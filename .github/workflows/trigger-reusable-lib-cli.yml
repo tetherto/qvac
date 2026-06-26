@@ -87,6 +87,10 @@ jobs:
         run: npm install
         working-directory: ${{ env.WORKDIR }}
 
+      - name: Run checks
+        run: npm run check
+        working-directory: ${{ env.WORKDIR }}
+
       - name: Build
         run: npm run build
         working-directory: ${{ env.WORKDIR }}
@@ -96,7 +100,7 @@ jobs:
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
-          retention-days: 1
+          retention-days: 30
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -163,7 +167,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -211,7 +215,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -223,18 +227,16 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "cli"
-      release_name: "QVAC cli Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/cli"
 
   publish-feature-gpr:
     needs:
@@ -253,7 +255,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/
@@ -287,7 +289,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/download-release-artifact
         with:
           name: cli-dist
           path: ${{ env.WORKDIR }}/dist/

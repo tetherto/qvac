@@ -7,11 +7,11 @@ const RECOMMENDED_TOTAL_MEMORY_GB = 4
 const RECOMMENDED_AVAILABLE_MEMORY_GB = 2
 const RECOMMENDED_FREE_DISK_GB = 5
 
-function toGB (bytes: number): number {
-  return bytes / (1024 ** 3)
+function toGB(bytes: number): number {
+  return bytes / 1024 ** 3
 }
 
-function fmtGB (bytes: number): string {
+function fmtGB(bytes: number): string {
   return `${toGB(bytes).toFixed(2)} GB`
 }
 
@@ -73,9 +73,12 @@ export const checkAvailableMemory: Check = (ctx) => {
   }
 }
 
-interface StatfsLike { bsize: number, bavail: number }
+interface StatfsLike {
+  bsize: number
+  bavail: number
+}
 
-function readFreeDiskBytes (dir: string): number | null {
+function readFreeDiskBytes(dir: string): number | null {
   const statfs = (fs as unknown as { statfsSync?: (p: string) => StatfsLike }).statfsSync
   if (typeof statfs === 'function') {
     try {
@@ -109,7 +112,7 @@ function readFreeDiskBytes (dir: string): number | null {
 // (see the ggml-metal / whisper-cpp+vulkan CMake configs). Running LLM or
 // Whisper inference without a GPU backend falls back to CPU, which is
 // roughly an order of magnitude slower — worth flagging in the report.
-function parseVulkanDeviceNames (stdout: string): string[] {
+function parseVulkanDeviceNames(stdout: string): string[] {
   const names: string[] = []
   for (const line of stdout.split('\n')) {
     const m = /deviceName\s*=\s*(.+)/.exec(line)
@@ -140,9 +143,10 @@ export const checkGpuAcceleration: Check = (ctx) => {
   }
   const r = ctx.probe('vulkaninfo', ['--summary'])
   if (!r.ok) {
-    const installHint = ctx.platform === 'win32'
-      ? 'Install the Vulkan runtime via the latest GPU drivers or the Vulkan SDK (https://vulkan.lunarg.com/).'
-      : 'Install a Vulkan loader and vulkan-tools (Debian/Ubuntu: `apt install libvulkan1 vulkan-tools`; Fedora: `dnf install vulkan-tools vulkan-loader`).'
+    const installHint =
+      ctx.platform === 'win32'
+        ? 'Install the Vulkan runtime via the latest GPU drivers or the Vulkan SDK (https://vulkan.lunarg.com/).'
+        : 'Install a Vulkan loader and vulkan-tools (Debian/Ubuntu: `apt install libvulkan1 vulkan-tools`; Fedora: `dnf install vulkan-tools vulkan-loader`).'
     return {
       id: 'gpu-acceleration',
       label: 'GPU acceleration',

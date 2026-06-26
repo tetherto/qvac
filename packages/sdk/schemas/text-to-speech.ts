@@ -1,33 +1,126 @@
 import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
 
-// TTS supported languages based on available models
-export const TTS_LANGUAGES = [
+// Chatterbox multilingual supported languages (22). The engines support
+// different language sets, so the language enum is validated per engine.
+export const TTS_CHATTERBOX_LANGUAGES = [
   "en", // English
   "es", // Spanish
+  "fr", // French
   "de", // German
   "it", // Italian
+  "pt", // Portuguese
+  "nl", // Dutch
+  "pl", // Polish
+  "tr", // Turkish
+  "sv", // Swedish
+  "da", // Danish
+  "fi", // Finnish
+  "no", // Norwegian
+  "el", // Greek
+  "ms", // Malay
+  "sw", // Swahili
+  "ar", // Arabic
+  "ko", // Korean
+  "he", // Hebrew
+  "ru", // Russian
+  "zh", // Chinese
+  "hi", // Hindi
 ] as const;
 
-const ttsLanguageSchema = z.enum(TTS_LANGUAGES);
+// Supertonic supported languages (31, as of Supertonic 3). Earlier Supertonic
+// releases (1/2) only cover a subset, but validation is per-engine, not
+// per-model, so the enum reflects the engine's current full capability.
+export const TTS_SUPERTONIC_LANGUAGES = [
+  "en", // English
+  "ko", // Korean
+  "ja", // Japanese
+  "ar", // Arabic
+  "bg", // Bulgarian
+  "cs", // Czech
+  "da", // Danish
+  "de", // German
+  "el", // Greek
+  "es", // Spanish
+  "et", // Estonian
+  "fi", // Finnish
+  "fr", // French
+  "hi", // Hindi
+  "hr", // Croatian
+  "hu", // Hungarian
+  "id", // Indonesian
+  "it", // Italian
+  "lt", // Lithuanian
+  "lv", // Latvian
+  "nl", // Dutch
+  "pl", // Polish
+  "pt", // Portuguese
+  "ro", // Romanian
+  "ru", // Russian
+  "sk", // Slovak
+  "sl", // Slovenian
+  "sv", // Swedish
+  "tr", // Turkish
+  "uk", // Ukrainian
+  "vi", // Vietnamese
+] as const;
+
+// Supertonic languages not already present in the Chatterbox set, used to keep
+// TTS_LANGUAGES a true union across engines without duplicates.
+const TTS_SUPERTONIC_ONLY_LANGUAGES = [
+  "ja", // Japanese
+  "bg", // Bulgarian
+  "cs", // Czech
+  "et", // Estonian
+  "hr", // Croatian
+  "hu", // Hungarian
+  "id", // Indonesian
+  "lt", // Lithuanian
+  "lv", // Latvian
+  "ro", // Romanian
+  "sk", // Slovak
+  "sl", // Slovenian
+  "uk", // Ukrainian
+  "vi", // Vietnamese
+] as const;
+
+// Union of all TTS-supported languages across engines. Kept for backwards
+// compatibility; prefer the engine-specific lists when validating a config.
+export const TTS_LANGUAGES = [
+  ...TTS_CHATTERBOX_LANGUAGES,
+  ...TTS_SUPERTONIC_ONLY_LANGUAGES,
+] as const;
+
+const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES);
+const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES);
+const ttsIntegerSchema = z.number().int();
+const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative();
+const ttsPositiveIntegerSchema = ttsIntegerSchema.positive();
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("chatterbox"),
-  language: ttsLanguageSchema,
+  language: ttsChatterboxLanguageSchema,
   voice: z.string().optional(),
   useGPU: z.boolean().optional(),
+  // Chatterbox-only native streaming controls.
+  streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
+  streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
+  cfmSteps: ttsNonNegativeIntegerSchema.optional(),
+  threads: ttsPositiveIntegerSchema.optional(),
+  nGpuLayers: ttsIntegerSchema.optional(),
+  seed: ttsIntegerSchema.optional(),
 });
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsEngine: z.literal("supertonic"),
-  language: ttsLanguageSchema,
+  language: ttsSupertonicLanguageSchema,
   voice: z.string().optional(),
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   useGPU: z.boolean().optional(),
 });
 
-export const ttsRuntimeConfigSchema = z.union([
+export const ttsRuntimeConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
 ]);
@@ -41,7 +134,7 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.ex
 
 export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema;
 
-export const ttsLoadConfigSchema = z.union([
+export const ttsLoadConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxLoadConfigSchema,
   ttsSupertonicLoadConfigSchema,
 ]);
@@ -81,7 +174,7 @@ const legacyTtsOnnxFieldsShape =
 // `loadConfigSchema`. Permits deprecated ONNX field names so
 // `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
 // generic Zod error; other unknown keys are still rejected by `.strict()`.
-export const ttsConfigSchema = z.union([
+export const ttsConfigSchema = z.discriminatedUnion("ttsEngine", [
   ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
   ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
 ]);
@@ -141,6 +234,8 @@ export const textToSpeechStreamResponseSchema = z.object({
 });
 
 export type TtsLanguage = (typeof TTS_LANGUAGES)[number];
+export type TtsChatterboxLanguage = (typeof TTS_CHATTERBOX_LANGUAGES)[number];
+export type TtsSupertonicLanguage = (typeof TTS_SUPERTONIC_LANGUAGES)[number];
 export type TtsChatterboxLoadConfig = z.infer<typeof ttsChatterboxLoadConfigSchema>;
 export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSchema>;
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>;

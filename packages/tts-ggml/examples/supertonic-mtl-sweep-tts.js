@@ -31,8 +31,9 @@
  * `bash scripts/convert-models.sh -t supertonic-mtl`).  The
  * English-pinned single-sentence entry point lives in supertonic-tts.js.
  *
- * NOTE: Supertonic is CPU-only in tts-cpp today.  This example sets
- * useGPU=false explicitly to match.
+ * NOTE: Supertonic supports GPU on capable hosts, including Android via
+ * tts-cpp's per-vendor allowlist.  This example keeps useGPU=false; opt
+ * in with config: { useGPU: true }.
  */
 
 const fs = require('bare-fs')

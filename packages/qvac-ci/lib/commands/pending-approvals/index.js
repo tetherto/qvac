@@ -1,4 +1,4 @@
-import { command, flag, summary, footer } from 'paparam'
+import { command, flag, summary, footer } from '../../cli.js'
 import { Command } from '../../command.js'
 import { validatePrNumber, validateRepo, validateTeamSlug, exitWithError } from '../../helpers.js'
 // Imported as a namespace so tests can inject mocks via the shared module object.

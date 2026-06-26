@@ -10,8 +10,20 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runChatterboxJaMecabTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/chatterbox-ja-mecab.test.js', options)
+}
+
+async function runChatterboxKvCacheGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/chatterbox-kv-cache-gpu.test.js', options)
+}
+
 async function runChatterboxMtlTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-mtl.test.js', options)
+}
+
+async function runChatterboxSpeedTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/chatterbox-speed.test.js', options)
 }
 
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -22,6 +34,14 @@ async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
 }
 
+async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/rtf-benchmark.test.js', options)
+}
+
+async function runStreamingBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/streaming-benchmark.test.js', options)
+}
+
 async function runSupertonicMtlTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/supertonic-mtl.test.js', options)
 }
@@ -30,11 +50,21 @@ async function runSupertonicTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/supertonic.test.js', options)
 }
 
+async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/supertonic3-quant.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
+  runChatterboxJaMecabTest,
+  runChatterboxKvCacheGpuTest,
   runChatterboxMtlTest,
+  runChatterboxSpeedTest,
   runGpuSmokeTest,
   runMultipleRunsTest,
+  runRtfBenchmarkTest,
+  runStreamingBenchmarkTest,
   runSupertonicMtlTest,
-  runSupertonicTest
+  runSupertonicTest,
+  runSupertonic3QuantTest
 }

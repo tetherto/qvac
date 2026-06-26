@@ -1,0 +1,33 @@
+name: Branch cleanup
+
+# Weekly enforcement of docs/branch-retention.md for this repo. Manual runs default
+# to dry-run; the scheduled run enforces (the ~7-day grace period is the safety net,
+# so nothing is deleted until it has been flagged on the tracking issue for that long).
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays at 08:00 UTC (09:00 CET)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report only; do not delete branches"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    uses: ./.github/workflows/reusable-branch-cleanup.yml
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+    with:
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      single_package: false

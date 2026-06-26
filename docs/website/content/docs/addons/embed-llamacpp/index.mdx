@@ -49,7 +49,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm i @qvac/dl-filesystem @qvac/embed-llamacpp
+npm i @qvac/embed-llamacpp bare-path
 ```
 </Step>
 
@@ -68,34 +68,33 @@ Create `index.js`:
 
 <WrapCode>
 
-```js title="index.js" lineNumbers'use strict'
+```js title="index.js" lineNumbers
+'use strict'
 
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const GGMLBert = require('@qvac/embed-llamacpp')
 
 async function main () {
   const modelName = 'gte-large_fp16.gguf'
-  const dirPath = './models'
+  const dirPath = path.resolve('./models')
+  const modelPath = path.join(dirPath, modelName)
 
-  // 1. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 2. Configuring model settings
-  const args = {
-    loader: fsDL,
+  // 1. Configuring model settings
+  const model = new GGMLBert({
+    files: { model: [modelPath] },
+    config: {
+      device: 'gpu',
+      gpu_layers: '25'
+    },
     logger: console,
-    opts: { stats: true },
-    diskPath: dirPath,
-    modelName
-  }
-  const config = '-ngl\t25'
+    opts: { stats: true }
+  })
 
-  // 3. Loading model
-  const model = new GGMLBert(args, config)
+  // 2. Loading model
   await model.load()
 
   try {
-    // 4. Generating embeddings
+    // 3. Generating embeddings
     const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
     const response = await model.run(query)
     const embeddings = await response.await()
@@ -108,9 +107,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 5. Cleaning up resources
+    // 4. Cleaning up resources
     await model.unload()
-    await fsDL.close()
   }
 }
 
@@ -135,59 +133,66 @@ bare index.js
 const GGMLBert = require('@qvac/embed-llamacpp')
 ```
 
-### 2. Create a Data Loader
+### 2. Create Local Model Paths
 
-Data Loaders abstract the way model files are accessed. Use a `FileSystemDataLoader` to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
 
 ```js
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 
-const dirPath = './models'
+const dirPath = path.resolve('./models')
 const modelName = 'gte-large_fp16.gguf'
 
-const fsDL = new FilesystemDL({ dirPath })
+const modelPath = path.join(dirPath, modelName)
 ```
 
 ### 3. Create the `args` obj
 
 ```js
 const args = {
-  loader: fsDL,
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    gpu_layers: '25'
+  },
   logger: console,
-  opts: { stats: true },
-  diskPath: dirPath,
-  modelName
+  opts: { stats: true }
 }
 ```
 
 The `args` obj contains the following properties:
 
-* `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality. 
+* `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide every shard in order.
+* `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model.
+* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
-* `diskPath`: The local directory where the model file will be downloaded to.
-* `modelName`: The name of model file in the Data Loader.
 
 ### 4. Create `config`
 
-The `config` is a string consisting of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
-Each parameter is separated by a tab (`\t`) from its value, and different parameters are separated by newlines (`\n`).
+The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
+*All parameters must be strings.*
 
 ```js
 // an example of possible configuration
-const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
+const config = {
+  device: 'gpu',
+  gpu_layers: '99',
+  batch_size: '1024',
+  ctx_size: '512'
+}
 ```
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
-| -dev    | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
-| -ngl | integer                                    | 0            | Number of model layers to offload to GPU              |
-|--batch-size  | integer                                     | 2048                         | Tokens for processing multiple prompts together             |
-| --pooling         | `{none,mean,cls,last,rank}`                 | model default                | Pooling type for embeddings                           |
-| --attention       | `{causal,non-causal}`                       | model default                | Attention type for embeddings                         |
-| --embd-normalize  | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
-| -fa               | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
-| --main-gpu        | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| device            | `"gpu"` or `"cpu"`                          | `"gpu"`                      | Device to run inference on                            |
+| gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
+| batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
+| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window in tokens                      |
+| pooling           | `"none"`, `"mean"`, `"cls"`, `"last"`, or `"rank"` | model default        | Pooling type for embeddings                           |
+| attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
+| embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
+| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention                        |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 
 #### IGPU/GPU  selection logic:
@@ -203,7 +208,7 @@ const config = '-ngl\t99\n--batch-size\t1024\n-dev\tgpu'
 ### 5. Instantiate the model
 
 ```js
-const model = new GGMLBert(args, config)
+const model = new GGMLBert(args)
 ```
 
 ### 6. Load the model
@@ -212,29 +217,7 @@ const model = new GGMLBert(args, config)
 await model.load()
 ```
 
-_Optionally_ you can pass the following parameters to tweak the loading behaviour.
-* `close?`: This boolean value determines whether to close the Data Loader after loading. Defaults to `true`
-* `reportProgressCallback?`: A callback function which gets called periodically with progress updates. It can be used to display overall progress percentage.
-
-_For example:_
-
-```js
-await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
-```
-
-**Progress Callback Data**
-
-The progress callback receives an object with the following properties:
-
-| Property            | Type   | Description                             |
-|---------------------|--------|-----------------------------------------|
-| `action`            | string | Current operation being performed       |
-| `totalSize`         | number | Total bytes to be loaded                |
-| `totalFiles`        | number | Total number of files to process        |
-| `filesProcessed`    | number | Number of files completed so far        |
-| `currentFile`       | string | Name of file currently being processed  |
-| `currentFileProgress` | string | Percentage progress on current file     |
-| `overallProgress`   | string | Overall loading progress percentage     |
+`load()` reads the file(s) listed in `files.model` directly from disk and activates the model. The caller is responsible for ensuring the files already exist at those paths.
 
 ### 7. Generate embeddings for input sequence
 
@@ -253,7 +236,6 @@ Unload the model when finished:
 ```javascript
 try {
   await model.unload()
-  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }

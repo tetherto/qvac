@@ -7,8 +7,18 @@
     "tests_bare": true
   },
   {
+    "package": "bare-sdk",
+    "path": "packages/bare-sdk",
+    "pkg_manager": "bun",
+    "needs_bare": true,
+    "tests_bare": true,
+    "sdk_sources": ["workspace"]
+  },
+  {
     "package": "cli",
-    "path": "packages/cli"
+    "path": "packages/cli",
+    "sdk_sources": ["workspace"],
+    "sdk_sources_release": ["workspace", "published"]
   },
   {
     "package": "rag",
@@ -17,7 +27,8 @@
   },
   {
     "package": "logging",
-    "path": "packages/logging"
+    "path": "packages/logging",
+    "needs_bare": true
   },
   {
     "package": "error",
@@ -28,5 +39,9 @@
     "package": "ai-sdk-provider",
     "path": "packages/ai-sdk-provider",
     "pkg_manager": "bun"
+  },
+  {
+    "package": "opencode-plugin",
+    "path": "plugins/opencode"
   }
 ]

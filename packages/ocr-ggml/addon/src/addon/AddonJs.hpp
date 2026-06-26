@@ -123,11 +123,11 @@ getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 
-// Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal'). Default keeps
-// CPU inference; 'vulkan' (Linux/Windows/Android) and 'metal' (Apple) request a
-// matching GPU with transparent CPU fallback (see OcrBackendSelection).
-// Extracted from createInstance to keep that factory's cognitive complexity
-// under the clang-tidy threshold.
+// Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
+// Default keeps CPU inference; 'vulkan' (Linux/Windows/Android), 'metal'
+// (Apple) and 'opencl' (Android/Adreno) request a matching GPU with transparent
+// CPU fallback (see OcrBackendSelection). Extracted from createInstance to keep
+// that factory's cognitive complexity under the clang-tidy threshold.
 void applyBackendDevice(
     js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
     OcrConfig& config) {
@@ -142,12 +142,41 @@ void applyBackendDevice(
     config.backendDevice = BackendDevice::VULKAN;
   } else if (backendDevice == "metal") {
     config.backendDevice = BackendDevice::METAL;
+  } else if (backendDevice == "opencl") {
+    config.backendDevice = BackendDevice::OPENCL;
   } else if (backendDevice == "cpu") {
     config.backendDevice = BackendDevice::CPU;
   } else {
     throw StatusError{
         general_error::InvalidArgument,
-        "backendDevice must be 'cpu', 'vulkan', or 'metal'"};
+        "backendDevice must be 'cpu', 'vulkan', 'metal', or 'opencl'"};
+  }
+
+  // Optional toggle for the DocTR recognizer CPU-assist worker. When omitted,
+  // Pipeline decides automatically (on for Mali/Immortalis Vulkan).
+  auto optCpuAssist =
+      params.getOptionalProperty<js::Boolean>(env, "recognizerCpuAssist");
+  if (optCpuAssist) {
+    config.recognizerCpuAssist = optCpuAssist->as<bool>(env);
+  }
+
+  // Optional per-stage override: detection backend (DocTR). When omitted,
+  // detection uses the same backend as recognition.
+  auto optDetBackend =
+      params.getOptionalProperty<js::String>(env, "detectionBackendDevice");
+  if (optDetBackend) {
+    const auto det = optDetBackend->as<std::string>(env);
+    if (det == "vulkan") {
+      config.detectionBackendDevice = BackendDevice::VULKAN;
+    } else if (det == "metal") {
+      config.detectionBackendDevice = BackendDevice::METAL;
+    } else if (det == "cpu") {
+      config.detectionBackendDevice = BackendDevice::CPU;
+    } else {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "detectionBackendDevice must be 'cpu', 'vulkan', or 'metal'"};
+    }
   }
 }
 
@@ -311,8 +340,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         input.getProperty<js::Int32>(env, "width").as<int>(env);
     modelInput.imageHeight =
         input.getProperty<js::Int32>(env, "height").as<int>(env);
-    if (auto bpp =
-            input.getOptionalProperty<js::Number>(env, "bitsPerPixel");
+    if (auto bpp = input.getOptionalProperty<js::Number>(env, "bitsPerPixel");
         bpp) {
       modelInput.bitsPerPixel = bpp->as<int>(env);
     }

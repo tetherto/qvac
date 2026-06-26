@@ -65,7 +65,8 @@ def translate_direct(texts, src_lang, trg_lang, is_quantized):
                 env["QVAC_MODEL_PATH"] = str(model_f16_path)
             elif model_f32_path.exists():
                 env["QVAC_MODEL_PATH"] = str(model_f32_path)
-            # If model doesn't exist, nmt-cli will use Hyperdrive to download it
+            # If no local model exists, nmt-cli errors out (no remote auto-download).
+            # Models must be present in qvac_models/{src}-{trg}/ — see benchmarks README.
 
         # Build hyperparameter flags from environment variables
         hyperparam_flags = []
@@ -98,7 +99,7 @@ def translate_direct(texts, src_lang, trg_lang, is_quantized):
         if model_path:
             print(f"[QVAC] Using model: {model_path}", file=sys.stderr)
         else:
-            print(f"[QVAC] No local model found, will use Hyperdrive", file=sys.stderr)
+            print(f"[QVAC] WARNING: No local model found in qvac_models/{src_lang}-{trg_lang}/; nmt-cli will error (provide a model or set QVAC_MODEL_PATH)", file=sys.stderr)
 
         # Create temporary file for stderr capture
         stderr_fd, stderr_path = tempfile.mkstemp(suffix=".err", prefix="qvac_stderr_")

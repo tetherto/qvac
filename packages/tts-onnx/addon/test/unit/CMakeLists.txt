@@ -11,6 +11,7 @@ target_sources(
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxLanguageMode.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
@@ -56,6 +57,7 @@ target_link_libraries(
   PRIVATE
     qvac-onnx::headers
     ${QVAC_TTS_TEST_ORT_TARGET}
+    mecab::mecab
     tokenizers::tokenizers_cpp
     ${QVAC_UTF8PROC_TARGET}
     GTest::gtest
@@ -63,15 +65,6 @@ target_link_libraries(
     GTest::gmock
     GTest::gmock_main
 )
-
-if(WIN32)
-  target_link_libraries(
-    inference-tts-unit-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 bare_platform(_TTS_TEST_PLATFORM)
 bare_arch(_TTS_TEST_ARCH)
 set(_tts_onnx_prebuilds "${CMAKE_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/${_TTS_TEST_PLATFORM}-${_TTS_TEST_ARCH}")

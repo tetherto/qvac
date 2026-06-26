@@ -3,10 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const {
-  DEFAULT_SWEEP_CTX_SIZES,
-  DEFAULT_SWEEP_BATCH_SIZES
-} = require('./utils')
 
 const DEFAULT_RESULTS_DIR = path.resolve(__dirname, 'results', 'parameter-sweep')
 const DEFAULT_MODELS_DIR = path.resolve(__dirname, 'models')
@@ -94,17 +90,20 @@ function loadModelsFromManifest () {
 
 const MODELS = loadModelsFromManifest()
 
-// Parameter sweep: full factorial (cartesian product)
+// Parameter sweep (cartesian product). Tuned to the focused sweep:
+// only quantization and reasoning-budget vary; every other dimension is
+// pinned to a single value. Edit these arrays to sweep more dimensions.
 const PARAMETER_SWEEP = {
-  quantization: ['Q4_0', 'Q4_K_M', 'Q8_0', 'F16'],
+  quantization: ['Q4_0', 'Q4_1', 'Q4_K_M', 'Q6_K', 'Q8_0'],
   device: getDefaultSweepDevices(),
-  'ctx-size': DEFAULT_SWEEP_CTX_SIZES.map(String),
-  threads: ['2', '4', '8'],
-  'batch-size': DEFAULT_SWEEP_BATCH_SIZES.map(String), // max: 10k
-  'ubatch-size': ['128', '512'], // must be <= batch-size
-  'flash-attn': ['off', 'on'],
-  'cache-type-k': ['f16', 'q8_0', 'q4_0'],
-  'cache-type-v': ['f16', 'q8_0', 'q4_0']
+  'ctx-size': ['2048'],
+  threads: ['4'],
+  'batch-size': ['512'],
+  'ubatch-size': ['512'],
+  'flash-attn': ['off'],
+  'cache-type-k': ['f16'],
+  'cache-type-v': ['f16'],
+  'reasoning-budget': ['-1', '0']
   // verbosity: fixed at '0' (not swept)
 }
 

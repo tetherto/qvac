@@ -228,7 +228,8 @@ jobs:
           tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.PKG_DIR }}
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-npm]
     if: |
       !cancelled() &&
@@ -236,13 +237,10 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "ocr-onnx"
-      release_name: "QVAC OCR Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/ocr-onnx"
 
   post-build-gate:
     name: Post-Build Gate

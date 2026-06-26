@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -33,20 +33,25 @@
     "url": "git+https://github.com/tetherto/qvac.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/cli#readme",
+  "homepage": "https://qvac.tether.io",
   "scripts": {
     "prepublishOnly": "node scripts/check-publish-ready.cjs",
     "build": "rm -rf dist && tsc",
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "check": "npm run lint && npm run format",
     "test": "npx tsx --test test/*.test.ts",
     "test:unit": "npx tsx --test test/*.test.ts",
-    "test:bats": "npm run build && bats test/cli.bats",
-    "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats",
-    "test:e2e:local": "npm run build && bats test/e2e-local.bats",
+    "test:e2e": "npm run test:e2e:js",
+    "test:e2e:js": "tsx --test 'test/e2e/*.test.ts' 'test/e2e/cli/*.test.ts' 'test/e2e/http/*.test.ts' && tsx --test --test-concurrency=1 'test/e2e/model/*.test.ts'",
+    "test:e2e:js:coverage": "tsx --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='**/test/**' 'test/e2e/**/*.test.ts'",
     "dev:link": "npm install ../sdk",
-    "dev:unlink": "node scripts/dev-unlink.cjs"
+    "dev:unlink": "node scripts/dev-unlink.cjs",
+    "sdk-source:workspace": "node scripts/preinstall-build-local-sdk.cjs && npm install ../sdk"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.0",
@@ -54,7 +59,7 @@
     "@fastify/multipart": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
-    "@qvac/sdk": "^0.12.0",
+    "@qvac/sdk": "^0.13.1",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
     "fastify": "^5.0.0",
@@ -67,7 +72,9 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.3",
-    "bats": "^1.13.0",
+    "lunte": "^1.8.2",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.3"
   }
 }

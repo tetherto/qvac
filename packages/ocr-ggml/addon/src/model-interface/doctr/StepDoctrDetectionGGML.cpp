@@ -119,13 +119,6 @@ StepDoctrDetectionGGML::~StepDoctrDetectionGGML() {
   backends_.clear();
 }
 
-// Round up to the next multiple of the backbone's total stride (32) so the
-// MobileNetV3 downsampling and FPN taps land on integer feature-map sizes.
-int roundUpToStride(int v) {
-  constexpr int kStride = 32;
-  return ((v + kStride - 1) / kStride) * kStride;
-}
-
 std::tuple<cv::Mat, float, int, int, int, int>
 StepDoctrDetectionGGML::preprocessImage(const cv::Mat& img) {
   const int h = img.rows;
@@ -142,13 +135,15 @@ StepDoctrDetectionGGML::preprocessImage(const cv::Mat& img) {
   cv::Mat floatImg;
   resized.convertTo(floatImg, CV_32FC3, 1.0 / PIXEL_MAX);
 
-  // Canvas = the resized image padded to the next multiple of 32 per axis,
-  // preserving aspect ratio (NOT a fixed square). The long side is already
-  // DBNET_INPUT_SIZE; the short side gets at most 31px of padding. This avoids
-  // convolving the ~25-30% zero-padding a square canvas would add for the
-  // typical portrait/landscape document. Symmetric padding matches OnnxTR.
-  const int canvasW = roundUpToStride(newW);
-  const int canvasH = roundUpToStride(newH);
+  // Canvas = a fixed DBNET_INPUT_SIZE square with the resized image centred by
+  // symmetric padding, mirroring python-doctr's PreProcessor (preserve aspect
+  // ratio + symmetric pad to the model's 1024x1024 training size). An
+  // aspect-ratio canvas (padding only the short side to a stride multiple)
+  // changes db_mobilenet's SE-block global-average-pool statistics, shifting
+  // the probability map and over-producing boxes on scene text — so match
+  // doctr's square canvas exactly for detection parity.
+  const int canvasW = DBNET_INPUT_SIZE;
+  const int canvasH = DBNET_INPUT_SIZE;
   const int padLeft = (canvasW - newW) / 2;
   const int padTop = (canvasH - newH) / 2;
 

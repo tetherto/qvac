@@ -1,5 +1,6 @@
 import { ModelType } from "./model-types";
 import {
+  ADDON_BCI,
   ADDON_CLASSIFICATION,
   ADDON_DIFFUSION,
   ADDON_EMBEDDING,
@@ -22,11 +23,12 @@ import {
 export const ENGINE_TO_ADDON = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.whispercppTranscription]: "whisper",
+  [ModelType.bciWhispercppTranscription]: "bci",
   [ModelType.llamacppEmbedding]: "embeddings",
   [ModelType.nmtcppTranslation]: "nmt",
   [ModelType.onnxTts]: "tts",
   [ModelType.ttsGgml]: "tts",
-  [ModelType.onnxOcr]: "ocr",
+  [ModelType.ggmlOcr]: "ocr",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.sdcppGeneration]: "diffusion",
   [ModelType.ggmlVla]: "vla",
@@ -39,10 +41,14 @@ export const ENGINE_TO_ADDON = {
 const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   [ADDON_LLM]: ModelType.llamacppCompletion,
   [ADDON_WHISPER]: ModelType.whispercppTranscription,
+  [ADDON_BCI]: ModelType.bciWhispercppTranscription,
   [ADDON_EMBEDDING]: ModelType.llamacppEmbedding,
   [ADDON_NMT]: ModelType.nmtcppTranslation,
   [ADDON_TTS]: ModelType.ttsGgml,
-  [ADDON_OCR]: ModelType.onnxOcr,
+  [ADDON_OCR]: ModelType.ggmlOcr,
+  // Pre-GGML package / tag names from the ONNX era — resolve to the GGML engine.
+  "@qvac/ocr-onnx": ModelType.ggmlOcr,
+  "onnx-ocr": ModelType.ggmlOcr,
   [ADDON_PARAKEET]: ModelType.parakeetTranscription,
   "@qvac/translation-llamacpp": ModelType.nmtcppTranslation,
   "@qvac/vad-silero": "onnx-vad",
@@ -52,11 +58,12 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   // Tag-style names (used by some older registry entries)
   generation: ModelType.llamacppCompletion,
   transcription: ModelType.whispercppTranscription,
+  bci: ModelType.bciWhispercppTranscription,
   embedding: ModelType.llamacppEmbedding,
   translation: ModelType.nmtcppTranslation,
   vad: "onnx-vad",
   tts: ModelType.ttsGgml,
-  ocr: ModelType.onnxOcr,
+  ocr: ModelType.ggmlOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
   [ADDON_VLA]: ModelType.ggmlVla,

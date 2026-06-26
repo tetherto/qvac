@@ -15,7 +15,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(inference-addon-llama C CXX)
 
@@ -43,6 +43,9 @@ find_package(llama CONFIG REQUIRED)
 # need the full nlohmann headers, not just the forward decl shipped with
 # `llama/common/json-schema-to-grammar.h`.
 find_package(nlohmann_json CONFIG REQUIRED)
+# Lock-free MPMC queue (moodycamel) backing the ContinuousBatchScheduler
+# request intake: `processBatch` callers enqueue, the worker dequeues.
+find_package(unofficial-concurrentqueue CONFIG REQUIRED)
 
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
@@ -75,19 +78,21 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -111,6 +116,7 @@ endif()
       llama::common
       llama::mtmd
       nlohmann_json::nlohmann_json
+      unofficial::concurrentqueue::concurrentqueue
   )
 
 
@@ -126,18 +132,20 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -158,12 +166,13 @@ if(BUILD_CLI)
           llama::common
           llama::mtmd
           nlohmann_json::nlohmann_json
+          unofficial::concurrentqueue::concurrentqueue
   )
   find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support
   target_compile_features(cli_tool PRIVATE cxx_std_20)
-  
+
   # Install ggml backends next to the CLI tool binary in build folder
   if((ANDROID OR UNIX) AND NOT APPLE)
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -181,16 +190,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
-  
+
   # Integration tests for model classes (includes backend selection tests)
   # Pass ENABLE_COVERAGE option to test subdirectory
   add_subdirectory(test/unit)
-endif()
-
-if(WIN32)
-  target_link_libraries(
-    ${inference-addon-llama}
-    PRIVATE
-      msvcrt.lib
-  )
 endif()

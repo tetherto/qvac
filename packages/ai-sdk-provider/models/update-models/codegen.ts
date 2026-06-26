@@ -2,7 +2,7 @@ import { getEndpointCategoryFromAddon, type EndpointCategory } from './schemas.t
 import { generateExportName } from './naming.ts'
 import type { ProcessedModel } from './types.ts'
 
-export function generateModelsFileContent (models: ProcessedModel[]): string {
+export function generateModelsFileContent(models: ProcessedModel[]): string {
   const usedNames = new Set<string>()
   const named = new Map<ProcessedModel, string>()
 
@@ -46,7 +46,7 @@ export function generateModelsFileContent (models: ProcessedModel[]): string {
   return generateFileContentWithNames(withCategory)
 }
 
-function assignName (m: ProcessedModel, usedNames: Set<string>): string {
+function assignName(m: ProcessedModel, usedNames: Set<string>): string {
   return generateExportName({
     path: m.registryPath,
     engine: m.engine,
@@ -58,7 +58,7 @@ function assignName (m: ProcessedModel, usedNames: Set<string>): string {
   })
 }
 
-function generateFileContentWithNames (
+function generateFileContentWithNames(
   modelsWithNames: (ProcessedModel & { name: string; endpointCategory: EndpointCategory })[]
 ): string {
   const entries = modelsWithNames

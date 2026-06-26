@@ -45,8 +45,8 @@ Both commands invoke `tsx ./models/update-models/index.ts` with the relevant fla
 
 ```ts
 export const allModels = [
-  { name: 'QWEN3_4B_INST_Q4_K_M', endpointCategory: 'chat', /* ... */ } as const,
-  { name: 'WHISPER_EN_TINY_Q8_0', endpointCategory: 'transcription', /* ... */ } as const
+  { name: 'QWEN3_4B_INST_Q4_K_M', endpointCategory: 'chat' /* ... */ } as const,
+  { name: 'WHISPER_EN_TINY_Q8_0', endpointCategory: 'transcription' /* ... */ } as const
 ] as const
 
 export const QWEN3_4B_INST_Q4_K_M: ModelConstant<'chat'> = allModels[0]

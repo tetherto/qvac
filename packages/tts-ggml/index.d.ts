@@ -49,7 +49,7 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Supertonic still rejects `useGPU: true` at construction time (engine is CPU-only today). */
+  /** Route inference through a GPU backend (Metal / Vulkan / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
   useGPU?: boolean
   /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
@@ -68,8 +68,12 @@ declare interface TTSGgmlOptions {
   voiceDir?: string
   /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: must be 0 / unset (engine is CPU-only today). */
+  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (including Android, per tts-cpp's per-vendor allowlist). */
   nGpuLayers?: number
+  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "f16") cost ~390 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
+  nCtx?: number
+  /** Chatterbox-only: T3 KV-cache storage dtype: 'f32' | 'f16' | 'q8_0' (default 'f16', ~50% of f32's memory; the safe cross-backend default).  'q8_0' is ~27% of f32 and decodes 20-30% faster on Metal, but only works on backends that implement the q8_0 CONT op (CPU, CUDA) — it hard-aborts the multilingual model on Metal, so it is opt-in.  Pass 'f32' for bit-exact parity with the pre-quantisation behaviour. */
+  kvCacheType?: 'f32' | 'f16' | 'q8_0'
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number
   /** Chatterbox-only: speech tokens per native streaming chunk (25 ~= 1 s of audio).  0 disables. */
@@ -86,7 +90,15 @@ declare interface TTSGgmlOptions {
   steps?: number
   /** Alias for `steps` (cross-compat with `@qvac/tts-onnx`). */
   numInferenceSteps?: number
-  /** Supertonic: speech-rate factor.  0 -> GGUF default. */
+  /**
+   * Speech-rate / duration multiplier (1.0 = unchanged, &lt; 1 slower, &gt; 1 faster).
+   * Supertonic: scales the engine's native duration predictor (0 -> GGUF default).
+   * Chatterbox: the engine has no native rate control, so this is applied as a
+   * pitch-preserving WSOLA time-stretch post-synthesis (functionally equivalent to
+   * ffmpeg `atempo`); bounded to [0.25, 4.0].  When omitted (or 1.0), the raw
+   * model output is left unchanged (no default slowdown); pass an explicit value
+   * to opt in.
+   */
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string
@@ -172,6 +184,8 @@ declare namespace TTSGgml {
     backendDevice?: number
     /** Stable numeric code for the active backend.  0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other-GPU. */
     backendId?: number
+    /** 1 when a GPU was present but the engine routed to CPU by policy (e.g. Chatterbox on ARM Mali, `allow_arm_mali=false`); 0 otherwise.  A CPU `backendDevice` with `gpuUnsupported === 1` is expected, not a regression. */
+    gpuUnsupported?: number
   }
 
   export interface TTSOutputChunk {

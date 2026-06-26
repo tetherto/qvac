@@ -9,17 +9,18 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
-  OCR_LATIN_RECOGNIZER_1,
+  OCR_CRAFT,
+  OCR_LATIN,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -64,6 +65,7 @@ import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
+  downloadTarget: "mobile",
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
   // kernel to actually release pages / reclaim mmap regions — without
   // it, the next test's load arrives while the previous model's RSS is
@@ -75,18 +77,18 @@ const resources = new ResourceManager({
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
 });
 
 resources.define("embeddings", {
   constant: GTE_LARGE_FP16,
-  type: "embeddings",
+  type: "llamacpp-embedding",
 });
 
 resources.define("whisper", {
   constant: WHISPER_TINY,
-  type: "whisper",
+  type: "whispercpp-transcription",
   config: {
     vadModelSrc: VAD_SILERO_5_1_2,
     audio_format: "f32le",
@@ -111,37 +113,55 @@ resources.define("whisper", {
 
 resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("tools-dynamic", {
   constant: QWEN3_1_7B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
   config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("ocr", {
-  constant: OCR_LATIN_RECOGNIZER_1,
-  type: "ocr",
-  config: { langList: ["en"] },
+  constant: OCR_LATIN,
+  type: "ggml-ocr",
+  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time
+  // and downloaded on-device, making the first OCR test cold-start time out on
+  // mobile). Mirrors the whisper VAD companion-download pattern.
+  // canvasSize caps CRAFT's detection canvas to bound peak memory on
+  // high-resolution pages (e.g. the 4K ocr-large-image), which otherwise OOMs
+  // the device. 1280 is the ocr-ggml-recommended cap for mobile targets.
+  config: { langList: ["en"], detectorModelSrc: OCR_CRAFT, canvasSize: 1280 },
 });
 
+async function resolveClassificationWeightsPath() {
+  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
+  // This path is relative to dist/tests/mobile/consumer.js after tsc.
+  const assetModule = require("../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf");
+  return await resolveBundledAssetUri(assetModule);
+}
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required.
+// so no registry constant / pre-download is required. On mobile the weight
+// file must still be resolved as a Metro asset and passed explicitly because
+// the Bare worker bundle does not expose package data files at __dirname.
 resources.define("classification", {
-  type: "classification",
+  type: "ggml-classification",
+  config: async () => ({
+    modelPath: await resolveClassificationWeightsPath(),
+  }),
 });
 
 resources.define("sharded-embeddings", {
   constant: GTE_LARGE_335M_FP16_SHARD,
-  type: "embeddings",
+  type: "llamacpp-embedding",
   skipPreDownload: true,
 });
 
 resources.define("indictrans-en-hi", {
   constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "IndicTrans",
     from: "eng_Latn",
@@ -151,7 +171,7 @@ resources.define("indictrans-en-hi", {
 
 resources.define("indictrans-hi-en", {
   constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "IndicTrans",
     from: "hin_Deva",
@@ -161,7 +181,7 @@ resources.define("indictrans-hi-en", {
 
 resources.define("bergamot-en-fr", {
   constant: BERGAMOT_EN_FR,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "en",
@@ -171,7 +191,7 @@ resources.define("bergamot-en-fr", {
 
 resources.define("bergamot-en-es", {
   constant: BERGAMOT_EN_ES,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "en",
@@ -181,7 +201,7 @@ resources.define("bergamot-en-es", {
 
 resources.define("bergamot-es-it-pivot", {
   constant: BERGAMOT_ES_EN,
-  type: "nmt",
+  type: "nmtcpp-translation",
   config: {
     engine: "Bergamot",
     from: "es",
@@ -196,12 +216,12 @@ resources.define("bergamot-es-it-pivot", {
 
 resources.define("salamandra", {
   constant: SALAMANDRATA_2B_INST_Q4,
-  type: "llm",
+  type: "llamacpp-completion",
 });
 
 resources.define("afriquegemma", {
   constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: "llm",
+  type: "llamacpp-completion",
   config: {
     tools: true,
     ctx_size: 2048,
@@ -233,63 +253,69 @@ async function resolveBundledAudioUri(filename: string): Promise<string | undefi
 }
 
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  type: "tts",
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  type: "tts-ggml",
   config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    useGPU: true,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
     referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
   }),
 });
 
 resources.define("tts-supertonic", {
   constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: "tts",
+  type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
     language: "en",
     voice: "F1",
+    useGPU: true,
   },
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
-  type: "tts",
+  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
     language: "es",
     voice: "F1",
+    useGPU: true,
   },
 });
 
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_0_6B_V3_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_0_6B_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("parakeet-eou", {
   constant: PARAKEET_EOU_120M_V1_Q8_0,
-  type: "parakeet",
+  type: "parakeet-transcription",
   config: {},
 });
 
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  type: "llm",
+  type: "llamacpp-completion",
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -298,7 +324,7 @@ resources.define("vision", {
 
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
-  type: "vla",
+  type: "ggml-vla",
   config: { backend: "cpu" },
 });
 // NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
@@ -354,26 +380,17 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
-    skipTests([
-      "http-sharded-embed-load",
-      "http-sharded-embed-progress",
-      "http-archive-embed-load",
-      "http-archive-embed-progress",
-      "http-archive-embed-inference",
-    ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^http-(?:sharded|archive)-embed-/, "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(
-      /^video-/,
-      "Video mode works on mobile but SDK-shipped Wan models are too large to load on-device; mobile apps should pass a `delegate` to loadModel(...), desktop covers local-load coverage",
-    ),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)"),
     new SkipExecutor(/^vla-pi05-/, "π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05"),
     new SkipExecutor(
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
+    new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -392,7 +409,7 @@ export const executor = createExecutor({
     ] : []),
     ...(Platform.OS === "ios" ? [
       // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
-      new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),
+      // new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),
       skipTests([
         "ocr-sign-image",
         "ocr-chart-image",

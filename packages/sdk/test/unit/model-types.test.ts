@@ -17,7 +17,7 @@ test("ModelType contains all canonical values", (t) => {
   t.is(ModelType.parakeetTranscription, "parakeet-transcription");
   t.is(ModelType.onnxTts, "onnx-tts");
   t.is(ModelType.ttsGgml, "tts-ggml");
-  t.is(ModelType.onnxOcr, "onnx-ocr");
+  t.is(ModelType.ggmlOcr, "ggml-ocr");
 });
 
 test("ModelTypeAliases maps to correct canonical values", (t) => {
@@ -27,7 +27,7 @@ test("ModelTypeAliases maps to correct canonical values", (t) => {
   t.is(ModelTypeAliases.nmt, ModelType.nmtcppTranslation);
   t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription);
   t.is(ModelTypeAliases.tts, ModelType.ttsGgml);
-  t.is(ModelTypeAliases.ocr, ModelType.onnxOcr);
+  t.is(ModelTypeAliases.ocr, ModelType.ggmlOcr);
 });
 
 test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
@@ -39,7 +39,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   t.is(PUBLIC_MODEL_TYPES.parakeetTranscription, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.onnxTts, "onnx-tts");
   t.is(PUBLIC_MODEL_TYPES.ttsGgml, "tts-ggml");
-  t.is(PUBLIC_MODEL_TYPES.onnxOcr, "onnx-ocr");
+  t.is(PUBLIC_MODEL_TYPES.ggmlOcr, "ggml-ocr");
 
   // Alias keys
   t.is(PUBLIC_MODEL_TYPES.llm, "llamacpp-completion");
@@ -48,7 +48,7 @@ test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
   t.is(PUBLIC_MODEL_TYPES.nmt, "nmtcpp-translation");
   t.is(PUBLIC_MODEL_TYPES.parakeet, "parakeet-transcription");
   t.is(PUBLIC_MODEL_TYPES.tts, "tts-ggml");
-  t.is(PUBLIC_MODEL_TYPES.ocr, "onnx-ocr");
+  t.is(PUBLIC_MODEL_TYPES.ocr, "ggml-ocr");
 });
 
 test("normalizeModelType converts aliases to canonical", (t) => {
@@ -59,7 +59,7 @@ test("normalizeModelType converts aliases to canonical", (t) => {
   t.is(normalizeModelType("nmt"), "nmtcpp-translation");
   t.is(normalizeModelType("parakeet"), "parakeet-transcription");
   t.is(normalizeModelType("tts"), "tts-ggml");
-  t.is(normalizeModelType("ocr"), "onnx-ocr");
+  t.is(normalizeModelType("ocr"), "ggml-ocr");
 });
 
 test("normalizeModelType passes through canonical values unchanged", (t) => {
@@ -73,7 +73,7 @@ test("normalizeModelType passes through canonical values unchanged", (t) => {
   t.is(normalizeModelType("parakeet-transcription"), "parakeet-transcription");
   t.is(normalizeModelType("onnx-tts"), "onnx-tts");
   t.is(normalizeModelType("tts-ggml"), "tts-ggml");
-  t.is(normalizeModelType("onnx-ocr"), "onnx-ocr");
+  t.is(normalizeModelType("ggml-ocr"), "ggml-ocr");
 });
 
 test("isModelTypeAlias correctly identifies aliases", (t) => {
@@ -94,7 +94,7 @@ test("isModelTypeAlias correctly identifies aliases", (t) => {
   t.is(isModelTypeAlias("parakeet-transcription"), false);
   t.is(isModelTypeAlias("onnx-tts"), false);
   t.is(isModelTypeAlias("tts-ggml"), false);
-  t.is(isModelTypeAlias("onnx-ocr"), false);
+  t.is(isModelTypeAlias("ggml-ocr"), false);
 });
 
 test("modelTypeInputSchema accepts aliases", (t) => {
@@ -124,7 +124,7 @@ test("modelTypeInputSchema accepts canonical values", (t) => {
   );
   t.is(modelTypeInputSchema.parse("onnx-tts"), "onnx-tts");
   t.is(modelTypeInputSchema.parse("tts-ggml"), "tts-ggml");
-  t.is(modelTypeInputSchema.parse("onnx-ocr"), "onnx-ocr");
+  t.is(modelTypeInputSchema.parse("ggml-ocr"), "ggml-ocr");
 });
 
 test("modelTypeInputSchema rejects invalid values", (t) => {
@@ -141,7 +141,7 @@ test("modelTypeSchema transforms aliases to canonical", (t) => {
   t.is(modelTypeSchema.parse("nmt"), "nmtcpp-translation");
   t.is(modelTypeSchema.parse("parakeet"), "parakeet-transcription");
   t.is(modelTypeSchema.parse("tts"), "tts-ggml");
-  t.is(modelTypeSchema.parse("ocr"), "onnx-ocr");
+  t.is(modelTypeSchema.parse("ocr"), "ggml-ocr");
 });
 
 test("modelTypeSchema passes through canonical values", (t) => {
@@ -158,7 +158,7 @@ test("modelTypeSchema passes through canonical values", (t) => {
   );
   t.is(modelTypeSchema.parse("onnx-tts"), "onnx-tts");
   t.is(modelTypeSchema.parse("tts-ggml"), "tts-ggml");
-  t.is(modelTypeSchema.parse("onnx-ocr"), "onnx-ocr");
+  t.is(modelTypeSchema.parse("ggml-ocr"), "ggml-ocr");
 });
 
 test("modelTypeSchema rejects invalid values", (t) => {

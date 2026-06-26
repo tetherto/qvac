@@ -54,7 +54,7 @@ test("translateRequestSchema (NMT): accepts an optional requestId", (t) => {
     modelId: "m1",
     text: "hello",
     stream: true,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     requestId: "req-nmt",
   });
   t.is(result.success, true);
@@ -66,7 +66,7 @@ test("translateRequestSchema (LLM): accepts an optional requestId", (t) => {
     modelId: "m1",
     text: "hello",
     stream: true,
-    modelType: "llm",
+    modelType: "llamacpp-completion",
     from: "en",
     to: "fr",
     requestId: "req-llm",
@@ -80,7 +80,7 @@ test("translateRequestSchema: rejects empty-string requestId", (t) => {
     modelId: "m1",
     text: "hello",
     stream: true,
-    modelType: "nmt",
+    modelType: "nmtcpp-translation",
     requestId: "",
   });
   t.is(result.success, false);

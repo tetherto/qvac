@@ -5,8 +5,9 @@ const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { LlamaInterface, mapAddonEvent } = require('./addon')
+const BatchHandler = require('./batchHandler')
 
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+const { RUN_BUSY_ERROR_MESSAGE } = BatchHandler
 
 function normalizeRunOptions (runOptions) {
   if (runOptions === undefined) {
@@ -43,6 +44,45 @@ function normalizeRunOptions (runOptions) {
   }
 }
 
+function promptToAddonMessages (prompt, runOptions) {
+  if (!Array.isArray(prompt)) {
+    throw new TypeError('Prompt input must be Message[]')
+  }
+
+  const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
+
+  const textMessages = []
+  const mediaItems = []
+
+  for (const message of prompt) {
+    if (message.role === 'user' &&
+        message.type === 'media' &&
+        message.content instanceof Uint8Array) {
+      mediaItems.push(message.content)
+      textMessages.push({ ...message, content: '' })
+    } else {
+      textMessages.push(message)
+    }
+  }
+
+  const promptMessages = []
+
+  for (const mediaData of mediaItems) {
+    promptMessages.push({ type: 'media', content: mediaData })
+  }
+
+  promptMessages.push({
+    type: 'text',
+    input: JSON.stringify(textMessages),
+    prefill,
+    generationParams,
+    cacheKey,
+    saveCacheToDisk
+  })
+
+  return promptMessages
+}
+
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
 // (a JSON Schema literal) for ergonomics, so we stringify it here. Also
@@ -50,6 +90,13 @@ function normalizeRunOptions (runOptions) {
 // the JS boundary gives a clearer error than letting the C++ throw.
 function normalizeGenerationParams (generationParams) {
   if (generationParams === undefined) return undefined
+
+  if (generationParams.remove_thinking_from_context !== undefined &&
+      typeof generationParams.remove_thinking_from_context !== 'boolean') {
+    throw new TypeError(
+      'generationParams.remove_thinking_from_context must be a boolean when provided'
+    )
+  }
 
   const hasGrammar = typeof generationParams.grammar === 'string' &&
     generationParams.grammar.length > 0
@@ -194,6 +241,12 @@ class LlmLlamacpp {
     this.addon = null
     this._checkpointSaveDir = null
     this._hasActiveResponse = false
+    this._batchHandler = new BatchHandler({
+      job: this._job,
+      parsePrompt: promptToAddonMessages,
+      cancelHandler: () => this.addon?.cancel(),
+      runJob: (items) => this.addon.runJob(items)
+    })
     // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
     this._addonEventState = { skipNextRuntimeStats: false }
     this.state = { configLoaded: false }
@@ -254,8 +307,37 @@ class LlmLlamacpp {
    * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
    * @returns {Promise<QvacResponse>}
    */
-  async run (prompt, runOptions = {}) {
-    return this._run(() => this._runInternal(prompt, runOptions))
+  async run (prompt, runOptions) {
+    if (BatchHandler.isBatchInput(prompt)) {
+      if (runOptions !== undefined) {
+        throw new TypeError('Batch run options must be set per BatchPrompt item')
+      }
+      return this._run(() => this._runBatchInternal(prompt))
+    }
+    return this._run(() => this._runInternal(prompt, runOptions || {}))
+  }
+
+  async _runBatchInternal (batchInput) {
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    const response = await this._batchHandler.run(batchInput)
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+      this._batchHandler.clear()
+    })
+    finalized.catch((err) => {
+      this.logger?.warn?.('Batch inference response rejected:', err?.message || err)
+    })
+    response.await = () => finalized
+
+    return response
   }
 
   async _runInternal (prompt, runOptions = {}) {
@@ -266,43 +348,8 @@ class LlmLlamacpp {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    if (!Array.isArray(prompt)) {
-      throw new TypeError('Prompt input must be Message[]')
-    }
-    const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
-
     this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
-
-    // Separate media messages from text messages
-    const textMessages = []
-    const mediaItems = []
-
-    for (const message of prompt) {
-      if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-        mediaItems.push(message.content)
-        textMessages.push({ ...message, content: '' })
-      } else {
-        textMessages.push(message)
-      }
-    }
-
-    const promptMessages = []
-
-    // Send media first (in order), then the stringified text messages.
-    for (const mediaData of mediaItems) {
-      promptMessages.push({ type: 'media', content: mediaData })
-    }
-
-    promptMessages.push({
-      type: 'text',
-      input: JSON.stringify(textMessages),
-      prefill,
-      generationParams,
-      cacheKey,
-      saveCacheToDisk
-    })
+    const promptMessages = promptToAddonMessages(prompt, runOptions)
 
     const response = this._job.start()
 
@@ -382,6 +429,10 @@ class LlmLlamacpp {
     if (eventType === 'Error') {
       this.logger.error('Job failed with error:', error)
       this._job.fail(error)
+    } else if (eventType === 'BatchOutput') {
+      this._batchHandler.onOutput(data)
+    } else if (eventType === 'BatchResult') {
+      this._batchHandler.onResult(data)
     } else if (eventType === 'Output') {
       this._job.output(data)
     } else if (eventType === 'FinetuneProgress') {
@@ -394,7 +445,12 @@ class LlmLlamacpp {
       if (isFinetuneTerminal) {
         this._job.end(null, data)
       } else {
-        this._job.end(this.opts.stats ? data : null)
+        const batchResult = this._batchHandler.buildFinalResultIfActive()
+        if (batchResult !== null) {
+          this._job.end(this.opts.stats ? data : null, batchResult)
+        } else {
+          this._job.end(this.opts.stats ? data : null)
+        }
       }
     }
   }

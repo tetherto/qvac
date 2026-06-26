@@ -9,8 +9,10 @@ import {
   type RPCOptions,
   type ModelDescriptor,
   type SdcppConfig,
-  loadModelOptionsToRequestSchema,
+  loadBuiltinToRequestSchema,
+  loadCustomPluginToRequestSchema,
   reloadConfigOptionsToRequestSchema,
+  isBuiltInModelType,
   isModelTypeAlias,
   normalizeModelType,
   inferModelTypeFromModelSrc,
@@ -23,6 +25,7 @@ import {
   InvalidResponseError,
 } from "@/utils/errors-client";
 import { assertModelSrcMatchesModelType } from "@/utils/load-model-validation";
+import { parseClientInput } from "@/client/parse-input";
 import { getClientLogger } from "@/logging";
 import { decoratePromise } from "@/utils/decorate-promise";
 import { generateClientRequestId } from "@/client/api/client-request-id";
@@ -75,7 +78,10 @@ export function loadModel<S extends ModelDescriptor>(
  * @overloadLabel "Load new model"
  * @param options - An object that defines all configuration parameters required for loading the model, including:
  *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
- *   - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
+ *   - modelType: The canonical type of model ("llamacpp-completion",
+ *     "whispercpp-transcription", "llamacpp-embedding", "nmtcpp-translation",
+ *     "tts-ggml", ...). May be omitted when `modelSrc` is a registry descriptor
+ *     that already carries the engine.
  *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
@@ -92,27 +98,27 @@ export function loadModel<S extends ModelDescriptor>(
  * // Local file path - absolute path
  * const localModelId = await loadModel({
  *   modelSrc: "/home/user/models/llama-7b.gguf",
- *   modelType: "llm",
+ *   modelType: "llamacpp-completion",
  *   modelConfig: { ctx_size: 2048 }
  * });
  *
  * // Local file path - relative path
  * const relativeModelId = await loadModel({
  *   modelSrc: "./models/whisper-base.gguf",
- *   modelType: "whisper"
+ *   modelType: "whispercpp-transcription"
  * });
  *
  * // Hyperdrive URL with key and path
  * const hyperdriveId = await loadModel({
  *   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
- *   modelType: "llm",
+ *   modelType: "llamacpp-completion",
  *   modelConfig: { ctx_size: 2048 }
  * });
  *
  * // Remote HTTP/HTTPS URL with progress tracking
  * const remoteId = await loadModel({
  *   modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
- *   modelType: "llm",
+ *   modelType: "llamacpp-completion",
  *   onProgress: (progress) => {
  *     console.log(`Downloaded: ${progress.percentage}%`);
  *   }
@@ -121,7 +127,7 @@ export function loadModel<S extends ModelDescriptor>(
  * // Multimodal model with projection
  * const multimodalId = await loadModel({
  *   modelSrc: "https://huggingface.co/.../main-model.gguf",
- *   modelType: "llm",
+ *   modelType: "llamacpp-completion",
  *   modelConfig: {
  *     ctx_size: 512,
  *     projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
@@ -134,7 +140,7 @@ export function loadModel<S extends ModelDescriptor>(
  * // Whisper with VAD model
  * const whisperId = await loadModel({
  *   modelSrc: "https://huggingface.co/.../whisper-model.gguf",
- *   modelType: "whisper",
+ *   modelType: "whispercpp-transcription",
  *   modelConfig: {
  *     mode: "caption",
  *     output_format: "plaintext",
@@ -150,7 +156,7 @@ export function loadModel<S extends ModelDescriptor>(
  *
  * const modelId = await loadModel({
  *   modelSrc: "/path/to/model.gguf",
- *   modelType: "llm",
+ *   modelType: "llamacpp-completion",
  *   logger // Pass logger in options
  * });
  * ```
@@ -291,9 +297,6 @@ async function runLoadModel(
         "on typical mobile devices. Pass a `delegate` to `loadModel(...)` to " +
         "run generation on a desktop peer instead.";
       logger.warn(message);
-      // Surface via console too - if an RN host app doesn't wire getClientLogger()
-      // to a visible transport, logger.warn alone won't reach the dev.
-      console.warn(message);
     }
   }
 
@@ -305,8 +308,10 @@ async function runLoadModel(
   resolvedOptions = { ...resolvedOptions, requestId };
 
   const request = isReloadConfig
-    ? reloadConfigOptionsToRequestSchema.parse(resolvedOptions)
-    : loadModelOptionsToRequestSchema.parse(resolvedOptions);
+    ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)
+    : isBuiltInModelType(resolvedOptions["modelType"])
+      ? parseClientInput(loadBuiltinToRequestSchema, resolvedOptions)
+      : parseClientInput(loadCustomPluginToRequestSchema, resolvedOptions);
   const modelLogger = isReloadConfig
     ? undefined
     : (resolvedOptions["logger"] as LoadModelOptions["logger"]);

@@ -1004,4 +1004,115 @@ async function ensureLavaSRModels (options = {}) {
   }
 }
 
-module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureLavaSRModels }
+const MECAB_REGISTRY_SOURCE = 's3'
+const MECAB_IPADIC_DIRNAME = 'mecab-ipadic'
+const MECAB_IPADIC_FILES = [
+  { name: 'char.bin', minSize: 100000 },
+  { name: 'dicrc', minSize: 100 },
+  { name: 'matrix.bin', minSize: 1000000 },
+  { name: 'mecabrc', minSize: 50 },
+  { name: 'sys.dic', minSize: 10000000 },
+  { name: 'unk.dic', minSize: 1000 }
+].map((file) => ({
+  ...file,
+  registryPath: `qvac_models_compiled/chatterbox/${MECAB_IPADIC_DIRNAME}/${file.name}`,
+  registrySource: MECAB_REGISTRY_SOURCE
+}))
+
+function mecabDictComplete (dir) {
+  for (const file of MECAB_IPADIC_FILES) {
+    const filePath = path.join(dir, file.name)
+    if (!fs.existsSync(filePath)) return false
+    try {
+      if (fs.statSync(filePath).size < file.minSize) return false
+    } catch (e) {
+      return false
+    }
+  }
+  return true
+}
+
+function loadRegistryClient () {
+  try {
+    return require('@qvac/registry-client').QVACRegistryClient
+  } catch (err) {
+    console.log(' Registry client (@qvac/registry-client) not installed; skipping registry fetch.')
+    return null
+  }
+}
+
+async function downloadDictFileFromRegistry (file, destPath) {
+  const QVACRegistryClient = loadRegistryClient()
+  if (!QVACRegistryClient) return false
+
+  const destDir = path.dirname(destPath)
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true })
+
+  console.log(` Fetching ${file.name} from QVAC registry (${file.registrySource})...`)
+
+  let client
+  try {
+    client = new QVACRegistryClient()
+    await client.ready()
+    const result = await client.downloadModel(file.registryPath, file.registrySource, { outputFile: destPath })
+    if (result && result.artifact && result.artifact.path) {
+      const stats = fs.statSync(result.artifact.path)
+      if (stats.size < file.minSize) {
+        console.log(` Registry download too small: ${stats.size} bytes (expected >=${file.minSize})`)
+        try { fs.unlinkSync(destPath) } catch (_e) {}
+        return false
+      }
+      console.log(` ✓ Registry download: ${file.name} (${stats.size} bytes)`)
+      return true
+    }
+    console.log(' Registry download returned no artifact path')
+    return false
+  } catch (err) {
+    console.log(` Registry download failed: ${err && err.message ? err.message : String(err)}`)
+    try { fs.unlinkSync(destPath) } catch (_e) {}
+    return false
+  } finally {
+    if (client) {
+      try { await client.close() } catch (_e) {}
+    }
+  }
+}
+
+async function fetchMecabDictFromRegistry (targetDir) {
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
+
+  let allOk = true
+  for (const file of MECAB_IPADIC_FILES) {
+    const dest = path.join(targetDir, file.name)
+    if (fs.existsSync(dest)) {
+      try {
+        if (fs.statSync(dest).size >= file.minSize) continue
+      } catch (_e) {}
+      try { fs.unlinkSync(dest) } catch (_e) {}
+    }
+    const ok = await downloadDictFileFromRegistry(file, dest)
+    if (!ok) allOk = false
+  }
+  return allOk
+}
+
+async function ensureMecabDict (options = {}) {
+  const targetDir = options.targetDir || path.join(getBaseDir(), 'models', MECAB_IPADIC_DIRNAME)
+  console.log(`Ensuring MeCab/IPAdic dictionary (dir: ${targetDir})...`)
+
+  if (mecabDictComplete(targetDir)) {
+    console.log(` ✓ using MeCab dictionary at ${targetDir}`)
+    return { success: true, dir: targetDir }
+  }
+
+  if (await fetchMecabDictFromRegistry(targetDir)) {
+    return { success: true, dir: targetDir }
+  }
+
+  console.log(' MeCab/IPAdic dictionary not found locally and registry fetch failed.')
+  console.log(` Expected these files under ${targetDir}:`)
+  for (const file of MECAB_IPADIC_FILES) console.log(`   ${file.name}`)
+  return { success: false, dir: targetDir }
+}
+
+module.exports = { ensureFileDownloaded, ensureWhisperModel, ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureLavaSRModels, ensureMecabDict }

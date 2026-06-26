@@ -200,9 +200,46 @@ function _detectGpu (platform) {
     return null
   }
 
+  // NVIDIA kernel-driver procfs fallback for Linux. /proc/driver/nvidia exists
+  // whenever the nvidia module is loaded (guaranteed on a CUDA host) and carries
+  // the friendly model name, so it recovers "NVIDIA GeForce RTX 3090" even when
+  // the nvidia-smi *binary* is not installed / not on PATH — the case on the GPU
+  // CI runners. QVAC-20684.
+  function _readProcNvidia () {
+    let fsM = fs
+    let pathM = pathMod
+    if (!fsM || !pathM) {
+      try {
+        fsM = fsM || require('fs')
+        pathM = pathM || require('path')
+      } catch (_) {
+        return null
+      }
+    }
+    const base = '/proc/driver/nvidia/gpus'
+    let gpus
+    try {
+      gpus = fsM.readdirSync(base)
+    } catch (_) {
+      return null
+    }
+    for (const gpu of gpus.sort()) {
+      try {
+        const info = fsM.readFileSync(pathM.join(base, gpu, 'information'), 'utf8')
+        const m = info.match(/^Model:\s*(.+)$/m)
+        if (m) return m[1].trim()
+      } catch (_) {
+        continue
+      }
+    }
+    return null
+  }
+
   if (platform === 'linux') {
     const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
     if (nv) return nv
+    const proc = _readProcNvidia()
+    if (proc) return proc
     const lspci = _safeExec('lspci')
     if (lspci) {
       const lines = lspci.split('\n').filter(l => /VGA|3D|Display/i.test(l))
@@ -221,6 +258,14 @@ function _detectGpu (platform) {
   if (platform === 'win32') {
     const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
     if (nv) return nv
+    // PowerShell CIM: `wmic` was removed in Windows 11 24H2 / Server 2025, so it
+    // is absent on the windows-2025 runner. Try CIM first, keep wmic for older
+    // Windows images. QVAC-20684.
+    const ps = _safeExec('powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"')
+    if (ps) {
+      const lines = ps.split('\n').map(l => l.trim()).filter(Boolean)
+      if (lines.length) return lines[0]
+    }
     const wmic = _safeExec('wmic path win32_VideoController get name')
     if (wmic) {
       const lines = wmic.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
@@ -511,6 +556,14 @@ const METRIC_COLUMNS = {
     { key: 'ttfa_ms', label: 'TTFA (ms)' },
     { key: 'inter_chunk_p95_ms', label: 'Inter-chunk P95 (ms)' }
   ],
+  diffusion: [
+    { key: 'model_load_ms', label: 'Load (ms)' },
+    { key: 'generation_ms', label: 'Gen (ms)' },
+    { key: 'ttfb_ms', label: 'TTFB (ms)' },
+    { key: 'total_steps', label: 'Steps' },
+    { key: 'width', label: 'Width' },
+    { key: 'height', label: 'Height' }
+  ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
     { key: 'tps', label: 'TPS' }
@@ -593,6 +646,12 @@ function createPerformanceReporter (opts) {
           ode_time_ms: null,
           backend: null,
           platform: null,
+          model_load_ms: null,
+          generation_ms: null,
+          ttfb_ms: null,
+          total_steps: null,
+          width: null,
+          height: null,
           ...metrics
         },
         input: (extra && extra.input) || null,

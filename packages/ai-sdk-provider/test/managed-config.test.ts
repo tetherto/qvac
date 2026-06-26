@@ -106,10 +106,11 @@ test('synthesizeServeConfig rejects duplicate model names (string or spec)', () 
 
 test('synthesizeServeConfig rejects more than one explicit default', () => {
   assert.throws(
-    () => synthesizeServeConfig([
-      { name: KNOWN, default: true },
-      { name: 'QWEN3_1_7B_INST_Q4', default: true }
-    ]),
+    () =>
+      synthesizeServeConfig([
+        { name: KNOWN, default: true },
+        { name: 'QWEN3_1_7B_INST_Q4', default: true }
+      ]),
     (err: unknown) => {
       assert.ok(err instanceof MultipleDefaultManagedModelsError)
       assert.equal(err.code, 'MULTIPLE_DEFAULTS')
@@ -138,10 +139,7 @@ test('synthesizeServeConfig honors an explicit preload: false', () => {
 })
 
 test('synthesizeServeConfig honors an explicit default on a non-first model', () => {
-  const config = synthesizeServeConfig([
-    KNOWN,
-    { name: 'QWEN3_1_7B_INST_Q4', default: true }
-  ])
+  const config = synthesizeServeConfig([KNOWN, { name: 'QWEN3_1_7B_INST_Q4', default: true }])
   const entries = config.serve.models
 
   // The explicit default wins; the first model is NOT auto-defaulted.

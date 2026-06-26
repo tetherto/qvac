@@ -9,10 +9,7 @@ export function getServerLogger(options?: LoggerOptions): Logger {
     return cachedLogger;
   }
 
-  const logger = createStreamLogger(SDK_LOG_ID, SDK_SERVER_NAMESPACE, {
-    enableConsole: true, // SDK logs should still print to console
-    ...options,
-  });
+  const logger = createStreamLogger(SDK_LOG_ID, SDK_SERVER_NAMESPACE, options);
 
   if (!options) {
     cachedLogger = logger;

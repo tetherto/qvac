@@ -29,11 +29,10 @@
  * ONNX bundle into a single .gguf via
  * scripts/convert-supertonic2-to-gguf.py --arch supertonic.
  *
- * NOTE: Supertonic is CPU-only in tts-cpp today (engine docstring at
- * include/tts-cpp/supertonic/engine.h: "CPU only today").  Passing
- * useGPU=true throws at construction with a message pointing at the
- * limitation; the example explicitly sets useGPU=false.  Chatterbox
- * (turbo + MTL) keeps GPU enabled by default.
+ * NOTE: Supertonic supports GPU on capable hosts (Metal on Apple,
+ * Vulkan/CUDA on desktop, and Android via tts-cpp's per-vendor
+ * allowlist); opt in with config: { useGPU: true }.  This example keeps
+ * useGPU=false so it runs identically everywhere.
  */
 
 const fs = require('bare-fs')

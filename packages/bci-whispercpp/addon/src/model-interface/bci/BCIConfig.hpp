@@ -34,6 +34,12 @@ struct BCIConfig {
   // in transcription-whispercpp 0.9.0.
   std::string backendsDir;
 
+  // Explicit path to the BCI embedder weights file
+  // (`configurationParams.embedderPath` from JS). When empty, BCIModel
+  // falls back to resolving `bci-embedder.bin` next to the GGML model
+  // file. Lets callers store the embedder separately from the model.
+  std::string embedderPath;
+
   // Owned storage for string values that whisper_full_params references by
   // pointer (e.g. p.language = lang_.c_str()). Must outlive the params struct.
   mutable std::string lang_;

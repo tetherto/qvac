@@ -4,8 +4,8 @@
 #include <string>
 #include <utility>
 
-#include <nlohmann/json.hpp>
 #include <inference-addon-cpp/Errors.hpp>
+#include <nlohmann/json.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "common/json-schema-to-grammar.h"
@@ -29,6 +29,21 @@ void applyGenerationOverridesToSampling(
   setIf(overrides.presence_penalty, sampling.penalty_present);
   setIf(overrides.repeat_penalty, sampling.penalty_repeat);
 
+  // Forward reasoning_budget into the budget-sampler's token cap. The
+  // template-specific start/end/forced vectors are refreshed after prompt
+  // formatting, where common_chat_params exposes the thinking tags.
+  if (overrides.reasoning_budget) {
+    const int budget = *overrides.reasoning_budget;
+    if (budget > 0) {
+      sampling.reasoning_budget_tokens = budget;
+    } else {
+      sampling.reasoning_budget_tokens = -1;
+      sampling.reasoning_budget_start.clear();
+      sampling.reasoning_budget_end.clear();
+      sampling.reasoning_budget_forced.clear();
+    }
+  }
+
   // `json_schema` and `grammar` are mutually exclusive at the JS boundary
   // and in `AddonJs::runJob::parseText`, so reaching this branch with both
   // set means a caller bypassed those checks (most likely the C++ unit
@@ -47,9 +62,8 @@ void applyGenerationOverridesToSampling(
   if (overrides.json_schema) {
     try {
       auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);
-      sampling.grammar =
-          common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT,
-                         json_schema_to_grammar(parsed));
+      sampling.grammar = common_grammar(
+          COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, json_schema_to_grammar(parsed));
     } catch (const std::exception& ex) {
       throw qvac_errors::StatusError(
           ADDON_ID,

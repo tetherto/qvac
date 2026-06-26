@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.2.2",
+  "version": "0.3.6",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -12,6 +12,7 @@
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
+    "example:chatterbox-adjust-speed": "bare examples/chatterbox-adjust-speed.js",
     "example:chatterbox-mtl-sweep": "bare examples/chatterbox-mtl-sweep-tts.js",
     "example:chatterbox-sentence-stream": "bare examples/chatterbox-sentence-stream-tts.js",
     "example:chatterbox-chunk-stream": "bare examples/chatterbox-chunk-stream-tts.js",
@@ -24,6 +25,9 @@
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
+    "test:benchmark:streaming": "brittle-bare test/benchmark/streaming-benchmark.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target tts_ggml_tests && bare-make install",
@@ -56,7 +60,6 @@
     "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
-    "test/utils/loader.fake.js",
     "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
     "test/data/sentences-medium.js",
@@ -81,11 +84,11 @@
     "directory": "packages/tts-ggml"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/registry-client": "^0.4.0",
-    "@qvac/transcription-whispercpp": "^0.5.5",
+    "@qvac/transcription-whispercpp": "^0.10.1",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.1",
     "brittle": "^3.17.0",
@@ -98,7 +101,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/infer-base": "^0.6.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",

@@ -38,6 +38,11 @@ declare interface WhisperConfig {
 declare interface BCIWhispercppFiles {
   /** Absolute path to the BCI GGML model file. */
   model: string
+  /**
+   * Optional path to the embedder weights file. When omitted the native
+   * addon resolves `bci-embedder.bin` from the same directory as `model`.
+   */
+  embedder?: string
 }
 
 declare interface BCIWhispercppArgs {

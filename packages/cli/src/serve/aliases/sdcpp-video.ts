@@ -16,13 +16,14 @@ export const SDCPP_VIDEO_TYPE = 'sdcpp-video'
 const NESTED_MODEL_SRC_KEYS = [
   'clipLModelSrc',
   'clipGModelSrc',
+  'clipVisionModelSrc',
   't5XxlModelSrc',
   'llmModelSrc',
   'vaeModelSrc',
   'highNoiseDiffusionModelSrc'
 ] as const
 
-export function resolveSdcppVideoAlias (rawConfig: Record<string, unknown>): {
+export function resolveSdcppVideoAlias(rawConfig: Record<string, unknown>): {
   sdkType: string
   endpointCategory: string
   config: Record<string, unknown>

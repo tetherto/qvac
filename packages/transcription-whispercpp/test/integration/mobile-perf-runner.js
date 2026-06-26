@@ -5,7 +5,6 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
 const binding = require('../../binding')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
   detectPlatform,
   setupJsLogger,
@@ -94,7 +93,6 @@ async function runMobilePerfCase (t, opts) {
 
     const constructorArgs = {
       files: { model: modelPath },
-      loader: new FakeDL({}),
       opts: { stats: true }
     }
 
@@ -192,6 +190,18 @@ async function runMobilePerfCase (t, opts) {
       // is in the device-farm logcat capture for review.
       t.ok(backendId === 3 || backendId === 4,
         modelLabel + ' ' + epLabel + ' Android with use_gpu=true should select a GPU backend (Vulkan=3 or OpenCL=4); got ' + backendId)
+    } else if (useGPU && platform.startsWith('ios')) {
+      // On iOS with use_gpu=true we expect ggml to have registered the
+      // Metal backend (backendId 1). Metal ships inside the statically
+      // linked `ggml-speech` (metal is a default-feature of that port on
+      // osx | ios and is re-asserted by whisper-cpp[metal] in vcpkg.json),
+      // so unlike Android there is no loose dynamic-backend `.so` to stage
+      // — the backend is present in the .bare module itself. This is the
+      // device-farm guard that iOS actually offloads to Metal (and that
+      // the historical MTLCompiler XPC init crash has not regressed)
+      // rather than silently falling back to CPU.
+      t.is(backendId, 1,
+        modelLabel + ' ' + epLabel + ' iOS with use_gpu=true should select the Metal backend (backendId=1); got ' + backendId)
     }
 
     console.log('Mobile perf case ' + modelLabel + ' ' + epLabel + ' completed successfully!\n')

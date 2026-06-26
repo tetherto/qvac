@@ -5,6 +5,7 @@ import { ModelType } from "./model-types";
 const modelRegistryEntryAddonSchema = z.enum([
   "llm",
   "whisper",
+  "bci",
   "embeddings",
   "nmt",
   "vad",
@@ -25,11 +26,12 @@ const modelRegistryEntryAddonSchema = z.enum([
 export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppCompletion,
   ModelType.whispercppTranscription,
+  ModelType.bciWhispercppTranscription,
   ModelType.llamacppEmbedding,
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
   ModelType.ttsGgml,
-  ModelType.onnxOcr,
+  ModelType.ggmlOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
   ModelType.ggmlVla,

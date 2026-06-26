@@ -1,5 +1,55 @@
 # Changelog
 
+# QVAC CLI v0.7.0 Release Notes
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.7.0
+
+This release adds image-to-video generation and audio encoding to the OpenAI-compatible HTTP server. It also fixes token accounting and `finish_reason` reporting across all chat-category routes.
+
+## New Features
+
+### Image-to-video via POST /v1/videos
+
+`POST /v1/videos` now supports img2vid in addition to txt2vid. Supply the reference image as a multipart file field (the form the OpenAI SDK sends for `Uploadable`), as a JSON `{ image_url }` (base64 data URI or HTTP(S) URL up to 100 MB), or as a JSON `{ file_id }` referencing a previously uploaded file. Mode is inferred automatically from the presence of `input_reference`.
+
+```typescript
+import OpenAI, { toFile } from 'openai'
+import fs from 'node:fs'
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1' })
+
+// img2vid via local file (multipart)
+const job = await client.videos.create({
+  model: 'wan-i2v',
+  prompt: 'subject slowly turns and smiles',
+  input_reference: await toFile(fs.createReadStream('./frame.png'), 'frame.png')
+})
+
+// img2vid via data URI (JSON)
+const job2 = await client.videos.create({
+  model: 'wan-i2v',
+  prompt: 'subject slowly turns and smiles',
+  input_reference: { image_url: 'data:image/png;base64,...' }
+})
+```
+
+### Audio encoding — mp3, opus, aac, flac
+
+`POST /v1/audio/speech` now supports `response_format: "mp3"`, `"opus"`, `"aac"`, and `"flac"` in addition to `wav` and `pcm`. Encoding is handled by `ffmpeg` on the server's `PATH`; if ffmpeg is absent, these formats return `503 transcode_unavailable`. Use `qvac doctor` to check availability.
+
+Two new discovery endpoints are also available:
+
+```
+GET /v1/audio/voices  →  list of configured TTS voices
+GET /v1/audio/models  →  list of loaded (READY) TTS models
+```
+
+## Bug Fixes
+
+### Correct finish_reason and token accounting
+
+`finish_reason: "length"` is now returned when generation is truncated by `max_tokens` or `max_completion_tokens` (previously always `"stop"`). The Responses API equivalent is `status: "incomplete"` with `incomplete_details.reason: "max_output_tokens"`. Token counts (`completion_tokens` / `output_tokens`) now consistently use the SDK's `generatedTokens` stats across `/v1/chat/completions`, `/v1/completions`, and `/v1/responses`.
+
 ## [0.6.0]
 
 Release Date: 2026-06-02
@@ -19,6 +69,7 @@ The SDK was previously a dev-only dependency that the CLI expected the host proj
 This is the first release that depends on the published `@qvac/sdk@0.12.0` `./commands` subpath, into which the bundle/verify implementation moved. There is nothing for consumers to do beyond a normal install; the SDK comes with the CLI.
 
 **Before:**
+
 ```json
 {
   "devDependencies": {
@@ -28,6 +79,7 @@ This is the first release that depends on the published `@qvac/sdk@0.12.0` `./co
 ```
 
 **After:**
+
 ```json
 {
   "dependencies": {
@@ -45,6 +97,7 @@ This is the first release that depends on the published `@qvac/sdk@0.12.0` `./co
 With the Fastify + Zod rewrite of the `serve` HTTP layer, request validation and error codes are aligned with OpenAI semantics. A request naming a model that is not configured now fails with `404 model_not_found` instead of being rejected later as a `400` on an unrelated field such as `output_format`.
 
 **Before:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -54,6 +107,7 @@ $ curl -sX POST .../v1/images/generations \
 ```
 
 **After:**
+
 ```sh
 $ curl -sX POST .../v1/images/generations \
     -H 'Content-Type: application/json' \
@@ -81,6 +135,7 @@ qvac openai spec -o spec.json    # write to a file
 `qvac serve openai` now exposes text-to-video on the OpenAI `/v1/videos` surface, backed by the SDK's `sdcpp-video` model type. Generation is asynchronous: `POST /v1/videos` returns a job that you poll with `GET /v1/videos/{id}`, fetch with `GET /v1/videos/{id}/content`, and clean up with `DELETE /v1/videos/{id}`.
 
 Configure a video model in `qvac.config.json`:
+
 ```json
 {
   "serve": {
@@ -324,12 +379,14 @@ The wire is the new `requestId` exposed synchronously on the SDK's decorated pro
 
 ```typescript
 // Inside qvac serve route handler (illustrative)
-import { sdkCompletion } from "@qvac/cli/serve/core/sdk";
-import { bindClientDisconnectCancel } from "@qvac/cli/serve/core/cancel-bridge";
+import { sdkCompletion } from '@qvac/cli/serve/core/sdk'
+import { bindClientDisconnectCancel } from '@qvac/cli/serve/core/cancel-bridge'
 
-const run = sdkCompletion({ /* ... */ });
-bindClientDisconnectCancel(req, res, run.requestId, logger);
-const final = await run.final;
+const run = sdkCompletion({
+  /* ... */
+})
+bindClientDisconnectCancel(req, res, run.requestId, logger)
+const final = await run.final
 ```
 
 The bridge is idempotent (`req.once('close', ...)`), short-circuits if the response already finished (`res.writableEnded`), and swallows the `sdkCancel` rejection so a slow-or-failed cancel never breaks the response handler.
@@ -443,9 +500,7 @@ Blocking JSON response (default):
   "created": 1718000000,
   "output_format": "png",
   "size": "1024x1024",
-  "data": [
-    { "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 

@@ -30,10 +30,7 @@ test('resolveModelConstant maps a public id to its constant', () => {
 })
 
 test('resolveModelConstant passes a bare constant through unchanged', () => {
-  assert.equal(
-    resolveModelConstant('QWEN3_5_9B_MULTIMODAL_Q4_K_M'),
-    'QWEN3_5_9B_MULTIMODAL_Q4_K_M'
-  )
+  assert.equal(resolveModelConstant('QWEN3_5_9B_MULTIMODAL_Q4_K_M'), 'QWEN3_5_9B_MULTIMODAL_Q4_K_M')
   // An unknown / non-catalog constant is left untouched (back-compat).
   assert.equal(resolveModelConstant('QWEN3_600M_INST_Q4'), 'QWEN3_600M_INST_Q4')
 })

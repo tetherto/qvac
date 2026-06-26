@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.12.x (latest)
+title: API Summary — v0.13.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,11 +12,71 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 45 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 47 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
 ## Functions
+
+### `bciTranscribe`
+
+Has 2 overloads.
+
+#### Overload 1
+Transcribe a neural-signal buffer with a loaded BCI model and return the
+complete text. Accepts either a `.bin` file path or a raw neural buffer.
+
+**Signature**:
+
+```ts
+function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; startMs: number; text: string }[]> & { requestId: string };
+```
+
+#### Overload 2
+Transcribe a neural-signal buffer with a loaded BCI model and return the
+complete text. Accepts either a `.bin` file path or a raw neural buffer.
+
+**Signature**:
+
+```ts
+function bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };
+```
+
+---
+
+### `bciTranscribeStream`
+
+Has 2 overloads.
+
+#### Overload 1
+Opens a bidirectional streaming BCI transcription session. Neural-signal
+chunks are streamed in via `write()`, and transcription is yielded as the
+addon's sliding window decodes successive windows.
+
+The returned session is single-use. Attempting to iterate a second time
+will throw a `TranscriptionFailedError`.
+
+**Signature**:
+
+```ts
+function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
+```
+
+#### Overload 2
+Opens a bidirectional streaming BCI transcription session. Neural-signal
+chunks are streamed in via `write()`, and transcription is yielded as the
+addon's sliding window decodes successive windows.
+
+The returned session is single-use. Attempting to iterate a second time
+will throw a `TranscriptionFailedError`.
+
+**Signature**:
+
+```ts
+function bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;
+```
+
+---
 
 ### `cancel`
 
@@ -312,7 +372,7 @@ Generates embeddings for a single text using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "gpu" | "cpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "gpu" | "cpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -325,7 +385,7 @@ Generates embeddings for multiple texts using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "gpu" | "cpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "gpu" | "cpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -396,7 +456,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
@@ -1460,9 +1520,8 @@ Generates a video using a loaded video diffusion model.
 function video(params: VideoClientParams): VideoResult;
 ```
 
-**Example**:
+**Examples**:
 ```ts
-// Basic txt2vid generation
 const { outputs, stats } = video({
   modelId,
   mode: "txt2vid",
@@ -1474,8 +1533,9 @@ const { outputs, stats } = video({
 });
 const buffers = await outputs;
 fs.writeFileSync("output.avi", buffers[0]);
+```
 
-// With progress tracking
+```ts
 const { progressStream, outputs } = video({
   modelId,
   mode: "txt2vid",
@@ -1485,8 +1545,20 @@ for await (const { step, totalSteps } of progressStream) {
   console.log(`${step}/${totalSteps}`);
 }
 const buffers = await outputs;
+```
 
-// With control frames (e.g. for guided generation)
+```ts
+const firstFrame = fs.readFileSync("portrait.png");
+const { outputs } = video({
+  modelId,
+  mode: "img2vid",
+  prompt: "the subject slowly turns and smiles, cinematic lighting",
+  init_image: firstFrame,
+  strength: 0.85,
+});
+```
+
+```ts
 const frameA = fs.readFileSync("frame-a.png");
 const frameB = fs.readFileSync("frame-b.png");
 const { outputs } = video({
@@ -1495,8 +1567,9 @@ const { outputs } = video({
   prompt: "smooth transition between scenes",
   control_frames: [frameA, frameB],
 });
+```
 
-// Cancellation via requestId
+```ts
 const { requestId, outputs } = video({ modelId, mode: "txt2vid", prompt: "..." });
 // ...later
 await cancel(requestId);
@@ -1506,8 +1579,8 @@ await cancel(requestId);
 
 ### `vla`
 
-Run SmolVLA inference on a loaded VLA model and return the produced action
-chunk plus per-stage timings.
+Run VLA inference on a loaded model (SmolVLA or π₀.₅) and return the
+produced action chunk plus per-stage timings.
 
 **Signature**:
 
@@ -1652,6 +1725,8 @@ and read `error.code` / `error.cause`. Code ranges:
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
 | `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
 | `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
+| `WORKER_CRASHED` | 50205 | Bare worker exited mid-request (code=…, signal=…) — in-flight calls were aborted |
+| `WORKER_SHUTDOWN` | 50206 | SDK is shutting down — in-flight RPC call aborted |
 | `PROVIDER_START_FAILED` | 50400 | Failed to start provider… |
 | `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider… |
 | `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider |

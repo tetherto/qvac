@@ -228,7 +228,13 @@ async function runTTS (model, params, expectation = {}, options = {}) {
           audioDurationMs: stats.audioDurationMs,
           totalSamples: stats.totalSamples,
           backendDevice: stats.backendDevice,
-          backendId: stats.backendId
+          backendId: stats.backendId,
+          // The allowlist above dropped gpuUnsupported, so gpu-smoke's
+          // policy-CPU escape hatch (allowPolicyCpu && dev===0 &&
+          // stats.gpuUnsupported) never saw the flag the engine set and the
+          // Chatterbox/Mali fallback failed the strict assertion. Pass it
+          // through (runSupertonicTTS already returns the raw stats object).
+          gpuUnsupported: stats.gpuUnsupported
         }
       : null
 

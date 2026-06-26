@@ -9,12 +9,13 @@ import { z } from "zod";
 export const ModelType = {
   llamacppCompletion: "llamacpp-completion",
   whispercppTranscription: "whispercpp-transcription",
+  bciWhispercppTranscription: "bci-whispercpp-transcription",
   llamacppEmbedding: "llamacpp-embedding",
   nmtcppTranslation: "nmtcpp-translation",
   onnxTts: "onnx-tts",
   ttsGgml: "tts-ggml",
   parakeetTranscription: "parakeet-transcription",
-  onnxOcr: "onnx-ocr",
+  ggmlOcr: "ggml-ocr",
   sdcppGeneration: "sdcpp-generation",
   ggmlVla: "ggml-vla",
   ggmlClassification: "ggml-classification",
@@ -24,6 +25,7 @@ export const ModelType = {
 const AliasKeys = {
   llm: "llm",
   whisper: "whisper",
+  bci: "bci",
   embeddings: "embeddings",
   nmt: "nmt",
   parakeet: "parakeet",
@@ -42,11 +44,12 @@ const AliasKeys = {
 export const ModelTypeAliases = {
   [AliasKeys.llm]: ModelType.llamacppCompletion,
   [AliasKeys.whisper]: ModelType.whispercppTranscription,
+  [AliasKeys.bci]: ModelType.bciWhispercppTranscription,
   [AliasKeys.embeddings]: ModelType.llamacppEmbedding,
   [AliasKeys.nmt]: ModelType.nmtcppTranslation,
   [AliasKeys.parakeet]: ModelType.parakeetTranscription,
   [AliasKeys.tts]: ModelType.ttsGgml,
-  [AliasKeys.ocr]: ModelType.onnxOcr,
+  [AliasKeys.ocr]: ModelType.ggmlOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
   [AliasKeys.vla]: ModelType.ggmlVla,
   [AliasKeys.classification]: ModelType.ggmlClassification,
@@ -69,12 +72,11 @@ const canonicalValuesSet = new Set<string>(Object.values(ModelType));
  *
  * @example
  * ```typescript
- * // Using alias (backward compatible)
- * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmt });
- * // MODEL_TYPES.nmt resolves to "nmtcpp-translation"
- *
- * // Using canonical name directly
+ * // Preferred: canonical name
  * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmtcppTranslation });
+ *
+ * // Deprecated: alias (still resolves to "nmtcpp-translation")
+ * loadModel({ modelSrc: "...", modelType: MODEL_TYPES.nmt });
  * ```
  */
 export const PUBLIC_MODEL_TYPES = {
@@ -167,6 +169,18 @@ export const whisperModelTypeSchema = modelTypeInputSchema
 export type WhisperModelTypeInput = z.infer<typeof whisperModelTypeSchema>;
 
 /**
+ * BCI/Transcription model type schema.
+ * - Alias: `"bci"` → resolves to `"bci-whispercpp-transcription"`
+ * - Canonical: `"bci-whispercpp-transcription"`
+ */
+export const bciModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.bci, ModelType.bciWhispercppTranscription])
+  .describe(
+    'BCI model type: "bci" (alias) or "bci-whispercpp-transcription" (canonical)',
+  );
+export type BciModelTypeInput = z.infer<typeof bciModelTypeSchema>;
+
+/**
  * Parakeet/Transcription model type schema.
  * - Alias: `"parakeet"` → resolves to `"parakeet-transcription"`
  * - Canonical: `"parakeet-transcription"`
@@ -216,12 +230,12 @@ export type TtsModelTypeInput = z.infer<typeof ttsModelTypeSchema>;
 
 /**
  * OCR model type schema.
- * - Alias: `"ocr"` → resolves to `"onnx-ocr"`
- * - Canonical: `"onnx-ocr"`
+ * - Alias: `"ocr"` → resolves to `"ggml-ocr"`
+ * - Canonical: `"ggml-ocr"`
  */
 export const ocrModelTypeSchema = modelTypeInputSchema
-  .extract([AliasKeys.ocr, ModelType.onnxOcr])
-  .describe('OCR model type: "ocr" (alias) or "onnx-ocr" (canonical)');
+  .extract([AliasKeys.ocr, ModelType.ggmlOcr])
+  .describe('OCR model type: "ocr" (alias) or "ggml-ocr" (canonical)');
 export type OcrModelTypeInput = z.infer<typeof ocrModelTypeSchema>;
 
 /**

@@ -271,7 +271,8 @@ jobs:
             echo "published_version=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish-release:
+  # Tag the published version (no GitHub Release; SDK-only releases policy)
+  create-tag:
     needs: [publish-npm]
     if: |
       !cancelled() &&
@@ -279,13 +280,10 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release.yml
+    uses: ./.github/workflows/create-release-tag.yml
     with:
       repo_name: "whispercpp"
-      release_name: "QVAC Transcription Whisper Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-      prev_sha: ${{ github.event.before }}
-      workdir: "packages/transcription-whispercpp"
 
   post-build-gate:
     name: Post-Build Gate
@@ -339,25 +337,3 @@ jobs:
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-
-  benchmark:
-    name: Trigger Benchmark (Whispercpp)
-    runs-on: ubuntu-latest
-    environment: release
-    needs:
-      - post-build-gate
-      - label-gate
-    if: "needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.post-build-gate.outputs.should_run_tests == 'true')"
-    steps:
-      - name: Trigger benchmark workflow
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          gh workflow run benchmark-transcription-whispercpp.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f dataset_type=librispeech \
-            -f language=english \
-            -f model_size=tiny \
-            -f streaming_mode=false \
-            -f workdir=packages/transcription-whispercpp

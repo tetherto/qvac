@@ -35,6 +35,11 @@ on:
         required: false
         type: number
         default: 60
+      device-farm-start-timeout:
+        description: "Maximum time in minutes to wait for Device Farm runs to enter RUNNING before starting the producer."
+        required: false
+        type: number
+        default: 90
       device-farm-project-arn:
         description: "AWS Device Farm project ARN"
         required: true
@@ -621,9 +626,41 @@ jobs:
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
+  wait-device-farm-running:
+    name: "[ios] wait-device-farm-running"
+    needs: [build, device-farm]
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
+          sparse-checkout-cone-mode: false
+
+      - name: Download run ARNs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: device-farm-arn-ios-${{ needs.build.outputs.runId }}-*
+          path: ./run-arns
+          merge-multiple: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Wait for Device Farm runs to enter RUNNING
+        uses: ./.github/actions/sdk-device-farm-wait-for-running
+        with:
+          platform: ios
+          run-arns-directory: ./run-arns
+          start-timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+
   run-producer:
     name: "[ios] run-producer"
-    needs: build
+    needs: [build, wait-device-farm-running]
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 90
@@ -889,7 +926,7 @@ jobs:
 
   cleanup-device-farm:
     name: "[ios] cleanup-device-farm"
-    needs: [build, run-producer, device-farm]
+    needs: [build, device-farm, wait-device-farm-running, run-producer]
     if: always()
     runs-on: ubuntu-latest
     environment: release

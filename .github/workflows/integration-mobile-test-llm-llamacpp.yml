@@ -2,7 +2,7 @@ name: Mobile Integration Tests (LLM)
 
 # Migrated to .github/actions/run-mobile-integration-tests in QVAC-18168.
 #
-# LLM uses sharded scheduling: 2 Android groups + 10 iOS groups, each
+# LLM uses sharded scheduling: 8 Android groups + 15 iOS groups, each
 # scheduled as its own Device Farm run against the LLM device pool. The
 # group definitions live in the addon at test/mobile/test-groups.json so
 # adding/moving a test changes the shard composition without editing this
@@ -41,6 +41,16 @@ on:
         type: string
         required: false
         default: ""
+      job_timeout_minutes:
+        description: "Override the build-and-test job timeout (minutes). Default 150. Raised by Benchmark Performance (LLM) where the sharded matrix needs more headroom."
+        type: number
+        required: false
+        default: 150
+      artifact_suffix:
+        description: "Optional suffix appended to the perf-report artifact-name stem (before the platform segment) so multiple invocations in one run (e.g. Benchmark batches) don't collide. Default empty keeps the existing name."
+        type: string
+        required: false
+        default: ""
       pre_build_script:
         description: "Optional node script (path under packages/llm-llamacpp) run before the mobile build to bootstrap a benchmark into the framework (stage files + regenerate the test list). Default '' = no-op."
         type: string
@@ -71,11 +81,6 @@ on:
         type: string
         required: false
         default: ""
-      artifact_suffix:
-        description: "Optional extra suffix for the per-job artifact names (console-logs/perf-report/devicefarm-logs), so callers running several jobs per platform don't collide. Default '' = unchanged."
-        type: string
-        required: false
-        default: ""
       mocha_timeout_ms:
         description: "Override the WDIO/Mocha per-test timeout in ms (mochaOpts.timeout). Default '' keeps the established 2100000 (35 min) — unchanged for existing callers."
         type: string
@@ -91,6 +96,24 @@ on:
         type: string
         required: false
         default: ""
+    # Additive outputs (QVAC weekend job): surface the monitor verdict so a
+    # caller can read real pass/fail past the job's `continue-on-error: true`.
+    # When a caller runs both platforms in one call the matrix overwrites these
+    # nondeterministically — single-platform callers (the weekend workflow uses
+    # `platforms:` to run one platform per call) get a well-defined value.
+    outputs:
+      test-result:
+        description: "Aggregate Device Farm verdict ('passed'/'failed')."
+        value: ${{ jobs.build-and-test.outputs.test-result }}
+      test-total:
+        description: "Total test cases executed."
+        value: ${{ jobs.build-and-test.outputs.test-total }}
+      test-passed:
+        description: "Test cases passed."
+        value: ${{ jobs.build-and-test.outputs.test-passed }}
+      test-failed:
+        description: "Test cases failed."
+        value: ${{ jobs.build-and-test.outputs.test-failed }}
   workflow_dispatch:
     inputs:
       ref:
@@ -124,8 +147,15 @@ jobs:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 150 }}
     continue-on-error: true
+    # Surfaced as workflow_call outputs above so schedule-driven callers can
+    # report a verdict (the job itself never fails — continue-on-error).
+    outputs:
+      test-result: ${{ steps.monitor.outputs.test-result }}
+      test-total: ${{ steps.monitor.outputs.test-total }}
+      test-passed: ${{ steps.monitor.outputs.test-passed }}
+      test-failed: ${{ steps.monitor.outputs.test-failed }}
     permissions:
       contents: read
       packages: read
@@ -180,6 +210,20 @@ jobs:
           prebuild-artifact-prefix: ${{ inputs.addon_npm_version == '' && 'llama-cpp-' || '' }}
           package-version: ${{ inputs.addon_npm_version }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+
+      # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
+      # committed — they are generated from test/integration/_benchmark-matrix.js.
+      # Regenerate them after setup (which provisions Node) but before the
+      # bundle is built, so the Device Farm app contains them, then hard-fail if
+      # any are still missing. This makes it impossible to build the bundle
+      # without the shards present. (Runs for every LLM mobile run; for
+      # non-benchmark runs the generated shards are simply skipped, like any
+      # other mobile-only test.)
+      - name: Generate benchmark shards
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          npm run generate:benchmark-shards
+          node scripts/generate-benchmark-shards.js --assert-shards
 
       # ── Benchmark bootstrap (additive, opt-in via pre_build_script) ──────────
       # When a caller passes pre_build_script (only the VLM benchmark does), run the
@@ -281,6 +325,7 @@ jobs:
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
@@ -316,7 +361,7 @@ jobs:
           platform: ${{ matrix.platform }}
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          artifact-name: perf-report-llamacpp-llm-${{ matrix.platform }}${{ inputs.artifact_suffix != '' && format('-{0}', inputs.artifact_suffix) || '' }}-${{ github.run_number }}
+          artifact-name: perf-report-llamacpp-llm-${{ inputs.artifact_suffix }}${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

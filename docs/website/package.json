@@ -4,7 +4,7 @@
   "description": "Official documentation and single source of truth for QVAC",
   "private": true,
   "scripts": {
-    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/**/*.ts",
+    "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts",
     "build": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links",
     "build:static": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",
@@ -40,6 +40,7 @@
     "next": "^16.2.6",
     "next-themes": "^0.4.6",
     "openai": "^6.38.0",
+    "prettier": "^3.8.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

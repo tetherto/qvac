@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Logger } from "@/logging";
 import {
   llmConfigBaseSchema,
   embedConfigBaseSchema,
@@ -10,9 +11,15 @@ import {
   parakeetLoadConfigSchema,
 } from "./transcription-config";
 import type { parakeetConfigSchema } from "./transcription-config";
+import { bciConfigSchema } from "./bci-config";
 import { delegateSchema } from "./delegate";
-import { nmtConfigSchema } from "./translation-config";
-import { ttsConfigSchema } from "./text-to-speech";
+import { nmtConfigBaseSchema, nmtConfigSchema } from "./translation-config";
+import {
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsChatterboxLoadConfigSchema,
+  ttsConfigSchema,
+  ttsSupertonicLoadConfigSchema,
+} from "./text-to-speech";
 import { ocrConfigSchema } from "./ocr";
 import {
   modelSrcInputSchema,
@@ -23,6 +30,7 @@ import {
 import {
   llmModelTypeSchema,
   whisperModelTypeSchema,
+  bciModelTypeSchema,
   parakeetModelTypeSchema,
   embeddingsModelTypeSchema,
   nmtModelTypeSchema,
@@ -33,6 +41,7 @@ import {
   classificationModelTypeSchema,
   ModelType,
   ModelTypeAliases,
+  normalizeModelType,
   type CanonicalModelType,
   type ModelTypeInput,
 } from "./model-types";
@@ -45,7 +54,10 @@ const builtInModelTypes = new Set([
   ...Object.values(ModelType),
   ...Object.keys(ModelTypeAliases),
 ]);
-import type { Logger } from "@/logging";
+
+export function isBuiltInModelType(modelType: unknown): boolean {
+  return typeof modelType === "string" && builtInModelTypes.has(modelType);
+}
 import { reloadConfigRequestSchema } from "./reload-config";
 
 const loadModelCommonFields = {
@@ -62,6 +74,78 @@ const loadModelRequestCommonFields = {
   requestId: z.string().min(1).optional(),
 };
 
+const topLevelLoadModelOptionKeys = new Set([
+  ...Object.keys(loadModelRequestCommonFields),
+  "modelType",
+  "modelConfig",
+]);
+
+type ShapeSchema = { shape: Record<string, unknown> };
+
+const modelConfigKeysByModelType = new Map<string, Set<string>>([
+  [ModelType.llamacppCompletion, configKeys(llmConfigBaseSchema)],
+  [ModelType.whispercppTranscription, configKeys(whisperConfigSchema)],
+  [ModelType.bciWhispercppTranscription, configKeys(bciConfigSchema)],
+  [ModelType.parakeetTranscription, configKeys(parakeetLoadConfigSchema)],
+  [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
+  [
+    ModelType.nmtcppTranslation,
+    configKeys(...nmtConfigBaseSchema.options),
+  ],
+  [
+    ModelType.ttsGgml,
+    configKeys(
+      ttsChatterboxLoadConfigSchema,
+      ttsSupertonicLoadConfigSchema,
+      LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+    ),
+  ],
+  [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
+  [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
+  [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
+  [ModelType.ggmlClassification, configKeys(classificationConfigSchema)],
+]);
+
+const misplacedLoadModelConfigGuard = z.unknown().superRefine((value, ctx) => {
+  const keys = getMisplacedModelConfigKeys(value);
+  if (keys.length === 0) return;
+
+  ctx.addIssue({
+    code: "custom",
+    message:
+      `Model config field "${keys[0]}" must be passed inside modelConfig. ` +
+      `Did you mean ${keys.map((key) => `modelConfig.${key}`).join(", ")}?`,
+  });
+});
+
+function configKeys(
+  ...sources: (ShapeSchema | readonly string[])[]
+): Set<string> {
+  const keys = sources.flatMap((source) =>
+    isStringArray(source) ? source : Object.keys(source.shape),
+  );
+  return new Set(keys.filter((key) => !topLevelLoadModelOptionKeys.has(key)));
+}
+
+function isStringArray(
+  source: ShapeSchema | readonly string[],
+): source is readonly string[] {
+  return Array.isArray(source);
+}
+
+function getMisplacedModelConfigKeys(value: unknown): string[] {
+  if (!isRecord(value) || typeof value["modelType"] !== "string") return [];
+  const configKeys = modelConfigKeysByModelType.get(
+    normalizeModelType(value["modelType"]),
+  );
+  if (!configKeys) return [];
+  return Object.keys(value).filter((key) => configKeys.has(key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
@@ -75,6 +159,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: whisperModelTypeSchema,
       modelConfig: whisperConfigSchema.partial().strict().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: bciModelTypeSchema,
+      modelConfig: bciConfigSchema.partial().strict().optional(),
     })
     .strict(),
   z
@@ -157,7 +248,7 @@ export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform(
   }),
 );
 
-const loadModelOptionsToRequestBaseSchema = z.union([
+export const loadBuiltinToRequestSchema = z.discriminatedUnion("modelType", [
   z
     .object({
       ...loadModelRequestCommonFields,
@@ -186,6 +277,24 @@ const loadModelOptionsToRequestBaseSchema = z.union([
     .transform((data) => ({
       type: "loadModel" as const,
       modelType: ModelType.whispercppTranscription,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: (data.modelConfig ?? {}),
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
+      modelType: bciModelTypeSchema,
+      modelConfig: bciConfigSchema.partial().strict().optional(),
+    })
+    .strict()
+    .transform((data) => ({
+      type: "loadModel" as const,
+      modelType: ModelType.bciWhispercppTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}),
@@ -286,7 +395,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
     .strict()
     .transform((data) => ({
       type: "loadModel" as const,
-      modelType: ModelType.onnxOcr,
+      modelType: ModelType.ggmlOcr,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
       modelConfig: (data.modelConfig ?? {}),
@@ -350,29 +459,35 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       delegate: data.delegate,
       ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
-  z
-    .object({
-      ...loadModelRequestCommonFields,
-      modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-        message: "Built-in model types must use their specific schema",
-      }),
-      modelConfig: z.record(z.string(), z.unknown()).optional(),
-    })
-    .transform((data) => ({
-      type: "loadModel" as const,
-      modelType: data.modelType,
-      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
-      modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig ?? {},
-      seed: data.seed ?? false,
-      withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-      ...(data.requestId !== undefined && { requestId: data.requestId }),
-    })),
+]);
+
+export const loadCustomPluginToRequestSchema = z
+  .object({
+    ...loadModelRequestCommonFields,
+    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+      message: "Built-in model types must use their specific schema",
+    }),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
+  })
+  .transform((data) => ({
+    type: "loadModel" as const,
+    modelType: data.modelType,
+    modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+    modelName: modelInputToNameSchema.parse(data.modelSrc),
+    modelConfig: data.modelConfig ?? {},
+    seed: data.seed ?? false,
+    withProgress: data.withProgress ?? !!data.onProgress,
+    delegate: data.delegate,
+    ...(data.requestId !== undefined && { requestId: data.requestId }),
+  }));
+
+const loadModelOptionsToRequestBaseSchema = z.union([
+  loadBuiltinToRequestSchema,
+  loadCustomPluginToRequestSchema,
 ]);
 
 export const loadModelOptionsToRequestSchema =
-  loadModelOptionsToRequestBaseSchema;
+  misplacedLoadModelConfigGuard.pipe(loadModelOptionsToRequestBaseSchema);
 
 const commonModelConfigSchema = z.object({
   type: z.literal("loadModel"),
@@ -407,6 +522,13 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
+export const loadBciModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.bciWhispercppTranscription),
+    modelConfig: bciConfigSchema,
+  })
+  .strict();
+
 export const loadParakeetModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.parakeetTranscription),
@@ -437,7 +559,7 @@ export const loadTtsModelRequestSchema = commonModelConfigSchema
 
 export const loadOcrModelRequestSchema = commonModelConfigSchema
   .extend({
-    modelType: z.literal(ModelType.onnxOcr),
+    modelType: z.literal(ModelType.ggmlOcr),
     modelConfig: ocrConfigSchema,
   })
   .strict();
@@ -477,6 +599,7 @@ export const loadModelSrcRequestSchema = z
   .union([
     loadLlmModelRequestSchema,
     loadWhisperModelRequestSchema,
+    loadBciModelRequestSchema,
     loadParakeetModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadNmtModelRequestSchema,
@@ -630,13 +753,15 @@ export type InferredConfig<S> = S extends {
   ? z.input<typeof llmConfigBaseSchema>
   : S extends { engine: typeof ModelType.whispercppTranscription }
     ? Partial<z.input<typeof whisperConfigSchema>>
+    : S extends { engine: typeof ModelType.bciWhispercppTranscription }
+    ? Partial<z.input<typeof bciConfigSchema>>
     : S extends { engine: typeof ModelType.llamacppEmbedding }
       ? z.input<typeof embedConfigBaseSchema>
       : S extends { engine: typeof ModelType.nmtcppTranslation }
         ? z.input<typeof nmtConfigSchema>
         : S extends { engine: typeof ModelType.ttsGgml }
           ? z.input<typeof ttsConfigSchema>
-          : S extends { engine: typeof ModelType.onnxOcr }
+          : S extends { engine: typeof ModelType.ggmlOcr }
             ? Partial<z.input<typeof ocrConfigSchema>>
             : S extends { engine: typeof ModelType.parakeetTranscription }
               ? z.input<typeof parakeetConfigSchema>
