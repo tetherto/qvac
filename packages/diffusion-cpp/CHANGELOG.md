@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.12.0] - 2026-06-26
+## [0.13.0] - 2026-06-26
 
 This release adds LTX-2.3 text-to-video (with audio) support and moves the `stable-diffusion-cpp` and `ggml` dependencies from temporary package-local overlay ports to the published `tetherto/qvac-registry-vcpkg` registry.
 
@@ -8,6 +8,23 @@ This release adds LTX-2.3 text-to-video (with audio) support and moves the `stab
 
 - Consume `stable-diffusion-cpp@2026-06-04` and `ggml@2026-06-06` from `tetherto/qvac-registry-vcpkg` (published in [qvac-registry-vcpkg#191](https://github.com/tetherto/qvac-registry-vcpkg/pull/191)). These pin the LTX-2.3 video/audio pipeline: the merged `qvac-ext-stable-diffusion.cpp` LTX support and the `qvac-ext-ggml` Metal `IM2COL_3D`/`PAD` and fused-RoPE kernels.
 - Remove the temporary package-local `stable-diffusion-cpp` and `ggml` vcpkg overlay ports (and the `overlay-ports` entry in `vcpkg-configuration.json`); both now resolve from the registry. The `default-registry` baseline is bumped to the PR #191 merge commit.
+
+## [0.12.0] - 2026-06-22
+
+Windows prebuilds now ship without a dependency on the MSVC redistributable.
+Addons link the static Visual C++ runtime (`/MT`) via shared
+`vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`, and CMake no longer links
+`msvcrt.lib`, which had forced dynamic CRT imports. Per-package vcpkg overlays
+were consolidated into the monorepo `vcpkg-overlays/` tree. No public API change.
+
+### Changed
+
+- Windows `.bare` prebuilds no longer import `vcruntime140.dll`, `msvcp140.dll`,
+  or UCRT DLLs; CI verifies this with `dumpbin` on every Windows prebuild.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
 
 ## [0.11.2] - 2026-06-05
 

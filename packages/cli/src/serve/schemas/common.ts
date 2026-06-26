@@ -39,11 +39,22 @@ export const toolDef = z.object({
   }).optional()
 }).passthrough()
 
-const contentPart = z.object({ type: z.string() }).passthrough()
+const textContentPart = z.object({
+  type: z.literal('text'),
+  text: z.string()
+}).passthrough()
+
+const imageContentPart = z.object({
+  type: z.literal('image_url'),
+  image_url: z.union([z.string(), z.object({ url: z.string() }).passthrough()])
+}).passthrough()
+
+export const messageContentPart = z.discriminatedUnion('type', [textContentPart, imageContentPart])
+export type MessageContentPart = z.infer<typeof messageContentPart>
 
 export const chatMessage = z.object({
   role: z.string(),
-  content: z.union([z.string(), z.null(), z.array(contentPart)]).optional(),
+  content: z.union([z.string(), z.null(), z.array(messageContentPart)]).optional(),
   tool_calls: z.array(z.object({
     id: z.string(),
     type: z.string(),
@@ -64,6 +75,7 @@ export interface GenerationParams {
   presence_penalty?: number
   repeat_penalty?: number
   reasoning_budget?: -1 | 0
+  remove_thinking_from_context?: boolean
 }
 
 export type ResponseFormat =
@@ -137,6 +149,13 @@ export class InvalidResponseFormatError extends Error {
   }
 }
 
+export class UnsupportedImageContentError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'UnsupportedImageContentError'
+  }
+}
+
 export function extractResponseFormat (body: Record<string, unknown>): ResponseFormat | undefined {
   const raw = body['response_format']
   if (raw === undefined || raw === null) return undefined
@@ -203,6 +222,12 @@ export function extractGenerationParams (
 
   if (typeof body['reasoning_budget'] === 'boolean') {
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0
+  } else if (body['reasoning_budget'] === -1 || body['reasoning_budget'] === 0) {
+    params.reasoning_budget = body['reasoning_budget']
+  }
+
+  if (typeof body['remove_thinking_from_context'] === 'boolean') {
+    params.remove_thinking_from_context = body['remove_thinking_from_context']
   }
 
   return Object.keys(params).length > 0 ? params : undefined

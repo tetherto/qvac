@@ -10,6 +10,7 @@ Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array
 - [Results](#results)
 - [Neural Signal Format](#neural-signal-format)
 - [Installation](#installation)
+- [Quickstart](#quickstart)
 - [Model Conversion](#model-conversion)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -86,6 +87,38 @@ VCPKG_ROOT=/path/to/vcpkg npm run build
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
 
+## Quickstart
+
+To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the public release tarball** (the fixtures aren't in the registry yet).
+
+```bash
+cd packages/bci-whispercpp
+npm install   # installs @qvac/registry-client (devDependency)
+
+# Download model files (ggml-bci-windowed.bin + bci-embedder.bin) + test fixtures
+npm run download-models
+# node scripts/download-models.js --models    # models only (from the registry)
+# node scripts/download-models.js --fixtures  # fixtures only
+# node scripts/download-models.js --force     # re-download even if present
+```
+
+The models land in `models/` and the neural-signal fixtures in `test/fixtures/`. Then run an example:
+
+```bash
+# Transcribe all bundled fixture samples and print WER
+bare examples/transcribe-neural.js --batch
+
+# Transcribe a single neural signal file
+bare examples/transcribe-neural.js test/fixtures/neural_sample_0.bin
+
+# Streaming transcription over a sliding window
+bare examples/transcribe-stream-neural.js test/fixtures/neural_sample_0.bin
+```
+
+By default the examples look for `models/ggml-bci-windowed.bin` (with `bci-embedder.bin` alongside it). Override with `WHISPER_MODEL_PATH=/path/to/ggml-bci-windowed.bin` or by passing the model path as the final argument.
+
+> The model files come from the [`qvac` model registry](https://github.com/tetherto/qvac/tree/main/packages/registry-server) (engine `@qvac/bci-whispercpp`, S3 source `qvac_models_compiled/bci-whispercpp/...`). If you already have them locally, skip the download step and point `WHISPER_MODEL_PATH` at your copy. The fixtures URL can be overridden with `BCI_FIXTURES_URL`.
+
 ### Model Conversion Prerequisites
 
 - **Python 3** with `numpy`, `torch`, and `transformers` (`pip install numpy torch transformers`)
@@ -115,7 +148,7 @@ Both files are written to `models/` by default. All flags are optional:
 | `--last-window-layer` | `3` | Last encoder layer with windowed attention |
 | `--f32` | off | Use f32 for all tensors (avoids f16 precision loss, ~2x larger) |
 
-**Important:** Both files must be in the same directory at runtime. The C++ addon looks for `bci-embedder.bin` next to the GGML model file and will fail if it is missing.
+**Important:** By default both files must be in the same directory at runtime — the addon resolves `bci-embedder.bin` next to the GGML model file and will fail if it is missing. To store the embedder elsewhere, pass an explicit path via `files.embedder` (see [Usage](#usage)).
 
 ## Usage
 
@@ -138,7 +171,16 @@ const bci = new BCIWhispercpp({
 })
 ```
 
-> The companion `bci-embedder.bin` must sit next to `files.model`. The native addon resolves it by path and will fail to load otherwise.
+> By default the companion `bci-embedder.bin` must sit next to `files.model` — the native addon resolves it relative to the model path and will fail to load otherwise. To keep the embedder in a different location, pass its path explicitly via `files.embedder`:
+>
+> ```js
+> const bci = new BCIWhispercpp({
+>   files: {
+>     model: './models/ggml-bci-windowed.bin',
+>     embedder: './weights/bci-embedder.bin' // optional override
+>   }
+> })
+> ```
 
 ### 2. Load the model
 
@@ -252,7 +294,7 @@ VCPKG_ROOT=/path/to/vcpkg npm run test:cpp
 npm run test:dts
 ```
 
-Integration tests require both `ggml-bci-windowed.bin` and `bci-embedder.bin` to be present in the same directory. See [Model Conversion](#model-conversion).
+Integration tests require both `ggml-bci-windowed.bin` and `bci-embedder.bin` to be present in the same directory, plus the neural-signal fixtures. The quickest way to get them is `npm run download-models` (see [Quickstart](#quickstart)); alternatively produce the models yourself via [Model Conversion](#model-conversion).
 
 ## Configuration
 
@@ -266,7 +308,8 @@ new BCIWhispercpp(args, config)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `files.model` | string | **Required.** Path to BCI GGML model file (`bci-embedder.bin` must sit alongside it). |
+| `files.model` | string | **Required.** Path to BCI GGML model file. By default `bci-embedder.bin` must sit alongside it. |
+| `files.embedder` | string | Optional explicit path to the embedder weights file. Overrides the default lookup of `bci-embedder.bin` next to `files.model`. |
 | `logger` | object | Optional logger; wrapped in `@qvac/logging`. Defaults to a noop logger. |
 | `opts.stats` | boolean | When `true`, runtime stats are surfaced on `response.stats` for batch jobs. Default `false`. |
 
@@ -345,7 +388,7 @@ All errors thrown by this package are `QvacErrorAddonBCI` instances (extending `
 | `26006` | `INVALID_NEURAL_INPUT` | Batch input rejected by the addon |
 | `26007` | `JOB_ALREADY_RUNNING` | `transcribe()` called while a job is in flight |
 | `26008` | `MODEL_NOT_LOADED` | Inference called before `load()` or after `destroy()` |
-| `26009` | `MODEL_FILE_NOT_FOUND` | `files.model` missing or unreadable |
+| `26009` | `MODEL_FILE_NOT_FOUND` | `files.model` missing/unreadable, or `files.embedder` provided but missing/invalid |
 | `26010` | `BUFFER_LIMIT_EXCEEDED` | Neural signal buffer exceeded the addon limit |
 | `26011` | `FAILED_TO_START_JOB` | Addon refused to start the job |
 | `26012` | `INVALID_CONFIG` | Constructor / context configuration rejected |

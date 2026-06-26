@@ -39,6 +39,7 @@ async function main () {
     console.error('Set WHISPER_MODEL_PATH or pass as second argument.')
     return
   }
+  const embedderPath = path.join(path.dirname(modelPath), 'bci-embedder.bin')
 
   if (isBatch) {
     const manifestPath = path.join(__dirname, '..', 'test', 'fixtures', 'manifest.json')
@@ -60,7 +61,7 @@ async function main () {
 
     for (const [day, samples] of byDay) {
       const bci = new BCIWhispercpp({
-        files: { model: modelPath }
+        files: { model: modelPath, embedder: embedderPath }
       }, {
         whisperConfig: { language: 'en', temperature: 0.0 },
         miscConfig: { caption_enabled: false },
@@ -107,7 +108,7 @@ async function main () {
     }
 
     const bci = new BCIWhispercpp({
-      files: { model: modelPath }
+      files: { model: modelPath, embedder: embedderPath }
     }, {
       whisperConfig: { language: 'en', temperature: 0.0 },
       miscConfig: { caption_enabled: false }

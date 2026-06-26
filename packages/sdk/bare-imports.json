@@ -24,10 +24,6 @@
     "bare": "bare-path",
     "default": "path"
   },
-  "process": {
-    "bare": "bare-process",
-    "default": "process"
-  },
   "readline": {
     "bare": "bare-readline",
     "default": "readline"
@@ -41,4 +37,3 @@
     "default": "node:url"
   }
 }
-

@@ -1,19 +1,21 @@
 import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
 
-// Model config
+// Model config — maps to @qvac/ocr-ggml `OcrGgmlParams`. Legacy ONNX-only knobs
+// (useGPU, timeout, pipelineMode, decodingMethod, straightenPages) are dropped;
+// zod's default (non-strict) object strips them silently if still passed.
 export const ocrConfigSchema = z.object({
   langList: z.array(z.string()).optional(),
-  useGPU: z.boolean().optional(),
-  timeout: z.number().optional(),
-  pipelineMode: z.enum(["easyocr", "doctr"]).optional(),
+  pipelineType: z.enum(["easyocr", "doctr"]).optional(),
   magRatio: z.number().optional(),
+  canvasSize: z.number().optional(),
   defaultRotationAngles: z.array(z.number()).optional(),
   contrastRetry: z.boolean().optional(),
   lowConfidenceThreshold: z.number().optional(),
   recognizerBatchSize: z.number().optional(),
-  decodingMethod: z.enum(["ctc", "attention"]).optional(),
-  straightenPages: z.boolean().optional(),
+  nThreads: z.number().optional(),
+  backendDevice: z.enum(["cpu", "vulkan", "metal", "opencl"]).optional(),
+  gpuDevice: z.number().optional(),
   detectorModelSrc: modelSrcInputSchema.optional(),
 });
 

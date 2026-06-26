@@ -91,23 +91,27 @@ async function main () {
     runStartedAt = new Date().toISOString()
   }
 
+  const writeProgressFile = () => {
+    try {
+      fs.writeFileSync(progressFile, JSON.stringify({
+        startedAt: runStartedAt,
+        sweepFingerprint,
+        completedCases: Array.from(completedCases)
+      }, null, 2))
+    } catch (writeError) {
+      if (debugEnabled) {
+        debugLogger.warn(`Failed to write progress: ${writeError.message || String(writeError)}`)
+      }
+    }
+  }
+
   let saveProgressTimeout = null
   const saveProgress = () => {
     if (saveProgressTimeout) {
       clearTimeout(saveProgressTimeout)
     }
     saveProgressTimeout = setTimeout(() => {
-      try {
-        fs.writeFileSync(progressFile, JSON.stringify({
-          startedAt: runStartedAt,
-          sweepFingerprint,
-          completedCases: Array.from(completedCases)
-        }, null, 2))
-      } catch (writeError) {
-        if (debugEnabled) {
-          debugLogger.warn(`Failed to save progress: ${writeError.message || String(writeError)}`)
-        }
-      }
+      writeProgressFile()
       saveProgressTimeout = null
     }, 1000)
   }
@@ -117,17 +121,7 @@ async function main () {
       clearTimeout(saveProgressTimeout)
       saveProgressTimeout = null
     }
-    try {
-      fs.writeFileSync(progressFile, JSON.stringify({
-        startedAt: runStartedAt,
-        sweepFingerprint,
-        completedCases: Array.from(completedCases)
-      }, null, 2))
-    } catch (writeError) {
-      if (debugEnabled) {
-        debugLogger.warn(`Failed to flush progress: ${writeError.message || String(writeError)}`)
-      }
-    }
+    writeProgressFile()
   }
 
   moduleFlushProgress = flushProgress
@@ -331,7 +325,8 @@ async function main () {
         const caseMetricSamples = {
           runMs: [],
           ttftMs: [],
-          tps: []
+          tps: [],
+          ppTps: []
         }
         let firstPromptTokens = null
         let firstGeneratedTokens = null
@@ -342,6 +337,15 @@ async function main () {
           const runMetrics = []
           let firstOutput = null
           let promptError = null
+
+          // Warmup run (discarded) so the first measured repeat isn't skewed by
+          // cold-start graph build / GPU kernel warmup. Without it the first run
+          // is a large outlier that makes the TTFT/ppTPS mean ± stddev
+          // meaningless. Mirrors the mobile runner's warmup.
+          try {
+            const warmup = await model.run(prompt.messages)
+            await warmup.onUpdate(() => {}).await()
+          } catch (_) { /* measured runs below surface any real error */ }
 
           for (let repeat = 1; repeat <= repeats; repeat++) {
             try {
@@ -366,6 +370,7 @@ async function main () {
                 unloadMs: null, // Will unload after all prompts
                 ttftMs: round(ttftMs, 3),
                 tps: round(stats.TPS != null ? stats.TPS : null, 3),
+                ppTps: round(stats.ppTPS != null ? stats.ppTPS : null, 3),
                 promptTokens: stats.promptTokens ?? null,
                 generatedTokens: stats.generatedTokens ?? null
               }
@@ -374,6 +379,7 @@ async function main () {
               caseMetricSamples.runMs.push(metrics.runMs)
               if (metrics.ttftMs != null) caseMetricSamples.ttftMs.push(metrics.ttftMs)
               if (metrics.tps != null) caseMetricSamples.tps.push(metrics.tps)
+              if (metrics.ppTps != null) caseMetricSamples.ppTps.push(metrics.ppTps)
               if (firstPromptTokens == null && metrics.promptTokens != null) firstPromptTokens = metrics.promptTokens
               if (firstGeneratedTokens == null && metrics.generatedTokens != null) firstGeneratedTokens = metrics.generatedTokens
               caseRepeatsAttempted += 1
@@ -537,6 +543,8 @@ async function main () {
               ttftMsStd: round(stddev(caseMetricSamples.ttftMs), 3),
               tpsMean: round(average(caseMetricSamples.tps), 3),
               tpsStd: round(stddev(caseMetricSamples.tps), 3),
+              ppTpsMean: round(average(caseMetricSamples.ppTps), 3),
+              ppTpsStd: round(stddev(caseMetricSamples.ppTps), 3),
               promptTokens: firstPromptTokens,
               generatedTokens: firstGeneratedTokens
             }

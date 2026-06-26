@@ -5,10 +5,24 @@ alwaysApply: false
 ---
 - All example files should have consistent error handling using try-catch blocks with process.exit(0) on success and process.exit(1) on error
 - Use top-level await with try-catch instead of async function wrappers
-- Error messages should use: `console.error("❌ Error:", error)`
 - Examples can use plain `Error` objects (they're user-facing demos, not SDK code)
 - All example files which load models should have an unloadModel call to unload the model when done
+- Logging convention (uniform across all examples):
+  - Normal messages (status, steps, metrics, progress) use `console.log` prefixed with `▸ ` (e.g. `console.log("▸ Loading model")`)
+  - Caught errors use `console.error` prefixed with `✖ ` (e.g. `console.error("✖", error)`). Reserve `console.error` for errors only — some runtimes render it in red, which looks alarming for ordinary output
+  - Genuine results stay unprefixed so they read apart from the `▸` commentary: stream tokens via `process.stdout.write(token)`, final results via plain `console.log`
+  - Do not use other decorative emojis; only `▸` (info) and `✖` (error)
+  - No shared logging helper — each example stays standalone and copy-pasteable
+- Download progress renders as one in-place line on stderr, not a raw progress-object dump:
+  ```ts
+  onProgress: (p) => {
+    const mb = (n: number) => (n / 1e6).toFixed(1);
+    const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+    process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+    if (p.percentage >= 100) process.stderr.write("\n");
+  },
+  ```
 - Exception for continuously running services (providers, seeders, microphone recording):
   - Use `process.stdin.resume()` to keep running
-  - Include SIGINT handler for graceful shutdown: `process.on("SIGINT", () => { console.log("\n🛑 Service stopped"); process.exit(0); })`
+  - Include SIGINT handler for graceful shutdown: `process.on("SIGINT", () => { console.log("\n▸ Service stopped"); process.exit(0); })`
   

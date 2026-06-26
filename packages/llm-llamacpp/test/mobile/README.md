@@ -21,6 +21,24 @@ The mobile tests run the **same integration suite** that lives under `test/integ
 
 There is **no separate `test.cjs` file** and the addon no longer takes a `Loader` instance — file paths are passed directly to the constructor by the test (or by the test helper in `test/integration/utils.js`). Mobile testing reuses these helpers unchanged.
 
+## Test Groups & the Weekend Suite
+
+`test-groups.json` shards the suite into Device Farm runs. The per-PR mobile
+workflow auto-detects **only** the `android` and `ios` keys — every group under
+them runs on each labelled PR.
+
+The sibling `androidWeekly` / `iosWeekly` keys are **ignored by the PR path** and
+are consumed only by `.github/workflows/weekend-mobile-test-llm-llamacpp.yml`
+(Sundays 06:00 UTC + manual dispatch), which feeds them to the reusable mobile
+workflow as a `test_groups` override. The heavier/slower tests (both OCR tests,
+the Elephant + HighResAurora image functional tests, and the full
+`vlmPerf{Gemma4,Qwen35}` perf groups) live there to keep PR runs fast.
+
+To move a test between the per-PR and weekend cadence, just move its entry
+between the `android`/`ios` and `androidWeekly`/`iosWeekly` sections — no
+workflow edits required. The weekend run posts a pass/fail report to a
+`weekly-mobile-report`-labelled GitHub issue and to the run's Summary page.
+
 ## Setup
 
 ### Test Assets

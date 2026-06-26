@@ -16,6 +16,7 @@ import {
 import { stream as streamRpc, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TextToSpeechStreamFailedError } from "@/utils/errors-client";
+import { parseClientInput } from "@/client/parse-input";
 
 const logger = getClientLogger();
 
@@ -211,7 +212,7 @@ export function textToSpeech(
   params: TtsClientParamsInput,
   options?: RPCOptions,
 ): TextToSpeechStreamResult {
-  const parsed: TtsClientParams = ttsClientParamsSchema.parse(params);
+  const parsed: TtsClientParams = parseClientInput(ttsClientParamsSchema, params);
 
   if (parsed.sentenceStream && !parsed.stream) {
     throw new TextToSpeechStreamFailedError(

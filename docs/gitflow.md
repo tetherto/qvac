@@ -21,6 +21,7 @@ This repository uses a **main-first GitFlow** optimized for **public SDK/model p
 - [Repo conventions](#repo-conventions)
 - [Working with forks](#working-with-forks)
 - [Branch types](#branch-types-naming-purpose-publishing)
+- [Branch retention & deletion](#branch-retention--deletion)
 - [Release flow](#release-flow-new-version-xyz)
 - [Patch flow](#patch-flow-xyz--xyzz1)
 - [Feature & temp flows](#feature--temp-branches-non-release-publishing)
@@ -138,6 +139,26 @@ git push -u origin feature-<package>-<short-desc>
 ---
 
 ![Branch types and publishing](.github/docs/gitflow/images/branch-types-and-publishing.png)
+
+---
+
+## Branch retention & deletion
+
+Upstream branches are kept or cleaned up according to a separate, enforced policy
+documented in [branch-retention.md](branch-retention.md):
+
+- `main` and the branch backing each package's current latest published version are
+  never deleted, nor is any branch with an open PR, branch protection, or a WIP flag.
+- `release-*` branches follow a nested-semver window (latest 2 majors / 3 minors / 3
+  patches per package); older lines are eligible for deletion because the shipped code
+  is preserved permanently by the release tag + npm artifact.
+- `feature-*` / `tmp-*` are deleted after 2 months of inactivity; ad-hoc branches after
+  1 month.
+- A weekly GitHub Action flags candidates, waits a ~7-day grace period via a tracking
+  issue, then deletes — applied across all qvac repos.
+
+See [branch-retention.md](branch-retention.md) for the full rules, the safelist, and
+how to adopt the automation in another repo.
 
 ---
 

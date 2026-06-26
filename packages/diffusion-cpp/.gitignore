@@ -30,5 +30,6 @@ temp/
 *.avi
 *.webm
 test/model/
+test/results/
 test/integration/all.js
 test/unit/all.js

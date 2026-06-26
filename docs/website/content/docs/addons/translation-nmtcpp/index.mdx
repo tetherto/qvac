@@ -53,7 +53,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm i @qvac/translation-nmtcpp @qvac/dl-hyperdrive
+npm i @qvac/translation-nmtcpp
 ```
 </Step>
 
@@ -66,23 +66,24 @@ Create `example.js`:
 ```js title="example.js" lineNumbers'use strict'
 
 /**
- * Quickstart Example
+ * Quickstart Example — Bergamot Backend
  *
- * This example demonstrates both translation backends:
- * 1. GGML backend - Downloads model via HyperdriveDL (English to Italian)
- * 2. Bergamot backend - Uses local model files (requires BERGAMOT_MODEL_PATH)
+ * This example demonstrates translation using the Bergamot backend
+ * with local model files or auto-download via Firefox CDN (English to Italian).
  *
  * Usage:
- *   bare examples/quickstart.js
- *   BERGAMOT_MODEL_PATH=/path/to/bergamot/model bare examples/quickstart.js
+ *   bare example.js
+ *   BERGAMOT_MODEL_PATH=/path/to/bergamot/model bare example.js
  *
  * Enable verbose C++ logging:
- *   VERBOSE=1 bare examples/quickstart.js
+ *   VERBOSE=1 bare example.js
  */
 
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-const fs = require('bare-fs')
+const {
+  ensureBergamotModelFiles,
+  getBergamotFileNames
+} = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const path = require('bare-path')
 const process = require('bare-process')
 
@@ -103,101 +104,36 @@ const logger = VERBOSE
 
 const text = 'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
 
-async function testGGML () {
-  console.log('\n=== Testing GGML Backend ===\n')
-
-  // Create `DataLoader`
-  const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-it translation model weights and config
-    key: 'hd://9ef58f31c20d5556722e0b58a5d262fd89801daf2e6cb28e3f21ac6e9228088f'
-  })
-
-  // Create the `args` object
-  const args = {
-    loader: hdDL,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: './models',
-    modelName: 'model.bin',
-    logger // Pass the logger
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, { })
-
-  // Load model
-  await model.load()
-
-  try {
-    // Run the Model
-    const response = await model.run(text)
-
-    await response
-      .onUpdate(data => {
-        console.log(data)
-      })
-      .await()
-
-    console.log('GGML translation finished!')
-  } finally {
-    // Unload the model
-    await model.unload()
-
-    // Close the DataLoader
-    await hdDL.close()
-  }
-}
-
 async function testBergamot () {
   console.log('\n=== Testing Bergamot Backend ===\n')
 
-  // Use local model path for Bergamot - env var or relative path
+  const srcLang = 'en'
+  const dstLang = 'it'
+
+  // Use local model path if provided, otherwise auto-download
   const bergamotPath = process.env.BERGAMOT_MODEL_PATH || './model/bergamot/enit'
 
-  console.log('Model path:', bergamotPath)
+  // Ensure model files are present (downloads from Firefox CDN if not)
+  const modelDir = await ensureBergamotModelFiles(srcLang, dstLang, bergamotPath)
+  console.log('Model directory:', modelDir)
 
-  // Check if model directory exists
-  if (!fs.existsSync(bergamotPath)) {
-    console.log('Bergamot model directory not found, skipping test')
-    console.log('Set BERGAMOT_MODEL_PATH env var or place model in ./model/bergamot/enit')
-    return
-  }
+  const fileNames = getBergamotFileNames(srcLang, dstLang)
 
   console.log('Loading model...')
 
-  // Create a local file loader for Bergamot models that are already on disk
-  const localLoader = {
-    ready: async () => { /* Models already on disk */ },
-    close: async () => { /* No resources to close */ },
-    download: async (filename) => {
-      // Read file from local disk
-      const filePath = path.join(bergamotPath, filename)
-      return fs.readFileSync(filePath)
+  // Create the model with resolved file paths
+  const model = new TranslationNmtcpp({
+    files: {
+      model: path.join(modelDir, fileNames.modelName),
+      srcVocab: path.join(modelDir, fileNames.srcVocabName),
+      dstVocab: path.join(modelDir, fileNames.dstVocabName)
     },
-    getFileSize: async (filename) => {
-      const filePath = path.join(bergamotPath, filename)
-      const stats = fs.statSync(filePath)
-      return stats.size
-    }
-  }
-
-  // Create the `args` object for Bergamot
-  const args = {
-    loader: localLoader,
-    params: { mode: 'full', dstLang: 'it', srcLang: 'en' },
-    diskPath: bergamotPath,
-    modelName: 'model.enit.intgemm.alphas.bin',
+    params: { mode: 'full', dstLang, srcLang },
+    config: {
+      modelType: TranslationNmtcpp.ModelTypes.Bergamot
+    },
     logger // Pass the logger
-  }
-
-  // Config with explicit vocab paths for Bergamot
-  const config = {
-    srcVocabName: 'vocab.enit.spm',
-    dstVocabName: 'vocab.enit.spm',
-    modelType: TranslationNmtcpp.ModelTypes.Bergamot
-  }
-
-  // Create Model Instance
-  const model = new TranslationNmtcpp(args, config)
+  })
 
   // Load model
   await model.load()
@@ -220,19 +156,12 @@ async function testBergamot () {
   } finally {
     console.log('Unloading model...')
     await model.unload()
-
-    // Close the local loader
-    await localLoader.close()
     console.log('Done!')
   }
 }
 
 async function main () {
   try {
-    // Test GGML backend
-    await testGGML()
-
-    // Test Bergamot backend
     await testBergamot()
 
     console.log('\n=== All Tests Completed Successfully! ===\n')
@@ -259,49 +188,62 @@ bare example.js
 
 The library provides a straightforward and intuitive workflow for translating text. Irrespective of the chosen model, the workflow remains the same:
 
-### 1. Create `DataLoader`
+### 1. Obtain the model files
 
-In QVAC, the `DataLoader` class provides an interface for fetching model weights and other resources crucial for running AI Models. A `DataLoader` instance is required to successfully instantiate a `ModelClass`. We can create a `HyperdriveDL` using the following code.
+The model class is **files-based**: you pass it the resolved on-disk paths of the model weights (and, for Bergamot, the vocab files). The package ships fetcher helpers that download the files on demand and return the directory they were written to:
+
+- **IndicTrans2** — `ensureIndicTransModelFile()` downloads the GGML model from the **QVAC model registry** (via `@qvac/registry-client`).
+- **Bergamot** — `ensureBergamotModelFiles()` downloads the model + vocab bundle from Mozilla's **Firefox Remote Settings CDN**.
+
+Both helpers are idempotent: if a valid file already exists at the destination, they return immediately without re-downloading. You can also point the model class at files you have downloaded yourself — the fetchers are a convenience, not a requirement.
 
 ```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
+// IndicTrans2 — fetch from the QVAC model registry
+const {
+  ensureIndicTransModelFile,
+  getIndicTransFileName
+} = require('@qvac/translation-nmtcpp/lib/indictrans-model-fetcher')
 
-const hdDL = new HyperdriveDL({
-  key: 'hd://528eb43b34c57b0fb7116e532cd596a9661b001870bdabf696243e8d079a74ca' // (Required) Hyperdrive key with 'hd://' prefix (raw hex also works)
-  // store: corestore // (Optional) A Corestore instance for persistent storage. See Glossary for details.
-})
+const path = require('bare-path')
+
+const modelPath = path.join('./model/indictrans', getIndicTransFileName())
+await ensureIndicTransModelFile(modelPath) // downloads if not already present
 ```
 
-<Callout type="info">
-It is extremely important that you provide the correct `key` when using a `HyperdriveDataLoader`. A `DataLoader` with model weights and settings for an `en-it` translation can obviously not be utilized for doing a `de-en` translation. Please ensure that the `key` being used aligns with the model (package) installed and the translation requirement.
-</Callout>
+```javascript
+// Bergamot — fetch from the Firefox Remote Settings CDN
+const {
+  ensureBergamotModelFiles,
+  getBergamotFileNames
+} = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+
+const modelDir = await ensureBergamotModelFiles('en', 'it', './model/bergamot/enit')
+const fileNames = getBergamotFileNames('en', 'it') // { modelName, srcVocabName, dstVocabName }
+```
 
 ### 2. Create the `args` object
 
-The `args` object contains the `DataLoader` we created in the previous step and other translation parameters that control how the translation model operates, including which languages to translate between and what performance metrics to collect.
+The model is constructed from a single options object: `files` (resolved paths from Step 1), `params` (languages and mode), `config` (model type and decoding options), and an optional `logger`.
 
-The structure varies slightly depending on which backend you're using.
+The shape of `files` varies slightly depending on which backend you're using.
 
 #### IndicTrans2
 
-For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
+For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.) IndicTrans2 needs only the model weights file:
 
 ```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-
-const hdDL = new HyperdriveDL({
-  key: 'hd://8c0f50e7c75527213a090d2f1dcd9dbdb8262e5549c8cbbb74cb7cb12b156892' // en-hi 200M model (INDICTRANS_EN_HI_200M_Q0F32)
-})
-
 const args = {
-  loader: hdDL,
+  files: {
+    model: modelPath // resolved path from Step 1
+  },
   params: {
     mode: 'full',
     srcLang: 'eng_Latn',   // Source language (ISO 15924 code)
     dstLang: 'hin_Deva'    // Target language (ISO 15924 code)
   },
-  diskPath: './models/indic-en-hi-200M',              // Unique directory per model
-  modelName: 'ggml-indictrans2-en-indic-dist-200M.bin' // Must match exact filename in Hyperdrive
+  config: {
+    modelType: TranslationNmtcpp.ModelTypes.IndicTrans
+  }
 }
 ```
 
@@ -310,8 +252,8 @@ const args = {
 |-----------|-------------|---------|
 | `srcLang` | Source language (ISO 15924) | `'eng_Latn'`, `'hin_Deva'`, `'ben_Beng'` |
 | `dstLang` | Target language (ISO 15924) | `'eng_Latn'`, `'hin_Deva'`, `'tam_Taml'` |
-| `modelName` | Specific filename per model | `'ggml-indictrans2-en-indic-dist-200M.bin'` |
-| `modelType` | **Required**: `TranslationNmtcpp.ModelTypes.IndicTrans` | - |
+| `files.model` | Path to the model weights file | `'./model/indictrans/ggml-indictrans2-en-indic-dist-200M-q4_0.bin'` |
+| `modelType` | **Required in config**: `TranslationNmtcpp.ModelTypes.IndicTrans` | - |
 
 **IndicTrans2 model naming pattern:**
 - `ggml-indictrans2-{direction}-{size}.bin` for q0f32 quantization
@@ -322,88 +264,56 @@ Where `direction` is `en-indic`, `indic-en`, or `indic-indic`, and `size` is `di
 
 #### Bergamot
 
-Bergamot models (Firefox Translations) are available via **Hyperdrive** or as local files.
-
-**Option 1: Using Hyperdrive (Recommended)**
+Bergamot needs the model weights plus a source and target vocabulary file. Use the paths returned by `ensureBergamotModelFiles()` / `getBergamotFileNames()`, or point at files you downloaded yourself:
 
 ```javascript
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
-
-const hdDL = new HyperdriveDL({
-  key: 'hd://a8811fb494e4aee45ca06a011703a25df5275e5dfa59d6217f2d430c677f9fa6' // en-it Bergamot (BERGAMOT_ENIT)
-})
+const path = require('bare-path')
 
 const args = {
-  loader: hdDL,
+  files: {
+    model: path.join(modelDir, fileNames.modelName),
+    srcVocab: path.join(modelDir, fileNames.srcVocabName),
+    dstVocab: path.join(modelDir, fileNames.dstVocabName)
+  },
   params: {
     mode: 'full',
     srcLang: 'en',    // Source language (ISO 639-1 code)
     dstLang: 'it'     // Target language (ISO 639-1 code)
   },
-  diskPath: './models/bergamot-en-it',           // Unique directory per model
-  modelName: 'model.enit.intgemm.alphas.bin'     // Model file from Hyperdrive
-}
-```
-
-**Option 2: Using Local Files**
-
-```javascript
-const fs = require('bare-fs')
-const path = require('bare-path')
-
-// Path to your locally downloaded Bergamot model directory
-const bergamotPath = './models/bergamot-en-it'
-
-const localLoader = {
-  ready: async () => {},
-  close: async () => {},
-  download: async (filename) => {
-    return fs.readFileSync(path.join(bergamotPath, filename))
-  },
-  getFileSize: async (filename) => {
-    const stats = fs.statSync(path.join(bergamotPath, filename))
-    return stats.size
+  config: {
+    modelType: TranslationNmtcpp.ModelTypes.Bergamot
   }
-}
-
-const args = {
-  loader: localLoader,
-  params: {
-    mode: 'full',
-    srcLang: 'en',
-    dstLang: 'it'
-  },
-  diskPath: bergamotPath,
-  modelName: 'model.enit.intgemm.alphas.bin'
 }
 ```
 
 **Bergamot Model Files by Language Pair:**
 
-| Language Pair | Hyperdrive Key | Model File | Vocab File(s) |
-|---------------|----------------|------------|---------------|
-| en→it | `a8811fb494e4aee4...` | `model.enit.intgemm.alphas.bin` | `vocab.enit.spm` |
-| it→en | `3b4be93d19dd9e9e...` | `model.iten.intgemm.alphas.bin` | `vocab.iten.spm` |
-| en→es | `bf46f9b51d04f561...` | `model.enes.intgemm.alphas.bin` | `vocab.enes.spm` |
-| es→en | `c3e983c8db3f64fa...` | `model.esen.intgemm.alphas.bin` | `vocab.esen.spm` |
-| en→fr | `0a4f388c0449b777...` | `model.enfr.intgemm.alphas.bin` | `vocab.enfr.spm` |
-| fr→en | `7a9b38b0c4637b2e...` | `model.fren.intgemm.alphas.bin` | (see registry) |
-| en→de | (see Bergamot section in registry) | `model.ende.intgemm.alphas.bin` | `vocab.ende.spm` |
-| en→ru | `404279d9716f3191...` | `model.enru.intgemm.alphas.bin` | `vocab.enru.spm` |
-| ru→en | `dad7f99c8d8c1723...` | `model.ruen.intgemm.alphas.bin` | `vocab.ruen.spm` |
-| en→zh | `15d484200acea8b1...` | `model.enzh.intgemm.alphas.bin` | `srcvocab.enzh.spm`, `trgvocab.enzh.spm` |
-| zh→en | `17eb4c3fcd23ac3c...` | `model.zhen.intgemm.alphas.bin` | `vocab.zhen.spm` |
-| en→ja | `ac0b883d176ea3b1...` | `model.enja.intgemm.alphas.bin` | `srcvocab.enja.spm`, `trgvocab.enja.spm` |
-| ja→en | `85012ed3c3ff5c2b...` | `model.jaen.intgemm.alphas.bin` | `vocab.jaen.spm` |
+| Language Pair | Model File | Vocab File(s) |
+|---------------|------------|---------------|
+| en→it | `model.enit.intgemm.alphas.bin` | `vocab.enit.spm` |
+| it→en | `model.iten.intgemm.alphas.bin` | `vocab.iten.spm` |
+| en→es | `model.enes.intgemm.alphas.bin` | `vocab.enes.spm` |
+| es→en | `model.esen.intgemm.alphas.bin` | `vocab.esen.spm` |
+| en→fr | `model.enfr.intgemm.alphas.bin` | `vocab.enfr.spm` |
+| fr→en | `model.fren.intgemm.alphas.bin` | (see Firefox Translations models) |
+| en→de | `model.ende.intgemm.alphas.bin` | `vocab.ende.spm` |
+| en→ru | `model.enru.intgemm.alphas.bin` | `vocab.enru.spm` |
+| ru→en | `model.ruen.intgemm.alphas.bin` | `vocab.ruen.spm` |
+| en→zh | `model.enzh.intgemm.alphas.bin` | `srcvocab.enzh.spm`, `trgvocab.enzh.spm` |
+| zh→en | `model.zhen.intgemm.alphas.bin` | `vocab.zhen.spm` |
+| en→ja | `model.enja.intgemm.alphas.bin` | `srcvocab.enja.spm`, `trgvocab.enja.spm` |
+| ja→en | `model.jaen.intgemm.alphas.bin` | `vocab.jaen.spm` |
+
+`getBergamotFileNames(srcLang, dstLang)` returns the correct `modelName`, `srcVocabName`, and `dstVocabName` for each pair (including the separate source/target vocabs used by CJK languages), so you normally don't need to hard-code these.
 
 **Key Parameters:**
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `srcLang` | Source language (ISO 639-1) | `'en'`, `'es'`, `'de'` |
 | `dstLang` | Target language (ISO 639-1) | `'it'`, `'fr'`, `'de'` |
-| `modelName` | Model weights file | `'model.enit.intgemm.alphas.bin'` |
-| `srcVocabName` | **Required in config**: Source vocab file | `'vocab.enit.spm'` or `'srcvocab.enja.spm'` |
-| `dstVocabName` | **Required in config**: Target vocab file | `'vocab.enit.spm'` or `'trgvocab.enja.spm'` |
+| `files.model` | Path to the model weights file | `'./model/bergamot/enit/model.enit.intgemm.alphas.bin'` |
+| `files.srcVocab` | Path to the source vocabulary file | `'./model/bergamot/enit/vocab.enit.spm'` |
+| `files.dstVocab` | Path to the target vocabulary file | `'./model/bergamot/enit/vocab.enit.spm'` |
 | `modelType` | **Required in config**: `TranslationNmtcpp.ModelTypes.Bergamot` | - |
 
 **Bergamot model file naming convention:**
@@ -411,10 +321,10 @@ const args = {
 - `vocab.{srctgt}.spm` - Shared vocabulary for most language pairs
 - `srcvocab.{srctgt}.spm` + `trgvocab.{srctgt}.spm` - Separate vocabs for CJK languages (zh, ja)
 
-<Callout title="`diskPath` Configuration" type="info">
+<Callout title="Model directory layout" type="info">
 Use a **unique directory per model** to avoid file conflicts when using multiple models:
-- `./models/indic-en-hi-200M` for IndicTrans English→Hindi
-- `./models/bergamot-en-it` for Bergamot English→Italian
+- `./model/indictrans` for IndicTrans English→Hindi
+- `./model/bergamot/enit` for Bergamot English→Italian
 </Callout>
 
 <Callout type="info">
@@ -432,9 +342,9 @@ The `config` object contains two types of parameters:
 
 | Parameter | IndicTrans2 | Bergamot |
 |-----------|-------------|----------|
-| `modelType` | **Required** | **Required** |
-| `srcVocabName` | Not needed | **Required** |
-| `dstVocabName` | Not needed | **Required** |
+| `config.modelType` | **Required** | **Required** |
+| `files.srcVocab` | Not needed | **Required** (passed via `files`, see Step 2) |
+| `files.dstVocab` | Not needed | **Required** (passed via `files`, see Step 2) |
 
 #### Generation/Decoding Parameters (IndicTrans Only)
 
@@ -456,7 +366,7 @@ const generationParams = {
 
 ### 4. Create Model Instance
 
-Import `TranslationNmtcpp` and create an instance by combining `args` (from Step 2) with `config` parameters (from Step 3):
+Import `TranslationNmtcpp` and create an instance from the single options object built in Step 2. Decoding options from Step 3 are merged into `args.config`:
 
 ```javascript
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
@@ -466,27 +376,27 @@ const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 
 ```javascript
 // IndicTrans - must specify modelType + generation parameters
-const config = {
-  modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
-  ...generationParams,  // Spread generation params from Step 3
-  maxlength: 256        // Override for longer outputs
-}
-
-const model = new TranslationNmtcpp(args, config)
+const model = new TranslationNmtcpp({
+  ...args, // files + params from Step 2
+  config: {
+    modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+    ...generationParams,  // Spread generation params from Step 3
+    maxlength: 256        // Override for longer outputs
+  }
+})
 ```
 
 #### Bergamot
 
 ```javascript
-// Bergamot - must specify modelType, vocab files (limited generation params support)
-const config = {
-  modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-  srcVocabName: 'vocab.enit.spm',    // Required: source vocabulary file
-  dstVocabName: 'vocab.enit.spm',    // Required: target vocabulary file
-  beamsize: 4                        // Only beamsize supported for Bergamot
-}
-
-const model = new TranslationNmtcpp(args, config)
+// Bergamot - vocab files are passed via `files` (see Step 2); limited generation params support
+const model = new TranslationNmtcpp({
+  ...args, // files (model + srcVocab + dstVocab) + params from Step 2
+  config: {
+    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+    beamsize: 4 // Only beamsize supported for Bergamot
+  }
+})
 ```
 
 **Available Model Types:**
@@ -589,12 +499,12 @@ try {
 
 ## Supported Languages
 
-### IndicTrans2 Models (Hyperdrive)
+### IndicTrans2 Models (QVAC registry)
 
-IndicTrans2 supports translation between English and 22 Indic languages. The following directions are available via Hyperdrive:
+IndicTrans2 supports translation between English and 22 Indic languages. The following directions are available via the QVAC model registry:
 
-| Direction | Hyperdrive Keys | Sizes |
-|-----------|-----------------|-------|
+| Direction | Available | Sizes |
+|-----------|-----------|-------|
 | English → Indic | Yes | 200M, 1B |
 | Indic → English | Yes | 200M, 1B |
 | Indic → Indic | Yes | 320M, 1B |
@@ -653,7 +563,7 @@ IndicTrans2 supports translation between English and 22 Indic languages. The fol
 
 ### Bergamot Models (Firefox Translations)
 
-**Language pairs available via Hyperdrive:**
+**Language pairs available via the Firefox Remote Settings CDN:**
 
 | Language | Code | en→X | X→en |
 |----------|------|------|------|
@@ -667,7 +577,7 @@ IndicTrans2 supports translation between English and 22 Indic languages. The fol
 | Russian | ru | Yes | Yes |
 | Chinese | zh | Yes | Yes |
 
-The Bergamot backend supports all language pairs available in [Firefox Translations](https://github.com/mozilla/firefox-translations-models). See the Firefox Translations models repository for the complete and up-to-date list of supported language pairs. **Download Firefox Translations models locally only if your language pair is not available via Hyperdrive.**
+The Bergamot backend supports all language pairs available in [Firefox Translations](https://github.com/mozilla/firefox-translations-models). See the Firefox Translations models repository for the complete and up-to-date list of supported language pairs.
 
 ## ModelClasses and Packages
 
@@ -693,7 +603,7 @@ TranslationNmtcpp.ModelTypes = {
 |---------|-------------|----------|-----------|
 | `@qvac/translation-nmtcpp` | Main translation package | Bergamot, IndicTrans | See [Supported Languages](#supported-languages) |
 
-The main package supports all three backends and all their respective languages. See [Supported Languages](#supported-languages) for the complete list.
+The main package supports both backends and all their respective languages. See [Supported Languages](#supported-languages) for the complete list.
 
 ## Logging
 
@@ -701,7 +611,7 @@ The library supports configurable logging for both JavaScript and C++ (native) c
 
 ### Enabling C++ Logs
 
-To enable verbose C++ logging, pass a `logger` object in the `args` parameter:
+To enable verbose C++ logging, pass a `logger` object in the options:
 
 ```javascript
 // Enable C++ logging
@@ -713,10 +623,9 @@ const logger = {
 }
 
 const args = {
-  loader: hdDL,
+  files: { model: modelPath, srcVocab, dstVocab }, // resolved paths (see Step 1)
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/bergamot-en-it',
-  modelName: 'model.enit.intgemm.alphas.bin',
+  config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot },
   logger  // Pass logger to enable C++ logs
 }
 ```
@@ -727,10 +636,9 @@ To suppress all C++ logs, either omit the `logger` parameter or set it to `null`
 
 ```javascript
 const args = {
-  loader: hdDL,
+  files: { model: modelPath, srcVocab, dstVocab }, // resolved paths (see Step 1)
   params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
-  diskPath: './models/bergamot-en-it',
-  modelName: 'model.enit.intgemm.alphas.bin'
+  config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
   // No logger = suppress C++ logs
 }
 ```
@@ -741,10 +649,10 @@ All examples support the `VERBOSE` environment variable:
 
 ```bash
 # Run with C++ logging disabled (default)
-bare examples/example.hd.js
+bare examples/quickstart.js
 
 # Run with C++ logging enabled
-VERBOSE=1 bare examples/example.hd.js
+VERBOSE=1 bare examples/quickstart.js
 ```
 
 ### Log Levels

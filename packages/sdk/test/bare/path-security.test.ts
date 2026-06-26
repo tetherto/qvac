@@ -5,7 +5,7 @@ import test from "brittle";
 //
 // Tests `validateAndJoinPath`, `isPathWithinBase` from the server utils, and
 // `extractTarStream` archive extraction. These require the Bare runtime
-// (bare-path, bare-fs, bare-process) and run via `npm run test:bare`.
+// (bare-path, bare-fs, bare-os) and run via `npm run test:bare`.
 //
 // The shared/client-side path security tests (sanitizePathComponent,
 // checkPathWithinBase) live in test/unit/path-security.test.ts.
@@ -52,9 +52,9 @@ test(
     const { extractTarStream } = await import("@/server/utils/archive");
     const barePath = await import("bare-path");
     const bareFs = await import("bare-fs");
-    const bareProcess = await import("bare-process");
+    const bareOs = await import("bare-os");
 
-    const cwd = bareProcess.default.cwd();
+    const cwd = bareOs.cwd();
     const fixturePath = barePath.join(
       cwd,
       "test",

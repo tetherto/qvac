@@ -456,6 +456,29 @@ runs:
 
           export GROUP_GREP_OUT="$GROUP_GREP"
 
+          # Per-shard perf gating: skip perf extraction on non-perf shards
+          # to avoid the poll loop (~13 min on Android) running uselessly
+          # when no perf-report.json exists.
+          #
+          # Rules:
+          #   - If the addon is NOT sharded (single "default" group), respect
+          #     the global ENABLES_PERF as-is (addons like tts-onnx, whisper,
+          #     nmtcpp emit perf from their single shard).
+          #   - If the addon IS sharded (multiple groups), only enable perf
+          #     for groups whose name contains "perf" (case-insensitive).
+          SHARD_ENABLES_PERF="false"
+          if [ "$ENABLES_PERF" = "true" ]; then
+            if [ "$GROUP_COUNT" -le 1 ]; then
+              SHARD_ENABLES_PERF="true"
+            else
+              _lower_name=$(echo "$GROUP_NAME" | tr '[:upper:]' '[:lower:]')
+              case "$_lower_name" in
+                *perf*) SHARD_ENABLES_PERF="true" ;;
+              esac
+            fi
+          fi
+          export SHARD_ENABLES_PERF
+
           # Python rather than sed because PLATFORM_CAPS contains characters that
           # are awkward to escape in sed substitution syntax (newlines, &, |, /).
           python3 - <<'PY' > "$WDIO_CONFIG_PATH"
@@ -476,7 +499,7 @@ runs:
             "__ENABLE_CRASH_MONITOR__": os.environ["ENABLE_CRASH_MONITOR"],
             "__QVAC_PERF_RUNS__": os.environ.get("QVAC_PERF_RUNS", ""),
             "__QVAC_PERF_WARMUP_RUNS__": os.environ.get("QVAC_PERF_WARMUP_RUNS", ""),
-            "__ENABLES_PERF__": os.environ.get("ENABLES_PERF", "false"),
+            "__ENABLES_PERF__": os.environ.get("SHARD_ENABLES_PERF", "false"),
             "__AFTER_HOOK_EXTRA__": after_snippet,
         }
         for k, v in repl.items():

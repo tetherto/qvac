@@ -4,6 +4,8 @@ The CLI exposes an **OpenAI-compatible HTTP API** (`qvac serve openai`) so tools
 
 This document describes the supported routes and how to configure `serve.models` for each capability. For general CLI usage, see [README.md](../README.md).
 
+For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../docs/architecture/AGENT-INTEGRATIONS.md). Use this file for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
+
 ## Implemented endpoints (today)
 
 | Method | Path | Notes |
@@ -112,7 +114,7 @@ Blocking response shape (single prompt):
 
 Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
 `max_completion_tokens`, `top_p`, `seed`, `frequency_penalty`,
-`presence_penalty`, `reasoning_budget`.
+`presence_penalty`, `reasoning_budget`, `remove_thinking_from_context`.
 
 ### Ignored parameters (warning logged)
 

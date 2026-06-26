@@ -18,8 +18,12 @@ try {
     modelConfig: {
       ctx_size: 4096,
     },
-    onProgress: (progress) =>
-      console.log(`Loading Bob: ${progress.percentage.toFixed(1)}%`),
+    onProgress: (p) => {
+      const mb = (n: number) => (n / 1e6).toFixed(1);
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
+      if (p.percentage >= 100) process.stderr.write("\n");
+    },
   });
 
   const aliceHistory = [
@@ -36,7 +40,7 @@ try {
     },
   ];
 
-  console.log("🙋🏻‍♂️ Bob: ", "What is Bitcoin?");
+  console.log("Bob: ", "What is Bitcoin?");
 
   const aliceResponse = completion({
     modelId: alice,
@@ -46,8 +50,8 @@ try {
   const aliceText = await aliceResponse.text;
   aliceHistory.push({ role: "assistant", content: aliceText });
 
-  console.log("🙋🏻‍♀️ Alice: ", aliceText);
-  console.log("📊 Alice Stats: ", await aliceResponse.stats);
+  console.log("Alice: ", aliceText);
+  console.log("▸ Alice Stats: ", await aliceResponse.stats);
 
   const bobResponse = completion({
     modelId: bob,
@@ -57,8 +61,8 @@ try {
   const bobText = await bobResponse.text;
   bobHistory.push({ role: "assistant", content: bobText });
 
-  console.log("🙋🏻‍♂️ Bob: ", bobText);
-  console.log("📊 Bob Stats: ", await bobResponse.stats);
+  console.log("Bob: ", bobText);
+  console.log("▸ Bob Stats: ", await bobResponse.stats);
 
   const aliceResponse2 = completion({
     modelId: alice,
@@ -68,8 +72,8 @@ try {
   const aliceText2 = await aliceResponse2.text;
   aliceHistory.push({ role: "assistant", content: aliceText2 });
 
-  console.log("🙋🏻‍♀️ Alice: ", aliceText2);
-  console.log("📊 Alice Stats: ", await aliceResponse2.stats);
+  console.log("Alice: ", aliceText2);
+  console.log("▸ Alice Stats: ", await aliceResponse2.stats);
 
   const bobResponse2 = completion({
     modelId: bob,
@@ -79,12 +83,12 @@ try {
   const bobText2 = await bobResponse2.text;
   bobHistory.push({ role: "assistant", content: bobText2 });
 
-  console.log("🙋🏻‍♂️ Bob: ", bobText2);
-  console.log("📊 Bob Stats: ", await bobResponse2.stats);
+  console.log("Bob: ", bobText2);
+  console.log("▸ Bob Stats: ", await bobResponse2.stats);
 
   await unloadModel({ modelId: alice, clearStorage: false });
   await unloadModel({ modelId: bob, clearStorage: false });
 } catch (error) {
-  console.error("❌ Error:", error);
+  console.error("✖", error);
   process.exit(1);
 }
