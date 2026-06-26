@@ -172,11 +172,12 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - verify-fabric-lockstep
       - ci-router
+      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -193,11 +194,12 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - sanity-checks
       - ci-router
+      - label-gate
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
@@ -206,11 +208,12 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
       - authorize
       - ci-router
+      - label-gate
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -247,10 +250,11 @@ jobs:
           workdir: packages/llm-llamacpp
 
   detect-native-changes:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - ci-router
+      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -380,10 +384,11 @@ jobs:
           echo "native_hash=${NATIVE_HASH:0:16}" >> "$GITHUB_OUTPUT"
 
   prebuild-cache-restore:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
       - detect-native-changes
       - sanity-checks
+      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -411,10 +416,12 @@ jobs:
       - sanity-checks
       - detect-native-changes
       - prebuild-cache-restore
+      - label-gate
     if: |
       always() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-cache-restore.outputs.cache_hit != 'true')
     permissions:
@@ -434,10 +441,11 @@ jobs:
     # so subsequent JS-only pushes can restore it.
     # Cache key is scoped by PR number + native hash, so PRs cannot
     # poison each other's cache and native changes invalidate it.
-    if: always() && needs.prebuild.result == 'success'
+    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
+      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -455,12 +463,13 @@ jobs:
           key: prebuilds-llm-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
 
   run-integration-tests:
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
     needs:
       - authorize
       - prebuild
       - prebuild-cache-restore
       - ci-router
+      - label-gate
     permissions:
       contents: read
       packages: read
