@@ -1,17 +1,17 @@
 name: On PR Trigger (LLM)
 
 on:
-  pull_request_target:
+  # TEST-ONLY (throwaway branch): pull_request_target -> pull_request so the
+  # head workflow runs and ci-router/label-gate read PR labels. Base
+  # lgci-sandbox does not match main's trigger filter. NOT FOR MERGE.
+  pull_request:
     types:
       - opened
       - synchronize
       - reopened
       - labeled
     branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
+      - lgci-sandbox
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
@@ -53,6 +53,10 @@ jobs:
         id: gate
         uses: ./.github/actions/label-gate
         with:
+          # TEST-ONLY (negative): look for an absent label so label-gate
+          # returns authorised=false even though `verified` IS applied —
+          # proves the new gating skips all PR-code/secret jobs. NOT FOR MERGE.
+          label: verified-gate-test-absent
           github-token: ${{ secrets.PAT_TOKEN }}
   ci-router:
     name: CI Router (label detection)
