@@ -77,9 +77,9 @@ struct MatchingDevice {
 //
 // The defect is specific to Adreno's *Vulkan* path, so the check is scoped to
 // the Vulkan backend rather than the GPU name alone: Adreno's OpenCL backend is
-// numerically sound and is the supported OpenCL path for Adreno (QVAC-19798), so
-// an Adreno-via-OpenCL device must NOT be rejected here. Apple Metal devices are
-// never Adreno, so the Metal path is unaffected.
+// numerically sound and is the supported OpenCL path for Adreno (QVAC-19798),
+// so an Adreno-via-OpenCL device must NOT be rejected here. Apple Metal devices
+// are never Adreno, so the Metal path is unaffected.
 bool isBrokenGpuDevice(ggml_backend_dev_t dev) {
   const char* descRaw = ggml_backend_dev_description(dev);
   if (descRaw == nullptr ||
@@ -245,17 +245,17 @@ namespace {
 // the selected backend does not implement — so a GPU backend that cannot run a
 // required op must be rejected here, in favour of CPU, rather than crashing at
 // inference time. This originally guarded ggml's OpenCL backend, which lacked
-// POOL_2D and aborted on the CRAFT detector (QVAC-19798); the OpenCL backend now
-// implements POOL_2D (and the other OCR vision ops) as of qvac-fabric 8828.1.2,
-// so it passes this probe and runs OCR end-to-end. The probe remains a safety
-// net for any current or future backend that is missing a required op.
+// POOL_2D and aborted on the CRAFT detector (QVAC-19798); the OpenCL backend
+// now implements POOL_2D (and the other OCR vision ops) as of qvac-fabric
+// 8828.1.2, so it passes this probe and runs OCR end-to-end. The probe remains
+// a safety net for any current or future backend that is missing a required op.
 //
 // POOL_2D is a reliable representative probe: it is used by every OCR graph
 // (EasyOCR CRAFT max-pools, CRNN max/avg-pools, DocTR DBNet / recognizer SE
 // avg-pools) and was historically the op ggml's OpenCL backend was missing,
-// while the full-featured Vulkan/Metal backends support it. The probe op mirrors
-// the production call in `easyocr/craft.cpp` (`maxpool_2x2`) so a device that
-// runs OCR for real is never falsely rejected.
+// while the full-featured Vulkan/Metal backends support it. The probe op
+// mirrors the production call in `easyocr/craft.cpp` (`maxpool_2x2`) so a
+// device that runs OCR for real is never falsely rejected.
 bool deviceSupportsRequiredOcrOps(ggml_backend_dev_t dev) {
   if (dev == nullptr) {
     return false;
