@@ -6,8 +6,9 @@ This release adds LTX-2.3 text-to-video (with audio) support and moves the `stab
 
 ### Changed
 
-- Consume `stable-diffusion-cpp@2026-06-04` and `ggml@2026-06-06` from `tetherto/qvac-registry-vcpkg` (published in [qvac-registry-vcpkg#191](https://github.com/tetherto/qvac-registry-vcpkg/pull/191)). These pin the LTX-2.3 video/audio pipeline: the merged `qvac-ext-stable-diffusion.cpp` LTX support and the `qvac-ext-ggml` Metal `IM2COL_3D`/`PAD` and fused-RoPE kernels.
-- Remove the temporary package-local `stable-diffusion-cpp` and `ggml` vcpkg overlay ports (and the `overlay-ports` entry in `vcpkg-configuration.json`); both now resolve from the registry. The `default-registry` baseline is bumped to the PR #191 merge commit.
+- Consume `stable-diffusion-cpp@2026-06-04#1` and `ggml@2026-06-06#1` from `tetherto/qvac-registry-vcpkg` (published in [qvac-registry-vcpkg#191](https://github.com/tetherto/qvac-registry-vcpkg/pull/191) and [#215](https://github.com/tetherto/qvac-registry-vcpkg/pull/215)). These pin the LTX-2.3 video/audio pipeline: the merged `qvac-ext-stable-diffusion.cpp` LTX support and the `qvac-ext-ggml` Metal `IM2COL_3D`/`PAD` and fused-RoPE kernels.
+- Pin `ggml@2026-06-06#1`, which wires `spirv-headers` into the `ggml-vulkan` target ([qvac-ext-ggml#31](https://github.com/tetherto/qvac-ext-ggml/pull/31)) so the non-Apple Vulkan backend (notably the Android prebuild) compiles instead of failing on a missing `<spirv/unified1/spirv.hpp>`.
+- Remove the temporary package-local `stable-diffusion-cpp` and `ggml` vcpkg overlay ports (and the `overlay-ports` entry in `vcpkg-configuration.json`); both now resolve from the registry. The `default-registry` baseline is bumped to the [#215](https://github.com/tetherto/qvac-registry-vcpkg/pull/215) merge commit.
 
 ## [0.12.0] - 2026-06-22
 
