@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.0] - 2026-06-26
+
+This release adds LTX-2.3 text-to-video (with audio) support and moves the `stable-diffusion-cpp` and `ggml` dependencies from temporary package-local overlay ports to the published `tetherto/qvac-registry-vcpkg` registry.
+
+### Changed
+
+- Consume `stable-diffusion-cpp@2026-06-04` and `ggml@2026-06-06` from `tetherto/qvac-registry-vcpkg` (published in [qvac-registry-vcpkg#191](https://github.com/tetherto/qvac-registry-vcpkg/pull/191)). These pin the LTX-2.3 video/audio pipeline: the merged `qvac-ext-stable-diffusion.cpp` LTX support and the `qvac-ext-ggml` Metal `IM2COL_3D`/`PAD` and fused-RoPE kernels.
+- Remove the temporary package-local `stable-diffusion-cpp` and `ggml` vcpkg overlay ports (and the `overlay-ports` entry in `vcpkg-configuration.json`); both now resolve from the registry. The `default-registry` baseline is bumped to the PR #191 merge commit.
+
 ## [0.11.2] - 2026-06-05
 
 This release restores caller control over where the diffusion text-conditioning path runs on macOS. It removes an Apple-specific override that forced the CLIP/text encoder path onto CPU.
