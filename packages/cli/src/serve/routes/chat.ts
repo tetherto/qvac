@@ -188,7 +188,7 @@ async function runStreaming(
       delta: ChatCompletionDelta,
       finishReason: OpenAiFinishReason | null,
       usage?: ChatCompletionUsage
-    ): unknown => chatCompletionChunk({
+    ) => chatCompletionChunk({
       id,
       created,
       model: p.modelAlias,
