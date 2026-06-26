@@ -38,6 +38,12 @@ const DEFAULT_NPREDICT = 128
 // 0 = no cap. Without this the CLI ran every --tasks entry while the addon honoured
 // maxTasks, so smoke produced mismatched rows ('—' for tasks the addon skipped).
 const MAX_TASKS = parseInt(arg('max-tasks', '0'), 10) || 0
+// Explicit item allowlist — mirrors the addon preset's `ids` (e.g. ocr1page=['ocr-page_0'],
+// ocr5pages=the 5 ocr-page docs). When set it WINS over tasks/max-tasks, exactly like
+// harness.cjs. Without it the CLI ran every task while the addon ran only the listed ids,
+// so an id-based preset (ocr1page/ocr5pages) had the addon doing OCR-only and the CLIs
+// doing everything → lopsided '—' columns.
+const IDS = (arg('ids', '') || '').split(',').map(s => s.trim()).filter(Boolean)
 const MAIN_ORIGIN = arg('main-origin', 'Qwen3.5-0.8B-Q8_0')
 const MMPROJ_ORIGIN = arg('mmproj-origin', 'Qwen3.5-0.8B mmproj-Q8_0')
 
@@ -45,6 +51,8 @@ if (!BINARY || !fs.existsSync(BINARY)) { console.error(`[cli-fixture] binary not
 if (!LLM || !MMPROJ) { console.error('[cli-fixture] --llm and --mmproj are required'); process.exit(2) }
 
 function selectedItems () {
+  // Id allowlist wins (same precedence as harness.cjs selectedItems).
+  if (IDS.length) { const want = new Set(IDS); return fixture.items.filter(it => want.has(it.id)) }
   const seen = {}
   return fixture.items.filter(it => {
     if (TASKS.length && !TASKS.includes(it.task)) return false

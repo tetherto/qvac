@@ -166,12 +166,13 @@ const TASK_LABELS = {
 const taskLabel = t => TASK_LABELS[t] || t
 
 function parseArgs (argv) {
-  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2', versionsB64: process.env.QVAC_VLM_VERSIONS_B64 || '' }
+  const out = { files: [], inputs: [], title: 'VLM Matrix', outFile: null, prov: [], mode: '', engine: '', preset: process.env.QVAC_VLM_PRESET || '', base: CONFIG.base || 'model_1', candidate: CONFIG.candidate || 'model_2', versionsB64: process.env.QVAC_VLM_VERSIONS_B64 || '' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--title') out.title = argv[++i]
     else if (argv[i] === '--out') out.outFile = argv[++i]
     else if (argv[i] === '--mode') out.mode = argv[++i]
     else if (argv[i] === '--engine') out.engine = argv[++i]
+    else if (argv[i] === '--preset') out.preset = argv[++i]
     else if (argv[i] === '--base') out.base = argv[++i]
     else if (argv[i] === '--candidate') out.candidate = argv[++i]
     else if (argv[i] === '--versions-b64') out.versionsB64 = argv[++i]
@@ -327,6 +328,7 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     ? 'several sources (engine varies; model fixed)'
     : `two models (${base} vs ${candidate}; engine fixed)`
   L.push(`**Mode:** ${modeLabel}  ·  **Engine:** ${opts.engine || 'addon'}\n`)
+  if (opts.preset) L.push(`**Preset:** \`${opts.preset}\` _(task set + samples per leg)_\n`)
   const severalSources = opts.mode === 'several-sources'
   L.push(severalSources
     ? '_one fixed model across inference engines · quality = lmms-eval ' +
@@ -661,7 +663,7 @@ if (require.main === module) {
   const provText = args.prov.map(p => { try { return fs.readFileSync(p, 'utf-8') } catch (_) { return '' } }).join('\n')
   let versions = null
   try { if (args.versionsB64) versions = JSON.parse(Buffer.from(args.versionsB64, 'base64').toString('utf8')) } catch (_) {}
-  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, base: args.base, candidate: args.candidate, versions })
+  const md = build(rows, vision, meta, provText, args.title, { mode: args.mode, engine: args.engine, preset: args.preset, base: args.base, candidate: args.candidate, versions })
   process.stdout.write(md + '\n')
   if (args.outFile) fs.writeFileSync(args.outFile, md + '\n')
 }

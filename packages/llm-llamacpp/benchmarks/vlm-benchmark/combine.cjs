@@ -39,13 +39,14 @@ function walk (dir) {
 }
 
 function parseArgs (argv) {
-  const a = { dir: 'matrix-logs', out: null, title: 'VLM Matrix', mode: '', engine: '', runNumber: '', versionsB64: process.env.QVAC_VLM_VERSIONS_B64 || '' }
+  const a = { dir: 'matrix-logs', out: null, title: 'VLM Matrix', mode: '', engine: '', preset: process.env.QVAC_VLM_PRESET || '', runNumber: '', versionsB64: process.env.QVAC_VLM_VERSIONS_B64 || '' }
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--dir') a.dir = argv[++i]
     else if (argv[i] === '--out') a.out = argv[++i]
     else if (argv[i] === '--title') a.title = argv[++i]
     else if (argv[i] === '--mode') a.mode = argv[++i]
     else if (argv[i] === '--engine') a.engine = argv[++i]
+    else if (argv[i] === '--preset') a.preset = argv[++i]
     else if (argv[i] === '--run-number') a.runNumber = argv[++i]
     // base64'd JSON from resolve-versions.cjs ({mode, sources:[{engine,chosenTag,latestTag}]})
     // → the report's "Engine versions" table. Defaults to QVAC_VLM_VERSIONS_B64.
@@ -138,7 +139,7 @@ function main () {
     let versions = null
     try { if (args.versionsB64) versions = JSON.parse(Buffer.from(args.versionsB64, 'base64').toString('utf8')) } catch (_) {}
     md = build(rows, vision, meta, prov.join('\n\n'), args.title,
-      { mode: args.mode, engine: args.engine, base, candidate, versions })
+      { mode: args.mode, engine: args.engine, preset: args.preset, base, candidate, versions })
   }
   process.stdout.write(md + '\n')
   if (args.out) {
