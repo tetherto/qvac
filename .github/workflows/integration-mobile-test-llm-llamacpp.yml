@@ -136,8 +136,7 @@ jobs:
       matrix:
         # Default (platforms='') runs both, preserving behaviour for every existing
         # caller; a caller may pass platforms='Android' or 'iOS' to run a single one.
-        # POC(prestage): Android-only to keep the run short/cheap.
-        include: ${{ fromJSON('[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]') }}
+        include: ${{ fromJSON(inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
 
     steps:
       - name: Validate Dispatch Inputs
