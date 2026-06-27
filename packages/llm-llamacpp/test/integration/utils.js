@@ -52,35 +52,6 @@ function urlHost (url) {
   try { return new URL(url).host } catch (_) { return url }
 }
 
-// Hard outer deadline for a single download attempt. downloadFileOnce already
-// has connect/idle timers, but a blocking name resolution (getaddrinfo) can
-// stall before they're meaningful — leaving the request hung with no error and
-// no retry until the 30-minute test-level timeout kills the whole shard. This
-// guarantees a stuck attempt rejects with a transient ETIMEDOUT so the retry
-// loop can move on.
-//
-// We attach handlers directly to `promise` (rather than Promise.race against a
-// rejecting timer) so that a late settlement of the underlying download — after
-// the deadline already won — is ALWAYS observed. A Promise.race leaves the
-// loser unobserved, which Bare reports as an unhandled rejection and can
-// escalate to SIGABRT (the exact crash class this whole change exists to
-// avoid). Here the timer and the download both settle the same outer promise;
-// whichever loses becomes a no-op, and neither is left dangling.
-function withDeadline (promise, deadlineMs, host) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(Object.assign(
-        new Error(`Download attempt exceeded ${deadlineMs}ms deadline from ${host}`),
-        { code: 'ETIMEDOUT' }
-      ))
-    }, deadlineMs)
-    promise.then(
-      (value) => { clearTimeout(timer); resolve(value) },
-      (err) => { clearTimeout(timer); reject(err) }
-    )
-  })
-}
-
 async function downloadFileOnce (url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
@@ -176,12 +147,13 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
   // Defaults tuned for mobile Device Farm: connectivity gaps here can last tens
   // of seconds, so 4 attempts over ~7s gave up far too early. 7 attempts with a
   // backoff cap of 20s spans a ~1-2 min window, riding out real blips. Each
-  // attempt is bounded by attemptDeadlineMs so a hung DNS/connect can't stall.
+  // attempt is bounded by downloadFileOnce's own connect/idle timers (which
+  // reset on data), so a slow-but-progressing large download is allowed to run
+  // to completion rather than being capped by a fixed per-attempt deadline.
   const {
     retries = 6,
     minBytes = 1,
     backoffCapMs = 20_000,
-    attemptDeadlineMs = 90_000,
     ...downloadOpts
   } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
@@ -195,7 +167,7 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
     const url = urlList[attempt % urlList.length]
     const host = urlHost(url)
     try {
-      await withDeadline(downloadFileOnce(url, partPath, downloadOpts), attemptDeadlineMs, host)
+      await downloadFileOnce(url, partPath, downloadOpts)
 
       // Verify the artifact actually landed and is non-trivial. A "resolved"
       // download whose .part is missing or short means the transfer was
