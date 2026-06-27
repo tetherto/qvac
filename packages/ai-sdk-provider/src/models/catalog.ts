@@ -39,19 +39,19 @@ const byConstant = new Map(qvacCatalog.map((entry) => [entry.constant, entry]))
 // Find the catalog entry for either a public id (`qwen3.5-9b`) or its SDK
 // constant (`QWEN3_5_9B_MULTIMODAL_Q4_K_M`). Returns `undefined` for ids/
 // constants not in the catalog (e.g. a bare constant with no friendly alias).
-export function findCatalogEntry (idOrConstant: string): QvacCatalogEntry | undefined {
+export function findCatalogEntry(idOrConstant: string): QvacCatalogEntry | undefined {
   return byId.get(idOrConstant) ?? byConstant.get(idOrConstant)
 }
 
 // True when `id` is a public catalog id (not a constant).
-export function isCatalogId (id: string): boolean {
+export function isCatalogId(id: string): boolean {
   return byId.has(id)
 }
 
 // Resolve any catalog id (or constant) to the SDK constant the serve must load.
 // A value that is not a catalog id passes through unchanged, so raw constants —
 // including ones with no friendly alias — keep working.
-export function resolveModelConstant (idOrConstant: string): string {
+export function resolveModelConstant(idOrConstant: string): string {
   return byId.get(idOrConstant)?.constant ?? idOrConstant
 }
 
@@ -62,6 +62,6 @@ const KNOWN_CONSTANTS: ReadonlySet<string> = new Set(allModels.map((m) => m.name
 // The catalog ids whose constant is missing from the generated SDK catalog.
 // Empty in a healthy build; the unit test asserts it stays empty so a renamed
 // or removed constant fails CI instead of 500-ing at request time.
-export function catalogEntriesWithUnknownConstant (): readonly QvacCatalogEntry[] {
+export function catalogEntriesWithUnknownConstant(): readonly QvacCatalogEntry[] {
   return qvacCatalog.filter((entry) => !KNOWN_CONSTANTS.has(entry.constant))
 }

@@ -54,18 +54,22 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 // `coerce*` before they reach `ResolvedOptions`.
 export type RawOptions = Partial<Record<keyof ResolvedOptions, unknown>>
 
-function coerceString (option: string, value: unknown): string {
-  if (typeof value !== 'string') throw new InvalidOptionError(option, `expected a string, got ${typeof value}`)
+function coerceString(option: string, value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new InvalidOptionError(option, `expected a string, got ${typeof value}`)
+  }
   return value
 }
 
-function coerceNumber (option: string, value: unknown): number {
+function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n)) throw new InvalidOptionError(option, `expected a number, got ${JSON.stringify(value)}`)
+  if (!Number.isFinite(n)) {
+    throw new InvalidOptionError(option, `expected a number, got ${JSON.stringify(value)}`)
+  }
   return n
 }
 
-function coerceBoolean (option: string, value: unknown): boolean {
+function coerceBoolean(option: string, value: unknown): boolean {
   if (typeof value === 'boolean') return value
   if (value === 'true' || value === '1') return true
   if (value === 'false' || value === '0') return false
@@ -75,7 +79,7 @@ function coerceBoolean (option: string, value: unknown): boolean {
 // Merge raw option sources left-to-right (later sources win) onto the defaults,
 // validating each provided value. Pure — no disk or env access — so the
 // precedence and coercion rules are trivially unit-testable.
-export function mergeOptions (...sources: readonly RawOptions[]): ResolvedOptions {
+export function mergeOptions(...sources: readonly RawOptions[]): ResolvedOptions {
   const merged: RawOptions = {}
   for (const source of sources) {
     for (const [key, value] of Object.entries(source)) {
@@ -84,14 +88,21 @@ export function mergeOptions (...sources: readonly RawOptions[]): ResolvedOption
   }
   return {
     model: merged.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', merged.model),
-    ctxSize: merged.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', merged.ctxSize),
+    ctxSize:
+      merged.ctxSize === undefined
+        ? DEFAULT_OPTIONS.ctxSize
+        : coerceNumber('ctxSize', merged.ctxSize),
     reasoningBudget:
       merged.reasoningBudget === undefined
         ? DEFAULT_OPTIONS.reasoningBudget
         : coerceNumber('reasoningBudget', merged.reasoningBudget),
-    tools: merged.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', merged.tools),
+    tools:
+      merged.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', merged.tools),
     shim: merged.shim === undefined ? DEFAULT_OPTIONS.shim : coerceBoolean('shim', merged.shim),
-    runtime: merged.runtime === undefined ? DEFAULT_OPTIONS.runtime : coerceString('runtime', merged.runtime),
+    runtime:
+      merged.runtime === undefined
+        ? DEFAULT_OPTIONS.runtime
+        : coerceString('runtime', merged.runtime),
     readyTimeoutMs:
       merged.readyTimeoutMs === undefined
         ? DEFAULT_OPTIONS.readyTimeoutMs
@@ -100,7 +111,8 @@ export function mergeOptions (...sources: readonly RawOptions[]): ResolvedOption
       merged.listenTimeoutMs === undefined
         ? DEFAULT_OPTIONS.listenTimeoutMs
         : coerceNumber('listenTimeoutMs', merged.listenTimeoutMs),
-    debug: merged.debug === undefined ? DEFAULT_OPTIONS.debug : coerceBoolean('debug', merged.debug),
+    debug:
+      merged.debug === undefined ? DEFAULT_OPTIONS.debug : coerceBoolean('debug', merged.debug),
     setDefaultModel:
       merged.setDefaultModel === undefined
         ? DEFAULT_OPTIONS.setDefaultModel
@@ -110,7 +122,7 @@ export function mergeOptions (...sources: readonly RawOptions[]): ResolvedOption
 
 // Map QVAC_* env vars onto raw options. Only set keys are returned, so env
 // participates in the same precedence merge as the other sources.
-export function optionsFromEnv (env: NodeJS.ProcessEnv): RawOptions {
+export function optionsFromEnv(env: NodeJS.ProcessEnv): RawOptions {
   const raw: RawOptions = {}
   if (env['QVAC_MODEL'] !== undefined) raw.model = env['QVAC_MODEL']
   if (env['QVAC_CTX_SIZE'] !== undefined) raw.ctxSize = env['QVAC_CTX_SIZE']
@@ -119,16 +131,20 @@ export function optionsFromEnv (env: NodeJS.ProcessEnv): RawOptions {
   if (env['QVAC_SHIM'] !== undefined) raw.shim = env['QVAC_SHIM']
   if (env['QVAC_RUNTIME'] !== undefined) raw.runtime = env['QVAC_RUNTIME']
   if (env['QVAC_READY_TIMEOUT_MS'] !== undefined) raw.readyTimeoutMs = env['QVAC_READY_TIMEOUT_MS']
-  if (env['QVAC_LISTEN_TIMEOUT_MS'] !== undefined) raw.listenTimeoutMs = env['QVAC_LISTEN_TIMEOUT_MS']
+  if (env['QVAC_LISTEN_TIMEOUT_MS'] !== undefined) {
+    raw.listenTimeoutMs = env['QVAC_LISTEN_TIMEOUT_MS']
+  }
   if (env['QVAC_DEBUG'] !== undefined) raw.debug = env['QVAC_DEBUG']
-  if (env['QVAC_SET_DEFAULT_MODEL'] !== undefined) raw.setDefaultModel = env['QVAC_SET_DEFAULT_MODEL']
+  if (env['QVAC_SET_DEFAULT_MODEL'] !== undefined) {
+    raw.setDefaultModel = env['QVAC_SET_DEFAULT_MODEL']
+  }
   return raw
 }
 
 // Read an optional `qvac.json` from the project directory. A missing file is
 // not an error (env / plugin options can supply everything); a malformed one
 // is, so a typo doesn't silently fall back to defaults.
-export function optionsFromProjectFile (projectDir: string): RawOptions {
+export function optionsFromProjectFile(projectDir: string): RawOptions {
   let text: string
   try {
     text = readFileSync(join(projectDir, 'qvac.json'), 'utf8')
@@ -137,7 +153,7 @@ export function optionsFromProjectFile (projectDir: string): RawOptions {
   }
   try {
     const parsed: unknown = JSON.parse(text)
-    if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new InvalidOptionError('qvac.json', 'expected a JSON object')
     }
     return parsed as RawOptions
@@ -150,7 +166,7 @@ export function optionsFromProjectFile (projectDir: string): RawOptions {
 // Resolve effective options from all sources. Precedence, lowest to highest:
 // defaults < qvac.json < opencode.json plugin options < QVAC_* env. Env wins so
 // an ad-hoc `QVAC_MODEL=… opencode` override always takes effect.
-export function resolveOptions (params: {
+export function resolveOptions(params: {
   pluginOptions?: RawOptions | undefined
   projectDir: string
   env: NodeJS.ProcessEnv
@@ -165,7 +181,7 @@ export function resolveOptions (params: {
 // The env subset the host needs to load + serve the model. The plugin resolves
 // options once (honouring qvac.json + plugin tuple) and passes the resolved
 // values to the host so the host never re-reads config.
-export function hostEnv (options: ResolvedOptions): Record<string, string> {
+export function hostEnv(options: ResolvedOptions): Record<string, string> {
   return {
     QVAC_MODEL: options.model,
     QVAC_CTX_SIZE: String(options.ctxSize),

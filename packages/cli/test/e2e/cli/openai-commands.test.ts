@@ -10,7 +10,7 @@ describe('cli: openai spec', () => {
   it('emits a valid OpenAPI JSON document to stdout', async () => {
     const r = await runCli(['openai', 'spec'])
     assert.equal(r.code, 0)
-    const doc = JSON.parse(r.stdout) as { openapi: string, paths: Record<string, unknown> }
+    const doc = JSON.parse(r.stdout) as { openapi: string; paths: Record<string, unknown> }
     assert.match(doc.openapi, /^3\./)
     assert.ok('/v1/chat/completions' in doc.paths)
     assert.ok('/v1/models' in doc.paths)
