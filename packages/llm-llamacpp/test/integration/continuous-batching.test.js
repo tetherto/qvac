@@ -141,8 +141,8 @@ function buildVlmBatchItem (item) {
     return {
       id: item.id,
       prompt: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: `Write one sentence of a story. Start with the word "${word}".` }
+        { role: 'system', content: 'Follow the user instruction exactly. Do not add a preamble.' },
+        { role: 'user', content: `Write one short sentence that contains the exact word "${word}".` }
       ],
       runOptions: { generationParams: { predict: 48 } }
     }
