@@ -8,6 +8,8 @@ vcpkg_from_github(
     REPO tetherto/qvac-ext-stable-diffusion.cpp
     REF 11717d225f13eb21f0a7fe5c8c5c7d733b1203a7
     SHA512 554e9f51fa63ab0a528f7c33cfd8823144fd8ea36f7a2d4e8388adb5bb554e08fa7d66d989f1a26eee7ebdf6276bf0c0a9eacf9f4fe13bba676350e78dc3a8fd
+    PATCHES
+        resolve-backend-registry-alias.patch
 )
 
 set(SD_FLASH_ATTN OFF)

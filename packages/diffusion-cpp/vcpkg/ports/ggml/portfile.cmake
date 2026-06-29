@@ -3,12 +3,12 @@
 # This fabric-based branch preserves qvac-fabric-llm.cpp's Adreno OpenCL Q4_0
 # preallocated transpose-buffer path, then replays the QVAC stable-diffusion.cpp
 # kernels from the 2026-06-06 line (Metal IM2COL_3D/PAD/fused RoPE, hybrid
-# backend packaging, and Vulkan coopmat1 f32-accum flash-attn).
+# backend packaging, and Vulkan coopmat1 f32-accum/GQA flash-attn).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 462ffabc553cfac4cb029b70fb15a3a528fb55c1
-    SHA512 80ea4804dfd5751cc09e4ea4654c262913ca63d6a4efe08bf98efe77b5014887671b85f38f217aab5981ba2ed7d7685513c43074b20faeffa0a28cb6a7457040
+    REF 1d0faf0a869a0ba3822adac6eba6a03ead74c842
+    SHA512 a6a31dae4499496f207e443b42cb517aec9e7bc8cfe5f19ed2a28b94c24e285e73c853bc93261cd9aeb6254b3579f566becdeefc403612611563c7f97e48a7b8
 )
 
 # The fabric repo vendors ggml as a subtree and keeps ggml.pc.in outside that
