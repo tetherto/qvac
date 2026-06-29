@@ -6,8 +6,19 @@ const os = require('bare-os')
 const process = require('bare-process')
 
 const TRANSIENT_ERROR_CODES = new Set([
-  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  // DNS / name resolution
+  'EAI_NODATA', 'EAI_AGAIN', 'EAI_FAIL', 'ENOTFOUND',
+  // connectivity — these dominate mobile Device Farm flakiness: a transient
+  // network drop surfaces as ENETUNREACH/EHOSTUNREACH and MUST be retried
+  // (previously these were treated as fatal, so a sub-second blip failed the
+  // whole run with no retry).
+  'ENETUNREACH', 'EHOSTUNREACH', 'ECONNREFUSED',
+  // mid-transfer / timeout
+  'ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE',
+  // post-transfer: the request "resolved" but the .part is missing/short or
+  // couldn't be finalized (truncated/interrupted transfer) — retry it instead
+  // of hard-failing on the resulting ENOENT/short file.
+  'EINCOMPLETE'
 ])
 
 const cleanedIntegrationCacheFiles = new Set()
@@ -133,9 +144,24 @@ async function downloadFileOnce (url, dest, opts = {}) {
 }
 
 async function downloadFileWithRetries (urls, dest, opts = {}) {
-  const { retries = 3, minBytes = 1, ...downloadOpts } = opts
+  // Defaults tuned for mobile Device Farm: connectivity gaps here can last tens
+  // of seconds, so 4 attempts over ~7s gave up far too early. 7 attempts with a
+  // backoff cap of 20s spans a ~1-2 min window, riding out real blips. Each
+  // attempt is bounded by downloadFileOnce's own connect/idle timers (which
+  // reset on data), so a slow-but-progressing large download is allowed to run
+  // to completion rather than being capped by a fixed per-attempt deadline.
+  const {
+    retries = 6,
+    minBytes = 1,
+    backoffCapMs = 20_000,
+    ...downloadOpts
+  } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
   const partPath = dest + '.part'
+
+  // Drop any leftover .part from a previously interrupted/killed run so a stale
+  // temp file can't be mistaken for this download's output.
+  try { fs.unlinkSync(partPath) } catch (_) {}
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const url = urlList[attempt % urlList.length]
@@ -143,13 +169,28 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
     try {
       await downloadFileOnce(url, partPath, downloadOpts)
 
-      const stat = fs.statSync(partPath)
-      if (stat.size < minBytes) {
-        fs.unlinkSync(partPath)
-        throw Object.assign(new Error(`Downloaded file is empty from ${host}`), { code: 'ESIZE' })
+      // Verify the artifact actually landed and is non-trivial. A "resolved"
+      // download whose .part is missing or short means the transfer was
+      // truncated/interrupted — surface it as EINCOMPLETE so the loop RETRIES
+      // instead of hard-failing on a fatal ENOENT (which previously killed the
+      // run after a single attempt).
+      let size = -1
+      try { size = fs.statSync(partPath).size } catch (_) { size = -1 }
+      if (size < minBytes) {
+        throw Object.assign(
+          new Error(`Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`),
+          { code: 'EINCOMPLETE' }
+        )
       }
 
-      fs.renameSync(partPath, dest)
+      try {
+        fs.renameSync(partPath, dest)
+      } catch (err) {
+        throw Object.assign(
+          new Error(`Failed to finalize download from ${host}: ${err.code || err.message}`),
+          { code: 'EINCOMPLETE' }
+        )
+      }
       return
     } catch (err) {
       try { fs.unlinkSync(partPath) } catch (_) {}
@@ -160,11 +201,33 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
         throw err
       }
 
-      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, backoffCapMs)
       console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
+}
+
+// Android Device Farm pre-staging: the device's network to huggingface.co is
+// unreliable (~40% of downloads fail even with retries), but the Device Farm
+// HOST has solid network. The test-spec pre_test phase downloads each model on
+// the host and `adb push`es it here; when a model is already staged we skip the
+// on-device download entirely.
+//
+// /data/local/tmp is the one location that is both adb-writable from the host
+// AND readable by the app process (proven on these devices: the harness already
+// pushes testFilter.txt here and the app reads it). The app's own scoped dirs
+// (/data/data/<pkg>, /sdcard/Android/data/<pkg>) reject adb access on Android
+// 11+, so they cannot be used for host pre-staging.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelDir (modelName) {
+  if (os.platform() !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+  } catch (_) {}
+  return null
 }
 
 async function ensureModel ({ modelName, downloadUrl }) {
@@ -178,6 +241,25 @@ async function ensureModel ({ modelName, downloadUrl }) {
     }
     console.log(`[download] Removing zero-byte cached file: ${modelName}`)
     fs.unlinkSync(modelPath)
+  }
+
+  // Pre-staged path: copy the host-staged model from the read-only staging dir
+  // into the normal (app-private, WRITABLE) modelDir, then return modelDir. The
+  // copy is a fast local operation (no network). Returning a writable dir is
+  // essential — tests write sibling files next to the model (sliding-context
+  // caches, finetuning checkpoints via path.join(modelDir, ...)), which would
+  // fail if we returned the read-only /data/local/tmp staging dir directly.
+  const staged = prestagedModelDir(modelName)
+  if (staged) {
+    fs.mkdirSync(modelDir, { recursive: true })
+    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
+    fs.copyFileSync(path.join(staged, modelName), modelPath)
+    const stat = fs.statSync(modelPath)
+    if (stat.size === 0) {
+      fs.unlinkSync(modelPath)
+      throw new Error(`[prestage] copied model ${modelName} is empty`)
+    }
+    return [modelName, modelDir]
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
