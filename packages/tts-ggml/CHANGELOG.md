@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chatterbox multilingual `q8_0` KV cache now runs on the Metal GPU — the real
+  fix for the 0.3.6 crash mitigation.** Bumps the `tts-cpp` pin to `2026-06-29#1`
+  (`qvac-ext-lib-whisper.cpp` PR #71 `12749a05`, one commit ahead of the LavaSR
+  `4c8767a2`), consumed from `qvac-registry-vcpkg` (#216); the `default-registry`
+  baseline advances to `bf8d9a92` so the new pin resolves. 0.3.6 dodged the
+  multilingual Metal SIGABRT (`unsupported op 'CONT'`) by defaulting the KV cache
+  to `f16`; the root cause was the per-(layer,head) alignment probe `ggml_cont`'ing
+  a strided view of the `q8_0` K cache, which ggml-metal can't encode (no
+  quantized CONT kernel). The probe now dequantizes that slice via
+  `ggml_cast(->f32)` (Metal-supported), so a `q8_0` KV cache runs on the GPU
+  again — `chatterbox_mtl_resolve_kv_type` probes the cast per-backend and falls
+  back to f32 only where the backend can't encode it. Validated on macOS Metal
+  and on-device iOS (iPhone 17 Pro Max, A19 Pro). (QVAC-19557)
 - **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
   GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
   master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
