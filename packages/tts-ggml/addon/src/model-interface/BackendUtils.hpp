@@ -38,11 +38,11 @@ inline bool containsCaseInsensitive(const char* haystack, const char* needle) {
 // True when an ARM Mali / Immortalis (Valhall) GPU device is registered with
 // ggml. Read-only: enumerates devices and inspects their name/description; it
 // never inits a device or commits a backend selection, so it is safe to call
-// after the engine has already chosen CPU. Mirrors tts-cpp's
-// desc_or_name_is_arm_mali (matches "mali" or "immortalis"). Scoped to the
-// vendor tts-cpp declines by policy (allow_arm_mali=false) so Adreno / Xclipse
-// — which DO run GPU — are never matched, and a genuine GPU->CPU regression on
-// those vendors stays unflagged.
+// after the engine has chosen its backend. Mirrors tts-cpp's
+// desc_or_name_is_arm_mali (matches "mali" or "immortalis"). Defensive
+// observability only (tts-cpp now admits Chatterbox on Mali): scopes the
+// gpuUnsupported_ "GPU present but unused" signal to Mali/Immortalis so a
+// genuine GPU->CPU regression on Adreno / Xclipse stays distinguishable.
 inline bool androidOffAllowlistGpuPresent() {
   const size_t count = ggml_backend_dev_count();
   for (size_t i = 0; i < count; ++i) {
