@@ -195,11 +195,8 @@ export async function close(): Promise<void> {
 
     // terminate() crashes on Android (addon dlclose leaves pthread_key_t
     // destructors dangling); iOS dyld no-ops dlclose so it's safe there.
-    // Non-iOS: send the cleanup roundtrip, then drop refs without
-    // terminating. Android cannot safely terminate/dlclose the worklet
-    // here, but reset/reload still needs addon logger js_ref_t handles
-    // released before a fresh worker registers plugins in the same app
-    // process.
+    // Non-iOS: drop refs only -- sending __shutdown__ without a follow-up
+    // terminate would clear the worker plugin registry.
     let platform: string | undefined;
     try {
       platform = (await getRuntimeContext()).platform;
@@ -208,14 +205,8 @@ export async function close(): Promise<void> {
     }
 
     if (platform !== "ios") {
-      if (rpcInstance) {
-        logger.info("🧹 Requesting worker cleanup");
-        await sendShutdownMessage(rpcInstance);
-      }
       rpcInstance = null;
       rpcPromise = null;
-      workletInstance = null;
-      workletInitialized = false;
       return;
     }
 

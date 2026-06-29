@@ -74,6 +74,7 @@ import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js"
 import { BciExecutor } from "../shared/executors/node/bci-executor.js";
 import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DownloadResilienceExecutor } from "../shared/executors/node/download-resilience-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
@@ -414,6 +415,9 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new BciExecutor(resources),
     new VisionExecutor(resources),
+    // Must precede DownloadExecutor — its /^download-/ pattern also matches
+    // download-resilience-*, and dispatch is first-match-wins.
+    new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),

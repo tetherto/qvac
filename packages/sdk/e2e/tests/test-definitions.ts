@@ -28,6 +28,7 @@ import { parakeetStreamTests } from "./parakeet-stream-tests.js";
 import { bciTests } from "./bci-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
+import { downloadResilienceTests } from "./download-resilience-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
@@ -283,6 +284,9 @@ export const tests = [
 
   // Download tests (cancel isolation)
   ...downloadTests,
+
+  // Download resilience: survive suspend/resume + network drop (QVAC-21225)
+  ...downloadResilienceTests,
 
   // Diffusion tests
   ...diffusionTests,
