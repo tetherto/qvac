@@ -2,7 +2,7 @@
 
 This document covers the **cross-platform RTF and streaming latency** benchmark
 system for the GGML (tts-cpp) TTS backend — the one wired into the
-`Benchmark RTF (TTS GGML)` GitHub Actions workflow, with ingestion paths for
+`Benchmark Performance (TTS GGML)` GitHub Actions workflow, with ingestion paths for
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
 drops.
 
@@ -206,10 +206,10 @@ total wall time.
 The RTF benchmark supports `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND`. We
 deliberately **don't** set a bound in CI yet — without accumulated baselines,
 any bound would either trip on noise or fail to catch real regressions.
-Recommended follow-up once the scheduled or manually dispatched benchmark has a
-few runs banked:
+Recommended follow-up once the manually dispatched benchmark has a few runs
+banked:
 
-1. Read the P95 of the last 4 weekly runs per `(platform, engine, gpu)` from the
+1. Read the P95 of the last 4 benchmark runs per `(platform, engine, gpu)` from the
    summarize JSON artifact.
 2. Set `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND = P95 * 1.5` per matrix row.
 3. Re-generate the matrix JSON with those bounds embedded as `rtfUpperBound`.

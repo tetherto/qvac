@@ -29,7 +29,6 @@ on:
 permissions:
   contents: read
   packages: read
-  id-token: write
 
 env:
   ADDON_DIR: packages/tts-ggml
@@ -84,7 +83,6 @@ jobs:
       - label-gate
     permissions:
       contents: write
-      packages: write
       pull-requests: write
       id-token: write
     uses: ./.github/workflows/prebuilds-tts-ggml.yml
@@ -102,7 +100,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      id-token: write
     uses: ./.github/workflows/integration-test-tts-ggml.yml
     secrets: inherit
     with:
