@@ -1,0 +1,72 @@
+name: '[TEST] lgci npm-fallback gate'
+
+# THROWAWAY validation workflow for PR #2873 — proves the mobile-setup
+# npm-fallback gate (.github/actions/run-mobile-integration-tests/setup).
+# Delete after capturing evidence.
+#
+# It runs the REAL setup composite with NO prebuild artifacts present, so the
+# only thing that could mask a missing artifact is the npm fallback. We assert
+# the gate by reading each run's step conclusions:
+#   - push event        -> event_name=push        -> npm step RUNS  (non-PR, default)
+#   - pull_request       -> event_name=pull_request -> npm step SKIPPED -> Verify hard-fails (the fix)
+#   - pull_request + allow-npm-fallback=true        -> npm step RUNS  (explicit override)
+on:
+  push:
+    branches: ['test/lgci-npm-fallback']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  default-gate:
+    name: setup (default allow-npm-fallback)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          path: addon
+          fetch-depth: 1
+      - name: Run mobile setup (no artifacts present)
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: iOS
+          addon-workdir: 'packages/llm-llamacpp'
+          addon-npm-name: '@qvac/llm-llamacpp'
+          prebuild-artifact-prefix: 'llama-cpp-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+  override-gate:
+    name: setup (allow-npm-fallback=true)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          path: addon
+          fetch-depth: 1
+      - name: Run mobile setup (allow-npm-fallback forced on)
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: iOS
+          addon-workdir: 'packages/llm-llamacpp'
+          addon-npm-name: '@qvac/llm-llamacpp'
+          prebuild-artifact-prefix: 'llama-cpp-'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          allow-npm-fallback: 'true'
