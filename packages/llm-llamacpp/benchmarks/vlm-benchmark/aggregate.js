@@ -525,7 +525,16 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   // build that source has available (same or newer). AUTO mode pins every source to the
   // most recent build they ALL support (apples-to-apples by default); MANUAL mode honors
   // the refs set per source (builds may differ). opts.versions comes from resolve-versions.cjs.
-  if (opts.versions && Array.isArray(opts.versions.sources) && opts.versions.sources.length) {
+  //
+  // This auto/manual resolution only applies to CLI engine comparison (fabric/upstream),
+  // where a llama.cpp build ref is actually CHOSEN. An addon-only comparison (e.g.
+  // addon@candidate vs addon@baseline) bundles whatever llama.cpp each addon build pinned —
+  // nothing is auto-resolved, the two builds differ by construction, and we can't read the
+  // baseline's bundled engine anyway — so labelling it "chosen automatically" is wrong. The
+  // per-source addon versions are already in "Sources — resolved versions" below; only render
+  // this table (and its label) when a CLI source is in the comparison.
+  if (opts.versions && Array.isArray(opts.versions.sources) &&
+      opts.versions.sources.some(s => s.engine === 'fabric-cli' || s.engine === 'upstream-cli')) {
     const vmode = opts.versions.mode
     L.push('### Engine versions — llama.cpp build per source\n')
     L.push(vmode === 'auto'
