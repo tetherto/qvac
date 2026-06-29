@@ -50,6 +50,19 @@ inputs:
       pin a specific published version.
     required: false
     default: ""
+  allow-npm-fallback:
+    description: |
+      Whether the npm fallback (npm pack <addon>@<version>) is allowed when
+      no CI prebuild artifacts are present. Defaults to "false" so that
+      PR-triggered runs (pull_request / pull_request_target) NEVER silently
+      test the published release instead of the PR's own binaries — a missing
+      artifact hard-fails in the "Verify and prepare prebuilds" step instead.
+      Regardless of this input, the fallback is implicitly enabled for every
+      NON-PR event (workflow_dispatch, schedule, push/on-merge, benchmarks),
+      where testing a published package is the intended behaviour. Set to
+      "true" to force-enable the fallback in a PR context.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -144,8 +157,18 @@ runs:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
       continue-on-error: true
 
+    # npm fallback — DISABLED for PR-triggered runs.
+    # On a PR (pull_request / pull_request_target) the only acceptable
+    # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
+    # or the merged `prebuilds` artifact handled above). If neither is
+    # present the run must hard-fail in "Verify and prepare prebuilds"
+    # below rather than silently `npm pack`-ing the PUBLISHED release and
+    # going green against the wrong binaries. For every non-PR event
+    # (workflow_dispatch, schedule, push/on-merge, benchmarks) testing a
+    # published package is the intended behaviour, so the fallback stays on.
+    # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
     - name: Download prebuilds (from npm — fallback when no artifacts found)
-      if: inputs.skip-prebuilds != 'true'
+      if: inputs.skip-prebuilds != 'true' && (inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
