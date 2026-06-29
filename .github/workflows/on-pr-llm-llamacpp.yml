@@ -310,13 +310,24 @@ jobs:
             exit 0
           fi
 
-          # For synchronize (push) events, diff the PREVIOUS head
-          # (github.event.before) against the CURRENT head — so a JS-only
-          # push after earlier C++ commits correctly reports native_changed=false.
-          # For opened/reopened/labeled, diff base..head (full PR diff).
-          # native_hash always uses the full HEAD tree for cache key correctness.
-          DIFF_FROM="$BASE_SHA"
-          if [ "$EVENT_ACTION" = "synchronize" ] && [ -n "$BEFORE_SHA" ]; then
+          # Pick the diff base by how the PR head moved on THIS event:
+          #   • opened                      → full PR diff (base..head): first
+          #     evaluation, so the whole PR delta is the right thing to inspect.
+          #   • head advanced (synchronize) → previous head..current head, the
+          #     per-push delta. github.event.before is populated only for
+          #     synchronize, so a JS-only push after earlier C++ commits reports
+          #     native_changed=false and restores from cache.
+          #   • labeled / reopened on an UNCHANGED head → before is empty, so we
+          #     diff head..head (empty) → native_changed=false. Adding a routing
+          #     label (e.g. run-mobile-addon-tests) on an already-built head must
+          #     NOT rerun the prebuild matrix.
+          # native_hash always uses the full HEAD tree for cache-key correctness,
+          # so a wrong "false" can never restore a stale binary — the key (which
+          # encodes the HEAD native tree) simply would not match.
+          DIFF_FROM="$HEAD_SHA"
+          if [ "$EVENT_ACTION" = "opened" ]; then
+            DIFF_FROM="$BASE_SHA"
+          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$HEAD_SHA" ]; then
             DIFF_FROM="$BEFORE_SHA"
             # Fetch BEFORE_SHA — same fork fallback as HEAD_SHA.
             # For fork PRs the previous head may only exist in the fork repo.
@@ -324,7 +335,7 @@ jobs:
               if [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
                 git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=50 2>/dev/null || true
               fi
-              # If BEFORE_SHA is still unreachable, fall back to base..head diff
+              # If BEFORE_SHA is still unreachable, fall back to base..head diff.
               if ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
                 echo "::warning::BEFORE_SHA ($BEFORE_SHA) unreachable — falling back to base..head diff"
                 DIFF_FROM="$BASE_SHA"
