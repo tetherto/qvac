@@ -30,7 +30,7 @@ export interface DrainedCompletion {
  * Pass `onToken` to stream content deltas as they arrive (SSE paths); omit
  * it for blocking responses.
  */
-export async function drainCompletion (
+export async function drainCompletion(
   result: CompletionRun,
   onToken?: (token: string) => void
 ): Promise<DrainedCompletion> {
@@ -68,7 +68,10 @@ export async function drainCompletion (
   return { text, toolCalls, stats, stopReason, completionTokens, finishReason }
 }
 
-export function completionTokensFromStats (text: string, stats: CompletionStats | undefined): number {
+export function completionTokensFromStats(
+  text: string,
+  stats: CompletionStats | undefined
+): number {
   if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
     return stats.generatedTokens
   }

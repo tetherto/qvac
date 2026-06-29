@@ -4,7 +4,7 @@ import { generateExportName } from './naming.ts'
 import type { CurrentModel, ProcessedModel } from './types.ts'
 import { getCommitHash } from './utils.ts'
 
-export function loadCurrentModels (outputFile: string): CurrentModel[] {
+export function loadCurrentModels(outputFile: string): CurrentModel[] {
   try {
     if (!fs.existsSync(outputFile)) {
       return []
@@ -41,7 +41,7 @@ export function loadCurrentModels (outputFile: string): CurrentModel[] {
   }
 }
 
-export function compareModels (
+export function compareModels(
   remoteModels: ProcessedModel[],
   currentModels: CurrentModel[]
 ): { added: ProcessedModel[]; removed: CurrentModel[] } {
@@ -54,9 +54,7 @@ export function compareModels (
   return { added, removed }
 }
 
-export function assignNames (
-  models: ProcessedModel[]
-): (ProcessedModel & { name: string })[] {
+export function assignNames(models: ProcessedModel[]): (ProcessedModel & { name: string })[] {
   const usedNames = new Set<string>()
   return models.map((m) => ({
     ...m,
@@ -72,7 +70,7 @@ export function assignNames (
   }))
 }
 
-export function separateUpdates (
+export function separateUpdates(
   added: (ProcessedModel & { name: string })[],
   removed: CurrentModel[]
 ): {
@@ -91,7 +89,7 @@ export function separateUpdates (
   }
 }
 
-export function createHistoryFile (
+export function createHistoryFile(
   added: (ProcessedModel & { name: string })[],
   removed: CurrentModel[],
   currentModels: CurrentModel[],

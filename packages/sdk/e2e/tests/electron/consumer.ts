@@ -20,17 +20,18 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
-  OCR_LATIN_RECOGNIZER_1,
+  OCR_CRAFT,
+  OCR_LATIN,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -73,6 +74,7 @@ import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js"
 import { BciExecutor } from "../shared/executors/node/bci-executor.js";
 import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DownloadResilienceExecutor } from "../shared/executors/node/download-resilience-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
@@ -143,9 +145,11 @@ resources.define("tools-gemma4", {
 });
 
 resources.define("ocr", {
-  constant: OCR_LATIN_RECOGNIZER_1,
-  type: "onnx-ocr",
-  config: { langList: ["en"] },
+  constant: OCR_LATIN,
+  type: "ggml-ocr",
+  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time).
+  // Mirrors desktop so Electron covers the same OCR model/plugin path.
+  config: { langList: ["en"], detectorModelSrc: OCR_CRAFT },
 });
 
 // Classification ships bundled weights inside @qvac/classification-ggml,
@@ -237,13 +241,16 @@ resources.define("afriquegemma", {
 });
 
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "chatterbox",
     language: "en",
     useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    cfmSteps: 1,
     referenceAudioSrc: path.resolve(
       process.cwd(),
       "assets/audio",
@@ -264,7 +271,7 @@ resources.define("tts-supertonic", {
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
@@ -408,6 +415,9 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new BciExecutor(resources),
     new VisionExecutor(resources),
+    // Must precede DownloadExecutor — its /^download-/ pattern also matches
+    // download-resilience-*, and dispatch is first-match-wins.
+    new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),

@@ -8,7 +8,7 @@ const STATES = {
   ERROR: 'error'
 } as const
 
-export type ModelState = typeof STATES[keyof typeof STATES]
+export type ModelState = (typeof STATES)[keyof typeof STATES]
 
 export interface ModelEntry {
   id: string
@@ -71,12 +71,15 @@ export interface ModelRegistry {
   getEntry: (modelId: string) => ModelEntry | null
   getAll: () => ModelEntry[]
   getReady: () => ModelEntry[]
-  register: (alias: string, opts: {
-    modelSrc: string | ModelConstant
-    sdkType: string
-    endpointCategory: string
-    config: Record<string, unknown>
-  }) => ModelEntry
+  register: (
+    alias: string,
+    opts: {
+      modelSrc: string | ModelConstant
+      sdkType: string
+      endpointCategory: string
+      config: Record<string, unknown>
+    }
+  ) => ModelEntry
   setLoading: (modelId: string) => void
   setReady: (modelId: string, sdkModelId?: string) => void
   setError: (modelId: string, error: unknown) => void
@@ -84,27 +87,30 @@ export interface ModelRegistry {
   isAllowed: (modelId: string, serveConfig: ServeConfig) => boolean
 }
 
-export function createModelRegistry (): ModelRegistry {
+export function createModelRegistry(): ModelRegistry {
   const models = new Map<string, ModelEntry>()
 
-  function getEntry (modelId: string): ModelEntry | null {
+  function getEntry(modelId: string): ModelEntry | null {
     return models.get(modelId) ?? null
   }
 
-  function getAll (): ModelEntry[] {
+  function getAll(): ModelEntry[] {
     return Array.from(models.values())
   }
 
-  function getReady (): ModelEntry[] {
+  function getReady(): ModelEntry[] {
     return getAll().filter((m) => m.state === STATES.READY)
   }
 
-  function register (alias: string, opts: {
-    modelSrc: string | ModelConstant
-    sdkType: string
-    endpointCategory: string
-    config: Record<string, unknown>
-  }): ModelEntry {
+  function register(
+    alias: string,
+    opts: {
+      modelSrc: string | ModelConstant
+      sdkType: string
+      endpointCategory: string
+      config: Record<string, unknown>
+    }
+  ): ModelEntry {
     const existing = models.get(alias)
     if (existing) return existing
 
@@ -123,7 +129,7 @@ export function createModelRegistry (): ModelRegistry {
     return entry
   }
 
-  function setLoading (modelId: string): void {
+  function setLoading(modelId: string): void {
     const entry = models.get(modelId)
     if (entry) {
       entry.state = STATES.LOADING
@@ -131,7 +137,7 @@ export function createModelRegistry (): ModelRegistry {
     }
   }
 
-  function setReady (modelId: string, sdkModelId?: string): void {
+  function setReady(modelId: string, sdkModelId?: string): void {
     const entry = models.get(modelId)
     if (entry) {
       entry.state = STATES.READY
@@ -140,7 +146,7 @@ export function createModelRegistry (): ModelRegistry {
     }
   }
 
-  function setError (modelId: string, error: unknown): void {
+  function setError(modelId: string, error: unknown): void {
     const entry = models.get(modelId)
     if (entry) {
       entry.state = STATES.ERROR
@@ -148,11 +154,11 @@ export function createModelRegistry (): ModelRegistry {
     }
   }
 
-  function remove (modelId: string): boolean {
+  function remove(modelId: string): boolean {
     return models.delete(modelId)
   }
 
-  function isAllowed (modelId: string, serveConfig: ServeConfig): boolean {
+  function isAllowed(modelId: string, serveConfig: ServeConfig): boolean {
     if (serveConfig.models.size === 0) return true
     return serveConfig.models.has(modelId)
   }

@@ -63,8 +63,14 @@ Third-Party Model Licenses
 
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  craft_mlt_25k
+    https://www.jaided.ai/easyocr/modelhub/
+  crnn_mobilenet_v3_small
+    https://github.com/mindee/doctr
   crnn_mobilenet_v3_small
     https://github.com/felixdittrich92/OnnxTR
+  db_mobilenet_v3_large
+    https://github.com/mindee/doctr
   db_mobilenet_v3_large
     https://github.com/felixdittrich92/OnnxTR
   db_resnet50
@@ -109,10 +115,16 @@ Third-Party Model Licenses
     https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
   laser-dolphin-mixtral-2x7b-dpo-GGUF
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
+  latin_g2
+    https://www.jaided.ai/easyocr/modelhub/
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
     https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
+  MedPsy-1.7B-GGUF
+    https://huggingface.co/qvac/MedPsy-1.7B-GGUF
+  MedPsy-4B-GGUF
+    https://huggingface.co/qvac/MedPsy-4B-GGUF
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parseq
@@ -143,8 +155,12 @@ Third-Party Model Licenses
     https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF
   Qwen3.5-2B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
+  Qwen3.5-2B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF
   Qwen3.5-4B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+  Qwen3.5-4B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF
   Qwen3.5-9B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
   Qwen3.6-27B-GGUF
@@ -204,12 +220,24 @@ Third-Party Model Licenses
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
+  char
+    https://github.com/polm/ipadic-py
+  dicrc
+    https://github.com/polm/ipadic-py
+  matrix
+    https://github.com/polm/ipadic-py
+  mecabrc
+    https://github.com/polm/ipadic-py
   RealESRGAN_x4plus
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
   RealESRGAN_x4plus_anime_6B
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth
   RealESRNet_x4plus
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
+  sys
+    https://github.com/polm/ipadic-py
+  unk
+    https://github.com/polm/ipadic-py
 
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
@@ -562,6 +590,8 @@ Third-Party Model Licenses
     s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf
   supertonic2-q8_0
     s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q8_0.gguf
+  supertonic3-f16
+    https://huggingface.co/supertone/supertonic-3
 
 --- openrail++ ---
 
@@ -587,83 +617,57 @@ metadata entry within the registry.
 JavaScript Dependencies
 =========================================================================
 
---- (bsd-2-clause AND mit AND apache-2.0) ---
-
-  rc@1.2.8
-    https://github.com/dominictarr/rc
-
---- (bsd-3-clause AND gpl-2.0) ---
-
-  node-forge@1.4.0
-    https://github.com/digitalbazaar/forge
-
---- (mit AND apache-2.0) ---
-
-  fb-dotslash@0.5.8
-    https://github.com/facebook/dotslash
-
---- (mit AND cc0-1.0) ---
-
-  type-fest@0.21.3
-    https://github.com/sindresorhus/type-fest
-  type-fest@0.7.1
-    https://github.com/sindresorhus/type-fest
-
---- 0bsd (Zero-Clause BSD) ---
-
-  jsc-safe-url@0.2.4
-    https://github.com/robhogan/jsc-safe-url
-
 --- apache-2.0 (Apache License 2.0) ---
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/bci-whispercpp@0.2.0
+  @qvac/bci-whispercpp@0.3.3
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.3.1
+  @qvac/classification-ggml@0.7.0
     https://github.com/tetherto/qvac
-  @qvac/decoder-audio@0.4.0
+  @qvac/decoder-audio@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/diagnostics@0.1.1
-  @qvac/diffusion-cpp@0.11.2
+  @qvac/diagnostics@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.19.1
+  @qvac/diffusion-cpp@0.12.0
+    https://github.com/tetherto/qvac
+  @qvac/embed-llamacpp@0.23.0
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
   @qvac/infer-base@0.4.2
     https://github.com/tetherto/qvac
+  @qvac/infer-base@0.6.1
+    https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.24.0
+  @qvac/llm-llamacpp@0.30.0
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.0
-  @qvac/ocr-onnx@0.6.0
-    https://github.com/tetherto/qvac
-  @qvac/onnx@0.15.0
+  @qvac/ocr-ggml@0.7.0
     https://github.com/tetherto/qvac
   @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.6.0
+  @qvac/registry-client@0.6.1
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/transcription-parakeet@0.7.2
+  @qvac/transcription-parakeet@0.8.2
     https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.9.1
+  @qvac/transcription-whispercpp@0.10.2
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@5.0.2
+  @qvac/translation-nmtcpp@6.3.0
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.2.3
+  @qvac/tts-ggml@0.3.5
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.3.2
+  @qvac/vla-ggml@0.7.0
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.8.0
+  b4a@1.8.1
     https://github.com/holepunchto/b4a
   bare-abort@2.0.13
     https://github.com/holepunchto/bare-abort
-  bare-abort-controller@1.1.1
+  bare-abort-controller@1.1.2
     https://github.com/holepunchto/bare-abort-controller
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
@@ -671,14 +675,12 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.2.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.6.0
+  bare-buffer@3.6.1
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
   bare-bundle-id@1.0.2
     https://github.com/holepunchto/bare-bundle-id
-  bare-channel@5.2.3
-    https://github.com/holepunchto/bare-channel
   bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
@@ -689,39 +691,39 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-fetch@3.0.1
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.2.2
+  bare-ffmpeg@1.2.3
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.7.1
+  bare-fs@4.7.2
     https://github.com/holepunchto/bare-fs
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
-  bare-http-parser@1.1.3
+  bare-http-parser@1.1.5
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.5.6
+  bare-http1@4.5.7
     https://github.com/holepunchto/bare-http1
   bare-https@3.0.0
     https://github.com/holepunchto/bare-https
   bare-inspect@3.1.4
     https://github.com/holepunchto/bare-inspect
-  bare-lief@0.2.3
+  bare-lief@0.2.4
     https://github.com/holepunchto/bare-lief
-  bare-link@3.2.1
+  bare-link@3.2.2
     https://github.com/holepunchto/bare-link
   bare-mime@1.0.0
     https://github.com/holepunchto/bare-mime
-  bare-module-lexer@1.4.7
+  bare-module-lexer@1.5.2
     https://github.com/holepunchto/bare-module-lexer
-  bare-module-resolve@1.12.1
+  bare-module-resolve@1.12.2
     https://github.com/holepunchto/bare-module-resolve
-  bare-module-traverse@2.0.1
+  bare-module-traverse@2.1.2
     https://github.com/holepunchto/bare-module-traverse
   bare-net@2.3.2
     https://github.com/holepunchto/bare-net
   bare-os@3.9.1
     https://github.com/holepunchto/bare-os
-  bare-pack@2.0.1
+  bare-pack@2.1.3
     https://github.com/holepunchto/bare-pack
   bare-path@3.0.1
     https://github.com/holepunchto/bare-path
@@ -729,11 +731,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-pipe
   bare-process@4.4.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.3.2
+  bare-rpc@1.3.3
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.28.4
+  bare-runtime@1.28.7
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.28.4
+  bare-runtime-darwin-arm64@1.28.7
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.0.3
     https://github.com/holepunchto/bare-semver
@@ -741,55 +743,41 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-signals
   bare-stdio@1.0.2
     https://github.com/holepunchto/bare-stdio
-  bare-stream@2.13.1
+  bare-stream@2.13.3
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.5.4
+  bare-structured-clone@1.5.5
     https://github.com/holepunchto/bare-structured-clone
-  bare-subprocess@5.2.3
+  bare-subprocess@6.1.0
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.5.1
     https://github.com/holepunchto/bare-tcp
   bare-tls@3.1.7
     https://github.com/holepunchto/bare-tls
-  bare-tty@5.1.0
+  bare-tty@5.1.1
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.4.3
+  bare-url@2.4.5
     https://github.com/holepunchto/bare-url
-  bare-zlib@1.3.3
+  bare-zlib@1.4.0
     https://github.com/holepunchto/bare-zlib
-  baseline-browser-mapping@2.10.23
-    https://github.com/web-platform-dx/baseline-browser-mapping
-  blind-relay@1.5.0
+  blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  bser@2.1.1
-    https://github.com/facebook/watchman
-  chrome-launcher@0.15.2
-    https://github.com/GoogleChrome/chrome-launcher
-  chromium-edge-launcher@0.2.0
-    https://github.com/cezaraugusto/chromium-edge-launcher
-  chromium-edge-launcher@0.3.0
-    https://github.com/cezaraugusto/chromium-edge-launcher
-  compact-encoding@2.19.2
+  compact-encoding@3.2.0
     https://github.com/holepunchto/compact-encoding
-  compact-encoding@3.1.0
-    https://github.com/holepunchto/compact-encoding
-  detect-libc@2.1.2
-    https://github.com/lovell/detect-libc
+  compact-encoding-bitfield@1.1.0
+    https://github.com/compact-encoding/compact-encoding-bitfield
+  compact-encoding-net@1.3.0
+    https://github.com/compact-encoding/compact-encoding-net
   device-file@2.3.1
     https://github.com/holepunchto/device-file
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
-  exponential-backoff@3.1.3
-    https://github.com/coveooss/exponential-backoff
-  fb-watchman@2.0.2
-    https://github.com/facebook/watchman
   fd-lock@2.1.1
     https://github.com/holepunchto/fd-lock
   fs-native-extensions@1.5.0
     https://github.com/holepunchto/fs-native-extensions
-  hyperblobs@2.11.1
+  hyperblobs@2.12.1
     https://github.com/holepunchto/hyperblobs
   hypercore-errors@1.5.0
     https://github.com/holepunchto/hypercore-errors
@@ -797,11 +785,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.4.0
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@2.8.0
+  hypercore-storage@3.1.1
     https://github.com/holepunchto/hypercore-storage
   hyperdb@6.7.0
     https://github.com/holepunchto/hyperdb
-  hyperdht-address@1.0.1
+  hyperdht-address@1.1.1
     https://github.com/holepunchto/hyperdht-address
   hyperdht-stats@1.10.0
     https://github.com/holepunchto/hyperdht-stats
@@ -809,15 +797,12 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdispatch
   hyperdrive@13.3.2
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.20.1
+  hyperschema@1.21.0
     https://github.com/holepunchto/hyperschema
-  hyperswarm-stats@1.3.0
+  hyperswarm-stats@1.3.1
     https://github.com/holepunchto/hyperswarm-stats
   index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
-  lighthouse-logger@1.4.2
-  marky@1.3.0
-    https://github.com/nolanlawson/marky
   mirror-drive@1.14.2
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
@@ -826,8 +811,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/paparam
   passive-core-watcher@1.0.1
     https://github.com/holepunchto/passive-core-watcher
-  qrcode-terminal@0.11.0
-    https://github.com/gtanner/qrcode-terminal
   quickbit-native@2.4.8
     https://github.com/holepunchto/quickbit-native
   rabin-native@2.0.0
@@ -840,11 +823,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/refcounter
   require-addon@1.2.0
     https://github.com/holepunchto/require-addon
-  require-asset@1.2.1
+  require-asset@1.2.2
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.15.0
+  rocksdb-native@3.16.0
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -854,1173 +837,134 @@ JavaScript Dependencies
     https://github.com/holepunchto/sub-encoder
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
-  ts-interface-checker@0.1.13
-    https://github.com/gristlabs/ts-interface-checker
-  typescript@5.9.3
-    https://github.com/microsoft/TypeScript
-  udx-native@1.19.2
+  udx-native@1.20.7
     https://github.com/holepunchto/udx-native
   unslab@1.3.0
     https://github.com/holepunchto/unslab
-  walker@1.0.8
-    https://github.com/daaku/nodejs-walker
-  which-runtime@1.3.2
+  which-runtime@1.4.0
     https://github.com/holepunchto/which-runtime
-  xcode@3.0.1
-    https://github.com/apache/cordova-node-xcode
-
---- blueoak-1.0.0 ---
-
-  chownr@3.0.0
-    https://github.com/isaacs/chownr
-  glob@13.0.6
-    https://github.com/isaacs/node-glob
-  lru-cache@11.3.5
-    https://github.com/isaacs/node-lru-cache
-  minimatch@10.2.5
-    https://github.com/isaacs/minimatch
-  minipass@7.1.3
-    https://github.com/isaacs/minipass
-  path-scurry@2.0.2
-    https://github.com/isaacs/path-scurry
-  sax@1.6.0
-    https://github.com/isaacs/sax-js
-  tar@7.5.13
-    https://github.com/isaacs/node-tar
-  yallist@5.0.0
-    https://github.com/isaacs/yallist
-
---- bsd-2-clause (BSD 2-Clause License) ---
-
-  dotenv@16.4.7
-    https://github.com/motdotla/dotenv
-  dotenv-expand@11.0.7
-    https://github.com/motdotla/dotenv-expand
-  fontfaceobserver@2.3.0
-    https://github.com/bramstein/fontfaceobserver
-  regjsparser@0.13.1
-    https://github.com/jviereck/regjsparser
-  terser@5.46.2
-    https://github.com/terser/terser
-  webidl-conversions@5.0.0
-    https://github.com/jsdom/webidl-conversions
-
---- bsd-3-clause (BSD 3-Clause License) ---
-
-  @expo/xcpretty@4.4.3
-    https://github.com/expo/expo-cli
-  @react-native/debugger-frontend@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/debugger-frontend@0.85.2
-    https://github.com/facebook/react-native
-  ieee754@1.2.1
-    https://github.com/feross/ieee754
-  makeerror@1.0.12
-    https://github.com/daaku/nodejs-makeerror
-  source-map@0.5.7
-    https://github.com/mozilla/source-map
-  source-map@0.6.1
-    https://github.com/mozilla/source-map
-  source-map-js@1.2.1
-    https://github.com/7rulnik/source-map-js
-  tmpl@1.0.5
-    https://github.com/daaku/nodejs-tmpl
-
---- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
-
-  caniuse-lite@1.0.30001791
-    https://github.com/browserslist/caniuse-lite
 
 --- isc (ISC License) ---
 
-  @isaacs/fs-minipass@4.0.1
-    https://github.com/npm/fs-minipass
-  @isaacs/ttlcache@1.4.1
-    https://github.com/isaacs/ttlcache
-  @ungap/structured-clone@1.3.0
-    https://github.com/ungap/structured-clone
   bits-to-bytes@1.3.0
     https://github.com/holepunchto/bits-to-bytes
-  cliui@8.0.1
-    https://github.com/yargs/cliui
-  compact-encoding-bitfield@1.0.0
-    https://github.com/compact-encoding/compact-encoding-bitfield
-  compact-encoding-net@1.2.0
-    https://github.com/compact-encoding/compact-encoding-net
-  electron-to-chromium@1.5.344
-    https://github.com/Kilian/electron-to-chromium
-  fs.realpath@1.0.0
-    https://github.com/isaacs/fs.realpath
-  get-caller-file@2.0.5
-    https://github.com/stefanpenner/get-caller-file
-  glob@7.2.3
-    https://github.com/isaacs/node-glob
-  graceful-fs@4.2.11
-    https://github.com/isaacs/node-graceful-fs
-  hosted-git-info@7.0.2
-    https://github.com/npm/hosted-git-info
-  inflight@1.0.6
-    https://github.com/npm/inflight
-  inherits@2.0.4
-    https://github.com/isaacs/inherits
-  ini@1.3.8
-    https://github.com/isaacs/ini
-  isexe@2.0.0
-    https://github.com/isaacs/isexe
-  lru-cache@10.4.3
-    https://github.com/isaacs/node-lru-cache
-  lru-cache@5.1.1
-    https://github.com/isaacs/node-lru-cache
-  minimatch@3.1.5
-    https://github.com/isaacs/minimatch
-  minimatch@9.0.9
-    https://github.com/isaacs/minimatch
   nanoassert@2.0.0
     https://github.com/emilbayes/nanoassert
   noise-curve-ed@2.1.0
     https://github.com/chm-diederichs/noise-curve-ed
-  npm-package-arg@11.0.3
-    https://github.com/npm/npm-package-arg
-  once@1.4.0
-    https://github.com/isaacs/once
-  picocolors@1.1.1
-    https://github.com/alexeyraspopov/picocolors
-  proc-log@4.2.0
-    https://github.com/npm/proc-log
   quickbit-universal@2.2.0
     https://github.com/holepunchto/quickbit-universal
-  rimraf@3.0.2
-    https://github.com/isaacs/rimraf
-  semver@6.3.1
+  semver@7.8.4
     https://github.com/npm/node-semver
-  semver@7.8.1
-    https://github.com/npm/node-semver
-  setprototypeof@1.2.0
-    https://github.com/wesleytodd/setprototypeof
-  signal-exit@3.0.7
-    https://github.com/tapjs/signal-exit
   simdle-universal@1.1.2
     https://github.com/holepunchto/simdle-universal
-  validate-npm-package-name@5.0.1
-    https://github.com/npm/validate-npm-package-name
-  which@2.0.2
-    https://github.com/isaacs/node-which
-  wrappy@1.0.2
-    https://github.com/npm/wrappy
-  y18n@5.0.8
-    https://github.com/yargs/y18n
-  yallist@3.1.1
-    https://github.com/isaacs/yallist
-  yaml@2.8.3
-    https://github.com/eemeli/yaml
-  yargs-parser@21.1.1
-    https://github.com/yargs/yargs-parser
 
 --- mit (MIT License) ---
 
-  @0no-co/graphql.web@1.2.0
-    https://github.com/0no-co/graphql.web
-  @babel/code-frame@7.10.4
-    https://github.com/babel/babel
-  @babel/code-frame@7.29.0
-    https://github.com/babel/babel
-  @babel/compat-data@7.29.0
-    https://github.com/babel/babel
-  @babel/core@7.29.0
-    https://github.com/babel/babel
-  @babel/generator@7.29.1
-    https://github.com/babel/babel
-  @babel/helper-annotate-as-pure@7.27.3
-    https://github.com/babel/babel
-  @babel/helper-compilation-targets@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-create-class-features-plugin@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-create-regexp-features-plugin@7.28.5
-    https://github.com/babel/babel
-  @babel/helper-define-polyfill-provider@0.6.8
-    https://github.com/babel/babel-polyfills
-  @babel/helper-globals@7.28.0
-    https://github.com/babel/babel
-  @babel/helper-member-expression-to-functions@7.28.5
-    https://github.com/babel/babel
-  @babel/helper-module-imports@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-module-transforms@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-optimise-call-expression@7.27.1
-    https://github.com/babel/babel
-  @babel/helper-plugin-utils@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-remap-async-to-generator@7.27.1
-    https://github.com/babel/babel
-  @babel/helper-replace-supers@7.28.6
-    https://github.com/babel/babel
-  @babel/helper-skip-transparent-expression-wrappers@7.27.1
-    https://github.com/babel/babel
-  @babel/helper-string-parser@7.27.1
-    https://github.com/babel/babel
-  @babel/helper-validator-identifier@7.28.5
-    https://github.com/babel/babel
-  @babel/helper-validator-option@7.27.1
-    https://github.com/babel/babel
-  @babel/helper-wrap-function@7.28.6
-    https://github.com/babel/babel
-  @babel/helpers@7.29.2
-    https://github.com/babel/babel
-  @babel/highlight@7.25.9
-    https://github.com/babel/babel
-  @babel/parser@7.29.2
-    https://github.com/babel/babel
-  @babel/plugin-proposal-decorators@7.29.0
-    https://github.com/babel/babel
-  @babel/plugin-proposal-export-default-from@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-syntax-decorators@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-syntax-dynamic-import@7.8.3
-    https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-dynamic-import
-  @babel/plugin-syntax-export-default-from@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-syntax-flow@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-syntax-jsx@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-syntax-nullish-coalescing-operator@7.8.3
-    https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-nullish-coalescing-operator
-  @babel/plugin-syntax-optional-chaining@7.8.3
-    https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-optional-chaining
-  @babel/plugin-syntax-typescript@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-arrow-functions@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-async-generator-functions@7.29.0
-    https://github.com/babel/babel
-  @babel/plugin-transform-async-to-generator@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-block-scoping@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-class-properties@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-class-static-block@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-classes@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-computed-properties@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-destructuring@7.28.5
-    https://github.com/babel/babel
-  @babel/plugin-transform-export-namespace-from@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-flow-strip-types@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-for-of@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-function-name@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-literals@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-logical-assignment-operators@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-modules-commonjs@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-named-capturing-groups-regex@7.29.0
-    https://github.com/babel/babel
-  @babel/plugin-transform-nullish-coalescing-operator@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-numeric-separator@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-object-rest-spread@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-optional-catch-binding@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-optional-chaining@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-parameters@7.27.7
-    https://github.com/babel/babel
-  @babel/plugin-transform-private-methods@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-private-property-in-object@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-display-name@7.28.0
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-jsx@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-jsx-development@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-jsx-self@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-jsx-source@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-react-pure-annotations@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-regenerator@7.29.0
-    https://github.com/babel/babel
-  @babel/plugin-transform-runtime@7.29.0
-    https://github.com/babel/babel
-  @babel/plugin-transform-shorthand-properties@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-spread@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-sticky-regex@7.27.1
-    https://github.com/babel/babel
-  @babel/plugin-transform-typescript@7.28.6
-    https://github.com/babel/babel
-  @babel/plugin-transform-unicode-regex@7.27.1
-    https://github.com/babel/babel
-  @babel/preset-react@7.28.5
-    https://github.com/babel/babel
-  @babel/preset-typescript@7.28.5
-    https://github.com/babel/babel
-  @babel/runtime@7.29.2
-    https://github.com/babel/babel
-  @babel/template@7.28.6
-    https://github.com/babel/babel
-  @babel/traverse@7.29.0
-    https://github.com/babel/babel
-  @babel/types@7.29.0
-    https://github.com/babel/babel
-  @expo/cli@54.0.24
-    https://github.com/expo/expo
-  @expo/code-signing-certificates@0.0.6
-    https://github.com/expo/code-signing-certificates
-  @expo/config@12.0.13
-    https://github.com/expo/expo
-  @expo/config-plugins@54.0.4
-    https://github.com/expo/expo
-  @expo/config-types@54.0.10
-    https://github.com/expo/expo
-  @expo/devcert@1.2.1
-    https://github.com/expo/devcert
-  @expo/devtools@0.1.8
-    https://github.com/expo/expo
-  @expo/env@2.0.11
-    https://github.com/expo/expo
-  @expo/fingerprint@0.15.5
-    https://github.com/expo/expo
-  @expo/image-utils@0.8.13
-    https://github.com/expo/expo
-  @expo/json-file@10.0.13
-    https://github.com/expo/expo
-  @expo/metro@54.2.0
-    https://github.com/expo/expo-metro
-  @expo/metro-config@54.0.15
-    https://github.com/expo/expo
-  @expo/osascript@2.4.2
-    https://github.com/expo/expo
-  @expo/package-manager@1.10.4
-    https://github.com/expo/expo
-  @expo/plist@0.4.8
-    https://github.com/expo/expo
-  @expo/prebuild-config@54.0.8
-    https://github.com/expo/expo
-  @expo/require-utils@55.0.4
-    https://github.com/expo/expo
-  @expo/schema-utils@0.1.8
-    https://github.com/expo/expo
-  @expo/sdk-runtime-versions@1.0.0
-  @expo/spawn-async@1.7.2
-    https://github.com/expo/spawn-async
-  @expo/sudo-prompt@9.3.2
-    https://github.com/expo/sudo-prompt
-  @expo/vector-icons@15.1.1
-    https://github.com/expo/vector-icons
-  @expo/ws-tunnel@1.0.6
-  @jest/schemas@29.6.3
-    https://github.com/jestjs/jest
-  @jest/types@29.6.3
-    https://github.com/jestjs/jest
-  @jridgewell/gen-mapping@0.3.13
-    https://github.com/jridgewell/sourcemaps
-  @jridgewell/remapping@2.3.5
-    https://github.com/jridgewell/sourcemaps
-  @jridgewell/resolve-uri@3.1.2
-    https://github.com/jridgewell/resolve-uri
-  @jridgewell/source-map@0.3.11
-    https://github.com/jridgewell/sourcemaps
-  @jridgewell/sourcemap-codec@1.5.5
-    https://github.com/jridgewell/sourcemaps
-  @jridgewell/trace-mapping@0.3.31
-    https://github.com/jridgewell/sourcemaps
-  @react-native/assets-registry@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/babel-plugin-codegen@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/babel-preset@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/codegen@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/codegen@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/community-cli-plugin@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/debugger-shell@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/dev-middleware@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/dev-middleware@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/gradle-plugin@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/js-polyfills@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/normalize-colors@0.81.5
-    https://github.com/facebook/react-native
-  @react-native/normalize-colors@0.85.2
-    https://github.com/facebook/react-native
-  @react-native/virtualized-lists@0.85.2
-    https://github.com/facebook/react-native
-  @sinclair/typebox@0.27.10
-    https://github.com/sinclairzx81/typebox-legacy
-  @types/istanbul-lib-coverage@2.0.6
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/istanbul-lib-report@3.0.3
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/istanbul-reports@3.0.4
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/node@24.12.1
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/node@24.12.2
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/yargs@17.0.35
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @types/yargs-parser@21.0.3
-    https://github.com/DefinitelyTyped/DefinitelyTyped
-  @urql/core@5.2.0
-    https://github.com/urql-graphql/urql
-  @urql/exchange-retry@1.3.2
-    https://github.com/urql-graphql/urql
-  @xmldom/xmldom@0.8.13
-    https://github.com/xmldom/xmldom
-  @xmldom/xmldom@0.9.10
-    https://github.com/xmldom/xmldom
-  abort-controller@3.0.0
-    https://github.com/mysticatea/abort-controller
-  accepts@1.3.8
-    https://github.com/jshttp/accepts
-  accepts@2.0.0
-    https://github.com/jshttp/accepts
-  acorn@8.16.0
-    https://github.com/acornjs/acorn
-  agent-base@7.1.4
-    https://github.com/TooTallNate/proxy-agents
-  anser@1.4.10
-    https://github.com/IonicaBizau/anser
-  ansi-escapes@4.3.2
-    https://github.com/sindresorhus/ansi-escapes
-  ansi-regex@4.1.1
-    https://github.com/chalk/ansi-regex
-  ansi-regex@5.0.1
-    https://github.com/chalk/ansi-regex
-  ansi-styles@3.2.1
-    https://github.com/chalk/ansi-styles
-  ansi-styles@4.3.0
-    https://github.com/chalk/ansi-styles
-  ansi-styles@5.2.0
-    https://github.com/chalk/ansi-styles
-  any-promise@1.3.0
-    https://github.com/kevinbeaty/any-promise
-  arg@5.0.2
-    https://github.com/vercel/arg
-  asap@2.0.6
-    https://github.com/kriskowal/asap
-  async-limiter@1.0.1
-    https://github.com/strml/async-limiter
-  babel-plugin-polyfill-corejs2@0.4.17
-    https://github.com/babel/babel-polyfills
-  babel-plugin-polyfill-corejs3@0.13.0
-    https://github.com/babel/babel-polyfills
-  babel-plugin-polyfill-regenerator@0.6.8
-    https://github.com/babel/babel-polyfills
-  babel-plugin-react-compiler@1.0.0
-    https://github.com/facebook/react
-  babel-plugin-react-native-web@0.21.2
-    https://github.com/necolas/react-native-web
-  babel-plugin-syntax-hermes-parser@0.29.1
-    https://github.com/facebook/hermes
-  babel-plugin-syntax-hermes-parser@0.33.3
-    https://github.com/facebook/hermes
-  babel-plugin-transform-flow-enums@0.0.2
-    https://github.com/facebook/flow
-  babel-preset-expo@54.0.10
-    https://github.com/expo/expo
-  balanced-match@1.0.2
-    https://github.com/juliangruber/balanced-match
-  balanced-match@4.0.4
-    https://github.com/juliangruber/balanced-match
-  base64-js@1.5.1
-    https://github.com/beatgammit/base64-js
-  better-opn@3.0.2
-    https://github.com/ExiaSR/better-opn
   big-sparse-array@1.0.3
     https://github.com/mafintosh/big-sparse-array
   binary-stream-equals@1.0.0
     https://github.com/mafintosh/binary-stream-equals
-  bogon@1.2.0
+  bogon@1.3.0
     https://github.com/mafintosh/bogon
-  bplist-creator@0.1.0
-    https://github.com/nearinfinity/node-bplist-creator
-  bplist-parser@0.3.1
-    https://github.com/nearinfinity/node-bplist-parser
-  bplist-parser@0.3.2
-    https://github.com/nearinfinity/node-bplist-parser
-  brace-expansion@1.1.14
-    https://github.com/juliangruber/brace-expansion
-  brace-expansion@2.1.0
-    https://github.com/juliangruber/brace-expansion
-  brace-expansion@5.0.5
-    https://github.com/juliangruber/brace-expansion
-  braces@3.0.3
-    https://github.com/micromatch/braces
-  browserslist@4.28.2
-    https://github.com/browserslist/browserslist
-  buffer@5.7.1
-    https://github.com/feross/buffer
-  buffer-from@1.1.2
-    https://github.com/LinusU/buffer-from
-  bytes@3.1.2
-    https://github.com/visionmedia/bytes.js
-  camelcase@6.3.0
-    https://github.com/sindresorhus/camelcase
-  chalk@2.4.2
-    https://github.com/chalk/chalk
-  chalk@4.1.2
-    https://github.com/chalk/chalk
-  ci-info@2.0.0
-    https://github.com/watson/ci-info
-  ci-info@3.9.0
-    https://github.com/watson/ci-info
-  cli-cursor@2.1.0
-    https://github.com/sindresorhus/cli-cursor
-  cli-spinners@2.9.2
-    https://github.com/sindresorhus/cli-spinners
-  clone@1.0.4
-    https://github.com/pvorb/node-clone
   codecs@3.1.0
     https://github.com/mafintosh/codecs
-  color-convert@1.9.3
-    https://github.com/Qix-/color-convert
-  color-convert@2.0.1
-    https://github.com/Qix-/color-convert
-  color-name@1.1.3
-    https://github.com/dfcreative/color-name
-  color-name@1.1.4
-    https://github.com/colorjs/color-name
-  commander@12.1.0
-    https://github.com/tj/commander.js
-  commander@2.20.3
-    https://github.com/tj/commander.js
-  commander@4.1.1
-    https://github.com/tj/commander.js
-  commander@7.2.0
-    https://github.com/tj/commander.js
-  compressible@2.0.18
-    https://github.com/jshttp/compressible
-  compression@1.8.1
-    https://github.com/expressjs/compression
-  concat-map@0.0.1
-    https://github.com/substack/node-concat-map
-  connect@3.7.0
-    https://github.com/senchalabs/connect
-  convert-source-map@2.0.0
-    https://github.com/thlorenz/convert-source-map
-  core-js-compat@3.49.0
-    https://github.com/zloirock/core-js
-  corestore@7.9.2
+  corestore@7.10.1
     https://github.com/holepunchto/corestore
-  cross-spawn@7.0.6
-    https://github.com/moxystudio/node-cross-spawn
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  debug@2.6.9
-    https://github.com/visionmedia/debug
-  debug@3.2.7
-    https://github.com/visionmedia/debug
-  debug@4.4.3
-    https://github.com/debug-js/debug
-  deep-extend@0.6.0
-    https://github.com/unclechu/node-deep-extend
-  deepmerge@4.3.1
-    https://github.com/TehShrike/deepmerge
-  defaults@1.0.4
-    https://github.com/sindresorhus/node-defaults
-  define-lazy-prop@2.0.0
-    https://github.com/sindresorhus/define-lazy-prop
-  depd@2.0.0
-    https://github.com/dougwilson/nodejs-depd
-  destroy@1.2.0
-    https://github.com/stream-utils/destroy
-  dht-rpc@6.26.4
+  dht-rpc@6.27.0
     https://github.com/holepunchto/dht-rpc
-  ee-first@1.1.1
-    https://github.com/jonathanong/ee-first
-  emoji-regex@8.0.0
-    https://github.com/mathiasbynens/emoji-regex
-  encodeurl@1.0.2
-    https://github.com/pillarjs/encodeurl
-  encodeurl@2.0.0
-    https://github.com/pillarjs/encodeurl
-  env-editor@0.4.2
-    https://github.com/sindresorhus/env-editor
-  error-stack-parser@2.1.4
-    https://github.com/stacktracejs/error-stack-parser
-  es-errors@1.3.0
-    https://github.com/ljharb/es-errors
-  escalade@3.2.0
-    https://github.com/lukeed/escalade
-  escape-html@1.0.3
-    https://github.com/component/escape-html
-  escape-string-regexp@1.0.5
-    https://github.com/sindresorhus/escape-string-regexp
-  escape-string-regexp@4.0.0
-    https://github.com/sindresorhus/escape-string-regexp
-  etag@1.8.1
-    https://github.com/jshttp/etag
-  event-target-shim@5.0.1
-    https://github.com/mysticatea/event-target-shim
-  expo@54.0.34
-    https://github.com/expo/expo
-  expo-asset@12.0.13
-    https://github.com/expo/expo
-  expo-constants@18.0.13
-    https://github.com/expo/expo
-  expo-file-system@19.0.22
-    https://github.com/expo/expo
-  expo-font@14.0.11
-    https://github.com/expo/expo
-  expo-keep-awake@15.0.8
-    https://github.com/expo/expo
-  expo-modules-autolinking@3.0.25
-    https://github.com/expo/expo
-  expo-modules-core@3.0.30
-    https://github.com/expo/expo
-  expo-server@1.0.6
-    https://github.com/expo/expo
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
   fast-safe-stringify@2.1.1
     https://github.com/davidmarkclements/fast-safe-stringify
-  fdir@6.5.0
-    https://github.com/thecodrr/fdir
-  fill-range@7.1.1
-    https://github.com/jonschlinkert/fill-range
-  finalhandler@1.1.2
-    https://github.com/pillarjs/finalhandler
   flat-tree@1.13.0
     https://github.com/mafintosh/flat-tree
-  flow-enums-runtime@0.0.6
-    https://github.com/facebook/flow
-  freeport-async@2.0.0
-    https://github.com/expo/freeport-async
-  fresh@0.5.2
-    https://github.com/jshttp/fresh
-  function-bind@1.1.2
-    https://github.com/Raynos/function-bind
   generate-object-property@2.0.0
     https://github.com/mafintosh/generate-object-property
   generate-string@1.0.1
     https://github.com/mafintosh/generate-string
-  gensync@1.0.0-beta.2
-    https://github.com/loganfsmyth/gensync
-  getenv@2.0.0
-    https://github.com/ctavan/node-getenv
-  has-flag@3.0.0
-    https://github.com/sindresorhus/has-flag
-  has-flag@4.0.0
-    https://github.com/sindresorhus/has-flag
-  hasown@2.0.3
-    https://github.com/inspect-js/hasOwn
-  hermes-compiler@250829098.0.10
-    https://github.com/facebook/hermes
-  hermes-estree@0.29.1
-    https://github.com/facebook/hermes
-  hermes-estree@0.32.0
-    https://github.com/facebook/hermes
-  hermes-estree@0.33.3
-    https://github.com/facebook/hermes
-  hermes-estree@0.35.0
-    https://github.com/facebook/hermes
-  hermes-parser@0.29.1
-    https://github.com/facebook/hermes
-  hermes-parser@0.32.0
-    https://github.com/facebook/hermes
-  hermes-parser@0.33.3
-    https://github.com/facebook/hermes
-  hermes-parser@0.35.0
-    https://github.com/facebook/hermes
-  http-errors@2.0.1
-    https://github.com/jshttp/http-errors
-  https-proxy-agent@7.0.6
-    https://github.com/TooTallNate/proxy-agents
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.30.2
+  hypercore@11.33.1
     https://github.com/holepunchto/hypercore
-  hypercore-crypto@3.6.1
+  hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.30.0
+  hyperdht@6.32.0
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
-  ignore@5.3.2
-    https://github.com/kaelzhang/node-ignore
-  image-size@1.2.1
-    https://github.com/image-size/image-size
-  invariant@2.2.4
-    https://github.com/zertosh/invariant
-  is-core-module@2.16.1
-    https://github.com/inspect-js/is-core-module
-  is-docker@2.2.1
-    https://github.com/sindresorhus/is-docker
-  is-fullwidth-code-point@3.0.0
-    https://github.com/sindresorhus/is-fullwidth-code-point
-  is-number@7.0.0
-    https://github.com/jonschlinkert/is-number
   is-options@1.0.2
     https://github.com/mafintosh/is-options
   is-property@1.0.2
     https://github.com/mikolalysenko/is-property
-  is-wsl@2.2.0
-    https://github.com/sindresorhus/is-wsl
-  jest-get-type@29.6.3
-    https://github.com/jestjs/jest
-  jest-util@29.7.0
-    https://github.com/jestjs/jest
-  jest-validate@29.7.0
-    https://github.com/jestjs/jest
-  jest-worker@29.7.0
-    https://github.com/jestjs/jest
-  jimp-compact@0.16.1
-    https://github.com/nuxt-community/jimp-compact
-  js-tokens@4.0.0
-    https://github.com/lydell/js-tokens
-  js-yaml@4.1.1
-    https://github.com/nodeca/js-yaml
-  jsesc@3.1.0
-    https://github.com/mathiasbynens/jsesc
-  json5@2.2.3
-    https://github.com/json5/json5
   kademlia-routing-table@1.0.6
     https://github.com/mafintosh/kademlia-routing-table
-  kleur@3.0.3
-    https://github.com/lukeed/kleur
-  lan-network@0.2.1
-    https://github.com/kitten/lan-network
-  leven@3.1.0
-    https://github.com/sindresorhus/leven
-  lines-and-columns@1.2.4
-    https://github.com/eventualbuddha/lines-and-columns
   llm-splitter@0.2.0
     https://github.com/nearform/llm-splitter
-  lodash.debounce@4.0.8
-    https://github.com/lodash/lodash
-  lodash.throttle@4.1.1
-    https://github.com/lodash/lodash
-  log-symbols@2.2.0
-    https://github.com/sindresorhus/log-symbols
-  loose-envify@1.4.0
-    https://github.com/zertosh/loose-envify
-  memoize-one@5.2.1
-    https://github.com/alexreardon/memoize-one
-  merge-stream@2.0.0
-    https://github.com/grncdr/merge-stream
-  metro@0.83.3
-    https://github.com/facebook/metro
-  metro@0.84.3
-    https://github.com/facebook/metro
-  metro-babel-transformer@0.83.3
-    https://github.com/facebook/metro
-  metro-babel-transformer@0.84.3
-    https://github.com/facebook/metro
-  metro-cache@0.83.3
-    https://github.com/facebook/metro
-  metro-cache@0.84.3
-    https://github.com/facebook/metro
-  metro-cache-key@0.83.3
-    https://github.com/facebook/metro
-  metro-cache-key@0.84.3
-    https://github.com/facebook/metro
-  metro-config@0.83.3
-    https://github.com/facebook/metro
-  metro-config@0.84.3
-    https://github.com/facebook/metro
-  metro-core@0.83.3
-    https://github.com/facebook/metro
-  metro-core@0.84.3
-    https://github.com/facebook/metro
-  metro-file-map@0.83.3
-    https://github.com/facebook/metro
-  metro-file-map@0.84.3
-    https://github.com/facebook/metro
-  metro-minify-terser@0.83.3
-    https://github.com/facebook/metro
-  metro-minify-terser@0.84.3
-    https://github.com/facebook/metro
-  metro-resolver@0.83.3
-    https://github.com/facebook/metro
-  metro-resolver@0.84.3
-    https://github.com/facebook/metro
-  metro-runtime@0.83.3
-    https://github.com/facebook/metro
-  metro-runtime@0.84.3
-    https://github.com/facebook/metro
-  metro-source-map@0.83.3
-    https://github.com/facebook/metro
-  metro-source-map@0.84.3
-    https://github.com/facebook/metro
-  metro-symbolicate@0.83.3
-    https://github.com/facebook/metro
-  metro-symbolicate@0.84.3
-    https://github.com/facebook/metro
-  metro-transform-plugins@0.83.3
-    https://github.com/facebook/metro
-  metro-transform-plugins@0.84.3
-    https://github.com/facebook/metro
-  metro-transform-worker@0.83.3
-    https://github.com/facebook/metro
-  metro-transform-worker@0.84.3
-    https://github.com/facebook/metro
-  micromatch@4.0.8
-    https://github.com/micromatch/micromatch
-  mime@1.6.0
-    https://github.com/broofa/node-mime
-  mime-db@1.52.0
-    https://github.com/jshttp/mime-db
-  mime-db@1.54.0
-    https://github.com/jshttp/mime-db
-  mime-types@2.1.35
-    https://github.com/jshttp/mime-types
-  mime-types@3.0.2
-    https://github.com/jshttp/mime-types
-  mimic-fn@1.2.0
-    https://github.com/sindresorhus/mimic-fn
-  minimist@1.2.8
-    https://github.com/minimistjs/minimist
-  minizlib@3.1.0
-    https://github.com/isaacs/minizlib
-  mkdirp@1.0.4
-    https://github.com/isaacs/node-mkdirp
-  ms@2.0.0
-    https://github.com/zeit/ms
-  ms@2.1.3
-    https://github.com/vercel/ms
   mutexify@1.4.0
     https://github.com/mafintosh/mutexify
-  mz@2.7.0
-    https://github.com/normalize/mz
-  nanoid@3.3.11
-    https://github.com/ai/nanoid
   nat-sampler@1.0.1
     https://github.com/mafintosh/nat-sampler
-  negotiator@0.6.3
-    https://github.com/jshttp/negotiator
-  negotiator@0.6.4
-    https://github.com/jshttp/negotiator
-  negotiator@1.0.0
-    https://github.com/jshttp/negotiator
-  nested-error-stacks@2.0.1
-    https://github.com/mdlavin/nested-error-stacks
-  node-int64@0.4.0
-    https://github.com/broofa/node-int64
-  node-releases@2.0.38
-    https://github.com/chicoxyzzy/node-releases
-  nullthrows@1.1.1
-    https://github.com/zertosh/nullthrows
-  ob1@0.83.3
-    https://github.com/facebook/metro
-  ob1@0.84.3
-    https://github.com/facebook/metro
-  object-assign@4.1.1
-    https://github.com/sindresorhus/object-assign
-  on-finished@2.3.0
-    https://github.com/jshttp/on-finished
-  on-finished@2.4.1
-    https://github.com/jshttp/on-finished
-  on-headers@1.1.0
-    https://github.com/jshttp/on-headers
-  onetime@2.0.1
-    https://github.com/sindresorhus/onetime
-  open@7.4.2
-    https://github.com/sindresorhus/open
-  open@8.4.2
-    https://github.com/sindresorhus/open
-  ora@3.4.0
-    https://github.com/sindresorhus/ora
-  p-limit@3.1.0
-    https://github.com/sindresorhus/p-limit
-  parse-png@2.1.0
-    https://github.com/kevva/parse-png
-  parseurl@1.3.3
-    https://github.com/pillarjs/parseurl
-  path-is-absolute@1.0.1
-    https://github.com/sindresorhus/path-is-absolute
-  path-key@3.1.1
-    https://github.com/sindresorhus/path-key
-  path-parse@1.0.7
-    https://github.com/jbgutierrez/path-parse
-  picomatch@2.3.2
-    https://github.com/micromatch/picomatch
-  picomatch@4.0.4
-    https://github.com/micromatch/picomatch
-  pirates@4.0.7
-    https://github.com/danez/pirates
-  plist@3.1.1
-    https://github.com/TooTallNate/node-plist
-  pngjs@3.4.0
-    https://github.com/lukeapage/pngjs2
-  postcss@8.4.49
-    https://github.com/postcss/postcss
-  pretty-bytes@5.6.0
-    https://github.com/sindresorhus/pretty-bytes
-  pretty-format@29.7.0
-    https://github.com/jestjs/jest
-  progress@2.0.3
-    https://github.com/visionmedia/node-progress
   promaphore@1.0.0
     https://github.com/mafintosh/promaphore
-  promise@8.3.0
-    https://github.com/then/promise
-  prompts@2.4.2
-    https://github.com/terkelg/prompts
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
-  protomux@3.10.3
+  protomux@3.11.0
     https://github.com/holepunchto/protomux
-  punycode@2.3.1
-    https://github.com/mathiasbynens/punycode.js
-  queue@6.0.2
-    https://github.com/jessetane/queue
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
   random-array-iterator@1.0.0
     https://github.com/mafintosh/random-array-iterator
-  range-parser@1.2.1
-    https://github.com/jshttp/range-parser
-  react@19.2.5
-    https://github.com/facebook/react
-  react-devtools-core@6.1.5
-    https://github.com/facebook/react
-  react-is@18.3.1
-    https://github.com/facebook/react
-  react-native@0.85.2
-    https://github.com/facebook/react-native
-  react-refresh@0.14.2
-    https://github.com/facebook/react
   ready-resource@1.2.0
     https://github.com/holepunchto/ready-resource
   record-cache@1.2.0
     https://github.com/mafintosh/record-cache
-  regenerate@1.4.2
-    https://github.com/mathiasbynens/regenerate
-  regenerate-unicode-properties@10.2.2
-    https://github.com/mathiasbynens/regenerate-unicode-properties
-  regenerator-runtime@0.13.11
-    https://github.com/facebook/regenerator/tree/main/packages/runtime
-  regexpu-core@6.4.0
-    https://github.com/mathiasbynens/regexpu-core
-  regjsgen@0.8.0
-    https://github.com/bnjmnt4n/regjsgen
-  require-directory@2.1.1
-    https://github.com/troygoode/node-require-directory
-  require-from-string@2.0.2
-    https://github.com/floatdrop/require-from-string
-  requireg@0.2.2
-    https://github.com/h2non/requireg
-  resolve@1.22.12
-    https://github.com/browserify/resolve
-  resolve@1.7.1
-    https://github.com/browserify/resolve
-  resolve-from@5.0.0
-    https://github.com/sindresorhus/resolve-from
   resolve-reject-promise@1.1.0
     https://github.com/mafintosh/resolve-reject-promise
-  resolve-workspace-root@2.0.1
-    https://github.com/byCedric/resolve-workspace-root
-  resolve.exports@2.0.3
-    https://github.com/lukeed/resolve.exports
-  restore-cursor@2.0.0
-    https://github.com/sindresorhus/restore-cursor
-  safe-buffer@5.2.1
-    https://github.com/feross/safe-buffer
   safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   same-data@1.0.0
     https://github.com/mafintosh/same-data
-  scheduler@0.27.0
-    https://github.com/facebook/react
-  send@0.19.2
-    https://github.com/pillarjs/send
-  serialize-error@2.1.0
-    https://github.com/sindresorhus/serialize-error
-  serve-static@1.16.3
-    https://github.com/expressjs/serve-static
-  shebang-command@2.0.0
-    https://github.com/kevva/shebang-command
-  shebang-regex@3.0.0
-    https://github.com/sindresorhus/shebang-regex
-  shell-quote@1.8.3
-    https://github.com/ljharb/shell-quote
   shuffled-priority-queue@2.1.0
     https://github.com/mafintosh/shuffled-priority-queue
   signal-promise@1.0.3
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  simple-plist@1.3.1
-    https://github.com/wollardj/simple-plist
-  sisteransi@1.0.5
-    https://github.com/terkelg/sisteransi
-  slash@3.0.0
-    https://github.com/sindresorhus/slash
-  slugify@1.6.9
-    https://github.com/simov/slugify
   sodium-native@5.1.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
   sodium-universal@5.0.1
     https://github.com/holepunchto/sodium-universal
-  source-map-support@0.5.21
-    https://github.com/evanw/node-source-map-support
   speedometer@1.1.0
     https://github.com/mafintosh/speedometer
-  stackframe@1.3.4
-    https://github.com/stacktracejs/stackframe
-  stacktrace-parser@0.1.11
-    https://github.com/errwischt/stacktrace-parser
-  statuses@1.5.0
-    https://github.com/jshttp/statuses
-  statuses@2.0.2
-    https://github.com/jshttp/statuses
-  streamx@2.25.0
+  streamx@2.28.0
     https://github.com/mafintosh/streamx
-  string-width@4.2.3
-    https://github.com/sindresorhus/string-width
-  strip-ansi@5.2.0
-    https://github.com/chalk/strip-ansi
-  strip-ansi@6.0.1
-    https://github.com/chalk/strip-ansi
-  strip-json-comments@2.0.1
-    https://github.com/sindresorhus/strip-json-comments
-  structured-headers@0.4.1
-    https://github.com/evert/structured-header
-  sucrase@3.35.1
-    https://github.com/alangpierce/sucrase
-  supports-color@5.5.0
-    https://github.com/chalk/supports-color
-  supports-color@7.2.0
-    https://github.com/chalk/supports-color
-  supports-color@8.1.1
-    https://github.com/chalk/supports-color
-  supports-hyperlinks@2.3.0
-    https://github.com/jamestalmage/supports-hyperlinks
-  supports-preserve-symlinks-flag@1.0.0
-    https://github.com/inspect-js/node-supports-preserve-symlinks-flag
-  tar-stream@3.1.8
+  tar-stream@3.2.0
     https://github.com/mafintosh/tar-stream
   teex@1.0.1
     https://github.com/mafintosh/teex
-  terminal-link@2.1.1
-    https://github.com/sindresorhus/terminal-link
-  thenify@3.3.1
-    https://github.com/thenables/thenify
-  thenify-all@1.6.0
-    https://github.com/thenables/thenify-all
-  throat@5.0.0
-    https://github.com/ForbesLindesay/throat
   time-ordered-set@2.0.1
     https://github.com/mafintosh/time-ordered-set
   timeout-refresh@2.0.1
     https://github.com/mafintosh/timeout-refresh
   tiny-byte-size@1.1.0
     https://github.com/mafintosh/tiny-byte-size
-  tinyglobby@0.2.16
-    https://github.com/SuperchupuDev/tinyglobby
   tinyld@1.3.4
     https://github.com/komodojp/tinyld
-  to-regex-range@5.0.1
-    https://github.com/micromatch/to-regex-range
-  toidentifier@1.0.1
-    https://github.com/component/toidentifier
-  undici@6.25.0
-    https://github.com/nodejs/undici
-  undici-types@7.16.0
-    https://github.com/nodejs/undici
-  unicode-canonical-property-names-ecmascript@2.0.1
-    https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript
-  unicode-match-property-ecmascript@2.0.0
-    https://github.com/mathiasbynens/unicode-match-property-ecmascript
-  unicode-match-property-value-ecmascript@2.2.1
-    https://github.com/mathiasbynens/unicode-match-property-value-ecmascript
-  unicode-property-aliases-ecmascript@2.2.0
-    https://github.com/mathiasbynens/unicode-property-aliases-ecmascript
   unix-path-resolve@1.0.2
     https://github.com/mafintosh/unix-path-resolve
   unordered-set@2.0.1
     https://github.com/mafintosh/unordered-set
-  unpipe@1.0.0
-    https://github.com/stream-utils/unpipe
-  update-browserslist-db@1.2.3
-    https://github.com/browserslist/update-db
-  utils-merge@1.0.1
-    https://github.com/jaredhanson/utils-merge
-  uuid@7.0.3
-    https://github.com/uuidjs/uuid
   varint@5.0.0
     https://github.com/chrisdickinson/varint
-  vary@1.1.2
-    https://github.com/jshttp/vary
-  vlq@1.0.1
-    https://github.com/Rich-Harris/vlq
-  wcwidth@1.0.1
-    https://github.com/timoxley/wcwidth
-  whatwg-fetch@3.6.20
-    https://github.com/github/fetch
-  whatwg-url-without-unicode@8.0.0-3
-    https://github.com/charpeni/whatwg-url
-  wonka@6.3.6
-    https://github.com/0no-co/wonka
-  wrap-ansi@7.0.0
-    https://github.com/chalk/wrap-ansi
-  ws@6.2.3
-    https://github.com/websockets/ws
-  ws@7.5.10
-    https://github.com/websockets/ws
-  ws@8.20.0
-    https://github.com/websockets/ws
   xache@1.2.1
     https://github.com/mafintosh/xache
-  xml2js@0.6.0
-    https://github.com/Leonidas-from-XIV/node-xml2js
-  xmlbuilder@11.0.1
-    https://github.com/oozcitak/xmlbuilder-js
-  xmlbuilder@15.1.1
-    https://github.com/oozcitak/xmlbuilder-js
-  yargs@17.7.2
-    https://github.com/yargs/yargs
-  yocto-queue@0.1.0
-    https://github.com/sindresorhus/yocto-queue
   z32@1.1.0
     https://github.com/mafintosh/z32
-  zod@4.3.6
+  zod@4.4.3
     https://github.com/colinhacks/zod
-
---- mpl-2.0 (Mozilla Public License 2.0) ---
-
-  lightningcss@1.32.0
-    https://github.com/parcel-bundler/lightningcss
-  lightningcss-darwin-arm64@1.32.0
-    https://github.com/parcel-bundler/lightningcss
-
---- python-2.0 (Python Software Foundation License) ---
-
-  argparse@2.0.1
-    https://github.com/nodeca/argparse
-
---- unlicense (The Unlicense) ---
-
-  big-integer@1.6.52
-    https://github.com/peterolson/BigInteger.js
-  stream-buffers@2.2.0
-    https://github.com/samcday/node-stream-buffer
 

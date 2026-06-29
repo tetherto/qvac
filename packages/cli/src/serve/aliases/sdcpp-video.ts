@@ -23,7 +23,7 @@ const NESTED_MODEL_SRC_KEYS = [
   'highNoiseDiffusionModelSrc'
 ] as const
 
-export function resolveSdcppVideoAlias (rawConfig: Record<string, unknown>): {
+export function resolveSdcppVideoAlias(rawConfig: Record<string, unknown>): {
   sdkType: string
   endpointCategory: string
   config: Record<string, unknown>
