@@ -13,11 +13,11 @@ const createLifecycleTest = (
   metadata: { category: "lifecycle", dependency, estimatedDurationMs },
 });
 
-export const lifecycleSuspendResumeBasic = createLifecycleTest("lifecycle-suspend-resume-basic");
-export const lifecycleSuspendIdempotent = createLifecycleTest("lifecycle-suspend-idempotent");
+export const lifecycleSuspendResumeBasic = createLifecycleTest("lifecycle-suspend-resume-basic", "none", 30000, ["smoke"]);
+export const lifecycleSuspendIdempotent = createLifecycleTest("lifecycle-suspend-idempotent", "none", 30000, ["smoke"]);
 export const lifecycleResumeIdempotent = createLifecycleTest("lifecycle-resume-idempotent");
 export const lifecycleSuspendResumeInference = createLifecycleTest("lifecycle-suspend-resume-inference", "llm", 60000, ["smoke"]);
-export const lifecycleRapidToggle = createLifecycleTest("lifecycle-rapid-toggle");
+export const lifecycleRapidToggle = createLifecycleTest("lifecycle-rapid-toggle", "none", 30000, ["smoke"]);
 export const lifecycleSuspendDuringInference = createLifecycleTest("lifecycle-suspend-during-inference", "llm", 60000);
 export const lifecycleStateTransitions = createLifecycleTest("lifecycle-state-transitions", "none", 15000, ["smoke"]);
 export const lifecycleBlockedCompletion = createLifecycleTest("lifecycle-blocked-completion", "llm", 60000);
