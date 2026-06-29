@@ -18,4 +18,3 @@ Release Date: 2026-05-15
 ## 🧹 Chores
 
 - Bump `@qvac/sdk` dep from `^0.10.0` to `^0.11.0` and the `MIN_SDK_VERSION` runtime check in `serve/core/sdk.ts` from `'0.10.0'` to `'0.11.0'` to track the new requestId-based cancel surface that the CLI cancel bridge depends on. `qvac serve openai` now refuses to start if the installed `@qvac/sdk` is older than `0.11.0`.
-

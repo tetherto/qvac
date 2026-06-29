@@ -17,11 +17,11 @@ export interface ChunkAttributionStore {
   evict: (vectorStoreId: string) => void
 }
 
-export function createChunkAttributionStore (): ChunkAttributionStore {
+export function createChunkAttributionStore(): ChunkAttributionStore {
   const map = new Map<string, Map<string, ChunkAttribution>>()
 
   return {
-    record (vectorStoreId, chunkId, attribution) {
+    record(vectorStoreId, chunkId, attribution) {
       let inner = map.get(vectorStoreId)
       if (!inner) {
         inner = new Map()
@@ -29,12 +29,12 @@ export function createChunkAttributionStore (): ChunkAttributionStore {
       }
       inner.set(chunkId, { fileId: attribution.fileId, fileName: attribution.fileName })
     },
-    lookup (vectorStoreId, chunkId) {
+    lookup(vectorStoreId, chunkId) {
       const inner = map.get(vectorStoreId)
       const found = inner?.get(chunkId)
       return found ? { fileId: found.fileId, fileName: found.fileName } : null
     },
-    evict (vectorStoreId) {
+    evict(vectorStoreId) {
       map.delete(vectorStoreId)
     }
   }

@@ -27,7 +27,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac'                         // anything non-empty; serve does not validate
+  apiKey: 'qvac' // anything non-empty; serve does not validate
 })
 
 const { textStream } = streamText({
@@ -40,7 +40,7 @@ for await (const chunk of textStream) {
 }
 ```
 
-The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see *Known limitations* below).
+The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see _Known limitations_ below).
 
 ---
 
@@ -51,8 +51,8 @@ Every model in the QVAC P2P registry that has an OpenAI-shaped endpoint is expor
 ```ts
 import { models, allModels } from '@qvac/ai-sdk-provider'
 
-models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat'      (compile-time known)
-models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory // 'chat'      (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory // 'transcription'
 
 for (const m of allModels) {
   console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)

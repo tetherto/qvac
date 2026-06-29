@@ -8,41 +8,41 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 
 ## Implemented endpoints (today)
 
-| Method | Path | Notes |
-|--------|------|--------|
-| `GET` | `/v1/models` | Lists **loaded** models |
-| `GET` | `/v1/models/{id}` | Model metadata |
-| `DELETE` | `/v1/models/{id}` | Unload |
-| `POST` | `/v1/chat/completions` | Chat |
-| `POST` | `/v1/completions` | Legacy text completions (single + multi-prompt; blocking + SSE) |
-| `POST` | `/v1/responses` | Responses API (blocking + SSE streaming); volatile, see below |
-| `GET` | `/v1/responses/{id}` | Retrieve a stored response |
-| `DELETE` | `/v1/responses/{id}` | Delete a stored response |
-| `GET` | `/v1/responses/{id}/input_items` | Paginate the original input items |
-| `POST` | `/v1/embeddings` | Embeddings |
-| `POST` | `/v1/audio/transcriptions` | Speech-to-text (source language) |
-| `POST` | `/v1/audio/translations` | Speech-to-text **into English** (Whisper translate task) |
-| `POST` | `/v1/audio/speech` | Text-to-speech (Chatterbox / Supertonic; `wav` + `pcm`, plus `mp3` / `opus` / `aac` / `flac` with `ffmpeg`) |
-| `GET` | `/v1/audio/voices` | List configured TTS voices |
-| `GET` | `/v1/audio/models` | List READY text-to-speech models |
-| `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
-| `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
-| `POST` | `/v1/videos` | Async video generation — txt2vid (JSON) or img2vid (JSON with `input_reference`); returns a queued job |
-| `GET` | `/v1/videos` | List video generation jobs |
-| `GET` | `/v1/videos/{id}` | Get video job status and progress |
-| `GET` | `/v1/videos/{id}/content` | Download rendered video (`video/mp4` or `video/avi`) |
-| `DELETE` | `/v1/videos/{id}` | Cancel and remove a video job |
-| `POST` | `/v1/files` | Upload a file into the in-memory store (used by image URL responses + vector stores) |
-| `GET` | `/v1/files` | List in-memory files |
-| `GET` | `/v1/files/{id}` | File metadata |
-| `GET` | `/v1/files/{id}/content` | Stream the bytes (used by image `response_format=url`) |
-| `GET` | `/v1/vector_stores` | List vector stores |
-| `POST` | `/v1/vector_stores` | Create a vector store |
-| `GET` | `/v1/vector_stores/{id}` | Retrieve a vector store |
-| `POST` | `/v1/vector_stores/{id}` | Update a vector store |
-| `DELETE` | `/v1/vector_stores/{id}` | Delete a vector store |
-| `POST` | `/v1/vector_stores/{id}/search` | Semantic search over a store (needs a loaded `embedding` model) |
-| `POST` | `/v1/vector_stores/{id}/files` | Attach + embed a previously-uploaded file |
+| Method   | Path                             | Notes                                                                                                       |
+| -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/v1/models`                     | Lists **loaded** models                                                                                     |
+| `GET`    | `/v1/models/{id}`                | Model metadata                                                                                              |
+| `DELETE` | `/v1/models/{id}`                | Unload                                                                                                      |
+| `POST`   | `/v1/chat/completions`           | Chat                                                                                                        |
+| `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                             |
+| `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                               |
+| `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                                  |
+| `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                                    |
+| `GET`    | `/v1/responses/{id}/input_items` | Paginate the original input items                                                                           |
+| `POST`   | `/v1/embeddings`                 | Embeddings                                                                                                  |
+| `POST`   | `/v1/audio/transcriptions`       | Speech-to-text (source language)                                                                            |
+| `POST`   | `/v1/audio/translations`         | Speech-to-text **into English** (Whisper translate task)                                                    |
+| `POST`   | `/v1/audio/speech`               | Text-to-speech (Chatterbox / Supertonic; `wav` + `pcm`, plus `mp3` / `opus` / `aac` / `flac` with `ffmpeg`) |
+| `GET`    | `/v1/audio/voices`               | List configured TTS voices                                                                                  |
+| `GET`    | `/v1/audio/models`               | List READY text-to-speech models                                                                            |
+| `POST`   | `/v1/images/generations`         | Diffusion txt2img (blocking + SSE)                                                                          |
+| `POST`   | `/v1/images/edits`               | Diffusion img2img (multipart; blocking + SSE)                                                               |
+| `POST`   | `/v1/videos`                     | Async video generation — txt2vid (JSON) or img2vid (JSON with `input_reference`); returns a queued job      |
+| `GET`    | `/v1/videos`                     | List video generation jobs                                                                                  |
+| `GET`    | `/v1/videos/{id}`                | Get video job status and progress                                                                           |
+| `GET`    | `/v1/videos/{id}/content`        | Download rendered video (`video/mp4` or `video/avi`)                                                        |
+| `DELETE` | `/v1/videos/{id}`                | Cancel and remove a video job                                                                               |
+| `POST`   | `/v1/files`                      | Upload a file into the in-memory store (used by image URL responses + vector stores)                        |
+| `GET`    | `/v1/files`                      | List in-memory files                                                                                        |
+| `GET`    | `/v1/files/{id}`                 | File metadata                                                                                               |
+| `GET`    | `/v1/files/{id}/content`         | Stream the bytes (used by image `response_format=url`)                                                      |
+| `GET`    | `/v1/vector_stores`              | List vector stores                                                                                          |
+| `POST`   | `/v1/vector_stores`              | Create a vector store                                                                                       |
+| `GET`    | `/v1/vector_stores/{id}`         | Retrieve a vector store                                                                                     |
+| `POST`   | `/v1/vector_stores/{id}`         | Update a vector store                                                                                       |
+| `DELETE` | `/v1/vector_stores/{id}`         | Delete a vector store                                                                                       |
+| `POST`   | `/v1/vector_stores/{id}/search`  | Semantic search over a store (needs a loaded `embedding` model)                                             |
+| `POST`   | `/v1/vector_stores/{id}/files`   | Attach + embed a previously-uploaded file                                                                   |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -103,9 +103,7 @@ Blocking response shape (single prompt):
   "object": "text_completion",
   "created": 1718000000,
   "model": "my-llm",
-  "choices": [
-    { "text": "Hello", "index": 0, "logprobs": null, "finish_reason": "stop" }
-  ],
+  "choices": [{ "text": "Hello", "index": 0, "logprobs": null, "finish_reason": "stop" }],
   "usage": { "prompt_tokens": 0, "completion_tokens": 1, "total_tokens": 1 }
 }
 ```
@@ -125,16 +123,16 @@ suffix insertion, multi-choice `n`) are not implemented.
 
 ### Errors
 
-| HTTP | `error.code` | When |
-|------|----------------|------|
-| 400 | `invalid_json` | Body is not valid JSON |
-| 400 | `missing_model` | `model` field is missing |
-| 400 | `invalid_prompt` | Prompt is missing, empty, has empty array entries, or is provided as token ids |
-| 400 | `unsupported_streaming` | Multi-prompt input combined with `"stream": true` |
-| 400 | `invalid_model_type` | Alias is not a `chat` model |
-| 404 | `model_not_found` | Unknown alias |
-| 503 | `model_not_ready` | Model not loaded yet |
-| 500 | `completion_error` | SDK / engine failure |
+| HTTP | `error.code`            | When                                                                           |
+| ---- | ----------------------- | ------------------------------------------------------------------------------ |
+| 400  | `invalid_json`          | Body is not valid JSON                                                         |
+| 400  | `missing_model`         | `model` field is missing                                                       |
+| 400  | `invalid_prompt`        | Prompt is missing, empty, has empty array entries, or is provided as token ids |
+| 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
+| 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
+| 404  | `model_not_found`       | Unknown alias                                                                  |
+| 503  | `model_not_ready`       | Model not loaded yet                                                           |
+| 500  | `completion_error`      | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
 
@@ -201,22 +199,22 @@ Both routes require an alias whose **endpoint category** is `image`. Built-in SD
 
 This server is intentionally **loud** about every OpenAI image-API field it cannot honor without producing the wrong bytes. Every case below is a `400` with a stable `error.code` so an agent can branch on it instead of silently shipping the wrong output to a user.
 
-| HTTP | `error.code` | Trigger |
-|------|--------------|---------|
-| 400 | `mask_not_supported` | `/v1/images/edits` received a `mask` / `mask[]` field. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image. Resend without `mask`. |
-| 400 | `unsupported_response_format` | `response_format=url` was requested but the server is not configured with `--public-base-url` (no way to mint a downloadable URL — see below). Use `response_format=b64_json`. |
-| 400 | `invalid_response_format` | Anything other than `b64_json` / `url`. |
-| 400 | `unsupported_output_format` | `output_format` other than `png`. The server only emits PNG. |
-| 400 | `unsupported_output_compression` | `output_compression` is set. Only meaningful with jpeg/webp, which we do not emit. |
-| 400 | `unsupported_background` | `background=transparent|opaque|auto`. The server has no alpha-channel control. |
-| 400 | `invalid_strength` | `/v1/images/edits` received a `strength` outside `[0, 1]` or a non-numeric value. |
-| 400 | `missing_prompt` / `missing_model` / `missing_image` | Required fields absent. |
-| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`. |
-| 400 | `invalid_n` | `n` is not a positive integer. |
-| 404 | `model_not_found` | Unknown alias. |
-| 400 | `invalid_model_type` | Alias is not an `image` model. |
-| 503 | `model_not_ready` | Model not loaded yet. |
-| 500 | `image_generation_error` / `image_edit_error` | SDK / engine failure. |
+| HTTP | `error.code`                                         | Trigger                                                                                                                                                                                                        |
+| ---- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------- |
+| 400  | `mask_not_supported`                                 | `/v1/images/edits` received a `mask` / `mask[]` field. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image. Resend without `mask`. |
+| 400  | `unsupported_response_format`                        | `response_format=url` was requested but the server is not configured with `--public-base-url` (no way to mint a downloadable URL — see below). Use `response_format=b64_json`.                                 |
+| 400  | `invalid_response_format`                            | Anything other than `b64_json` / `url`.                                                                                                                                                                        |
+| 400  | `unsupported_output_format`                          | `output_format` other than `png`. The server only emits PNG.                                                                                                                                                   |
+| 400  | `unsupported_output_compression`                     | `output_compression` is set. Only meaningful with jpeg/webp, which we do not emit.                                                                                                                             |
+| 400  | `unsupported_background`                             | `background=transparent                                                                                                                                                                                        | opaque | auto`. The server has no alpha-channel control. |
+| 400  | `invalid_strength`                                   | `/v1/images/edits` received a `strength` outside `[0, 1]` or a non-numeric value.                                                                                                                              |
+| 400  | `missing_prompt` / `missing_model` / `missing_image` | Required fields absent.                                                                                                                                                                                        |
+| 400  | `invalid_size`                                       | `size` is not `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                                                                                                                   |
+| 400  | `invalid_n`                                          | `n` is not a positive integer.                                                                                                                                                                                 |
+| 404  | `model_not_found`                                    | Unknown alias.                                                                                                                                                                                                 |
+| 400  | `invalid_model_type`                                 | Alias is not an `image` model.                                                                                                                                                                                 |
+| 503  | `model_not_ready`                                    | Model not loaded yet.                                                                                                                                                                                          |
+| 500  | `image_generation_error` / `image_edit_error`        | SDK / engine failure.                                                                                                                                                                                          |
 
 The following OpenAI fields are **accepted and silently ignored** (a warning is logged) because they are advisory and would not change the bytes returned: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
 
@@ -304,16 +302,16 @@ Response shape matches `/v1/images/generations`.
 
 ### Multipart edits — accepted fields
 
-| Field | Description |
-|-------|-------------|
+| Field                  | Description                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
 | `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
-| `model`, `prompt` | Same as JSON variants. **Required.** |
-| `size` | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`. |
-| `n` | Positive integer. |
-| `seed` | Integer. |
-| `strength` | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`. |
-| `response_format` | `b64_json` (default) or `url` (requires `--public-base-url`). |
-| `stream` | When `true`, response is `text/event-stream` (see Streaming above). |
+| `model`, `prompt`      | Same as JSON variants. **Required.**                                                                  |
+| `size`                 | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                        |
+| `n`                    | Positive integer.                                                                                     |
+| `seed`                 | Integer.                                                                                              |
+| `strength`             | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`.           |
+| `response_format`      | `b64_json` (default) or `url` (requires `--public-base-url`).                                         |
+| `stream`               | When `true`, response is `text/event-stream` (see Streaming above).                                   |
 
 ## `POST /v1/audio/translations`
 
@@ -395,16 +393,16 @@ You normally use the **same** underlying weights for both transcription and tran
 
 ### Errors
 
-| HTTP | `error.code` | When |
-|------|----------------|------|
-| 400 | `invalid_content_type` | Not `multipart/form-data` |
-| 400 | `missing_file` / `missing_model` | Required fields missing |
-| 400 | `unsupported_param` | e.g. `language` present |
-| 400 | `unsupported_response_format` | `srt`, `vtt`, `verbose_json` |
-| 400 | `invalid_model_type` | Alias is not an `audio-translation` model (use `type: whispercpp-audio-translation` in `serve.models`) |
-| 404 | `model_not_found` | Unknown alias |
-| 503 | `model_not_ready` | Model not loaded yet |
-| 500 | `translation_error` | SDK / engine failure |
+| HTTP | `error.code`                     | When                                                                                                   |
+| ---- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 400  | `invalid_content_type`           | Not `multipart/form-data`                                                                              |
+| 400  | `missing_file` / `missing_model` | Required fields missing                                                                                |
+| 400  | `unsupported_param`              | e.g. `language` present                                                                                |
+| 400  | `unsupported_response_format`    | `srt`, `vtt`, `verbose_json`                                                                           |
+| 400  | `invalid_model_type`             | Alias is not an `audio-translation` model (use `type: whispercpp-audio-translation` in `serve.models`) |
+| 404  | `model_not_found`                | Unknown alias                                                                                          |
+| 503  | `model_not_ready`                | Model not loaded yet                                                                                   |
+| 500  | `translation_error`              | SDK / engine failure                                                                                   |
 
 ## `POST /v1/audio/speech`
 
@@ -463,12 +461,20 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
         "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
         "type": "tts",
         "preload": true,
-        "config": { "ttsEngine": "chatterbox", "language": "en", "referenceAudioSrc": "./voices/alloy-ref.wav" }
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "referenceAudioSrc": "./voices/alloy-ref.wav"
+        }
       },
       "tts-chatter-echo": {
         "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
         "type": "tts",
-        "config": { "ttsEngine": "chatterbox", "language": "en", "referenceAudioSrc": "./voices/echo-ref.wav" }
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "referenceAudioSrc": "./voices/echo-ref.wav"
+        }
       }
     },
     "openai": {
@@ -500,14 +506,14 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 
 Binary audio body. Headers include:
 
-| Header | Description |
-|--------|-------------|
-| `Content-Type` | `audio/wav` (`wav`); **`audio/L16; rate=<sr>; channels=1`** (RFC 2586, `pcm`); `audio/mpeg` (`mp3`); `audio/ogg` (`opus`); `audio/aac` (`aac`); `audio/flac` (`flac`). |
-| `Content-Length` | Total bytes. |
-| `X-Audio-Sample-Rate` | Native sample rate of the model output. **24000** Hz for Chatterbox, **44100** Hz for Supertonic. Override by setting `sampleRate` on the alias's `config`. **Only sent for `wav`/`pcm`** — encoded containers carry their own rate metadata. |
-| `X-Audio-Channels` | Always `1` (mono). Only sent for `wav`/`pcm`. |
-| `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`. |
-| `X-QVAC-Ignored-Params` | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent). |
+| Header                    | Description                                                                                                                                                                                                                                   |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Type`            | `audio/wav` (`wav`); **`audio/L16; rate=<sr>; channels=1`** (RFC 2586, `pcm`); `audio/mpeg` (`mp3`); `audio/ogg` (`opus`); `audio/aac` (`aac`); `audio/flac` (`flac`).                                                                        |
+| `Content-Length`          | Total bytes.                                                                                                                                                                                                                                  |
+| `X-Audio-Sample-Rate`     | Native sample rate of the model output. **24000** Hz for Chatterbox, **44100** Hz for Supertonic. Override by setting `sampleRate` on the alias's `config`. **Only sent for `wav`/`pcm`** — encoded containers carry their own rate metadata. |
+| `X-Audio-Channels`        | Always `1` (mono). Only sent for `wav`/`pcm`.                                                                                                                                                                                                 |
+| `X-Audio-Bits-Per-Sample` | Always `16`. Only sent for `wav`/`pcm`.                                                                                                                                                                                                       |
+| `X-QVAC-Ignored-Params`   | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent).                                                                                                                                         |
 
 The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
 
@@ -534,21 +540,21 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 
 ### Errors
 
-| HTTP | `error.code` | When |
-|------|--------------|------|
-| 400 | `invalid_json` | Body is not valid JSON |
-| 400 | `missing_model` | `model` field is missing |
-| 400 | `missing_input` | `input` is missing or empty/whitespace |
-| 400 | `input_too_long` | `input.length` exceeds `maxInputChars` (default 4096) |
-| 400 | `missing_voice` | `voice` not sent and `defaultVoice` is `null` |
-| 400 | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac` |
-| 400 | `invalid_model_type` | Alias is not a `speech` model |
-| 404 | `model_not_found` | No `voices` mapping, no hyphen alias, no bare alias matches |
-| 502 | `speech_empty` | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
-| 502 | `transcode_failed` | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm` |
-| 503 | `transcode_unavailable` | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH` |
-| 503 | `model_not_ready` | Model not loaded yet |
-| 500 | `speech_error` | SDK / engine failure (message goes to server logs only) |
+| HTTP | `error.code`              | When                                                                                                    |
+| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`            | Body is not valid JSON                                                                                  |
+| 400  | `missing_model`           | `model` field is missing                                                                                |
+| 400  | `missing_input`           | `input` is missing or empty/whitespace                                                                  |
+| 400  | `input_too_long`          | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
+| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`                                                           |
+| 400  | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
+| 400  | `invalid_model_type`      | Alias is not a `speech` model                                                                           |
+| 404  | `model_not_found`         | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
+| 502  | `speech_empty`            | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
+| 502  | `transcode_failed`        | ffmpeg failed (or timed out) encoding `mp3` / `opus` / `aac` / `flac` — retry with `wav`/`pcm`          |
+| 503  | `transcode_unavailable`   | `mp3` / `opus` / `aac` / `flac` requested but `ffmpeg` is not on the server's `PATH`                    |
+| 503  | `model_not_ready`         | Model not loaded yet                                                                                    |
+| 500  | `speech_error`            | SDK / engine failure (message goes to server logs only)                                                 |
 
 ## `GET /v1/audio/voices`
 
@@ -605,13 +611,13 @@ Two generation modes:
 
 ### Endpoints
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `POST` | `/v1/videos` | Create job → `{ status: "queued" }` |
-| `GET` | `/v1/videos/{id}` | Poll status |
-| `GET` | `/v1/videos/{id}/content` | Download; defaults to `video/mp4` (lazy ffmpeg transcode + cache). `?format=avi` returns the native MJPG-AVI. `?variant` other than `video` → `501 unsupported_variant` |
-| `GET` | `/v1/videos` | Paginated list (`limit` / `order` / `after`) |
-| `DELETE` | `/v1/videos/{id}` | Abort the running job and drop its assets |
+| Method   | Path                      | Notes                                                                                                                                                                   |
+| -------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/v1/videos`              | Create job → `{ status: "queued" }`                                                                                                                                     |
+| `GET`    | `/v1/videos/{id}`         | Poll status                                                                                                                                                             |
+| `GET`    | `/v1/videos/{id}/content` | Download; defaults to `video/mp4` (lazy ffmpeg transcode + cache). `?format=avi` returns the native MJPG-AVI. `?variant` other than `video` → `501 unsupported_variant` |
+| `GET`    | `/v1/videos`              | Paginated list (`limit` / `order` / `after`)                                                                                                                            |
+| `DELETE` | `/v1/videos/{id}`         | Abort the running job and drop its assets                                                                                                                               |
 
 ### Deviations from the OpenAI spec
 
@@ -622,11 +628,11 @@ Two generation modes:
 
 ### Errors
 
-| HTTP | `error.code` | When |
-|------|--------------|------|
-| 400 | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL returned non-200, timed out, or exceeded the 100 MB limit; `file_id` not found |
-| 400 | `invalid_strength` | `strength` outside `[0, 1]` or non-numeric |
-| 400 | `invalid_model_type` | Alias is not a `video` model |
-| 404 | `video_not_found` | Unknown job id |
-| 501 | `unsupported_variant` | `GET …/content?variant=` other than `video` |
-| 503 | `model_not_ready` | Model not loaded yet |
+| HTTP | `error.code`              | When                                                                                                                                                                               |
+| ---- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_input_reference` | Data URI has invalid base64, decodes to empty bytes, or is missing the comma separator; HTTP(S) URL returned non-200, timed out, or exceeded the 100 MB limit; `file_id` not found |
+| 400  | `invalid_strength`        | `strength` outside `[0, 1]` or non-numeric                                                                                                                                         |
+| 400  | `invalid_model_type`      | Alias is not a `video` model                                                                                                                                                       |
+| 404  | `video_not_found`         | Unknown job id                                                                                                                                                                     |
+| 501  | `unsupported_variant`     | `GET …/content?variant=` other than `video`                                                                                                                                        |
+| 503  | `model_not_ready`         | Model not loaded yet                                                                                                                                                               |

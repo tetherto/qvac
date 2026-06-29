@@ -54,7 +54,7 @@ setInterval(() => {}, 1 << 30)
 
 export const fakeServeSkip = process.platform === 'win32'
 
-export async function makeFakeServe (): Promise<{ binPath: string, cleanup: () => Promise<void> }> {
+export async function makeFakeServe(): Promise<{ binPath: string; cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), 'qvac-fakeserve-'))
   const binPath = join(dir, 'fake-serve.cjs')
   await writeFile(binPath, FAKE_SERVE, 'utf8')
@@ -64,7 +64,7 @@ export async function makeFakeServe (): Promise<{ binPath: string, cleanup: () =
 
 // Redirect ~/.qvac so the supervisor's PID bookkeeping never touches real
 // state. `os.homedir()` honours $HOME via libuv on POSIX.
-export async function withFakeHome (fn: () => Promise<void>): Promise<void> {
+export async function withFakeHome(fn: () => Promise<void>): Promise<void> {
   const prevHome = process.env['HOME']
   const fakeHome = await mkdtemp(join(tmpdir(), 'qvac-home-'))
   process.env['HOME'] = fakeHome
@@ -78,7 +78,7 @@ export async function withFakeHome (fn: () => Promise<void>): Promise<void> {
 }
 
 const BEHAVIOR_KEY = 'FAKE_SERVE_BEHAVIOR'
-export function setBehavior (value: string | undefined): void {
+export function setBehavior(value: string | undefined): void {
   if (value === undefined) delete process.env[BEHAVIOR_KEY]
   else process.env[BEHAVIOR_KEY] = value
 }
@@ -88,7 +88,7 @@ export function setBehavior (value: string | undefined): void {
 // must kill the leftover runner + serve and drop their records ourselves to
 // avoid leaking processes across the (isolated, fake-HOME) registry. Safe to
 // call repeatedly; only touches serves recorded under the current $HOME.
-export async function reapAllManaged (): Promise<void> {
+export async function reapAllManaged(): Promise<void> {
   let records
   try {
     records = await readAllRecords()
