@@ -31,6 +31,11 @@ const REGISTRY_RESUME_TIMEOUT_MS = 120_000;
 // forces a retry → reconnect (the fix path), not just a natural resume.
 const REGISTRY_SUSPEND_MS = 20_000;
 const SUSPEND_BACKGROUND_MS = 750;
+// Fast check for whether flaky-lan-server is actually reachable. It is on a
+// same-LAN local run; it is not on CI Device Farm (the device can't reach the
+// runner, and CI never starts it), so the HTTP cases skip there instead of
+// burning the full HTTP_RESUME_TIMEOUT_MS.
+const FLAKY_PROBE_TIMEOUT_MS = 3_000;
 
 let nonceCounter = 0;
 function uniquePath(route: "netdrop" | "suspend"): string {
@@ -66,6 +71,33 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
   // consumer-config.ts at build time. Undefined on builds without that config.
   constructor(private readonly flakyHost?: string) {
     super();
+  }
+
+  private flakyReachable?: boolean;
+
+  /**
+   * Returns the flaky-lan-server base URL only if it actually answers, else null.
+   * Probed once (the server's presence doesn't change mid-run). The HTTP cases
+   * run when it's up (local same-LAN run) and skip when it isn't (CI Device Farm,
+   * or the server simply wasn't started).
+   */
+  private async flakyBaseIfReachable(): Promise<string | null> {
+    if (!this.flakyHost) return null;
+    const base = `http://${this.flakyHost}:${FLAKY_PORT}`;
+    if (this.flakyReachable === undefined) {
+      try {
+        const res = await withTimeout(
+          "flaky-server probe",
+          fetch(`${base}/__control/reset`),
+          FLAKY_PROBE_TIMEOUT_MS,
+        );
+        const body = await res.text();
+        this.flakyReachable = res.ok && body.trim() === "reset";
+      } catch {
+        this.flakyReachable = false;
+      }
+    }
+    return this.flakyReachable ? base : null;
   }
 
   protected handlers = {
@@ -150,15 +182,15 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
 
   /** https:// download must recover from a mid-stream socket drop via range resume. */
   async httpNetdrop(): Promise<TestResult> {
-    const host = this.flakyHost;
-    if (!host) {
+    const base = await this.flakyBaseIfReachable();
+    if (!base) {
       return {
         passed: true,
         skipped: true,
-        output: "skipped: flaky-lan-server host unknown (no broker host baked into consumer-config)",
+        output: "skipped: flaky-lan-server not reachable (start it locally with `node tests/shared/flaky-lan-server.mjs`; unreachable on CI Device Farm)",
       };
     }
-    const assetSrc = `http://${host}:${FLAKY_PORT}${uniquePath("netdrop")}`;
+    const assetSrc = `${base}${uniquePath("netdrop")}`;
     let maxPct = 0;
     try {
       const op = downloadAsset({
@@ -184,15 +216,14 @@ export class MobileDownloadResilienceExecutor extends BaseExecutor<typeof resili
 
   /** https:// download must survive suspend/resume even when the socket dies on background. */
   async httpSuspend(): Promise<TestResult> {
-    const host = this.flakyHost;
-    if (!host) {
+    const base = await this.flakyBaseIfReachable();
+    if (!base) {
       return {
         passed: true,
         skipped: true,
-        output: "skipped: flaky-lan-server host unknown (no broker host baked into consumer-config)",
+        output: "skipped: flaky-lan-server not reachable (start it locally with `node tests/shared/flaky-lan-server.mjs`; unreachable on CI Device Farm)",
       };
     }
-    const base = `http://${host}:${FLAKY_PORT}`;
     const path = uniquePath("suspend");
     const assetSrc = `${base}${path}`;
     let firstProgress = false;
