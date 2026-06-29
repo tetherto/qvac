@@ -62,6 +62,11 @@ on:
         required: false
         type: string
         default: ""
+      baseline_npm:
+        description: "  addon@baseline version (several-sources build comparison). Empty = AUTO-DETECT the latest published @qvac/llm-llamacpp release; set e.g. 0.22.1 to pin a specific older version. Pair with -f ref=<sha|branch> to set addon@candidate."
+        required: false
+        type: string
+        default: ""
 permissions:
   contents: read
   packages: read
@@ -128,6 +133,7 @@ jobs:
         shell: bash
         env:
           INPUT_MIN: ${{ inputs.mobile_timeout_min }}
+          INPUT_BASELINE_NPM: ${{ inputs.baseline_npm }}
         run: |
           min="$INPUT_MIN"
           if [ -z "$min" ]; then
@@ -147,12 +153,25 @@ jobs:
             echo "pertest_min=" >> "$GITHUB_OUTPUT"
             echo "Mobile timeout: pipeline default (35-min Mocha / 30-min Android per-test)"
           fi
-          # Baseline addon version (config.defaultBaseline.npm) — the pinned published
-          # build the baseline source uses (mobile baseline session bundles it from npm;
-          # desktop baseline packs it). Candidate uses the freshly-built prebuild instead.
-          baseline_npm=$(node -e 'try{const c=require("./packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs");process.stdout.write((c.defaultBaseline&&c.defaultBaseline.npm)||"")}catch(e){}' || true)
+          # addon@baseline version (the build comparison reference; candidate uses the
+          # freshly-built prebuild instead). Resolution order:
+          #   1. explicit baseline_npm input (pin a specific version), else
+          #   2. AUTO-DETECT the latest published release — @qvac/llm-llamacpp is public, so
+          #      `npm view` needs no token, and resolving the concrete version here keeps
+          #      desktop pack + mobile bundle + the report on the SAME number, else
+          #   3. config.defaultBaseline.npm as an offline fallback (registry unreachable).
+          baseline_npm="$INPUT_BASELINE_NPM"
+          baseline_src="pinned input"
+          if [ -z "$baseline_npm" ]; then
+            baseline_npm=$(npm view @qvac/llm-llamacpp version 2>/dev/null || true)
+            baseline_src="latest published (auto)"
+          fi
+          if [ -z "$baseline_npm" ]; then
+            baseline_npm=$(node -e 'try{const c=require("./packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs");process.stdout.write((c.defaultBaseline&&c.defaultBaseline.npm)||"")}catch(e){}' || true)
+            baseline_src="config fallback"
+          fi
           echo "baseline_npm=$baseline_npm" >> "$GITHUB_OUTPUT"
-          echo "Baseline addon: ${baseline_npm:-<none>}"
+          echo "Baseline addon: @qvac/llm-llamacpp@${baseline_npm:-<none>} — ${baseline_src}"
       - id: dmatrix
         shell: bash
         env:
@@ -451,8 +470,11 @@ jobs:
         if: contains(inputs.matrix_sources, 'addon@baseline')
         working-directory: ${{ env.WORKDIR }}
         shell: bash
+        env:
+          # Resolved by the context job (latest published / pinned input / config fallback).
+          BASELINE_VER: ${{ needs.context.outputs.baseline_npm }}
         run: |
-          BASELINE_VER=$(node -e "console.log(require('./benchmarks/vlm-benchmark/config.cjs').defaultBaseline.npm)")
+          if [ -z "$BASELINE_VER" ]; then BASELINE_VER=$(node -e "console.log(require('./benchmarks/vlm-benchmark/config.cjs').defaultBaseline.npm)"); fi
           echo "baseline @qvac/llm-llamacpp@$BASELINE_VER"
           npm pack "@qvac/llm-llamacpp@$BASELINE_VER"
           rm -rf builds/baseline

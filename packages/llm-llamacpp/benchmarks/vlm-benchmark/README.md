@@ -63,7 +63,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | **several-sources — engine** | ✅ | ❌ | `… -f matrix_sources=addon,fabric,upstream` | addon vs native llama.cpp CLIs. **Desktop only** — CLIs are native binaries; mobile runs an addon app. |
 | `addon` source | ✅ | ✅ | `-f matrix_sources=addon` | The published npm prebuild. |
 | `addon@candidate` | ✅ | ✅ | `…@candidate` + `-f ref=<branch\|tag\|sha>` | Built from `ref` (triggers `prebuild-candidate`). Desktop swaps the prebuild; mobile bundles it. |
-| `addon@baseline` | ✅ | ✅ | `…@baseline` | Pinned npm version `config.defaultBaseline.npm`. |
+| `addon@baseline` | ✅ | ✅ | `…@baseline` | **Latest published npm release, auto-detected** at run time. Pin a specific version with `-f baseline_npm=<ver>`; `config.defaultBaseline.npm` is only an offline fallback. |
 | `fabric` / `upstream` CLI | ✅ | ❌ | `fabric[@ref]`, `upstream[@ref]` | Native `llama-mtmd-cli`, built per-OS. `ref` = release **tag**, **branch**, or **full 40-char commit SHA**. |
 | **Auto version parity** | ✅ | n/a | bare `fabric`/`upstream` (no `@ref`) | Auto-picks the **most recent llama.cpp build all requested sources support** (addon's `qvac-fabric` vcpkg pin is the ceiling) and pins everything to it → apples-to-apples by default. |
 | **Manual version** | ✅ | n/a | any explicit `@ref` | Refs used as given (builds may differ). Report's **Engine versions** table labels it *set manually* (no warning). |
@@ -155,13 +155,15 @@ gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
   -f matrix_models="qwen3.5-q8,challenger=https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/NewVLM-Q4_K_M.gguf|https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/mmproj-F16.gguf" \
   -f matrix_desktop=linux-cpu,linux-gpu,macos-gpu -f matrix_mobile=s25-cpu,iphone17pro
 
-# candidate-vs-baseline: validate an UNMERGED change vs the published build
+# candidate-vs-baseline: validate any commit/branch vs the latest published build
 gh workflow run benchmark-vlm-model-comparison.yml \
   --ref qvac-19371-vlm-benchmark-improve \            # branch hosting the benchmark workflow
   -f matrix_mode=several-sources \
   -f matrix_sources=addon@candidate,addon@baseline \
-  -f ref=<branch|tag|commit-sha> \                    # built as addon@candidate
+  -f ref=<branch|tag|commit-sha> \                    # addon@candidate, built from this ref
   -f matrix_models=qwen3.5-q8 -f matrix_preset=full -f matrix_desktop=linux-cpu
+# addon@baseline auto-resolves to the LATEST published npm release — nothing to pin.
+# To compare against a specific older release instead, add: -f baseline_npm=0.22.1
 ```
 
 `prebuild-candidate` builds the **full platform matrix** from `ref`; a non-linux build

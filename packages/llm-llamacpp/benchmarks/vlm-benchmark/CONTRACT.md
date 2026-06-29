@@ -67,8 +67,9 @@ set today). Config-only: there is no `matrix_scenarios` dispatch input (local ov
 the `QVAC_VLM_SCENARIOS` env still works).
 
 **`matrix_desktop` / `matrix_mobile` / `matrix_preset` / …** — unchanged (see README).
-GitHub caps `workflow_dispatch` at **10 inputs**; the benchmark now uses **9**, so one slot
-is free (the vestigial `run_matrix` switch was removed — the matrix always runs).
+GitHub caps `workflow_dispatch` at **10 inputs**, and the benchmark now uses all **10**
+(the vestigial `run_matrix` switch was removed — the matrix always runs — and that slot
+was reclaimed by `baseline_npm`, which pins `addon@baseline`; empty = auto-detect latest).
 
 ## 4 · Quality reporting (no gate)
 

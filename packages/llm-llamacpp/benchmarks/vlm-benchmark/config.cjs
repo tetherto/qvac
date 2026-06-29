@@ -145,8 +145,9 @@ module.exports = {
     fabric: { type: 'fabric-cli', ref: 'v8189.0.2' },
     upstream: { type: 'upstream-cli', ref: 'b8189' }
   },
-  // The published addon version used as `addon@baseline` when a model has no
-  // per-catalog-entry `baseline` pin. Bump deliberately.
+  // Offline FALLBACK for addon@baseline only. The benchmark workflow auto-detects the
+  // latest published @qvac/llm-llamacpp release at run time (or honours the `baseline_npm`
+  // dispatch input); this pin is used solely if that registry lookup fails.
   defaultBaseline: { npm: '0.24.0' },
 
   // ════════════════════════ SCENARIOS — the task set ════════════════════════
