@@ -1,6 +1,6 @@
 {
   "name": "qvac-fabric",
-  "version": "9341.0.0",
+  "version": "9341.1.0",
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
