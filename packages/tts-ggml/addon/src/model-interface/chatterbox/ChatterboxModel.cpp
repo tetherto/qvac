@@ -277,14 +277,10 @@ void ChatterboxModel::loadLocked() {
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
 
-  // Chatterbox declines ARM Mali/Immortalis (Valhall) by policy
-  // (tts-cpp init_backend passes allow_arm_mali=false because the T3
-  // graph hits the Valhall mul_mat bug) and falls back to CPU. That is a
-  // legitimate "GPU present but unused", not a regression — surface it via
-  // gpuUnsupported so gpu-smoke's allowPolicyCpu path accepts the CPU
-  // fallback on Mali while a genuine GPU->CPU fallback on any other vendor
-  // (no Mali device enumerated) still fails CI. OR (not replace) the engine
-  // flag so a future-correct engine reading keeps working.
+  // tts-cpp now admits Chatterbox onto ARM Mali/Immortalis Vulkan
+  // (allow_arm_mali=true). gpuUnsupported_ stays as defensive observability: it
+  // flags a "GPU present but unused" case if any engine falls back to CPU,
+  // OR-ed (not replacing) the engine flag.
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);

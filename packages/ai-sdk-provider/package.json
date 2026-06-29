@@ -68,7 +68,9 @@
     "check-models": "tsx ./models/update-models/index.ts --check",
     "update-models": "tsx ./models/update-models/index.ts",
     "check": "npm run lint && npm run format && npm run typecheck",
-    "test:unit": "tsx --test test/*.test.ts"
+    "test:unit": "tsx --test test/*.test.ts",
+    "test:e2e": "npm run test:integration",
+    "test:integration": "tsx --test test/managed-integration.test.ts"
   },
   "peerDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",

@@ -248,8 +248,8 @@ jobs:
       # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
       # model-type/backend shouldn't sink the whole leg). But a run that produced
       # ZERO artifacts means every entry failed and must still fail loudly —
-      # mirrors the "Verify benchmark output exists" gate in
-      # benchmark-rtf-tts-ggml.yml.
+      # mirrors the "Verify benchmark output exists" gate in the TTS GGML
+      # performance benchmark path.
       - name: Verify RTF benchmark output exists
         if: ${{ always() && inputs.run_rtf_benchmarks }}
         shell: bash

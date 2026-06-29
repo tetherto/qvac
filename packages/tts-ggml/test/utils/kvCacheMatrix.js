@@ -158,10 +158,10 @@ async function loadChatterbox ({ variant, modelDir, refWavPath, language, useGPU
   return model
 }
 
-// Mirrors gpu-smoke.test.js::assertGpuBackend; kept here so the matrix
-// harness is self-contained.  `allowPolicyCpu` lets a vendor tts-cpp
-// declines (e.g. Chatterbox on ARM Mali, gpuUnsupported=1) count as a pass.
-function assertGpuEngaged (t, tag, stats, allowPolicyCpu = true) {
+// Mirrors gpu-smoke.test.js::assertGpuBackend; kept here so the matrix harness
+// is self-contained.  `allowPolicyCpu` would let a CPU fallback on a declined
+// vendor pass — but Chatterbox now runs on Mali GPU, so it defaults to strict.
+function assertGpuEngaged (t, tag, stats, allowPolicyCpu = false) {
   if (!stats) {
     t.fail(`${tag}: no response.stats returned (cannot verify backend)`)
     return
@@ -194,7 +194,7 @@ function assertGpuEngaged (t, tag, stats, allowPolicyCpu = true) {
 // Run one synth to completion and assert it produced audio.  Surviving this
 // call at all is the core regression signal: a q8_0 CONT abort on Metal would
 // have SIGABRT'd the process before we got here.
-async function assertSynthesisCompletes (t, model, { tag, text, language, minSamples = 2000, expectGpu = false, allowPolicyCpu = true }) {
+async function assertSynthesisCompletes (t, model, { tag, text, language, minSamples = 2000, expectGpu = false, allowPolicyCpu = false }) {
   const result = await runTTS(
     model,
     { text: text || textFor(language) },

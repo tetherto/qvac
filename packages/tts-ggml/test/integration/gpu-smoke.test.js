@@ -30,7 +30,7 @@ const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureChatterboxMtlModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureChatterboxMtlModels, ensureSupertonicModel, ensureSupertonicMtlModel, ensureSupertonic3Model } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
@@ -84,9 +84,9 @@ function assertGpuBackend (t, engineTag, stats, allowPolicyCpu = false) {
     return
   }
 
-  // Engines tts-cpp declines on a given vendor (e.g. Chatterbox on Mali,
-  // allow_arm_mali=false) legitimately fall back to CPU and flag it via
-  // stats.gpuUnsupported. That is the correct result there, not a GPU regression.
+  // allowPolicyCpu hatch: an engine tts-cpp declines on a vendor would fall back
+  // to CPU and flag stats.gpuUnsupported. Chatterbox now runs on Mali GPU, so all
+  // callers assert strictly; the hatch stays for any future declined engine.
   if (allowPolicyCpu && dev === 0 && stats.gpuUnsupported) {
     t.pass(`${engineTag}/${platform}: GPU present but declined by policy (gpuUnsupported=1); correctly using CPU`)
     return
@@ -180,7 +180,7 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ true)
+    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ false)
     recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
@@ -235,7 +235,7 @@ test('Chatterbox MTL GPU smoke - multilingual model on GPU with the default (f16
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox MTL/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox MTL/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ true)
+    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ false)
     recordSmoke(t, 'chatterbox-mtl gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
@@ -277,6 +277,83 @@ test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     t.ok(result.data.sampleCount > 0, 'Supertonic/GPU produced audio')
     assertGpuBackend(t, 'Supertonic', result.data.stats)
     recordSmoke(t, 'supertonic gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+// Supertonic 2 (multilingual) GPU smoke. The Supertonic GPU smoke above
+// loads v1; v2 ships as a separate GGUF (supertonic2.gguf) with its own
+// weights, so it needs its own GPU coverage. Strict assertion, matching the
+// v1 entry — useGPU=true must engage the GPU backend on GPU-capable platforms
+// (Metal / Vulkan / CUDA / OpenCL), no silent CPU fallback.
+test('Supertonic 2 GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureSupertonicMtlModel({ targetDir: modelsDir })
+  if (!download || !download.success) {
+    t.fail('Supertonic 2 GGUF not available - registry fetch failed. Run `npm run download-models:registry -- --group supertonic2` or stage models locally.')
+    return
+  }
+
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: download.path,
+    language: 'en',
+    voice: 'F1',
+    useGPU: true
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runSupertonicTTS(
+      model,
+      { text: 'GPU smoke check for Supertonic 2.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Supertonic2/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Supertonic2/GPU produced audio')
+    assertGpuBackend(t, 'Supertonic2', result.data.stats)
+    recordSmoke(t, 'supertonic2 gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+// Supertonic 3 GPU smoke. v3 ships in multiple quant tiers (f16/f32/q8_0/q4_0);
+// the GPU smoke runs the q4_0 tier (the on-device shipping default) so the
+// quantised-weight Metal/Vulkan path is exercised — the same class of path that
+// surfaced the Chatterbox q8_0 Metal CONT abort. Strict assertion.
+test('Supertonic 3 GPU smoke (q4_0) - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureSupertonic3Model({ targetDir: modelsDir, quant: 'q4_0' })
+  if (!download || !download.success) {
+    t.fail('Supertonic 3 q4_0 GGUF not available - registry fetch failed. Run `npm run download-models:registry -- --group supertonic3` or stage models locally.')
+    return
+  }
+
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: download.path,
+    language: 'en',
+    voice: 'F1',
+    useGPU: true
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runSupertonicTTS(
+      model,
+      { text: 'GPU smoke check for Supertonic 3.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Supertonic3/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Supertonic3/GPU produced audio')
+    assertGpuBackend(t, 'Supertonic3', result.data.stats)
+    recordSmoke(t, 'supertonic3 q4_0 gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }

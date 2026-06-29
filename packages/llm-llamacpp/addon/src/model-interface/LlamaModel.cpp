@@ -1057,6 +1057,42 @@ void LlamaModel::commonParamsParse(
     }
   }
 
+  // parse image-max-tokens / image-min-tokens (override Qwen-VL default caps)
+  for (const std::string& key : {"image-max-tokens", "image_max_tokens"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      try {
+        params.image_max_tokens = std::stoi(it->second);
+      } catch (...) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-max-tokens must be an integer, got: %s",
+                it->second.c_str()));
+      }
+      configFilemap.erase(it);
+      break;
+    }
+  }
+  for (const std::string& key : {"image-min-tokens", "image_min_tokens"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      try {
+        params.image_min_tokens = std::stoi(it->second);
+      } catch (...) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-min-tokens must be an integer, got: %s",
+                it->second.c_str()));
+      }
+      configFilemap.erase(it);
+      break;
+    }
+  }
+
   // parse custom nDiscarded from config (apply only if > 0)
   if (auto iter = configFilemap.find("n_discarded");
       iter != configFilemap.end()) {
