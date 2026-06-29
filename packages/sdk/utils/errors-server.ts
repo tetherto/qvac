@@ -731,6 +731,9 @@ export class ChecksumValidationFailedError extends QvacErrorBase {
 }
 
 export class HTTPError extends QvacErrorBase {
+  /** HTTP status code; `0` denotes a connection/network failure (no response). */
+  readonly httpStatus: number;
+
   constructor(status: number, statusText: string, cause?: unknown) {
     super(
       createErrorOptions(
@@ -739,6 +742,7 @@ export class HTTPError extends QvacErrorBase {
         cause,
       ),
     );
+    this.httpStatus = status;
   }
 }
 
