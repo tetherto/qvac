@@ -323,25 +323,6 @@ const SINGLE_FILE_MANIFEST = [
     sha256: '921dc7e259f308e5b027111fa185efcbf33db13f6e35749ddf7f5cdb60ef520b'
   },
   {
-    // Qwen2-VL uses M-RoPE (n_pos_per_embd() == 4), unlike SmolVLM (== 1), so it
-    // is the smallest reputable fixture that actually exercises per-cell
-    // llama_kv_cell_ext (x/y) preservation across GGSQ cache save/restore.
-    // linux-x64 only: it is large (~1.6GiB total) and the MTMD M-RoPE cache
-    // test GTEST_SKIPs elsewhere when the fixture is absent.
-    scope: 'ci',
-    platforms: ['linux-x64'],
-    url: 'https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf',
-    dest: 'Qwen2-VL-2B-Instruct-Q4_K_M.gguf',
-    sha256: '5745685d2e607a82a0696c1118e56a2a1ae0901da450fd9cd4f161c6b62867d7'
-  },
-  {
-    scope: 'ci',
-    platforms: ['linux-x64'],
-    url: 'https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf',
-    dest: 'mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf',
-    sha256: 'a0ad91f00a7a80dcf84d719a61b00ee2e07b71794f4ee2dfa81a254621a8c418'
-  },
-  {
     scope: 'ci',
     url: 'https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf',
     dest: 'Qwen3-0.6B-Q8_0.gguf',

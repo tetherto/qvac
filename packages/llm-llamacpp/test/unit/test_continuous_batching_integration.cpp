@@ -1728,34 +1728,41 @@ TEST_F(
 // GGSQ unification (sub-tasks 2 + 3): the batch multimodal path must support
 // prompt caching on GGSQ. Today MtmdLlmContext::saveCache throws, so a batched
 // media prompt with saveCacheToDisk writes no cache and this fails. The fixture
-// is Qwen2-VL (M-RoPE, n_pos_per_embd()==4) so a successful save+reload round
+// is Qwen3.5 (M-RoPE, n_pos_per_embd()==4) so a successful save+reload round
 // trip actually exercises per-cell llama_kv_cell_ext (x/y) restore — SmolVLM
-// (n_pos_per_embd()==1) could not. The reload pass does not just assert the
-// cache loads: it asks a follow-up that depends on the cached image and checks
-// the answer still names the image subject, so a cache that reloads but
-// restores corrupt/incomplete image KV fails. linux-x64 only; GTEST_SKIP when
-// absent.
+// (n_pos_per_embd()==1) could not. Its image prefill commits far more KV cells
+// (~2899) than positions (~90), so the round trip really exercises the M-RoPE
+// per-cell x/y metadata. The reload pass does not just assert the cache loads:
+// it asks a follow-up that depends on the cached image and checks the answer
+// still names the image subject, so a cache that reloads but restores
+// corrupt/incomplete image KV fails. The fixture is fetched on every platform
+// by scripts/download-unit-test-models.js; GTEST_SKIP when it is absent.
 TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
-  const std::string vlmPath = test_common::BaseTestModelPath::get(
-      "Qwen2-VL-2B-Instruct-Q4_K_M.gguf", "Qwen2-VL-2B-Instruct.gguf");
-  const std::string mmprojPath = test_common::BaseTestModelPath::get(
-      "mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
-      "mmproj-Qwen2-VL-2B-Instruct.gguf");
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
   if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
-    GTEST_SKIP() << "Qwen2-VL M-RoPE fixture not found (linux-x64 only)";
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
   }
   const std::vector<uint8_t> image = readElephantImage();
   ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
 
   const fs::path cachePath = fs::temp_directory_path() /
-                             ("qwen2vl-mrope-cache-" + uniqueTestId() + ".bin");
+                             ("qwen35-mrope-cache-" + uniqueTestId() + ".bin");
 
   auto makeModel = [&] {
     std::string path = vlmPath;
     std::string projection = mmprojPath;
     auto cfg = config_;
-    cfg["ctx_size"] = "2048";
-    cfg["n_predict"] = "16";
+    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE: cells >> positions),
+    // so the round trip needs the 4096 the Qwen3.5 mtmd unit tests use.
+    cfg["ctx_size"] = "4096";
+    // Qwen3.5 is a reasoning model; without this it spends the whole n_predict
+    // budget on chain-of-thought and never reaches the one-word answer. 0
+    // disables thinking so the subject keyword fits, as the VLM perf tests do.
+    cfg["reasoning-budget"] = "0";
+    cfg["n_predict"] = "32";
     auto m = std::make_unique<LlamaModel>(
         std::move(path), std::move(projection), std::move(cfg));
     m->waitForLoadInitialization();
