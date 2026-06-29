@@ -59,6 +59,7 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { MobileDownloadResilienceExecutor } from "./executors/download-resilience-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
@@ -338,19 +339,54 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
-async function ensureMobileE2EConfig() {
+// The download-resilience HTTP test reaches flaky-lan-server.mjs on the desktop,
+// which is the same machine as the MQTT broker. consumer-config.ts is generated
+// at the app root at build time (3 levels up from dist/tests/mobile/, like
+// assets.ts) and carries the resolved broker host. It is absent in the source
+// tree, so resolve it lazily and tolerate its absence (desktop/electron builds).
+function resolveBakedMqttHost(): string | undefined {
+  try {
+    // @ts-ignore - generated at mobile build time, not present in the source tree
+    const cfg = require("../../../consumer-config");
+    const host = cfg?.config?.mqtt?.host;
+    return typeof host === "string" && host.length > 0 ? host : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// A download-resilience-only run needs a short registryStreamTimeoutMs so
+// registry-suspend forces a stream timeout → retry → reconnect (the fix path).
+// Mobile P2P block latency is far higher than desktop, so it uses its own
+// fixture with a forgiving 8s timeout (vs desktop's 1s); the executor's suspend
+// window is set well above it so the reconnect still reliably triggers. Any
+// broader run keeps the default config, since a short timeout breaks normal
+// model downloads.
+function isResilienceOnlyRun(filteredTests?: TestDefinition[]): boolean {
+  return (
+    !!filteredTests &&
+    filteredTests.length > 0 &&
+    filteredTests.every((t) => t.testId.startsWith("download-resilience-"))
+  );
+}
+
+async function ensureMobileE2EConfig(useResilienceConfig: boolean) {
   const env = typeof process !== "undefined" ? process.env : undefined;
   if (env?.["QVAC_CONFIG_PATH"]) {
     console.log(`📦 Mobile e2e config: QVAC_CONFIG_PATH already set to ${env["QVAC_CONFIG_PATH"]}, skipping write`);
     return;
   }
 
+  const fixtureName = useResilienceConfig
+    ? "qvac.config.e2e.resilience.mobile.json"
+    : "qvac.config.e2e.json";
+
   // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
   const assets = await import("../../../assets");
-  const qvacE2EConfig = assets.other?.["qvac.config.e2e.json"];
+  const qvacE2EConfig = assets.other?.[fixtureName];
   if (!qvacE2EConfig || typeof qvacE2EConfig !== "object") {
     throw new Error(
-      "qvac.config.e2e.json fixture not found in mobile assets — ensure ./fixtures/**/* is listed in qvac-test.config.js mobile.assets.patterns",
+      `${fixtureName} fixture not found in mobile assets — ensure ./fixtures/**/* is listed in qvac-test.config.js mobile.assets.patterns`,
     );
   }
 
@@ -363,13 +399,13 @@ async function ensureMobileE2EConfig() {
   await configFile.write(`${JSON.stringify(qvacE2EConfig, null, 2)}\n`);
   const cfg = qvacE2EConfig as Record<string, unknown>;
   console.log(
-    `📦 Mobile e2e config written to ${configFile.uri} ` +
+    `📦 Mobile e2e config written to ${configFile.uri} from ${fixtureName} ` +
     `(registryStreamTimeoutMs=${cfg["registryStreamTimeoutMs"]}, registryDownloadMaxRetries=${cfg["registryDownloadMaxRetries"]})`,
   );
 }
 
 export async function bootstrap(filteredTests?: TestDefinition[]) {
-  await ensureMobileE2EConfig();
+  await ensureMobileE2EConfig(isResilienceOnlyRun(filteredTests));
 
   // `filteredTests` (when present) is the producer's post-filter test list
   // delivered via register-ack; absence keeps the legacy "warm everything" path.
@@ -391,16 +427,6 @@ export const executor = createExecutor({
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
     new SkipExecutor(/^bci-/, "BCI addon tests are desktop-only until mobile support is enabled"),
-    // suspend() hangs the test runner on mobile (the lifecycle coordinator
-    // pauses MQTT/network ops and never resumes within the test timeout).
-    // Only resume-idempotent is safe -- it does not call suspend().
-    skipTests([
-      "lifecycle-suspend-resume-basic",
-      "lifecycle-suspend-idempotent",
-      "lifecycle-suspend-resume-inference",
-      "lifecycle-rapid-toggle",
-      "lifecycle-suspend-during-inference",
-    ], "suspend() hangs the runner on mobile"),
     ...(Platform.OS === "android" ? [
       skipTests([
         "parakeet-stream-eou",
@@ -454,6 +480,7 @@ export const executor = createExecutor({
     new MobileParakeetStreamExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
+    new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
