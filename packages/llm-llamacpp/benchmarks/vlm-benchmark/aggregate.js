@@ -143,13 +143,23 @@ function bleuOne (p, g) {
   return bp * Math.exp(logsum / 4)
 }
 // Best (most charitable) over the gold alternatives: min error, max overlap.
+// CER/WER are edit-distance ratios that exceed 1.0 when the model OVER-generates — a
+// repetition loop emits more wrong text than the gold is long (we've seen raw CER 1.29 /
+// WER 2.16 from a stuck table loop). Clamp each item at 1.0: you can never do worse than
+// emitting nothing (empty pred = exactly 1.0), so a single degenerate doc can't dominate the
+// arithmetic mean and swamp the bounded BLEU. The raw overflow is surfaced as a `deg` flag so
+// a looping model stays visible rather than silently capped. Together with BLEU (precision +
+// brevity), the clamped triple rewards a model that emits MORE correct and LESS wrong text.
 function ocrScore (pred, golds) {
   const p = ocrNorm(pred); const gs = (golds || []).map(ocrNorm).filter(Boolean)
-  if (!gs.length) return { cer: null, wer: null, bleu: null }
+  if (!gs.length) return { cer: null, wer: null, bleu: null, deg: false }
+  const rawCer = Math.min(...gs.map(g => cerOne(p, g)))
+  const rawWer = Math.min(...gs.map(g => werOne(p, g)))
   return {
-    cer: Math.min(...gs.map(g => cerOne(p, g))),
-    wer: Math.min(...gs.map(g => werOne(p, g))),
-    bleu: Math.max(...gs.map(g => bleuOne(p, g)))
+    cer: Math.min(1, rawCer),
+    wer: Math.min(1, rawWer),
+    bleu: Math.max(...gs.map(g => bleuOne(p, g))),
+    deg: rawCer > 1 || rawWer > 1
   }
 }
 
@@ -321,9 +331,9 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   function ocrGroup (key) {
     const rs = (byKey[key] || []).filter(r => OCR_METRICS.has(r.metric) && !r.error)
     if (!rs.length) return null
-    const cs = []; const ws = []; const bs = []
-    for (const r of rs) { const o = ocrScore(r.pred, r.gold); if (o.cer != null) { cs.push(o.cer); ws.push(o.wer); bs.push(o.bleu) } }
-    return { cer: mean(cs), wer: mean(ws), bleu: mean(bs), n: rs.length }
+    const cs = []; const ws = []; const bs = []; let deg = 0
+    for (const r of rs) { const o = ocrScore(r.pred, r.gold); if (o.cer != null) { cs.push(o.cer); ws.push(o.wer); bs.push(o.bleu); if (o.deg) deg++ } }
+    return { cer: mean(cs), wer: mean(ws), bleu: mean(bs), n: rs.length, deg }
   }
   const OCR_ROWS = [{ k: 'cer', label: 'CER ↓' }, { k: 'wer', label: 'WER ↓' }, { k: 'bleu', label: 'BLEU ↑' }]
 
@@ -590,22 +600,30 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   if (ocrTasks.length) {
     const ocrAgg = (cell, t, host, dev) => {
       const rs = rows.filter(r => r.cell === cell && r.task === t && (r.__host || '') === host && r.device === dev && !r.error)
-      const cs = []; const ws = []; const bs = []
-      for (const r of rs) { const o = ocrScore(r.pred, r.gold); if (o.cer != null) { cs.push(o.cer); ws.push(o.wer); bs.push(o.bleu) } }
-      return { cer: mean(cs), wer: mean(ws), bleu: mean(bs), n: rs.length }
+      const cs = []; const ws = []; const bs = []; let deg = 0
+      for (const r of rs) { const o = ocrScore(r.pred, r.gold); if (o.cer != null) { cs.push(o.cer); ws.push(o.wer); bs.push(o.bleu); if (o.deg) deg++ } }
+      return { cer: mean(cs), wer: mean(ws), bleu: mean(bs), n: rs.length, deg }
     }
     L.push('### OCR — text recognition (CER ↓ / WER ↓ lower better · BLEU ↑ higher better)\n')
-    L.push('| Task | Config | host | CER ↓ | WER ↓ | BLEU ↑ |')
-    L.push('|---|---|---|---|---|---|')
+    L.push('| Task | Config | host | CER ↓ | WER ↓ | BLEU ↑ | loops |')
+    L.push('|---|---|---|---|---|---|---|')
+    let anyDeg = false
     for (const t of ocrTasks) {
       for (const k of keys) {
         const [host, cell, dev] = k.split('|')
         const o = ocrAgg(cell, t, host, dev)
         if (!o.n) continue
-        L.push(`| ${taskLabel(t)} | \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${fmtNum(o.cer, 3)} | ${fmtNum(o.wer, 3)} | ${fmtNum(o.bleu, 3)} |`)
+        if (o.deg) anyDeg = true
+        L.push(`| ${taskLabel(t)} | \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${fmtNum(o.cer, 3)} | ${fmtNum(o.wer, 3)} | ${fmtNum(o.bleu, 3)} | ${o.deg ? '⚠ ' + o.deg + '/' + o.n : '—'} |`)
       }
     }
     L.push('')
+    if (anyDeg) {
+      L.push('> **loops** counts items where the model over-generated — raw CER/WER > 1.0 ' +
+        '(more wrong text than the gold is long, e.g. a repetition loop). Those items are clamped ' +
+        'to 1.0 in CER/WER so one degenerate doc cannot dominate the average; the flag keeps the ' +
+        'degeneration visible.\n')
+    }
   }
   L.push('### Speed\n')
   L.push('| Config | host | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | encode TPS | decode TPS | gen (ms) | wall (ms) |')
