@@ -14,7 +14,7 @@ const SUPPORTED_CLI_HOSTS: ReadonlyArray<string> = [
   'win32-x64'
 ]
 
-function parseNodeMajor (version: string): number | null {
+function parseNodeMajor(version: string): number | null {
   const match = /^v?(\d+)\./.exec(version)
   if (!match || match[1] === undefined) return null
   const n = Number.parseInt(match[1], 10)

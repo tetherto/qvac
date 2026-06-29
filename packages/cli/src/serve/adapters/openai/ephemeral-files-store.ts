@@ -26,7 +26,11 @@ export interface EphemeralFilesStoreOptions {
 
 export interface EphemeralFilesStore {
   /** Store bytes and return an OpenAI-shaped `file-…` id. */
-  put: (record: Omit<EphemeralFileRecord, 'createdAtMs' | 'expiresAtMs' | 'contentType'> & { contentType?: string }) => string
+  put: (
+    record: Omit<EphemeralFileRecord, 'createdAtMs' | 'expiresAtMs' | 'contentType'> & {
+      contentType?: string
+    }
+  ) => string
   /** Return the record if present; does not remove. */
   get: (id: string) => EphemeralFileRecord | null
   /** Return all current records (newest first), without their bytes. */
@@ -39,7 +43,7 @@ const DEFAULT_MAX_BYTES = 256 * 1024 * 1024
 const DEFAULT_MAX_FILES = 256
 const DEFAULT_TTL_MS = 60 * 60 * 1000
 
-export function createEphemeralFilesStore (
+export function createEphemeralFilesStore(
   nowMs: () => number = () => Date.now(),
   options: EphemeralFilesStoreOptions = {}
 ): EphemeralFilesStore {
@@ -50,28 +54,25 @@ export function createEphemeralFilesStore (
 
   const map = new Map<string, EphemeralFileRecord>()
 
-  function totalBytes (): number {
+  function totalBytes(): number {
     let n = 0
     for (const rec of map.values()) n += rec.data.length
     return n
   }
 
-  function evict (id: string, reason: EphemeralFileEvictReason): void {
+  function evict(id: string, reason: EphemeralFileEvictReason): void {
     if (!map.delete(id)) return
     if (onEvict) onEvict(id, reason)
   }
 
-  function evictExpired (now: number): void {
+  function evictExpired(now: number): void {
     if (ttlMs <= 0) return
     for (const [id, rec] of map.entries()) {
       if (now - rec.createdAtMs > ttlMs) evict(id, 'ttl')
     }
   }
 
-  function evictOldestUntil (
-    predicate: () => boolean,
-    reason: EphemeralFileEvictReason
-  ): void {
+  function evictOldestUntil(predicate: () => boolean, reason: EphemeralFileEvictReason): void {
     if (predicate()) return
     const ids = Array.from(map.entries())
       .sort((a, b) => a[1].createdAtMs - b[1].createdAtMs)
@@ -83,7 +84,7 @@ export function createEphemeralFilesStore (
   }
 
   return {
-    put (record) {
+    put(record) {
       const now = nowMs()
       evictExpired(now)
       const id = `file-${randomBytes(12).toString('hex')}`
@@ -99,7 +100,7 @@ export function createEphemeralFilesStore (
       evictOldestUntil(() => totalBytes() <= maxBytes, 'max_bytes')
       return id
     },
-    get (id) {
+    get(id) {
       const rec = map.get(id)
       if (!rec) return null
       if (rec.expiresAtMs !== null && nowMs() > rec.expiresAtMs) {
@@ -108,12 +109,12 @@ export function createEphemeralFilesStore (
       }
       return rec
     },
-    list () {
+    list() {
       return Array.from(map.entries())
         .map(([id, record]) => ({ id, record }))
         .sort((a, b) => b.record.createdAtMs - a.record.createdAtMs)
     },
-    remove (id) {
+    remove(id) {
       map.delete(id)
     }
   }

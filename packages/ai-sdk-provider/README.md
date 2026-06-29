@@ -5,6 +5,7 @@
 QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
 > **Status — `0.2.0`.** Two modes:
+>
 > - **External** (default): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
 > - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
 >
@@ -55,7 +56,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac'                         // anything non-empty; serve does not validate
+  apiKey: 'qvac' // anything non-empty; serve does not validate
 })
 
 const { textStream } = streamText({
@@ -71,11 +72,11 @@ for await (const chunk of textStream) {
 The provider exposes the same surface as any AI SDK provider:
 
 ```ts
-qvac('qwen3-600m')                     // language model (chat)
-qvac.chatModel('qwen3-600m')           // explicit chat model
-qvac.completionModel('qwen3-600m')     // legacy completion
+qvac('qwen3-600m') // language model (chat)
+qvac.chatModel('qwen3-600m') // explicit chat model
+qvac.completionModel('qwen3-600m') // legacy completion
 qvac.textEmbeddingModel('embed-gemma') // text embeddings
-qvac.imageModel('flux-schnell')        // image generation
+qvac.imageModel('flux-schnell') // image generation
 ```
 
 ---
@@ -128,22 +129,22 @@ interface QvacManagedOptions {
   // SDK model constant names, or per-model spec objects (see below). The first
   // entry is the default alias unless one sets `default: true`.
   models: (string | QvacManagedModel)[]
-  servePort?: number             // default: auto-allocate a free port
-  serveHost?: string             // default: '127.0.0.1' (loopback only)
-  serveStartTimeout?: number     // ms to wait for health; default: 180000
-  serveBinPath?: string          // override the `qvac` binary; default: resolve @qvac/cli
-  reuse?: boolean                // share/reuse a matching serve; default: true (false if servePort is pinned)
-  serveIdleTimeout?: number      // ms to keep a shared serve after its last user exits; default: 300000
-  apiKey?: string                // default: 'qvac'
+  servePort?: number // default: auto-allocate a free port
+  serveHost?: string // default: '127.0.0.1' (loopback only)
+  serveStartTimeout?: number // ms to wait for health; default: 180000
+  serveBinPath?: string // override the `qvac` binary; default: resolve @qvac/cli
+  reuse?: boolean // share/reuse a matching serve; default: true (false if servePort is pinned)
+  serveIdleTimeout?: number // ms to keep a shared serve after its last user exits; default: 300000
+  apiKey?: string // default: 'qvac'
   headers?: Record<string, string>
   fetch?: typeof fetch
 }
 
 interface QvacManagedModel {
-  name: string                       // SDK model constant name
-  config?: Record<string, unknown>   // per-model serve config (ctx_size, reasoning_budget, …)
-  preload?: boolean                  // load at startup; default: true
-  default?: boolean                  // make this the default alias (at most one model)
+  name: string // SDK model constant name
+  config?: Record<string, unknown> // per-model serve config (ctx_size, reasoning_budget, …)
+  preload?: boolean // load at startup; default: true
+  default?: boolean // make this the default alias (at most one model)
 }
 ```
 
@@ -158,7 +159,11 @@ const qvac = await createQvac({
   mode: 'managed',
   models: [
     // Agent-capable chat model with a large context window and no reasoning budget.
-    { name: 'GPT_OSS_20B_INST_Q4_K_M', config: { ctx_size: 32768, reasoning_budget: 0 }, default: true },
+    {
+      name: 'GPT_OSS_20B_INST_Q4_K_M',
+      config: { ctx_size: 32768, reasoning_budget: 0 },
+      default: true
+    },
     // A smaller utility model, loaded lazily, for titles/summaries.
     { name: 'QWEN3_1_7B_INST_Q4', config: { ctx_size: 8192 }, preload: false }
   ]
@@ -171,9 +176,9 @@ Without this, every model uses `qvac serve`'s defaults — and the default `ctx_
 
 Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that opening multiple sessions — or several tools at once — doesn't spawn a serve (and reload models into memory) for each one.
 
-- **Fleet key & reuse.** Each managed provider derives a *fleet key* from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, host, or `qvac` binary) each get their own.
-- **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). A *consumer* is a process that called `createQvac` and hasn't `close()`d or exited — liveness is tracked by those processes, **not** by request traffic. This means a tool that connects straight to `baseURL` (OpenCode, Cline, Aider) does **not** by itself keep the serve alive; the process that resolved the `baseURL` must stay alive for the duration (see [Using with coding agents](#using-with-coding-agents)).
-- **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters *your* session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
+- **Fleet key & reuse.** Each managed provider derives a _fleet key_ from its exact serve config (model set + per-model `config` + bind host + `serveBinPath`). `createQvac` reuses any healthy serve with a matching key and only spawns a new one when none exists. Two sessions that request the same models share one process; two that request different models (or different `ctx_size`, host, or `qvac` binary) each get their own.
+- **Detached supervisor.** The serve is owned by a small detached runner — not by your process — so it survives your script exiting and can be shared. The runner reaps the serve once **no consumer process has been alive for `serveIdleTimeout`** (default 5 min). A _consumer_ is a process that called `createQvac` and hasn't `close()`d or exited — liveness is tracked by those processes, **not** by request traffic. This means a tool that connects straight to `baseURL` (OpenCode, Cline, Aider) does **not** by itself keep the serve alive; the process that resolved the `baseURL` must stay alive for the duration (see [Using with coding agents](#using-with-coding-agents)).
+- **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters _your_ session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
 - **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
 - **Private serves.** Pass `reuse: false` (or pin `servePort`) to force a dedicated serve that is **not** shared and is reaped as soon as your process exits.
 - **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse.
@@ -218,7 +223,7 @@ Then point your harness at the alias. For OpenCode, `model` and `small_model` ca
 ```json
 // opencode.json
 {
-  "model":       "qvac/qwen3-8b-chat",
+  "model": "qvac/qwen3-8b-chat",
   "small_model": "qvac/qwen3-8b-chat"
 }
 ```
@@ -229,7 +234,7 @@ You can still configure a separate, lighter `small_model` if you want title, sum
 
 OpenCode fires the main `build` completion and the `title`/summary completion concurrently against the one alias; the per-model queue (section 1) serializes them instead of failing on a job-lock collision.
 
-> **Keep the resolving process alive while the agent runs.** Liveness is tracked by *consumer processes* — the ones that called `createQvac` — not by HTTP traffic. OpenCode connects straight to `baseURL`, so it is invisible to the idle reaper. If your setup script writes `opencode.json` and then **exits**, it deregisters the only consumer and the serve is reaped after `serveIdleTimeout`, even mid-session. Run the agent as a child of the process that holds the provider open, and let `await using` detach on exit:
+> **Keep the resolving process alive while the agent runs.** Liveness is tracked by _consumer processes_ — the ones that called `createQvac` — not by HTTP traffic. OpenCode connects straight to `baseURL`, so it is invisible to the idle reaper. If your setup script writes `opencode.json` and then **exits**, it deregisters the only consumer and the serve is reaped after `serveIdleTimeout`, even mid-session. Run the agent as a child of the process that holds the provider open, and let `await using` detach on exit:
 
 ```ts
 import { spawn } from 'node:child_process'
@@ -264,7 +269,7 @@ Requires `@qvac/sdk >= 0.11.0` (and `@qvac/cli >= 0.5.0` which pins it). Older S
 
 The integration is plumbing — your local-model choice decides whether an agent actually works. Empirical findings from `qvac serve` + OpenCode testing:
 
-- **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably *invoke* tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
+- **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably _invoke_ tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
 - **Cloud Qwen3.5-9B** (full precision, e.g. via OpenRouter) calls tools aggressively but still hallucinates content from tool results.
 - Reliable local tool use generally needs **≥14B parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
 
@@ -291,8 +296,8 @@ QVAC ships a typed catalog of every model registered in its P2P registry. The me
 ```ts
 import { models, allModels } from '@qvac/ai-sdk-provider'
 
-models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat' (compile-time known)
-models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory // 'chat' (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory // 'transcription'
 
 for (const m of allModels) {
   console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)
@@ -335,11 +340,11 @@ Factory returning a branded Vercel AI SDK provider. The return type depends on `
 
 ```ts
 interface QvacExternalOptions {
-  mode?: 'external'                      // default
-  baseURL?: string                       // default: see Default base URL
-  apiKey?: string                        // default: 'qvac'
-  headers?: Record<string, string>       // default: {}
-  fetch?: typeof fetch                   // default: globalThis.fetch
+  mode?: 'external' // default
+  baseURL?: string // default: see Default base URL
+  apiKey?: string // default: 'qvac'
+  headers?: Record<string, string> // default: {}
+  fetch?: typeof fetch // default: globalThis.fetch
 }
 ```
 

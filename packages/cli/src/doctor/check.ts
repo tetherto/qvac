@@ -57,13 +57,13 @@ export const probeBinary: ProbeFn = (command, args) => {
 // available for allocation. os.freemem() is known to be misleading on
 // Linux and macOS because it excludes reclaimable page cache, which
 // causes noisy false warnings on otherwise healthy systems.
-function readAvailableMemoryBytes (): number {
+function readAvailableMemoryBytes(): number {
   const available = (os as unknown as { availableMemory?: () => number }).availableMemory
   if (typeof available === 'function') return available()
   return os.freemem()
 }
 
-export function createDefaultContext (projectRoot: string = process.cwd()): CheckContext {
+export function createDefaultContext(projectRoot: string = process.cwd()): CheckContext {
   return {
     projectRoot,
     platform: process.platform,
