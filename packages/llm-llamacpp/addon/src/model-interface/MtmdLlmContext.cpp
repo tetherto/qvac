@@ -18,6 +18,7 @@
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
@@ -1531,15 +1532,29 @@ bool MtmdLlmContext::loadCache(
   }
 
   // `llama_state_seq_load_file` has already restored this sequence's KV cells.
+  // Every validation below runs after that restore, and the scheduler installs
+  // its per-slot cleanup guard only once this function returns, so any throw in
+  // between would strand the restored cells as orphan KV on the slot. Roll the
+  // sequence (and the metadata it stamped) back unless we reach the accept
+  // point, mirroring `TextLlmContext::loadCache` and `CacheManager::loadCache`.
+  ScopeGuard restoredKvGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[MtmdLlm] failed to clear sequence after invalid cache load\n");
+    }
+    current_ = {};
+    protectedPrefix_ = {};
+    tools_.reset();
+  });
+
   // Accepting a partial header would leave `cacheTokens`/`firstMsgCacheTokens`
   // defaulted to zero (they diverge from `nPast` under M-RoPE, breaking later
-  // cap checks), and silently returning here would strand the restored cells
-  // as orphan KV. Require the full four-field contract; on any other count
-  // clear the sequence KV and reject, mirroring `CacheManager::loadCache`.
+  // cap checks). Require the full four-field contract; the guard above clears
+  // the restored KV on reject, mirroring `CacheManager::loadCache`.
   if (!mtmdSessionMetadataIsComplete(tokenCount)) {
-    if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
-      llama_memory_seq_rm(mem, seqId_, -1, -1);
-    }
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
@@ -1577,6 +1592,7 @@ bool MtmdLlmContext::loadCache(
   if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
     llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
   }
+  restoredKvGuard.dismiss();
   return true;
 }
 
