@@ -189,16 +189,20 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 
 const ZERO_COST: OpenClawCost = Object.freeze({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
 
-export const openClawModels: OpenClawModel[] = qvacCatalog.map((entry) => ({
-  id: entry.id,
-  name: entry.name,
-  reasoning: true,
-  input: ['text', 'image'],
-  cost: ZERO_COST,
-  contextWindow: DEFAULT_OPTIONS.ctxSize,
-  maxTokens: 8192,
-  compat: { requiresStringContent: true }
-}))
+export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[] {
+  return qvacCatalog.map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    reasoning: true,
+    input: ['text', 'image'],
+    cost: ZERO_COST,
+    contextWindow: options.ctxSize,
+    maxTokens: 8192,
+    compat: { requiresStringContent: true }
+  }))
+}
+
+export const openClawModels: OpenClawModel[] = createOpenClawModels(DEFAULT_OPTIONS)
 
 export const openClawCatalogRows: readonly OpenClawCatalogRow[] = qvacCatalog.map((entry) => ({
   kind: 'text',
@@ -315,7 +319,7 @@ export function createOpenClawProvider (options: ResolvedOptions): OpenClawProvi
       readyTimeoutMs: options.readyTimeoutMs,
       idleStopMs: options.idleStopMs
     },
-    models: openClawModels
+    models: createOpenClawModels(options)
   }
 }
 

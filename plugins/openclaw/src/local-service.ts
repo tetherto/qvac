@@ -96,6 +96,15 @@ export function buildQvacServeArgs (options: LocalServiceOptions, configPath: st
   ]
 }
 
+export function resolveLocalServiceExitCode (
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  stopping: boolean
+): number | null {
+  if (signal !== null) return stopping ? 0 : null
+  return code ?? 1
+}
+
 async function writeConfig (options: LocalServiceOptions): Promise<{ configPath: string, cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), 'qvac-openclaw-'))
   const configPath = join(dir, 'qvac.config.json')
@@ -135,8 +144,12 @@ async function main (): Promise<void> {
 
   child.on('exit', async (code, signal) => {
     await generated.cleanup()
-    if (signal !== null) process.kill(process.pid, signal)
-    process.exit(code ?? 1)
+    const exitCode = resolveLocalServiceExitCode(code, signal, stopping)
+    if (exitCode === null && signal !== null) {
+      process.kill(process.pid, signal)
+      return
+    }
+    process.exit(exitCode)
   })
 }
 

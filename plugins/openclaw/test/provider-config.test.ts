@@ -5,6 +5,7 @@ import type { QvacProviderAuthResult } from '../src/provider-config.ts'
 import {
   DEFAULT_OPTIONS,
   applyQvacSetupConfig,
+  createOpenClawModels,
   createOpenClawProvider,
   createQvacServeModels,
   createQvacSetupResult,
@@ -73,6 +74,13 @@ test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () 
   assert.deepEqual(model.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
 })
 
+test('createOpenClawModels advertises the configured context window', () => {
+  const model = createOpenClawModels(resolveOptions({ ctxSize: 65536 })).find((entry) => entry.id === 'qwen3.5-9b')
+
+  assert.ok(model)
+  assert.equal(model.contextWindow, 65536)
+})
+
 test('createOpenClawProvider builds a localService-backed OpenAI-compatible provider', () => {
   const provider = createOpenClawProvider(resolveOptions({
     port: 11500,
@@ -80,6 +88,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
     serviceRuntime: '/usr/local/bin/node',
     serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
     cwd: '/tmp/project',
+    ctxSize: 65536,
     readyTimeoutMs: 123000,
     idleStopMs: 45000
   }))
@@ -101,7 +110,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
       '--port',
       '11500',
       '--ctx-size',
-      '32768',
+      '65536',
       '--reasoning-budget',
       '-1',
       '--tools',
@@ -113,6 +122,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
     idleStopMs: 45000
   })
   assert.equal(provider.models.length, openClawModels.length)
+  assert.equal(provider.models.find((entry) => entry.id === 'qwen3.5-9b')?.contextWindow, 65536)
 })
 
 test('createQvacSetupResult materializes provider config without pasted JSON', () => {

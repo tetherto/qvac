@@ -4,7 +4,8 @@ import { test } from 'node:test'
 import {
   buildQvacServeArgs,
   createLocalServiceServeConfig,
-  parseLocalServiceArgs
+  parseLocalServiceArgs,
+  resolveLocalServiceExitCode
 } from '../src/local-service.ts'
 
 test('local service launcher creates QVAC serve config and command args from OpenClaw options', () => {
@@ -53,4 +54,11 @@ test('local service launcher creates QVAC serve config and command args from Ope
     '--model',
     'qwen3.5-9b'
   ])
+})
+
+test('local service exits cleanly for intentional child signal stops', () => {
+  assert.equal(resolveLocalServiceExitCode(null, 'SIGTERM', true), 0)
+  assert.equal(resolveLocalServiceExitCode(null, 'SIGTERM', false), null)
+  assert.equal(resolveLocalServiceExitCode(0, null, false), 0)
+  assert.equal(resolveLocalServiceExitCode(null, null, false), 1)
 })
