@@ -333,8 +333,8 @@ private:
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
-  void completeGroupRequestLocked(
-      const std::shared_ptr<BatchGroup>& group) noexcept;
+  void
+  completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
       const std::shared_ptr<BatchGroup>& group,
       std::exception_ptr error) noexcept;

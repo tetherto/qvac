@@ -38,8 +38,8 @@ namespace {
 void logTeardownFailureNoexcept(
     const char* what, uint32_t seqId, const char* detail) noexcept {
   try {
-    std::string msg = std::string("[ContinuousBatch] ") + what +
-                      " for seqId " + std::to_string(seqId);
+    std::string msg = std::string("[ContinuousBatch] ") + what + " for seqId " +
+                      std::to_string(seqId);
     if (detail != nullptr) {
       msg += ": ";
       msg += detail;
@@ -565,8 +565,9 @@ ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
       try {
         QLOG_IF(
             Priority::ERROR,
-            std::string("[ContinuousBatch] fatal: unrecoverable failure "
-                        "reacquiring scheduler mutex, aborting: ") +
+            std::string(
+                "[ContinuousBatch] fatal: unrecoverable failure "
+                "reacquiring scheduler mutex, aborting: ") +
                 e.what());
       } catch (...) {
       }

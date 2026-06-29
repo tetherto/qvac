@@ -380,9 +380,8 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
   const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
   const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
   SCOPED_TRACE(
-      "sequenceCells=" + std::to_string(sequenceCells) +
-      ", totalCells=" + std::to_string(totalCells) +
-      ", posMax=" + std::to_string(posMax));
+      "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
+      std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
   EXPECT_EQ(sequenceCells, kQwen35MultimodalPrefillCells);
   EXPECT_EQ(totalCells, kQwen35MultimodalPrefillCells);
@@ -432,9 +431,8 @@ TEST_F(
   const uint32_t totalCells = llama_memory_seq_token_count(mem, -1);
   const llama_pos posMax = llama_memory_seq_pos_max(mem, 0);
   SCOPED_TRACE(
-      "sequenceCells=" + std::to_string(sequenceCells) +
-      ", totalCells=" + std::to_string(totalCells) +
-      ", posMax=" + std::to_string(posMax));
+      "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
+      std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
   EXPECT_GT(sequenceCells, kQwen35MultimodalPrefillCells);
   EXPECT_EQ(totalCells, sequenceCells);
@@ -545,8 +543,8 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
       << "loadCache must reject a cache whose NPast exceeds the context size";
 
   const uint32_t leakedCells = llama_memory_seq_token_count(mem, seqId);
-  SCOPED_TRACE("sequence KV cells after failed load: " +
-               std::to_string(leakedCells));
+  SCOPED_TRACE(
+      "sequence KV cells after failed load: " + std::to_string(leakedCells));
   EXPECT_EQ(leakedCells, 0u)
       << "loadCache restored KV then threw without rolling it back: the slot "
          "leaks orphan KV cells. A ScopeGuard must clear the sequence on any "

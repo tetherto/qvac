@@ -1755,8 +1755,9 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
     std::string path = vlmPath;
     std::string projection = mmprojPath;
     auto cfg = config_;
-    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE: cells >> positions),
-    // so the round trip needs the 4096 the Qwen3.5 mtmd unit tests use.
+    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE: cells >>
+    // positions), so the round trip needs the 4096 the Qwen3.5 mtmd unit tests
+    // use.
     cfg["ctx_size"] = "4096";
     // Qwen3.5 is a reasoning model; without this it spends the whole n_predict
     // budget on chain-of-thought and never reaches the one-word answer. 0
