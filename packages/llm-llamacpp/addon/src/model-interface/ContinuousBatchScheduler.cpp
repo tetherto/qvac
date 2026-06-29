@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <optional>
@@ -545,17 +546,32 @@ ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
   }
 }
 
-ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept(false) {
+ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
   if (lock_ != nullptr) {
     // applyDeferredTeardownLocked() is noexcept, so the teardown below cannot
     // throw. The re-acquire can: std::mutex::lock() may raise std::system_error
     // on an unrecoverable lock failure (the OS failing to meet its
-    // pthread_mutex_lock specification for an initialised normal mutex). It is
-    // intentionally not caught -- the scheduler's only mutex is then gone, so
-    // there is no slot state we could safely touch to recover. The destructor
-    // is noexcept(false) so this single, unrecoverable system_error propagates
-    // instead of being turned into std::terminate here.
-    lock_->lock();
+    // pthread_mutex_lock specification for an initialised normal mutex). If it
+    // does, the scheduler's only mutex is gone and we are NOT holding it, so
+    // letting it propagate would hand a lock-free, mid-teardown state to the
+    // worker's catch handler -- which assumes the lock is held and would race
+    // concurrent cancel()/submit() before hitting a UB wait() on an unowned
+    // lock. Stop cleanly at the point of failure instead: log and abort.
+    try {
+      lock_->lock();
+    } catch (const std::system_error& e) {
+      // Composing/emitting the message can itself throw (allocation); swallow
+      // that so abort() always runs.
+      try {
+        QLOG_IF(
+            Priority::ERROR,
+            std::string("[ContinuousBatch] fatal: unrecoverable failure "
+                        "reacquiring scheduler mutex, aborting: ") +
+                e.what());
+      } catch (...) {
+      }
+      std::abort();
+    }
     scheduler_.applyDeferredTeardownLocked();
   }
 }

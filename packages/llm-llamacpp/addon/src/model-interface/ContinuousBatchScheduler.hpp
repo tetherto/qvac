@@ -267,16 +267,17 @@ private:
     StepUnlockGuard(
         ContinuousBatchScheduler& scheduler,
         std::unique_lock<std::mutex>* lock);
-    /// `noexcept(false)`: the deferred-teardown work it runs is `noexcept`, but
-    /// re-acquiring `mutex_` is not. The only exception it can throw is the
-    /// `std::system_error` `std::mutex::lock()` is permitted to raise on an
+    /// `noexcept`: the deferred-teardown work it runs is `noexcept`, but
+    /// re-acquiring `mutex_` is not. The only exception that step can raise is
+    /// the `std::system_error` `std::mutex::lock()` is permitted to throw on an
     /// unrecoverable lock failure -- i.e. the OS failing to honour its
     /// `pthread_mutex_lock` contract for an initialised normal mutex. That is
-    /// not a recoverable condition (the worker's sole mutex is gone, so no slot
-    /// state can be touched safely), so it is left to propagate rather than be
-    /// swallowed; the implicit `noexcept` is dropped only so the throw is not
-    /// converted into a less informative `std::terminate` at this boundary.
-    ~StepUnlockGuard() noexcept(false);
+    /// not recoverable: the worker's sole mutex is gone and, crucially, we are
+    /// no longer holding it, so letting it escape would hand a lock-free state
+    /// to the worker's catch handler (which assumes the lock is held). The
+    /// destructor catches it, logs, and `std::abort()`s instead -- a clean stop
+    /// at the point of failure rather than UB downstream.
+    ~StepUnlockGuard() noexcept;
     StepUnlockGuard(const StepUnlockGuard&) = delete;
     StepUnlockGuard& operator=(const StepUnlockGuard&) = delete;
     StepUnlockGuard(StepUnlockGuard&&) = delete;
