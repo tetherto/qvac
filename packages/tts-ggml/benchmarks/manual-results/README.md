@@ -9,7 +9,7 @@ from a local engineer box.
 Files are read by the RTF aggregator via its `--manual-dir` argument:
 
 - `scripts/perf-report/aggregate-tts-ggml-rtf.js`
-- the `summarize` job in `.github/workflows/benchmark-rtf-tts-ggml.yml`
+- the `summarize` job in `.github/workflows/benchmark-performance-tts-ggml.yml`
 
 Any `.json` file in this directory is picked up. Files ending in `.json.example`
 are **skipped** — rename to `.json` to activate. Records the aggregator does not

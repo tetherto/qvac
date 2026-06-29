@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
+  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
+  master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
+  in turn requires `ggml-speech 2026-06-26` (`qvac-ext-ggml` speech `f5727c32`,
+  PR #30); the `default-registry` baseline advances to `162f8f7c` so the new pins
+  resolve.
+  - **GPU (ARM Mali / Vulkan — Google Tensor / Pixel):** the CFM estimator's f32
+    `ggml_flash_attn_ext` miscomputed on Mali, blowing the f0 predictor up to NaN
+    and collapsing the audio into a clean ~1.3 s followed by a buzzy "blank +
+    beeps" break. Chatterbox now runs on Mali via an `is_arm_mali`-gated unfused
+    CFM attention (`soft_max` + separate-V matmul, numerically equivalent and
+    still on the GPU). Zero change off ARM Mali; CPU output byte-identical.
+  - **CPU (ARM SVE — Google Tensor / Pixel):** the SVE leftover-tail of
+    `ggml_vec_dot_f32` dropped the main loop's partial sums on inactive lanes
+    (`svmad_f32_m` → `svmla_f32_m`), biasing the HiFT `conv_transpose_1d` inner
+    dot and producing a constant ~12 kHz Nyquist tone. NEON/x86/RISC-V and all
+    non-CPU backends are byte-identical.
+
 ## [0.3.6] - 2026-06-25
 
 ### Fixed
