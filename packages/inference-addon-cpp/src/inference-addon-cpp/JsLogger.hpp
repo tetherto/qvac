@@ -60,6 +60,14 @@ namespace qvac_lib_inference_addon_cpp::logger {
             delete handle;
           });
         });
+
+        // Tie cleanup to the env lifetime. If the runtime tears this env down
+        // without releaseLogger() being called first (e.g. a worker/runtime
+        // teardown), onEnvTeardown fires while the env is being destroyed but
+        // BEFORE its JS context is disposed, disarming the logger so the
+        // teardown's final uv_run cannot dispatch asyncCallback against a dead
+        // context.
+        JS(js_add_teardown_callback(env, &JsLogger::onEnvTeardown, nullptr));
       }
 
       auto oldState = storeState(newState);
@@ -73,6 +81,9 @@ namespace qvac_lib_inference_addon_cpp::logger {
     static auto releaseLogger(js_env_t *env, js_callback_info_t * /*info*/) -> js_value_t* try {
       auto oldState = storeState(nullptr);
       if (oldState) {
+        // Explicit release: drop the env-teardown hook registered in setLogger
+        // so it cannot fire (double-close) when that env is later torn down.
+        js_remove_teardown_callback((oldState->env), &JsLogger::onEnvTeardown, nullptr);
         releaseJsRefs((oldState->env), oldState->cb);
       }
       if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
@@ -143,6 +154,20 @@ namespace qvac_lib_inference_addon_cpp::logger {
         catch (...) {
           std::cerr << "ERROR: Caught unknown exception\n";
         }
+    }
+
+    // Invoked by the runtime while this env is being torn down, BEFORE its JS
+    // context is disposed. Disarms the logger so a pending uv_async_send that
+    // the teardown's final uv_run would otherwise drain cannot dispatch
+    // asyncCallback against a dead context: nulling the shared state makes any
+    // such callback early-return, and closing the handle stops it firing at all.
+    static void onEnvTeardown(void * /*data*/) {
+      storeState(nullptr);
+      if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
+        uv_close(reinterpret_cast<uv_handle_t*>(logger_async_), [](uv_handle_t* handle) {
+          delete handle;
+        });
+      }
     }
 
     static void log(int priority, const std::string &message) {
