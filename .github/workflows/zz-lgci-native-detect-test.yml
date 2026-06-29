@@ -1,0 +1,87 @@
+name: '[TEST] lgci native-change detection'
+
+# THROWAWAY validation workflow for PR #2873 — proves the DIFF_FROM selection
+# in `detect-native-changes` (.github/workflows/on-pr-llm-llamacpp.yml).
+#
+# Runs on a *regular* pull_request (NOT pull_request_target) so the PR HEAD's
+# workflow file — i.e. the fix — actually executes. Base is `lgci-sandbox`,
+# which does not match main's trigger filters, so the real on-pr-* workflows
+# do not fire.
+#
+# It reproduces BOTH the NEW logic (this PR) and the OLD logic (synchronize-only)
+# and prints native_changed for each, so a single `labeled` run shows the
+# regression (OLD=true) vs the fix (NEW=false) on the same PR state.
+#
+# Delete branch + base after capturing evidence.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Detect (new vs old logic)
+        env:
+          WORKDIR: zz-lgci-testpkg
+          EVENT_ACTION: ${{ github.event.action }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          # Ensure base + head commits are present locally for diffing.
+          git fetch origin "$BASE_SHA" --depth=1 2>/dev/null || true
+          git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null || true
+          if [ -n "$BEFORE_SHA" ]; then
+            git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null || true
+          fi
+
+          echo "event_action=$EVENT_ACTION"
+          echo "before=$BEFORE_SHA"
+          echo "head=$HEAD_SHA"
+          echo "base=$BASE_SHA"
+
+          native_changed() {
+            from="$1"
+            changed=false
+            files=$(git diff --name-only "$from" "$HEAD_SHA" -- 2>/dev/null) || { echo "true"; return; }
+            while IFS= read -r f; do
+              case "$f" in
+                ${WORKDIR}/*.cpp|${WORKDIR}/*.hpp|${WORKDIR}/*.c|${WORKDIR}/*.h) changed=true; break ;;
+                ${WORKDIR}/*CMakeLists.txt) changed=true; break ;;
+                ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) changed=true; break ;;
+                ${WORKDIR}/vcpkg/*) changed=true; break ;;
+              esac
+            done <<< "$files"
+            echo "$changed"
+          }
+
+          # NEW logic (this PR)
+          DIFF_NEW="$HEAD_SHA"
+          if [ "$EVENT_ACTION" = "opened" ]; then
+            DIFF_NEW="$BASE_SHA"
+          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$HEAD_SHA" ]; then
+            DIFF_NEW="$BEFORE_SHA"
+          fi
+
+          # OLD logic (synchronize-only special case)
+          DIFF_OLD="$BASE_SHA"
+          if [ "$EVENT_ACTION" = "synchronize" ] && [ -n "$BEFORE_SHA" ]; then
+            DIFF_OLD="$BEFORE_SHA"
+          fi
+
+          NC_NEW=$(native_changed "$DIFF_NEW")
+          NC_OLD=$(native_changed "$DIFF_OLD")
+
+          echo "RESULT action=$EVENT_ACTION diff_from_new=${DIFF_NEW:0:8} NEW=$NC_NEW diff_from_old=${DIFF_OLD:0:8} OLD=$NC_OLD"
+          echo "::notice title=native-detect::action=$EVENT_ACTION NEW=$NC_NEW OLD=$NC_OLD"
