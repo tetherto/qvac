@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
-import { drainCompletion } from '../adapters/openai/completion-result.js'
+import { drainCompletion, type OpenAiFinishReason } from '../adapters/openai/completion-result.js'
 import { requireModel } from '../plugins/require-model.js'
 import { logUnsupported } from '../plugins/log-unsupported.js'
 import {
@@ -15,7 +15,13 @@ import {
   type SdkChatArgs
 } from '../schemas/chat.js'
 import { InvalidResponseFormatError, UnsupportedImageContentError } from '../schemas/common.js'
-import { sdkToolCallsToOpenai, sdkToolCallsToOpenaiDeltas } from '../adapters/openai/tool-calls.js'
+import { sdkToolCallsToOpenaiDeltas } from '../adapters/openai/tool-calls.js'
+import {
+  chatCompletionChunk,
+  chatCompletionResponse,
+  type ChatCompletionDelta,
+  type ChatCompletionUsage
+} from '../adapters/openai/chat-shapes.js'
 
 interface PreparedRequest extends SdkChatArgs {
   sdkModelId: string
@@ -137,31 +143,19 @@ async function runBlocking(
 
     const { text, toolCalls, completionTokens, finishReason } = await drainCompletion(result)
 
-    const hasToolCalls = toolCalls.length > 0
-    const message: Record<string, unknown> = {
-      role: 'assistant',
-      content: hasToolCalls ? null : text || null
-    }
-    if (hasToolCalls) {
-      message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
-    }
-
     req.server.qvac.logger.info(
       `  completion done tokens=${completionTokens} finish=${finishReason}`
     )
 
-    reply.send({
+    reply.send(chatCompletionResponse({
       id: `chatcmpl-${randomId()}`,
-      object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
       model: p.modelAlias,
-      choices: [{ index: 0, message, finish_reason: finishReason }],
-      usage: {
-        prompt_tokens: 0,
-        completion_tokens: completionTokens,
-        total_tokens: completionTokens
-      }
-    })
+      text,
+      toolCalls,
+      completionTokens,
+      finishReason
+    }))
   } finally {
     await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
   }
@@ -191,16 +185,16 @@ async function runStreaming(
     const created = Math.floor(Date.now() / 1000)
 
     const chunk = (
-      delta: Record<string, unknown>,
-      finishReason: string | null,
-      extra?: Record<string, unknown>
-    ): Record<string, unknown> => ({
+      delta: ChatCompletionDelta,
+      finishReason: OpenAiFinishReason | null,
+      usage?: ChatCompletionUsage
+    ) => chatCompletionChunk({
       id,
-      object: 'chat.completion.chunk',
       created,
       model: p.modelAlias,
-      choices: [{ index: 0, delta, finish_reason: finishReason }],
-      ...extra
+      delta,
+      finishReason,
+      ...(usage !== undefined ? { usage } : {})
     })
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
@@ -215,20 +209,15 @@ async function runStreaming(
     )
 
     if (hasToolCalls) {
-      const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
+      const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls) ?? []
       sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
       sendSSE(raw, chunk({}, 'tool_calls'))
     } else {
-      sendSSE(
-        raw,
-        chunk({}, finishReason, {
-          usage: {
-            prompt_tokens: 0,
-            completion_tokens: completionTokens,
-            total_tokens: completionTokens
-          }
-        })
-      )
+      sendSSE(raw, chunk({}, finishReason, {
+        prompt_tokens: 0,
+        completion_tokens: completionTokens,
+        total_tokens: completionTokens
+      }))
     }
 
     endSSE(raw)
