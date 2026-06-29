@@ -129,6 +129,13 @@ const TASKS = (() => {
 // forced length — short answers still stop at EOS, so VQA pays nothing for the headroom.
 const TASK_NPREDICT = { 'ocr-page': 768, 'ocr-small': 96 }
 const DEFAULT_NPREDICT = 128
+// Scored-prediction char cap. Full-page OCR is a whole-document transcription (golds up
+// to ~1.5k chars), so it needs a wide cap or CER/WER are inflated by truncation alone;
+// every other task is a short answer — keep those tight so the [VLMROW] marker stays well
+// under Android logcat's ~4 KB per-line limit (over-long markers get truncated on-device).
+const TASK_PRED_CAP = { 'ocr-page': 2000 }
+const DEFAULT_PRED_CAP = 600
+const predCap = task => TASK_PRED_CAP[task] || DEFAULT_PRED_CAP
 
 function selectedItems () {
   // Explicit item allowlist (preset.ids) wins — used to pick specific images
@@ -371,7 +378,7 @@ function runModel (spec) {
             task: item.task,
             id: item.id,
             metric: item.metric,
-            pred: String(r.text).slice(0, 600),
+            pred: String(r.text).slice(0, predCap(item.task)),
             img: item.image,
             img_w: r.dims.w,
             img_h: r.dims.h,
@@ -419,7 +426,7 @@ function runModel (spec) {
               task: item.task,
               id: item.id,
               metric: item.metric,
-              pred: String(r.text).slice(0, 600),
+              pred: String(r.text).slice(0, predCap(item.task)),
               img: item.image,
               img_w: r.dims.w,
               img_h: r.dims.h,

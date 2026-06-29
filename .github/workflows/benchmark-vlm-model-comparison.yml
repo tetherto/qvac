@@ -139,9 +139,14 @@ jobs:
             min=$(node -e 'try{const c=require("./packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs");process.stdout.write(c.mobileTimeoutMin==null?"":String(c.mobileTimeoutMin))}catch(e){}' || true)
           fi
           if [ -n "$min" ]; then
-            echo "mocha_ms=$((min*60000))" >> "$GITHUB_OUTPUT"
+            # Keep the outer Mocha/WDIO session 5 min longer than the in-app per-test
+            # guard (mirrors the pipeline default 35>30) so the per-test guard fires
+            # first and can emit its timeout message + flush logs before the session is
+            # torn down. Equal ceilings would race and lose that diagnostic headroom.
+            mocha_min=$((min+5))
+            echo "mocha_ms=$((mocha_min*60000))" >> "$GITHUB_OUTPUT"
             echo "pertest_min=$min" >> "$GITHUB_OUTPUT"
-            echo "Mobile timeout: ${min} min (Mocha $((min*60000)) ms, Android per-test ${min} min)"
+            echo "Mobile timeout: per-test ${min} min, Mocha ${mocha_min} min (+5 headroom)"
           else
             echo "mocha_ms=" >> "$GITHUB_OUTPUT"
             echo "pertest_min=" >> "$GITHUB_OUTPUT"

@@ -432,8 +432,10 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     else if (fast === true && good === false) icon = '⚖️'
     else if (fast === false && good === true) icon = '⚖️'
     else if (fast === false) icon = '🐢'
-    L.push(`> ${icon} **Summary** — candidate **${candidate}** is ${verdict(sp, 'faster', 'slower')} than baseline **${base}** _(vis-encode + TTFT)_, ` +
-      `with ${verdict(qp, 'better', 'worse')} quality, averaged across ${legs} platform·device leg${legs === 1 ? '' : 's'}.\n`)
+    L.push(`> ${icon} **Summary** — candidate **${candidate}** vs baseline **${base}**: ` +
+      `${verdict(sp, 'faster', 'slower')} _(visual-encode + prefill only)_, ` +
+      `${verdict(qp, 'better', 'worse')} quality _(full response · VQA + OCR)_ — ` +
+      `avg over ${legs} platform·device leg${legs === 1 ? '' : 's'}.\n`)
     L.push(`Two models — **${base}** (base) vs **${candidate}** (candidate), per platform · device.\n`)
     // Relative % difference (cand vs base), shown alongside the absolute Δ in every Highlights
     // comparison table for easier magnitude reading. Relative to the baseline value.
@@ -500,11 +502,13 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   // most recent build they ALL support (apples-to-apples by default); MANUAL mode honors
   // the refs set per source (builds may differ). opts.versions comes from resolve-versions.cjs.
   if (opts.versions && Array.isArray(opts.versions.sources) && opts.versions.sources.length) {
-    const auto = opts.versions.mode === 'auto'
+    const vmode = opts.versions.mode
     L.push('### Engine versions — llama.cpp build per source\n')
-    L.push(auto
+    L.push(vmode === 'auto'
       ? '_Versions **chosen automatically** — the most recent llama.cpp build supported by every requested source._\n'
-      : '_Versions **set manually** — refs were pinned per source, so builds may differ._\n')
+      : vmode === 'auto-nocommon'
+        ? '_Versions **auto-selected per source** — no single build is common to all requested sources, so each ran its most recent; **builds differ (cross-version comparison)**._\n'
+        : '_Versions **set manually** — refs were pinned per source, so builds may differ._\n')
     L.push('| Source | build used | most recent available |')
     L.push('|---|---|---|')
     for (const s of opts.versions.sources) {
