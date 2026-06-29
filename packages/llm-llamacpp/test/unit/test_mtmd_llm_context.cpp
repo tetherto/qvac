@@ -478,6 +478,83 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   });
 }
 
+/// `llama_state_seq_load_file` restores the sequence's KV before `loadCache`
+/// validates it. A throw after the restore must roll those cells back: the
+/// scheduler installs its per-slot cleanup guard only once `loadCache` returns,
+/// so an unguarded throw strands orphan KV on the slot. Mirrors the text path
+/// (`TextLlmContext::loadCache`) and `CacheManager::loadCache`.
+TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "single-prompt context for a VLM must be MTMD";
+  auto* lctx = model->getContext();
+  ASSERT_NE(lctx, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+
+  // Prefill a prompt so the sequence holds real KV cells we can persist.
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getNPast(), 0);
+
+  // Persist the genuine KV but with a doctored NPast that exceeds the
+  // context window. All four metadata fields are present so the
+  // completeness gate passes and execution reaches the NPast bounds check.
+  const llama_token overflowNPast =
+      static_cast<llama_token>(llama_n_ctx(lctx)) + 1;
+  const llama_token plausible = static_cast<llama_token>(ctx->getNPast());
+  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
+      overflowNPast, plausible, plausible, plausible};
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-mtmd-loadcache-rollback.bin";
+  fs::remove(cachePath);
+  const auto savedBytes = llama_state_seq_save_file(
+      lctx,
+      cachePath.string().c_str(),
+      seqId,
+      sessionTokens,
+      SESSION_METADATA_FIELD_COUNT);
+  ASSERT_GT(savedBytes, 0u);
+
+  // Clear the sequence so restoration is observable from a clean baseline.
+  ctx->resetState(true);
+  auto* mem = llama_get_memory(lctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
+      << "precondition: sequence KV must be empty before the failing load";
+
+  bool threw = false;
+  try {
+    (void)ctx->loadCache(cachePath.string(), 0);
+  } catch (const qvac_errors::StatusError&) {
+    threw = true;
+  }
+  EXPECT_TRUE(threw)
+      << "loadCache must reject a cache whose NPast exceeds the context size";
+
+  const uint32_t leakedCells = llama_memory_seq_token_count(mem, seqId);
+  SCOPED_TRACE("sequence KV cells after failed load: " +
+               std::to_string(leakedCells));
+  EXPECT_EQ(leakedCells, 0u)
+      << "loadCache restored KV then threw without rolling it back: the slot "
+         "leaks orphan KV cells. A ScopeGuard must clear the sequence on any "
+         "post-restore validation failure.";
+
+  fs::remove(cachePath);
+}
+
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
