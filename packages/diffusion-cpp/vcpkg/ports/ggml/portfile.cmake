@@ -7,8 +7,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 8d39bebd8ca70d8dcee52b0dabd9d2fb63283d05
-    SHA512 658f43561673b6312d9305249c2d01ba68e3811cf30f1f640fd721fb97f6da6e5dcdeccf4aad426f5b3e2c9b2ab9fd050ebbac822cd48567de408f75ef672ea3
+    REF 9b31afac52f8e722a5fcb53ae5448731b635fab4
+    SHA512 e5908baecd05bb68f6e6e6998dd0f6a4035eced196004bf97c8a8503354e503e49c4de35182e028d5ece62af24d621bb32c3a0729a3455d98171eef0aeac8002
 )
 
 # The fabric repo vendors ggml as a subtree and keeps ggml.pc.in outside that
