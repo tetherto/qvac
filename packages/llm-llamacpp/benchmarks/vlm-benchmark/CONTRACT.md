@@ -63,13 +63,12 @@ Presigned S3 URLs work for a one-off dispatch but expire — don't commit them t
 `upstream@<ref>` (CLI sources are desktop-only — Linux/macOS/Windows — several-sources mode).
 
 **Scenario** — task-set name from `scenarios.cjs` (`config.defaultScenario`, single `default`
-set today). Config-only: there is no `matrix_scenarios` dispatch input — the
-`workflow_dispatch` budget is capped at 10 and `mobile_timeout_min` holds the last slot
-(local override via the `QVAC_VLM_SCENARIOS` env still works).
+set today). Config-only: there is no `matrix_scenarios` dispatch input (local override via
+the `QVAC_VLM_SCENARIOS` env still works).
 
 **`matrix_desktop` / `matrix_mobile` / `matrix_preset` / …** — unchanged (see README).
-GitHub caps `workflow_dispatch` at **10 inputs** — the set is exactly full; adding one means
-folding another.
+GitHub caps `workflow_dispatch` at **10 inputs**; the benchmark now uses **9**, so one slot
+is free (the vestigial `run_matrix` switch was removed — the matrix always runs).
 
 ## 4 · Quality reporting (no gate)
 

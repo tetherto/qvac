@@ -19,13 +19,12 @@ target**; a host-side script collects the per-leg logs and renders one Markdown 
 The benchmark is the **Benchmark VLM (model comparison)** workflow
 (`.github/workflows/benchmark-vlm-model-comparison.yml`). Dispatch with `gh workflow run`
 (or the *Run workflow* UI). **`--ref` = the branch hosting the workflow** (not the model);
-**`-f …`** are the inputs. GitHub caps `workflow_dispatch` at **10 inputs** — the set below
-is the complete list; omit any to use its `config.cjs` default.
+**`-f …`** are the inputs — the set below is the complete list; **omit any to use its
+`config.cjs` default** (none are required).
 
 ```bash
 gh workflow run benchmark-vlm-model-comparison.yml \
   --ref qvac-19371-vlm-benchmark-improve \    # branch hosting THIS workflow (must be branch/tag, not a bare SHA)
-  -f run_matrix=true \                        # REQUIRED — must be true or nothing runs
   -f matrix_mode=two-models \                 # two-models | several-sources
   -f matrix_preset=full \                     # smoke | cognitive | ocr1page | ocr5pages | full
   -f matrix_models=qwen3.5-f16,qwen3.5-q8 \   # catalog names | [label=]<llm-url>|<mmproj-url>[@ctx=N] | json:[…]
@@ -39,7 +38,7 @@ gh workflow run benchmark-vlm-model-comparison.yml \
 
 **Smallest valid run** (everything from `config.cjs` defaults):
 ```bash
-gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> -f run_matrix=true
+gh workflow run benchmark-vlm-model-comparison.yml --ref <branch>
 ```
 
 **Preview a several-sources version resolution without running** (no CI):
@@ -152,14 +151,14 @@ edit entirely by passing an ad-hoc model via `-f matrix_models=<llm-url>|<mmproj
 ```bash
 # two-models, mixed legs, ad-hoc challenger model
 gh workflow run benchmark-vlm-model-comparison.yml --ref <branch> \
-  -f run_matrix=true -f matrix_mode=two-models -f matrix_preset=full \
+  -f matrix_mode=two-models -f matrix_preset=full \
   -f matrix_models="qwen3.5-q8,challenger=https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/NewVLM-Q4_K_M.gguf|https://huggingface.co/org/NewVLM-GGUF/resolve/<sha>/mmproj-F16.gguf" \
   -f matrix_desktop=linux-cpu,linux-gpu,macos-gpu -f matrix_mobile=s25-cpu,iphone17pro
 
 # candidate-vs-baseline: validate an UNMERGED change vs the published build
 gh workflow run benchmark-vlm-model-comparison.yml \
   --ref qvac-19371-vlm-benchmark-improve \            # branch hosting the benchmark workflow
-  -f run_matrix=true -f matrix_mode=several-sources \
+  -f matrix_mode=several-sources \
   -f matrix_sources=addon@candidate,addon@baseline \
   -f ref=<branch|tag|commit-sha> \                    # built as addon@candidate
   -f matrix_models=qwen3.5-q8 -f matrix_preset=full -f matrix_desktop=linux-cpu

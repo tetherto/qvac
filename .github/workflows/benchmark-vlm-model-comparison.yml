@@ -32,11 +32,6 @@ on:
       # Runs the @qvac/llm-llamacpp addon over the frozen fixture (lmms-eval quality +
       # vision-encode speed) on Linux (and S25), driven by
       # packages/llm-llamacpp/benchmarks/vlm-benchmark/config.cjs.
-      run_matrix:
-        description: "run the VLM quality+speed matrix (must be true)"
-        required: false
-        type: boolean
-        default: true
       matrix_mode:
         description: "  matrix mode: two-models (f16 vs q8, addon) or several-sources (addon+fabric-cli+upstream-cli; desktop only — builds native CLIs, so Linux/macOS/Windows, no mobile)"
         required: false
@@ -161,13 +156,11 @@ jobs:
       - id: dmatrix
         shell: bash
         env:
-          RUN_MATRIX: ${{ inputs.run_matrix }}
           MATRIX_DESKTOP: ${{ inputs.matrix_desktop }}
           MATRIX_MODE: ${{ inputs.matrix_mode }}
         run: |
           cells='[]'
-          if [[ "$RUN_MATRIX" == "true" ]]; then
-            IFS=',' read -ra tokens <<< "${MATRIX_DESKTOP:-linux-cpu}"
+          IFS=',' read -ra tokens <<< "${MATRIX_DESKTOP:-linux-cpu}"
             for raw in "${tokens[@]}"; do
               sel=$(echo "$raw" | xargs)
               # several-sources builds native fabric/upstream CLIs, so the Linux CPU
@@ -196,7 +189,6 @@ jobs:
                 --arg h "$host" --arg b "$backend" --arg r "$runner" --arg n "$no_gpu" \
                 '. + [{"host":$h,"backend":$b,"runner":$r,"no_gpu":$n}]')
             done
-          fi
           count=$(echo "$cells" | jq 'length')
           echo "value=$cells" >> "$GITHUB_OUTPUT"
           echo "count=$count" >> "$GITHUB_OUTPUT"
@@ -208,7 +200,6 @@ jobs:
       - id: mmatrix
         shell: bash
         env:
-          RUN_MATRIX: ${{ inputs.run_matrix }}
           MATRIX_MOBILE: ${{ inputs.matrix_mobile }}
           MATRIX_MODE: ${{ inputs.matrix_mode }}
           MATRIX_SOURCES: ${{ inputs.matrix_sources }}
@@ -235,7 +226,7 @@ jobs:
           if [[ "$MATRIX_MODE" == "several-sources" && -n "$MATRIX_MOBILE" ]] && echo ",$MATRIX_SOURCES," | grep -qE ',(fabric|upstream)(@[^,]*)?,'; then
             echo "::warning::fabric/upstream are desktop-only native CLIs and will NOT run on mobile; matrix_mobile runs addon-type sources only."
           fi
-          if [[ "$RUN_MATRIX" == "true" && -n "$MATRIX_MOBILE" && -n "$mobile_sources" ]]; then
+          if [[ -n "$MATRIX_MOBILE" && -n "$mobile_sources" ]]; then
             IFS=',' read -ra tokens <<< "$MATRIX_MOBILE"
             for raw in "${tokens[@]}"; do
               sel=$(echo "$raw" | xargs)
@@ -791,7 +782,7 @@ jobs:
       - context
       - matrix-desktop
       - matrix-mobile
-    if: always() && inputs.run_matrix && needs.context.result == 'success'
+    if: always() && needs.context.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
