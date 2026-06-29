@@ -387,9 +387,11 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     // in this run. Speed = per-leg mean of the two latency metrics that exist on BOTH
     // cells — vis-encode (mmproj) + TTFT — falling back to whichever one is present (mobile
     // legs usually have TTFT only). Quality = the mean of every quality DIMENSION present on
-    // the leg — VQA overall % and OCR BLEU % (both higher = better) — so a run with cognitive
-    // AND OCR tasks reflects both, not just VQA. Each leg gets equal weight (mean of per-leg
-    // relative %). Two-models mode only.
+    // the leg — VQA overall % (higher = better) and an OCR score that blends CER + WER
+    // (lower = better) with BLEU (higher = better), each as ONE equal-weighted dimension — so
+    // a run with cognitive AND OCR tasks reflects both, not just VQA, and OCR's mixed-direction
+    // metrics aren't misread. Each leg gets equal weight (mean of per-leg relative %).
+    // Two-models mode only.
     const speedPcts = []
     const qualPcts = []
     for (const host of hosts) {
@@ -404,16 +406,23 @@ function build (rows, vision, meta, provText, title, opts = {}) {
           const bs = mean(bParts); const cs = mean(cParts)
           if (bs > 0) speedPcts.push((bs - cs) / bs * 100)
         }
-        // Blend every quality dimension present on this leg (VQA overall %, OCR BLEU %) —
-        // each higher = better — so OCR is NOT dropped when cognitive tasks also ran.
+        // VQA overall % is higher = better.
         const qParts = []
         if (b.overall != null && c.overall != null && b.overall > 0) {
           qParts.push((c.overall - b.overall) / b.overall * 100)
         }
+        // OCR mixes directions: CER + WER are lower = better (improvement = base − cand),
+        // BLEU is higher = better (improvement = cand − base). Blend whichever sub-metrics
+        // are present into ONE equal-weighted OCR dimension so OCR doesn't outweigh VQA 3:1
+        // and a lower error rate counts as better, not worse.
         const bo = ocrGroup(`${host}|${base}|${dv}`)
         const co = ocrGroup(`${host}|${candidate}|${dv}`)
-        if (bo && co && bo.bleu != null && co.bleu != null && bo.bleu > 0) {
-          qParts.push((co.bleu - bo.bleu) / bo.bleu * 100)
+        if (bo && co) {
+          const ocrParts = []
+          if (bo.cer != null && co.cer != null && bo.cer > 0) ocrParts.push((bo.cer - co.cer) / bo.cer * 100)
+          if (bo.wer != null && co.wer != null && bo.wer > 0) ocrParts.push((bo.wer - co.wer) / bo.wer * 100)
+          if (bo.bleu != null && co.bleu != null && bo.bleu > 0) ocrParts.push((co.bleu - bo.bleu) / bo.bleu * 100)
+          if (ocrParts.length) qParts.push(mean(ocrParts))
         }
         if (qParts.length) qualPcts.push(mean(qParts))
       }
