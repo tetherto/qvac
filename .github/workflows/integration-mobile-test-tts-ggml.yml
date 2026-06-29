@@ -231,7 +231,7 @@ jobs:
       # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
       # block per suite (RTF + streaming) into bare_console.log. Scrape every
       # block with --merge (no last-write-wins) and union them per device. The
-      # artifact name is what benchmark-rtf-tts-ggml.yml's summarize job
+      # artifact name is what benchmark-performance-tts-ggml.yml's summarize job
       # downloads (pattern perf-report-tts-ggml-*). Skipped on normal PR runs.
       - name: Extract and report TTS-GGML performance
         if: always() && !cancelled() && inputs.run_rtf_benchmarks && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
