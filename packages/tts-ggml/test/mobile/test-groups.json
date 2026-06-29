@@ -1,0 +1,31 @@
+{
+  "_comment": "Mobile test sharding for @qvac/tts-ggml. The mobile CI action auto-detects this file and runs ONLY the tests listed here (Mocha --grep per group). The perf benchmarks (runRtfBenchmarkTest, runStreamingBenchmarkTest) are intentionally NOT listed: they must not run on normal mobile runs, so they can never produce a 0/0 result. The benchmark list lives in perf-tests.json; a benchmark run (run_rtf_benchmarks=true, e.g. via benchmark-rtf-tts-ggml.yml) builds its test-groups from that file and runs only those. To add/remove a benchmark, edit perf-tests.json — no workflow or this-file changes needed. Only the 'ios' and 'android' keys are consumed by the action; this _comment is ignored.",
+  "ios": {
+    "functional": [
+      "runAddonTest",
+      "runChatterboxJaMecabTest",
+      "runChatterboxKvCacheGpuTest",
+      "runChatterboxMtlTest",
+      "runChatterboxSpeedTest",
+      "runGpuSmokeTest",
+      "runMultipleRunsTest",
+      "runSupertonicMtlTest",
+      "runSupertonicTest",
+      "runSupertonic3QuantTest"
+    ]
+  },
+  "android": {
+    "functional": [
+      "runAddonTest",
+      "runChatterboxJaMecabTest",
+      "runChatterboxKvCacheGpuTest",
+      "runChatterboxMtlTest",
+      "runChatterboxSpeedTest",
+      "runGpuSmokeTest",
+      "runMultipleRunsTest",
+      "runSupertonicMtlTest",
+      "runSupertonicTest",
+      "runSupertonic3QuantTest"
+    ]
+  }
+}
