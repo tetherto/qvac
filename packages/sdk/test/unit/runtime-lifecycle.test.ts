@@ -11,6 +11,7 @@ import {
   getRegisteredResourceCounts,
   resetLifecycleState,
   assertLifecycleAllowed,
+  onResume,
 } from "@/server/bare/runtime-lifecycle";
 import type { Request } from "@/schemas";
 import { LifecycleOperationBlockedError } from "@/utils/errors-server";
@@ -391,4 +392,37 @@ test("gate blocks during transition states (suspending and resuming)", async (t)
   t.exception(() => assertLifecycleAllowed(fakeRequest("loadModel")));
 
   await resumeP;
+});
+
+test("onResume listeners fire after resume and unregister cleanly", async (t) => {
+  const log: string[] = [];
+  setup(log);
+  await suspendRuntime();
+
+  let fired = 0;
+  const off = onResume(() => fired++);
+
+  await resumeRuntime();
+  t.is(fired, 1, "listener fired once on resume");
+
+  off();
+  await suspendRuntime();
+  await resumeRuntime();
+  t.is(fired, 1, "listener did not fire after unregister");
+});
+
+test("resetLifecycleState clears onResume listeners", async (t) => {
+  const log: string[] = [];
+  setup(log);
+  await suspendRuntime();
+
+  let fired = 0;
+  onResume(() => fired++);
+
+  resetLifecycleState();
+  // Re-register resources and cycle; the pre-reset listener must not fire.
+  setup(log);
+  await suspendRuntime();
+  await resumeRuntime();
+  t.is(fired, 0, "listeners registered before reset are cleared");
 });
