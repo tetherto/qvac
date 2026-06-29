@@ -4,7 +4,11 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['coreml', 'cuda', 'directml', 'rocm', 'nnapi']
+// whisper.cpp GPU backends: the ggml cascade (Vulkan on linux/win32/android,
+// Metal on darwin/ios, OpenCL on Adreno android) plus the CoreML encoder
+// (darwin) and the DirectML path (win32) the benchmark matrix exercises.
+// CUDA is not supported on any platform.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'coreml', 'directml']
 
 function parseArgs (argv) {
   const args = {
@@ -97,9 +101,9 @@ function normalizeBackend (platformName, useGPU, backendHint) {
     case 'win32':
       return 'directml'
     case 'android':
-      return 'nnapi'
+      return 'vulkan'
     case 'linux':
-      return 'cuda'
+      return 'vulkan'
     default:
       return 'gpu'
   }

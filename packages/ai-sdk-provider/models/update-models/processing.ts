@@ -4,9 +4,7 @@ import { getAddonFromEngine, resolveCanonicalEngine } from './schemas.ts'
 import { detectShardedModel } from './shards.ts'
 import type { ProcessedModel } from './types.ts'
 
-export function toHexString (
-  value: Buffer | string | { data: number[] } | undefined
-): string {
+export function toHexString(value: Buffer | string | { data: number[] } | undefined): string {
   if (!value) return ''
   if (Buffer.isBuffer(value)) return value.toString('hex')
   if (typeof value === 'string') return value
@@ -16,7 +14,7 @@ export function toHexString (
   return ''
 }
 
-export function extractModelName (registryPath: string): string {
+export function extractModelName(registryPath: string): string {
   const parts = registryPath.split('/')
   if (parts.length >= 2) {
     return parts[1] || parts[0] || ''
@@ -29,7 +27,7 @@ export function extractModelName (registryPath: string): string {
   )
 }
 
-export function processRegistryModel (model: QVACModelEntry): ProcessedModel | null {
+export function processRegistryModel(model: QVACModelEntry): ProcessedModel | null {
   const engine = resolveCanonicalEngine(model.engine)
   if (!engine) {
     console.warn(`⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`)

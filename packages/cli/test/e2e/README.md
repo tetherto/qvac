@@ -19,7 +19,7 @@ build step handles this; the test scripts don't re-build.
 ### 1. In-process, via Fastify `app.inject()` — **default for `/v1/*` routes**
 
 Helpers: `helpers/server.ts` (`createServer`, `useServer`, `useModelServer`).
-Builds the *same* server code `qvac serve openai` runs (`buildServer`) and injects
+Builds the _same_ server code `qvac serve openai` runs (`buildServer`) and injects
 requests without opening a socket. Fast, deterministic, no port.
 
 Use for HTTP API behavior: routing, request/response shape, validation + error
@@ -74,11 +74,12 @@ each builds its own in-process server or spawns its own process on a free port i
 its own temp dir — so they run in parallel, as the first pass of `test:e2e:js`.
 
 The model-loading files (`model/`) run as a second, serial pass
-(`--test-concurrency=1`) as a precaution. Run in parallel they *may* contend on
+(`--test-concurrency=1`) as a precaution. Run in parallel they _may_ contend on
 the shared model cache in `~/.qvac` (cold on every CI run) or load several models
-+ SDK workers at once; neither has been shown to actually break, so they're
-serialized rather than risk flaky CI. If parallel model loads turn out to be
-safe, the two passes can be merged into one.
+
+- SDK workers at once; neither has been shown to actually break, so they're
+  serialized rather than risk flaky CI. If parallel model loads turn out to be
+  safe, the two passes can be merged into one.
 
 Within a file, node:test runs tests in definition order, but no test depends on
 another's side effects — the destructive model-unload test has its own server, as
@@ -98,7 +99,7 @@ Native TTS (discovery, wav, pcm) always runs.
 `test:e2e:js:coverage` uses node:test's built-in `--experimental-test-coverage`
 (no external dependency), scoped to `src/`. It reports the **in-process** surface
 (serve routes/adapters/plugins ≈ 80%+). Coverage of the spawned commands
-(`verify`/`bundle`/`doctor`/`openai`) is *not* folded into that number — built-in
+(`verify`/`bundle`/`doctor`/`openai`) is _not_ folded into that number — built-in
 coverage doesn't remap a child process's `dist` execution back to `src`. That's an
 accepted trade-off for keeping zero coverage deps.
 

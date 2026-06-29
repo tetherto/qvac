@@ -17,16 +17,18 @@ import {
   type MessageContentPart
 } from './common.js'
 
-export const chatCompletionsBody = z.object({
-  model: z.string().min(1),
-  messages: z.array(chatMessage),
-  stream: z.boolean().optional(),
-  tools: z.array(toolDef).optional(),
-  response_format: responseFormat.optional(),
-  temperature: z.number().optional(),
-  top_p: z.number().optional(),
-  max_tokens: z.number().int().optional()
-}).passthrough()
+export const chatCompletionsBody = z
+  .object({
+    model: z.string().min(1),
+    messages: z.array(chatMessage),
+    stream: z.boolean().optional(),
+    tools: z.array(toolDef).optional(),
+    response_format: responseFormat.optional(),
+    temperature: z.number().optional(),
+    top_p: z.number().optional(),
+    max_tokens: z.number().int().optional()
+  })
+  .passthrough()
 
 export const CHAT_UNSUPPORTED_PARAMS = [
   'logit_bias',
@@ -76,7 +78,7 @@ interface SdkHistoryItem {
   attachments?: Array<{ path: string }>
 }
 
-export function openaiMessagesToHistory (messages: OpenAIMessage[]): ChatHistoryItem[] {
+export function openaiMessagesToHistory(messages: OpenAIMessage[]): ChatHistoryItem[] {
   // Pure: decode + validate image parts to bytes (an unsupported image throws → 400). No file I/O —
   // writeChatImages materializes the bytes at the inference call, like routes/audio.ts.
   return messages.map((msg) => {
@@ -87,7 +89,7 @@ export function openaiMessagesToHistory (messages: OpenAIMessage[]): ChatHistory
   })
 }
 
-function decodeMessage (msg: OpenAIMessage): DecodedMessage {
+function decodeMessage(msg: OpenAIMessage): DecodedMessage {
   if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
     return { role: 'assistant', content: synthesizeToolCallContent(msg.tool_calls), images: [] }
   }
@@ -104,7 +106,7 @@ function decodeMessage (msg: OpenAIMessage): DecodedMessage {
 // OpenAI multimodal content is an array of parts: concatenate the text and decode each `image_url`
 // (base64 data URL) to its bytes. An image we cannot honor throws (→ 400) rather than being dropped,
 // so a "describe this image" turn never silently degrades to a text-only answer.
-function decodeMultimodalContent (role: string, parts: MessageContentPart[]): DecodedMessage {
+function decodeMultimodalContent(role: string, parts: MessageContentPart[]): DecodedMessage {
   let content = ''
   const images: ImageAttachment[] = []
   for (const part of parts) {
@@ -134,7 +136,7 @@ const IMAGE_MAGIC: Record<string, number[]> = {
   png: [0x89, 0x50, 0x4e, 0x47]
 }
 
-function decodeImageUrl (url: string): ImageAttachment {
+function decodeImageUrl(url: string): ImageAttachment {
   const match = /^data:(image\/[a-z0-9.+-]+);base64,(.*)$/is.exec(url)
   if (match === null) {
     throw new UnsupportedImageContentError(
@@ -161,7 +163,9 @@ function decodeImageUrl (url: string): ImageAttachment {
 // Materialize each image attachment's bytes to a flat temp file (mirrors routes/audio.ts's
 // writeTempAudio) and return the SDK history plus the temp paths the caller must unlink in a
 // `finally`. Atomic: if a write fails partway, the files already written this call are removed.
-export async function writeChatImages (history: ChatHistoryItem[]): Promise<{ history: SdkHistoryItem[], tmpPaths: string[] }> {
+export async function writeChatImages(
+  history: ChatHistoryItem[]
+): Promise<{ history: SdkHistoryItem[]; tmpPaths: string[] }> {
   const tmpPaths: string[] = []
   const sdkHistory: SdkHistoryItem[] = []
   try {
@@ -186,17 +190,19 @@ export async function writeChatImages (history: ChatHistoryItem[]): Promise<{ hi
   }
 }
 
-function synthesizeToolCallContent (toolCalls: NonNullable<OpenAIMessage['tool_calls']>): string {
-  return toolCalls.map((tc) => {
-    let args: Record<string, unknown>
-    try {
-      args = JSON.parse(tc.function.arguments) as Record<string, unknown>
-    } catch {
-      args = {}
-    }
-    const callObj = { name: tc.function.name, arguments: args }
-    return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
-  }).join('\n')
+function synthesizeToolCallContent(toolCalls: NonNullable<OpenAIMessage['tool_calls']>): string {
+  return toolCalls
+    .map((tc) => {
+      let args: Record<string, unknown>
+      try {
+        args = JSON.parse(tc.function.arguments) as Record<string, unknown>
+      } catch {
+        args = {}
+      }
+      const callObj = { name: tc.function.name, arguments: args }
+      return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
+    })
+    .join('\n')
 }
 
 export type ChatCompletionsBody = z.infer<typeof chatCompletionsBody>
@@ -209,12 +215,15 @@ export interface SdkChatArgs {
   stream: boolean
 }
 
-export function toSdkChatArgs (body: ChatCompletionsBody): SdkChatArgs {
+export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
   const responseFmt = extractResponseFormat(body as Record<string, unknown>)
   return {
     history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
     tools: openaiToolsToSdk(body.tools as Parameters<typeof openaiToolsToSdk>[0]),
-    generationParams: extractGenerationParams(body as Record<string, unknown>, 'max_completion_tokens'),
+    generationParams: extractGenerationParams(
+      body as Record<string, unknown>,
+      'max_completion_tokens'
+    ),
     responseFormat: responseFmt,
     stream: Boolean(body.stream)
   }

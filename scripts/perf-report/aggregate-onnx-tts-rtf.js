@@ -17,7 +17,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['coreml', 'cuda', 'directml', 'rocm', 'nnapi']
+const SUPPORTED_GPU_BACKENDS = ['coreml', 'directml', 'rocm', 'nnapi']
 const VALID_ENGINES = ['chatterbox-en', 'chatterbox-multi', 'supertonic']
 const NOISY_STDDEV_RATIO = 0.15
 
@@ -89,7 +89,7 @@ function normalizeBackend (platformName, useGPU, backendHint) {
     case 'android': return 'nnapi'
     case 'ios':
     case 'darwin': return 'coreml'
-    case 'linux': return hint || 'cuda'
+    case 'linux': return hint || 'gpu'
     case 'win32': return hint || 'directml'
     default: return hint || 'gpu'
   }

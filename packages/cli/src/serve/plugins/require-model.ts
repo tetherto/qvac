@@ -3,7 +3,8 @@ import { HttpError } from '../lib/http-error.js'
 import { resolveModelAlias } from '../config.js'
 import type { QvacRequestModel } from '../lib/types.js'
 
-export function requireModel (category: string): preHandlerAsyncHookHandler {
+export function requireModel(category: string): preHandlerAsyncHookHandler {
+  // lunte-disable-next-line require-await
   return async function (req) {
     const body = req.body as Record<string, unknown> | undefined
     const modelName = typeof body?.['model'] === 'string' ? (body['model'] as string).trim() : ''
@@ -11,20 +12,34 @@ export function requireModel (category: string): preHandlerAsyncHookHandler {
   }
 }
 
-export function resolveAndCheckModel (req: FastifyRequest, modelName: string, category: string): QvacRequestModel {
+export function resolveAndCheckModel(
+  req: FastifyRequest,
+  modelName: string,
+  category: string
+): QvacRequestModel {
   if (!modelName) {
     throw new HttpError(400, 'missing_model', '"model" is required.')
   }
 
   const ctx = req.server.qvac
-  const modelEntry = resolveModelAlias(ctx.serveConfig, modelName) ?? ctx.registry.getEntry(modelName)
+  const modelEntry =
+    resolveModelAlias(ctx.serveConfig, modelName) ?? ctx.registry.getEntry(modelName)
   if (!modelEntry) {
-    throw new HttpError(404, 'model_not_found', `Model "${modelName}" is not available. Check serve.models config.`)
+    throw new HttpError(
+      404,
+      'model_not_found',
+      `Model "${modelName}" is not available. Check serve.models config.`
+    )
   }
 
-  const endpointCategory = 'endpointCategory' in modelEntry ? modelEntry.endpointCategory : undefined
+  const endpointCategory =
+    'endpointCategory' in modelEntry ? modelEntry.endpointCategory : undefined
   if (endpointCategory !== category) {
-    throw new HttpError(400, 'invalid_model_type', `Model "${modelName}" does not support ${category}.`)
+    throw new HttpError(
+      400,
+      'invalid_model_type',
+      `Model "${modelName}" does not support ${category}.`
+    )
   }
 
   const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id

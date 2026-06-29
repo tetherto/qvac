@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
+  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
+  master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
+  in turn requires `ggml-speech 2026-06-26` (`qvac-ext-ggml` speech `f5727c32`,
+  PR #30); the `default-registry` baseline advances to `162f8f7c` so the new pins
+  resolve.
+  - **GPU (ARM Mali / Vulkan — Google Tensor / Pixel):** the CFM estimator's f32
+    `ggml_flash_attn_ext` miscomputed on Mali, blowing the f0 predictor up to NaN
+    and collapsing the audio into a clean ~1.3 s followed by a buzzy "blank +
+    beeps" break. Chatterbox now runs on Mali via an `is_arm_mali`-gated unfused
+    CFM attention (`soft_max` + separate-V matmul, numerically equivalent and
+    still on the GPU). Zero change off ARM Mali; CPU output byte-identical.
+  - **CPU (ARM SVE — Google Tensor / Pixel):** the SVE leftover-tail of
+    `ggml_vec_dot_f32` dropped the main loop's partial sums on inactive lanes
+    (`svmad_f32_m` → `svmla_f32_m`), biasing the HiFT `conv_transpose_1d` inner
+    dot and producing a constant ~12 kHz Nyquist tone. NEON/x86/RISC-V and all
+    non-CPU backends are byte-identical.
+
+## [0.3.6] - 2026-06-25
+
+### Fixed
+
+- **Chatterbox Metal GPU crash on the multilingual model — default KV-cache
+  dtype changed from `q8_0` to `f16`.** With the `q8_0` KV cache (the default
+  since 0.3.2, QVAC-19557), running the **multilingual** Chatterbox model on a
+  **Metal GPU** hard-aborted mid-synthesis with
+  `GGML_ABORT("unsupported op 'CONT'")`. The multilingual step graph
+  (`eval_step_mtl`, B=2 cond+uncond batched path) issues a `CONT` on the KV
+  cache, and the ggml-speech Metal backend only implements a `q8_0`-source
+  `CONT` to `f32`/`f16` — not `q8_0`→`q8_0` — so the op fails
+  `ggml_metal_device_supports_op` and aborts. The EN **Turbo** model and the
+  **CPU** backend were unaffected (different graph / backend supports the op),
+  which is why ≤0.2.5 worked on GPU and 0.3.2+ regressed. `f16` (~50% of f32,
+  vs `q8_0`'s ~27%) is now the safe cross-backend default; `q8_0` remains
+  available opt-in via `kvCacheType: 'q8_0'` for memory-constrained CPU/CUDA
+  hosts that implement the op. A proper backend-aware fix (extend
+  `chatterbox_resolve_kv_type` to probe `CONT` support, not just flash-attn)
+  belongs in `qvac-ext-lib-whisper.cpp` and would let Metal keep `q8_0` storage.
+
 ## [0.3.5] - 2026-06-24
 
 ### Changed
