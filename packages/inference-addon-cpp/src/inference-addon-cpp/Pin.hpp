@@ -26,6 +26,8 @@
 // a pthread_key destructor crashes (SIGSEGV) on dlclose() without the pin, and
 // survives with it.
 
+#include <atomic>
+
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -41,19 +43,21 @@
 namespace qvac_lib_inference_addon_cpp {
 
 // Pin the addon `.so`/`.dll` that this function is compiled into. Safe to call
-// repeatedly; the work is done once per loaded addon. `dladdr` resolves to the
-// calling addon's own library (addons are loaded RTLD_LOCAL, so the symbol is
-// not interposed), so each addon pins itself.
+// repeatedly and concurrently; the work is done once per loaded addon. `dladdr`
+// resolves to the calling addon's own library (addons are loaded RTLD_LOCAL, so
+// the symbol is not interposed), so each addon pins itself.
 #if !defined(_WIN32)
 __attribute__((visibility("hidden")))
 #endif
 inline void
 pinAddon() {
-  static bool pinned = false;
-  if (pinned) {
+  // Atomic so multiple Bare worklet threads creating instances concurrently
+  // can't race the guard and both fall through to pin. The first thread to
+  // exchange in `true` does the work; everyone else returns.
+  static std::atomic<bool> pinned{false};
+  if (pinned.exchange(true)) {
     return;
   }
-  pinned = true;
 
 #if defined(_WIN32)
   HMODULE module = nullptr;
