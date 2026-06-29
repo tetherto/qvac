@@ -10,6 +10,11 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/gpu-smoke.test.js', options)
+}
+
 module.exports = {
-  runAddonTest
+  runAddonTest,
+  runGpuSmokeTest
 }
