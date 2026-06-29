@@ -306,6 +306,11 @@ function build (rows, vision, meta, provText, title, opts = {}) {
       ttft: mean(okRows.map(r => r.ttft_ms).filter(v => v != null)),
       tps: mean(okRows.map(r => r.decode_tps).filter(v => v != null)),
       wall: mean(okRows.map(r => r.ms).filter(v => v != null)),
+      // Prompt-processing (encode) throughput: prompt + image tokens ingested per second
+      // during prefill (TTFT spans vision-encode + prompt-eval). Per-row ratio, then mean.
+      encTps: mean(okRows.map(r => (r.prompt_tokens != null && r.ttft_ms) ? r.prompt_tokens / (r.ttft_ms / 1000) : null).filter(v => v != null)),
+      // Response generation time: wall minus time-to-first-token = the decode phase (ms).
+      genMs: mean(okRows.map(r => (r.ms != null && r.ttft_ms != null) ? r.ms - r.ttft_ms : null).filter(v => v != null)),
       // Peak RSS is a per-process high-water mark; each measured block is its own
       // process, so report the MAX across blocks (not the mean). Populated on every
       // platform the runtime exposes getrusage (desktop + Android); null otherwise.
@@ -603,17 +608,20 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     L.push('')
   }
   L.push('### Speed\n')
-  L.push('| Config | host | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | decode TPS | wall (ms) |')
-  L.push('|---|---|---|---|---|---|---|---|---|')
+  L.push('| Config | host | n | err | **mmproj enc (ms)** | tiles | TTFT (ms) | encode TPS | decode TPS | gen (ms) | wall (ms) |')
+  L.push('|---|---|---|---|---|---|---|---|---|---|---|')
   for (const k of keys) {
     const [host, cell, dev] = k.split('|')
     const g = groupStats(k)
-    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${g.n} | ${g.errs} | ${fmtNum(g.ve, 1)} | ${fmtNum(g.sl, 1)} | ${fmtNum(g.ttft, 0)} | ${fmtNum(g.tps, 1)} | ${fmtNum(g.wall, 0)} |`)
+    L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${g.n} | ${g.errs} | ${fmtNum(g.ve, 1)} | ${fmtNum(g.sl, 1)} | ${fmtNum(g.ttft, 0)} | ${fmtNum(g.encTps, 1)} | ${fmtNum(g.tps, 1)} | ${fmtNum(g.genMs, 0)} | ${fmtNum(g.wall, 0)} |`)
   }
   L.push('')
   L.push('> **mmproj enc** is parsed from llama.cpp\'s native stderr. On mobile (Device Farm) that ' +
     'stream is not captured (Android logcat / iOS console), so it shows `—` there; TTFT on mobile ' +
-    'already includes the vision-encode + prompt-eval time and is the cross-platform proxy.\n')
+    'already includes the vision-encode + prompt-eval time and is the cross-platform proxy. ' +
+    '**encode TPS** = prompt + image tokens ÷ TTFT (prefill ingest rate); **decode TPS** is the ' +
+    'generation rate; **gen (ms)** = wall − TTFT (the response-generation/decode phase). encode TPS ' +
+    'and gen (ms) are reported on every platform that emits token counts, `—` where it does not.\n')
   // Peak RSS — its own table so a memory regression is easy to spot per platform ×
   // device × source. One row per host|cell|device; the value is the max across
   // measured blocks (per-process high-water). Populated where the runtime exposes it.
