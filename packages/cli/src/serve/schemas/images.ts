@@ -2,64 +2,70 @@ import { z } from 'zod'
 import type { Logger } from '../../logger.js'
 import type { DiffusionClientParams } from '@qvac/sdk'
 
-export const imagesGenerationsBody = z.object({
-  model: z.string().min(1),
-  prompt: z.string().min(1),
-  n: z.number().int().optional(),
-  size: z.string().optional(),
-  response_format: z.string().optional(),
-  stream: z.boolean().optional(),
-  seed: z.number().optional(),
-  steps: z.number().int().optional()
-}).passthrough()
+export const imagesGenerationsBody = z
+  .object({
+    model: z.string().min(1),
+    prompt: z.string().min(1),
+    n: z.number().int().optional(),
+    size: z.string().optional(),
+    response_format: z.string().optional(),
+    stream: z.boolean().optional(),
+    seed: z.number().optional(),
+    steps: z.number().int().optional()
+  })
+  .passthrough()
 
-export const imagesEditsBody = z.object({
-  model: z.string().min(1),
-  prompt: z.string().min(1).optional(),
-  image: z.instanceof(Buffer).optional(),
-  // `image[]` (with literal brackets) is the OpenAI batch-edit form. Declared
-  // here so a stringified value (e.g. `curl -F "image[]=junk-text"`) is
-  // rejected at the validation layer with code `missing_image` instead of
-  // falling through `.passthrough()` and crashing the handler at
-  // `imageFiles[0]!.buffer`. The error-handler maps the instancePath
-  // `image[]` → `missing_image`.
-  'image[]': z.instanceof(Buffer).optional(),
-  size: z.string().optional(),
-  response_format: z.string().optional(),
-  n: z.union([z.string(), z.number()]).optional(),
-  strength: z.union([z.string(), z.number()]).optional(),
-  stream: z.union([z.string(), z.boolean()]).optional()
-}).passthrough().superRefine((body, ctx) => {
-  if (!('image' in body) && !('image[]' in body)) {
-    ctx.addIssue({ code: 'custom', path: ['image'], message: '"image" field is required.' })
-  }
-  if ('mask' in body || 'mask[]' in body) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['mask'],
-      message: 'mask inpainting is not supported by this server; the underlying diffusion engine has no mask channel. Resend without `mask` / `mask[]`.'
-    })
-  }
-})
+export const imagesEditsBody = z
+  .object({
+    model: z.string().min(1),
+    prompt: z.string().min(1).optional(),
+    image: z.instanceof(Buffer).optional(),
+    // `image[]` (with literal brackets) is the OpenAI batch-edit form. Declared
+    // here so a stringified value (e.g. `curl -F "image[]=junk-text"`) is
+    // rejected at the validation layer with code `missing_image` instead of
+    // falling through `.passthrough()` and crashing the handler at
+    // `imageFiles[0]!.buffer`. The error-handler maps the instancePath
+    // `image[]` → `missing_image`.
+    'image[]': z.instanceof(Buffer).optional(),
+    size: z.string().optional(),
+    response_format: z.string().optional(),
+    n: z.union([z.string(), z.number()]).optional(),
+    strength: z.union([z.string(), z.number()]).optional(),
+    stream: z.union([z.string(), z.boolean()]).optional()
+  })
+  .passthrough()
+  .superRefine((body, ctx) => {
+    if (!('image' in body) && !('image[]' in body)) {
+      ctx.addIssue({ code: 'custom', path: ['image'], message: '"image" field is required.' })
+    }
+    if ('mask' in body || 'mask[]' in body) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mask'],
+        message:
+          'mask inpainting is not supported by this server; the underlying diffusion engine has no mask channel. Resend without `mask` / `mask[]`.'
+      })
+    }
+  })
 
 // ─── Errors ──────────────────────────────────────────────────────────
 
 export class InvalidImageSizeError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidImageSizeError'
   }
 }
 
 export class InvalidImagePromptError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidImagePromptError'
   }
 }
 
 export class InvalidImageBatchCountError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidImageBatchCountError'
   }
@@ -67,7 +73,7 @@ export class InvalidImageBatchCountError extends Error {
 
 export class UnsupportedImageOutputError extends Error {
   readonly code: string
-  constructor (code: string, message: string) {
+  constructor(code: string, message: string) {
     super(message)
     this.name = 'UnsupportedImageOutputError'
     this.code = code
@@ -75,7 +81,7 @@ export class UnsupportedImageOutputError extends Error {
 }
 
 export class InvalidImageStrengthError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidImageStrengthError'
   }
@@ -83,14 +89,11 @@ export class InvalidImageStrengthError extends Error {
 
 // ─── Parsers / Mappers ───────────────────────────────────────────────
 
-export type ParsedImageSize =
-  | { width: number; height: number }
-  | { auto: true }
-  | null
+export type ParsedImageSize = { width: number; height: number } | { auto: true } | null
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/
 
-export function parseImageSize (size: unknown): ParsedImageSize {
+export function parseImageSize(size: unknown): ParsedImageSize {
   if (size === undefined || size === null || size === '') return null
   if (typeof size !== 'string') {
     throw new InvalidImageSizeError('"size" must be a string like "1024x1024" or "auto".')
@@ -99,22 +102,28 @@ export function parseImageSize (size: unknown): ParsedImageSize {
 
   const match = SIZE_PATTERN.exec(size)
   if (!match) {
-    throw new InvalidImageSizeError(`"size" must be "WIDTHxHEIGHT" or "auto" (got ${JSON.stringify(size)}).`)
+    throw new InvalidImageSizeError(
+      `"size" must be "WIDTHxHEIGHT" or "auto" (got ${JSON.stringify(size)}).`
+    )
   }
 
   const width = Number(match[1])
   const height = Number(match[2])
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
-    throw new InvalidImageSizeError(`"size" dimensions must be positive integers (got ${JSON.stringify(size)}).`)
+    throw new InvalidImageSizeError(
+      `"size" dimensions must be positive integers (got ${JSON.stringify(size)}).`
+    )
   }
   if (width % 8 !== 0 || height % 8 !== 0) {
-    throw new InvalidImageSizeError(`"size" dimensions must be multiples of 8 (got ${width}x${height}).`)
+    throw new InvalidImageSizeError(
+      `"size" dimensions must be multiples of 8 (got ${width}x${height}).`
+    )
   }
 
   return { width, height }
 }
 
-export function extractImageGenerationParams (
+export function extractImageGenerationParams(
   body: Record<string, unknown>,
   modelId: string
 ): DiffusionClientParams {
@@ -138,7 +147,9 @@ export function extractImageGenerationParams (
   if (body['n'] !== undefined) {
     const n = body['n']
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
-      throw new InvalidImageBatchCountError(`"n" must be a positive integer (got ${JSON.stringify(n)}).`)
+      throw new InvalidImageBatchCountError(
+        `"n" must be a positive integer (got ${JSON.stringify(n)}).`
+      )
     }
     params.batch_count = n
   }
@@ -147,18 +158,25 @@ export function extractImageGenerationParams (
 }
 
 const IMAGE_ADVISORY_PARAMS = [
-  'quality', 'style', 'moderation', 'partial_images', 'user', 'input_fidelity'
+  'quality',
+  'style',
+  'moderation',
+  'partial_images',
+  'user',
+  'input_fidelity'
 ] as const
 
-export function logImageUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
+export function logImageUnsupportedParams(body: Record<string, unknown>, logger: Logger): void {
   for (const param of IMAGE_ADVISORY_PARAMS) {
     if (body[param] !== undefined) {
-      logger.warn(`Ignoring unsupported OpenAI image param: ${param}=${JSON.stringify(body[param])}`)
+      logger.warn(
+        `Ignoring unsupported OpenAI image param: ${param}=${JSON.stringify(body[param])}`
+      )
     }
   }
 }
 
-export function assertSupportedImageOutputParams (body: Record<string, unknown>): void {
+export function assertSupportedImageOutputParams(body: Record<string, unknown>): void {
   const outputFormat = body['output_format']
   if (outputFormat !== undefined && outputFormat !== null && outputFormat !== 'png') {
     throw new UnsupportedImageOutputError(
@@ -182,7 +200,7 @@ export function assertSupportedImageOutputParams (body: Record<string, unknown>)
   }
 }
 
-export function coerceMultipartFields (fields: Map<string, string>): Record<string, unknown> {
+export function coerceMultipartFields(fields: Map<string, string>): Record<string, unknown> {
   const obj: Record<string, unknown> = {}
   for (const [k, v] of fields.entries()) {
     const trimmed = v.trim()
@@ -216,7 +234,7 @@ export function coerceMultipartFields (fields: Map<string, string>): Record<stri
   return obj
 }
 
-export function extractImageEditParams (
+export function extractImageEditParams(
   body: Record<string, unknown>,
   imageBuffer: Uint8Array,
   modelId: string
@@ -232,9 +250,7 @@ export function extractImageEditParams (
       )
     }
     if (strengthRaw < 0 || strengthRaw > 1) {
-      throw new InvalidImageStrengthError(
-        `"strength" must be in [0, 1] (got ${strengthRaw}).`
-      )
+      throw new InvalidImageStrengthError(`"strength" must be in [0, 1] (got ${strengthRaw}).`)
     }
     params.strength = strengthRaw
   }
@@ -242,7 +258,7 @@ export function extractImageEditParams (
   return params
 }
 
-export function logImageEditExtraWarnings (
+export function logImageEditExtraWarnings(
   _body: Record<string, unknown>,
   opts: { extraImageCount: number },
   logger: Logger

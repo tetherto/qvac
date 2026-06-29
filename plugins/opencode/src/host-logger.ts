@@ -6,20 +6,22 @@ export interface HostLogger {
   error: (message: string) => void
 }
 
-function writeFileLog (logFile: string | undefined, message: string): void {
+function writeFileLog(logFile: string | undefined, message: string): void {
   if (logFile === undefined) return
   try {
     appendFileSync(logFile, `${new Date().toISOString()} ${message}\n`)
-  } catch {
-  }
+  } catch {}
 }
 
-export function formatUnknownError (err: unknown): string {
+export function formatUnknownError(err: unknown): string {
   if (err instanceof Error) return err.stack ?? err.message
   return String(err)
 }
 
-export function createHostLogger (params: { debug: boolean, logFile: string | undefined }): HostLogger {
+export function createHostLogger(params: {
+  debug: boolean
+  logFile: string | undefined
+}): HostLogger {
   const write = (message: string): void => writeFileLog(params.logFile, message)
   return {
     log: (message: string): void => {

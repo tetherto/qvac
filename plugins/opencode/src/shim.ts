@@ -30,8 +30,8 @@ interface TextPart {
 // Collapse an OpenAI array-of-parts `content` into the plain string serve
 // accepts, concatenating the text parts. Strings and nullish values pass
 // through unchanged; non-text parts (e.g. image_url) contribute nothing.
-export function flattenContent (content: unknown): unknown {
-  if (typeof content === 'string' || content == null) return content
+export function flattenContent(content: unknown): unknown {
+  if (typeof content === 'string' || content === null || content === undefined) return content
   if (!Array.isArray(content)) return content
   return content
     .map((part: unknown): string => {
@@ -44,10 +44,12 @@ export function flattenContent (content: unknown): unknown {
 }
 
 // Flatten the `content` of every message in a chat-completion body in place.
-export function flattenMessages (body: ChatCompletionBody): ChatCompletionBody {
+export function flattenMessages(body: ChatCompletionBody): ChatCompletionBody {
   if (Array.isArray(body.messages)) {
     for (const msg of body.messages) {
-      if (msg != null && 'content' in msg) msg.content = flattenContent(msg.content)
+      if (msg !== null && msg !== undefined && 'content' in msg) {
+        msg.content = flattenContent(msg.content)
+      }
     }
   }
   return body
@@ -58,7 +60,7 @@ const THINK_CLOSE = '</think>'
 
 // Longest suffix of `text` that is a strict prefix of `tag`, so a tag split
 // across stream chunks is carried over rather than emitted half-formed.
-function maxTagSuffix (text: string, tag: string): number {
+function maxTagSuffix(text: string, tag: string): number {
   const max = Math.min(text.length, tag.length - 1)
   for (let k = max; k > 0; k--) {
     if (text.slice(text.length - k) === tag.slice(0, k)) return k
@@ -79,10 +81,10 @@ export interface ThinkSplitter {
 // Stateful splitter: feed it successive content deltas and it returns the
 // portion that is answer `content` vs. reasoning (text inside `<think>` tags,
 // with the tags stripped). Handles tags spanning chunk boundaries via a carry.
-export function makeThinkSplitter (): ThinkSplitter {
+export function makeThinkSplitter(): ThinkSplitter {
   let inThink = false
   let carry = ''
-  const split = function split (input: string): SplitResult {
+  const split = function split(input: string): SplitResult {
     let text = carry + input
     carry = ''
     let content = ''
@@ -143,7 +145,7 @@ export interface SSEChunk {
 // Turn one upstream SSE object into 0..2 objects: a `reasoning_content` chunk
 // for any `<think>` text and/or a `content` chunk for the rest. Chunks without
 // a string `content` delta (role-only, tool_calls, finish, usage) pass through.
-export function transformSSEChunk (chunk: SSEChunk, split: ThinkSplitter): SSEChunk[] {
+export function transformSSEChunk(chunk: SSEChunk, split: ThinkSplitter): SSEChunk[] {
   const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined
   const delta = choice?.delta
   if (choice === undefined || delta === undefined || typeof delta.content !== 'string') {
@@ -152,7 +154,10 @@ export function transformSSEChunk (chunk: SSEChunk, split: ThinkSplitter): SSECh
   const { content, reasoning } = split(delta.content)
   const out: SSEChunk[] = []
   if (reasoning !== '') {
-    out.push({ ...chunk, choices: [{ ...choice, delta: { reasoning_content: reasoning }, finish_reason: null }] })
+    out.push({
+      ...chunk,
+      choices: [{ ...choice, delta: { reasoning_content: reasoning }, finish_reason: null }]
+    })
   }
   const rest: SSEDelta = { ...delta, content }
   const hasOtherKeys = Object.keys(rest).some((k) => k !== 'content')

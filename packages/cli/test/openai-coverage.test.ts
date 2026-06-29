@@ -4,10 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildCoverageReport } from '../src/openai/coverage/build-report.js'
 import { categorize } from '../src/openai/coverage/categorize.js'
-import {
-  filterCoverageRows,
-  formatCoverageReportHuman
-} from '../src/openai/coverage/format.js'
+import { filterCoverageRows, formatCoverageReportHuman } from '../src/openai/coverage/format.js'
 import { parseRouter } from '../src/openai/coverage/parse-router.js'
 import { parseSpec } from '../src/openai/coverage/parse-spec.js'
 import { CONSUMER_PRIMARY_ENDPOINTS } from '../src/openai/coverage/primary.js'
@@ -27,14 +24,8 @@ describe('openai coverage categorize', () => {
   it('maps x-oaiMeta.group slugs and tags case-insensitively', () => {
     assert.equal(categorize({ tags: [], group: 'containers' }), 'platform')
     assert.equal(categorize({ tags: [], group: 'chatkit' }), 'platform')
-    assert.equal(
-      categorize({ tags: ['Certificates'], group: 'administration' }),
-      'platform'
-    )
-    assert.equal(
-      categorize({ tags: [], group: 'responses' }),
-      'primary-ai'
-    )
+    assert.equal(categorize({ tags: ['Certificates'], group: 'administration' }), 'platform')
+    assert.equal(categorize({ tags: [], group: 'responses' }), 'primary-ai')
     assert.equal(categorize({ tags: ['chat'] }), 'primary-ai')
   })
 })
@@ -60,10 +51,7 @@ describe('openai coverage live report (fixture)', () => {
 
     assert.ok(report.rows.length > 0)
     assert.equal(report.summary.byCategory['unknown'].total, 1)
-    assert.equal(
-      report.rows.find((r) => r.tags.includes('NewlyAddedThing'))?.category,
-      'unknown'
-    )
+    assert.equal(report.rows.find((r) => r.tags.includes('NewlyAddedThing'))?.category, 'unknown')
 
     const categories = ['primary-ai', 'ai-secondary', 'platform', 'unknown'] as const
     for (const cat of categories) {
@@ -102,9 +90,7 @@ describe('openai coverage live report (fixture)', () => {
       routerPath: FIXTURE_ROUTER
     })
     assert.ok(report.summary.unknownBreakdown)
-    assert.ok(
-      report.summary.unknownBreakdown.some((x) => x.label === 'NewlyAddedThing')
-    )
+    assert.ok(report.summary.unknownBreakdown.some((x) => x.label === 'NewlyAddedThing'))
   })
 
   it('omits unknown section and category line when nothing is unmapped', () => {
@@ -191,4 +177,3 @@ describe('openai coverage parse-spec', () => {
     assert.ok(entries.some((e) => e.path === '/v1/chat/completions'))
   })
 })
-

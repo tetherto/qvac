@@ -11,10 +11,7 @@ import {
   type NativePackage,
   type UnclassifiedPackage
 } from './native-packages.js'
-import {
-  LockfileNotFoundAtRefError,
-  type LockfilePackage
-} from './lockfile.js'
+import { LockfileNotFoundAtRefError, type LockfilePackage } from './lockfile.js'
 
 export interface VerifyDepsOptions {
   projectRoot: string
@@ -44,19 +41,19 @@ interface PackageIdentity {
   version?: string
 }
 
-function packageKey (pkg: PackageIdentity): string {
+function packageKey(pkg: PackageIdentity): string {
   return `${pkg.name}@${pkg.version ?? 'unknown'}`
 }
 
-function sortPackages<T extends PackageIdentity> (packages: T[]): T[] {
+function sortPackages<T extends PackageIdentity>(packages: T[]): T[] {
   return [...packages].sort((a, b) => packageKey(a).localeCompare(packageKey(b)))
 }
 
-export function formatNativePackage (pkg: PackageIdentity): string {
+export function formatNativePackage(pkg: PackageIdentity): string {
   return `${pkg.name}@${pkg.version ?? 'unknown'}`
 }
 
-export function diffNativePackages (
+export function diffNativePackages(
   basePackages: NativePackage[],
   headPackages: NativePackage[]
 ): NativePackageDiff {
@@ -84,20 +81,21 @@ export function diffNativePackages (
   }
 }
 
-async function nativePackagesForLock (
+// lunte-disable-next-line require-await
+async function nativePackagesForLock(
   packageRoot: string,
   packages: LockfilePackage[]
 ): Promise<{
-    nativePackages: NativePackage[]
-    unclassifiedPackages: UnclassifiedPackage[]
-  }> {
+  nativePackages: NativePackage[]
+  unclassifiedPackages: UnclassifiedPackage[]
+}> {
   return collectNativePackages({
     projectRoot: packageRoot,
     packages
   })
 }
 
-export function diffUnknownRemovedPackages (
+export function diffUnknownRemovedPackages(
   baseUnclassifiedPackages: UnclassifiedPackage[],
   headPackages: LockfilePackage[]
 ): UnclassifiedPackage[] {
@@ -114,24 +112,16 @@ export function diffUnknownRemovedPackages (
   return sortPackages([...unknownRemovedByKey.values()])
 }
 
-export function resolveLockfilePackageRoot (
-  projectRoot: string,
-  lockfilePath?: string
-): string {
+export function resolveLockfilePackageRoot(projectRoot: string, lockfilePath?: string): string {
   const resolvedLockfile = path.isAbsolute(lockfilePath ?? NPM_LOCKFILE)
-    ? lockfilePath ?? NPM_LOCKFILE
+    ? (lockfilePath ?? NPM_LOCKFILE)
     : path.join(projectRoot, lockfilePath ?? NPM_LOCKFILE)
   return path.dirname(resolvedLockfile)
 }
 
-export async function verifyDeps (
-  options: VerifyDepsOptions
-): Promise<VerifyDepsResult> {
+export async function verifyDeps(options: VerifyDepsOptions): Promise<VerifyDepsResult> {
   const lockfilePath = options.lockfilePath ?? NPM_LOCKFILE
-  const packageRoot = resolveLockfilePackageRoot(
-    options.projectRoot,
-    lockfilePath
-  )
+  const packageRoot = resolveLockfilePackageRoot(options.projectRoot, lockfilePath)
   const baseOptions: ReadNpmPackageLockAtRefOptions = {
     projectRoot: options.projectRoot,
     ref: options.base
@@ -165,18 +155,17 @@ export async function verifyDeps (
   const basePackages = baseLock === null ? [] : collectPackagesFromNpmLock(baseLock)
   const headPackages = headLock === null ? [] : collectPackagesFromNpmLock(headLock)
 
-  const base = baseLock === null
-    ? { nativePackages: [], unclassifiedPackages: [] }
-    : await nativePackagesForLock(packageRoot, basePackages)
-  const head = headLock === null
-    ? { nativePackages: [], unclassifiedPackages: [] }
-    : await nativePackagesForLock(packageRoot, headPackages)
+  const base =
+    baseLock === null
+      ? { nativePackages: [], unclassifiedPackages: [] }
+      : await nativePackagesForLock(packageRoot, basePackages)
+  const head =
+    headLock === null
+      ? { nativePackages: [], unclassifiedPackages: [] }
+      : await nativePackagesForLock(packageRoot, headPackages)
 
   const diff = diffNativePackages(base.nativePackages, head.nativePackages)
-  diff.unknownRemoved = diffUnknownRemovedPackages(
-    base.unclassifiedPackages,
-    headPackages
-  )
+  diff.unknownRemoved = diffUnknownRemovedPackages(base.unclassifiedPackages, headPackages)
 
   return {
     base: options.base,
@@ -187,7 +176,7 @@ export async function verifyDeps (
   }
 }
 
-async function readOptionalNpmPackageLockAtRef (
+async function readOptionalNpmPackageLockAtRef(
   options: ReadNpmPackageLockAtRefOptions
 ): Promise<PackageLockFile | null> {
   try {
@@ -198,7 +187,7 @@ async function readOptionalNpmPackageLockAtRef (
   }
 }
 
-function formatList (title: string, packages: NativePackage[], marker: string): string[] {
+function formatList(title: string, packages: NativePackage[], marker: string): string[] {
   if (packages.length === 0) return []
   return [
     `  ${title} (${packages.length}):`,
@@ -207,7 +196,7 @@ function formatList (title: string, packages: NativePackage[], marker: string): 
   ]
 }
 
-function formatUnknownRemovedList (packages: UnclassifiedPackage[]): string[] {
+function formatUnknownRemovedList(packages: UnclassifiedPackage[]): string[] {
   if (packages.length === 0) return []
   return [
     `  Removed (unknown native status) (${packages.length}):`,
@@ -216,7 +205,7 @@ function formatUnknownRemovedList (packages: UnclassifiedPackage[]): string[] {
   ]
 }
 
-export function hasNativeChanges (result: VerifyDepsResult): boolean {
+export function hasNativeChanges(result: VerifyDepsResult): boolean {
   return (
     result.diff.added.length > 0 ||
     result.diff.removed.length > 0 ||
@@ -224,11 +213,11 @@ export function hasNativeChanges (result: VerifyDepsResult): boolean {
   )
 }
 
-export function hasUnclassifiedPackages (result: VerifyDepsResult): boolean {
+export function hasUnclassifiedPackages(result: VerifyDepsResult): boolean {
   return result.unclassifiedBase.length > 0 || result.unclassifiedHead.length > 0
 }
 
-function formatUnclassifiedWarning (result: VerifyDepsResult): string[] {
+function formatUnclassifiedWarning(result: VerifyDepsResult): string[] {
   const unknownRemovedKeys = new Set(result.diff.unknownRemoved.map(packageKey))
   const unclassifiedPackages = [
     ...result.unclassifiedBase.filter((pkg) => !unknownRemovedKeys.has(packageKey(pkg))),
@@ -244,7 +233,7 @@ function formatUnclassifiedWarning (result: VerifyDepsResult): string[] {
   ]
 }
 
-export function formatVerifyDepsResult (result: VerifyDepsResult): string {
+export function formatVerifyDepsResult(result: VerifyDepsResult): string {
   if (result.skippedReason) {
     return result.skippedReason
   }

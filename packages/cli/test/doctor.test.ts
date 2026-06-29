@@ -26,7 +26,7 @@ import type { CheckContext } from '../src/doctor/checks/index.js'
 // Build a CheckContext with a minimal, deterministic baseline and spread
 // per-test overrides on top. Keeps each test assertion about a single
 // variable rather than mocking the whole host.
-function makeCtx (overrides: Partial<CheckContext> = {}): CheckContext {
+function makeCtx(overrides: Partial<CheckContext> = {}): CheckContext {
   return {
     projectRoot: process.cwd(),
     platform: 'linux',
@@ -123,9 +123,18 @@ describe('checkTotalMemory', () => {
   })
 
   it("reports severity 'required' across fail/warn/pass branches (severity describes the check, not the outcome)", () => {
-    assert.equal(checkTotalMemory(makeCtx({ totalMemoryBytes: 1 * 1024 ** 3 })).severity, 'required')
-    assert.equal(checkTotalMemory(makeCtx({ totalMemoryBytes: 3 * 1024 ** 3 })).severity, 'required')
-    assert.equal(checkTotalMemory(makeCtx({ totalMemoryBytes: 8 * 1024 ** 3 })).severity, 'required')
+    assert.equal(
+      checkTotalMemory(makeCtx({ totalMemoryBytes: 1 * 1024 ** 3 })).severity,
+      'required'
+    )
+    assert.equal(
+      checkTotalMemory(makeCtx({ totalMemoryBytes: 3 * 1024 ** 3 })).severity,
+      'required'
+    )
+    assert.equal(
+      checkTotalMemory(makeCtx({ totalMemoryBytes: 8 * 1024 ** 3 })).severity,
+      'required'
+    )
   })
 })
 
@@ -175,25 +184,31 @@ describe('checkGpuAcceleration', () => {
       '\tdeviceName         = NVIDIA GeForce RTX 3080',
       '\tdeviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU'
     ].join('\n')
-    const r = checkGpuAcceleration(makeCtx({
-      platform: 'linux',
-      probe: () => ({ ok: true, stdout })
-    }))
+    const r = checkGpuAcceleration(
+      makeCtx({
+        platform: 'linux',
+        probe: () => ({ ok: true, stdout })
+      })
+    )
     assert.equal(r.status, 'pass')
     assert.ok(r.value && r.value.includes('NVIDIA GeForce RTX 3080'))
   })
 
   it('passes on linux but hints when vulkaninfo reports no devices', () => {
-    const r = checkGpuAcceleration(makeCtx({
-      platform: 'linux',
-      probe: () => ({ ok: true, stdout: 'VULKANINFO\n' })
-    }))
+    const r = checkGpuAcceleration(
+      makeCtx({
+        platform: 'linux',
+        probe: () => ({ ok: true, stdout: 'VULKANINFO\n' })
+      })
+    )
     assert.equal(r.status, 'pass')
     assert.ok(r.hint && /no GPU devices/i.test(r.hint))
   })
 
   it('is informational on unknown platforms', () => {
-    const r = checkGpuAcceleration(makeCtx({ platform: 'freebsd' as NodeJS.Platform, probe: () => ({ ok: false }) }))
+    const r = checkGpuAcceleration(
+      makeCtx({ platform: 'freebsd' as NodeJS.Platform, probe: () => ({ ok: false }) })
+    )
     assert.equal(r.status, 'info')
     assert.equal(r.severity, 'informational')
   })
@@ -365,7 +380,9 @@ describe('collectCheckSections + isReportOk', () => {
   })
 
   it('accepts an explicit CheckContext override for deterministic test runs', () => {
-    const sections = collectCheckSections({ context: makeCtx({ probe: () => ({ ok: true, version: 'x' }) }) })
+    const sections = collectCheckSections({
+      context: makeCtx({ probe: () => ({ ok: true, version: 'x' }) })
+    })
     const tools = sections.find((s) => s.id === 'tools')
     assert.ok(tools)
     assert.ok(tools.checks.every((c) => c.status === 'pass'))
