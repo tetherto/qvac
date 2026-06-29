@@ -217,6 +217,29 @@ TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToF16) {
       "f16");
 }
 
+// Tripwire (QVAC-21401): the *default* KV-cache dtype must be one every GPU
+// backend can run the full multilingual T3 step graph with.  The MTL graph
+// (tts-cpp eval_step_mtl) issues a ggml_cont on the KV cache, and ggml-speech's
+// Metal backend has no q8_0->q8_0 CONT, so a *quantized* default (q8_0, the
+// 0.3.2 QVAC-19557 default) hard-aborts the multilingual model on Metal with
+// GGML_ABORT("unsupported op 'CONT'").  This asserts the *property* (default is
+// f32/f16, never quantized), not just the current literal — so a future
+// re-flip to a quantized default trips this cheap, no-GPU PR check instead of
+// shipping and aborting on a user's Apple Silicon device.  Relax deliberately
+// only once tts-cpp's chatterbox_resolve_kv_type probes CONT (and auto-
+// downgrades quantized KV on backends that can't run it).
+TEST(ChatterboxEngineOptions, DefaultKvCacheTypeIsGpuSafeNotQuantized) {
+  ChatterboxConfig cfg;  // no kvCacheType -> addon default
+  const std::string def =
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type;
+  EXPECT_TRUE(def == "f32" || def == "f16")
+      << "default KV-cache dtype '" << def << "' is not GPU-safe: a quantized "
+         "default aborts the multilingual Chatterbox model on Metal "
+         "(unsupported q8_0 CONT, QVAC-21401). Keep the default f16/f32, or "
+         "land the tts-cpp CONT-probe fix before re-quantizing it.";
+  EXPECT_NE(def, "q8_0");
+}
+
 TEST(ChatterboxEngineOptions, ExplicitKvCacheTypeForwarded) {
   ChatterboxConfig cfg;
   cfg.kvCacheType = "f32";

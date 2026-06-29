@@ -29,8 +29,33 @@ interface ResourceMeta {
 const swarms = new Map<SuspendableSwarm, ResourceMeta>();
 const stores = new Map<SuspendableStore, ResourceMeta>();
 
+type ResumeListener = () => void;
+const resumeListeners = new Set<ResumeListener>();
+
 let state: LifecycleState = "active";
 let transitionPromise: Promise<void> | null = null;
+
+/**
+ * Register a callback fired after the runtime returns to "active". Lets in-flight
+ * work (e.g. an HTTP download whose socket died while backgrounded) recover the
+ * instant `resume()` runs instead of waiting for a timeout. Returns an
+ * unregister function — callers MUST call it when their work finishes so the
+ * listener doesn't leak into the next operation.
+ */
+export function onResume(listener: ResumeListener): () => void {
+  resumeListeners.add(listener);
+  return () => resumeListeners.delete(listener);
+}
+
+function notifyResume(): void {
+  for (const listener of Array.from(resumeListeners)) {
+    try {
+      listener();
+    } catch (error) {
+      logger.error("Lifecycle: onResume listener threw:", error);
+    }
+  }
+}
 
 export function registerSwarm(swarm: SuspendableSwarm, meta: ResourceMeta) {
   swarms.set(swarm, meta);
@@ -75,6 +100,7 @@ export function getRegisteredResourceCounts() {
 export function resetLifecycleState() {
   swarms.clear();
   stores.clear();
+  resumeListeners.clear();
   state = "active";
   transitionPromise = null;
 }
@@ -201,6 +227,7 @@ export async function resumeRuntime(): Promise<void> {
     .then(() => {
       state = "active";
       logger.info("▶️ Runtime resumed");
+      notifyResume();
     })
     .catch((error: unknown) => {
       state = "suspended";

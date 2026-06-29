@@ -36,7 +36,7 @@ Release Date: 2026-06-10
 
 ### Added
 
-- **Managed mode (`mode: 'managed'`).** `createQvac({ mode: 'managed', models, ... })` returns a `Promise<ManagedQvacProvider>` that synthesizes an ephemeral `qvac.config.json` from a model list and brings up `qvac serve openai` for you — no hand-authored config or separate CLI step. Serves are **shared** across processes via a *fleet key* (model set + per-model config + host + binary + pinned port), owned by a **detached runner** that idle-reaps the serve once no consumer process remains for `serveIdleTimeout` (default 5 min). `close()` / `await using` detaches the calling process; a serve still in use by another consumer keeps running. Includes crash-recovery (`fetch` re-resolves and retries once on `ECONNREFUSED`) and a self-healing registry under `~/.qvac/managed-serves/`. New options: `models`, `servePort`, `serveHost`, `serveStartTimeout`, `serveBinPath`, `reuse`, `serveIdleTimeout`. New exports: `ManagedQvacProvider`, `QvacManagedOptions`, `QvacManagedModel`, `QvacExternalOptions`, and the managed error classes (`QvacManagedModeError` + subclasses) with the `QvacManagedErrorCode` union. Requires the optional `@qvac/cli` peer dependency. **External mode is unchanged**; the managed subsystem is dynamically imported only when `mode: 'managed'` is set.
+- **Managed mode (`mode: 'managed'`).** `createQvac({ mode: 'managed', models, ... })` returns a `Promise<ManagedQvacProvider>` that synthesizes an ephemeral `qvac.config.json` from a model list and brings up `qvac serve openai` for you — no hand-authored config or separate CLI step. Serves are **shared** across processes via a _fleet key_ (model set + per-model config + host + binary + pinned port), owned by a **detached runner** that idle-reaps the serve once no consumer process remains for `serveIdleTimeout` (default 5 min). `close()` / `await using` detaches the calling process; a serve still in use by another consumer keeps running. Includes crash-recovery (`fetch` re-resolves and retries once on `ECONNREFUSED`) and a self-healing registry under `~/.qvac/managed-serves/`. New options: `models`, `servePort`, `serveHost`, `serveStartTimeout`, `serveBinPath`, `reuse`, `serveIdleTimeout`. New exports: `ManagedQvacProvider`, `QvacManagedOptions`, `QvacManagedModel`, `QvacExternalOptions`, and the managed error classes (`QvacManagedModeError` + subclasses) with the `QvacManagedErrorCode` union. Requires the optional `@qvac/cli` peer dependency. **External mode is unchanged**; the managed subsystem is dynamically imported only when `mode: 'managed'` is set.
 - **Refreshed model catalog.** Updated the generated provider catalog against the live QVAC registry for the 0.2.0 release, adding 17 OpenAI-compatible model constants with no removals.
 
 ---
@@ -70,7 +70,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac'                         // anything non-empty; serve does not validate
+  apiKey: 'qvac' // anything non-empty; serve does not validate
 })
 
 const { textStream } = streamText({
@@ -83,7 +83,7 @@ for await (const chunk of textStream) {
 }
 ```
 
-The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see *Known limitations* below).
+The provider exposes the same surface as any AI SDK provider — `qvac('alias')` for the default chat model, plus explicit `qvac.chatModel(...)`, `qvac.completionModel(...)`, `qvac.textEmbeddingModel(...)`, and `qvac.imageModel(...)` accessors. A pre-built default instance (`qvac`) is also exported for quick scripts; explicit `createQvac({ baseURL })` is recommended until the default `baseURL` is finalized (see _Known limitations_ below).
 
 ---
 
@@ -94,8 +94,8 @@ Every model in the QVAC P2P registry that has an OpenAI-shaped endpoint is expor
 ```ts
 import { models, allModels } from '@qvac/ai-sdk-provider'
 
-models.QWEN3_4B_INST_Q4_K_M.endpointCategory  // 'chat'      (compile-time known)
-models.WHISPER_EN_TINY_Q8_0.endpointCategory  // 'transcription'
+models.QWEN3_4B_INST_Q4_K_M.endpointCategory // 'chat'      (compile-time known)
+models.WHISPER_EN_TINY_Q8_0.endpointCategory // 'transcription'
 
 for (const m of allModels) {
   console.log(`${m.name} (${m.endpointCategory}, ${m.expectedSize} bytes)`)
