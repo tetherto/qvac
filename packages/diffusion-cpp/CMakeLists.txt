@@ -71,20 +71,22 @@ if(ANDROID AND GGML_BACKEND_DL)
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
     endif()
-    # qvac ggml ports prefix backend module filenames (e.g.
-    # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
-    # modules are installed under vcpkg's bin/ directory on Android.
-    find_library(_${_backend}_LIB NAMES
-      "qvac-diffusion-${_backend}"
-      "${_backend}"
-      PATHS
-        "${VCPKG_INSTALLED_PATH}/bin"
-        "${VCPKG_INSTALLED_PATH}/lib"
-      REQUIRED)
-    add_library(ggml::${_backend} SHARED IMPORTED)
-    set_target_properties(ggml::${_backend} PROPERTIES
-      IMPORTED_LOCATION "${_${_backend}_LIB}"
-      IMPORTED_NO_SONAME TRUE)
+    if(NOT TARGET ggml::${_backend})
+      # qvac ggml ports prefix backend module filenames (e.g.
+      # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
+      # modules are installed under vcpkg's bin/ directory on Android.
+      find_library(_${_backend}_LIB NAMES
+        "qvac-diffusion-${_backend}"
+        "${_backend}"
+        PATHS
+          "${VCPKG_INSTALLED_PATH}/bin"
+          "${VCPKG_INSTALLED_PATH}/lib"
+        REQUIRED)
+      add_library(ggml::${_backend} SHARED IMPORTED)
+      set_target_properties(ggml::${_backend} PROPERTIES
+        IMPORTED_LOCATION "${_${_backend}_LIB}"
+        IMPORTED_NO_SONAME TRUE)
+    endif()
     list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
   endforeach()
 endif()
