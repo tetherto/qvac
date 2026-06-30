@@ -9,7 +9,11 @@ interface GenerationParams {
 
 interface BatchPrompt {
   id?: string;
-  history: Array<{ role: string; content: string }>;
+  history: Array<{
+    role: string;
+    content: string;
+    attachments?: Array<{ path: string }>;
+  }>;
   generationParams?: GenerationParams;
   tools?: Array<{
     type: "function";
@@ -29,6 +33,7 @@ interface BatchCompletionTestParams {
   resourceKey?: string;
   toolDialect?: ToolDialect;
   expectedById?: Record<string, string[]>;
+  expectedAnyById?: Record<string, string[]>;
   expectedToolCall?: {
     id: string;
     name: string;
@@ -61,6 +66,12 @@ function createBatchCompletionTest(
 }
 
 const deterministic: GenerationParams = { temp: 0, seed: 42, predict: 16 };
+const visionDeterministic: GenerationParams = {
+  temp: 0,
+  seed: 42,
+  predict: 48,
+};
+const ELEPHANT_IMAGE_TERMS = ["elephant", "tusk", "trunk"];
 
 export const batchCompletionBasic = createBatchCompletionTest(
   "batch-completion-basic",
@@ -75,7 +86,9 @@ export const batchCompletionBasic = createBatchCompletionTest(
       },
       {
         id: "second",
-        history: [{ role: "user", content: "Reply with only the word ORANGE." }],
+        history: [
+          { role: "user", content: "Reply with only the word ORANGE." },
+        ],
         generationParams: deterministic,
       },
     ],
@@ -180,9 +193,68 @@ export const batchCompletionToolCalling = createBatchCompletionTest(
   20000,
 );
 
+export const batchCompletionVisionMixed = createBatchCompletionTest(
+  "batch-completion-vision-mixed",
+  {
+    resourceKey: "vision-batch",
+    prompts: [
+      {
+        id: "image",
+        history: [
+          {
+            role: "user",
+            content: "What animal is in this image? Reply with one word.",
+            attachments: [{ path: "shared-test-data/images/elephant.jpg" }],
+          },
+        ],
+        generationParams: visionDeterministic,
+      },
+      {
+        id: "text",
+        history: [{ role: "user", content: "Reply with only the word PLAIN." }],
+        generationParams: deterministic,
+      },
+    ],
+    stream: false,
+    expectedAnyById: {
+      image: ELEPHANT_IMAGE_TERMS,
+    },
+    expectedById: {
+      text: ["PLAIN"],
+    },
+  },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
+  30000,
+);
+
+export const batchCompletionVisionMissingImage = createBatchCompletionTest(
+  "batch-completion-vision-missing-image",
+  {
+    resourceKey: "vision-batch",
+    prompts: [
+      {
+        id: "missing",
+        history: [
+          {
+            role: "user",
+            content: "What is in this image?",
+            attachments: [{ path: "shared-test-data/images/nonexistent.jpg" }],
+          },
+        ],
+        generationParams: visionDeterministic,
+      },
+    ],
+    stream: false,
+  },
+  { validation: "throws-error", errorContains: "not found" },
+  10000,
+);
+
 export const batchCompletionTests = [
   batchCompletionBasic,
   batchCompletionStreaming,
   batchCompletionEmptyRejected,
   batchCompletionToolCalling,
+  batchCompletionVisionMixed,
+  batchCompletionVisionMissingImage,
 ];

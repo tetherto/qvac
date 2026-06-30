@@ -187,6 +187,50 @@ test("batchCompletion client: stream errors reject existing and late byId finals
   }
 });
 
+test("batchCompletion client: preserves multimodal attachments in stream request", async (t) => {
+  let capturedRequest: BatchCompletionStreamRequest | undefined;
+  const run = createBatchCompletionRun(
+    {
+      modelId: "vision",
+      prompts: [
+        {
+          id: "image",
+          history: [
+            {
+              role: "user",
+              content: "What animal is in this image?",
+              attachments: [{ path: "/tmp/elephant.jpg" }],
+            },
+          ],
+        },
+      ],
+    },
+    function streamFactory(request) {
+      capturedRequest = request;
+      return mockResponses([
+        {
+          type: "batchCompletionStream",
+          done: true,
+          ids: ["image"],
+          events: [
+            {
+              id: "image",
+              event: { type: "completionDone", seq: 0 },
+            },
+          ],
+        },
+      ]);
+    },
+  );
+
+  await collect(run.events);
+  t.ok(capturedRequest, "request was sent");
+  if (!capturedRequest) return;
+  t.alike(capturedRequest.prompts[0]?.history[0]?.attachments, [
+    { path: "/tmp/elephant.jpg" },
+  ]);
+});
+
 test("batchCompletion client: resolves per-prompt tools and routes handlers by id", async (t) => {
   let capturedRequest: BatchCompletionStreamRequest | undefined;
   const calls: string[] = [];

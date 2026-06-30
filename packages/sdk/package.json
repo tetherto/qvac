@@ -207,7 +207,7 @@
     "@qvac/embed-llamacpp": "^0.23.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.30.0",
+    "@qvac/llm-llamacpp": "^0.31.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.7.0",
     "@qvac/rag": "^0.6.4",

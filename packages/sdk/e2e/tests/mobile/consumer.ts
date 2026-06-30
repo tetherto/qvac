@@ -336,6 +336,16 @@ resources.define("vision", {
   },
 });
 
+resources.define("vision-batch", {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: "llamacpp-completion",
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  },
+});
+
 resources.define("vla", {
   constant: SMOLVLA_LIBERO_VISION_Q8,
   type: "ggml-vla",
@@ -417,6 +427,28 @@ async function ensureMobileE2EConfig(useResilienceConfig: boolean) {
   );
 }
 
+let batchImageAssets: Record<string, number> | null = null;
+
+async function loadBatchImageAssets() {
+  if (!batchImageAssets) {
+    // @ts-ignore - assets.ts is generated at consumer build time
+    const assets = await import("../../../assets");
+    batchImageAssets = assets.images;
+  }
+  return batchImageAssets;
+}
+
+async function resolveBatchAttachmentPath(inputPath: string) {
+  const images = await loadBatchImageAssets();
+  const fileName = inputPath.split("/").pop();
+  if (!fileName) return inputPath;
+  const assetModule = images?.[fileName];
+  if (!assetModule) {
+    throw new Error(`Image file not found in assets: ${fileName}`);
+  }
+  return await resolveBundledAssetUri(assetModule);
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   await ensureMobileE2EConfig(isResilienceOnlyRun(filteredTests));
 
@@ -470,7 +502,9 @@ export const executor = createExecutor({
 
     // Real executors
     new ModelLoadingExecutor(resources),
-    new BatchCompletionExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath,
+    }),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),

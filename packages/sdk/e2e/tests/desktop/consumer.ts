@@ -358,6 +358,16 @@ resources.define("vision", {
   },
 });
 
+resources.define("vision-batch", {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: "llamacpp-completion",
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  },
+});
+
 resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "sdcpp-generation",
@@ -464,6 +474,12 @@ function ensureDesktopE2EConfig() {
   }
 }
 
+function resolveBatchAttachmentPath(inputPath: string) {
+  const fileName = inputPath.split("/").pop();
+  if (!fileName) return inputPath;
+  return path.resolve(process.cwd(), "assets/images", fileName);
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureDesktopE2EConfig();
 
@@ -476,7 +492,9 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
-    new BatchCompletionExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath,
+    }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),

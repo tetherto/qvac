@@ -6,6 +6,7 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { batchCompletionTests } from "../../batch-completion-tests.js";
+import type { ResourceManager } from "../resource-manager.js";
 
 interface BatchCompletionTestParams {
   prompts: Parameters<typeof batchCompletion>[0]["prompts"];
@@ -13,6 +14,7 @@ interface BatchCompletionTestParams {
   resourceKey?: string;
   toolDialect?: Parameters<typeof batchCompletion>[0]["toolDialect"];
   expectedById?: Record<string, string[]>;
+  expectedAnyById?: Record<string, string[]>;
   expectedToolCall?: {
     id: string;
     name: string;
@@ -21,10 +23,23 @@ interface BatchCompletionTestParams {
   };
 }
 
+type BatchAttachmentResolver = (path: string) => string | Promise<string>;
+
+interface BatchCompletionExecutorOptions {
+  resolveAttachmentPath?: BatchAttachmentResolver;
+}
+
 export class BatchCompletionExecutor extends AbstractModelExecutor<
   typeof batchCompletionTests
 > {
   pattern = /^batch-completion-/;
+
+  constructor(
+    resources: ResourceManager,
+    private options: BatchCompletionExecutorOptions = {},
+  ) {
+    super(resources);
+  }
 
   protected handlers = Object.fromEntries(
     batchCompletionTests.map((test) => [test.testId, this.generic.bind(this)]),
@@ -38,9 +53,10 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
       const llmModelId = await this.resources.ensureLoaded(
         params.resourceKey ?? "llm-batch",
       );
+      const prompts = await this.resolvePromptAttachments(params.prompts);
       const run = batchCompletion({
         modelId: llmModelId,
-        prompts: params.prompts,
+        prompts,
         stream: params.stream ?? false,
         ...(params.toolDialect && { toolDialect: params.toolDialect }),
       });
@@ -56,10 +72,10 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
 
       const ids = await run.ids;
       const results = await run.results;
-      if (ids.length !== params.prompts.length) {
+      if (ids.length !== prompts.length) {
         return {
           passed: false,
-          output: `Expected ${params.prompts.length} ids, got ${ids.length}`,
+          output: `Expected ${prompts.length} ids, got ${ids.length}`,
         };
       }
       if (params.stream) {
@@ -106,7 +122,19 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
       }
 
       if (params.expectedById) {
-        return this.validateExpectedById(results, params.expectedById);
+        return this.validateExpectedById(
+          results,
+          params.expectedById,
+          params.expectedAnyById,
+        );
+      }
+
+      if (params.expectedAnyById) {
+        return this.validateExpectedById(
+          results,
+          undefined,
+          params.expectedAnyById,
+        );
       }
 
       const output = results
@@ -120,6 +148,33 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
       }
       return { passed: false, output: `batchCompletion failed: ${errorMsg}` };
     }
+  }
+
+  private async resolvePromptAttachments(
+    prompts: BatchCompletionTestParams["prompts"],
+  ) {
+    const resolveAttachmentPath = this.options.resolveAttachmentPath;
+    if (!resolveAttachmentPath) return prompts;
+
+    const resolved: BatchCompletionTestParams["prompts"] = [];
+    for (const prompt of prompts) {
+      const history: typeof prompt.history = [];
+      for (const message of prompt.history) {
+        if (!message.attachments?.length) {
+          history.push(message);
+          continue;
+        }
+        const attachments: NonNullable<typeof message.attachments> = [];
+        for (const attachment of message.attachments) {
+          attachments.push({
+            path: await resolveAttachmentPath(attachment.path),
+          });
+        }
+        history.push({ ...message, attachments });
+      }
+      resolved.push({ ...prompt, history });
+    }
+    return resolved;
   }
 
   private async validateToolCall(
@@ -186,14 +241,15 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
 
   private validateExpectedById(
     results: Awaited<ReturnType<typeof batchCompletion>["results"]>,
-    expectedById: Record<string, string[]>,
+    expectedById: Record<string, string[]> | undefined,
+    expectedAnyById: Record<string, string[]> | undefined,
   ): TestResult {
     const resultsById = new Map(
       results.map((result) => [result.id, result.final.contentText]),
     );
     const missing: string[] = [];
 
-    for (const [id, expectedStrings] of Object.entries(expectedById)) {
+    for (const [id, expectedStrings] of Object.entries(expectedById ?? {})) {
       const text = resultsById.get(id);
       if (text === undefined) {
         missing.push(`${id}:<missing result>`);
@@ -204,6 +260,18 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<
         if (!text.includes(expected)) {
           missing.push(`${id}:${expected}`);
         }
+      }
+    }
+
+    for (const [id, expectedStrings] of Object.entries(expectedAnyById ?? {})) {
+      const text = resultsById.get(id);
+      if (text === undefined) {
+        missing.push(`${id}:<missing result>`);
+        continue;
+      }
+
+      if (!expectedStrings.some((expected) => text.includes(expected))) {
+        missing.push(`${id}:one of [${expectedStrings.join(", ")}]`);
       }
     }
 

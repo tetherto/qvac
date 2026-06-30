@@ -47,6 +47,25 @@ test("batchCompletionClientParamsSchema: accepts batch prompts", (t) => {
   t.is(result.success, true);
 });
 
+test("batchCompletionClientParamsSchema: accepts multimodal attachments", (t) => {
+  const result = batchCompletionClientParamsSchema.safeParse({
+    modelId: "vision",
+    prompts: [
+      {
+        id: "image",
+        history: [
+          {
+            role: "user",
+            content: "What animal is in this image?",
+            attachments: [{ path: "/tmp/elephant.jpg" }],
+          },
+        ],
+      },
+    ],
+  });
+  t.is(result.success, true);
+});
+
 test("batchCompletionClientParamsSchema: requires at least one prompt", (t) => {
   const result = batchCompletionClientParamsSchema.safeParse({
     modelId: "llama",

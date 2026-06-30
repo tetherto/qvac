@@ -45,9 +45,11 @@ type HistoryMessage = {
   attachments?: { path: string }[] | undefined;
 };
 
+type AddonBatchMessage = ReturnType<typeof transformMessages>[number];
+
 type AddonBatchPrompt = {
   id?: string;
-  prompt: ReturnType<typeof transformMessages>;
+  prompt: AddonBatchMessage[];
   runOptions?: BatchCompletionRunOptions;
 };
 
@@ -119,6 +121,8 @@ function renderPromptHistory(
         : prependToolsToHistory(prompt.history, tools);
   }
 
+  // Uses the same attachment expansion as single completion: each SDK
+  // attachment becomes an addon `type: "media"` message before the text turn.
   return transformMessages(historyWithTools);
 }
 

@@ -127,8 +127,50 @@ const stats = await run.stats;
 
 `run.results` resolves in prompt order. `run.ids` exposes the addon-assigned ids
 and `run.byId(id)` gives per-prompt events and final aggregation. Each prompt can
-also carry its own `tools` and `mcp` clients; handlers are attached only to tool
-calls produced by that prompt:
+also carry the same multimodal `attachments` supported by `completion()` when the
+loaded model has a projection model:
+
+```ts
+import {
+  batchCompletion,
+  loadModel,
+  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  SMOLVLM2_500M_MULTIMODAL_Q8_0,
+} from "@qvac/sdk";
+
+const visionModelId = await loadModel({
+  modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  modelType: "llm",
+  modelConfig: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  },
+});
+
+const run = batchCompletion({
+  modelId: visionModelId,
+  prompts: [
+    {
+      id: "image",
+      history: [
+        {
+          role: "user",
+          content: "What animal is in this image?",
+          attachments: [{ path: "/absolute/path/to/elephant.jpg" }],
+        },
+      ],
+    },
+    {
+      id: "text",
+      history: [{ role: "user", content: "Reply with only PLAIN." }],
+    },
+  ],
+});
+```
+
+Prompts can also carry their own `tools` and `mcp` clients; handlers are attached
+only to tool calls produced by that prompt:
 
 ```ts
 import { z } from "zod";
