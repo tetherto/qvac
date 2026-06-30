@@ -1038,35 +1038,78 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
     }
 
     // 3. Sample + accept the longest matching prefix.
-    std::vector<llama_token> ids = common_sampler_sample_and_accept_n(
-        smpl_.get(), modelCtx_.lctx, idxs, draft);
-    const size_t nAccepted = ids.size() - 1;
-    if (!draft.empty()) {
-      common_speculative_accept(
-          spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
-      draftAccepted_ += static_cast<int64_t>(nAccepted);
-      draftTotal_ += static_cast<int64_t>(draft.size());
-    }
-
-    // 4. Commit id_last + the accepted drafts; drop the rejected tail from both
-    // the target and the MTP draft KV.
-    const llama_pos posNext =
-        nPast_ + 1 + static_cast<llama_pos>(nAccepted);
-    clearSequenceMemory(modelCtx_.lctx, posNext, -1);
-    if (ctxDraft_) {
-      clearSequenceMemory(ctxDraft_.get(), posNext, -1);
-    }
-    nPast_ = posNext;
-
-    // 5. Emit accepted tokens; the bonus becomes the next id_last.
+    const llama_pos posBase = nPast_;
+    size_t nAccepted = 0; // verified drafts whose KV we keep
     bool finished = false;
-    for (size_t i = 0; i < ids.size(); ++i) {
-      SequenceStepResult step = processToken(
-          ids[i], true, ++generatedAfterAccept, outputCallback, nullptr);
+    bool reasoningRecovered = false;
+    for (size_t j = 0; j < idxs.size(); ++j) {
+      if (params_.n_predict > 0 &&
+          generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
+        break;
+      }
+
+      const llama_token tok =
+          common_sampler_sample(smpl_.get(), modelCtx_.lctx, idxs[j]);
+
+      common_sampler_accept(smpl_.get(), tok, true);
+      nPast_ = posBase + 1 + static_cast<llama_pos>(j);
+
+      const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tok);
+      if (isEos && isQwen3ReasoningFamily_ &&
+          reasoningState_.inside_reasoning &&
+          reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+        clearSequenceMemory(modelCtx_.lctx, nPast_, -1);
+        if (ctxDraft_) {
+          clearSequenceMemory(ctxDraft_.get(), nPast_, -1);
+        }
+        llama_token closeTok = tok;
+        std::string closeStr;
+        handleReasoningEOS(
+            closeTok, closeStr, *specBatch, nPast_, outputCallback);
+        if (!draft.empty()) {
+          draftAccepted_ += static_cast<int64_t>(nAccepted);
+          draftTotal_ += static_cast<int64_t>(draft.size());
+        }
+        const llama_token next =
+            common_sampler_sample(smpl_.get(), modelCtx_.lctx, -1);
+        common_sampler_accept(smpl_.get(), next, true);
+        const SequenceStepResult nstep = processToken(
+            next, true, ++generatedAfterAccept, outputCallback, &specBatch);
+        idLast = nstep.token;
+        finished = nstep.finished;
+        reasoningRecovered = true;
+        break;
+      }
+
+      const SequenceStepResult step = processToken(
+          tok, true, ++generatedAfterAccept, outputCallback, &specBatch);
       idLast = step.token;
       if (step.finished) {
         finished = true;
         break;
+      }
+      if (j < draft.size() && tok == draft[j]) {
+        ++nAccepted;
+        continue;
+      }
+      break; // mismatch / bonus: tok is the next id_last, decoded fresh later
+    }
+
+    if (!reasoningRecovered) {
+      // Keep id_last + the accepted drafts, drop the rejected/stop tail from
+      // both contexts and reset nPast_ to just past the kept prefix.
+      const llama_pos keepPos =
+          posBase + 1 + static_cast<llama_pos>(nAccepted);
+      clearSequenceMemory(modelCtx_.lctx, keepPos, -1);
+      if (ctxDraft_) {
+        clearSequenceMemory(ctxDraft_.get(), keepPos, -1);
+      }
+      nPast_ = keepPos;
+      if (!draft.empty()) {
+        common_speculative_accept(
+            spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+        draftAccepted_ += static_cast<int64_t>(nAccepted);
+        draftTotal_ += static_cast<int64_t>(draft.size());
       }
     }
     if (finished) {

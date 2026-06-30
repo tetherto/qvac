@@ -494,6 +494,8 @@ private:
 public:
   // Speculative-decoding counters surfaced through RuntimeStats. Default 0 on
   // the base; only the single-prompt MTP path increments them.
-  [[nodiscard]] int64_t getDraftAccepted() const override { return draftAccepted_; }
+  [[nodiscard]] int64_t getDraftAccepted() const override {
+    return draftAccepted_;
+  }
   [[nodiscard]] int64_t getDraftTotal() const override { return draftTotal_; }
 };

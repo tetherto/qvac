@@ -28,7 +28,7 @@ const MODEL = {
 
 const PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
-  { role: 'user', content: 'What is the capital of France? Answer in one word.' }
+  { role: 'user', content: 'What is the capital of France? Answer in one complete sentence.' }
 ]
 
 function createLogger () {
@@ -51,7 +51,7 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
-async function runOnce ({ withSpec }) {
+async function runOnce ({ withSpec, overrides = {} }) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -66,7 +66,8 @@ async function runOnce ({ withSpec }) {
     temp: '0',
     seed: '42',
     'reasoning-budget': '0',
-    verbosity: '2'
+    verbosity: '2',
+    ...overrides
   }
   if (withSpec) {
     config['spec-type'] = 'draft-mtp'
@@ -132,5 +133,45 @@ test('Qwen3.5-0.8B without spec-type', {
   t.is(
     stats.draftAccepted, 0,
     'non-spec run performs no speculative drafting (draftAccepted=0)'
+  )
+})
+
+test('Qwen3.5-0.8B MTP with reasoning enabled stays coherent + balanced', {
+  timeout: 600_000
+}, async t => {
+  const { output, stats } = await runOnce({
+    withSpec: true,
+    overrides: { 'reasoning-budget': '32', n_predict: '200' }
+  })
+  t.ok(output.length > 0, `produced output (${output.length} chars)`)
+  console.log(`  reasoning+spec output: "${output.slice(0, 200)}"`)
+  t.ok(
+    stats.draftAccepted > 0,
+    `MTP still drafts with reasoning on (draftAccepted=${stats.draftAccepted})`
+  )
+
+  if (output.includes('<think>')) {
+    t.ok(output.includes('</think>'), 'reasoning block closed (balanced tags)')
+  }
+  t.ok(/paris/i.test(output), 'output still names the capital after reasoning')
+})
+
+test('Qwen3.5-0.8B MTP honors a small n_predict without over-committing KV', {
+  timeout: 600_000
+}, async t => {
+  const nPredict = 4
+  const { output, stats } = await runOnce({
+    withSpec: true,
+    overrides: { n_predict: String(nPredict) }
+  })
+  t.ok(output.length > 0, `produced output (${output.length} chars)`)
+  console.log(
+    `  short output: "${output.slice(0, 120)}" ` +
+    `draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
+  )
+  t.ok(
+    stats.draftAccepted <= nPredict,
+    'accepted drafts bounded by the budget, no over-committed tail ' +
+    `(draftAccepted=${stats.draftAccepted} <= n_predict=${nPredict})`
   )
 })
