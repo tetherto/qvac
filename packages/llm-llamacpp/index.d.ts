@@ -340,6 +340,14 @@ export interface RuntimeStats {
    * including overlapping requests from other callers.
    */
   avgConcurrentSeq: number
+  /**
+   * MTP speculative-decoding counters for the last request: `draftTotal` is
+   * the number of tokens the MTP draft head proposed, `draftAccepted` is how
+   * many the target verified and accepted. Both 0 when speculative decoding is
+   * inactive (no `spec-type=draft-mtp`, or a model without an MTP head).
+   */
+  draftAccepted: number
+  draftTotal: number
   backendDevice: 'cpu' | 'gpu'
 }
 
