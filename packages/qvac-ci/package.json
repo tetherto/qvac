@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ci",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "CI utilities for the QVAC monorepo",
   "author": "Tether",
   "license": "Apache-2.0",
