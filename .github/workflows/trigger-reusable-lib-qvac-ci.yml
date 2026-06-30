@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: npm
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
     outputs:
