@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "84724b00ad8bcb6cef9320ac467fe30f9d288fe0",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "feat/qvac-19557-tts-cpp-mtl-q8-gpu"
+    "baseline": "f04e244701f462c4c8fead7b50bcaffa52c052ac",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
