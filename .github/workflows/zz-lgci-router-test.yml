@@ -1,0 +1,99 @@
+name: '[TEST] lgci router decouple'
+
+# THROWAWAY validation for the "verified authorises only" change.
+# Runs the NEW ci-router logic on a regular pull_request (so the head's file
+# runs) into lgci-sandbox, then has no-op stage jobs gated on EXACTLY the same
+# `if:` conditions the real workflow uses. Toggling labels on the PR shows which
+# stages run vs skip end-to-end — proving `verified` alone runs nothing heavy
+# and a granular label without `verified` stays gated. Delete after.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+
+jobs:
+  router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Route CI stages (NEW logic)
+        id: route
+        env:
+          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          HAS_VERIFIED=false
+          HAS_PREBUILDS=false
+          HAS_CPP=false
+          HAS_DESKTOP=false
+          HAS_MOBILE=false
+          if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
+            for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
+              case "$label" in
+                verified)                 HAS_VERIFIED=true ;;
+                prebuilds)                HAS_PREBUILDS=true ;;
+                run-cpp-addon-tests)      HAS_CPP=true ;;
+                run-desktop-addon-tests)  HAS_DESKTOP=true ;;
+                run-mobile-addon-tests)   HAS_MOBILE=true ;;
+              esac
+            done
+          fi
+
+          VERIFIED=false
+          PREBUILDS=false
+          CPP_TESTS=false
+          DESKTOP=false
+          MOBILE=false
+          if [ "$HAS_VERIFIED" = "true" ]; then
+            VERIFIED=true
+            [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
+            [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
+            [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
+            [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
+          fi
+
+          echo "ROUTER labels=$PR_LABELS_JSON => verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
+          echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
+          echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
+          echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
+          echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
+          echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
+
+  baseline:
+    needs: router
+    if: needs.router.outputs.run_verified_checks == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN baseline (verified checks)"' }]
+
+  stage-prebuilds:
+    needs: router
+    if: needs.router.outputs.run_prebuilds == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN prebuilds"' }]
+
+  stage-cpp:
+    needs: router
+    if: needs.router.outputs.run_cpp_tests == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN cpp-tests"' }]
+
+  stage-desktop:
+    needs: router
+    if: needs.router.outputs.run_desktop == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN desktop"' }]
+
+  stage-mobile:
+    needs: router
+    if: needs.router.outputs.run_mobile == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN mobile"' }]
