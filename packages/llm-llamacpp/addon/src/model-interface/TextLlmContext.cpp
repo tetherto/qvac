@@ -939,7 +939,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
   draftTotal_ = 0;
 
   if (thinkingForcedOpen_ && outputCallback) {
-    outputCallback("<think>\n");
+    outputCallback(thinkingForcedOpenText_);
     reasoningState_.inside_reasoning = true;
   }
   if (stopGeneration_.load()) {
