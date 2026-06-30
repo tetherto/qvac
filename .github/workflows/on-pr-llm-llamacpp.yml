@@ -108,30 +108,20 @@ jobs:
           DESKTOP=false
           MOBILE=false
 
-          # `verified` is the trust gate. Per review, prebuilds / cpp-tests /
-          # desktop / mobile ALL require `verified` as well — a granular label
-          # on its own (without the trust gate) must never trigger expensive or
-          # secret-exposing jobs. So every stage below is computed inside this
-          # block; without `verified` nothing but the (empty) baseline runs.
+          # `verified` is the trust gate and ONLY the trust gate: it authorises
+          # a PR to run expensive / secret-exposing jobs, but no longer selects
+          # any stage on its own. Each heavy stage runs only when its granular
+          # label is present AND `verified` authorises it — so a granular label
+          # without `verified` never triggers anything (the security invariant),
+          # and `verified` alone runs only the baseline verified checks.
+          # cpp-tests builds the addon itself (different flag) so it does NOT
+          # depend on prebuilds; desktop + mobile DO need prebuilds.
           if [ "$HAS_VERIFIED" = "true" ]; then
             VERIFIED=true
-            if [ "$HAS_PREBUILDS" = "true" ] || [ "$HAS_CPP" = "true" ] || \
-               [ "$HAS_DESKTOP" = "true" ] || [ "$HAS_MOBILE" = "true" ]; then
-              # Selective mode: run only the explicitly requested stages.
-              # cpp-tests builds the addon itself (different flag) so it does
-              # NOT depend on prebuilds. desktop + mobile DO need prebuilds.
-              [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
-              [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
-              [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
-              [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
-            else
-              # Backward compat: `verified` alone still runs the full pipeline
-              # (kept temporarily so the rollout does not block other teams).
-              PREBUILDS=true
-              CPP_TESTS=true
-              DESKTOP=true
-              MOBILE=true
-            fi
+            [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
+            [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
+            [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
+            [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
           fi
           echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
           echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
