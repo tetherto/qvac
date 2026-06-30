@@ -71,7 +71,13 @@ namespace qvac_lib_inference_addon_cpp::logger {
       }
 
       auto oldState = storeState(newState);
-      if (oldState) {
+      if (oldState && oldState->env == env) {
+        // Only delete the previous callback ref when it belongs to THIS live
+        // env. After a worker teardown / soft-reload (QVAC-21544 reinit path),
+        // oldState->env is a different, already-disposed env whose V8 global
+        // handles are gone; js_delete_reference on it crashes in
+        // GlobalHandles::Release. A stale ref from a dead env is dropped here
+        // (its handles died with that env).
         releaseJsRefs((oldState->env), oldState->cb);
       }
 
@@ -80,9 +86,11 @@ namespace qvac_lib_inference_addon_cpp::logger {
 
     static auto releaseLogger(js_env_t *env, js_callback_info_t * /*info*/) -> js_value_t* try {
       auto oldState = storeState(nullptr);
-      if (oldState) {
-        // Explicit release: drop the env-teardown hook registered in setLogger
-        // so it cannot fire (double-close) when that env is later torn down.
+      if (oldState && oldState->env == env) {
+        // Same env-liveness guard as setLogger: only drop the teardown hook and
+        // delete the callback ref when the stored state belongs to THIS live
+        // env, never a torn-down/reloaded one (deleting a dead env's ref crashes
+        // in GlobalHandles::Release).
         js_remove_teardown_callback((oldState->env), &JsLogger::onEnvTeardown, nullptr);
         releaseJsRefs((oldState->env), oldState->cb);
       }
