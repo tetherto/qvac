@@ -8,14 +8,28 @@ namespace qvac_lib_inference_addon_llama::batching {
 namespace views = std::views;
 
 Request::Request(
+    uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos,
+    bool canSlide)
+    : seqId(rid), pendingPrefillTokens(std::move(plan.tokens)),
+      pendingMediaBarriers(std::move(plan.mediaBarriers)),
+      currentPos(initialPos), slideCapable(canSlide),
+      maxTokensPerSequence(maxTokens) {
+  prefillTokenCount = pendingPrefillTokens.size();
+  for (const auto& barrier : pendingMediaBarriers) {
+    prefillTokenCount += static_cast<size_t>(barrier.nPos);
+  }
+}
+
+Request::Request(
     uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
     llama_pos initialPos, bool canSlide)
-    : seqId(rid), pendingPrefillTokens(std::move(toks)),
-      prefillTokenCount(pendingPrefillTokens.size()), currentPos(initialPos),
-      slideCapable(canSlide), maxTokensPerSequence(maxTokens) {}
+    : Request(
+          rid, PrefillPlan{.tokens = std::move(toks)}, maxTokens, initialPos,
+          canSlide) {}
 
 bool Request::isPrefillComplete() const {
-  return prefillFedCount >= pendingPrefillTokens.size();
+  return prefillFedCount >= pendingPrefillTokens.size() &&
+         pendingMediaBarriers.empty();
 }
 
 bool Request::exceededLimit() const {
@@ -47,6 +61,15 @@ bool Request::isOptPrefillPending(const std::optional<Request>& slot) {
   return slot.has_value() && slot->isPrefillPending();
 }
 
+bool Request::isAwaitingMedia() const {
+  return isPrefillPending() && !pendingMediaBarriers.empty() &&
+         prefillFedCount >= pendingMediaBarriers.front().afterTextTokens;
+}
+
+bool Request::isOptAwaitingMedia(const std::optional<Request>& slot) {
+  return slot.has_value() && slot->isAwaitingMedia();
+}
+
 bool Request::isGenerationIdle() const {
   return !isFinished() && isPrefillComplete() && !hasUnfedSample;
 }
@@ -64,7 +87,7 @@ bool Request::isOptGenerationPending(const std::optional<Request>& slot) {
 }
 
 bool Request::hasTokensToFeed() const {
-  return isPrefillPending() || isGenerationPending();
+  return (isPrefillPending() && !isAwaitingMedia()) || isGenerationPending();
 }
 
 bool Request::isOptHasTokensToFeed(const std::optional<Request>& slot) {
@@ -73,7 +96,17 @@ bool Request::isOptHasTokensToFeed(const std::optional<Request>& slot) {
 
 unsigned Request::remainingToFeed() const {
   if (!isPrefillComplete()) {
-    return static_cast<unsigned>(pendingPrefillTokens.size() - prefillFedCount);
+    // Text feeding stops at the head media barrier; the segment past it
+    // only unblocks once the scheduler completes the barrier.
+    const size_t feedLimit =
+        pendingMediaBarriers.empty()
+            ? pendingPrefillTokens.size()
+            : std::min(
+                  pendingPrefillTokens.size(),
+                  pendingMediaBarriers.front().afterTextTokens);
+    return feedLimit > prefillFedCount
+               ? static_cast<unsigned>(feedLimit - prefillFedCount)
+               : 0u;
   }
   return hasUnfedSample ? 1u : 0u;
 }
@@ -86,7 +119,16 @@ llama_token Request::tokenToFeedAt(llama_pos pos) const {
 }
 
 bool Request::chunkConsumesAllUnfed(unsigned chunkSize) const {
-  return chunkSize == remainingToFeed();
+  if (chunkSize != remainingToFeed()) {
+    return false;
+  }
+  if (isPrefillComplete()) {
+    return true;
+  }
+  // Mid-prefill a chunk can also drain `remainingToFeed` by hitting a
+  // media barrier; logits belong only to the true end of the prompt.
+  return pendingMediaBarriers.empty() &&
+         prefillFedCount + chunkSize >= pendingPrefillTokens.size();
 }
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
@@ -102,23 +144,50 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos,
-    bool slideCapable) {
-  if (tokens.empty()) {
+    bool slideCapable, llama_pos initialKvCells) {
+  return addRequestAt(
+      seqId,
+      PrefillPlan{.tokens = std::move(tokens)},
+      initialPos,
+      slideCapable,
+      initialKvCells);
+}
+
+MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
+    uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos, bool slideCapable,
+    llama_pos initialKvCells) {
+  if (plan.tokens.empty() && plan.mediaBarriers.empty()) {
     return AddStatus::ErrEmptyTokens;
   }
-  const auto totalTokens = static_cast<size_t>(initialPos) + tokens.size();
-  if (totalTokens > maxTokensPerSequence_) {
+  const bool barriersValid =
+      std::ranges::is_sorted(
+          plan.mediaBarriers, {}, &MediaBarrier::afterTextTokens) &&
+      std::ranges::all_of(plan.mediaBarriers, [&](const MediaBarrier& b) {
+        return b.afterTextTokens <= plan.tokens.size() && b.nPos > 0;
+      });
+  if (!barriersValid) {
+    return AddStatus::ErrInvalidPlan;
+  }
+  // M-RoPE media occupies more KV cells than positions, so both the
+  // position span and the KV-cell span must fit the per-sequence cap. The
+  // KV-cell span is sized from the physical cell count already committed
+  // (`initialKvCells`), which for a cache-loaded M-RoPE sequence exceeds the
+  // logical position count (`initialPos`); a negative default means "same as
+  // initialPos" (text, where cells and positions coincide).
+  const llama_pos kvBase = initialKvCells < 0 ? initialPos : initialKvCells;
+  const auto totalPositions = static_cast<size_t>(initialPos) +
+                              static_cast<size_t>(plan.totalPositions());
+  const auto totalKvTokens =
+      static_cast<size_t>(kvBase) + static_cast<size_t>(plan.totalKvTokens());
+  if (totalPositions > maxTokensPerSequence_ ||
+      totalKvTokens > maxTokensPerSequence_) {
     return AddStatus::ErrTokensTooLarge;
   }
   if (seqId >= slots_.size() || slots_[seqId].has_value()) {
     return AddStatus::ErrNoFreeSlot;
   }
   slots_[seqId].emplace(
-      seqId,
-      std::move(tokens),
-      maxTokensPerSequence_,
-      initialPos,
-      slideCapable);
+      seqId, std::move(plan), maxTokensPerSequence_, initialPos, slideCapable);
   return AddStatus::Ok;
 }
 
@@ -208,18 +277,25 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
 }
 
 namespace {
+void finishPrefillIfComplete(
+    Request& req,
+    const MultiRequestBatcher::PrefillCompleteFn& onPrefillComplete) {
+  if (!req.isPrefillComplete()) {
+    return;
+  }
+  if (onPrefillComplete) {
+    onPrefillComplete(req.seqId, req.currentPos, req.prefillTokenCount);
+  }
+  req.pendingPrefillTokens.clear();
+  req.pendingPrefillTokens.shrink_to_fit();
+  req.prefillFedCount = 0;
+}
+
 void advanceReqPrefill(
     Request& req, llama_pos chunk,
     const MultiRequestBatcher::PrefillCompleteFn& onPrefillComplete) {
   req.prefillFedCount += static_cast<size_t>(chunk);
-  if (req.isPrefillComplete()) {
-    if (onPrefillComplete) {
-      onPrefillComplete(req.seqId, req.currentPos, req.prefillTokenCount);
-    }
-    req.pendingPrefillTokens.clear();
-    req.pendingPrefillTokens.shrink_to_fit();
-    req.prefillFedCount = 0;
-  }
+  finishPrefillIfComplete(req, onPrefillComplete);
 }
 } // namespace
 
@@ -240,6 +316,34 @@ void MultiRequestBatcher::advance(
   }
 }
 
+std::optional<MultiRequestBatcher::AwaitingMedia>
+MultiRequestBatcher::nextAwaitingMedia() const {
+  for (const auto& slot : slots_ | views::filter(Request::isOptAwaitingMedia)) {
+    return AwaitingMedia{
+        .seqId = slot->seqId,
+        .mediaIndex = slot->pendingMediaBarriers.front().mediaIndex,
+        .currentPos = slot->currentPos};
+  }
+  return std::nullopt;
+}
+
+bool MultiRequestBatcher::completeMediaBarrier(
+    uint32_t seqId, llama_pos newPos,
+    const PrefillCompleteFn& onPrefillComplete) {
+  const bool hasBarrier =
+      isValid(seqId) && !slots_[seqId]->pendingMediaBarriers.empty();
+  if (hasBarrier) {
+    Request& req = *slots_[seqId];
+    req.pendingMediaBarriers.erase(req.pendingMediaBarriers.begin());
+    req.currentPos = newPos;
+    if (req.exceededLimit() && req.stopReason == StopReason::None) {
+      req.stopReason = StopReason::LimitReached;
+    }
+    finishPrefillIfComplete(req, onPrefillComplete);
+  }
+  return hasBarrier;
+}
+
 void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   for (auto& slot : slots_ | views::filter(Request::isOptGenerationIdle)) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
@@ -248,11 +352,11 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   }
 }
 
-bool MultiRequestBatcher::isValid(uint32_t seqId) const {
+bool MultiRequestBatcher::isValid(uint32_t seqId) const noexcept {
   return seqId < slots_.size() && slots_[seqId].has_value();
 }
 
-const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const {
+const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const noexcept {
   if (!isValid(seqId)) {
     return nullptr;
   }

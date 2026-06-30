@@ -238,6 +238,22 @@ jobs:
           # session outlives any single test.
           android-per-test-timeout-minutes: '30'
 
+      # Generate the per-shard model pre-stage script (Android). The Device Farm
+      # host has reliable network; it downloads exactly the models the shard
+      # needs and adb pushes them to /data/local/tmp so the phone never fetches
+      # from huggingface.co. Block is derived from model-manifest.json.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
       # than the others. Sharded mode is wired automatically: the composite
@@ -261,6 +277,10 @@ jobs:
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
           test-groups: ${{ inputs.test_groups }}
+          # Host pre-stages this shard's models to /data/local/tmp (adb-writable
+          # + app-readable) so the phone never downloads from huggingface.co.
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+              echo "[prestage] done"
 
       - name: Schedule Device Farm test runs
         id: schedule

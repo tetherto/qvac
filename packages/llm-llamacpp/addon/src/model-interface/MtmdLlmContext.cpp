@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <filesystem>
+#include <system_error>
 
 #include <common/log.h>
 #include <gguf.h>
@@ -11,16 +13,26 @@
 
 #include "ContextSlider.hpp"
 #include "GenerationParamsApply.hpp"
+#include "MediaLoadOrder.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
+
+namespace {
+bool isFileInitialized(const std::filesystem::path& path) {
+  std::error_code errorCode;
+  const auto size = std::filesystem::file_size(path, errorCode);
+  return !errorCode && size != 0;
+}
+} // namespace
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
@@ -29,7 +41,27 @@ MtmdLlmContext::MtmdLlmContext(
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  initializeCommonState();
+}
 
+MtmdLlmContext::MtmdLlmContext(
+    const common_params& commonParams, const LlmModelContext& shared,
+    ToolsCompactController& tools, mtmd_context* sharedVision,
+    llama_seq_id seqId, llama_pos perSeqCtxCeiling)
+    : tools_(tools), sharedVision_(sharedVision), modelCtx_(shared),
+      params_(commonParams), perSeqCtxCeiling_(perSeqCtxCeiling) {
+  seqId_ = seqId;
+  if (sharedVision_ == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadModel),
+        "MtmdLlmContext: per-slot driver requires a shared vision context");
+  }
+  initializeCommonState();
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+void MtmdLlmContext::initializeCommonState() {
   if (modelCtx_.model == nullptr) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -44,7 +76,9 @@ MtmdLlmContext::MtmdLlmContext(
         "Failed to initialize context");
   }
 
-  modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
+  if (modelCtx_.vocab == nullptr) {
+    modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
+  }
 
   std::string chatTemplate =
       getChatTemplate(modelCtx_.model, params_, tools_.enabled());
@@ -83,7 +117,9 @@ MtmdLlmContext::MtmdLlmContext(
         "Model does not have chat template");
   }
 
-  initVisionContext();
+  if (sharedVision_ == nullptr) {
+    initVisionContext();
+  }
 
   // antiprompt init
   for (const std::string& antiprompt : params_.antiprompt) {
@@ -362,7 +398,7 @@ void MtmdLlmContext::tokenizeChat(
 
   auto bitmapsCPtr = bitmaps_.c_ptr();
   int32_t res = mtmd_tokenize(
-      ctxVision_.get(),
+      visionContext(),
       chunks.ptr.get(), // output
       &text,            // text
       bitmapsCPtr.data(),
@@ -389,7 +425,7 @@ void MtmdLlmContext::tokenizeChat(
 
       mtmd::input_chunks chunksNoTools(mtmd_input_chunks_init());
       int32_t resNoTools = mtmd_tokenize(
-          ctxVision_.get(),
+          visionContext(),
           chunksNoTools.ptr.get(),
           &textNoTools,
           bitmapsCPtr.data(),
@@ -544,7 +580,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       return false;
     }
     int32_t res = mtmd_helper_eval_chunk_single(
-        ctxVision_.get(),
+        visionContext(),
         modelCtx_.lctx,
         chunk,
         nPastLocal,
@@ -881,7 +917,26 @@ llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
 
 llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 
+llama_pos MtmdLlmContext::getKvCellsUsed() const {
+  return current_.cacheTokens;
+}
+
 void MtmdLlmContext::setNPast(llama_pos nPast) { current_.pos = nPast; }
+
+void MtmdLlmContext::advanceTextSpan(llama_pos newPos) {
+  current_.cacheTokens += newPos - current_.pos;
+  current_.pos = newPos;
+}
+
+// Scheduler-fed generated tokens are decoded by the batcher, not by this
+// driver, which learns of them only through syncPosition(). Each generated
+// token is text: it advances the logical position and consumes exactly one
+// KV cell, so advance both in lockstep. Without this, the per-slot KV-cell
+// cap in onLogitsReady() is checked against the frozen prefill count and an
+// M-RoPE slot (cacheTokens > pos) can generate past its KV-cell budget.
+void MtmdLlmContext::syncPosition(llama_pos currentPos) {
+  advanceTextSpan(currentPos);
+}
 
 llama_pos MtmdLlmContext::getCacheTokens() const {
   return current_.cacheTokens;
@@ -1054,7 +1109,7 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
         errorMsg);
   }
 
-  if (ctxVision_.get() == nullptr) {
+  if (visionContext() == nullptr) {
     resetMedia();
     const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
     throw qvac_errors::StatusError(
@@ -1062,7 +1117,7 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   }
 
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-      ctxVision_.get(), media.data(), media.size()));
+      visionContext(), media.data(), media.size()));
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =
@@ -1087,7 +1142,7 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         errorMsg);
   }
 
-  if (ctxVision_.get() == nullptr) {
+  if (visionContext() == nullptr) {
     resetMedia();
     const char* errorMsg = "[MtmdLlm] Vision context is not initialized\n";
     throw qvac_errors::StatusError(
@@ -1095,7 +1150,7 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
   }
 
   mtmd::bitmap bmp(
-      mtmd_helper_bitmap_init_from_file(ctxVision_.get(), fname.c_str()));
+      mtmd_helper_bitmap_init_from_file(visionContext(), fname.c_str()));
   if (!bmp.ptr) {
     resetMedia();
     std::string errorMsg = string_format(
@@ -1180,4 +1235,389 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   // future sampling since they're no longer in the KV cache.
 
   return tokensToRemove;
+}
+
+llama_pos MtmdLlmContext::ctxCeiling() const {
+  return perSeqCtxCeiling_ > 0
+             ? perSeqCtxCeiling_
+             : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
+}
+
+PrefillPlan MtmdLlmContext::preparePrefill(
+    const std::vector<common_chat_msg>& chatMsgs,
+    const std::vector<common_chat_tool>& tools,
+    const std::vector<std::vector<uint8_t>>& media,
+    const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
+    bool isPrefillOnlyRequest) {
+  resetMedia();
+  validateByteBufferCount(mediaPlan, media.size());
+  // Load media in prompt-marker order: byte buffers consume the next hoisted
+  // payload from `media` by index, paths load inline. This binds each bitmap
+  // to its own marker even when byte and path media interleave.
+  for (const auto& step : computeMediaLoadOrder(mediaPlan)) {
+    if (step.source == MediaSource::ByteBuffer) {
+      loadMedia(media[step.byteIndex]);
+    } else {
+      loadMedia(step.path);
+    }
+  }
+
+  mtmd::input_chunks chunks(mtmd_input_chunks_init());
+  tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
+
+  const size_t nChunks = chunks.size();
+  if (nChunks == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(EncoderFailed),
+        "[MtmdLlm] preparePrefill: prompt produced no chunks");
+  }
+
+  PrefillPlan plan;
+  for (size_t i = 0; i < nChunks; i++) {
+    const mtmd_input_chunk* chunk = chunks[i];
+    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+      size_t nTokens = 0;
+      const llama_token* tokens =
+          mtmd_input_chunk_get_tokens_text(chunk, &nTokens);
+      plan.tokens.insert(plan.tokens.end(), tokens, tokens + nTokens);
+    } else {
+      plan.mediaBarriers.push_back(
+          MediaBarrier{
+              .afterTextTokens = plan.tokens.size(),
+              .mediaIndex = i,
+              .nPos = mtmd_input_chunk_get_n_pos(chunk),
+              .nKvTokens = static_cast<llama_pos>(
+                  mtmd_input_chunk_get_n_tokens(chunk))});
+    }
+  }
+
+  // The batcher can only request logits on text tokens it feeds, so a
+  // generating request must end on text (chat templates append the
+  // generation prompt after the last media item, so this only rejects
+  // malformed prompts).
+  const bool endsWithMedia =
+      !plan.mediaBarriers.empty() &&
+      plan.mediaBarriers.back().afterTextTokens == plan.tokens.size();
+  if (endsWithMedia && !isPrefillOnlyRequest) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "[MtmdLlm] preparePrefill: prompt must end with text after the "
+        "last media item");
+  }
+
+  // M-RoPE media spans fewer positions than the KV cells it occupies, so both
+  // totals must clear the ceiling independently.
+  if (exceedsContextWindow(
+          plan.totalPositions(), ctxCeiling(), isPrefillOnlyRequest) ||
+      exceedsContextWindow(
+          plan.totalKvTokens(), ctxCeiling(), isPrefillOnlyRequest)) {
+    std::string errorMsg = string_format(
+        "[MtmdLlm] context overflow at batch prefill step: prompt spans %d "
+        "positions / %d KV cells, max context tokens %d\n",
+        plan.totalPositions(),
+        plan.totalKvTokens(),
+        ctxCeiling());
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(ContextOverflow), errorMsg);
+  }
+
+  // mtmd::input_chunks has a user-declared destructor and therefore no
+  // move assignment; transfer the owning pointer directly.
+  stagedChunks_.ptr = std::move(chunks.ptr);
+  pendingBatchFirstMsg_ = current_.pos == 0;
+  return plan;
+}
+
+llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
+  const bool indexInRange =
+      stagedChunks_.ptr &&
+      mediaIndex < mtmd_input_chunks_size(stagedChunks_.ptr.get());
+  const mtmd_input_chunk* chunk =
+      indexInRange ? mtmd_input_chunks_get(stagedChunks_.ptr.get(), mediaIndex)
+                   : nullptr;
+  if (chunk == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InternalError),
+        "[MtmdLlm] evalMediaSegment: no staged media segment " +
+            std::to_string(mediaIndex));
+  }
+
+  llama_pos newPos = pos;
+  constexpr bool logitsLast = false;
+  const int32_t res = mtmd_helper_eval_chunk_single(
+      visionContext(),
+      modelCtx_.lctx,
+      chunk,
+      pos,
+      seqId_,
+      params_.n_batch,
+      logitsLast,
+      &newPos);
+  if (res != 0) {
+    std::string errorMsg = string_format(
+        "[MtmdLlm] evalMediaSegment: failed to eval media chunk %zu "
+        "(res=%d)\n",
+        mediaIndex,
+        res);
+    throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
+  }
+
+  // Commit accounting only after a successful eval, so a throwing/failing
+  // eval leaves cacheTokens and pos consistent. Trailing text the scheduler
+  // fed since the last driver sync advances positions and KV cells 1:1; the
+  // media chunk then adds its own cells on top while positions advance to
+  // newPos.
+  advanceTextSpan(pos);
+  current_.cacheTokens +=
+      static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk));
+  current_.pos = newPos;
+  return newPos;
+}
+
+void MtmdLlmContext::onPrefillComplete(
+    llama_pos currentPos, size_t prefillTokenCount) {
+  // Trailing text advances positions and KV cells 1:1; media cells were
+  // already accounted by evalMediaSegment.
+  advanceTextSpan(currentPos);
+  if (pendingBatchFirstMsg_) {
+    protectedPrefix_ = current_;
+    const llama_pos ctxSize = ctxCeiling();
+    if (nDiscarded_ >= ctxSize - protectedPrefix_.pos) {
+      nDiscarded_ = ctxSize - protectedPrefix_.pos - 1;
+    }
+    pendingBatchFirstMsg_ = false;
+  }
+  tools_.onEvalComplete(
+      current_.pos, static_cast<llama_pos>(prefillTokenCount));
+}
+
+SequenceStepResult MtmdLlmContext::onLogitsReady(
+    int logitIdx, unsigned generatedAfterAccept,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
+  if (stopGeneration_.load()) {
+    stopGeneration_.store(false);
+    flushPendingUtf8ToCallback(outputCallback);
+    const llama_token eot = llama_vocab_eot(modelCtx_.vocab);
+    return {
+        .token =
+            eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(modelCtx_.vocab) : eot,
+        .finished = true};
+  }
+
+  if ((current_.pos + 1 > ctxCeiling() ||
+       current_.cacheTokens + 1 > ctxCeiling()) &&
+      nDiscarded_ == 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] generation overflow: per-slot context is full and "
+            "nDiscarded is 0 (nPast=%d, cacheTokens=%d, ceiling=%d)\n",
+            current_.pos,
+            current_.cacheTokens,
+            ctxCeiling()));
+    return {.finished = true, .contextOverflow = true};
+  }
+  // No applyContextDiscard here: the batcher's per-sequence cap stops a
+  // slot before its window fills, and sliding a sequence that holds
+  // media cells would discard image KV entries mid-generation.
+
+  llama_token tokenId =
+      common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+  common_sampler_accept(smpl_.get(), tokenId, true);
+
+  std::string tokenStr =
+      common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+  const std::string completeChars = utf8Buffer_.addToken(tokenStr);
+  if (!completeChars.empty() && outputCallback) {
+    outputCallback(completeChars);
+  }
+
+  const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
+  if (isEos && isHarmonyModel_ && params_.use_jinja &&
+      tokenId == harmonyCallToken_) {
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[MtmdLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
+    if (outputCallback) {
+      const std::string callMarker =
+          common_token_to_piece(modelCtx_.lctx, tokenId, true);
+      if (!callMarker.empty()) {
+        outputCallback(callMarker);
+      }
+    }
+    flushPendingUtf8ToCallback(outputCallback);
+    return {.token = tokenId, .finished = true};
+  }
+
+  // Batch path only: scheduler stops solely on `finished` (see
+  // TextLlmContext::onLogitsReady for the single-prompt rationale).
+  const bool reachedBudget =
+      inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
+      generatedAfterAccept >= static_cast<unsigned>(params_.n_predict);
+  const bool finished = isEos || reachedBudget || checkAntiprompt();
+  if (finished) {
+    flushPendingUtf8ToCallback(outputCallback);
+  }
+  return {.token = tokenId, .finished = finished};
+}
+
+void MtmdLlmContext::onSequenceEnd(
+    const std::function<void(const std::string&)>& outputCallback) {
+  flushPendingUtf8ToCallback(outputCallback);
+}
+
+void MtmdLlmContext::onGenerationFinished(
+    const std::function<void(const std::string&)>& outputCallback) {
+  onSequenceEnd(outputCallback);
+}
+
+void MtmdLlmContext::onCancel(
+    const std::function<void(const std::string&)>& outputCallback) {
+  onGenerationFinished(outputCallback);
+}
+
+void MtmdLlmContext::validatePromptPolicy(
+    const std::vector<common_chat_msg>& chatMsgs,
+    const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
+    bool hasKvCacheContext) const {
+  tools_.validatePrompt(chatMsgs, tools, layout, hasKvCacheContext);
+}
+
+/// Prompt caching on the multimodal batch path round-trips the full four-field
+/// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
+/// exactly as `CacheManager` does. All four fields are required: copying only
+/// the text path's two positional fields would drop
+/// `cacheTokens`/`firstMsgCacheTokens`, and for M-RoPE media those KV-cell
+/// counts diverge from the positional span (`current_.pos` vs
+/// `current_.cacheTokens`), so losing them would break context shifting after
+/// restore.
+static_assert(
+    SESSION_METADATA_FIELD_COUNT == 4,
+    "MTMD cache (de)serialization must persist all four session-metadata "
+    "fields; update the implementation when the contract changes");
+
+bool MtmdLlmContext::loadCache(
+    const std::string& cacheKey, llama_pos configuredNDiscarded) {
+  nDiscarded_ = configuredNDiscarded;
+  if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
+    return false;
+  }
+
+  // Restore the full four-field metadata contract (SessionMetadataField order:
+  // NPast, FirstMsgTokens, CacheTokens, FirstMsgCacheTokens). For M-RoPE media
+  // the KV-cell counts diverge from the positional span, so all four must
+  // survive — see the static_assert above. The per-cell llama_kv_cell_ext
+  // (x/y) is restored by the GGSQ sequence-state loader itself.
+  size_t tokenCount = 0;
+  llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {0, 0, 0, 0};
+  const auto loadedBytes = llama_state_seq_load_file(
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      sessionTokens,
+      SESSION_METADATA_FIELD_COUNT,
+      &tokenCount);
+  if (loadedBytes == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
+  }
+
+  // `llama_state_seq_load_file` has already restored this sequence's KV cells.
+  // Every validation below runs after that restore, and the scheduler installs
+  // its per-slot cleanup guard only once this function returns, so any throw in
+  // between would strand the restored cells as orphan KV on the slot. Roll the
+  // sequence (and the metadata it stamped) back unless we reach the accept
+  // point, mirroring `TextLlmContext::loadCache` and `CacheManager::loadCache`.
+  ScopeGuard restoredKvGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[MtmdLlm] failed to clear sequence after invalid cache load\n");
+    }
+    current_ = {};
+    protectedPrefix_ = {};
+    tools_.reset();
+  });
+
+  // Accepting a partial header would leave `cacheTokens`/`firstMsgCacheTokens`
+  // defaulted to zero (they diverge from `nPast` under M-RoPE, breaking later
+  // cap checks). Require the full four-field contract; the guard above clears
+  // the restored KV on reject, mirroring `CacheManager::loadCache`.
+  if (!mtmdSessionMetadataIsComplete(tokenCount)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "MtmdLlmContext::loadCache: cache '" + cacheKey +
+            "' has incomplete session metadata (" + std::to_string(tokenCount) +
+            " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
+  }
+
+  setNPast(sessionTokens[static_cast<size_t>(SessionMetadataField::NPast)]);
+  setFirstMsgTokens(
+      sessionTokens[static_cast<size_t>(SessionMetadataField::FirstMsgTokens)]);
+  setCacheTokens(
+      sessionTokens[static_cast<size_t>(SessionMetadataField::CacheTokens)]);
+  setFirstMsgCacheTokens(
+      sessionTokens[static_cast<size_t>(
+          SessionMetadataField::FirstMsgCacheTokens)]);
+
+  if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(ContextLengthExeeded),
+        "MtmdLlmContext::loadCache: cache '" + cacheKey +
+            "' exceeds current context size");
+  }
+
+  // Clamp discard to the per-slot window (ctxCeiling), not the physical
+  // context, mirroring TextLlmContext::loadCache.
+  const llama_pos window = ctxCeiling();
+  if (configuredNDiscarded > window - getFirstMsgTokens()) {
+    nDiscarded_ = window - getFirstMsgTokens() - 1;
+  } else {
+    nDiscarded_ = configuredNDiscarded;
+  }
+
+  if (auto* mem = llama_get_memory(modelCtx_.lctx); mem != nullptr) {
+    llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
+  }
+  restoredKvGuard.dismiss();
+  return true;
+}
+
+void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
+  if (cacheKey.empty()) {
+    return;
+  }
+
+  // Persist all four metadata fields in SessionMetadataField order so the
+  // physical KV-cell counts that diverge under M-RoPE survive restore.
+  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
+      static_cast<llama_token>(getNPast()),
+      static_cast<llama_token>(getFirstMsgTokens()),
+      static_cast<llama_token>(getCacheTokens()),
+      static_cast<llama_token>(getFirstMsgCacheTokens())};
+  const auto savedBytes = llama_state_seq_save_file(
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      sessionTokens,
+      SESSION_METADATA_FIELD_COUNT);
+  if (savedBytes == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidInputFormat),
+        "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
+  }
 }
