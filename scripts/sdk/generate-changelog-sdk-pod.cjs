@@ -925,7 +925,7 @@ function rebuildRootChangelog(packageName) {
     let content = fs.readFileSync(versionFile, "utf8").trim();
     // Transform version headers to "## [X.Y.Z]" for aggregated file
     content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
-    content = content.replace(/^# QVAC SDK v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
+    content = content.replace(/^# QVAC .+? v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
     // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
     content = content.replace(
       /\(\.\/([^)]+\.md)\)/g,

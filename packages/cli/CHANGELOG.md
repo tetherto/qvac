@@ -1,6 +1,6 @@
 # Changelog
 
-# QVAC CLI v0.8.0 Release Notes
+## [0.8.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.8.0
 
@@ -55,7 +55,7 @@ Gemma4 completion draining is hardened so requests that cap reasoning (for examp
 
 The CLI's committed `@qvac/sdk` dependency now targets `^0.14.0`. Documentation gained an OpenCode plugin model-selection guide and an agent-stack test-ownership map, and the e2e suite was migrated from BATS to a `node:test` suite with added coverage for OpenAI chat-agent request shapes.
 
-# QVAC CLI v0.7.0 Release Notes
+## [0.7.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.7.0
 
