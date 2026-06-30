@@ -4,18 +4,18 @@
 # Fork of ggml-org/ggml with all overlay patches pre-applied, plus the
 # downstream LTX support currently under review.
 #
-# Pulls from tetherto/qvac-ext-ggml branch 2026-06-06 (REF pinned to its tip
-# 805e8e1b for reproducibility). 805e8e1b is the merge of PR #23
-# (2026-06-06-ltx) into the canonical 2026-06-06 line, so it carries the full
-# merged compute set on top of leejet/ggml v0.12.0: the Metal fused Flux RoPE
-# kernel + implicit-GEMM conv2d + flash-attention fix, Wan IM2COL_3D/PAD, the
-# coopmat1 flash-attn f32-accumulation fixes (RADV PV/output in f32 under
-# GGML_PREC_F32, needed for correct LTX-2.3 output on Strix Halo), and the
-# ggml_graph_leaf/leafs/n_leafs public API export.
+# Pulls from tetherto/qvac-ext-ggml branch 2026-06-06-on-fabric-ggml (REF
+# pinned to its tip 12b744dc for reproducibility). This rebases the 2026-06-06
+# compute stack on the fabric ggml subtree, including the Adreno OpenCL Q4_0
+# allocation fix plus the OpenCL SOA tensor-upload serialization fix found on
+# the S25. It also carries the merged Metal fused Flux RoPE kernel,
+# implicit-GEMM conv2d + flash-attention fix, Wan IM2COL_3D/PAD, the coopmat1
+# flash-attn f32-accumulation fixes, and the ggml_graph_leaf/leafs/n_leafs
+# public API export.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/tetherto/qvac-ext-ggml.git"
-    REF 805e8e1b0329c9a6a11968bb31a81b03362a9f35
+    REF 12b744dc145b9bd691d1bc41debc3e865e4f513c
 )
 
 # --- GPU feature flags ---
