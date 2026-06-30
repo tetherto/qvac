@@ -1,0 +1,225 @@
+name: OpenCode Upstream Compatibility
+
+# Scheduled tripwire for the published OpenCode integration. This intentionally
+# installs the latest public OpenCode and QVAC plugin packages in a fresh project
+# so upstream/runtime drift is caught before users report it.
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # daily 07:00 UTC, after the public npm install check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencode-upstream-compat
+  cancel-in-progress: false
+
+env:
+  QVAC_SMOKE_MODEL: qwen3.5-0.8b
+  QVAC_READY_TIMEOUT_MS: "1800000"
+  QVAC_UPSTREAM_TIMEOUT_MS: "300000"
+  OPENCODE_TIMEOUT: 45m
+
+jobs:
+  smoke:
+    name: opencode-ai@latest + @qvac/opencode-plugin@latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install latest public packages
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/opencode-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/opencode-compat-artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p "$SMOKE_DIR" "$ARTIFACT_DIR"
+          cd "$SMOKE_DIR"
+
+          npm init -y > /dev/null
+          printf '%s\n' \
+            'registry=https://registry.npmjs.org/' \
+            '@qvac:registry=https://registry.npmjs.org/' \
+            'foreground-scripts=true' \
+            > .npmrc
+
+          npm install --no-fund --no-audit \
+            opencode-ai@latest \
+            @qvac/opencode-plugin@latest
+
+          npm ls --json \
+            opencode-ai \
+            @qvac/opencode-plugin \
+            @qvac/ai-sdk-provider \
+            @qvac/cli \
+            @qvac/sdk \
+            ai \
+            @ai-sdk/openai-compatible \
+            > "$ARTIFACT_DIR/npm-ls.json" || true
+
+          {
+            echo "## Package versions"
+            echo
+            echo '```json'
+            node - <<'NODE'
+          const { existsSync, readFileSync } = require('node:fs')
+          const { dirname, join, parse } = require('node:path')
+          const { createRequire } = require('node:module')
+          const requireFromProject = createRequire(`${process.cwd()}/package.json`)
+          const names = [
+            'opencode-ai',
+            '@qvac/opencode-plugin',
+            '@qvac/ai-sdk-provider',
+            '@qvac/cli',
+            '@qvac/sdk',
+            'ai',
+            '@ai-sdk/openai-compatible'
+          ]
+          function packageJsonFor(name) {
+            try {
+              return requireFromProject(`${name}/package.json`)
+            } catch {
+              // Some QVAC packages do not export package.json; resolve the entry
+              // point and walk upward to the matching package root.
+            }
+
+            let dir = dirname(requireFromProject.resolve(name))
+            const root = parse(dir).root
+            while (dir !== root) {
+              const candidate = join(dir, 'package.json')
+              if (existsSync(candidate)) {
+                const parsed = JSON.parse(readFileSync(candidate, 'utf8'))
+                if (parsed.name === name) return parsed
+              }
+              dir = dirname(dir)
+            }
+            throw new Error(`could not find package.json for ${name}`)
+          }
+          const versions = {}
+          for (const name of names) {
+            try {
+              versions[name] = packageJsonFor(name).version
+            } catch (err) {
+              versions[name] = `unresolved: ${err instanceof Error ? err.message : String(err)}`
+            }
+          }
+          console.log(JSON.stringify(versions, null, 2))
+          NODE
+            echo '```'
+          } | tee "$ARTIFACT_DIR/versions.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run OpenCode through QVAC plugin
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/opencode-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/opencode-compat-artifacts
+          QVAC_HOST_LOG: ${{ runner.temp }}/opencode-compat-artifacts/qvac-host.log
+          QVAC_DEBUG: "1"
+          QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
+        run: |
+          set -euo pipefail
+          cd "$SMOKE_DIR"
+
+          cat > opencode.json <<JSON
+          {
+            "\$schema": "https://opencode.ai/config.json",
+            "plugin": [
+              [
+                "@qvac/opencode-plugin",
+                {
+                  "model": "${QVAC_MODEL}",
+                  "ctxSize": 32768,
+                  "reasoningBudget": 0,
+                  "tools": true
+                }
+              ]
+            ]
+          }
+          JSON
+          cp opencode.json "$ARTIFACT_DIR/opencode.json"
+
+          echo "OpenCode CLI version:" | tee "$ARTIFACT_DIR/opencode-version.txt"
+          npx opencode --version | tee -a "$ARTIFACT_DIR/opencode-version.txt"
+
+          timeout "$OPENCODE_TIMEOUT" npx opencode run \
+            --model "qvac/${QVAC_MODEL}" \
+            --format json \
+            "Reply with one short sentence that includes qvac-ok." \
+            > "$ARTIFACT_DIR/opencode-run.jsonl" \
+            2> "$ARTIFACT_DIR/opencode-run.stderr"
+
+          {
+            echo
+            echo "## Smoke result"
+            echo
+            echo "OpenCode completed successfully through \`@qvac/opencode-plugin@latest\` using \`qvac/${QVAC_MODEL}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: opencode-upstream-compat
+          path: ${{ runner.temp }}/opencode-compat-artifacts
+          if-no-files-found: warn
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: smoke
+    # Manual runs are for debugging this workflow. Scheduled failures are the
+    # unattended signal that should create team-visible follow-up.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'OpenCode upstream compatibility smoke failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Scheduled OpenCode upstream compatibility smoke failed.`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- Artifact: \`opencode-upstream-compat\``,
+              `- Triage: inspect package versions, \`opencode-run.stderr\`, \`opencode-run.jsonl\`, and \`qvac-host.log\` from the artifact.`,
+              `- Likely cause: latest \`opencode-ai\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`,
+            ].join('\n');
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.title === title);
+
+            if (existing !== undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }
