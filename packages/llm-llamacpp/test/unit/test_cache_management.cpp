@@ -1,5 +1,7 @@
 #include <any>
+#include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -1027,4 +1029,43 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
          "resident in seq 0 "
          "even though the batch scheduler occupied and wiped seq 0. "
          "processPrompt returned empty output.";
+}
+
+// GGSQ unification (sub-task 1): the single-prompt CacheManager path must write
+// the per-sequence state format (GGSQ), not the whole-session format (GGSN), so
+// the same on-disk cache can be read back by the batch per-sequence loader. A
+// freshly written single-prompt cache file therefore starts with the GGSQ magic
+// (0x67677371, 'ggsq'); today it starts with GGSN (0x6767736e) and this fails.
+TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  EXPECT_NO_THROW({
+    processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
+        session1_path,
+        true);
+  });
+
+  ASSERT_TRUE(fs::exists(session1_path));
+
+  std::ifstream file(session1_path, std::ios::binary);
+  ASSERT_TRUE(file.is_open());
+  std::uint32_t magic = 0;
+  file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+  ASSERT_EQ(file.gcount(), static_cast<std::streamsize>(sizeof(magic)));
+
+  EXPECT_EQ(magic, static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC))
+      << "single-prompt cache wrote magic 0x" << std::hex << magic
+      << " (expected GGSQ 0x"
+      << static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC)
+      << "); CacheManager still uses the whole-session GGSN format instead of "
+         "the per-sequence GGSQ format shared with the batch path.";
 }

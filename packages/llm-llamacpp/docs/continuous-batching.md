@@ -50,7 +50,7 @@ const model = new LlmLlamacpp({
 
 `parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
-Continuous batching works on text-only models. Multimodal (vision) models use a separate context type and do not support batch mode.
+Continuous batching works on both text and multimodal (vision) models. A batch prompt may include media messages; each sequence runs its own per-slot MTMD driver that loads its media, sharing the model's mmproj weights.
 
 ---
 
@@ -305,6 +305,12 @@ Two restrictions apply in batch mode:
 
 ---
 
+## KV reuse: single-prompt vs batch
+
+The single-prompt path keeps one `TextLlmContext` for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+
+---
+
 ## Cancellation semantics
 
 Cancellation behaves differently depending on where a prompt is when `cancel()` fires:
@@ -344,7 +350,7 @@ When the batch completes, `BatchResult.stats` carries the full snapshot. `LlamaM
 | Feature | Batch mode |
 |---------|-----------|
 | Text models | Supported |
-| Multimodal / vision models | Not supported (separate context type) |
+| Multimodal / vision models | Supported (per-slot MTMD driver; batch prompts may include media messages) |
 | Tools | Supported (per-slot `ToolsCompactController`) |
 | `tools_compact` | Supported |
 | Per-prompt `cacheKey` | Supported (read sharing allowed; write sharing rejected) |

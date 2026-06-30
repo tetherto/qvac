@@ -39,6 +39,10 @@ add_executable(
   test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp
   test_continuous_batch_finalize.cpp
+  test_batch_entry_guard.cpp
+  test_slide_capable_capability.cpp
+  test_media_load_order.cpp
+  test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
   test_kv_leak_on_admit_failure.cpp
@@ -51,6 +55,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
