@@ -1,0 +1,77 @@
+{
+  "name": "@qvac/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "OpenClaw provider plugin that runs a local QVAC serve through OpenClaw localService",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "qvac",
+    "tether",
+    "openclaw",
+    "plugin",
+    "local-ai",
+    "on-device",
+    "offline",
+    "coding-agent",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "plugins/openclaw"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/plugins/openclaw#readme",
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "lint": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts",
+    "test:unit": "tsx --test test/*.test.ts",
+    "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
+  },
+  "dependencies": {
+    "@qvac/ai-sdk-provider": "^0.2.2",
+    "@qvac/cli": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "openclaw": "^2026.6.8",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.6.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  }
+}
