@@ -182,6 +182,19 @@ function getModelPath (filename) {
   return path.join(__dirname, '..', '..', 'models', filename)
 }
 
+// Resolve a bundled test asset (model / embedder / fixture) to a real on-device
+// path. The mobile test framework copies test/mobile/testAssets/ into the app
+// and exposes each file via global.assetPaths['../../testAssets/<file>'] as a
+// file:// URL (under the app cache dir, NOT global.testDir). Falls back to the
+// testDir-based path off-mobile or when the manifest is absent.
+function getMobileAssetPath (filename) {
+  if (typeof global !== 'undefined' && global.assetPaths) {
+    const key = '../../testAssets/' + filename
+    if (global.assetPaths[key]) return String(global.assetPaths[key]).replace('file://', '')
+  }
+  return path.join(getMobileAssetsDir(), filename)
+}
+
 function getTestPaths () {
   const fixturesDir = isMobile
     ? getMobileAssetsDir()
@@ -263,6 +276,7 @@ module.exports = {
   platform,
   getMobileAssetsDir,
   getModelPath,
+  getMobileAssetPath,
   getTestPaths,
   detectPlatform,
   computeWER,
