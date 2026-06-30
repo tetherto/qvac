@@ -390,3 +390,81 @@ test("batchCompletion client: resolves per-prompt tools and routes handlers by i
   });
   t.alike(calls, ["inline:Tokyo", "mcp:weather"]);
 });
+
+test("batchCompletion client: routes handlers by position when ids are omitted", async (t) => {
+  const calls: string[] = [];
+
+  const run = createBatchCompletionRun(
+    {
+      modelId: "llama",
+      prompts: [
+        {
+          history: [{ role: "user", content: "Call inline tool" }],
+          tools: [
+            {
+              name: "inline_tool",
+              description: "Inline test tool",
+              parameters: z.object({ city: z.string() }),
+              handler: async function (args) {
+                calls.push(`inline:${args["city"]}`);
+                return { source: "inline", args };
+              },
+            },
+          ],
+        },
+        {
+          history: [{ role: "user", content: "No tools here" }],
+        },
+      ],
+    },
+    function streamFactory() {
+      return mockResponses([
+        {
+          type: "batchCompletionStream",
+          ids: ["batch-1", "batch-2"],
+          events: [],
+        },
+        {
+          type: "batchCompletionStream",
+          done: true,
+          ids: ["batch-1", "batch-2"],
+          events: [
+            {
+              id: "batch-1",
+              event: {
+                type: "toolCall",
+                seq: 0,
+                call: {
+                  id: "call-inline",
+                  name: "inline_tool",
+                  arguments: { city: "Tokyo" },
+                },
+              },
+            },
+            { id: "batch-1", event: { type: "completionDone", seq: 1 } },
+            { id: "batch-2", event: { type: "completionDone", seq: 0 } },
+          ],
+        },
+      ]);
+    },
+  );
+
+  await collect(run.events);
+
+  t.alike(await run.ids, ["batch-1", "batch-2"], "addon-minted ids surface");
+
+  const toolPromptFinal = await run.byId("batch-1").final;
+  const plainPromptFinal = await run.byId("batch-2").final;
+
+  t.ok(
+    toolPromptFinal.toolCalls[0]?.invoke,
+    "handler routed to the first prompt by position despite the minted id",
+  );
+  t.absent(
+    plainPromptFinal.toolCalls[0]?.invoke,
+    "second prompt has no handler",
+  );
+
+  await toolPromptFinal.toolCalls[0]?.invoke?.();
+  t.alike(calls, ["inline:Tokyo"]);
+});

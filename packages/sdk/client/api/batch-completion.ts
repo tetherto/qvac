@@ -66,7 +66,7 @@ type PerIdState = {
 
 type ResolvedBatchPrompts = {
   prompts: BatchCompletionStreamRequest["prompts"];
-  handlersById: Map<string, ToolHandlerMap>;
+  handlers: ToolHandlerMap[];
 };
 
 function createPerIdState(): PerIdState {
@@ -102,9 +102,9 @@ async function resolveBatchPrompts(
   prompts: BatchPromptParams[],
 ): Promise<ResolvedBatchPrompts> {
   const resolvedPrompts: BatchCompletionStreamRequest["prompts"] = [];
-  const handlersById = new Map<string, ToolHandlerMap>();
+  const resolvedHandlers: ToolHandlerMap[] = [];
 
-  for (const [index, prompt] of prompts.entries()) {
+  for (const prompt of prompts) {
     let allTools: Tool[] = [];
     const handlers: ToolHandlerMap = new Map();
 
@@ -121,8 +121,7 @@ async function resolveBatchPrompts(
       addHandlers(handlers, mcpHandlers);
     }
 
-    const id = prompt.id ?? String(index);
-    handlersById.set(id, handlers);
+    resolvedHandlers.push(handlers);
 
     resolvedPrompts.push({
       ...(prompt.id !== undefined && { id: prompt.id }),
@@ -135,7 +134,7 @@ async function resolveBatchPrompts(
     });
   }
 
-  return { prompts: resolvedPrompts, handlersById };
+  return { prompts: resolvedPrompts, handlers: resolvedHandlers };
 }
 
 export function batchCompletion(
@@ -152,7 +151,8 @@ export function createBatchCompletionRun(
   const states = new Map<string, PerIdState>();
   const subStreams = new Map<string, BatchCompletionSubRun>();
   const eventQueue: BatchCompletionEvent[] = [];
-  let handlersById = new Map<string, ToolHandlerMap>();
+  const handlersById = new Map<string, ToolHandlerMap>();
+  let handlersByPosition: ToolHandlerMap[] = [];
   const emptyHandlers: ToolHandlerMap = new Map();
 
   let eventResolve: (() => void) | null = null;
@@ -225,7 +225,10 @@ export function createBatchCompletionRun(
   function resolveIds(ids: string[]) {
     if (idsResolved) return;
     idsResolved = true;
-    for (const id of ids) ensureState(id);
+    for (const [index, id] of ids.entries()) {
+      handlersById.set(id, handlersByPosition[index] ?? emptyHandlers);
+      ensureState(id);
+    }
     idsResolver(ids);
   }
 
@@ -307,7 +310,7 @@ export function createBatchCompletionRun(
   const processResponses = async () => {
     try {
       const resolved = await resolveBatchPrompts(params.prompts);
-      handlersById = resolved.handlersById;
+      handlersByPosition = resolved.handlers;
 
       const request: BatchCompletionStreamRequest = {
         type: "batchCompletionStream",

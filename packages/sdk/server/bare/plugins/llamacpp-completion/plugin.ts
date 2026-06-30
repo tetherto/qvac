@@ -155,18 +155,23 @@ export const llmPlugin = definePlugin({
           request.toolDialect ?? detectToolDialect(request.modelId);
         const modelCfg = getModelConfig(request.modelId);
         const toolsActive = (modelCfg as { tools?: boolean }).tools === true;
-        const toolsById = new Map(
-          request.prompts.map((prompt, index) => [
-            prompt.id ?? String(index),
-            prompt.tools ?? [],
-          ]),
+        const toolsByPosition = request.prompts.map(
+          (prompt) => prompt.tools ?? [],
         );
+        const toolsById = new Map<string, Tool[]>();
         const normalizers = new Map<
           string,
           ReturnType<typeof createCompletionNormalizer>
         >();
         const bufferedEvents: BatchCompletionEvent[] = [];
         let ids: string[] = [];
+
+        function registerIds(addonIds: string[]) {
+          ids = addonIds;
+          for (const [index, id] of addonIds.entries()) {
+            toolsById.set(id, toolsByPosition[index] ?? []);
+          }
+        }
 
         function getNormalizer(id: string) {
           let normalizer = normalizers.get(id);
@@ -220,7 +225,7 @@ export const llmPlugin = definePlugin({
 
           while (!result.done) {
             if (result.value.type === "ids") {
-              ids = result.value.ids;
+              registerIds(result.value.ids);
               yield {
                 type: "batchCompletionStream" as const,
                 ids,
