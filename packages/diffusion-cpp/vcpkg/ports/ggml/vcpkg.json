@@ -43,7 +43,10 @@
       ]
     },
     "vulkan": {
-      "description": "Enable Vulkan GPU backend"
+      "description": "Enable Vulkan GPU backend",
+      "dependencies": [
+        "spirv-headers"
+      ]
     }
   }
 }

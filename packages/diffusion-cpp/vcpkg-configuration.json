@@ -15,6 +15,7 @@
       "packages": [
         "gtest",
         "picojson",
+        "spirv-headers",
         "stb"
       ]
     }

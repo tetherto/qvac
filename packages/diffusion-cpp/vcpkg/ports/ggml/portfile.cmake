@@ -53,6 +53,25 @@ if("opencl" IN_LIST FEATURES)
     set(GGML_OPENCL ON)
 endif()
 
+# The fabric ggml Vulkan backend includes vma/VmaUsage.h through a
+# ../../../vendor include path from src/ggml-vulkan. Recreate that small vendor
+# layout for this standalone ggml source checkout.
+if("vulkan" IN_LIST FEATURES)
+    set(VMA_VENDOR_REF e9ad5fc9f6d5120639ed98d0c9248a83b7eaa04c)
+    set(VMA_VENDOR_DIR "${SOURCE_PATH}/../vendor/vma")
+    file(MAKE_DIRECTORY "${VMA_VENDOR_DIR}")
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/tetherto/qvac-fabric-llm.cpp/${VMA_VENDOR_REF}/vendor/vma/VmaUsage.h"
+        "${VMA_VENDOR_DIR}/VmaUsage.h"
+        TLS_VERIFY ON
+    )
+    file(DOWNLOAD
+        "https://raw.githubusercontent.com/tetherto/qvac-fabric-llm.cpp/${VMA_VENDOR_REF}/vendor/vma/vk_mem_alloc.h"
+        "${VMA_VENDOR_DIR}/vk_mem_alloc.h"
+        TLS_VERIFY ON
+    )
+endif()
+
 # --- Android: fetch NDK-matched Vulkan C++ headers ---
 # The NDK ships vulkan/vulkan_core.h (C) but not vulkan/vulkan.hpp (C++).
 # Rather than pulling the vcpkg vulkan-headers package (which may be a
@@ -113,6 +132,7 @@ vcpkg_cmake_configure(
         -DGGML_VULKAN=${GGML_VULKAN}
         -DGGML_CUDA=${GGML_CUDA}
         -DGGML_OPENCL=${GGML_OPENCL}
+        -DGGML_OPENCL_KERNEL_CACHE=OFF
         -DGGML_MAX_NAME=128
         ${GGML_CUDA_COMPILER_OPTION}
         ${PLATFORM_OPTIONS}
