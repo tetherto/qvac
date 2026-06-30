@@ -18,6 +18,10 @@ vcpkg_from_git(
     REF 12b744dc145b9bd691d1bc41debc3e865e4f513c
 )
 
+# Only build Release; ggml's Android install exports release CMake package
+# files, and the addon prebuild does not need a debug dependency build.
+set(VCPKG_BUILD_TYPE release)
+
 # --- GPU feature flags ---
 set(GGML_METAL  OFF)
 set(GGML_VULKAN OFF)
@@ -144,6 +148,7 @@ vcpkg_cmake_install()
 # MODULE target but does not install them via cmake install().
 if(VCPKG_TARGET_IS_ANDROID)
     file(GLOB _backend_sos
+        "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libqvac-diffusion-ggml-*.so"
         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libqvac-ggml-*.so"
         "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/bin/libggml-*.so"
     )
