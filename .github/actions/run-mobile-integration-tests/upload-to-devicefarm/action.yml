@@ -113,6 +113,15 @@ inputs:
     description: "Restrict to perf tests only"
     required: false
     default: "false"
+  extra-device-env:
+    description: |
+      Semicolon-separated KEY=VALUE pairs pushed to the device alongside the
+      perf knobs (same qvacPerfConfig.txt file; the on-device loader
+      os.setEnv()s every key before the tests load). Lets a consumer forward
+      arbitrary env to the on-device test code, e.g.
+      "QVAC_VLM_DEVICES=cpu;QVAC_VLM_PRESET=smoke". Empty = nothing extra.
+    required: false
+    default: ""
 
   # Custom artifact pulls
   after-hook-pulls:
@@ -289,6 +298,7 @@ runs:
         QVAC_PERF_RUNS: ${{ inputs.qvac-perf-runs }}
         QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac-perf-warmup-runs }}
         QVAC_PERF_ONLY: ${{ inputs.qvac-perf-only }}
+        EXTRA_DEVICE_ENV: ${{ inputs.extra-device-env }}
         AFTER_PULLS: ${{ inputs.after-hook-pulls }}
         AFTER_SNIPPET: ${{ inputs.wdio-after-snippet }}
         EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
@@ -320,6 +330,11 @@ runs:
         # crashMonitor + flushBareLog universal per design doc decisions §3 + §6.
         export ENABLE_FLUSH_BARE_LOG="true"
         export ENABLE_CRASH_MONITOR="true"
+
+        # Consumer device env: ';' → literal backslash-n so the value stays a
+        # single-line JS string in the template; the on-device loader
+        # normalises literal \n back into newlines before parsing.
+        export QVAC_EXTRA_ENV=$(printf '%s' "$EXTRA_DEVICE_ENV" | sed 's/;/\\n/g')
 
         # Resolve the per-group list, in priority order:
         #   1. Explicit `test-groups` input (takes precedence — escape hatch)
@@ -499,6 +514,7 @@ runs:
             "__ENABLE_CRASH_MONITOR__": os.environ["ENABLE_CRASH_MONITOR"],
             "__QVAC_PERF_RUNS__": os.environ.get("QVAC_PERF_RUNS", ""),
             "__QVAC_PERF_WARMUP_RUNS__": os.environ.get("QVAC_PERF_WARMUP_RUNS", ""),
+            "__QVAC_EXTRA_ENV__": os.environ.get("QVAC_EXTRA_ENV", ""),
             "__ENABLES_PERF__": os.environ.get("SHARD_ENABLES_PERF", "false"),
             "__AFTER_HOOK_EXTRA__": after_snippet,
         }

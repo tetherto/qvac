@@ -20,6 +20,13 @@ description: |
        iPhone 17 (iOS). Used by Whisper, NMT, TTS, Diffusion, Parakeet,
        Decoder.
 
+  4. Single-device (test-specs has 1 entry AND scheduling-mode=single-device):
+       Schedule ONE run on ONE device picked by a model filter
+       (device-model CONTAINS + optional device-manufacturer EQUALS,
+       maxDevices 1). Used by the VLM benchmark to pin each leg to exactly
+       one phone — extra devices only add Device Farm queue/concurrency
+       contention and can outwait the caller's job ceiling.
+
 inputs:
   platform:
     description: "Android | iOS"
@@ -47,9 +54,17 @@ inputs:
       Length 1 => default mode (single spec), length >1 => sharded mode.
     required: true
   scheduling-mode:
-    description: "dual-flagship | single-pool (only honored when test-specs has 1 entry)"
+    description: "dual-flagship | single-pool | single-device (only honored when test-specs has 1 entry)"
     required: false
     default: "dual-flagship"
+  device-model:
+    description: "single-device mode: MODEL CONTAINS filter value, e.g. 'S25 Ultra', 'iPhone 17'"
+    required: false
+    default: ""
+  device-manufacturer:
+    description: "single-device mode: optional MANUFACTURER EQUALS filter value, e.g. 'Samsung', 'Apple'"
+    required: false
+    default: ""
   job-timeout-minutes:
     description: "Per-run Device Farm jobTimeoutMinutes. Default 120 gives headroom for slower devices (Pixel 9 Pro VLM ~56 min). The crash monitor kills hung tests early so the extra ceiling doesn't waste time on crashes."
     required: false
@@ -78,6 +93,8 @@ runs:
         TEST_PACKAGE_ARN: ${{ inputs.test-package-upload-arn }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
         SCHEDULING_MODE: ${{ inputs.scheduling-mode }}
+        DEVICE_MODEL: ${{ inputs.device-model }}
+        DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -154,6 +171,25 @@ runs:
           SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN")
           echo "  $RUN_NAME_BASE -> $RUN_ARN"
+          RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
+        elif [ "$SCHEDULING_MODE" = "single-device" ]; then
+          # One run on one device picked by the caller's model filter.
+          if [ -z "$DEVICE_MODEL" ]; then
+            echo "ERROR: single-device mode requires device-model" >&2
+            exit 1
+          fi
+          SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
+          PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
+          FILTER=$(jq -nc --arg plat "$PLAT_UPPER" --arg model "$DEVICE_MODEL" --arg man "$DEVICE_MANUFACTURER" '{
+            filters: ([
+              {attribute:"PLATFORM", operator:"EQUALS",   values:[$plat]},
+              {attribute:"MODEL",    operator:"CONTAINS", values:[$model]}
+            ] + (if $man != "" then [{attribute:"MANUFACTURER", operator:"EQUALS", values:[$man]}] else [] end)),
+            maxDevices: 1
+          }')
+          SAFE_MODEL=$(printf '%s' "$DEVICE_MODEL" | tr -c '[:alnum:]' '_')
+          RUN_ARN=$(schedule_run_with_filter "${RUN_NAME_BASE}-${SAFE_MODEL}" "$FILTER" "$SPEC_ARN")
+          echo "  ${RUN_NAME_BASE}-${SAFE_MODEL} -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         else
           # Default dual-flagship: same spec, two device targets.
