@@ -392,6 +392,12 @@ qvac doctor
 - Node.js >= 18.0.0
 - npm
 
+### Agent-stack test ownership
+
+For tests that touch `qvac serve openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
+[`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
+CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
+
 The CLI depends on the published `@qvac/sdk` (`^0.12.0`), which provides the
 `./commands` subpath that `bundle`/`verify` re-export and the server runtime
 the `serve` commands use. A normal `npm install` pulls it from the registry —
