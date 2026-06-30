@@ -241,11 +241,18 @@ jobs:
           name: prebuilds
           path: packages/tts-ggml/prebuilds
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@0.1.0
+        with:
+          workdir: packages/tts-ggml
+          tag: ${{ inputs.npm_tag || 'latest' }}
+
       - name: Publish to NPM Package Registry
         id: publish
         uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
         with:
-          tag: ${{ inputs.npm_tag || 'latest' }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: packages/tts-ggml
 
       - name: Capture published version

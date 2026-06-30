@@ -247,11 +247,18 @@ jobs:
           name: opencode-plugin-dist
           path: plugins/opencode/dist
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@0.1.0
+        with:
+          workdir: plugins/opencode
+          tag: ${{ needs.publish-logic.outputs.npm_tag }}
+
       - name: Publish to NPM
         id: publish-npm
         uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
         with:
-          tag: ${{ needs.publish-logic.outputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: plugins/opencode
 
   publish-release:
