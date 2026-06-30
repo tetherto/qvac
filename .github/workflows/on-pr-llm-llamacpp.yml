@@ -414,10 +414,16 @@ jobs:
           REPO: ${{ github.repository }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           NATIVE_HASH: ${{ needs.detect-native-changes.outputs.native_hash }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_ID: ${{ github.run_id }}
         run: |
           set -u
-          WANT="prebuilds-cache-${NATIVE_HASH}"
+          # Marker is scoped by PR NUMBER (globally unique in the base repo) so a
+          # PR can only ever reuse ITS OWN prior prebuilds — a malicious PR's
+          # artifact can never be served to a different (victim) PR even if they
+          # share a fork branch name and native_hash. (Restores the per-PR
+          # isolation the replaced actions/cache key had.)
+          WANT="prebuilds-cache-pr-${PR_NUMBER}-${NATIVE_HASH}"
           echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
           RUNS=$(gh api "repos/$REPO/actions/workflows/on-pr-llm-llamacpp.yml/runs?branch=${HEAD_REF}&per_page=40" \
                    --jq ".workflow_runs[] | select(.id != ${RUN_ID}) | .id")
@@ -494,7 +500,7 @@ jobs:
       - name: Upload reuse marker (named with native hash)
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuilds-cache-${{ needs.detect-native-changes.outputs.native_hash }}
+          name: prebuilds-cache-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
           path: reuse-marker
           retention-days: 14
 
