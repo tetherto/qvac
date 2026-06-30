@@ -48,6 +48,21 @@ on:
         type: boolean
         required: false
         default: false
+      include-rocm:
+        description: >-
+          Install the ROCm/HIP SDK (TheRock dist, gfx1151) on the linux-x64
+          build so a consumer's qvac-fabric hip-backend feature cross-compiles
+          libqvac-ggml-hip.so. No AMD GPU is needed on the runner (compile-only,
+          like CUDA). Only affects the linux-x64 job; everything else is
+          unchanged.
+        type: boolean
+        required: false
+        default: false
+      rocm-version:
+        description: "TheRock ROCm dist tarball version used when include-rocm is set"
+        type: string
+        required: false
+        default: "7.13.0"
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -232,6 +247,12 @@ jobs:
         shell: bash
         run: |
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+
+      - if: ${{ inputs.include-rocm && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup ROCm SDK for HIP cross-compile
+        uses: ./.github/actions/setup-rocm
+        with:
+          rocm-version: ${{ inputs.rocm-version }}
 
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)
