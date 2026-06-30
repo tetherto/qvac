@@ -1,0 +1,96 @@
+name: '[TEST] cachefix reuse'
+
+# THROWAWAY validation of the artifact-based prebuild reuse fix
+# (replaces actions/cache, which can't write on pull_request_target).
+# Runs on a REGULAR pull_request (so the head's file — this one — executes,
+# unlike pull_request_target which always runs main's file). The reuse + save
+# jobs are VERBATIM copies of prebuild-artifact-reuse / prebuild-artifact-save
+# from on-pr-llm-llamacpp.yml, with a stub "prebuild" so it's fast.
+#
+# Run 1 (opened): no marker -> build stub -> save marker.
+# Run 2 (synchronize): finds marker -> downloads run 1's prebuilds -> build SKIPPED.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      hit: ${{ steps.reuse.outputs.hit }}
+    steps:
+      - name: Find + download a matching prebuilds artifact from a prior run
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          NATIVE_HASH: testhash-${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -u
+          WANT="prebuilds-cache-${NATIVE_HASH}"
+          echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
+          RUNS=$(gh api "repos/$REPO/actions/workflows/zz-cachefix-reuse-test.yml/runs?branch=${HEAD_REF}&per_page=40" \
+                   --jq ".workflow_runs[] | select(.id != ${RUN_ID}) | .id")
+          HIT=false
+          for rid in $RUNS; do
+            NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
+                      --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
+            if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "prebuilds"; then
+              echo "Match in run $rid — downloading its prebuilds artifact"
+              if gh run download "$rid" --repo "$REPO" --name prebuilds --dir cached-prebuilds; then
+                HIT=true
+                echo "reused-run=$rid" >> "$GITHUB_OUTPUT"
+                break
+              fi
+            fi
+          done
+          echo "hit=$HIT" >> "$GITHUB_OUTPUT"
+          echo "Prebuild reuse hit: $HIT"
+      - name: Show reused content (proves it came from the prior run)
+        if: steps.reuse.outputs.hit == 'true'
+        run: cat cached-prebuilds/prebuild.bin
+      - name: Re-publish reused prebuilds for downstream jobs
+        if: steps.reuse.outputs.hit == 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: cached-prebuilds
+
+  build:
+    needs: reuse
+    if: needs.reuse.outputs.hit != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stub prebuild (produce a fake prebuilds artifact)
+        run: |
+          mkdir -p cached-prebuilds
+          echo "prebuilt by run ${GITHUB_RUN_ID}" > cached-prebuilds/prebuild.bin
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: cached-prebuilds
+
+  save:
+    needs: [reuse, build]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write reuse marker
+        run: |
+          mkdir -p reuse-marker
+          echo "${GITHUB_RUN_ID}" > reuse-marker/producing-run-id.txt
+      - name: Upload reuse marker (named with native hash)
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds-cache-testhash-${{ github.event.pull_request.number }}
+          path: reuse-marker
+          retention-days: 7
