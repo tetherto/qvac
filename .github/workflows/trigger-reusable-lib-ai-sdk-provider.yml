@@ -211,7 +211,7 @@ jobs:
 
       - name: Publish to NPM
         id: publish-npm
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
         with:
           tag: ${{ needs.publish-logic.outputs.npm_tag }}
           workdir: packages/ai-sdk-provider

@@ -255,7 +255,7 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
         with:
           tag: ${{ inputs.npm_tag }}
           workdir: packages/llm-llamacpp
