@@ -75,14 +75,13 @@ async function runGpuCase (t, variant, kvCacheType) {
     kvCacheType
   })
   try {
-    // allowPolicyCpu: Chatterbox legitimately declines some vendors (e.g.
-    // ARM Mali) and falls back to CPU with gpuUnsupported=1 — not a failure.
+    // Chatterbox now runs on the ARM Mali GPU, so the GPU is required here.
     await assertSynthesisCompletes(t, model, {
       tag,
       language: LANGUAGE_FOR[variant],
       minSamples: 2000,
       expectGpu: true,
-      allowPolicyCpu: true
+      allowPolicyCpu: false
     })
   } finally {
     try { await model.unload() } catch (_e) {}

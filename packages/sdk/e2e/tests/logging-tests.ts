@@ -31,7 +31,7 @@ export const addonLoggingParakeet: TestDefinition = {
 
 export const addonLoggingOcr: TestDefinition = {
   testId: "addon-logging-ocr",
-  params: { handler: "addon-logging", trigger: "ocr", imageFileName: "ocr-simple-test-png.png" },
+  params: { handler: "addon-logging", trigger: "ocr", imageFileName: "small-64.jpg" },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "addon-logging", dependency: "ocr", estimatedDurationMs: 30000 },
 };
