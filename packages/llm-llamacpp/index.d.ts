@@ -502,6 +502,14 @@ declare namespace LlmLlamacpp {
          * model-level — never per-job.
          */
         avgConcurrentSeq: number;
+        /**
+         * MTP speculative-decoding counters for the last request: `draftTotal`
+         * is the number of tokens the MTP draft head proposed, `draftAccepted`
+         * is how many the target verified and accepted. Both are 0 when
+         * speculative decoding is inactive.
+         */
+        draftAccepted: number;
+        draftTotal: number;
         backendDevice: "cpu" | "gpu";
         /**
          * Why generation stopped. Per-sequence, so it is reported for a single
