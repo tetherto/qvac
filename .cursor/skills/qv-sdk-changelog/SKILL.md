@@ -207,6 +207,66 @@ release history lives in `packages/sdk/CHANGELOG.md` (see
 See `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` for the full sync skill
 spec, including the exclusion lists and what is intentionally NOT mirrored.
 
+### Step 8: Generate site docs (only when `--package=sdk`)
+
+Generate the documentation-site API reference and release notes for the new
+version **in the same working tree**, so the changelog PR also carries the docs
+update. This replaces the old standalone `docs-release.yml` workflow (which
+opened a second, separate docs PR). Skip this step entirely for any other
+`--package` value — only the SDK release drives the versioned docs site.
+
+Generation is **deterministic**: it runs the existing `docs/website` scripts
+(TypeDoc + Nunjucks render + verbatim `CHANGELOG_LLM.md` inlining). No LLM is
+involved in producing the API reference or release notes here — Step 4 already
+authored `CHANGELOG_LLM.md`, and this step only renders it into the site.
+
+**Prerequisites:**
+
+- `docs/website` dependencies installed (`cd docs/website && npm install`).
+- `SDK_PATH` set in `docs/website/.env` pointing at the SDK package root
+  (`packages/sdk`, the directory containing `index.ts` and `tsconfig.json`).
+  Copy `docs/website/.env.example` to `.env` if it doesn't exist yet.
+  `CHANGELOG_REPO_ROOT` defaults to the repo root, so no override is needed
+  when running inside the monorepo.
+
+**1. Generate the API reference + release notes (auto-detects minor vs patch):**
+
+```bash
+cd docs/website
+bun run scripts/release-version.ts <version> --force-extract
+```
+
+This is the exact command the old workflow ran. The dispatcher reads the
+version and forwards to the minor (`X.Y.0`: freeze outgoing series →
+regenerate latest) or patch (`X.Y.Z`, `Z >= 1`: insert the `## vX.Y.Z` section)
+orchestrator. It writes only:
+
+- `docs/website/content/docs/reference/api/**` (API summary MDX)
+- `docs/website/content/docs/reference/release-notes/**` (release notes MDX)
+- `docs/website/src/lib/versions.ts` (version-switcher manifest)
+
+**2. Verify the site still builds (mandatory):**
+
+```bash
+cd docs/website
+npm run build
+```
+
+A clean build confirms nothing on the website broke. Treat a build failure as
+**fail-stop**: surface the error and do NOT proceed to commit until it's fixed.
+
+**Disposable artifacts — never commit these.** Both the generation and the
+build produce byproducts that are already gitignored. Stage **only** the three
+surfaces listed above; never run `git add -A` / `git add .` from a dirty docs
+tree. Gitignored byproducts include:
+
+- `docs/website/scripts/api-docs/api-data.json` and `typedoc.json`
+- `docs/website/.typedoc-temp/`, `.next/`, `.source/`, `out/`, `dist/`
+- `docs/website/next-env.d.ts`
+- `packages/sdk/dist/` (from the `prebuild:examples` build step)
+
+See `docs/website/docs-workflow.md` for the full pipeline reference.
+
 ## CLI Parameters
 
 | Flag                            | Required | Description                                                        |
@@ -236,6 +296,13 @@ Additionally:
 
 - `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
 
+When `--package=sdk`, Step 8 also generates the documentation-site surfaces
+(commit these alongside the changelog):
+
+- `docs/website/content/docs/reference/api/**` – API reference MDX
+- `docs/website/content/docs/reference/release-notes/**` – Release notes MDX
+- `docs/website/src/lib/versions.ts` – Version-switcher manifest
+
 ## Tag Format
 
 Tags follow the pattern: `<package>-v<x.y.z>` and are created on **upstream** (not the fork).
@@ -258,6 +325,7 @@ Before completing:
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
 - [ ] When `--package=sdk`: `qv-sdk-bare-sdk-sync` run, `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated
+- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` staged (no disposable build artifacts)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
@@ -271,3 +339,4 @@ Before completing:
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.cursor/skills/qv-notice-generate/SKILL.md`
 - sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
+- Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
