@@ -121,7 +121,7 @@ jobs:
       # reusable workflow's mocha_timeout_ms / per_test_timeout_minutes inputs.
       # Precedence: workflow input > config.cjs `mobileTimeoutMin` > '' (pipeline default).
       - name: Checkout benchmark config (mobile-timeout default)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ steps.ctx.outputs.repository }}
           ref: ${{ steps.ctx.outputs.ref }}
@@ -325,7 +325,7 @@ jobs:
       # date). Needs a real clone — sparse checkout doesn't give us git
       # history.
       - name: Checkout for commit lookup
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ steps.ctx.outputs.repository }}
           ref: ${{ steps.ctx.outputs.ref }}
@@ -416,13 +416,13 @@ jobs:
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -522,7 +522,7 @@ jobs:
       # Fixture images live in S3 (not committed to git). Pull them into the benchmark's
       # fixture/ dir so the harness and the several-sources CLI runner read them locally.
       - name: Configure AWS credentials (fixture images)
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # 6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
@@ -595,7 +595,7 @@ jobs:
       # so every desktop leg builds its own CLIs and reports a per-platform comparison.
       - name: Cache CLI builds (several-sources)
         if: inputs.matrix_mode == 'several-sources' && (contains(inputs.matrix_sources, 'fabric') || contains(inputs.matrix_sources, 'upstream'))
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.WORKDIR }}/benchmarks/vlm-benchmark/cli-builds
           key: vlm-cli-v3-${{ matrix.host }}-${{ matrix.backend }}-${{ needs.context.outputs.fabric_ref }}-${{ needs.context.outputs.upstream_ref }}
@@ -728,7 +728,7 @@ jobs:
 
       - name: Upload matrix log
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vlm-matrix-log-${{ matrix.host }}-${{ matrix.backend }}-${{ github.run_number }}
           path: |
@@ -809,7 +809,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
@@ -818,7 +818,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
@@ -887,7 +887,7 @@ jobs:
 
       - name: Upload consolidated matrix report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vlm-matrix-consolidated-${{ github.run_number }}
           path: consolidated/
