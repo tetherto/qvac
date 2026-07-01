@@ -35,11 +35,11 @@ export function resolveRegistryDownloadMetadata(
 ) {
   return {
     expectedSize:
-      explicitMetadata?.expectedSize ?? modelMetadata?.expectedSize ?? 0,
+      modelMetadata?.expectedSize ?? explicitMetadata?.expectedSize ?? 0,
     checksum:
-      explicitMetadata?.sha256Checksum ??
-      expectedChecksum ??
       modelMetadata?.sha256Checksum ??
+      expectedChecksum ??
+      explicitMetadata?.sha256Checksum ??
       "",
   };
 }

@@ -165,7 +165,7 @@ async function resolveModelPathCore(
     const modelMetadata = getModelByPath(registryPath);
     const explicitMetadata = getExplicitRegistryMetadata(modelSrc);
     const expectedChecksum =
-      explicitMetadata?.sha256Checksum ?? modelMetadata?.sha256Checksum;
+      modelMetadata?.sha256Checksum ?? explicitMetadata?.sha256Checksum;
 
     const result = mode === "stats"
       ? await downloadModelFromRegistryWithStats(

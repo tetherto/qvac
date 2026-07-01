@@ -5,6 +5,7 @@ import {
 } from "@/schemas/load-model";
 import { llmConfigBaseSchema, ModelType } from "@/schemas";
 import { resolveRegistryDownloadMetadata } from "@/server/rpc/handlers/load-model/registry-metadata";
+import type { RegistryItem } from "@/models/registry";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
   const invalidRequest = {
@@ -121,6 +122,42 @@ test("resolveRegistryDownloadMetadata: descriptor metadata covers uncatalogued r
   t.is(
     metadata.checksum,
     "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+  );
+});
+
+test("resolveRegistryDownloadMetadata: catalog metadata wins over descriptor metadata", (t) => {
+  const catalogMetadata: RegistryItem = {
+    name: "CATALOG_MODEL",
+    registryPath: "known/model.gguf",
+    registrySource: "hf",
+    blobCoreKey: "catalog-core-key",
+    blobBlockOffset: 1,
+    blobBlockLength: 2,
+    blobByteOffset: 3,
+    modelId: "model.gguf",
+    addon: "llm",
+    expectedSize: 123,
+    sha256Checksum:
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    engine: "llamacpp-completion",
+    quantization: "q4_0",
+    params: "1B",
+  };
+
+  const metadata = resolveRegistryDownloadMetadata(
+    catalogMetadata,
+    {
+      expectedSize: 999,
+      sha256Checksum:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    },
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  );
+
+  t.is(metadata.expectedSize, 123);
+  t.is(
+    metadata.checksum,
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   );
 });
 
