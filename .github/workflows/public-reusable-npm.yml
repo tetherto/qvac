@@ -20,9 +20,6 @@ on:
       published_version:
         description: "The version published to npm (empty if skipped)"
         value: ${{ jobs.push-event.outputs.npm_published_version }}
-      publish_skipped:
-        description: "true if publish was skipped, else false"
-        value: ${{ jobs.push-event.outputs.npm_publish_skipped }}
 
 jobs:
   pull-request-event:
@@ -118,7 +115,6 @@ jobs:
     if: github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode
     outputs:
       npm_published_version: ${{ steps.publish-npm.outputs.npm_published_version }}
-      npm_publish_skipped: ${{ steps.publish-npm.outputs.npm_publish_skipped }}
     permissions:
       contents: read
       packages: write
