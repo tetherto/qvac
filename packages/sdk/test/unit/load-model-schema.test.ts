@@ -3,7 +3,8 @@ import {
   loadModelOptionsToRequestSchema,
   loadModelSrcRequestSchema,
 } from "@/schemas/load-model";
-import { ModelType } from "@/schemas";
+import { llmConfigBaseSchema, ModelType } from "@/schemas";
+import { resolveRegistryDownloadMetadata } from "@/server/rpc/handlers/load-model/registry-metadata";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
   const invalidRequest = {
@@ -87,6 +88,40 @@ test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", 
 
   t.is(loadModelSrcRequestSchema.safeParse(validWhisperRequest).success, true);
   t.is(loadModelSrcRequestSchema.safeParse(validOcrRequest).success, true);
+});
+
+test("llmConfigBaseSchema: preserves projection descriptor cache metadata", (t) => {
+  const descriptor = {
+    src: "registry://hf/future/Qwen3.5-2B.mmproj-Q8_0.gguf",
+    name: "MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0",
+    expectedSize: 364_664_384,
+    sha256Checksum:
+      "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+  };
+
+  const parsed = llmConfigBaseSchema.parse({
+    projectionModelSrc: descriptor,
+  });
+
+  t.alike(parsed.projectionModelSrc, descriptor);
+});
+
+test("resolveRegistryDownloadMetadata: descriptor metadata covers uncatalogued registry paths", (t) => {
+  const metadata = resolveRegistryDownloadMetadata(
+    undefined,
+    {
+      expectedSize: 364_664_384,
+      sha256Checksum:
+        "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+    },
+    undefined,
+  );
+
+  t.is(metadata.expectedSize, 364_664_384);
+  t.is(
+    metadata.checksum,
+    "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+  );
 });
 
 test("loadModelSrcRequestSchema: accepts classification load with empty modelSrc (bundled weights)", (t) => {
