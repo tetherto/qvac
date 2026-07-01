@@ -94,6 +94,15 @@ jobs:
             runner: qvac-ubuntu2204-x64-gpu
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
+          # Linux x64 on the ubuntu-24.04 GPU runner: exercises the Vulkan
+          # desktop build (no_gpu unset -> NO_GPU=false -> gpu-smoke runs +
+          # asserts GPU), matching the ubuntu-24.04 leg the other packages run.
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
           # GitHub-hosted ubuntu-26.04 CPU leg (no `runner:` -> hosted, so the
           # Manual Workspace Cleanup step auto-skips). Mirrors the parakeet
           # ubuntu-26.04 leg: forward coverage on the newest Ubuntu image,
