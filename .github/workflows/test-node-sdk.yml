@@ -271,8 +271,8 @@ jobs:
           const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
           fs.mkdirSync(cacheDir, { recursive: true });
           const config = { cacheDirectory: cacheDir };
-          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.json');
-          fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+          const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.ci.json');
+          fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
           fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
           console.log(`SDK cache dir: ${cacheDir}`);
           console.log(`Config written to: ${configPath}`);

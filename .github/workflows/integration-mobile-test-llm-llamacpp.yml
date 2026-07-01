@@ -66,6 +66,36 @@ on:
         type: string
         required: false
         default: ""
+      device_model:
+        description: "Optional Device Farm MODEL filter (e.g. 'S25 Ultra', 'iPhone 17'). When set, the single test spec is scheduled on exactly ONE matching device (single-device mode) instead of the dual-flagship default. Default '' = unchanged for existing callers."
+        type: string
+        required: false
+        default: ""
+      device_manufacturer:
+        description: "Optional Device Farm MANUFACTURER filter used with device_model (e.g. 'Samsung', 'Apple'). Default '' = any."
+        type: string
+        required: false
+        default: ""
+      device_env:
+        description: "Optional semicolon-separated KEY=VALUE pairs pushed to the on-device test app (qvacPerfConfig.txt channel; each key is os.setEnv()'d before the tests load). Default '' = nothing extra."
+        type: string
+        required: false
+        default: ""
+      mocha_timeout_ms:
+        description: "Override the WDIO/Mocha per-test timeout in ms (mochaOpts.timeout). Default '' keeps the established 2100000 (35 min) — unchanged for existing callers."
+        type: string
+        required: false
+        default: ""
+      per_test_timeout_minutes:
+        description: "Override the generated-spec per-test timeout in minutes on ALL platforms (Android + iOS). Default '' keeps the established per-platform defaults (Android 30 / iOS 20) — unchanged for existing callers."
+        type: string
+        required: false
+        default: ""
+      addon_npm_version:
+        description: "Bundle a specific published addon version from npm instead of the freshly-built prebuild artifact (skips the artifact download). Used to run a pinned BASELINE build on-device. Default '' keeps the established artifact-first behaviour (test the build produced in this run) — unchanged for existing callers."
+        type: string
+        required: false
+        default: ""
     # Additive outputs (QVAC weekend job): surface the monitor verdict so a
     # caller can read real pass/fail past the job's `continue-on-error: true`.
     # When a caller runs both platforms in one call the matrix overwrites these
@@ -173,7 +203,12 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/llm-llamacpp'
           addon-npm-name: '@qvac/llm-llamacpp'
-          prebuild-artifact-prefix: 'llama-cpp-'
+          # Default (addon_npm_version unset): artifact-first — bundle the prebuild built
+          # in THIS run (the established behaviour for PR/merge mobile tests). When a
+          # pinned version is requested (baseline leg), skip the artifact so it can't pick
+          # up a candidate prebuild from the same run, and pull that exact version from npm.
+          prebuild-artifact-prefix: ${{ inputs.addon_npm_version == '' && 'llama-cpp-' || '' }}
+          package-version: ${{ inputs.addon_npm_version }}
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
@@ -210,7 +245,7 @@ jobs:
           FIXTURE_IMAGES_URI: ${{ inputs.fixture_images_uri }}
         run: |
           if [ -n "$FIXTURE_IMAGES_URI" ]; then
-            aws s3 sync "$FIXTURE_IMAGES_URI" benchmarks/vlm-benchmark/images/
+            aws s3 sync "$FIXTURE_IMAGES_URI" benchmarks/vlm-benchmark/fixture/
           fi
           node "${{ inputs.pre_build_script }}"
           # the test-list generator runs under `bare` and imports bare-fs/bare-path,
@@ -235,8 +270,13 @@ jobs:
           # QVAC-17830: VLM image tests on Android exceed the 20-minute
           # default per-test ceiling. Paired with mocha-timeout-ms on
           # upload-to-devicefarm below (35 min) so the WDIO/Mocha
-          # session outlives any single test.
+          # session outlives any single test. This Android-only 30-min
+          # default is preserved for every caller (iOS keeps its 20 min).
           android-per-test-timeout-minutes: '30'
+          # Platform-neutral override (Android + iOS) — set only by callers
+          # that need iOS too (the VLM benchmark forwards per_test_timeout_minutes).
+          # Empty keeps the per-platform defaults above; when set it wins.
+          per-test-timeout-minutes: ${{ inputs.per_test_timeout_minutes }}
 
       # Generate the per-shard model pre-stage script (Android). The Device Farm
       # host has reliable network; it downloads exactly the models the shard
@@ -272,11 +312,13 @@ jobs:
           enables-perf: 'true'
           # QVAC-17830: 35-minute WDIO/Mocha ceiling so the runner
           # outlives the per-test 30-minute ceiling enforced above.
-          mocha-timeout-ms: '2100000'
+          # Caller-overridable (mocha_timeout_ms); '' keeps 2100000.
+          mocha-timeout-ms: ${{ inputs.mocha_timeout_ms != '' && inputs.mocha_timeout_ms || '2100000' }}
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
           test-groups: ${{ inputs.test_groups }}
+          extra-device-env: ${{ inputs.device_env }}
           # Host pre-stages this shard's models to /data/local/tmp (adb-writable
           # + app-readable) so the phone never downloads from huggingface.co.
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
@@ -290,6 +332,9 @@ jobs:
           device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
           android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
           ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
+          scheduling-mode: ${{ inputs.device_model != '' && 'single-device' || 'dual-flagship' }}
+          device-model: ${{ inputs.device_model }}
+          device-manufacturer: ${{ inputs.device_manufacturer }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
@@ -315,6 +360,7 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           addon-npm-name: '@qvac/llm-llamacpp'
+          artifact-name-suffix: ${{ inputs.artifact_suffix }}
           enables-perf: 'true'
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}

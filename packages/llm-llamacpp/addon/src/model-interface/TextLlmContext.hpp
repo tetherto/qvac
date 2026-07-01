@@ -151,6 +151,8 @@ public:
 
   void setRemoveThinkingFromContext(bool value) override;
 
+  [[nodiscard]] bool supportsSliding() const override { return true; }
+
   /**
    * The reset state method. It resets the context.
    *
@@ -168,10 +170,12 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
-  std::vector<llama_token> preparePrefill(
+  PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-      bool prefill) override;
+      const std::vector<common_chat_tool>& tools,
+      const std::vector<std::vector<uint8_t>>& media,
+      const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
+      bool isPrefillOnlyRequest) override;
 
   void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;

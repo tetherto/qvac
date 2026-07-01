@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +27,8 @@
 #include <llama/mtmd/mtmd.h>
 #include <picojson/picojson.h>
 
+#include "BatchEntryGuard.hpp"
+#include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
@@ -441,9 +444,37 @@ void LlamaModel::init(bool acquireLock) {
 }
 
 bool LlamaModel::isMultiBatchActivated(ReloadableState& state) {
-  return state.llmContext_ && state.isTextLlm_ &&
-         llama_n_seq_max(state.llmContext_->getCtx()) > 1;
+  return state.llmContext_ && llama_n_seq_max(state.llmContext_->getCtx()) > 1;
 }
+
+namespace {
+
+// Single source of truth for per-slot driver selection. The model layer owns
+// this decision because driver construction needs model-owned handles (the
+// shared llama context and the already-loaded mmproj); the scheduler stays
+// agnostic of any concrete driver type. `sharedVision` is the loaded mmproj
+// (`state.llmContext_` outlives the scheduler, see ReloadableState
+// declaration order); null for text-only contexts selects the text driver.
+// Capability is queried via `visionContext()` rather than an RTTI cast, so a
+// future multimodal context is picked up without inheriting MtmdLlmContext.
+batching::DriverFactory
+buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
+  return [shared, sharedVision](
+             const common_params& params,
+             ToolsCompactController& tools,
+             uint32_t seqId,
+             llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
+    const auto sid = static_cast<llama_seq_id>(seqId);
+    if (sharedVision != nullptr) {
+      return std::make_unique<MtmdLlmContext>(
+          params, shared, tools, sharedVision, sid, perSeqCtxCeiling);
+    }
+    return std::make_unique<TextLlmContext>(
+        params, shared, tools, sid, perSeqCtxCeiling);
+  };
+}
+
+} // namespace
 
 std::unique_ptr<batching::ContinuousBatchScheduler>
 LlamaModel::initBatchScheduler(ReloadableState& state) {
@@ -467,15 +498,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       batchCapacity,
       cparams,
       state.configuredNDiscarded_,
-      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt);
-}
-
-batching::ContinuousBatchScheduler* LlamaModel::batchSchedulerForTesting() {
-  std::shared_lock lock(stateMtx_);
-  if (!state_) {
-    return nullptr;
-  }
-  return state_->batchScheduler_.get();
+      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
+      buildDriverFactory(shared, state.llmContext_->visionContext()));
 }
 
 void LlamaModel::setWeightsForFile(
@@ -620,6 +644,24 @@ std::any LlamaModel::process(const std::any& input) {
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
+  // Load all prompt media (hoisted byte buffers and inline paths) in
+  // prompt-marker order so each bitmap binds to its own MTMD marker.
+  auto loadPlannedMedia = [this, &prompt](const ParsedPromptPayload& parsed) {
+    if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(MediaNotSupported),
+          "Media not supported by text-only models");
+    }
+    validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
+    for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+      if (step.source == MediaSource::ByteBuffer) {
+        loadMedia(prompt.media[step.byteIndex]);
+      } else {
+        state_->llmContext_->loadMedia(step.path);
+      }
+    }
+  };
   if (state_->cacheManager_.has_value()) {
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
@@ -629,6 +671,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
+    loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
@@ -637,6 +680,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
     ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
@@ -663,10 +707,8 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->llmContext_->resetNSlides();
   state_->llmContext_->resetThinkingBlockDiscards();
 
-  for (const auto& media : prompt.media) {
-    loadMedia(media);
-  }
-
+  // Prompt media (both hoisted byte buffers and inline paths) is loaded by
+  // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
 
@@ -756,26 +798,39 @@ bool LlamaModel::supportsBatching() const {
 
 std::vector<std::string>
 LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
-  activeBatchJobs_.fetch_add(1);
-  ScopeGuard jobGuard([this] { activeBatchJobs_.fetch_sub(1); });
-  validateBitnetQuantization();
-  state_->lastRun_ = {};
-  state_->lastRun_.wasBatch = true;
+  // Serialize the entry section (prior-count check, cache invalidation, KV
+  // wipe) under batchEntryMutex_. Without it a second caller can see
+  // activeBatchJobs_ == 0 before the first caller increments it, skip the wipe,
+  // and reach scheduler.processBatch() while the first caller is still clearing
+  // KV — wiping the second caller's sequences. The lock is released before
+  // scheduler.processBatch() so concurrent batch calls still overlap during
+  // generation; jobGuard outlives the lock so its decrement spans the whole
+  // job.
+  std::optional<batching::BatchEntryGuard> jobGuard;
+  {
+    std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
+    jobGuard.emplace(
+        activeBatchJobs_, [this] { validateBitnetQuantization(); });
+    const unsigned priorBatchJobs = jobGuard->prior();
+    state_->lastRun_ = {};
+    state_->lastRun_.wasBatch = true;
 
-  // Invalidate single-prompt cache state and clear any stale KV data left by
-  // single-prompt runs. The batch scheduler will manage KV slots itself.
-  if (state_->cacheManager_.has_value()) {
-    state_->cacheManager_->invalidate();
-  }
-  llama_context* lctx = getContext();
-  if (lctx != nullptr) {
-    llama_memory_t mem = llama_get_memory(lctx);
-    if (mem != nullptr) {
-      // Clear all sequences to ensure batch scheduler starts with clean KV
-      // state
-      const int nSeqMax = llama_n_seq_max(lctx);
-      for (int seqId = 0; seqId < nSeqMax; seqId++) {
-        llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+    // Invalidate single-prompt cache state and clear any stale KV left by
+    // single-prompt runs so the batch scheduler starts on clean KV. Only the
+    // first batch job entering does this: while another batch job is already in
+    // flight the scheduler owns the live KV slots, and an unconditional wipe
+    // here would clear that active job's sequences before its own admission.
+    if (priorBatchJobs == 0) {
+      if (state_->cacheManager_.has_value()) {
+        state_->cacheManager_->invalidate();
+      }
+      if (llama_context* lctx = getContext(); lctx != nullptr) {
+        if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
+          const int nSeqMax = llama_n_seq_max(lctx);
+          for (int seqId = 0; seqId < nSeqMax; seqId++) {
+            llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+          }
+        }
       }
     }
   }
@@ -788,8 +843,8 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "Model is not configured for continuous batching: requires a "
-        "text-only model with n_seq_max > 1");
+        "Model is not configured for continuous batching: requires "
+        "n_seq_max > 1");
   }
   auto& scheduler = *state_->batchScheduler_;
 
@@ -807,11 +862,11 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
               "' with saveCacheToDisk in the same batch would overwrite "
               "itself; each saved cache must use a distinct key");
     }
-    if (!prompt.media.empty()) {
+    if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: media is not supported in batch mode");
+          "processPromptBatch: media requires a multimodal model");
     }
     if (prompt.finetuningParams.has_value()) {
       throw qvac_errors::StatusError(
@@ -826,10 +881,18 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           toString(EmptyPrompt),
           "processPromptBatch: prompt produced no chat messages");
     }
+    if (!parsed.mediaPaths.empty() && state_->isTextLlm_) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: media requires a multimodal model");
+    }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
     sr.layout = std::move(parsed.layout);
+    sr.media = prompt.media;
+    sr.mediaPlan = std::move(parsed.mediaPlan);
     sr.prefill = prompt.prefill;
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
@@ -1522,7 +1585,10 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
           }
 
           if (!content.empty()) {
-            state_->llmContext_->loadMedia(content);
+            parsed.mediaPaths.push_back(content);
+            parsed.mediaPlan.push_back({MediaSource::Path, content});
+          } else {
+            parsed.mediaPlan.push_back({MediaSource::ByteBuffer, ""});
           }
           addMediaPlaceholder++;
           isNextUser = true;

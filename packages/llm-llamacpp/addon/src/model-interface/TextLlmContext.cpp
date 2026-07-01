@@ -19,6 +19,7 @@
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ReasoningUtils.hpp"
+#include "utils/ScopeGuard.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -424,7 +425,7 @@ bool TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
     bool prefill) {
   const std::vector<llama_token> inputTokens =
-      preparePrefill(chatMsgs, tools, isCacheLoaded, prefill);
+      preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill).tokens;
   const auto nTokens = static_cast<llama_pos>(inputTokens.size());
   LlamaBatch textBatch(params_.n_batch, 0, 1);
 
@@ -432,8 +433,8 @@ bool TextLlmContext::evalMessageWithTools(
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
     if (stopGeneration_.load()) {
-      // [TODO] Temporary recurrent-memory fix: removeLastNTokens() may no-op for
-      // hybrid/SSM models. A proper cancellation rollback needs llama.cpp
+      // [TODO] Temporary recurrent-memory fix: removeLastNTokens() may no-op
+      // for hybrid/SSM models. A proper cancellation rollback needs llama.cpp
       // sequence checkpoint save + restore so partially evaluated tokens can
       // be restored without corrupting recurrent state.
       removeLastNTokens(tokenIndex);
@@ -476,11 +477,19 @@ bool TextLlmContext::evalMessageWithTools(
   return true;
 }
 
-std::vector<llama_token> TextLlmContext::preparePrefill(
+PrefillPlan TextLlmContext::preparePrefill(
     const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-    bool prefill) {
-  (void)prefill;
+    const std::vector<common_chat_tool>& tools,
+    const std::vector<std::vector<uint8_t>>& media,
+    const std::vector<PlannedMedia>& mediaPlan, bool isCacheLoaded,
+    bool isPrefillOnlyRequest) {
+  if (!media.empty() || !mediaPlan.empty()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "TextLlmContext::preparePrefill: media requires a multimodal model");
+  }
 
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
@@ -494,7 +503,10 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
   // being rejected by the scheduler.
   const llama_pos ceiling = ctxCeiling();
 
-  if (nTokens >= static_cast<size_t>(ceiling)) {
+  // exceedsContextWindow mirrors the scheduler's admission, so the driver never
+  // rejects a prompt the scheduler already let in.
+  if (exceedsContextWindow(
+          static_cast<llama_pos>(nTokens), ceiling, isPrefillOnlyRequest)) {
     std::string errorMsg = string_format(
         "[TextLlm] context overflow at batch prefill step: prompt tokens %ld, "
         "max context tokens %d\n",
@@ -503,7 +515,10 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
-  if (nPast_ + static_cast<llama_pos>(nTokens) >= ceiling) {
+  if (exceedsContextWindow(
+          nPast_ + static_cast<llama_pos>(nTokens),
+          ceiling,
+          isPrefillOnlyRequest)) {
     auto outcome = trySlidePrefill(
         modelCtx_.lctx,
         seqId_,
@@ -549,7 +564,7 @@ std::vector<llama_token> TextLlmContext::preparePrefill(
     }
   }
 
-  return inputTokens;
+  return PrefillPlan{.tokens = std::move(inputTokens)};
 }
 
 void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
@@ -1068,10 +1083,19 @@ bool TextLlmContext::loadCache(
     return false;
   }
 
+  // Read the shared four-field metadata contract (SessionMetadataField order)
+  // so this path round-trips caches written by CacheManager and the MTMD
+  // driver. Text has no positional/cache divergence, so the last two fields
+  // mirror the first two and are not applied separately.
   size_t tokenCount = 0;
-  llama_token sessionTokens[2] = {0, 0};
+  llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {0, 0, 0, 0};
   const auto loadedBytes = llama_state_seq_load_file(
-      modelCtx_.lctx, cacheKey.c_str(), seqId_, sessionTokens, 2, &tokenCount);
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      sessionTokens,
+      SESSION_METADATA_FIELD_COUNT,
+      &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1079,7 +1103,8 @@ bool TextLlmContext::loadCache(
         "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
   }
 
-  auto clearLoadedSequence = [this]() noexcept {
+  // load already wrote KV; roll back unless we accept
+  ScopeGuard restoredKvGuard([this]() noexcept {
     try {
       clearSequenceMemory(modelCtx_.lctx);
     } catch (...) {
@@ -1090,60 +1115,55 @@ bool TextLlmContext::loadCache(
     nPast_ = 0;
     firstMsgTokens_ = 0;
     tools_.reset();
-  };
+  });
 
-  try {
-    if (tokenCount <= 1) {
-      clearLoadedSequence();
-      return false;
-    }
-    const llama_pos metadataNPast = sessionTokens[0];
-    const llama_pos metadataFirstMsgTokens = sessionTokens[1];
-    if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(ContextLengthExeeded),
-          "TextLlmContext::loadCache: cache '" + cacheKey +
-              "' exceeds current context size");
-    }
-
-    auto* mem = llama_get_memory(modelCtx_.lctx);
-    if (mem == nullptr) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToLoadSessionFile),
-          "TextLlmContext::loadCache: llama memory is null after loading "
-          "cache '" +
-              cacheKey + "'");
-    }
-
-    const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
-    if (restoredNPast != metadataNPast) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToLoadSessionFile),
-          string_format(
-              "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
-              "metadata expected nPast=%d",
-              cacheKey.c_str(),
-              restoredNPast,
-              metadataNPast));
-    }
-
-    nPast_ = metadataNPast;
-    firstMsgTokens_ = metadataFirstMsgTokens;
-    // Clamp discard to the per-slot window (ctxCeiling), not the physical
-    // context: in batch mode the slot ceiling is ctx / n_parallel.
-    const llama_pos window = ctxCeiling();
-    if (configuredNDiscarded > window - firstMsgTokens_) {
-      nDiscarded_ = window - firstMsgTokens_ - 1;
-    } else {
-      nDiscarded_ = configuredNDiscarded;
-    }
-  } catch (...) {
-    clearLoadedSequence();
-    throw;
+  if (tokenCount <= 1) {
+    return false;
   }
+  const llama_pos metadataNPast = sessionTokens[0];
+  const llama_pos metadataFirstMsgTokens = sessionTokens[1];
+  if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(ContextLengthExeeded),
+        "TextLlmContext::loadCache: cache '" + cacheKey +
+            "' exceeds current context size");
+  }
+
+  auto* mem = llama_get_memory(modelCtx_.lctx);
+  if (mem == nullptr) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "TextLlmContext::loadCache: llama memory is null after loading "
+        "cache '" +
+            cacheKey + "'");
+  }
+
+  const llama_pos restoredNPast = llama_memory_seq_pos_max(mem, seqId_) + 1;
+  if (restoredNPast != metadataNPast) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "TextLlmContext::loadCache: cache '%s' restored nPast=%d, but "
+            "metadata expected nPast=%d",
+            cacheKey.c_str(),
+            restoredNPast,
+            metadataNPast));
+  }
+
+  nPast_ = metadataNPast;
+  firstMsgTokens_ = metadataFirstMsgTokens;
+  // Clamp discard to the per-slot window (ctxCeiling), not the physical
+  // context: in batch mode the slot ceiling is ctx / n_parallel.
+  const llama_pos window = ctxCeiling();
+  if (configuredNDiscarded > window - firstMsgTokens_) {
+    nDiscarded_ = window - firstMsgTokens_ - 1;
+  } else {
+    nDiscarded_ = configuredNDiscarded;
+  }
+  restoredKvGuard.dismiss();
   return true;
 }
 
@@ -1152,11 +1172,20 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
     return;
   }
 
-  const llama_token sessionTokens[2] = {
-      static_cast<llama_token>(nPast_),
-      static_cast<llama_token>(firstMsgTokens_)};
+  // Persist the full four-field metadata contract so the file is loadable by
+  // every path (CacheManager, MTMD). For text the cache-token counts equal the
+  // positional counts, so the getters supply mirrored values.
+  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
+      static_cast<llama_token>(getNPast()),
+      static_cast<llama_token>(getFirstMsgTokens()),
+      static_cast<llama_token>(getCacheTokens()),
+      static_cast<llama_token>(getFirstMsgCacheTokens())};
   const auto savedBytes = llama_state_seq_save_file(
-      modelCtx_.lctx, cacheKey.c_str(), seqId_, sessionTokens, 2);
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      sessionTokens,
+      SESSION_METADATA_FIELD_COUNT);
   if (savedBytes == 0) {
     throw qvac_errors::StatusError(
         ADDON_ID,

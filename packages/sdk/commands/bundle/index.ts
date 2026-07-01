@@ -16,6 +16,7 @@ import {
 import { generateWorkerEntry } from "@/commands/bundle/entry-gen";
 import { runBarePack } from "@/commands/bundle/bare-pack";
 import { generateAddonsManifest } from "@/commands/bundle/manifest";
+import { createSdkImportResolver } from "@/commands/bundle/resolve-sdk-import";
 
 const require = createRequire(import.meta.url);
 
@@ -145,7 +146,12 @@ export async function bundleSdk(
   await fsp.mkdir(outputDir, { recursive: true });
 
   logger.info("\n📝 Generating worker entry...");
-  const workerEntry = generateWorkerEntry(pluginSpecifiers, sdkName);
+  const resolveSdkImport = createSdkImportResolver(sdkPath, sdkName);
+  const workerEntry = generateWorkerEntry(
+    pluginSpecifiers,
+    sdkName,
+    resolveSdkImport,
+  );
   await fsp.writeFile(entryPath, workerEntry, "utf8");
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`);
   logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`);
