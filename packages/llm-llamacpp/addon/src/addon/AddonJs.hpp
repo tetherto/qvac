@@ -1,6 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <any>
 #include <cmath>
+#include <atomic>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -11,6 +13,7 @@
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
@@ -46,10 +49,12 @@ getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   return llamaModel;
 }
 
-inline std::function<void(const std::string&)>
-makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return [&instance](const std::string& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s));
+inline std::function<void(const std::string&)> makeQueueOutputCallback(
+    qvac_lib_inference_addon_cpp::AddonJs& instance,
+    qvac_lib_inference_addon_cpp::JobId id =
+        qvac_lib_inference_addon_cpp::kNoJobId) {
+  return [&instance, id](const std::string& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s), id);
   };
 }
 
@@ -521,10 +526,38 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
 
+  // Worker-pool size for multi-job admission == the model's concurrency
+  // (`parallel`/`n_seq_max`). Read straight from the config map before it is
+  // moved into the model; absent or unparseable means single-slot (1).
+  auto config = args.getSubmap(1, "config");
+  unsigned maxConcurrency = 1;
+  if (auto it = config.find("parallel"); it != config.end()) {
+    try {
+      maxConcurrency = std::max(1U, static_cast<unsigned>(std::stoul(it->second)));
+    } catch (const std::exception&) {
+      maxConcurrency = 1;
+    }
+  }
+
   unique_ptr<model::IModel> model = make_unique<LlamaModel>(
       args.getMapEntry(1, "path"),
       args.getMapEntry(1, "projectionPath"),
-      args.getSubmap(1, "config"));
+      std::move(config));
+
+  // Always drive the model through the multi-job scheduler. With a 1-slot pool
+  // it behaves like the single-job path (the model's process(input, id) falls
+  // back to the single-job route when no batch scheduler is active), while
+  // parallel >= 2 admits that many concurrent jobs. Raw model pointers stay
+  // valid: AddonCpp owns the model for the scheduler's whole lifetime.
+  // Nearly unbounded waiting room so rejectWhenBusy:false callers are queued,
+  // not rejected; the cap only guards against a runaway producer.
+  const unsigned queueCapacity = MultiJobScheduler::DEFAULT_MAX_CAPACITY;
+  auto scheduler = make_unique<MultiJobScheduler>(
+      dynamic_cast<model::IModelMultiprocessor*>(model.get()),
+      maxConcurrency,
+      dynamic_cast<model::IModelCancel*>(model.get()),
+      dynamic_cast<model::IModelCancelById*>(model.get()),
+      queueCapacity);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
@@ -538,10 +571,22 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  auto addon = make_unique<AddonJs>(
+      env, std::move(callback), std::move(model), std::move(scheduler));
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
+
+/// Job ids are minted here, native-side, so the JS caller never supplies or
+/// tracks one. One shared mint for every admission — run() and the exclusive
+/// finetune alike — because the multi-job scheduler is a tagged-only path: it
+/// rejects the kNoJobId sentinel and duplicate live ids. Starts at 1 to stay
+/// clear of kNoJobId (0). Monotonic across instances, which is harmless: the
+/// JS side maps each returned id within its own instance.
+inline qvac_lib_inference_addon_cpp::JobId mintJobId() {
+  static std::atomic<qvac_lib_inference_addon_cpp::JobId> nextJobId{1};
+  return nextJobId.fetch_add(1, std::memory_order_relaxed);
+}
 
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -577,11 +622,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return result;
   }
 
-  vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
-  LlamaModel::Prompt prompt =
-      parsePromptInputs(env, inputs, makeQueueOutputCallback(instance));
+  // Streamed output is tagged with the minted id and the id is handed back in
+  // the result, mirroring how batch ids are assigned above.
+  const JobId jobId = mintJobId();
 
-  return instance.runJob(any(std::move(prompt)));
+  vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
+  LlamaModel::Prompt prompt = parsePromptInputs(
+      env, inputs, makeQueueOutputCallback(instance, jobId));
+
+  js_value_t* acceptedJs = instance.runJob(any(std::move(prompt)), jobId);
+
+  js::Object result = js::Object::create(env);
+  result.setProperty(env, "accepted", acceptedJs);
+  result.setProperty(
+      env, "id", js::Number::create(env, static_cast<double>(jobId)));
+  return result;
 }
 JSCATCH
 
@@ -606,9 +661,30 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
         llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
       llamaModel->finetuner().waitUntilFinetuningPauseComplete();
     } else {
-      addonCppRef->cancelJob();
+      // cancelAll, not cancelJob(kNoJobId): under the multi-job scheduler a
+      // kNoJobId cancel resolves to cancelById(0), a no-op for the real tagged
+      // ids. cancelAll() routes to the model's whole-model cancel(), preserving
+      // the "cancel the in-flight work" behaviour for both single and parallel.
+      addonCppRef->cancelAllJobs();
     }
   });
+}
+JSCATCH
+
+inline js_value_t* cancelJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  // A missing id resolves to kNoJobId, a no-op; whole-model cancel() remains
+  // the path for finetune / unload / explicit cancel-all.
+  const auto jobId = args.getIntegralOptional<JobId>(1).value_or(kNoJobId);
+
+  // shared_ptr capture so the addon outlives a concurrent destroyInstance()
+  // while the async cancel runs — see cancel() above.
+  auto addonCppRef = instance.addonCpp;
+  return js::JsAsyncTask::run(
+      env, [addonCppRef, jobId]() { addonCppRef->cancelJob(jobId); });
 }
 JSCATCH
 
@@ -633,7 +709,13 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   prompt.outputCallback = makeQueueOutputCallback(instance);
   prompt.progressCallback = makeQueueProgressCallback(instance);
 
-  return instance.runJob(any(std::move(prompt)));
+  // Finetune reloads weights, so it runs as an exclusive job — the scheduler
+  // enforces the finetune<->inference mutual exclusion (see runExclusiveJob).
+  // The exclusive path is tagged like any other admission (the scheduler
+  // rejects the kNoJobId sentinel); finetune's streamed events stay untagged
+  // (makeQueueOutputCallback without id), so JS keeps routing them to the
+  // finetune handler.
+  return instance.runExclusiveJob(any(std::move(prompt)), mintJobId());
 }
 JSCATCH
 

@@ -49,7 +49,7 @@ function baseFinetuneOpts(overrides = {}) {
 }
 
 async function assertInferenceSucceeds(t, model, token) {
-  model.addon.runJob.callsFake(() => true)
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
   const response = await model._runInternal([{ role: 'user', content: 'test' }])
   model._addonOutputCallback(null, 'Output', token, null)
   model._addonOutputCallback(null, 'Output', { TPS: 1, tokens: 1 }, null)
@@ -67,6 +67,11 @@ const createModelWithMockAddon = (opts = {}) => {
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
   })
   model.addon = createMockAddon()
+  /// Stand in for the native scheduler's activeJobs(): these are all cap=1
+  /// flows, so an active _job (finetune or single inference) means one
+  /// outstanding job. Lets the model's activeJobs-based admission gate work
+  /// without a JS-side counter.
+  model.addon.activeJobs = () => (model._job.active ? 1 : 0)
   return model
 }
 
@@ -178,7 +183,8 @@ test('finetune() runs inside exclusive queue wrapper', async (t) => {
 test('finetune() rejects when another active job exists', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
-  model._hasActiveResponse = true
+  /// Simulate an already-active job by reporting a full scheduler.
+  model.addon.activeJobs = () => 1
 
   await t.exception(() => model.finetune(opts), /already set or being processed/)
   t.ok(!model.addon.finetune.called, 'addon.finetune is not called when busy')
@@ -410,7 +416,7 @@ test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal r
 
 test('TPS stats without prior finetune are forwarded as normal JobEnded', async (t) => {
   const model = createModelWithMockAddon()
-  model.addon.runJob.callsFake(() => true)
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
 
   const response = await model._runInternal([{ role: 'user', content: 'Hello' }])
   t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should be false without finetune')
@@ -439,7 +445,7 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
     'skip flag should be armed after finetune'
   )
 
-  model.addon.runJob.callsFake(() => true)
+  model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
   const inferResponse = await model._runInternal([{ role: 'user', content: 'Hello' }])
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null)

@@ -46,7 +46,11 @@ struct FinetuneConfigOverrides {
   bool flashAttn{false};
 };
 
-class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
+class LlamaModel : public IModel,
+                   public IModelAsyncLoad,
+                   public IModelCancel,
+                   public IModelMultiprocessor,
+                   public IModelCancelById {
 public:
   LlamaModel(const LlamaModel&) = delete;
   LlamaModel& operator=(const LlamaModel&) = delete;
@@ -128,6 +132,20 @@ public:
   };
 
   std::any process(const std::any& input) final;
+
+  /// Multi-job entry carrying the admitting job id. An eligible single Prompt
+  /// (text generation, not finetune, not prefill-only) routes through the
+  /// scheduler as a one-item batch so it overlaps with other concurrent jobs;
+  /// its `seqId` is recorded against @p id so `cancelById` can target it.
+  /// Ineligible inputs or a model without a scheduler fall back to the
+  /// single-job path.
+  std::any process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id)
+      final;
+
+  /// Cancel the in-flight job admitted under @p id by cancelling its scheduler
+  /// slot. No-op when @p id is unknown (already finished or never admitted).
+  void cancelById(qvac_lib_inference_addon_cpp::JobId id) const final;
+
   std::string processPrompt(const Prompt& prompt);
 
   /// Run several prompts in parallel via the continuous-batching session
@@ -211,9 +229,26 @@ private:
 
   // Impl without mutexes
   std::string processPromptImpl(const Prompt& prompt);
-  std::vector<std::string>
-  processPromptBatchImpl(const std::vector<Prompt>& prompts);
+
+  /// Observes the scheduler `seqId` each request is admitted on, in input
+  /// order, the first time that slot streams. Lets the concurrent path bind a
+  /// job id to its slot without the single-prompt batch callers paying for it.
+  using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
+  std::vector<std::string> processPromptBatchImpl(
+      const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned = {},
+      const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
+
+  /// True for a single Prompt that may run on the scheduler concurrently:
+  /// text generation, not a finetune job, not prefill-only. Prefill-only and
+  /// finetune jobs keep the single path so their existing semantics hold.
+  static bool isConcurrentEligible(const Prompt& prompt);
+
+  /// Route a single Prompt through the scheduler as a one-item batch, recording
+  /// its assigned `seqId` against @p id for the lifetime of the run so
+  /// `cancelById` can target this job. Reuses processPromptBatchImpl machinery.
+  std::string processConcurrent(
+      const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id);
 
   /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
   /// (single source of truth across all in-flight / queued batch work).
@@ -264,13 +299,17 @@ private:
     /// scheduler is the single source of truth for batch stats (it
     /// already accumulates across every concurrent `processBatch` caller
     /// in the same idle epoch), and `llama_perf_context` is the source
-    /// for single-prompt stats. Per-run reset is a single value-assign
-    /// (`lastRun_ = {}`).
+    /// for single-prompt stats. Per-run reset is a single atomic store of a
+    /// fresh `LastRunInfo`.
     struct LastRunInfo {
       bool wasPrefill = false;
       bool wasBatch = false;
     };
-    LastRunInfo lastRun_;
+    /// Atomic so concurrent `processPrompt*` callers (which hold only a shared
+    /// lock on `stateMtx_`) publish the mode flags in one trivially-copyable
+    /// store and `runtimeStats()` reads them without tearing. A struct that
+    /// small is lock-free on every target.
+    std::atomic<LastRunInfo> lastRun_{LastRunInfo{}};
 
     /// Serializes the entry section of processPromptBatchImpl (the
     /// activeBatchJobs_ check, cache invalidation, and KV wipe). Released
@@ -356,6 +395,16 @@ private:
   mutable std::atomic<unsigned> activeSingleJobs_{0};
   mutable std::atomic<unsigned> activeBatchJobs_{0};
   int64_t runtimeBackendDevice_ = 0;
+
+  /// Maps an in-flight concurrent job id to its scheduler `seqId` so
+  /// `cancelById` can cancel exactly that slot. Guarded by `jobSeqMtx_`;
+  /// entries live only for the duration of the run. A cancel arriving before
+  /// the slot is recorded simply finds no entry and is a no-op — in practice
+  /// the slot is assigned before any token streams, so a self-cancel on first
+  /// output always lands.
+  mutable std::mutex jobSeqMtx_;
+  mutable std::unordered_map<qvac_lib_inference_addon_cpp::JobId, uint32_t>
+      jobToSeq_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();

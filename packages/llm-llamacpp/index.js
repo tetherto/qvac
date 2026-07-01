@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
-const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
+const { createJobHandler, exclusiveRunQueue, QvacResponse } = require('@qvac/infer-base')
 const { LlamaInterface, mapAddonEvent } = require('./addon')
 const BatchHandler = require('./batchHandler')
 
@@ -255,7 +255,16 @@ class LlmLlamacpp {
     this._run = exclusiveRunQueue()
     this.addon = null
     this._checkpointSaveDir = null
-    this._hasActiveResponse = false
+    // Concurrency is the caller's configured `parallel` (n_seq_max); values
+    // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
+    // derived once here rather than queried from the loaded model.
+    this._maxConcurrency = Math.max(1, Number(config?.parallel) || 1)
+    /// Admission policy when at capacity: true throws RUN_BUSY, false lets the
+    /// native multi-job scheduler admit/queue it. Overridable per call via
+    /// `runOptions.rejectWhenBusy`. Defaults to throwing for backward compat.
+    this._rejectWhenBusy = opts?.rejectWhenBusy ?? true
+    /// Maps the native-assigned jobId → response for active concurrent requests.
+    this._jobSinks = new Map()
     this._batchHandler = new BatchHandler({
       job: this._job,
       parsePrompt: promptToAddonMessages,
@@ -338,15 +347,13 @@ class LlmLlamacpp {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
-    if (this._hasActiveResponse) {
+    if (this._rejectWhenBusy && this.addon.activeJobs() >= this._maxConcurrency) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
     const response = await this._batchHandler.run(batchInput)
 
-    this._hasActiveResponse = true
     const finalized = response.await().finally(() => {
-      this._hasActiveResponse = false
       this._batchHandler.clear()
     })
     finalized.catch((err) => {
@@ -361,30 +368,48 @@ class LlmLlamacpp {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
-    if (this._hasActiveResponse) {
+    // rejectWhenBusy gates only this fast-fail pre-check: true rejects the moment
+    // the pool is full (never queues); false falls through to the scheduler's
+    // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
+    if (
+      (runOptions.rejectWhenBusy ?? this._rejectWhenBusy) &&
+      this.addon.activeJobs() >= this._maxConcurrency
+    ) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
     this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
     const promptMessages = promptToAddonMessages(prompt, runOptions)
 
-    const response = this._job.start()
+    let jobId
+    const response = new QvacResponse({ cancelHandler: () => this.addon?.cancelJob(jobId) })
+    /// For cap=1 (single-job), also register with _job so that legacy untagged
+    /// callbacks (no 5th jobId arg) can still be routed via _job.active.
+    if (this._maxConcurrency <= 1) {
+      this._job.startWith(response)
+    }
 
-    let accepted
+    /// The native addon mints the jobId and hands it back here. Single-threaded
+    /// JS guarantees this resolves before any tagged output callback runs, so
+    /// registering the sink afterwards never races the first chunk.
+    let admission
     try {
-      accepted = await this.addon.runJob(promptMessages)
+      admission = await this.addon.runJob(promptMessages)
     } catch (error) {
-      this._job.fail(error)
+      response.failed(error)
       throw error
     }
-    if (!accepted) {
-      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+    // Unconditional even when rejectWhenBusy is false: a rejected job never runs
+    // (pool + queue full), so there is no response to return.
+    if (!admission.accepted) {
+      response.failed(new Error(RUN_BUSY_ERROR_MESSAGE))
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
+    jobId = admission.id
+    this._jobSinks.set(jobId, response)
 
-    this._hasActiveResponse = true
     const finalized = response.await().finally(() => {
-      this._hasActiveResponse = false
+      this._jobSinks.delete(jobId)
     })
     finalized.catch((err) => {
       this.logger?.warn?.('Inference response rejected:', err?.message || err)
@@ -407,7 +432,10 @@ class LlmLlamacpp {
       if (!this.addon) {
         throw new Error('Addon not initialized. Call load() first.')
       }
-      if (this._hasActiveResponse) {
+      // Refused while ANY job is active (not just at full concurrency): finetune
+      // needs the model to itself. Fast-fail hint only — the native scheduler is
+      // the authority via exclusive-job admission.
+      if (this.addon.activeJobs() > 0) {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
       if (finetuningOptions.checkpointSaveDir) {
@@ -428,10 +456,7 @@ class LlmLlamacpp {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
-      this._hasActiveResponse = true
-      const finalized = response.await().finally(() => {
-        this._hasActiveResponse = false
-      })
+      const finalized = response.await()
       finalized.catch((err) => {
         this.logger?.warn?.('Finetune response rejected:', err?.message || err)
       })
@@ -440,22 +465,36 @@ class LlmLlamacpp {
     })
   }
 
-  _handleAddonOutputEvent(eventType, data, error) {
+  /// Route an output event to the correct sink. When jobId is a number,
+  /// inference events are directed to the per-job QvacResponse stored in
+  /// _jobSinks; untagged events (jobId === undefined) fall through to _job
+  /// for backward-compatible batch / finetune handling.
+  _handleAddonOutputEvent(eventType, data, error, jobId) {
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
       this.logger?.info?.(logMsg)
       return
     }
 
+    const sink = typeof jobId === 'number' ? this._jobSinks.get(jobId) : null
+
     if (eventType === 'Error') {
       this.logger.error('Job failed with error:', error)
-      this._job.fail(error)
+      if (sink) {
+        sink.failed(error)
+      } else {
+        this._job.fail(error)
+      }
     } else if (eventType === 'BatchOutput') {
       this._batchHandler.onOutput(data)
     } else if (eventType === 'BatchResult') {
       this._batchHandler.onResult(data)
     } else if (eventType === 'Output') {
-      this._job.output(data)
+      if (sink) {
+        sink.updateOutput(data)
+      } else {
+        this._job.output(data)
+      }
     } else if (eventType === 'FinetuneProgress') {
       if (this.opts.stats && data && data.stats) {
         this._job.active?.updateStats(data.stats)
@@ -469,6 +508,9 @@ class LlmLlamacpp {
         typeof data.status === 'string'
       if (isFinetuneTerminal) {
         this._job.end(null, data)
+      } else if (sink) {
+        if (this.opts.stats && data != null) sink.updateStats(data)
+        sink.ended()
       } else {
         const batchResult = this._batchHandler.buildFinalResultIfActive()
         if (batchResult !== null) {
@@ -480,10 +522,12 @@ class LlmLlamacpp {
     }
   }
 
-  _addonOutputCallback(addon, event, data, error) {
+  /// Native output callback. The 5th arg carries the numeric jobId minted by
+  /// _runInternal, or undefined for untagged (batch / finetune) events.
+  _addonOutputCallback(addon, event, data, error, jobId) {
     const mapped = mapAddonEvent(event, data, error, this._addonEventState)
     if (mapped === null) return
-    this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error)
+    this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error, jobId)
   }
 
   /**
@@ -550,7 +594,12 @@ class LlmLlamacpp {
       if (this._job.active) {
         this._job.fail(new Error('Model was unloaded'))
       }
-      this._hasActiveResponse = false
+      /// Settle every in-flight concurrent response before dropping it, or its
+      /// awaiting run() caller would hang forever.
+      for (const sink of this._jobSinks.values()) {
+        sink.failed(new Error('Model was unloaded'))
+      }
+      this._jobSinks.clear()
       if (this.addon) {
         await this.addon.unload()
         // Null the addon reference so post-unload `cancel()` / `run()` calls hit the
@@ -559,6 +608,12 @@ class LlmLlamacpp {
       }
       this.state.configLoaded = false
     })
+  }
+
+  /// Backward-compatible accessor: true when the scheduler has an active job.
+  /// Sourced from the native scheduler's activeJobs() — no JS-side counter.
+  get _hasActiveResponse() {
+    return (this.addon ? this.addon.activeJobs() : 0) > 0
   }
 
   getState() {

@@ -46,6 +46,7 @@ add_executable(
   test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
+  test_concurrent_process_by_id.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   test_reasoning_budget.cpp
