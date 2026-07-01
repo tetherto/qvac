@@ -229,6 +229,30 @@ exports.config = {
     await browser.pause(3000);
     if (global.flushBareLog) await global.flushBareLog('after');
 
+    // Android: dump the full device logcat HERE, in the `after:` hook (test
+    // phase), so the bare runtime TAP output survives a FAILING test. The
+    // testspec's post_test phase also writes logcat_full.txt, but Device Farm
+    // skips post_test when the test phase exits non-zero — so on a failing
+    // shard/device that post_test copy never exists and the only debug log is
+    // this one. iOS already captures its log via flushBareLog above; this
+    // brings Android to parity. On success post_test overwrites this file with
+    // an equivalent later dump, so the happy path is unchanged.
+    if ((capabilities.platformName || '').toLowerCase() === 'android') {
+      try {
+        var cp = require('child_process');
+        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+        var udid = process.env.DEVICEFARM_DEVICE_UDID || '';
+        var sel = udid ? ('-s ' + udid + ' ') : '';
+        cp.execSync('adb ' + sel + 'logcat -d -b all > "' + logDir + '/logcat_full.txt"', {
+          stdio: 'ignore',
+          timeout: 120000,
+        });
+        console.log('[logcat] after-hook logcat_full.txt captured');
+      } catch (e) {
+        console.log('[logcat] after-hook capture failed: ' + e.message);
+      }
+    }
+
     // Perf extraction — pull perf-report.json from the device while the
     // Appium session is still alive. See perf-extract.js for the full
     // multi-phase strategy (Android: poll→pullFile→logcat→shell→run-as;
