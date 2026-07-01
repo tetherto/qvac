@@ -40,10 +40,10 @@ const MTL_SENTENCES = [
   { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.' },
   { lang: 'de', text: 'Der braune Fuchs springt über den faulen Hund.' },
   { lang: 'pt', text: 'A raposa marrom pula sobre o cachorro preguiçoso.' },
-  { lang: 'ja', text: '今日はいい天気ですね。', requiresMecab: true },
   { lang: 'it', text: 'La rapida volpe marrone salta sopra il cane pigro.' }
 ]
 
+const JA_SENTENCE = '今日はいい天気ですね。'
 const ZH_SENTENCE = '敏捷的棕色狐狸跳过懒狗。'
 
 async function loadChatterboxMtlTTS (params) {
@@ -76,7 +76,7 @@ async function loadChatterboxMtlTTS (params) {
   return model
 }
 
-test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/ja/it with shared engine', { timeout: 1800000 }, async (t) => {
+test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/it with shared engine', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
@@ -84,22 +84,15 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/ja/it with share
     return
   }
 
-  const mecab = await ensureMecabDict({ targetDir: path.join(baseDir, 'models', 'mecab-ipadic') })
-
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
     t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
     s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
-    mecabDictDir: mecab.success ? mecab.dir : null,
     language: MTL_SENTENCES[0].lang
   })
   try {
     for (let i = 0; i < MTL_SENTENCES.length; i++) {
-      const { lang, text, requiresMecab } = MTL_SENTENCES[i]
-      if (requiresMecab && !mecab.success) {
-        t.pass(`Skipped MTL ${lang}: MeCab/IPAdic dictionary not available`)
-        continue
-      }
+      const { lang, text } = MTL_SENTENCES[i]
       console.log(`  [${lang}] "${text.slice(0, 50)}..."`)
       if (i > 0) {
         await model.reload({ language: lang })
@@ -125,6 +118,53 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/ja/it with share
         { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: text }
       ))
     }
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+test('Chatterbox MTL TTS (ggml): synthesizes Japanese with MeCab dictionary', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
+  if (!download.success) {
+    t.fail('Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
+    return
+  }
+
+  const mecab = await ensureMecabDict({ targetDir: path.join(baseDir, 'models', 'mecab-ipadic') })
+  if (!mecab.success) {
+    t.pass('Skipped: MeCab/IPAdic dictionary not available')
+    return
+  }
+
+  const model = await loadChatterboxMtlTTS({
+    modelDir: download.targetDir,
+    t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
+    s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
+    mecabDictDir: mecab.dir,
+    language: 'ja'
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runTTS(
+      model,
+      { text: JA_SENTENCE },
+      { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 },
+      { sampleRate: SAMPLE_RATE, engineTag: 'Chatterbox MTL JA' }
+    )
+    const wallMs = Date.now() - t0
+    console.log('    ' + result.output)
+
+    t.ok(result.passed, 'MTL ja run passes expectations')
+    t.ok(result.data.sampleCount > 0, 'MTL ja produced audio')
+    t.is(result.data.reportedSampleRate || SAMPLE_RATE, SAMPLE_RATE, 'MTL ja reports 24 kHz')
+
+    const st = result.data?.stats || {}
+    t.comment(recordTtsStats(
+      'chatterbox mtl ja',
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+      { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: JA_SENTENCE }
+    ))
   } finally {
     try { await model.unload() } catch (_e) {}
   }

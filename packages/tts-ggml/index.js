@@ -779,8 +779,15 @@ class TTSGgml {
 
     const ttsParams = this._buildTtsParams()
 
-    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-    await this.addon.activate()
+    const addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
+    this.addon = addon
+    try {
+      await addon.activate()
+    } catch (err) {
+      try { await addon.destroyInstance() } catch (_e) {}
+      if (this.addon === addon) this.addon = null
+      throw err
+    }
   }
 
   _buildTtsParams () {
