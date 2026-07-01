@@ -384,7 +384,16 @@ jobs:
           echo "native_changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "native_hash=${NATIVE_HASH:0:16}" >> "$GITHUB_OUTPUT"
 
-  prebuild-cache-restore:
+  # Reuse a prior run's prebuilds via ARTIFACTS rather than actions/cache.
+  # actions/cache cannot WRITE from a pull_request_target trigger (the reserve
+  # is rejected — see QVAC-21199 follow-up bug), so the cache was never
+  # populated and every push rebuilt. Instead, prebuild-artifact-save tags each
+  # successful prebuild run with a tiny marker artifact named with the native
+  # hash; here, on a no-native-change push, we find the most recent prior run of
+  # this PR's branch that carries the matching marker and download ITS
+  # `prebuilds` artifact, re-publishing it for downstream jobs. Falls back to a
+  # rebuild (reuse_hit=false) whenever nothing matches.
+  prebuild-artifact-reuse:
     if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
       - detect-native-changes
@@ -394,17 +403,47 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
     outputs:
-      cache_hit: ${{ steps.cache.outputs.cache-hit }}
+      reuse_hit: ${{ steps.reuse.outputs.hit }}
     steps:
-      - name: Restore prebuilds from cache
-        id: cache
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
-        with:
-          path: cached-prebuilds
-          key: prebuilds-llm-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
-      - name: Upload cached prebuilds as artifact
-        if: steps.cache.outputs.cache-hit == 'true'
+      - name: Find + download a matching prebuilds artifact from a prior run
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          NATIVE_HASH: ${{ needs.detect-native-changes.outputs.native_hash }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -u
+          # Marker is scoped by PR NUMBER (globally unique in the base repo) so a
+          # PR can only ever reuse ITS OWN prior prebuilds — a malicious PR's
+          # artifact can never be served to a different (victim) PR even if they
+          # share a fork branch name and native_hash. (Restores the per-PR
+          # isolation the replaced actions/cache key had.)
+          WANT="prebuilds-cache-pr-${PR_NUMBER}-${NATIVE_HASH}"
+          echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
+          RUNS=$(gh api "repos/$REPO/actions/workflows/on-pr-llm-llamacpp.yml/runs?branch=${HEAD_REF}&per_page=40" \
+                   --jq ".workflow_runs[] | select(.id != ${RUN_ID}) | .id")
+          HIT=false
+          for rid in $RUNS; do
+            NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
+                      --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
+            if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "prebuilds"; then
+              echo "Match in run $rid — downloading its prebuilds artifact"
+              if gh run download "$rid" --repo "$REPO" --name prebuilds --dir cached-prebuilds; then
+                HIT=true
+                echo "reused-run=$rid" >> "$GITHUB_OUTPUT"
+                break
+              fi
+            fi
+          done
+          echo "hit=$HIT" >> "$GITHUB_OUTPUT"
+          echo "Prebuild reuse hit: $HIT"
+      - name: Re-publish reused prebuilds for downstream jobs
+        if: steps.reuse.outputs.hit == 'true'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuilds
@@ -416,7 +455,7 @@ jobs:
       - ci-router
       - sanity-checks
       - detect-native-changes
-      - prebuild-cache-restore
+      - prebuild-artifact-reuse
       - label-gate
     if: |
       always() &&
@@ -424,7 +463,7 @@ jobs:
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
-      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-cache-restore.outputs.cache_hit != 'true')
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     permissions:
       contents: write
       packages: write
@@ -436,39 +475,41 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
-  prebuild-cache-save:
-    # Save whenever prebuild succeeds — regardless of native_changed.
-    # This ensures the first build on ANY PR populates the cache,
-    # so subsequent JS-only pushes can restore it.
-    # Cache key is scoped by PR number + native hash, so PRs cannot
-    # poison each other's cache and native changes invalidate it.
+  prebuild-artifact-save:
+    # Tag this successful prebuild run with a tiny marker artifact named with
+    # the native hash. A later no-native-change push (prebuild-artifact-reuse)
+    # finds the marker and reuses THIS run's `prebuilds` artifact instead of
+    # rebuilding. Runs whenever prebuild succeeds, so the first build on any PR
+    # records reuse for subsequent JS-only pushes; native changes produce a new
+    # hash → a new marker → a fresh rebuild. Replaces actions/cache/save, which
+    # cannot write from pull_request_target.
     if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
       - label-gate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      - name: Download prebuilds artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      - name: Write reuse marker
+        run: |
+          mkdir -p reuse-marker
+          echo "$GITHUB_RUN_ID" > reuse-marker/producing-run-id.txt
+      - name: Upload reuse marker (named with native hash)
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuilds
-          path: cached-prebuilds
-      - name: Save prebuilds to cache
-        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # 4.2.3
-        with:
-          path: cached-prebuilds
-          key: prebuilds-llm-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
+          name: prebuilds-cache-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
+          path: reuse-marker
+          retention-days: 14
 
   run-integration-tests:
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - authorize
       - prebuild
-      - prebuild-cache-restore
+      - prebuild-artifact-reuse
       - ci-router
       - label-gate
     permissions:
@@ -487,11 +528,11 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true')
+    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - authorize
       - prebuild
-      - prebuild-cache-restore
+      - prebuild-artifact-reuse
       - label-gate
       - ci-router
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
@@ -735,9 +776,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, prebuild-cache-restore, prebuild-cache-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router, label-gate]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router, label-gate]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-cache-restore.outputs.cache_hit == 'true' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
