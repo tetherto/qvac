@@ -228,14 +228,32 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
     int rej_n_actions = -1;
     VlaTimingGeneric rej_timing{};
     EXPECT_FALSE(model->infer(
-        image_ptrs.data(), /*nImages=*/0, IMAGE_SIZE, IMAGE_SIZE,
-        /*state=*/nullptr, /*state_dim=*/0, tokens.data(), lang_mask.get(),
-        TOKEN_MAX_LEN, noise.data(), actions_out.data(), &rej_n_actions,
+        image_ptrs.data(),
+        /*nImages=*/0,
+        IMAGE_SIZE,
+        IMAGE_SIZE,
+        /*state=*/nullptr,
+        /*state_dim=*/0,
+        tokens.data(),
+        lang_mask.get(),
+        TOKEN_MAX_LEN,
+        noise.data(),
+        actions_out.data(),
+        &rej_n_actions,
         &rej_timing));
     EXPECT_FALSE(model->infer(
-        image_ptrs.data(), /*nImages=*/N_CAMERAS + 1, IMAGE_SIZE, IMAGE_SIZE,
-        /*state=*/nullptr, /*state_dim=*/0, tokens.data(), lang_mask.get(),
-        TOKEN_MAX_LEN, noise.data(), actions_out.data(), &rej_n_actions,
+        image_ptrs.data(),
+        /*nImages=*/N_CAMERAS + 1,
+        IMAGE_SIZE,
+        IMAGE_SIZE,
+        /*state=*/nullptr,
+        /*state_dim=*/0,
+        tokens.data(),
+        lang_mask.get(),
+        TOKEN_MAX_LEN,
+        noise.data(),
+        actions_out.data(),
+        &rej_n_actions,
         &rej_timing));
   }
 }
