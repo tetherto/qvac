@@ -1,0 +1,93 @@
+name: '[TEST] cache composite e2e'
+
+# THROWAWAY: proves the detect-native-changes -> prebuild-artifact-reuse /
+# prebuild-artifact-save composites do cross-run reuse end-to-end, via the real
+# `uses: ./composite` mechanism (checked out from the PR head, since they aren't
+# on main yet). Runs on a REGULAR pull_request into lgci-sandbox so the HEAD file
+# runs. A stub prebuild produces a fake `prebuilds` artifact so no real build is
+# needed. Two-push flow:
+#   run 1 (opened): no prior marker -> prebuild stub runs -> save uploads marker
+#   run 2 (JS-only push): detect native_changed=false -> reuse finds run 1's
+#     marker -> prebuild stub SKIPS. Delete after.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      native_changed: ${{ steps.d.outputs.native_changed }}
+      native_hash: ${{ steps.d.outputs.native_hash }}
+    steps:
+      - name: Checkout PR head (composite + git objects)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Detect native changes (shared composite)
+        id: d
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/embed-llamacpp
+
+  reuse:
+    needs: detect
+    if: needs.detect.outputs.native_changed == 'false'
+    runs-on: ubuntu-latest
+    outputs:
+      reuse_hit: ${{ steps.r.outputs.reuse_hit }}
+    steps:
+      - name: Checkout reuse composite (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds (shared composite)
+        id: r
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: zz-cache-proof.yml
+          native-hash: ${{ needs.detect.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+  prebuild:
+    needs: [detect, reuse]
+    if: |
+      always() &&
+      (needs.detect.outputs.native_changed == 'true' || needs.reuse.outputs.reuse_hit != 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stub build -> fake prebuilds artifact
+        run: |
+          mkdir -p out
+          echo "fake-binary from run $GITHUB_RUN_ID" > out/prebuild.txt
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: out
+
+  save:
+    needs: [detect, prebuild]
+    if: always() && needs.prebuild.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout save composite (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker (shared composite)
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
