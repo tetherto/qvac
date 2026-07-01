@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Bumped the `whisper-cpp` vcpkg override from `1.8.5#5` to `1.9.1`, which pulls
+  the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
+  `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,
+  [#73](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/73)). The
+  registry baseline is left unchanged; the override resolves the new version
+  forward of the pinned baseline against
+  [tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)
+  (`whisper-cpp 1.9.1` port, REF `cb91a378`). No addon version bump (QVAC-21582).
+
 ## [0.3.3] - 2026-06-24
 
 ### Changed
