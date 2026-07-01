@@ -125,11 +125,30 @@ class LlamaInterface {
   }
 
   /**
+   * @returns {number} active jobs (in-flight + queued) per the native
+   * scheduler — the authoritative admission count.
+   */
+  activeJobs() {
+    if (!this._handle) return 0
+    return this._binding.activeJobs(this._handle)
+  }
+
+  /**
    * Cancel current inference job
    */
   async cancel(savePauseCheckpoint = 1) {
     if (!this._handle) return
     await this._binding.cancel(this._handle, savePauseCheckpoint)
+  }
+
+  /**
+   * Cancel a single job by its native-assigned id, leaving other concurrent
+   * jobs running. Routes to MultiJobScheduler::cancel(id) -> cancelById(id).
+   * @param {number} id - job id minted by runJob()
+   */
+  async cancelJob(id) {
+    if (!this._handle) return
+    await this._binding.cancelJob(this._handle, id)
   }
 
   /**
@@ -146,8 +165,10 @@ class LlamaInterface {
   }
 
   /**
-   * Run one inference job with an array of message objects.
+   * Run one inference job with an array of message objects. The native binding
+   * mints the job id and returns it so concurrent jobs can be routed.
    * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
+   * @returns {Promise<{accepted: boolean, id: number}>} admission result with the assigned job id
    */
   async runJob(data) {
     return this._binding.runJob(this._handle, data)

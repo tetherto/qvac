@@ -26,13 +26,21 @@ export type AddonRunJobMessage = AddonMessage | AddonMediaMessage
 export interface Addon {
   loadWeights(data: { filename: string; chunk: Uint8Array | null; completed: boolean }, logger?: QvacLogger): Promise<void>
   activate(): Promise<void>
-  /** Single-request admission: resolves `true` if accepted, `false` if busy. */
-  runJob(data: AddonRunJobMessage[]): Promise<boolean>
+  /** Single-request admission: resolves the accepted flag plus the native-assigned job id. */
+  runJob(data: AddonRunJobMessage[]): Promise<AddonRunJobResult>
   /** Batch admission: resolves the accepted flag plus the assigned sequence ids. */
   runJob(data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>
   cancel(): Promise<void>
+  /** Cancel a single job by its native-assigned id, leaving other concurrent jobs running. */
+  cancelJob(id: number): Promise<void>
   finetune?(params: FinetuneOptions): Promise<boolean>
   unload(): Promise<void>
+}
+
+export interface AddonRunJobResult {
+  accepted: boolean
+  /** Native-assigned job id used to route this request's streamed output. */
+  id: number
 }
 
 export interface AddonBatchRunItem {
@@ -106,7 +114,7 @@ export interface LlmLlamacppArgs {
   files: { model: string[]; projectionModel?: string }
   config: LlamaConfig
   logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
+  opts?: { stats?: boolean; rejectWhenBusy?: boolean }
 }
 
 export interface UserTextMessage {
@@ -291,6 +299,15 @@ export interface RunOptions {
    * via `removeLastNTokens` and therefore save on cancel as usual.
    */
   saveCacheToDisk?: boolean
+  /**
+   * Admission policy when the worker pool is full. `true` (default) rejects with
+   * RUN_BUSY before submitting. `false` submits to the native multi-job
+   * scheduler, which queues the job in a nearly unbounded waiting room beyond
+   * the pool (queued jobs start as slots free); under any realistic backlog it
+   * is queued rather than rejected. Overrides the instance-level
+   * `opts.rejectWhenBusy`.
+   */
+  rejectWhenBusy?: boolean
 }
 
 export interface BatchPrompt {
@@ -464,6 +481,12 @@ export default class LlmLlamacpp {
   constructor(args: LlmLlamacppArgs)
 
   load(): Promise<void>
+  /**
+   * Run inference. When the model was loaded with `config.parallel >= 2`,
+   * multiple `run()` calls may be concurrently in flight (continuous batching).
+   * Each call returns an independent `QvacResponse` that receives only its own
+   * output tokens. Throws `RUN_BUSY` when the model's concurrency cap is full.
+   */
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
   run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>

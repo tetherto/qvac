@@ -793,6 +793,74 @@ std::any LlamaModel::process(const std::any& input) {
   return {processPromptImpl(prompt)};
 }
 
+bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
+  return !prompt.finetuningParams.has_value() && !prompt.prefill;
+}
+
+std::any LlamaModel::process(
+    const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
+  if (id == qvac_lib_inference_addon_cpp::kNoJobId ||
+      input.type() != typeid(Prompt)) {
+    return process(input);
+  }
+  const auto& prompt = std::any_cast<const Prompt&>(input);
+  if (!isConcurrentEligible(prompt)) {
+    return process(input);
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    lock.unlock();
+    return process(input);
+  }
+  return {processConcurrent(prompt, id)};
+}
+
+std::string LlamaModel::processConcurrent(
+    const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
+  ScopeGuard mapGuard([this, id] {
+    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
+    jobToSeq_.erase(id);
+  });
+
+  // Record the slot the moment the scheduler assigns it. cancelById() runs on
+  // a different thread (never inside this observer), so it can safely take the
+  // batch scheduler's lock to cancel the recorded slot.
+  const SeqObserver onSeqAssigned = [this, id](size_t, uint32_t seqId) {
+    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
+    jobToSeq_[id] = seqId;
+  };
+  // Drop the binding the moment the slot ends. The scheduler frees the seqId
+  // here and may hand it to a peer job before this call returns and mapGuard
+  // runs; releasing now stops the stale binding from making cancelById target
+  // that peer's slot.
+  const SeqObserver onSeqDone = [this, id](size_t, uint32_t) {
+    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
+    jobToSeq_.erase(id);
+  };
+
+  const std::vector<Prompt> singleBatch{prompt};
+  std::vector<std::string> outputs =
+      processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone);
+  return outputs.empty() ? std::string{} : std::move(outputs.front());
+}
+
+void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    return;
+  }
+  std::optional<uint32_t> seqId;
+  {
+    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
+    if (auto found = jobToSeq_.find(id); found != jobToSeq_.end()) {
+      seqId = found->second;
+    }
+  }
+  if (seqId.has_value()) {
+    state_->batchScheduler_->cancel(*seqId);
+  }
+}
+
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
@@ -849,8 +917,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   activeSingleJobs_.fetch_add(1);
   ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
-  state_->lastRun_ = {};
-  state_->lastRun_.wasPrefill = prompt.prefill;
+  state_->lastRun_.store(
+      ReloadableState::LastRunInfo{.wasPrefill = prompt.prefill},
+      std::memory_order_relaxed);
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
   }
@@ -998,24 +1067,26 @@ bool LlamaModel::supportsBatching() const {
   return state_ && isMultiBatchActivated(*state_);
 }
 
-std::vector<std::string>
-LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
-  // Serialize the entry section (prior-count check, cache invalidation, KV
-  // wipe) under batchEntryMutex_. Without it a second caller can see
-  // activeBatchJobs_ == 0 before the first caller increments it, skip the wipe,
-  // and reach scheduler.processBatch() while the first caller is still clearing
+std::vector<std::string> LlamaModel::processPromptBatchImpl(
+    const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned,
+    const SeqObserver& onSeqDone) {
+  // `onSeqAssigned` (optional) fires once per request when the scheduler
+  // assigns its seqId. Serialize the entry section (prior-count check, cache
+  // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
+  // can see activeBatchJobs_ == 0 before the first increments it, skip the
+  // wipe, and reach scheduler.processBatch() while the first is still clearing
   // KV — wiping the second caller's sequences. The lock is released before
-  // scheduler.processBatch() so concurrent batch calls still overlap during
-  // generation; jobGuard outlives the lock so its decrement spans the whole
-  // job.
+  // processBatch() so concurrent batch calls still overlap; jobGuard outlives
+  // it so its decrement spans the whole job.
   std::optional<batching::BatchEntryGuard> jobGuard;
   {
     std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
     jobGuard.emplace(
         activeBatchJobs_, [this] { validateBitnetQuantization(); });
     const unsigned priorBatchJobs = jobGuard->prior();
-    state_->lastRun_ = {};
-    state_->lastRun_.wasBatch = true;
+    state_->lastRun_.store(
+        ReloadableState::LastRunInfo{.wasBatch = true},
+        std::memory_order_relaxed);
 
     // Invalidate single-prompt cache state and clear any stale KV left by
     // single-prompt runs so the batch scheduler starts on clean KV. Only the
@@ -1099,11 +1170,27 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
-    sr.streams.onToken = [userCb = prompt.outputCallback](
-                             [[maybe_unused]] uint32_t seqId,
-                             const std::string& piece) {
+    // `seen` fires the seq observer exactly once per slot, on whichever of
+    // onToken/onDone runs first, so the job id binds to its `seqId` even when
+    // the slot is cancelled or ends before emitting a token.
+    auto seen = std::make_shared<std::atomic<bool>>(false);
+    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](uint32_t seqId) {
+      if (onSeqAssigned && !seen->exchange(true)) {
+        onSeqAssigned(requestIndex, seqId);
+      }
+    };
+    sr.streams.onToken = [userCb = prompt.outputCallback, notifySeq](
+                             uint32_t seqId, const std::string& piece) {
+      notifySeq(seqId);
       if (userCb) {
         userCb(piece);
+      }
+    };
+    sr.streams.onDone = [notifySeq, onSeqDone, requestIndex = i](
+                            uint32_t seqId) {
+      notifySeq(seqId);
+      if (onSeqDone) {
+        onSeqDone(requestIndex, seqId);
       }
     };
 
@@ -1117,7 +1204,8 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->lastRun_.wasBatch && state_->batchScheduler_) {
+  const auto lastRun = state_->lastRun_.load(std::memory_order_relaxed);
+  if (lastRun.wasBatch && state_->batchScheduler_) {
     return batchRuntimeStatsLocked();
   }
   return singleRuntimeStatsLocked();
@@ -1167,7 +1255,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
   auto perfData =
       snapshot.value_or(llama_perf_context(state_->llmContext_->getCtx()));
   constexpr double kMillisInSecond = 1000.0;
-  const bool wasPrefill = state_->lastRun_.wasPrefill;
+  const bool wasPrefill =
+      state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
   const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
   const int64_t generatedTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);

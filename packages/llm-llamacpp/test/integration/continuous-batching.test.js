@@ -796,3 +796,46 @@ test(
     )
   }
 )
+
+// New feature: independent concurrent run(Message[]) calls (not a bundled
+// batch) admitted through the MultiJobScheduler when parallel >= 2. Each call
+// gets its own QvacResponse fed only its own tokens; admission is gated by the
+// scheduler's activeJobs() count (no JS-side counter). Proves no cross-talk and
+// that the jobs decode together (avgConcurrentSeq > 1).
+test(
+  'continuous batching: independent concurrent run() calls stay isolated and decode in parallel',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const cases = ['capital-france', 'sky-color', 'bee-product', 'frozen-water'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+
+    // Fire every run() before awaiting any, so all jobs are in flight at once.
+    const responses = await Promise.all(
+      cases.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    )
+    const texts = await Promise.all(responses.map(collectText))
+
+    for (let idx = 0; idx < cases.length; idx++) {
+      const item = cases[idx]
+      console.log(`[concurrent-run result] ${item.id}: ${texts[idx].trim()}`)
+      t.comment(`${item.id}: ${texts[idx].trim()}`)
+      t.ok(
+        containsExpectedWord(texts[idx], item.expected),
+        `${item.id} received its own output [${item.expected.join(', ')}] — no cross-talk`
+      )
+    }
+
+    const maxConcurrentSeq = Math.max(
+      0,
+      ...responses.map((r) => toNumber(r?.stats?.avgConcurrentSeq))
+    )
+    t.comment(`max avgConcurrentSeq across responses: ${maxConcurrentSeq}`)
+    t.ok(
+      maxConcurrentSeq > 1,
+      `avgConcurrentSeq (${maxConcurrentSeq}) > 1 confirms multi-job decode concurrency`
+    )
+  }
+)
