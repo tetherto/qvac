@@ -216,4 +216,26 @@ TEST(Pi05Integration, InferEndToEndMatchesPytorch) {
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   EXPECT_EQ(backend_name_lower, "cpu");
   EXPECT_FALSE(model->hasGpu());
+
+  // ── Host-side rejection: camera count out of range ───────────────
+  // `nImages` must be in [1, num_cameras]: the vision pass sizes the `pixels`
+  // batch axis (and the per-camera upload loop) to nImages, so an out-of-range
+  // count must be rejected before any buffer work. The range check runs before
+  // the per-image null-pointer scan, so passing more than N_CAMERAS pointers is
+  // safe here — infer returns false without dereferencing past the array.
+  // Reuse the already-valid inputs and vary only the camera count.
+  {
+    int rej_n_actions = -1;
+    VlaTimingGeneric rej_timing{};
+    EXPECT_FALSE(model->infer(
+        image_ptrs.data(), /*nImages=*/0, IMAGE_SIZE, IMAGE_SIZE,
+        /*state=*/nullptr, /*state_dim=*/0, tokens.data(), lang_mask.get(),
+        TOKEN_MAX_LEN, noise.data(), actions_out.data(), &rej_n_actions,
+        &rej_timing));
+    EXPECT_FALSE(model->infer(
+        image_ptrs.data(), /*nImages=*/N_CAMERAS + 1, IMAGE_SIZE, IMAGE_SIZE,
+        /*state=*/nullptr, /*state_dim=*/0, tokens.data(), lang_mask.get(),
+        TOKEN_MAX_LEN, noise.data(), actions_out.data(), &rej_n_actions,
+        &rej_timing));
+  }
 }

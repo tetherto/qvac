@@ -373,35 +373,34 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   // n_kv_heads] — identical to what `pi05BuildExpertBlockGraph`
   // accepts as cached_k/cached_v. `ggml_set_output` is critical: it
   // prevents `ggml_gallocr` from reusing the K/V buffers after their
-  // last in-graph consumer (the joint softmax / attn matmul), which
-  // would otherwise corrupt them by the time the caller reads back via
+  // last in-graph consumer (the flash-attention node), which would
+  // otherwise corrupt them by the time the caller reads back via
   // `ggml_backend_tensor_get`.
-  // Stored as F16 (llama.cpp-style KV cache) — the ODE expert reads these
-  // through flash-attention, which consumes F16 K/V, so caching F16 halves
-  // the prefix-KV bandwidth and avoids per-step casts. Numerics unchanged.
+  // Cache K/V as F16 (llama.cpp-style KV cache) — the ODE expert reads these
+  // through flash-attention, which consumes F16 K/V, so caching F16 halves the
+  // prefix-KV bandwidth and avoids per-step casts. Numerics unchanged. The
+  // SAME F16 K/V feed THIS block's flash-attention below, so cast k/v once and
+  // reuse for both the cache tap and the kernel — no second cast dispatch.
+  struct ggml_tensor* kf16 = ggml_cast(ctx, k, GGML_TYPE_F16);
+  struct ggml_tensor* vf16 = ggml_cast(ctx, v, GGML_TYPE_F16);
   if (outKPostRope != nullptr) {
-    struct ggml_tensor* kt = ggml_cast(ctx, k, GGML_TYPE_F16);
-    ggml_set_output(kt);
-    *outKPostRope = kt;
+    ggml_set_output(kf16);
+    *outKPostRope = kf16;
   }
   if (outV != nullptr) {
-    struct ggml_tensor* vt = ggml_cast(ctx, v, GGML_TYPE_F16);
-    ggml_set_output(vt);
-    *outV = vt;
+    ggml_set_output(vf16);
+    *outV = vf16;
   }
 
   // Attention via fused flash-attention. q is [head_dim, seq, n_heads],
   // k/v are [head_dim, seq, n_kv_heads] (MQA broadcast handled inside FA).
-  // FA wants F16 K/V; the F32 taps above are kept untouched for the expert
-  // cache, so we cast copies just for the kernel. F32 accumulation keeps the
-  // numerics within the cos>0.999 bar. Output is [head_dim, n_heads, seq],
-  // which reshapes straight back to [hidden, seq] — no permute needed.
+  // F32 accumulation keeps the numerics within the cos>0.999 bar. Output is
+  // [head_dim, n_heads, seq], which reshapes straight back to [hidden, seq] —
+  // no permute needed.
   // FA portability: see the canonical note at the SigLIP block FA site
   // (accuracy-neutral + faster on HIP/gfx1151 & Vulkan & CPU; not yet
   // benchmarked on Intel Iris Xe / Adreno / Metal; desktop-class target).
   const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
-  struct ggml_tensor* kf16 = ggml_cast(ctx, k, GGML_TYPE_F16);
-  struct ggml_tensor* vf16 = ggml_cast(ctx, v, GGML_TYPE_F16);
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
       ctx, q, kf16, vf16, attnMask, scale, /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
@@ -671,6 +670,14 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
   // are side-effects not reachable from the attention output). Math unchanged.
   const size_t es = ggml_element_size(kBuf);
   const int jointLen = static_cast<int>(kBuf->ne[1]);
+  // The tail write targets buffer rows [prefixLen : prefixLen + nAct]. If the
+  // caller's prefix + action lengths exceed the unified buffer's seq extent,
+  // the view (and the ggml_cpy below) would overrun kBuf/vBuf. This has held
+  // only by caller convention across call sites; enforce it here so a bad
+  // prefixLen/nAct fails the graph build instead of corrupting memory.
+  if (prefixLen < 0 || nAct < 0 || prefixLen + nAct > jointLen) {
+    return nullptr;
+  }
   struct ggml_tensor* kAct = ggml_view_3d(
       ctx, kBuf, headDim, nAct, nKvHeads, static_cast<size_t>(headDim) * es,
       static_cast<size_t>(jointLen) * headDim * es,
@@ -1231,12 +1238,16 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
   // K/V head, so the prefix is contiguous at offset 0 with no per-head
   // stride. A checkpoint with n_kv_heads > 1 would silently corrupt the
   // layout (prefix bytes landing across head boundaries) and read past the
-  // intended region. Reject it explicitly rather than emit wrong actions.
-  if (m->expert_n_kv_heads != 1) {
+  // intended region. The prefix is produced from `vlm_n_kv_heads` (perLayerKv)
+  // and consumed by the expert buffer sized for `expert_n_kv_heads`, so BOTH
+  // must be 1. The geometry check above already ties them together, but assert
+  // each explicitly so the MQA invariant is local and survives reordering.
+  if (m->expert_n_kv_heads != 1 || m->vlm_n_kv_heads != 1) {
     throw std::runtime_error(
-        "pi05LoadModel: unified KV cache requires MQA (expert_n_kv_heads==1), "
-        "got expert_n_kv_heads=" +
-        std::to_string(m->expert_n_kv_heads));
+        "pi05LoadModel: unified KV cache requires MQA (n_kv_heads==1), got "
+        "vlm_n_kv_heads=" +
+        std::to_string(m->vlm_n_kv_heads) +
+        " expert_n_kv_heads=" + std::to_string(m->expert_n_kv_heads));
   }
 
   // GPU only: allocate a backend buffer and copy the GGUF data into
@@ -1483,6 +1494,14 @@ static bool pi05Inference(
     struct ggml_tensor* pixels =
         ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, h, h, 3, nImages);
     ggml_set_input(pixels);
+    // The per-camera loop below writes nImages slots of imgFloats each into
+    // `pixels`. That equals the tensor's capacity by construction here, but
+    // assert it so a future divergence between nImages and the batch (N) dim
+    // can't silently overrun the buffer during the uploads.
+    if (static_cast<size_t>(nImages) * imgFloats * sizeof(float) !=
+        ggml_nbytes(pixels)) {
+      return false;
+    }
 
     auto outs = pi05BuildSiglipTowerGraph(
         vg.sg.ctx,
@@ -1782,30 +1801,6 @@ static bool pi05Inference(
     addOneToScale(modFinalAll, 1);
   }
 
-  Pi05StagedGuard og;
-  og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
-  if (og.sg.ctx == nullptr) {
-    return false;
-  }
-  struct ggml_tensor* xTT = ggml_new_tensor_2d(
-      og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
-  struct ggml_tensor* actPosT =
-      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
-  ggml_set_input(xTT);
-  ggml_set_input(actPosT);
-  // Per-step adaRMSNorm modulation inputs (sliced from the batched precompute).
-  std::vector<struct ggml_tensor*> modPreAttnT(nBlocks);
-  std::vector<struct ggml_tensor*> modPreFfwT(nBlocks);
-  for (int l = 0; l < nBlocks; ++l) {
-    modPreAttnT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
-    modPreFfwT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
-    ggml_set_input(modPreAttnT[l]);
-    ggml_set_input(modPreFfwT[l]);
-  }
-  struct ggml_tensor* modFinalT =
-      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
-  ggml_set_input(modFinalT);
-
   // ── Unified F16 KV cache (llama.cpp-style) ─────────────────────────
   // One persistent F16 buffer per layer, ne=[head_dim, prefix+action,
   // n_kv_heads], allocated outside the per-step graph (like weights). The
@@ -1813,6 +1808,11 @@ static bool pi05Inference(
   // writes its fresh action K/V into the tail slice in-graph (see the expert
   // block). Avoids the F32-only HIP concat, halves attention KV bandwidth,
   // and never re-touches the prefix. RAII guard frees the buffer on all exits.
+  //
+  // Declared BEFORE `og` on purpose: the per-step graph/scheduler in `og`
+  // reference these buffers as leaf tensors, and guards destruct in reverse
+  // declaration order — so `kvg` must be declared first to outlive `og` and
+  // its graph, avoiding a use-after-free at teardown.
   const int jointLen = prefixLen + m.action_horizon;
   ggml_backend_t kvBackend = m.has_gpu ? m.backend : m.backend_cpu;
   struct Pi05KvBufGuard {
@@ -1856,6 +1856,30 @@ static bool pi05Inference(
         vBufs[l], vCache.data() + static_cast<size_t>(l) * perLayerKv, 0,
         perLayerKv * sizeof(ggml_fp16_t));
   }
+
+  Pi05StagedGuard og;
+  og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
+  if (og.sg.ctx == nullptr) {
+    return false;
+  }
+  struct ggml_tensor* xTT = ggml_new_tensor_2d(
+      og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
+  struct ggml_tensor* actPosT =
+      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
+  ggml_set_input(xTT);
+  ggml_set_input(actPosT);
+  // Per-step adaRMSNorm modulation inputs (sliced from the batched precompute).
+  std::vector<struct ggml_tensor*> modPreAttnT(nBlocks);
+  std::vector<struct ggml_tensor*> modPreFfwT(nBlocks);
+  for (int l = 0; l < nBlocks; ++l) {
+    modPreAttnT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+    modPreFfwT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+    ggml_set_input(modPreAttnT[l]);
+    ggml_set_input(modPreFfwT[l]);
+  }
+  struct ggml_tensor* modFinalT =
+      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+  ggml_set_input(modFinalT);
 
   struct ggml_tensor* xExpT = ggml_mul_mat(og.sg.ctx, m.action_in_w, xTT);
   xExpT = ggml_add(
