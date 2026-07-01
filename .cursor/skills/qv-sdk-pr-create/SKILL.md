@@ -147,9 +147,9 @@ handling is needed. Step 8's three committable surfaces
 `docs/website/content/docs/reference/release-notes/**`,
 `docs/website/src/lib/versions.ts`) show up in `git status` alongside the
 changelog, while every generation/build byproduct
-(`api-data.json`, `typedoc.json`, `.typedoc-temp/`, `.next/`, `.source/`,
-`out/`, `dist/`, `next-env.d.ts`, `packages/sdk/dist/`) is gitignored and
-therefore never appears. Review `git status` and commit the shown files as usual.
+(`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`, `next-env.d.ts`,
+`packages/sdk/dist/`) is gitignored and therefore never appears. Review
+`git status` and commit the shown files as usual.
 
 Reviewers should expect the `reference/api` + `reference/release-notes` diff in
 the release PR alongside the changelog.

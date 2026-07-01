@@ -261,10 +261,10 @@ The three surfaces above are part of the release commit (same as Step 7's
 bare-sdk files: "Include … in the release commit"), and every generation/build
 byproduct is gitignored — exactly like Step 5's `announcement-post.txt` — so a
 normal `git status` review shows only the committable files. Let the user review
-before committing. Gitignored byproducts (do not `git add` them) include:
+before committing. Generated + gitignored byproducts (do not `git add` them):
 
-- `docs/website/scripts/api-docs/api-data.json` and `typedoc.json`
-- `docs/website/.typedoc-temp/`, `.next/`, `.source/`, `out/`, `dist/`
+- `docs/website/scripts/api-docs/api-data.json` (written by `release-version.ts`)
+- `docs/website/.next/`, `.source/`, `out/`, `dist/` (from `npm run build`)
 - `docs/website/next-env.d.ts`
 - `packages/sdk/dist/` (from the `prebuild:examples` build step)
 
