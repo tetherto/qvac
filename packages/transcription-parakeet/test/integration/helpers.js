@@ -795,6 +795,7 @@ async function runTranscription (params, expectation = {}) {
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
+const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
 
 function _registryQ8 (file) {
@@ -802,6 +803,9 @@ function _registryQ8 (file) {
 }
 function _registryQ4 (file) {
   return `${REGISTRY_PREFIX_Q4_0}/${file}`
+}
+function _registry20260701 (file) {
+  return `${REGISTRY_PREFIX_2026_07_01}/${file}`
 }
 function _registryStreaming (file) {
   return `${REGISTRY_PREFIX_STREAMING}/${file}`
@@ -811,32 +815,40 @@ const MODEL_CONFIGS = {
   ctc: {
     file: 'parakeet-ctc-0.6b.q8_0.gguf',
     mobileFile: 'parakeet-ctc-0.6b.q4_0.gguf',
+    f16File: 'parakeet-ctc-0.6b.f16.gguf',
     registryPath: _registryQ8('parakeet-ctc-0.6b.q8_0.gguf'),
-    mobileRegistryPath: _registryQ4('parakeet-ctc-0.6b.q4_0.gguf'),
+    mobileRegistryPath: _registry20260701('parakeet-ctc-0.6b.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-ctc-0.6b.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   tdt: {
     file: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
     mobileFile: 'parakeet-tdt-0.6b-v3.q4_0.gguf',
+    f16File: 'parakeet-tdt-0.6b-v3.f16.gguf',
     registryPath: _registryQ8('parakeet-tdt-0.6b-v3.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('parakeet-tdt-0.6b-v3.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-tdt-0.6b-v3.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   eou: {
     file: 'parakeet-eou-120m-v1.q8_0.gguf',
     mobileFile: 'parakeet-eou-120m-v1.q4_0.gguf',
+    f16File: 'parakeet-eou-120m-v1.f16.gguf',
     registryPath: _registryQ8('parakeet-eou-120m-v1.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('parakeet-eou-120m-v1.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-eou-120m-v1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   sortformer: {
     file: 'sortformer-4spk-v1.q8_0.gguf',
     mobileFile: 'sortformer-4spk-v1.q4_0.gguf',
+    f16File: 'sortformer-4spk-v1.f16.gguf',
     registryPath: _registryQ8('sortformer-4spk-v1.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('sortformer-4spk-v1.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('sortformer-4spk-v1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
@@ -848,8 +860,10 @@ const MODEL_CONFIGS = {
   sortformerStreaming: {
     file: 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
     mobileFile: 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    f16File: 'diar_streaming_sortformer_4spk-v2.1.f16.gguf',
     registryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
     mobileRegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf'),
+    f16RegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   }
@@ -945,8 +959,11 @@ function _ggufForQuant (cfg, quant) {
   if (q === 'q4_0' && cfg.mobileFile && cfg.mobileRegistryPath) {
     return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath, quant: 'q4_0' }
   }
+  if (q === 'f16' && cfg.f16File && cfg.f16RegistryPath) {
+    return { file: cfg.f16File, registryPath: cfg.f16RegistryPath, quant: 'f16' }
+  }
 
-  // Derive any other quant (e.g. f16 / f32) by swapping the quant token in the q8_0
+  // Derive any other quant by swapping the quant token in the q8_0
   // filename and reusing its registry prefix. Only resolves when both the
   // filename and prefix are known.
   if (cfg.file && cfg.registryPath) {

@@ -178,7 +178,7 @@ jobs:
           enable-cross-os: 'false'
 
       # Stage the desktop quantisation the RTF benchmark matrix sweeps:
-      #   f16 from the 2026-05-11 desktop registry prefix.
+      #   f16 from the 2026-07-01 desktop registry prefix.
       # Mobile q4_0 / q8_0 coverage is handled by the Device Farm workflow.
       - name: Download Parakeet GGUFs from QVAC registry (f16)
         if: steps.model-cache.outputs.cache-hit != 'true'
@@ -187,7 +187,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p models
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-07-01/ models/ \
             --recursive --exclude "*" --include "*.f16.gguf"
           ls -lh models/
 

@@ -7,40 +7,36 @@ const { QVACRegistryClient } = require('@qvac/registry-client')
 
 const REGISTRY_DATE_Q8_0 = '2026-05-11'
 const REGISTRY_DATE_Q4_0 = '2026-05-27'
+const REGISTRY_DATE_2026_07_01 = '2026-07-01'
 const REGISTRY_DATE_STREAMING = '2026-05-20'
 const REGISTRY_SOURCE = 's3'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
 const ALL_TYPES = ['ctc', 'tdt', 'eou', 'sortformer', 'sortformer-streaming-v2.1']
-const ALL_QUANTS = ['f32', 'f16', 'q8_0', 'q4_0']
+const ALL_QUANTS = ['f16', 'q8_0', 'q4_0']
 
 const MODELS = {
   ctc: {
-    f32: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-ctc-0.6b.f32.gguf'),
-    f16: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-ctc-0.6b.f16.gguf'),
+    f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-ctc-0.6b.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-ctc-0.6b.q8_0.gguf'),
-    q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-ctc-0.6b.q4_0.gguf')
+    q4_0: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-ctc-0.6b.q4_0.gguf')
   },
   tdt: {
-    f32: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.f32.gguf'),
-    f16: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.f16.gguf'),
+    f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-tdt-0.6b-v3.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-tdt-0.6b-v3.q4_0.gguf')
   },
   eou: {
-    f32: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-eou-120m-v1.f32.gguf'),
-    f16: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-eou-120m-v1.f16.gguf'),
+    f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-eou-120m-v1.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-eou-120m-v1.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-eou-120m-v1.q4_0.gguf')
   },
   sortformer: {
-    f32: filenameAt(REGISTRY_DATE_Q8_0, 'sortformer-4spk-v1.f32.gguf'),
-    f16: filenameAt(REGISTRY_DATE_Q8_0, 'sortformer-4spk-v1.f16.gguf'),
+    f16: filenameAt(REGISTRY_DATE_2026_07_01, 'sortformer-4spk-v1.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'sortformer-4spk-v1.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'sortformer-4spk-v1.q4_0.gguf')
   },
   'sortformer-streaming-v2.1': {
-    f32: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.f32.gguf'),
     f16: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf')
