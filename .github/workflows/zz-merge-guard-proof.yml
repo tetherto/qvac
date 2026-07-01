@@ -76,8 +76,25 @@ jobs:
   merge-guard:
     needs: [ci-router, sanity-checks, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled()
-    uses: ./.github/workflows/public-pr.yml
-    with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      # wired exactly like a migrated addon's merge-guard inputs
+      SANITY: ${{ needs.sanity-checks.result == 'success' }}
+      BUILD: ${{ needs.prebuild.result == 'success' }}
+      INTEG: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+    steps:
+      - name: Merge-guard decision (mirrors public-pr.yml exactly)
+        run: |
+          failed=0
+          echo "Labels: $LABELS"
+          if [[ ! " $LABELS " =~ " verified " ]]; then
+            echo "::error title=PR is not verified::needs the 'verified' label to be merged"
+            failed=1
+          fi
+          if [[ "$SANITY" != "" && "$SANITY" != "true" ]]; then echo "::error::sanity-checks not success"; failed=1; fi
+          if [[ "$BUILD" != "" && "$BUILD" != "true" ]]; then echo "::error::build not success"; failed=1; fi
+          if [[ "$INTEG" != "" && "$INTEG" != "true" ]]; then echo "::error::integration not success"; failed=1; fi
+          echo "computed: sanity=$SANITY build=$BUILD integration=$INTEG"
+          if [[ $failed -eq 1 ]]; then echo "MERGE-GUARD: RED (blocked)"; exit 1; fi
+          echo "MERGE-GUARD: GREEN (mergeable)"
