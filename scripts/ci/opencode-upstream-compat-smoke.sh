@@ -5,11 +5,15 @@ SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
 OPENCODE_TIMEOUT="${OPENCODE_TIMEOUT:-45m}"
-QVAC_HOST_LOG="${QVAC_HOST_LOG:-$ARTIFACT_DIR/qvac-host.log}"
-
-export QVAC_HOST_LOG
+QVAC_HOST_LOG="${QVAC_HOST_LOG:-}"
 
 mkdir -p "$SMOKE_DIR" "$ARTIFACT_DIR"
+SMOKE_DIR="$(cd "$SMOKE_DIR" && pwd -P)"
+ARTIFACT_DIR="$(cd "$ARTIFACT_DIR" && pwd -P)"
+if [[ -z "$QVAC_HOST_LOG" ]]; then
+  QVAC_HOST_LOG="$ARTIFACT_DIR/qvac-host.log"
+fi
+export QVAC_HOST_LOG
 cd "$SMOKE_DIR"
 
 npm init -y > /dev/null
@@ -126,12 +130,24 @@ if [[ "${SKIP_OPENCODE_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-timeout "$OPENCODE_TIMEOUT" npx opencode run \
-  --model "qvac/${QVAC_MODEL}" \
-  --format json \
-  "Reply with one short sentence that includes qvac-ok." \
-  > "$ARTIFACT_DIR/opencode-run.jsonl" \
-  2> "$ARTIFACT_DIR/opencode-run.stderr"
+run_opencode=(
+  npx opencode run
+  --print-logs
+  --log-level DEBUG
+  --model "qvac/${QVAC_MODEL}"
+  --format json
+  "Reply with one short sentence that includes qvac-ok."
+)
+
+if command -v timeout > /dev/null 2>&1; then
+  timeout "$OPENCODE_TIMEOUT" "${run_opencode[@]}" \
+    > "$ARTIFACT_DIR/opencode-run.jsonl" \
+    2> "$ARTIFACT_DIR/opencode-run.stderr"
+else
+  "${run_opencode[@]}" \
+    > "$ARTIFACT_DIR/opencode-run.jsonl" \
+    2> "$ARTIFACT_DIR/opencode-run.stderr"
+fi
 
 {
   echo
