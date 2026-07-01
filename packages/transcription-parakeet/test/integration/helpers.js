@@ -934,7 +934,7 @@ function _preferredGgufFor (cfg) {
 //
 // MODEL_CONFIGS stores the q8_0 build under `file`/`registryPath` and the
 // q4_0 build under `mobileFile`/`mobileRegistryPath`; the streaming sortformer
-// additionally publishes f16 under the same prefix.
+// additionally publishes full-precision variants under the same prefix.
 function _ggufForQuant (cfg, quant) {
   const q = String(quant || '').toLowerCase()
   if (!q) return null
@@ -946,11 +946,11 @@ function _ggufForQuant (cfg, quant) {
     return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath, quant: 'q4_0' }
   }
 
-  // Derive any other quant (e.g. f16) by swapping the quant token in the q8_0
+  // Derive any other quant (e.g. f16 / f32) by swapping the quant token in the q8_0
   // filename and reusing its registry prefix. Only resolves when both the
   // filename and prefix are known.
   if (cfg.file && cfg.registryPath) {
-    const file = cfg.file.replace(/\.(q8_0|q4_0|f16)\.gguf$/i, `.${q}.gguf`)
+    const file = cfg.file.replace(/\.(q8_0|q4_0|f16|f32)\.gguf$/i, `.${q}.gguf`)
     if (file !== cfg.file) {
       const prefix = cfg.registryPath.slice(0, cfg.registryPath.lastIndexOf('/'))
       return { file, registryPath: `${prefix}/${file}`, quant: q }
@@ -962,13 +962,13 @@ function _ggufForQuant (cfg, quant) {
 
 /**
  * Quantisation of a GGUF, derived from its filename (e.g. `q8_0`, `q4_0`,
- * `f16`). Returns '' when no recognised quant token is present.
+ * `f16`, `f32`). Returns '' when no recognised quant token is present.
  * @param {string} ggufPathOrName - GGUF file path or basename
  * @returns {string}
  */
 function quantFromGgufName (ggufPathOrName) {
   const base = path.basename(String(ggufPathOrName || ''))
-  const match = base.match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  const match = base.match(/\.(q8_0|q4_0|f16|f32)\.gguf$/i)
   return match ? match[1].toLowerCase() : ''
 }
 
@@ -1098,11 +1098,8 @@ async function ensureModelForType (modelType) {
  * every integration test that needs a real model -- when the GGUF is
  * available the function returns its path; when it isn't, behaviour is:
  *
- *   - Mobile + ctc: skip-as-pass. We intentionally do not exercise
- *     CTC on mobile (redundant with TDT for transcription tests;
- *     shares the same FastConformer encoder). Letting this one case
- *     stay as `t.pass` keeps the multi-model test green on mobile
- *     while still actually exercising TDT / EOU / Sortformer there.
+ *   - Mobile + ctc: skip-as-pass for older test bundles that intentionally
+ *     did not stage CTC. Current mobile perf provisioning stages CTC too.
  *   - Everything else: hard fail via `t.fail`. A missing model means
  *     none of the resolution sources (env var, local cache, mobile
  *     asset bundle, external dir, QVAC registry) returned a usable
@@ -1112,12 +1109,13 @@ async function ensureModelForType (modelType) {
  * @param {Object} t - brittle test object (must have `.fail(message)` /
  *                     `.pass(message)`)
  * @param {string} [modelType='tdt']
+ * @param {Object} [options] - Resolution options passed to ensureGgufForType.
  * @returns {Promise<string|null>} GGUF path on success, or `null` on
  *   miss (in which case the function has already recorded
  *   `t.pass` / `t.fail` and the caller should `return` early).
  */
-async function loadGgufOrSkip (t, modelType = 'tdt') {
-  const ggufPath = await ensureGgufForType(modelType)
+async function loadGgufOrSkip (t, modelType = 'tdt', options = {}) {
+  const ggufPath = await ensureGgufForType(modelType, null, options)
   if (ggufPath && fs.existsSync(ggufPath)) {
     return ggufPath
   }
