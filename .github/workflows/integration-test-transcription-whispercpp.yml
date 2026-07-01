@@ -86,11 +86,6 @@ jobs:
             runner: qvac-ubuntu2404-x64-gpu
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"}]
-          # GitHub-hosted ubuntu-26.04 CPU leg (no `runner:` -> hosted, so the
-          # Manual Workspace Cleanup + cache-models steps auto-skip and models
-          # download fresh). Mirrors the parakeet ubuntu-26.04 leg: forward
-          # coverage on the newest Ubuntu image, CPU-only (no Vulkan GPU on
-          # hosted runners).
           - os: ubuntu-26.04
             platform: linux
             arch: x64
