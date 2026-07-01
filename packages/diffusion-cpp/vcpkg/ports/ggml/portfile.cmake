@@ -1,28 +1,15 @@
-# ggml vcpkg overlay port for testing qvac-ext-ggml 2026-06-29-fabric.
+# ggml vcpkg overlay port for qvac-ext-ggml 2026-06-06-on-fabric-ggml.
 #
 # This fabric-based branch preserves qvac-fabric-llm.cpp's Adreno OpenCL Q4_0
 # preallocated transpose-buffer path, then replays the QVAC stable-diffusion.cpp
 # kernels from the 2026-06-06 line (Metal IM2COL_3D/PAD/fused RoPE, hybrid
-# backend packaging, and Vulkan coopmat1 f32-accum/GQA flash-attn).
+# backend packaging, Vulkan coopmat1 f32-accum/GQA flash-attn, and serialized
+# OpenCL SOA tensor uploads).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 1d0faf0a869a0ba3822adac6eba6a03ead74c842
-    SHA512 a6a31dae4499496f207e443b42cb517aec9e7bc8cfe5f19ed2a28b94c24e285e73c853bc93261cd9aeb6254b3579f566becdeefc403612611563c7f97e48a7b8
-)
-
-# The fabric repo vendors ggml as a subtree and keeps ggml.pc.in outside that
-# embedded directory. The standalone ggml CMake expects this template when
-# GGML_STANDALONE is ON, so provide it from the port.
-file(COPY "${CMAKE_CURRENT_LIST_DIR}/ggml.pc.in" DESTINATION "${SOURCE_PATH}")
-
-# The fabric branch plus replayed IM2COL_3D work has 101 ops; the replay kept
-# the old static-assert count at 100. Patch the assertion locally while testing
-# this branch through the package-local overlay.
-vcpkg_replace_string(
-    "${SOURCE_PATH}/src/ggml.c"
-    "static_assert(GGML_OP_COUNT == 100, \"GGML_OP_COUNT != 100\");"
-    "static_assert(GGML_OP_COUNT == 101, \"GGML_OP_COUNT != 101\");"
+    REF 01a74afa875902d46ec2b4a03a955f1201060d97
+    SHA512 fa8c72343817a8d73759061197ab238b45f338a8e7a9bdae65309776287080853964b944e47fb89e578a40262a86966e84c31c04fa290420315db6d2f7fe2c45
 )
 
 # --- GPU feature flags ---
@@ -94,6 +81,10 @@ if(VCPKG_TARGET_IS_ANDROID)
     )
 endif()
 
+# Only build Release. The fabric branch installs its CMake package config once
+# under share/ggml, matching the release-only consumers in this package family.
+set(VCPKG_BUILD_TYPE release)
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
@@ -148,4 +139,4 @@ file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
 
 file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
-vcpkg_install_copyright(FILE_LIST "${CMAKE_CURRENT_LIST_DIR}/LICENSE")
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

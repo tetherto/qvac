@@ -2,7 +2,7 @@
 #
 # This local overlay keeps the same qvac-ext-stable-diffusion.cpp LTX source
 # while forcing the dependency edge to the package-local ggml overlay pinned to
-# qvac-ext-ggml 2026-06-29-fabric.
+# qvac-ext-ggml 2026-06-06-on-fabric-ggml.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
