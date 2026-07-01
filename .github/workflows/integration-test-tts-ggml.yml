@@ -110,11 +110,6 @@ jobs:
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
-            no_gpu: 'true'
-          - os: windows-2025
-            platform: win32
-            arch: x64
             runner: qvac-win25-x64-gpu
 
     steps:
