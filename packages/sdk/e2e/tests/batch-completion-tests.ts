@@ -86,17 +86,17 @@ export const batchCompletionBasic = createBatchCompletionTest(
       },
       {
         id: "second",
-        history: [{ role: "user", content: "Reply with only the word APPLE." }],
+        history: [{ role: "user", content: "Reply with only the word GRAPE." }],
         generationParams: deterministic,
       },
     ],
     stream: false,
     expectedById: {
       first: ["BANANA"],
-      second: ["APPLE"],
+      second: ["GRAPE"],
     },
   },
-  { validation: "contains-all", contains: ["BANANA", "APPLE"] },
+  { validation: "contains-all", contains: ["BANANA", "GRAPE"] },
 );
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -118,7 +118,7 @@ export const batchCompletionStreaming = createBatchCompletionTest(
         history: [
           {
             role: "user",
-            content: "Reply with only the word APPLE.",
+            content: "Reply with only the word GRAPE.",
           },
         ],
         generationParams: deterministic,
@@ -127,10 +127,10 @@ export const batchCompletionStreaming = createBatchCompletionTest(
     stream: true,
     expectedById: {
       "stream-first": ["BANANA"],
-      "stream-second": ["APPLE"],
+      "stream-second": ["GRAPE"],
     },
   },
-  { validation: "contains-all", contains: ["BANANA", "APPLE"] },
+  { validation: "contains-all", contains: ["BANANA", "GRAPE"] },
 );
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(
