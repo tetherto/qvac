@@ -23,45 +23,61 @@ export const responseFormat = z.union([
   z.object({ type: z.literal('json_object') }),
   z.object({
     type: z.literal('json_schema'),
-    json_schema: z.object({
-      name: z.string().optional(),
-      schema: z.record(z.string(), z.unknown())
-    }).passthrough()
+    json_schema: z
+      .object({
+        name: z.string().optional(),
+        schema: z.record(z.string(), z.unknown())
+      })
+      .passthrough()
   })
 ])
 
-export const toolDef = z.object({
-  type: z.string(),
-  function: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.string(), z.unknown()).optional()
-  }).optional()
-}).passthrough()
+export const toolDef = z
+  .object({
+    type: z.string(),
+    function: z
+      .object({
+        name: z.string(),
+        description: z.string().optional(),
+        parameters: z.record(z.string(), z.unknown()).optional()
+      })
+      .optional()
+  })
+  .passthrough()
 
-const textContentPart = z.object({
-  type: z.literal('text'),
-  text: z.string()
-}).passthrough()
+const textContentPart = z
+  .object({
+    type: z.literal('text'),
+    text: z.string()
+  })
+  .passthrough()
 
-const imageContentPart = z.object({
-  type: z.literal('image_url'),
-  image_url: z.union([z.string(), z.object({ url: z.string() }).passthrough()])
-}).passthrough()
+const imageContentPart = z
+  .object({
+    type: z.literal('image_url'),
+    image_url: z.union([z.string(), z.object({ url: z.string() }).passthrough()])
+  })
+  .passthrough()
 
 export const messageContentPart = z.discriminatedUnion('type', [textContentPart, imageContentPart])
 export type MessageContentPart = z.infer<typeof messageContentPart>
 
-export const chatMessage = z.object({
-  role: z.string(),
-  content: z.union([z.string(), z.null(), z.array(messageContentPart)]).optional(),
-  tool_calls: z.array(z.object({
-    id: z.string(),
-    type: z.string(),
-    function: z.object({ name: z.string(), arguments: z.string() })
-  })).optional(),
-  tool_call_id: z.string().optional()
-}).passthrough()
+export const chatMessage = z
+  .object({
+    role: z.string(),
+    content: z.union([z.string(), z.null(), z.array(messageContentPart)]).optional(),
+    tool_calls: z
+      .array(
+        z.object({
+          id: z.string(),
+          type: z.string(),
+          function: z.object({ name: z.string(), arguments: z.string() })
+        })
+      )
+      .optional(),
+    tool_call_id: z.string().optional()
+  })
+  .passthrough()
 
 // ─── SDK-side types ───────────────────────────────────────────────────
 
@@ -104,7 +120,7 @@ interface OpenAITool {
 
 const VALID_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'object', 'array'])
 
-export function normalizeToolParameters (params: Record<string, unknown>): Record<string, unknown> {
+export function normalizeToolParameters(params: Record<string, unknown>): Record<string, unknown> {
   const props = params['properties'] as Record<string, Record<string, unknown>> | undefined
   if (!props) return params
 
@@ -116,16 +132,18 @@ export function normalizeToolParameters (params: Record<string, unknown>): Recor
   return { ...params, properties: normalized }
 }
 
-function normalizeType (type: unknown): string {
+function normalizeType(type: unknown): string {
   if (typeof type === 'string' && VALID_TYPES.has(type)) return type
   if (Array.isArray(type)) {
-    const primary = type.find((t): t is string => typeof t === 'string' && t !== 'null' && VALID_TYPES.has(t))
+    const primary = type.find(
+      (t): t is string => typeof t === 'string' && t !== 'null' && VALID_TYPES.has(t)
+    )
     return primary ?? 'string'
   }
   return 'string'
 }
 
-export function openaiToolsToSdk (tools: OpenAITool[] | undefined): Tool[] | undefined {
+export function openaiToolsToSdk(tools: OpenAITool[] | undefined): Tool[] | undefined {
   if (!tools || tools.length === 0) return undefined
 
   return tools
@@ -136,27 +154,29 @@ export function openaiToolsToSdk (tools: OpenAITool[] | undefined): Tool[] | und
         type: 'function',
         name: fn.name,
         description: fn.description ?? '',
-        parameters: normalizeToolParameters(fn.parameters ?? { type: 'object', properties: {} }) as Tool['parameters']
+        parameters: normalizeToolParameters(
+          fn.parameters ?? { type: 'object', properties: {} }
+        ) as Tool['parameters']
       }
     })
     .filter((t): t is Tool => t !== null)
 }
 
 export class InvalidResponseFormatError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidResponseFormatError'
   }
 }
 
 export class UnsupportedImageContentError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'UnsupportedImageContentError'
   }
 }
 
-export function extractResponseFormat (body: Record<string, unknown>): ResponseFormat | undefined {
+export function extractResponseFormat(body: Record<string, unknown>): ResponseFormat | undefined {
   const raw = body['response_format']
   if (raw === undefined || raw === null) return undefined
 
@@ -172,17 +192,25 @@ export function extractResponseFormat (body: Record<string, unknown>): ResponseF
 
   if (type === 'json_schema') {
     const schemaWrapper = obj['json_schema']
-    if (typeof schemaWrapper !== 'object' || schemaWrapper === null || Array.isArray(schemaWrapper)) {
+    if (
+      typeof schemaWrapper !== 'object' ||
+      schemaWrapper === null ||
+      Array.isArray(schemaWrapper)
+    ) {
       throw new InvalidResponseFormatError('"response_format.json_schema" must be an object.')
     }
     const wrapper = schemaWrapper as Record<string, unknown>
     const name = wrapper['name']
     const schema = wrapper['schema']
     if (typeof name !== 'string' || name.length === 0) {
-      throw new InvalidResponseFormatError('"response_format.json_schema.name" must be a non-empty string.')
+      throw new InvalidResponseFormatError(
+        '"response_format.json_schema.name" must be a non-empty string.'
+      )
     }
     if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
-      throw new InvalidResponseFormatError('"response_format.json_schema.schema" must be an object.')
+      throw new InvalidResponseFormatError(
+        '"response_format.json_schema.schema" must be an object.'
+      )
     }
     const result: ResponseFormat = {
       type: 'json_schema',
@@ -205,7 +233,7 @@ export function extractResponseFormat (body: Record<string, unknown>): ResponseF
   )
 }
 
-export function extractGenerationParams (
+export function extractGenerationParams(
   body: Record<string, unknown>,
   altTokenField?: string
 ): GenerationParams | undefined {
@@ -214,11 +242,17 @@ export function extractGenerationParams (
   if (typeof body['temperature'] === 'number') params.temp = body['temperature']
   if (typeof body['top_p'] === 'number') params.top_p = body['top_p']
   if (typeof body['seed'] === 'number') params.seed = body['seed']
-  if (typeof body['frequency_penalty'] === 'number') params.frequency_penalty = body['frequency_penalty']
-  if (typeof body['presence_penalty'] === 'number') params.presence_penalty = body['presence_penalty']
+  if (typeof body['frequency_penalty'] === 'number') {
+    params.frequency_penalty = body['frequency_penalty']
+  }
+  if (typeof body['presence_penalty'] === 'number') {
+    params.presence_penalty = body['presence_penalty']
+  }
 
   if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
-  if (altTokenField && typeof body[altTokenField] === 'number') params.predict = body[altTokenField] as number
+  if (altTokenField && typeof body[altTokenField] === 'number') {
+    params.predict = body[altTokenField] as number
+  }
 
   if (typeof body['reasoning_budget'] === 'boolean') {
     params.reasoning_budget = body['reasoning_budget'] ? -1 : 0

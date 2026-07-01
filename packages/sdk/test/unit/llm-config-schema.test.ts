@@ -1,6 +1,7 @@
 import test from "brittle";
 import {
   llmConfigBaseSchema,
+  llmConfigSchema,
   REASONING_BUDGET_MAX,
 } from "@/schemas/llamacpp-config";
 import {
@@ -125,4 +126,40 @@ test("llmConfigBaseSchema: rejects reasoning_budget other values", (t) => {
       .success,
     false,
   );
+});
+
+test("llmConfigBaseSchema: accepts valid image_tile_mode values", (t) => {
+  t.is(
+    llmConfigBaseSchema.safeParse({ image_tile_mode: "disabled" }).success,
+    true,
+  );
+  t.is(
+    llmConfigBaseSchema.safeParse({ image_tile_mode: "batched" }).success,
+    true,
+  );
+  t.is(
+    llmConfigBaseSchema.safeParse({ image_tile_mode: "sequential" }).success,
+    true,
+  );
+});
+
+test("llmConfigBaseSchema: rejects invalid image_tile_mode values", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: "tiled" }).success, false);
+  t.is(llmConfigBaseSchema.safeParse({ image_tile_mode: 0 }).success, false);
+});
+
+test("llmConfigBaseSchema: image_tile_mode is optional", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({}).success, true);
+});
+
+test("llmConfigSchema: defaults image_tile_mode to sequential", (t) => {
+  const result = llmConfigSchema.safeParse({});
+  t.is(result.success, true);
+  if (result.success) t.is(result.data.image_tile_mode, "sequential");
+});
+
+test("llmConfigSchema: explicit image_tile_mode overrides the default", (t) => {
+  const result = llmConfigSchema.safeParse({ image_tile_mode: "batched" });
+  t.is(result.success, true);
+  if (result.success) t.is(result.data.image_tile_mode, "batched");
 });

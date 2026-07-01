@@ -341,9 +341,7 @@ curl http://localhost:11434/v1/completions \
   "object": "text_completion",
   "created": 1718000000,
   "model": "my-llm",
-  "choices": [
-    { "text": "…", "index": 0, "logprobs": null, "finish_reason": "stop" }
-  ],
+  "choices": [{ "text": "…", "index": 0, "logprobs": null, "finish_reason": "stop" }],
   "usage": { "prompt_tokens": 0, "completion_tokens": 1, "total_tokens": 1 }
 }
 ```
@@ -421,9 +419,7 @@ PR: [#2032](https://github.com/tetherto/qvac/pull/2032)
 // old: response_format=url, no --public-base-url configured
 {
   "created": 1718000000,
-  "data": [
-    { "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 
@@ -481,4 +477,3 @@ curl http://localhost:11434/v1/images/edits \
 ```
 
 ---
-

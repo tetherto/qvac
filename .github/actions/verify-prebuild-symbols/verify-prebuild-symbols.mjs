@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/verify-prebuild-symbols.mjs
+// .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs
 //
 // Static guard against the "addon loads fine on its own but dlopen-crashes once
 // it is co-loaded with other ggml addons in the SDK" class of bug.
@@ -28,8 +28,8 @@
 //      (see packages/transcription-parakeet/symbols.map for the fix template).
 //
 // Usage:
-//   node scripts/verify-prebuild-symbols.mjs --dir <prebuilds-dir> [options]
-//   node scripts/verify-prebuild-symbols.mjs <prebuilds-dir>
+//   node verify-prebuild-symbols.mjs --dir <prebuilds-dir> [options]
+//   node verify-prebuild-symbols.mjs <prebuilds-dir>
 //
 // Options:
 //   --dir <path>            Directory to scan recursively (repeatable). Default: ./prebuilds

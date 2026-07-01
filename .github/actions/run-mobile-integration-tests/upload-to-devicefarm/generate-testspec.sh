@@ -13,7 +13,8 @@
 #
 # Optional env:
 #   PERF_EXTRACT_B64     — base64-encoded perf-extract.js (empty = skip)
-#   ENABLES_PERF         — "true" to wire perf bridging + post_test extraction
+#   SHARD_ENABLES_PERF   — "true" to wire perf bridging for this shard (set per-group by action.yml)
+#   ENABLES_PERF         — (legacy) global fallback if SHARD_ENABLES_PERF is unset
 #   QVAC_PERF_RUNS       — override for QVAC_PERF_RUNS
 #   QVAC_PERF_WARMUP_RUNS — override for QVAC_PERF_WARMUP_RUNS
 #   QVAC_PERF_ONLY       — restrict to perf tests only
@@ -55,119 +56,141 @@ emit_extra_commands() {
 
 # ── main: write testspec ──────────────────────────────────────────────
 {
-  printf 'version: 0.1\n'
-  printf '%s\n' "$HOST_LINE"
-  printf '\n'
-  printf 'phases:\n'
-  printf '  install:\n'
-  printf '    commands:\n'
-  printf '      - export NVM_DIR=$HOME/.nvm\n'
-  printf '      - . $NVM_DIR/nvm.sh 2>/dev/null || true\n'
-  printf '      - nvm install 18 2>/dev/null || true\n'
-  printf '      - nvm use 18 2>/dev/null || true\n'
-  printf '      - node --version || echo "Using system node"\n'
-  printf '\n'
-  printf '  pre_test:\n'
-  printf '    commands:\n'
-  printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
-  printf '      - rm -rf node_modules package-lock.json 2>/dev/null || true\n'
-  printf '      - npm install --legacy-peer-deps 2>&1\n'
-  printf '      - echo "Decoding wdio config..."\n'
-  printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
-  if [ -n "${PERF_EXTRACT_B64:-}" ]; then
-    printf '      - echo "%s" | base64 -d > tests/perf-extract.js\n' "$PERF_EXTRACT_B64"
-  fi
+# --- Header + install phase ---
+cat <<EOF
+version: 0.1
+${HOST_LINE}
 
-  if [ "${ENABLES_PERF:-false}" = "true" ]; then
-    printf '      - echo "Perf bridging: runs=%s warmup=%s only=%s"\n' \
-      "${QVAC_PERF_RUNS:-}" "${QVAC_PERF_WARMUP_RUNS:-}" "${QVAC_PERF_ONLY:-}"
-    printf '      - echo "QVAC_PERF_RUNS=%s" > /tmp/qvacPerfConfig.txt\n' "${QVAC_PERF_RUNS:-}"
-    printf '      - echo "QVAC_PERF_WARMUP_RUNS=%s" >> /tmp/qvacPerfConfig.txt\n' "${QVAC_PERF_WARMUP_RUNS:-}"
-    printf '      - echo "QVAC_PERF_ONLY=%s" >> /tmp/qvacPerfConfig.txt\n' "${QVAC_PERF_ONLY:-}"
-  fi
+phases:
+  install:
+    commands:
+      - export NVM_DIR=\$HOME/.nvm
+      - . \$NVM_DIR/nvm.sh 2>/dev/null || true
+      - nvm install 18 2>/dev/null || true
+      - nvm use 18 2>/dev/null || true
+      - node --version || echo "Using system node"
 
-  # Default Android pre-test: larger logcat buffer + ensure app data dir exists.
-  if [ "$PLATFORM" = "Android" ]; then
-    printf '      - adb shell logcat -G 16M 2>/dev/null || true\n'
-    printf '      - adb shell mkdir -p /sdcard/Android/data/io.tether.test.qvac/files/ 2>/dev/null || true\n'
-  fi
+  pre_test:
+    commands:
+      - cd \$DEVICEFARM_TEST_PACKAGE_PATH
+      - rm -rf node_modules package-lock.json 2>/dev/null || true
+      - npm install --legacy-peer-deps 2>&1
+      - echo "Decoding wdio config..."
+      - echo "${WDIO_CONFIG_B64}" | base64 -d > tests/wdio.config.devicefarm.js
+EOF
 
-  emit_extra_commands "${EXTRA_PRE_TEST_PATH:-/tmp/extra-pre-test.sh}"
+# --- Optional: perf-extract.js deployment ---
+_shard_perf="${SHARD_ENABLES_PERF:-${ENABLES_PERF:-false}}"
+if [ -n "${PERF_EXTRACT_B64:-}" ] && [ "$_shard_perf" = "true" ]; then
+  cat <<EOF
+      - echo "${PERF_EXTRACT_B64}" | base64 -d > tests/perf-extract.js
+EOF
+fi
 
-  if [ "$PLATFORM" = "iOS" ]; then
-    printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
-  fi
+# --- Optional: perf bridging config ---
+if [ "$_shard_perf" = "true" ]; then
+  cat <<EOF
+      - echo "Perf bridging: runs=${QVAC_PERF_RUNS:-} warmup=${QVAC_PERF_WARMUP_RUNS:-} only=${QVAC_PERF_ONLY:-}"
+      - echo "QVAC_PERF_RUNS=${QVAC_PERF_RUNS:-}" > /tmp/qvacPerfConfig.txt
+      - echo "QVAC_PERF_WARMUP_RUNS=${QVAC_PERF_WARMUP_RUNS:-}" >> /tmp/qvacPerfConfig.txt
+      - echo "QVAC_PERF_ONLY=${QVAC_PERF_ONLY:-}" >> /tmp/qvacPerfConfig.txt
+EOF
+fi
 
-  printf '      - export APPIUM_BASE_PATH=/wd/hub\n'
-  printf '      - |\n'
-  printf '        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \\\n'
-  printf '          --log-no-colors --relaxed-security --default-capabilities \\\n'
-  printf '          "{\\"appium:deviceName\\": \\"$DEVICEFARM_DEVICE_NAME\\", \\\n'
-  printf '          \\"platformName\\": \\"$DEVICEFARM_DEVICE_PLATFORM_NAME\\", \\\n'
-  printf '          \\"appium:app\\": \\"$DEVICEFARM_APP_PATH\\", \\\n'
-  printf '          \\"appium:udid\\":\\"$DEVICEFARM_DEVICE_UDID\\", \\\n'
-  printf '          \\"appium:platformVersion\\": \\"$DEVICEFARM_DEVICE_OS_VERSION\\", \\\n'
-  printf '          \\"appium:chromedriverExecutableDir\\": \\"$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\\", \\\n'
-  printf '          \\"appium:wdaLocalPort\\": 8100, \\\n'
-  printf '          \\"appium:derivedDataPath\\": \\"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\\", \\\n'
-  printf '          \\"appium:usePrebuiltWDA\\": true, \\\n'
-  printf '          \\"appium:automationName\\": \\"%s\\"}" \\\n' "$AUTOMATION_NAME"
-  printf '          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &\n'
-  printf '      - |\n'
-  printf '        appium_initialization_time=0\n'
-  printf '        until curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status"; do\n'
-  printf '          if [[ $appium_initialization_time -gt 30 ]]; then\n'
-  printf '            cat $DEVICEFARM_LOG_DIR/appium.log\n'
-  printf '            exit 1\n'
-  printf '          fi\n'
-  printf '          appium_initialization_time=$((appium_initialization_time + 1))\n'
-  printf '          sleep 1\n'
-  printf '        done\n'
-  printf '\n'
-  printf '  test:\n'
-  printf '    commands:\n'
-  printf '      - cd $DEVICEFARM_TEST_PACKAGE_PATH\n'
-  printf '      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js\n'
-  printf '\n'
-  printf '  post_test:\n'
-  printf '    commands:\n'
-  printf '      - echo "Test completed"\n'
+# --- Platform-specific pre-test commands ---
+if [ "$PLATFORM" = "Android" ]; then
+  cat <<'EOF'
+      - adb shell logcat -G 16M 2>/dev/null || true
+      - adb shell mkdir -p /sdcard/Android/data/io.tether.test.qvac/files/ 2>/dev/null || true
+EOF
+fi
 
-  # Emit test-results.json (written incrementally by wdio.template.js) into
-  # the log stream between markers so it can be extracted from raw logs too.
-  printf '      - |\n'
-  printf '        if [ -s "$DEVICEFARM_LOG_DIR/test-results.json" ]; then\n'
-  printf '          echo "[TEST_RESULTS_START]"\n'
-  printf '          cat "$DEVICEFARM_LOG_DIR/test-results.json"\n'
-  printf '          echo ""\n'
-  printf '          echo "[TEST_RESULTS_END]"\n'
-  printf '        fi\n'
+emit_extra_commands "${EXTRA_PRE_TEST_PATH:-/tmp/extra-pre-test.sh}"
 
-  if [ "${ENABLES_PERF:-false}" = "true" ]; then
-    printf '      - echo "Looking for perf-report-extract.json..."\n'
-    printf '      - |\n'
-    printf '        for p in "$DEVICEFARM_LOG_DIR/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/tests/perf-report-extract.json"; do\n'
-    printf '          if [ -s "$p" ]; then\n'
-    printf '            echo "[PERF_REPORT_START]"\n'
-    printf '            cat "$p"\n'
-    printf '            echo ""\n'
-    printf '            echo "[PERF_REPORT_END]"\n'
-    printf '            break\n'
-    printf '          fi\n'
-    printf '        done\n'
-  fi
+if [ "$PLATFORM" = "iOS" ]; then
+  cat <<'EOF'
+      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9
+EOF
+fi
 
-  # Default post-test log collection.
-  if [ "$PLATFORM" = "Android" ]; then
-    printf '      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true\n'
-  fi
-  printf '      - echo "Available log files:"\n'
-  printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
+# --- Appium startup ---
+cat <<EOF
+      - export APPIUM_BASE_PATH=/wd/hub
+      - |
+        appium --base-path=\$APPIUM_BASE_PATH --log-timestamp \\
+          --log-no-colors --relaxed-security --default-capabilities \\
+          "{\"appium:deviceName\": \"\$DEVICEFARM_DEVICE_NAME\", \\
+          \"platformName\": \"\$DEVICEFARM_DEVICE_PLATFORM_NAME\", \\
+          \"appium:app\": \"\$DEVICEFARM_APP_PATH\", \\
+          \"appium:udid\":\"\$DEVICEFARM_DEVICE_UDID\", \\
+          \"appium:platformVersion\": \"\$DEVICEFARM_DEVICE_OS_VERSION\", \\
+          \"appium:chromedriverExecutableDir\": \"\$DEVICEFARM_CHROMEDRIVER_EXECUTABLE_DIR\", \\
+          \"appium:wdaLocalPort\": 8100, \\
+          \"appium:derivedDataPath\": \"\$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\", \\
+          \"appium:usePrebuiltWDA\": true, \\
+          \"appium:automationName\": \"${AUTOMATION_NAME}\"}" \\
+          >> \$DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+      - |
+        appium_initialization_time=0
+        until curl --silent --fail "http://0.0.0.0:4723\${APPIUM_BASE_PATH}/status"; do
+          if [[ \$appium_initialization_time -gt 30 ]]; then
+            cat \$DEVICEFARM_LOG_DIR/appium.log
+            exit 1
+          fi
+          appium_initialization_time=\$((appium_initialization_time + 1))
+          sleep 1
+        done
 
-  emit_extra_commands "${EXTRA_POST_TEST_PATH:-/tmp/extra-post-test.sh}"
+  test:
+    commands:
+      - cd \$DEVICEFARM_TEST_PACKAGE_PATH
+      - node node_modules/@wdio/cli/bin/wdio.js run tests/wdio.config.devicefarm.js
 
-  # Custom artifact pulls (consumer-supplied JSON array).
-  PULL_LINES=$(python3 -c "
+  post_test:
+    commands:
+      - echo "Test completed"
+      - |
+        if [ -s "\$DEVICEFARM_LOG_DIR/test-results.json" ]; then
+          echo "[TEST_RESULTS_START]"
+          cat "\$DEVICEFARM_LOG_DIR/test-results.json"
+          echo ""
+          echo "[TEST_RESULTS_END]"
+        fi
+EOF
+
+# --- Optional: perf report extraction ---
+if [ "$_shard_perf" = "true" ]; then
+  cat <<'EOF'
+      - echo "Looking for perf-report-extract.json..."
+      - |
+        for p in "$DEVICEFARM_LOG_DIR/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/perf-report-extract.json" "$DEVICEFARM_TEST_PACKAGE_PATH/tests/perf-report-extract.json"; do
+          if [ -s "$p" ]; then
+            echo "[PERF_REPORT_START]"
+            cat "$p"
+            echo ""
+            echo "[PERF_REPORT_END]"
+            break
+          fi
+        done
+EOF
+fi
+
+# --- Platform-specific post-test log collection ---
+if [ "$PLATFORM" = "Android" ]; then
+  cat <<'EOF'
+      - adb logcat -d -b all > $DEVICEFARM_LOG_DIR/logcat_full.txt 2>/dev/null || true
+EOF
+fi
+
+cat <<'EOF'
+      - echo "Available log files:"
+      - ls -lh $DEVICEFARM_LOG_DIR/ || true
+EOF
+
+emit_extra_commands "${EXTRA_POST_TEST_PATH:-/tmp/extra-post-test.sh}"
+
+# --- Custom artifact pulls (consumer-supplied JSON array) ---
+PULL_LINES=$(python3 -c "
 import json, sys, os
 try:
     arr = json.loads(os.environ.get('AFTER_PULLS', '[]'))
@@ -179,14 +202,17 @@ for item in arr:
     if dp and an:
         print(f'cp -r {dp} \$DEVICEFARM_LOG_DIR/{an} 2>/dev/null || true')
 ")
-  if [ -n "$PULL_LINES" ]; then
-    while IFS= read -r line; do
-      [ -z "$line" ] && continue
-      printf '      - %s\n' "$line"
-    done <<< "$PULL_LINES"
-  fi
+if [ -n "$PULL_LINES" ]; then
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    printf '      - %s\n' "$line"
+  done <<< "$PULL_LINES"
+fi
 
-  printf '\n'
-  printf 'artifacts:\n'
-  printf '  - $DEVICEFARM_LOG_DIR\n'
+# --- Artifacts ---
+cat <<'EOF'
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR
+EOF
 } > "$SPEC_FILE"

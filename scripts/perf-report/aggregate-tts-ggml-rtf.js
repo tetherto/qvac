@@ -10,7 +10,7 @@
  * GGML differences vs ONNX:
  *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl
  *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
- *     cuda + opencl (manual / off the default cascade)
+ *     opencl (Adreno android, manual / off the default cascade)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
  *
  * Usage:
@@ -24,7 +24,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'cuda', 'opencl']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
 const NOISY_STDDEV_RATIO = 0.15
 
@@ -88,8 +88,9 @@ function formatMaybeInteger (value) {
 }
 
 // tts-cpp's GPU backend cascade: Vulkan on linux/win32/android, Metal on
-// darwin/ios. CUDA + OpenCL only appear when an explicit hint carries them
-// (manual drops / dedicated runners), so they pass through the hint branch.
+// darwin/ios. OpenCL (Adreno android) only appears when an explicit hint
+// carries it (manual drops / dedicated runners), so it passes through the
+// hint branch. CUDA is not supported on any platform.
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
   if (hint && hint !== 'gpu' && hint !== 'mobile-accelerated') return hint

@@ -4,7 +4,11 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['coreml', 'cuda', 'directml', 'rocm', 'nnapi']
+// whisper.cpp GPU backends: the ggml cascade (Vulkan on linux/win32/android,
+// Metal on darwin/ios, OpenCL on Adreno android) plus the CoreML encoder
+// (darwin) and the DirectML path (win32) the benchmark matrix exercises.
+// CUDA is not supported on any platform.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'coreml', 'directml']
 
 function parseArgs (argv) {
   const args = {
@@ -97,9 +101,9 @@ function normalizeBackend (platformName, useGPU, backendHint) {
     case 'win32':
       return 'directml'
     case 'android':
-      return 'nnapi'
+      return 'vulkan'
     case 'linux':
-      return 'cuda'
+      return 'vulkan'
     default:
       return 'gpu'
   }
@@ -121,6 +125,7 @@ function normalizeReport (report, sourceFile, source) {
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint)),
     meanRtf: Number(rtf.mean),
+    stddevRtf: Number(rtf.stddev),
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
@@ -146,6 +151,14 @@ function mean (values) {
   const nums = values.filter((value) => Number.isFinite(value))
   if (nums.length === 0) return NaN
   return nums.reduce((sum, value) => sum + value, 0) / nums.length
+}
+
+function stddev (values) {
+  const nums = values.filter((value) => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  const avg = nums.reduce((sum, value) => sum + value, 0) / nums.length
+  const variance = nums.reduce((acc, value) => acc + (value - avg) ** 2, 0) / nums.length
+  return Math.sqrt(variance)
 }
 
 function percentile (values, p) {
@@ -233,6 +246,7 @@ function normalizeMobileRecords (report, sourceFile) {
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
       meanRtf: mean(values.rtf),
+      stddevRtf: stddev(values.rtf),
       p50: percentile(values.rtf, 50),
       p95: percentile(values.rtf, 95),
       wallMs: mean(values.wallMs),
@@ -340,13 +354,13 @@ function renderMarkdown (records) {
   const lines = [
     '## Whisper Performance Findings',
     '',
-    '| Source | Device | Platform | Model | GPU | Backend | Mean RTF | P50 | P95 | Mean Wall (ms) | Notes |',
-    '|--------|--------|----------|-------|-----|---------|----------|-----|-----|----------------|-------|'
+    '| Source | Device | Platform | Model | GPU | Backend | Mean RTF | Stddev RTF | P50 | P95 | Mean Wall (ms) | Notes |',
+    '|--------|--------|----------|-------|-----|---------|----------|------------|-----|-----|----------------|-------|'
   ]
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddevRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
     )
   }
 
@@ -371,6 +385,7 @@ function renderHtml (records) {
       record.gpu,
       record.backend,
       formatNumber(record.meanRtf),
+      formatNumber(record.stddevRtf),
       formatNumber(record.p50),
       formatNumber(record.p95),
       formatMaybeInteger(record.wallMs),
@@ -408,6 +423,7 @@ function renderHtml (records) {
     '        <th>GPU</th>',
     '        <th>Backend</th>',
     '        <th>Mean RTF</th>',
+    '        <th>Stddev RTF</th>',
     '        <th>P50</th>',
     '        <th>P95</th>',
     '        <th>Mean Wall (ms)</th>',

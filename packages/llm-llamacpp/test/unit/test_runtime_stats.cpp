@@ -1,4 +1,5 @@
 #include <chrono>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -87,7 +88,8 @@ TEST(RuntimeStatsRates, ResetClearsRates) {
 // reads (`generatedTokens.size()` and `prefillTokenCount` — both zero
 // here because we're isolating the `thinkingDiscards` aggregation).
 Request makeStubRequest() {
-  return Request(/*rid=*/0, /*toks=*/{}, /*maxTokens=*/0);
+  return Request(
+      /*rid=*/0, /*toks=*/std::vector<llama_token>{}, /*maxTokens=*/0);
 }
 
 // `thinkingDiscards` is the per-slot count of compacted reasoning blocks
@@ -120,6 +122,51 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
 
   stats.reset();
   EXPECT_EQ(stats.thinkingBlockDiscards, 0);
+}
+
+// promptTokens must reflect tokens ACTUALLY prefilled, not the prompt size
+// planned at admission. Every termination path (including cancelSlotLocked)
+// funnels through accumulateSlot, so a request cancelled before any prefill
+// step ran must contribute zero prompt tokens -- otherwise the documented
+// `cacheTokens ~= promptTokens + generatedTokens` invariant breaks (cacheTokens
+// comes from the real nPast, here 0).
+TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(42, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+  // Admission fixed the planned prompt size, but no prefill step has fed any
+  // token yet, so the request is not prefill-complete.
+  ASSERT_EQ(req.prefillTokenCount, 42U);
+  ASSERT_EQ(req.prefillFedCount, 0U);
+  ASSERT_FALSE(req.isPrefillComplete());
+
+  RuntimeStatsSnapshot stats;
+  // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
+  // was processed, so nPast and the generated vector are empty.
+  stats.accumulateSlot(/*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
+
+  EXPECT_EQ(stats.promptTokens, 0);
+}
+
+// A request that completed prefill (normal completion, or a cancel after the
+// first generated token) must still report the full planned prompt: prefill
+// resets prefillFedCount to 0 once complete, so the honest count comes from
+// prefillTokenCount in that case.
+TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(42, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+  // Simulate prefill having fed every token: finishPrefillIfComplete clears the
+  // pending tokens and resets prefillFedCount to 0 once complete.
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+  ASSERT_TRUE(req.isPrefillComplete());
+
+  RuntimeStatsSnapshot stats;
+  stats.accumulateSlot(
+      /*nPast=*/42, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
+
+  EXPECT_EQ(stats.promptTokens, 42);
 }
 
 } // namespace

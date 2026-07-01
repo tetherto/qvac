@@ -22,20 +22,36 @@ const TTS_CONFIG = {
   }
 }
 
-function hasFfmpeg (): boolean {
+function hasFfmpeg(): boolean {
   try {
     execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
     execFileSync('ffprobe', ['-version'], { stdio: 'ignore' })
     return true
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
-function ffprobeCodec (buf: Buffer): string {
+function ffprobeCodec(buf: Buffer): string {
   const f = join(tmpdir(), `qvac-tts-probe-${process.pid}-${buf.length}.bin`)
   writeFileSync(f, buf)
   try {
-    return execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', f]).toString().trim()
-  } finally { rmSync(f, { force: true }) }
+    return execFileSync('ffprobe', [
+      '-v',
+      'error',
+      '-select_streams',
+      'a:0',
+      '-show_entries',
+      'stream=codec_name',
+      '-of',
+      'csv=p=0',
+      f
+    ])
+      .toString()
+      .trim()
+  } finally {
+    rmSync(f, { force: true })
+  }
 }
 
 const FFMPEG = hasFfmpeg()
@@ -43,7 +59,7 @@ const FFMPEG = hasFfmpeg()
 describe('tts (local): discovery + speech encoding', () => {
   const server = useModelServer(TTS_CONFIG)
 
-  function speak (format: string) {
+  function speak(format: string) {
     return server().inject({
       method: 'POST',
       url: '/v1/audio/speech',
@@ -53,7 +69,7 @@ describe('tts (local): discovery + speech encoding', () => {
 
   it('GET /v1/audio/models lists the loaded TTS model', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/audio/models' })
-    const body = res.json() as { object: string, data: Array<{ id: string, object: string }> }
+    const body = res.json() as { object: string; data: Array<{ id: string; object: string }> }
     assert.equal(body.object, 'list')
     assert.equal(body.data.length, 1)
     assert.ok(body.data.every((m) => m.object === 'model'))
@@ -62,7 +78,7 @@ describe('tts (local): discovery + speech encoding', () => {
 
   it('GET /v1/audio/voices returns the configured voices', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/audio/voices' })
-    const body = res.json() as { object: string, voices: string[], data: Array<{ id: string }> }
+    const body = res.json() as { object: string; voices: string[]; data: Array<{ id: string }> }
     assert.equal(body.object, 'list')
     assert.ok(body.voices.includes('alloy'))
     assert.ok(body.data.some((v) => v.id === 'alloy'))
@@ -88,11 +104,15 @@ describe('tts (local): discovery + speech encoding', () => {
     ['flac', 'audio/flac', 'flac']
   ]
   for (const [format, contentType, codec] of encoded) {
-    it(`speech: ${format} encodes to ${contentType}`, { skip: FFMPEG ? false : 'ffmpeg/ffprobe not on PATH' }, async () => {
-      const res = await speak(format)
-      assert.equal(res.statusCode, 200)
-      assert.equal(res.headers['content-type'], contentType)
-      assert.equal(ffprobeCodec(res.rawPayload), codec)
-    })
+    it(
+      `speech: ${format} encodes to ${contentType}`,
+      { skip: FFMPEG ? false : 'ffmpeg/ffprobe not on PATH' },
+      async () => {
+        const res = await speak(format)
+        assert.equal(res.statusCode, 200)
+        assert.equal(res.headers['content-type'], contentType)
+        assert.equal(ffprobeCodec(res.rawPayload), codec)
+      }
+    )
   }
 })

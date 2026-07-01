@@ -15,31 +15,33 @@ export interface Logger {
   debug: (message: string) => void
 }
 
-export function createLogger (level: string = 'info'): Logger {
+export function createLogger(level: string = 'info'): Logger {
   if (!(level in LOG_LEVELS)) {
     const validLevels = Object.keys(LOG_LEVELS).join(', ')
-    console.warn(`Invalid log level "${level}", falling back to "info". Valid levels: ${validLevels}`)
+    console.warn(
+      `Invalid log level "${level}", falling back to "info". Valid levels: ${validLevels}`
+    )
   }
 
   const currentLevel = LOG_LEVELS[level as LogLevel] ?? LOG_LEVELS.info
 
   return {
-    error (message: string) {
+    error(message: string) {
       if (currentLevel >= LOG_LEVELS.error) {
         console.error(message)
       }
     },
-    warn (message: string) {
+    warn(message: string) {
       if (currentLevel >= LOG_LEVELS.warn) {
         console.warn(message)
       }
     },
-    info (message: string) {
+    info(message: string) {
       if (currentLevel >= LOG_LEVELS.info) {
         console.log(message)
       }
     },
-    debug (message: string) {
+    debug(message: string) {
       if (currentLevel >= LOG_LEVELS.debug) {
         console.debug(message)
       }

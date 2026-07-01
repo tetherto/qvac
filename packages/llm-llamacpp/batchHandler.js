@@ -113,7 +113,7 @@ class BatchHandler {
         !Array.isArray(item) &&
         Array.isArray(item.prompt)
       const prompt = isWrapped ? item.prompt : item
-      const itemRunOptions = isWrapped && item.runOptions ? item.runOptions : {}
+      const itemRunOptions = isWrapped && item.runOptions !== undefined ? item.runOptions : {}
       const unwrapped = { messages: this._parsePrompt(prompt, itemRunOptions) }
       if (isWrapped && item.id !== undefined) unwrapped.id = item.id
       return unwrapped

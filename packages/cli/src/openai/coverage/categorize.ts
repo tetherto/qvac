@@ -80,7 +80,7 @@ const GROUP_CATEGORY: Record<string, CoverageCategory> = {
   usage: 'platform'
 }
 
-function normalizeLabel (label: string): string {
+function normalizeLabel(label: string): string {
   return label.trim().toLowerCase()
 }
 
@@ -88,7 +88,7 @@ const PRIMARY_NORM = new Set(PRIMARY_TAGS.map(normalizeLabel))
 const AI_SECONDARY_NORM = new Set(AI_SECONDARY_TAGS.map(normalizeLabel))
 const PLATFORM_NORM = new Set(PLATFORM_TAGS.map(normalizeLabel))
 
-function categoryFromTag (tag: string): CoverageCategory | null {
+function categoryFromTag(tag: string): CoverageCategory | null {
   const n = normalizeLabel(tag)
   if (PRIMARY_NORM.has(n)) return 'primary-ai'
   if (AI_SECONDARY_NORM.has(n)) return 'ai-secondary'
@@ -96,7 +96,7 @@ function categoryFromTag (tag: string): CoverageCategory | null {
   return null
 }
 
-export function categorize (entry: Pick<SpecEntry, 'tags' | 'group'>): CoverageCategory {
+export function categorize(entry: Pick<SpecEntry, 'tags' | 'group'>): CoverageCategory {
   if (entry.group) {
     const slug = entry.group.trim().toLowerCase()
     const fromGroup = GROUP_CATEGORY[slug]
@@ -112,7 +112,7 @@ export function categorize (entry: Pick<SpecEntry, 'tags' | 'group'>): CoverageC
 }
 
 /** Count OpenAPI tags and x-oaiMeta.group values on uncategorized operations. */
-export function summarizeUnknownLabels (
+export function summarizeUnknownLabels(
   entries: Array<Pick<SpecEntry, 'tags' | 'group'>>
 ): UnknownLabelCount[] {
   const tagCounts = new Map<string, number>()

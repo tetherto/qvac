@@ -1,14 +1,15 @@
 # Manual Performance Results (GGML TTS)
 
 Drop GGML TTS RTF benchmark JSON files in this directory when you need to
-include supported backends or devices that are **not available on CI** — CUDA
-desktops, Adreno OpenCL phones, hosted-macOS Metal (which crashes ggml's
-encoder under CI), or numbers from a local engineer box.
+include supported backends or devices that are **not available on CI** —
+Adreno OpenCL phones, discrete-GPU Vulkan boxes outside the self-hosted runner
+pool, hosted-macOS Metal (which crashes ggml's encoder under CI), or numbers
+from a local engineer box.
 
 Files are read by the RTF aggregator via its `--manual-dir` argument:
 
 - `scripts/perf-report/aggregate-tts-ggml-rtf.js`
-- the `summarize` job in `.github/workflows/benchmark-rtf-tts-ggml.yml`
+- the `summarize` job in `.github/workflows/benchmark-performance-tts-ggml.yml`
 
 Any `.json` file in this directory is picked up. Files ending in `.json.example`
 are **skipped** — rename to `.json` to activate. Records the aggregator does not
@@ -34,7 +35,7 @@ The canonical shape includes:
 | `engine`                      | string   | yes      | `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl`. |
 | `model.variant`               | string   | no       | Label: `q4` / `q8` / `f16` / `mixed` (default `q4`). |
 | `model.sizeBytes`             | number   | no       | Sum of the engine's GGUF files on disk. Shown as `Model (MB)`. |
-| `labels.backend`              | string   | yes      | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. |
+| `labels.backend`              | string   | yes      | `cpu` / `metal` / `vulkan` / `opencl`. |
 | `labels.device`               | string   | yes      | Human-readable device identifier (goes into the `Device` column). |
 | `labels.label`                | string   | no       | Free-form tag. |
 | `requested.useGPU`            | boolean  | yes      | `true` → `GPU` row; `false` → `CPU` row. |
@@ -65,8 +66,7 @@ column readable.
 
 ## Typical use cases
 
-- **CUDA** desktops (not in the default tts-cpp backend cascade — needs an
-  explicit `cuda` backend hint and a CUDA-enabled prebuild).
+- **Discrete-GPU Vulkan** desktops outside the self-hosted runner pool.
 - **Adreno OpenCL** Android phones not in the AWS Device Farm pool.
 - **Apple Silicon Metal** numbers from a local Mac (hosted macOS runners force
   `NO_GPU=true` because the Paravirtual Metal device crashes ggml's encoder).
@@ -77,8 +77,8 @@ column readable.
 ```bash
 # 1. Capture locally
 QVAC_TTS_GGML_BENCHMARK_USE_GPU=true \
-QVAC_TTS_GGML_BENCHMARK_BACKEND=cuda \
-QVAC_TTS_GGML_BENCHMARK_DEVICE=my-cuda-box \
+QVAC_TTS_GGML_BENCHMARK_BACKEND=vulkan \
+QVAC_TTS_GGML_BENCHMARK_DEVICE=my-vulkan-box \
 QVAC_TTS_GGML_BENCHMARK_RUNNER=manual-zbig \
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 
