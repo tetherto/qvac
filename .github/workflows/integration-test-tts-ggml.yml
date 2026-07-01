@@ -91,6 +91,14 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
+          # GitHub-hosted ubuntu-26.04 CPU leg (no `runner:` -> hosted, so the
+          # Manual Workspace Cleanup + cache-models steps auto-skip and models
+          # download fresh). Mirrors the parakeet ubuntu-26.04 leg: forward
+          # coverage on the newest Ubuntu image, CPU-only.
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
