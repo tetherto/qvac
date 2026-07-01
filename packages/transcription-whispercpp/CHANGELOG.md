@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
   `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,
   [#73](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/73)). The
-  registry baseline is moved to `d8e1c006`
-  ([tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)),
-  which carries the `whisper-cpp 1.9.1` port. No addon version bump (QVAC-21582).
+  registry baseline is left unchanged; the override resolves the new version
+  forward of the pinned baseline against
+  [tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)
+  (`whisper-cpp 1.9.1` port, REF `cb91a378`). No addon version bump (QVAC-21582).
 
 ## [0.10.2] - 2026-06-24
 
