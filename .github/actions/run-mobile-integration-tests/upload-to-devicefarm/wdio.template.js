@@ -20,6 +20,8 @@
 //   __ENABLE_CRASH_MONITOR__        'true' | 'false' — gates the 15s background crash poller
 //   __QVAC_PERF_RUNS__             Override for QVAC_PERF_RUNS (empty = test default)
 //   __QVAC_PERF_WARMUP_RUNS__      Override for QVAC_PERF_WARMUP_RUNS (empty = test default)
+//   __QVAC_EXTRA_ENV__             Extra KEY=VALUE lines (\n-separated, may be empty)
+//                                  appended to the pushed device config file
 //   __ENABLES_PERF__                'true' | 'false' — gates perf-report extraction in after:
 //   __AFTER_HOOK_EXTRA__            Optional consumer-supplied JS spliced into the after: hook
 //
@@ -185,12 +187,16 @@ exports.config = {
     }
     var perfRuns = '__QVAC_PERF_RUNS__';
     var perfWarmup = '__QVAC_PERF_WARMUP_RUNS__';
-    if (perfRuns.length > 0 || perfWarmup.length > 0) {
+    // Extra consumer-supplied KEY=VALUE lines (\n-separated) appended to the
+    // same config file — the on-device loader os.setEnv()s every key it finds.
+    var extraEnv = '__QVAC_EXTRA_ENV__';
+    if (perfRuns.length > 0 || perfWarmup.length > 0 || extraEnv.length > 0) {
       try {
         var configPath = isAndroid
           ? '/data/local/tmp/qvacPerfConfig.txt'
           : '@' + BUNDLE_ID + ':documents/qvacPerfConfig.txt';
         var configBody = 'QVAC_PERF_RUNS=' + perfRuns + '\nQVAC_PERF_WARMUP_RUNS=' + perfWarmup + '\n';
+        if (extraEnv.length > 0) configBody += extraEnv + '\n';
         await browser.pushFile(configPath, Buffer.from(configBody).toString('base64'));
         console.log('[pushFile] qvacPerfConfig -> ' + configPath);
       } catch (e) {
