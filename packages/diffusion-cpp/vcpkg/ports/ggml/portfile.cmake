@@ -1,15 +1,18 @@
-# ggml vcpkg overlay port for qvac-ext-ggml 2026-06-06-on-fabric-ggml.
+# ggml vcpkg overlay port for qvac-ext-ggml 2026-06-06-on-fabric-ggml-adreno-teardown.
 #
 # This fabric-based branch preserves qvac-fabric-llm.cpp's Adreno OpenCL Q4_0
 # preallocated transpose-buffer path, then replays the QVAC stable-diffusion.cpp
 # kernels from the 2026-06-06 line (Metal IM2COL_3D/PAD/fused RoPE, hybrid
 # backend packaging, Vulkan coopmat1 f32-accum/GQA flash-attn, and serialized
-# OpenCL SOA tensor uploads).
+# OpenCL SOA tensor uploads). It also cherry-picks e90151ab
+# (ggml-opencl: release sub-buffers before parent buffers on teardown) on top of
+# the 01a74af tip to fix the Adreno/QCOM Scudo "invalid chunk state" abort on
+# repeated Q4_0 load/unload cycles.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 01a74afa875902d46ec2b4a03a955f1201060d97
-    SHA512 fa8c72343817a8d73759061197ab238b45f338a8e7a9bdae65309776287080853964b944e47fb89e578a40262a86966e84c31c04fa290420315db6d2f7fe2c45
+    REF b84554ae3e7d1d292476c502c10c4e42b1f2ec1b
+    SHA512 00c35a020c515ceff6dbeba29cf1890912facbafbb4f81989969acfcfec84a3d99883ac9300e3c3c10cc4b650540e0e595541fac1d7415c66137fb1015d01f3f
 )
 
 # --- GPU feature flags ---
