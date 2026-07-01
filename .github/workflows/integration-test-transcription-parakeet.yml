@@ -177,10 +177,10 @@ jobs:
           hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
           enable-cross-os: 'false'
 
-      # Stage the desktop quantisations the RTF benchmark matrix sweeps:
-      #   f16 / f32 from the 2026-05-11 desktop registry prefix.
+      # Stage the desktop quantisation the RTF benchmark matrix sweeps:
+      #   f16 from the 2026-05-11 desktop registry prefix.
       # Mobile q4_0 / q8_0 coverage is handled by the Device Farm workflow.
-      - name: Download Parakeet GGUFs from QVAC registry (f16 + f32)
+      - name: Download Parakeet GGUFs from QVAC registry (f16)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
@@ -188,7 +188,7 @@ jobs:
           set -euo pipefail
           mkdir -p models
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
-            --recursive --exclude "*" --include "*.f16.gguf" --include "*.f32.gguf"
+            --recursive --exclude "*" --include "*.f16.gguf"
           ls -lh models/
 
       - name: Run integration test
@@ -227,13 +227,13 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
-          # Desktop quant sweep: f16 and f32 for all four model types.
+          # Desktop quant sweep: f16 for all four model types.
           # CPU-only runners run CPU legs; GPU runners additionally run the
           # Vulkan GPU legs.
           if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"f16","useGPU":false},{"modelType":"ctc","quant":"f16","useGPU":false},{"modelType":"eou","quant":"f16","useGPU":false},{"modelType":"sortformer","quant":"f16","useGPU":false},{"modelType":"tdt","quant":"f32","useGPU":false},{"modelType":"ctc","quant":"f32","useGPU":false},{"modelType":"eou","quant":"f32","useGPU":false},{"modelType":"sortformer","quant":"f32","useGPU":false}]'
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"f16","useGPU":false},{"modelType":"ctc","quant":"f16","useGPU":false},{"modelType":"eou","quant":"f16","useGPU":false},{"modelType":"sortformer","quant":"f16","useGPU":false}]'
           else
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"f16","useGPU":false},{"modelType":"ctc","quant":"f16","useGPU":false},{"modelType":"eou","quant":"f16","useGPU":false},{"modelType":"sortformer","quant":"f16","useGPU":false},{"modelType":"tdt","quant":"f32","useGPU":false},{"modelType":"ctc","quant":"f32","useGPU":false},{"modelType":"eou","quant":"f32","useGPU":false},{"modelType":"sortformer","quant":"f32","useGPU":false},{"modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"tdt","quant":"f32","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"f32","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"f32","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"f32","useGPU":true,"backendHint":"vulkan"}]'
+            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"f16","useGPU":false},{"modelType":"ctc","quant":"f16","useGPU":false},{"modelType":"eou","quant":"f16","useGPU":false},{"modelType":"sortformer","quant":"f16","useGPU":false},{"modelType":"tdt","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"f16","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"f16","useGPU":true,"backendHint":"vulkan"}]'
           fi
           node scripts/run-rtf-benchmark-matrix.js
 
