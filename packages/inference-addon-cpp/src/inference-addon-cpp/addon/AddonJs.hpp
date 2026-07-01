@@ -21,20 +21,31 @@ class AddonJs {
 public:
   const std::shared_ptr<AddonCpp> addonCpp;
 
+  /// @param scheduler Optional caller-supplied admission strategy, forwarded to
+  ///        AddonCpp; null selects AddonCpp's default single-job scheduler.
   AddonJs(
       js_env_t* env, std::unique_ptr<OutputCallBackInterface>&& outputCallback,
-      std::unique_ptr<model::IModel>&& model)
+      std::unique_ptr<model::IModel>&& model,
+      std::unique_ptr<IJobScheduler> scheduler = nullptr)
       : env_(env), addonCpp(
                        std::make_shared<AddonCpp>(
-                           std::move(outputCallback), std::move(model))) {}
+                           std::move(outputCallback), std::move(model),
+                           std::move(scheduler))) {}
 
   ~AddonJs() = default;
 
   /// @returns JavaScript Boolean that indicates if the job was run
   /// successfully. Can be false because a job is already set or being
   /// processed.
-  js_value_t* runJob(std::any input) {
-    return js::Boolean::create(env_, addonCpp->runJob(std::move(input)));
+  js_value_t* runJob(std::any input, JobId id = kNoJobId) {
+    return js::Boolean::create(env_, addonCpp->runJob(std::move(input), id));
+  }
+
+  /// @returns JavaScript Boolean: false when the exclusive job (e.g. finetune)
+  /// is refused because inference jobs are queued or in flight.
+  js_value_t* runExclusiveJob(std::any input, JobId id = kNoJobId) {
+    return js::Boolean::create(
+        env_, addonCpp->runExclusiveJob(std::move(input), id));
   }
 
   /**

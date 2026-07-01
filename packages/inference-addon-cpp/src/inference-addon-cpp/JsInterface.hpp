@@ -210,6 +210,17 @@ public:
   }
   JSCATCH
 
+  /// @returns JS number: active jobs (in-flight + queued) from the scheduler,
+  /// so JS need not maintain its own admission counter.
+  static auto activeJobs(js_env_t* env, js_callback_info_t* info)
+      -> js_value_t* try {
+    JsArgsParser argsParser(env, info);
+    auto& instance = getInstance(env, argsParser.get(0, "instance"));
+    return js::Number::create(
+        env, static_cast<double>(instance.addonCpp->activeJobs()));
+  }
+  JSCATCH
+
   /// @brief Can be used to get the input and type
   /// @example
   /// auto& instance = getInstance(env, argsParser.get(0, "instance"));

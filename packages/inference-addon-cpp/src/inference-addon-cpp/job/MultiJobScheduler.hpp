@@ -1,0 +1,210 @@
+#pragma once
+
+#include <any>
+#include <atomic>
+#include <condition_variable>
+#include <cstddef>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include "../Logger.hpp"
+#include "../ModelInterfaces.hpp"
+#include "../queue/OutputQueue.hpp"
+#include "IJobScheduler.hpp"
+#include "JobId.hpp"
+
+namespace qvac_lib_inference_addon_cpp {
+
+/// Admits up to maxConcurrency jobs at once onto a fixed pool of worker
+/// threads, each driving the model's process(input, id) in parallel. Beyond the
+/// pool, up to queueCapacity further jobs may wait — they start only once a
+/// worker (hence a model slot) frees, so the queue never over-subscribes the
+/// model. Admission is bounded: runJob rejects (back-pressure) once
+/// in-flight + queued would exceed maxConcurrency + queueCapacity, so the
+/// consumer never sees output for a job it was told was rejected. A queueCapacity
+/// of 0 means reject-at-pool (no waiting room). Per-job state lives only inside
+/// the worker stack, so one job's throw can never tear another's slot.
+///
+/// Cancellation routes to the model: cancel(id) targets one job via
+/// cancelById(); cancelAll() uses the model's whole-model cancel(), which stops
+/// every in-flight job in one call. The id -> internal-slot mapping is the
+/// model's concern; the scheduler only counts admissions for back-pressure.
+///
+/// runExclusiveJob admits a job that must run with the model to itself (a
+/// finetune reloads weights): it is refused unless the scheduler is idle, and
+/// while it runs every runJob admission is refused. This is where the
+/// finetune<->inference mutual exclusion is enforced.
+class MultiJobScheduler final : public IJobScheduler {
+  struct PendingJob {
+    std::any input;
+    JobId id;
+    bool exclusive{false};
+  };
+
+  std::shared_ptr<OutputQueue> outputQueue_;
+  model::IModelMultiprocessor* const multiprocessor_;
+  model::IModelCancel* const cancel_;
+  model::IModelCancelById* const cancelById_;
+  const unsigned maxConcurrency_;
+  /// Waiting room beyond the worker pool. Jobs admitted here sit in queued_
+  /// until a worker frees; 0 restores strict reject-at-pool back-pressure.
+  const unsigned queueCapacity_;
+
+  mutable std::mutex mtx_;
+  mutable std::condition_variable workCv_;
+  std::deque<PendingJob> queued_;
+  /// Admitted (queued + in-flight) job count; the figure admission is capped
+  /// against. Decremented when a job finishes.
+  std::size_t admittedCount_{0};
+  /// Set while an exclusive job (e.g. finetune) is queued or in flight. Blocks
+  /// every other admission until that job ends, giving it the model to itself.
+  bool exclusiveActive_{false};
+  std::vector<std::thread> workers_;
+  std::atomic_bool running_{false};
+  unsigned readyCount_{0};
+
+  void runResult(std::any&& output, JobId id) {
+    outputQueue_->queueResult(std::move(output), id);
+    outputQueue_->queueJobEnded(id);
+  }
+
+  /// Worker body. Per-job input/id are copied onto the stack while the lock is
+  /// held, then process() runs unlocked so cancel() and peer workers progress.
+  void workerLoop() {
+    {
+      std::lock_guard lock(mtx_);
+      ++readyCount_;
+    }
+    workCv_.notify_all();
+
+    while (running_.load()) {
+      std::unique_lock lock(mtx_);
+      workCv_.wait(lock, [this] { return !running_.load() || !queued_.empty(); });
+      if (!running_.load()) {
+        break;
+      }
+
+      PendingJob job = std::move(queued_.front());
+      queued_.pop_front();
+      lock.unlock();
+
+      try {
+        std::any output = multiprocessor_->process(job.input, job.id);
+        runResult(std::move(output), job.id);
+      } catch (const std::exception& exception) {
+        outputQueue_->queueException(exception, job.id);
+      } catch (...) {
+        outputQueue_->queueException(
+            std::runtime_error("Unknown exception in processing loop"), job.id);
+      }
+
+      {
+        std::lock_guard relock(mtx_);
+        --admittedCount_;
+        // Release exclusivity here, after process() has fully returned or
+        // thrown, so a stuck flag can never wedge admission if an exclusive job
+        // (finetune) fails.
+        if (job.exclusive) {
+          exclusiveActive_ = false;
+        }
+      }
+    }
+  }
+
+public:
+  /// Nearly unbounded queueCapacity: large enough that a "queue me, don't reject
+  /// me" caller is never refused under realistic load, while still capping memory
+  /// against a runaway producer.
+  static constexpr unsigned DEFAULT_MAX_CAPACITY = 16384;
+
+  MultiJobScheduler(
+      model::IModelMultiprocessor* multiprocessor, unsigned maxConcurrency,
+      model::IModelCancel* cancel, model::IModelCancelById* cancelById,
+      unsigned queueCapacity = 0)
+      : multiprocessor_(multiprocessor), cancel_(cancel),
+        cancelById_(cancelById), maxConcurrency_(maxConcurrency),
+        queueCapacity_(queueCapacity) {}
+
+  void start(std::shared_ptr<OutputQueue> outputQueue) override {
+    outputQueue_ = std::move(outputQueue);
+    running_.store(true);
+    workers_.reserve(maxConcurrency_);
+    for (unsigned worker = 0; worker < maxConcurrency_; ++worker) {
+      workers_.emplace_back([this] { workerLoop(); });
+    }
+
+    // Block until every worker has reached its wait, mirroring SingleJob's
+    // start handshake so jobs scheduled right after construction are not lost.
+    std::unique_lock lock(mtx_);
+    workCv_.wait(lock, [this] { return readyCount_ == maxConcurrency_; });
+  }
+
+  ~MultiJobScheduler() override {
+    {
+      std::lock_guard lock(mtx_);
+      running_.store(false);
+    }
+    workCv_.notify_all();
+    for (std::thread& worker : workers_) {
+      if (worker.joinable()) {
+        worker.join();
+      }
+    }
+  }
+
+  bool runJob(std::any input, JobId id) override {
+    std::unique_lock lock(mtx_);
+    if (exclusiveActive_ || admittedCount_ >= maxConcurrency_ + queueCapacity_) {
+      // Pool + queue full, or an exclusive job (finetune) holds the model:
+      // reject so no output is ever queued for this job.
+      return false;
+    }
+    ++admittedCount_;
+    queued_.push_back(PendingJob{std::move(input), id});
+    lock.unlock();
+    workCv_.notify_one();
+    return true;
+  }
+
+  bool runExclusiveJob(std::any input, JobId id) override {
+    std::unique_lock lock(mtx_);
+    if (exclusiveActive_ || admittedCount_ > 0) {
+      // An exclusive job must run with the model to itself: refuse while
+      // anything is queued or in flight (peer jobs, or another exclusive job).
+      return false;
+    }
+    exclusiveActive_ = true;
+    ++admittedCount_;
+    queued_.push_back(PendingJob{std::move(input), id, /*exclusive=*/true});
+    lock.unlock();
+    workCv_.notify_one();
+    return true;
+  }
+
+  void cancel(JobId id) override {
+    if (cancelById_ != nullptr) {
+      cancelById_->cancelById(id);
+    }
+  }
+
+  void cancelAll() override {
+    if (cancel_ != nullptr) {
+      cancel_->cancel();
+      return;
+    }
+    QLOG(logger::Priority::WARNING, "Model does not support cancellation (of all jobs in a single-call)");
+  }
+
+  /// Active jobs (queued + in-flight); the figure admission is capped against.
+  [[nodiscard]] std::size_t activeJobs() const override {
+    std::lock_guard lock(mtx_);
+    return admittedCount_;
+  }
+};
+
+} // namespace qvac_lib_inference_addon_cpp

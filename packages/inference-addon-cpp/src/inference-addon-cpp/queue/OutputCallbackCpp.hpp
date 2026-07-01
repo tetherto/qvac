@@ -97,11 +97,13 @@ private:
       }
 
       while (outputQueue_ != nullptr && !shouldStop_.load()) {
-        std::vector<std::any> outputQueue = std::move(outputQueue_->clear());
+        std::vector<std::pair<JobId, std::any>> outputQueue =
+            std::move(outputQueue_->clear());
         lock.unlock();
 
         for (size_t i = 0; !shouldStop_.load() && i < outputQueue.size(); i++) {
-          processEvent(outputQueue[i]);
+          /// JobId is ignored here; type-dispatch drives event handling.
+          processEvent(outputQueue[i].second);
         }
 
         lock.lock();

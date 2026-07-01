@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -11,16 +12,14 @@
 
 #include "Logger.hpp"
 #include "ModelInterfaces.hpp"
+#include "job/IJobScheduler.hpp"
 #include "queue/OutputQueue.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
 
-/**
- * @brief Tracks active processing state for synchronization.
- *
- * Used to synchronize cancel() with process() - cancel waits for processing
- * to complete before returning, ensuring job_ is not reset while in use.
- */
+/// Tracks active processing state for synchronization.
+/// Used to synchronize cancel() with process() — cancel waits for processing
+/// to complete before returning, ensuring job_ is not reset while in use.
 class ProcessingSync {
 public:
   void waitInactive() const {
@@ -42,7 +41,7 @@ private:
   mutable std::condition_variable cv_;
 };
 
-class JobRunner {
+class SingleJobScheduler final : public IJobScheduler {
   std::shared_ptr<OutputQueue> outputQueue_;
   model::IModel* const model_;
   model::IModelCancel* const modelCancel_;
@@ -102,55 +101,8 @@ class JobRunner {
     }
   }
 
-public:
-  explicit JobRunner(
-      std::shared_ptr<OutputQueue> outputQueue, model::IModel* model,
-      model::IModelCancel* modelCancel = nullptr)
-      : outputQueue_(std::move(outputQueue)), model_(model),
-        modelCancel_(modelCancel) {}
-
-  void start() {
-    this->running_ = true;
-    processingThread_ = std::thread([this]() { this->process(); });
-
-    // Make sure to wait until the thread is ready for a new job.
-    // Otherwise, the thread might ignore and lose new jobs quickly scheduled
-    // after construction, when its not ready for processing yet.
-    std::unique_lock lock(mtx_);
-    processCv_.wait(lock, [this]() { return ready_.load(); });
-  }
-
-  ~JobRunner() {
-    if (running_) {
-      QLOG_DEBUG("Stopping job");
-      {
-        std::lock_guard lock(mtx_);
-        running_ = false;
-      }
-      processCv_.notify_one();
-      if (processingThread_.joinable()) {
-        processingThread_.join();
-      }
-    }
-  }
-
-  bool runJob(std::any input) {
-    std::unique_lock lock(mtx_, std::defer_lock);
-    if (!lock.try_lock_for(std::chrono::milliseconds{100}) ||
-        job_.has_value()) {
-      // Do not queue exception, there could be another job already
-      // running and we want to keep the messages on queue matching
-      // the valid jobs.
-      // Return a boolean instead.
-      return false;
-    }
-    job_ = std::move(input);
-    lock.unlock();
-    processCv_.notify_one();
-    return true;
-  }
-
-  void cancel() {
+  /// Shared body for cancel(JobId) and cancelAll().
+  void cancelImpl() {
     std::unique_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
@@ -167,5 +119,83 @@ public:
       }
     }
   }
+
+public:
+  explicit SingleJobScheduler(
+      model::IModel* model, model::IModelCancel* modelCancel = nullptr)
+      : model_(model), modelCancel_(modelCancel) {}
+
+  void start(std::shared_ptr<OutputQueue> outputQueue) override {
+    outputQueue_ = std::move(outputQueue);
+    this->running_ = true;
+    processingThread_ = std::thread([this]() { this->process(); });
+
+    // Make sure to wait until the thread is ready for a new job.
+    // Otherwise, the thread might ignore and lose new jobs quickly scheduled
+    // after construction, when its not ready for processing yet.
+    std::unique_lock lock(mtx_);
+    processCv_.wait(lock, [this]() { return ready_.load(); });
+  }
+
+  ~SingleJobScheduler() override {
+    if (running_) {
+      QLOG_DEBUG("Stopping job");
+      {
+        std::lock_guard lock(mtx_);
+        running_ = false;
+      }
+      processCv_.notify_one();
+      if (processingThread_.joinable()) {
+        processingThread_.join();
+      }
+    }
+  }
+
+  /// Admit an untagged job. The single-slot implementation cannot correlate
+  /// outputs to a tagged request, so a non-sentinel @p id is rejected.
+  bool runJob(std::any input, JobId id = kNoJobId) override {
+    if (id != kNoJobId) {
+      throw std::invalid_argument(
+          "SingleJobScheduler does not support tagged jobs; id must be "
+          "kNoJobId");
+    }
+    std::unique_lock lock(mtx_, std::defer_lock);
+    if (!lock.try_lock_for(std::chrono::milliseconds{100}) ||
+        job_.has_value()) {
+      // Do not queue exception, there could be another job already
+      // running and we want to keep the messages on queue matching
+      // the valid jobs.
+      // Return a boolean instead.
+      return false;
+    }
+    job_ = std::move(input);
+    lock.unlock();
+    processCv_.notify_one();
+    return true;
+  }
+
+  /// Cancel the single slot. Only the untagged sentinel is honoured; a tagged
+  /// @p id cannot be correlated to the slot, so it is warned about and ignored.
+  void cancel(JobId id = kNoJobId) override {
+    if (id != kNoJobId) {
+      QLOG(logger::Priority::WARNING,
+          "SingleJobScheduler ignores cancel() for a tagged job id");
+      return;
+    }
+    cancelImpl();
+  }
+
+  void cancelAll() override { cancelImpl(); }
+
+  /// 0 or 1: the single slot is either free or occupied.
+  [[nodiscard]] std::size_t activeJobs() const override {
+    std::scoped_lock lock(mtx_);
+    return job_.has_value() ? 1U : 0U;
+  }
 };
+
+/// Backward-compatibility alias — all existing code naming JobRunner still
+/// compiles without modification.
+using JobRunner = SingleJobScheduler;
+
 } // namespace qvac_lib_inference_addon_cpp

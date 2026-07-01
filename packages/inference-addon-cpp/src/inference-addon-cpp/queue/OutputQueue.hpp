@@ -6,11 +6,13 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../Logger.hpp"
 #include "../ModelInterfaces.hpp"
 #include "../Utils.hpp"
+#include "../job/JobId.hpp"
 #include "OutputCallbackInterface.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
@@ -27,14 +29,15 @@ struct Error : std::string {
 
 class OutputQueue {
   std::mutex mtx_;
-  std::vector<std::any> outputQueue_;
+  /// Each entry carries the originating JobId so consumers can correlate events.
+  std::vector<std::pair<JobId, std::any>> outputQueue_;
 
   const model::IModel& model_;
   OutputCallBackInterface& outputCallback_;
 
-  void queueOutput(std::any&& output) {
+  void queueOutput(std::any&& output, JobId id) {
     std::scoped_lock lk{mtx_};
-    outputQueue_.emplace_back(std::move(output));
+    outputQueue_.emplace_back(id, std::move(output));
     outputCallback_.notify();
   }
 
@@ -45,25 +48,27 @@ public:
 
   ~OutputQueue() = default;
 
-  /// @brief Returns the current output queue and clears the internal queue.
-  std::vector<std::any> clear() {
+  /// @brief Atomically drains and returns all pending tagged entries.
+  std::vector<std::pair<JobId, std::any>> clear() {
     std::scoped_lock lk{mtx_};
     auto result = std::move(outputQueue_);
-    outputQueue_ = std::vector<std::any>();
+    outputQueue_ = {};
     return result;
   }
 
-  void queueJobEnded() { return queueOutput(model_.runtimeStats()); }
+  void queueJobEnded(JobId id = kNoJobId) {
+    queueOutput(model_.runtimeStats(), id);
+  }
 
-  void queueResult(std::any&& output) {
+  void queueResult(std::any&& output, JobId id = kNoJobId) {
     QLOG_DEBUG(
         std::string("[OutputQueue] queueResult called with type: ") +
         output.type().name());
-    queueOutput(std::move(output));
+    queueOutput(std::move(output), id);
   }
 
-  void queueException(const std::exception& exception) {
-    queueOutput(Output::Error{exception});
+  void queueException(const std::exception& exception, JobId id = kNoJobId) {
+    queueOutput(Output::Error{exception}, id);
   }
 };
 } // namespace qvac_lib_inference_addon_cpp

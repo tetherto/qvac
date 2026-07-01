@@ -167,15 +167,20 @@ private:
    *   outputCbParameters[1] = Event string
    *   outputCbParameters[2] = Output data
    *   outputCbParameters[3] = Error data
+   *   outputCbParameters[4] = JobId as JS number, or undefined for kNoJobId (in case of single-job addons)
    */
   static void createOutputCbParams(
-      State& state, js_value_t* jsHandle, const std::any& output,
+      State& state, js_value_t* jsHandle, const std::any& output, JobId id,
       js_value_t** outputCbParameters) {
     outputCbParameters[0] = jsHandle;
     outputCbParameters[1] = js::String::create(state.env, output.type().name());
 
     std::tie(outputCbParameters[2], outputCbParameters[3]) =
         createEventParams(state, output);
+
+    outputCbParameters[4] = (id == kNoJobId)
+        ? js::Undefined::create(state.env)
+        : js::Number::create(state.env, id);
   }
 
   /**
@@ -198,7 +203,7 @@ private:
     JS(js_get_reference_value(state.env, state.outputCb, &outputCb));
     js_value_t* jsHandle;
     JS(js_get_reference_value(state.env, state.jsHandle, &jsHandle));
-    std::vector<std::any> outputQueue;
+    std::vector<std::pair<JobId, std::any>> outputQueue;
     {
       std::scoped_lock lk{state.mtx};
       outputQueue = std::move(state.outputQueue->clear());
@@ -211,9 +216,11 @@ private:
           utils::onExit([env = state.env, innerScope]() {
             js_close_handle_scope(env, innerScope);
           });
-      static constexpr auto outputCbParametersCount = 4;
+      static constexpr auto outputCbParametersCount = 5;
       js_value_t* outputCbParameters[outputCbParametersCount];
-      createOutputCbParams(state, jsHandle, outputQueue[i], outputCbParameters);
+      createOutputCbParams(
+          state, jsHandle, outputQueue[i].second, outputQueue[i].first,
+          outputCbParameters);
       js_value_t* receiver;
       JS(js_get_global(state.env, &receiver));
       JS(js_call_function(
