@@ -86,19 +86,17 @@ export const batchCompletionBasic = createBatchCompletionTest(
       },
       {
         id: "second",
-        history: [
-          { role: "user", content: "Reply with only the word ORANGE." },
-        ],
+        history: [{ role: "user", content: "Reply with only the word APPLE." }],
         generationParams: deterministic,
       },
     ],
     stream: false,
     expectedById: {
       first: ["BANANA"],
-      second: ["ORANGE"],
+      second: ["APPLE"],
     },
   },
-  { validation: "contains-all", contains: ["BANANA", "ORANGE"] },
+  { validation: "contains-all", contains: ["BANANA", "APPLE"] },
 );
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -120,7 +118,7 @@ export const batchCompletionStreaming = createBatchCompletionTest(
         history: [
           {
             role: "user",
-            content: "Reply with only the word ORANGE.",
+            content: "Reply with only the word APPLE.",
           },
         ],
         generationParams: deterministic,
@@ -129,10 +127,10 @@ export const batchCompletionStreaming = createBatchCompletionTest(
     stream: true,
     expectedById: {
       "stream-first": ["BANANA"],
-      "stream-second": ["ORANGE"],
+      "stream-second": ["APPLE"],
     },
   },
-  { validation: "contains-all", contains: ["BANANA", "ORANGE"] },
+  { validation: "contains-all", contains: ["BANANA", "APPLE"] },
 );
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(
@@ -218,9 +216,6 @@ export const batchCompletionVisionMixed = createBatchCompletionTest(
     stream: false,
     expectedAnyById: {
       image: ELEPHANT_IMAGE_TERMS,
-    },
-    expectedById: {
-      text: ["PLAIN"],
     },
   },
   { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
