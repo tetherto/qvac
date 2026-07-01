@@ -1,0 +1,68 @@
+name: '[TEST] composite e2e (ci-router)'
+
+# THROWAWAY: validates the SHARED ci-router composite end-to-end via the real
+# `uses: ./.github/actions/ci-router` mechanism — the thing that has never
+# actually run (pull_request_target always runs main's file, and the composites
+# aren't on main yet). Runs on a REGULAR pull_request into lgci-sandbox so the
+# HEAD's file executes, and checks out the composite from the PR head (since it
+# isn't on main). Stub stage jobs gated on the router outputs prove the
+# composite-based routing works. Delete after.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+
+jobs:
+  ci-router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite from PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages (via shared composite)
+        id: route
+        uses: ./.github/actions/ci-router
+
+  baseline:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_verified_checks == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN baseline (run_verified_checks)"' }]
+
+  stage-cpp:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_cpp_tests == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN cpp (run_cpp_tests)"' }]
+
+  stage-prebuild:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_prebuilds == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN prebuild (run_prebuilds)"' }]
+
+  stage-desktop:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_desktop == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN desktop (run_desktop)"' }]
+
+  stage-mobile:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_mobile == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN mobile (run_mobile)"' }]
