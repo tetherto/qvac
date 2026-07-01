@@ -255,10 +255,13 @@ npm run build
 A clean build confirms nothing on the website broke. Treat a build failure as
 **fail-stop**: surface the error and do NOT proceed to commit until it's fixed.
 
-**Disposable artifacts — never commit these.** Both the generation and the
-build produce byproducts that are already gitignored. Stage **only** the three
-surfaces listed above; never run `git add -A` / `git add .` from a dirty docs
-tree. Gitignored byproducts include:
+**Staging follows the same convention as the other steps.** Like every other
+step, this one only generates files — it never runs `git add` or `git commit`.
+The three surfaces above are part of the release commit (same as Step 7's
+bare-sdk files: "Include … in the release commit"), and every generation/build
+byproduct is gitignored — exactly like Step 5's `announcement-post.txt` — so a
+normal `git status` review shows only the committable files. Let the user review
+before committing. Gitignored byproducts (do not `git add` them) include:
 
 - `docs/website/scripts/api-docs/api-data.json` and `typedoc.json`
 - `docs/website/.typedoc-temp/`, `.next/`, `.source/`, `out/`, `dist/`
@@ -325,7 +328,7 @@ Before completing:
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
 - [ ] When `--package=sdk`: `qv-sdk-bare-sdk-sync` run, `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated
-- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` staged (no disposable build artifacts)
+- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions

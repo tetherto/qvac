@@ -141,22 +141,15 @@ now generates the documentation-site API reference + release notes locally and
 ships them in this same release PR. There is **no longer a separate
 auto-generated docs PR** (the old `docs-release.yml` workflow was removed).
 
-When the diff includes docs-site changes, exercise caution while staging — the
-docs generation and `npm run build` produce many disposable, gitignored
-artifacts. **Stage only the three generated surfaces with explicit pathspecs;
-never `git add -A` / `git add .` from the docs tree:**
-
-```bash
-git add \
-  docs/website/content/docs/reference/api \
-  docs/website/content/docs/reference/release-notes \
-  docs/website/src/lib/versions.ts
-```
-
-Do NOT commit disposable build byproducts (all gitignored, but never force-add
-them): `docs/website/scripts/api-docs/api-data.json`, `typedoc.json`,
-`docs/website/.typedoc-temp/`, `.next/`, `.source/`, `out/`, `dist/`,
-`docs/website/next-env.d.ts`, `packages/sdk/dist/`.
+Staging works the same as for the rest of the release commit — no special
+handling is needed. Step 8's three committable surfaces
+(`docs/website/content/docs/reference/api/**`,
+`docs/website/content/docs/reference/release-notes/**`,
+`docs/website/src/lib/versions.ts`) show up in `git status` alongside the
+changelog, while every generation/build byproduct
+(`api-data.json`, `typedoc.json`, `.typedoc-temp/`, `.next/`, `.source/`,
+`out/`, `dist/`, `next-env.d.ts`, `packages/sdk/dist/`) is gitignored and
+therefore never appears. Review `git status` and commit the shown files as usual.
 
 Reviewers should expect the `reference/api` + `reference/release-notes` diff in
 the release PR alongside the changelog.
@@ -201,7 +194,7 @@ Before outputting the PR description, verify:
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
-- [ ] For sdk releases with generated docs, only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` are staged — no disposable build artifacts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.)
+- [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 
 ## References
