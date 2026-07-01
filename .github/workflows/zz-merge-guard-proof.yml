@@ -1,0 +1,83 @@
+name: '[TEST] merge-guard proof (router + real public-pr)'
+
+# THROWAWAY pre-merge proof for the addon rollout. Answers the team's real
+# question: "will this block PR merges?" Uses the REAL ci-router composite
+# (checked out from the PR head, since it isn't on main yet) + stub stage jobs
+# gated exactly like a migrated addon + the REAL merge-guard (public-pr.yml,
+# wired like embed). Toggle labels to show:
+#   verified + all stage labels -> every gated stage runs -> merge-guard GREEN
+#     (PRs ARE mergeable under the new model, with the labels)
+#   verified only              -> heavy stages skip -> build-status false ->
+#     merge-guard RED (by design: apply the stage labels to run required checks
+#     — identical to how llm-llamacpp already behaves on main)
+# Runs on a REGULAR pull_request into lgci-sandbox so the HEAD file executes.
+# Delete after.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches: [lgci-sandbox]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci-router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite from PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages (via shared composite)
+        id: route
+        uses: ./.github/actions/ci-router
+
+  sanity-checks:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_verified_checks == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN sanity (run_verified_checks)"' }]
+
+  cpp-tests:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_cpp_tests == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN cpp (run_cpp_tests)"' }]
+
+  prebuild:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_prebuilds == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN prebuild (run_prebuilds)"' }]
+
+  run-integration-tests:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_desktop == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN desktop (run_desktop)"' }]
+
+  run-mobile-integration-tests:
+    needs: ci-router
+    if: needs.ci-router.outputs.run_mobile == 'true'
+    runs-on: ubuntu-latest
+    steps: [{ name: ran, run: 'echo "RAN mobile (run_mobile)"' }]
+
+  merge-guard:
+    needs: [ci-router, sanity-checks, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
+    if: always() && !cancelled()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
