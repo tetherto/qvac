@@ -59,7 +59,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '' || '-gpu' }}-integration-tests
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
