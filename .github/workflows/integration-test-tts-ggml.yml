@@ -72,7 +72,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '' || '-gpu' }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
@@ -91,6 +91,10 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -102,11 +106,6 @@ jobs:
           - os: macos-15-large
             platform: darwin
             arch: x64
-            no_gpu: 'true'
-          - os: windows-2025
-            platform: win32
-            arch: x64
-            runner: qvac-win25-x64
             no_gpu: 'true'
           - os: windows-2025
             platform: win32

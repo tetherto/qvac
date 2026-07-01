@@ -15,6 +15,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/*.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",

@@ -1,14 +1,195 @@
 name: Benchmark Performance (BCI Whispercpp)
 
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
+# Manually-triggered BCI throughput benchmark. Mirrors
+# benchmark-performance-transcription-whispercpp.yml: a desktop RTF/throughput
+# matrix (CPU + Vulkan) plus a mobile Device Farm leg, consolidated into one
+# report by scripts/perf-report/aggregate-bci-rtf.js. BCI ships a single
+# registry model, so the sweep is platform × CPU/GPU backend (no quant axis).
 
 on:
   workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      include_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmark matrix"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
 
 jobs:
-  noop:
+  label-gate:
+    name: Authorise (label-gate)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
     steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+      include_desktop: ${{ steps.ctx.outputs.include_desktop }}
+      run_mobile: ${{ steps.ctx.outputs.run_mobile }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_INCLUDE_DESKTOP: ${{ inputs.include_desktop }}
+          INPUT_RUN_MOBILE: ${{ inputs.run_mobile }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "include_desktop=${INPUT_INCLUDE_DESKTOP}" >> "$GITHUB_OUTPUT"
+          echo "run_mobile=${INPUT_RUN_MOBILE}" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs:
+      - context
+      - label-gate
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+    if: needs.label-gate.outputs.authorised == 'true'
+
+  desktop-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      run_integration_tests: false
+      run_rtf_benchmarks: true
+
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  summarize:
+    needs:
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (always())
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      # No merge-multiple: same-platform runners can emit identically named
+      # rtf-benchmark-*.json files, so merging into one directory would clobber
+      # all but the last. Per-artifact subdirectories keep every runner; the
+      # aggregator's walkFiles recurses and dedupes on device.
+      - name: Download desktop benchmark artifacts
+        if: needs.context.outputs.include_desktop != 'false'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: rtf-results-*
+          path: benchmark-artifacts/desktop
+
+      # Per-platform subdirectories: Android + iOS each upload a
+      # performance-report.json, so a flat merge would collide. The aggregator's
+      # walkFiles recurses and dedupes mobile rows on device.
+      - name: Download mobile benchmark artifacts
+        if: needs.context.outputs.run_mobile != 'false'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: perf-report-bci-whispercpp-*
+          path: benchmark-artifacts/mobile
+
+      - name: Generate consolidated benchmark report
+        run: |
+          node scripts/perf-report/aggregate-bci-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/bci-whispercpp/benchmarks/manual-results \
+            --output benchmark-artifacts/bci-performance-findings.md \
+            --output-json benchmark-artifacts/bci-performance-findings.json \
+            --output-html benchmark-artifacts/bci-performance-findings.html
+
+      - name: Add summary
+        run: cat benchmark-artifacts/bci-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: bci-performance-findings
+          path: |
+            benchmark-artifacts/bci-performance-findings.md
+            benchmark-artifacts/bci-performance-findings.json
+            benchmark-artifacts/bci-performance-findings.html
+          retention-days: 30
