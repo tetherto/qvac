@@ -72,7 +72,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@0.1.0
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
     needs:
       - label-gate
@@ -219,14 +219,14 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
           workdir: packages/llm-llamacpp
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: packages/llm-llamacpp
