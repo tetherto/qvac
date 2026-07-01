@@ -1,0 +1,74 @@
+name: "Setup ROCm (TheRock) for HIP cross-compile"
+description: >-
+  Installs the TheRock ROCm dist (gfx target) on a linux-x64 runner and exports
+  ROCM_PATH/HIP_PATH/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a consumer's
+  qvac-fabric hip-backend feature can cross-compile libqvac-ggml-hip.so. No AMD
+  GPU is required on the runner (compile-only, like nvcc for CUDA).
+
+inputs:
+  rocm-version:
+    description: "TheRock ROCm dist tarball version"
+    required: false
+    default: "7.13.0"
+  gfx:
+    description: "AMD GPU arch target (TheRock dist family)"
+    required: false
+    default: "gfx1151"
+  sha256:
+    description: >-
+      Expected SHA-256 of the TheRock dist tarball. Pins the toolchain against a
+      silent re-upload of the same version (supply chain). MUST be updated when
+      rocm-version/gfx change — a mismatch fails the build. The default matches
+      the action's default rocm-version/gfx; leave empty only to deliberately
+      skip verification.
+    required: false
+    default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
+
+runs:
+  using: composite
+  steps:
+    # Cache the extracted SDK so the multi-GB tarball is fetched + unpacked once
+    # per (gfx, version, sha256). The key includes sha256 so re-pinning busts it.
+    - name: Cache ROCm SDK (TheRock dist)
+      id: cache-rocm
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/rocm
+        key: rocm-therock-${{ inputs.gfx }}-${{ inputs.rocm-version }}-${{ inputs.sha256 }}
+
+    - name: Download + verify + extract ROCm SDK (TheRock dist)
+      if: steps.cache-rocm.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ROCM_VERSION: ${{ inputs.rocm-version }}
+        ROCM_GFX: ${{ inputs.gfx }}
+        ROCM_SHA256: ${{ inputs.sha256 }}
+      run: |
+        url="https://repo.amd.com/rocm/tarball/therock-dist-linux-${ROCM_GFX}-${ROCM_VERSION}.tar.gz"
+        echo "Downloading $url"
+        curl -fsSL "$url" -o "$RUNNER_TEMP/rocm.tar.gz"
+        if [ -n "$ROCM_SHA256" ]; then
+          echo "Verifying SHA-256 ($ROCM_SHA256)"
+          echo "$ROCM_SHA256  $RUNNER_TEMP/rocm.tar.gz" | sha256sum -c -
+        else
+          echo "::warning::No sha256 pin provided — skipping integrity verification of the ROCm tarball"
+        fi
+        mkdir -p "$RUNNER_TEMP/rocm"
+        tar -xzf "$RUNNER_TEMP/rocm.tar.gz" -C "$RUNNER_TEMP/rocm"
+        rm -f "$RUNNER_TEMP/rocm.tar.gz"
+
+    - name: Export ROCm environment
+      shell: bash
+      run: |
+        hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
+        if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
+        rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
+        echo "ROCm prefix: $rocm_prefix"
+        # Only $prefix/bin on PATH (hipcc) — NOT lib/llvm/bin, whose bundled
+        # libc++ lacks __config_site and would hijack the system clang++ used for
+        # the regular C++/llama sources.
+        echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+        echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
+        echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
+        echo "VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$rocm_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

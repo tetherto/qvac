@@ -314,7 +314,7 @@ class LlmLlamacpp {
       }
       return this._run(() => this._runBatchInternal(prompt))
     }
-    return this._run(() => this._runInternal(prompt, runOptions || {}))
+    return this._run(() => this._runInternal(prompt, runOptions))
   }
 
   async _runBatchInternal (batchInput) {
