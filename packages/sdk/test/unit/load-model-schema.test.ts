@@ -4,7 +4,10 @@ import {
   loadModelSrcRequestSchema,
 } from "@/schemas/load-model";
 import { llmConfigBaseSchema, ModelType } from "@/schemas";
-import { resolveRegistryDownloadMetadata } from "@/server/rpc/handlers/load-model/registry-metadata";
+import {
+  getExplicitRegistryMetadata,
+  resolveRegistryDownloadMetadata,
+} from "@/server/rpc/handlers/load-model/registry-metadata";
 import type { RegistryItem } from "@/models/registry";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
@@ -105,6 +108,26 @@ test("llmConfigBaseSchema: preserves projection descriptor cache metadata", (t) 
   });
 
   t.alike(parsed.projectionModelSrc, descriptor);
+});
+
+test("getExplicitRegistryMetadata: ignores non-registry descriptors", (t) => {
+  const metadata = getExplicitRegistryMetadata({
+    src: "https://example.com/model.gguf",
+    expectedSize: 123,
+    sha256Checksum:
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+
+  t.is(metadata, undefined);
+});
+
+test("getExplicitRegistryMetadata: ignores registry descriptors without cache metadata", (t) => {
+  const metadata = getExplicitRegistryMetadata({
+    src: "registry://hf/future/model.gguf",
+    name: "FUTURE_MODEL",
+  });
+
+  t.is(metadata, undefined);
 });
 
 test("resolveRegistryDownloadMetadata: descriptor metadata covers uncatalogued registry paths", (t) => {
