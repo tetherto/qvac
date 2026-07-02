@@ -56,6 +56,9 @@ public:
     return result;
   }
 
+  /// Terminal event for a completed job. @p id routes the event; the payload is
+  /// a whole-model runtimeStats() snapshot (see IModel::runtimeStats), not this
+  /// job's private stats — under batching it aggregates across concurrent jobs.
   void queueJobEnded(JobId id = kNoJobId) {
     queueOutput(model_.runtimeStats(), id);
   }

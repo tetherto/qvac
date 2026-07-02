@@ -17,6 +17,14 @@ struct IModel {
   IModel& operator=(const IModel&) = delete;
   [[nodiscard]] virtual std::string getName() const = 0;
   virtual std::any process(const std::any& input) = 0;
+  /// Whole-model, point-in-time read, not per-job.
+  /// When jobs are batched this might provide aggregated metrics
+  /// such as average tokens per second during a recent processing
+  /// window.
+  ///
+  /// For models driven by IModelMultiprocessor it is the implementer's
+  /// responsibility to make runtimeStats() thread-safe: it may be called
+  /// concurrently with in-flight process() calls.
   [[nodiscard]] virtual RuntimeStats runtimeStats() const = 0;
 };
 
@@ -55,6 +63,10 @@ struct IModelMultiprocessor {
   IModelMultiprocessor& operator=(const IModelMultiprocessor&) = delete;
 
   virtual std::any process(const std::any& input, JobId id) = 0;
+
+  // No per-job runtimeStats(id) yet. There has not been a strong need for it.
+  // For example, on LLM, batched jobs report aggregated stats such as avg.
+  // decode speed.
 };
 
 /// Per-job cancellation: cancel just the in-flight call admitted under @p id.
