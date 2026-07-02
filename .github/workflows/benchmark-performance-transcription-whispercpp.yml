@@ -12,7 +12,12 @@ on:
         required: false
         type: string
       include_desktop:
-        description: "Run desktop benchmark matrix"
+        description: "Run desktop (CPU/GPU) RTF benchmark matrix"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
         required: false
         type: boolean
         default: true
@@ -49,6 +54,7 @@ jobs:
       repository: ${{ steps.ctx.outputs.repository }}
       ref: ${{ steps.ctx.outputs.ref }}
       include_desktop: ${{ steps.ctx.outputs.include_desktop }}
+      run_mobile: ${{ steps.ctx.outputs.run_mobile }}
     steps:
       - id: ctx
         shell: bash
@@ -56,6 +62,7 @@ jobs:
           INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           INPUT_INCLUDE_DESKTOP: ${{ inputs.include_desktop }}
+          INPUT_RUN_MOBILE: ${{ inputs.run_mobile }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -64,6 +71,7 @@ jobs:
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "include_desktop=${INPUT_INCLUDE_DESKTOP}" >> "$GITHUB_OUTPUT"
+          echo "run_mobile=${INPUT_RUN_MOBILE}" >> "$GITHUB_OUTPUT"
 
   prebuild:
     needs:
@@ -99,10 +107,28 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
 
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
   summarize:
     needs:
       - context
       - desktop-benchmarks
+      - mobile-benchmarks
       - label-gate
     if: needs.label-gate.outputs.authorised == 'true' && (always())
     runs-on: ubuntu-latest
@@ -116,21 +142,37 @@ jobs:
           ref: ${{ needs.context.outputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      # No merge-multiple: two Linux desktop runners (e.g. qvac-ubuntu2204-x64
+      # cpu-only and qvac-ubuntu2404-x64-gpu) emit identically named
+      # rtf-benchmark-linux-*.json files, so merging into one directory would
+      # clobber all but the last. Per-artifact subdirectories keep every
+      # runner; the aggregator's walkFiles recurses and dedupes on device.
       - name: Download desktop benchmark artifacts
         if: needs.context.outputs.include_desktop != 'false'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
-          merge-multiple: true
+
+      # Per-platform subdirectories: Android + iOS each upload a
+      # performance-report.json, so a flat merge would collide. The
+      # aggregator's walkFiles recurses and dedupes mobile rows on device.
+      - name: Download mobile benchmark artifacts
+        if: needs.context.outputs.run_mobile != 'false'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: perf-report-whispercpp-*
+          path: benchmark-artifacts/mobile
 
       - name: Generate consolidated benchmark report
         run: |
           node scripts/perf-report/aggregate-whisper-rtf.js \
-            --dir benchmark-artifacts/desktop \
+            --dir benchmark-artifacts \
             --manual-dir packages/transcription-whispercpp/benchmarks/manual-results \
             --output benchmark-artifacts/whisper-performance-findings.md \
-            --output-json benchmark-artifacts/whisper-performance-findings.json
+            --output-json benchmark-artifacts/whisper-performance-findings.json \
+            --output-html benchmark-artifacts/whisper-performance-findings.html
 
       - name: Add summary
         run: cat benchmark-artifacts/whisper-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
@@ -142,4 +184,5 @@ jobs:
           path: |
             benchmark-artifacts/whisper-performance-findings.md
             benchmark-artifacts/whisper-performance-findings.json
+            benchmark-artifacts/whisper-performance-findings.html
           retention-days: 30

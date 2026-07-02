@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -14,6 +15,7 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 
 struct PromptLayout;
+struct mtmd_context;
 
 struct GenerationParams {
   std::optional<int> n_predict;
@@ -159,6 +161,26 @@ struct LlmModelContext {
   const llama_vocab* vocab = nullptr;
 };
 
+/// Canonical layout of the per-session cache metadata that every cache
+/// (de)serializer must persist and restore. Any driver implementing
+/// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
+///
+/// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
+/// separately from `nPast`/`firstMsgTokens` (logical positional span) because
+/// multimodal M-RoPE media can occupy more KV cells than its positional span.
+/// Persisting only the two positional fields would lose the media KV-cell
+/// counts and break context shifting after restore. See `getCacheTokens` /
+/// `getFirstMsgCacheTokens` below for the divergence these fields capture.
+enum class SessionMetadataField : uint8_t {
+  NPast = 0,
+  FirstMsgTokens = 1,
+  CacheTokens = 2,
+  FirstMsgCacheTokens = 3,
+};
+
+/// Number of `llama_token` fields in the session metadata contract above.
+inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -230,6 +252,13 @@ public:
    * associated with this context.
    */
   virtual common_params& getParams() = 0;
+
+  /**
+   * The llama-side sequence id this context owns (0 for the single-prompt
+   * path, the scheduler-assigned slot id under continuous batching). Used as
+   * the `seq_id` argument when persisting/restoring per-sequence cache state.
+   */
+  [[nodiscard]] llama_seq_id getSeqId() const { return seqId_; }
 
   /**
    * The get nPast method. It returns the nPast.
@@ -375,7 +404,10 @@ public:
     (void)hasKvCacheContext;
   }
 
-  [[nodiscard]] llama_seq_id getSeqId() const { return seqId_; }
+  /// Loaded multimodal (mmproj) context this LLM context can hand to
+  /// per-slot batch drivers, or null for text-only contexts. Used by the
+  /// scheduler factory to detect media capability without a `dynamic_cast`.
+  [[nodiscard]] virtual mtmd_context* visionContext() const { return nullptr; }
 
 protected:
   void clearSequenceMemory(
