@@ -70,14 +70,14 @@ jobs:
           fi
 
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -99,14 +99,14 @@ jobs:
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # 6.2.1
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Cache Parakeet q4 GGUFs (registry + staged copies)
         id: cache-parakeet-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: |
             addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf

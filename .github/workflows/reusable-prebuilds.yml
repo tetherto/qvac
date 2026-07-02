@@ -167,7 +167,7 @@ jobs:
 
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -175,7 +175,7 @@ jobs:
 
       - name: Setup LLVM (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+        uses: tetherto/qvac/.github/actions/setup-llvm@879db0a288778b320594c403e464bd424da075cf
 
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -184,19 +184,19 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@879db0a288778b320594c403e464bd424da075cf
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@879db0a288778b320594c403e464bd424da075cf
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -224,7 +224,7 @@ jobs:
           }
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@879db0a288778b320594c403e464bd424da075cf
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -233,7 +233,7 @@ jobs:
 
       - if: ${{ inputs.include-vulkan-sdk && (matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK (Linux ARM and MacOS)
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@545b771c9e218ac3aca5f7afe693230f720574f0
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -275,7 +275,7 @@ jobs:
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
-        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@1225268a5953ea733a30dad7d3d9581073fb03da
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@879db0a288778b320594c403e464bd424da075cf
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -464,7 +464,7 @@ jobs:
 
           Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -482,7 +482,7 @@ jobs:
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuilds
           path: prebuilds

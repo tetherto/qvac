@@ -97,7 +97,7 @@ jobs:
         working-directory: .
         if: runner.environment != 'github-hosted'
       - name: Checkout source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           persist-credentials: false
 
@@ -187,7 +187,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/inference-addon-cpp/vcpkg.json', 'packages/inference-addon-cpp/vcpkg-configuration.json', 'packages/inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache
