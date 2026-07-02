@@ -200,7 +200,7 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
-    "@qvac/bci-whispercpp": "^0.3.2",
+    "@qvac/bci-whispercpp": "^0.4.0",
     "@qvac/classification-ggml": "^0.7.0",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.12.0",
