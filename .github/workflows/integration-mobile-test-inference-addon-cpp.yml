@@ -1,0 +1,178 @@
+name: Mobile Integration Tests (inference-addon-cpp)
+
+# QVAC-21737: run the inference-addon-cpp JS integration suites on mobile
+# (iOS + Android) via AWS Device Farm, not just desktop.
+#
+# inference-addon-cpp is a base C++ library whose JS integration tests live as
+# THREE self-contained bare addons under tests/integration_js/. There is no
+# single npm package to pack, so this workflow matrixes the shared
+# run-mobile-integration-tests composite over each test addon (one Device Farm
+# app + single-pool run per addon per platform).
+#
+# ⚠️ DRAFT — cannot go green until infra provisions (see
+# packages/inference-addon-cpp/docs/mobile-integration-tests.md):
+#   - AWS Device Farm project + pools: AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP,
+#     ANDROID_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP, IOS_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP
+#   - a mobile prebuild source for each test addon (skip-prebuilds builds from
+#     source; confirm the harness cross-compiles these bare addons on device
+#     targets)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      job_timeout_minutes:
+        description: "Override the build-and-test job timeout (minutes)."
+        type: number
+        required: false
+        default: 90
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.addon.dir }} · ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.runner }}
+    environment: release
+    timeout-minutes: ${{ inputs.job_timeout_minutes || 90 }}
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Android
+            runner: qvac-ubuntu2204-x64
+          - name: iOS
+            runner: macos-14
+        addon:
+          - dir: logger
+            npm: test-logger
+          - dir: js-create-double-first-call
+            npm: test-js-create-double-first-call
+          - dir: output-callback-lifetime
+            npm: output-callback-lifetime
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform.name }}
+          addon-workdir: 'packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}'
+          addon-npm-name: ${{ matrix.addon.npm }}
+          # These test addons have no dedicated prebuild pipeline; build from
+          # source for the mobile target instead of downloading CI artifacts.
+          skip-prebuilds: 'true'
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform.name }}
+          addon-workdir: 'packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}'
+          addon-npm-name: ${{ matrix.addon.npm }}
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform.name }}
+          addon-workdir: 'packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}'
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP }}
+
+      - name: Schedule Device Farm test run
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform.name }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: 'single-pool'
+
+      - name: Monitor Device Farm test run
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform.name }}
+          addon-npm-name: ${{ matrix.addon.npm }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: ${{ matrix.addon.npm }}
+          platform: ${{ matrix.platform.name }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

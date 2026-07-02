@@ -1,12 +1,5 @@
-const test = require('brittle')
-const addon = require('.')
-
-test('first js::Number double returns the requested value', function (t) {
-  t.is(addon.createDouble(2), 2, 'first js::Number double returns 2')
-  t.is(addon.createDouble(3), 3, 'second js::Number double returns 3')
-})
-
-test('first js_create_int32 returns the requested value', function (t) {
-  t.is(addon.createInt32(2), 2, 'first js_create_int32 returns 2')
-  t.is(addon.createInt32(3), 3, 'second js_create_int32 returns 3')
-})
+// Desktop entry point. The test body lives in test/integration/ so the same
+// suite feeds both the desktop `bare test.js` run and the mobile Device Farm
+// harness (which auto-generates test/mobile/integration.auto.cjs from
+// test/integration/*.test.js). Keep this a thin re-export.
+require('./test/integration/js-create-double-first-call.test.js')
