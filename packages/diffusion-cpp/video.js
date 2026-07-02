@@ -508,7 +508,10 @@ class VideoStableDiffusion {
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
     // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
     // img_emb projection and will produce garbage or crash.
-    if (mode === 'img2vid' && !this._files.clipVision) {
+    // LTX-2 (LTXAV) img2vid conditions on the input frame through the video VAE
+    // rather than clip_vision, so this requirement is Wan-only — gating it on
+    // isLtx keeps LTX img2vid usable from JS without a clip_vision file.
+    if (mode === 'img2vid' && !isLtx && !this._files.clipVision) {
       throw new TypeError(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
         'Download clip_vision_h.safetensors from ' +
