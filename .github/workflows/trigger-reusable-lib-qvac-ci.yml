@@ -124,7 +124,7 @@ jobs:
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
     uses: ./.github/workflows/public-reusable-npm.yml
