@@ -19,6 +19,9 @@ namespace tts_cpp::chatterbox {
 class Engine;
 struct EngineOptions;
 } // namespace tts_cpp::chatterbox
+namespace tts_cpp::lavasr {
+class Enhancer;
+}
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -136,6 +139,9 @@ private:
   // take a cheap local copy under the lock and then work outside it.
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::chatterbox::Engine> engine_;
+  // LavaSR enhancer (QVAC-16579): loaded alongside the engine when
+  // cfg_.enhancerGgufPath is set; null disables enhancement.
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
 
   // Rejects concurrent `process()` invocations; the outer JobRunner also
   // serializes jobs, but belt-and-suspenders enforcement here keeps

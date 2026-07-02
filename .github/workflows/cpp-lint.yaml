@@ -23,6 +23,16 @@ on:
         type: boolean
         required: false
         default: true
+      include-rocm-sdk:
+        description: >-
+          Install the ROCm (TheRock) SDK before generating the build system.
+          Required for packages whose qvac-fabric feature set pulls the
+          hip-backend: ggml-config.cmake then `find_dependency(hip/hipblas/
+          rocblas)` at configure time, which needs ROCm on the runner even
+          though linting never builds or runs the HIP backend.
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   cpp-lint:
@@ -80,6 +90,14 @@ jobs:
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      # Must run BEFORE vcpkg so ROCM_PATH is set when the qvac-fabric
+      # hip-backend feature is installed/resolved (setup-rocm exports
+      # VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH so the hip package is cache-keyed
+      # per ROCm prefix and its hip-config resolves at find_dependency time).
+      - if: ${{ inputs.include-rocm-sdk }}
+        name: Setup ROCm SDK for HIP cross-compile
+        uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
