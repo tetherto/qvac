@@ -168,11 +168,11 @@ describe('buildWavHeader', () => {
     assert.equal(header.toString('ascii', 36, 40), 'data')
 
     assert.equal(header.readUInt32LE(16), 16) // fmt chunk size
-    assert.equal(header.readUInt16LE(20), 1)  // PCM format
-    assert.equal(header.readUInt16LE(22), 1)  // mono
+    assert.equal(header.readUInt16LE(20), 1) // PCM format
+    assert.equal(header.readUInt16LE(22), 1) // mono
     assert.equal(header.readUInt32LE(24), 24000)
     assert.equal(header.readUInt32LE(28), 24000 * 2)
-    assert.equal(header.readUInt16LE(32), 2)  // block align
+    assert.equal(header.readUInt16LE(32), 2) // block align
     assert.equal(header.readUInt16LE(34), 16) // bits per sample
   })
 
@@ -238,7 +238,7 @@ describe('speechEncodeArgs', () => {
   })
 })
 
-function tail (args: string[]): string[] {
+function tail(args: string[]): string[] {
   return args.slice(args.indexOf('-c:a'))
 }
 
@@ -320,4 +320,3 @@ describe('parseServeConfig — openai.audio.speech.maxInputChars', () => {
     }
   })
 })
-

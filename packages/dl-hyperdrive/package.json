@@ -47,7 +47,7 @@
     "directory": "packages/dl-hyperdrive"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-hyperdrive#readme",
+  "homepage": "https://qvac.tether.io",
   "files": [
     "src",
     "index.d.ts",

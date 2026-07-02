@@ -2,10 +2,13 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
 import { writeStreamingResponse } from '../src/serve/adapters/openai/response-writers.js'
-import type { ResponsesHandlerParams, ResponseWriterContext } from '../src/serve/adapters/openai/response-writers.js'
+import type {
+  ResponsesHandlerParams,
+  ResponseWriterContext
+} from '../src/serve/adapters/openai/response-writers.js'
 import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 
-function minimalRouteContext (): ResponseWriterContext {
+function minimalRouteContext(): ResponseWriterContext {
   return {
     logger: { info: (): void => {} },
     responsesStore: {
@@ -19,7 +22,7 @@ function minimalRouteContext (): ResponseWriterContext {
   }
 }
 
-function baseHandlerParams (rid: string): ResponsesHandlerParams {
+function baseHandlerParams(rid: string): ResponsesHandlerParams {
   return {
     ctx: minimalRouteContext(),
     sdkModelId: 'mid',
@@ -38,7 +41,7 @@ function baseHandlerParams (rid: string): ResponsesHandlerParams {
   }
 }
 
-function fakeStreamCompletion (opts: {
+function fakeStreamCompletion(opts: {
   tokens: string[]
   toolCalls: ToolCall[]
   text: string
@@ -47,14 +50,14 @@ function fakeStreamCompletion (opts: {
 }): CompletionRun {
   // Writers consume `result.events`; drive content deltas, tool calls, stats
   // and the terminal `stopReason` the way the SDK does.
-  async function * events (): AsyncGenerator<unknown> {
+  async function* events(): AsyncGenerator<unknown> {
     let seq = 0
     for (const t of opts.tokens) yield { type: 'contentDelta', seq: seq++, text: t }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
   }
-  async function * gen (): AsyncGenerator<string> {
+  async function* gen(): AsyncGenerator<string> {
     for (const t of opts.tokens) yield t
   }
   return {
@@ -65,11 +68,11 @@ function fakeStreamCompletion (opts: {
     toolCalls: Promise.resolve(opts.toolCalls) as unknown as CompletionRun['toolCalls'],
     stats: Promise.resolve(opts.stats),
     tokenStream: gen(),
-    toolCallStream: (async function * empty (): AsyncGenerator<never> {})()
+    toolCallStream: (async function* (): AsyncGenerator<never> {})()
   }
 }
 
-function parseSseJsonEvents (raw: string): unknown[] {
+function parseSseJsonEvents(raw: string): unknown[] {
   const out: unknown[] = []
   for (const block of raw.split('\n\n')) {
     for (const line of block.split('\n')) {
@@ -86,7 +89,7 @@ function parseSseJsonEvents (raw: string): unknown[] {
   return out
 }
 
-function createStreamResponse (): { res: ServerResponse; raw: string } {
+function createStreamResponse(): { res: ServerResponse; raw: string } {
   const parts: string[] = []
   let sent = false
   const res = {
@@ -94,20 +97,20 @@ function createStreamResponse (): { res: ServerResponse; raw: string } {
     writeHead: (): void => {
       sent = true
     },
-    write (chunk: string): boolean {
+    write(chunk: string): boolean {
       parts.push(chunk)
       return true
     },
-    end (chunk?: string | Buffer): void {
+    end(chunk?: string | Buffer): void {
       if (chunk !== undefined && chunk !== null) parts.push(String(chunk))
     },
-    get headersSent (): boolean {
+    get headersSent(): boolean {
       return sent
     }
   } as unknown as ServerResponse
   return {
     res,
-    get raw (): string {
+    get raw(): string {
       return parts.join('')
     }
   }

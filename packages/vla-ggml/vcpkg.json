@@ -6,7 +6,10 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "9341.0.0"
+      "version>=": "9341.1.0",
+      "features": [
+        "hip-backend"
+      ]
     },
     {
       "name": "qvac-lib-inference-addon-cpp",

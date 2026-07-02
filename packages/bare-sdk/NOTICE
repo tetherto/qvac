@@ -63,8 +63,14 @@ Third-Party Model Licenses
 
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  craft_mlt_25k
+    https://www.jaided.ai/easyocr/modelhub/
+  crnn_mobilenet_v3_small
+    https://github.com/mindee/doctr
   crnn_mobilenet_v3_small
     https://github.com/felixdittrich92/OnnxTR
+  db_mobilenet_v3_large
+    https://github.com/mindee/doctr
   db_mobilenet_v3_large
     https://github.com/felixdittrich92/OnnxTR
   db_resnet50
@@ -109,10 +115,16 @@ Third-Party Model Licenses
     https://huggingface.co/CheeLi03/whisper-tiny-ja-puct-4k
   laser-dolphin-mixtral-2x7b-dpo-GGUF
     https://huggingface.co/jmb95/laser-dolphin-mixtral-2x7b-dpo-GGUF
+  latin_g2
+    https://www.jaided.ai/easyocr/modelhub/
   LightOnOCR-2-1B-ocr-soup-GGUF
     https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF
   Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
     https://huggingface.co/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF
+  MedPsy-1.7B-GGUF
+    https://huggingface.co/qvac/MedPsy-1.7B-GGUF
+  MedPsy-4B-GGUF
+    https://huggingface.co/qvac/MedPsy-4B-GGUF
   nb-tiny-ggml-model
     https://huggingface.co/NbAiLab/nb-whisper-tiny
   parseq
@@ -143,8 +155,12 @@ Third-Party Model Licenses
     https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF
   Qwen3.5-2B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
+  Qwen3.5-2B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF
   Qwen3.5-4B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+  Qwen3.5-4B-GGUF
+    https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF
   Qwen3.5-9B-GGUF
     https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
   Qwen3.6-27B-GGUF
@@ -204,12 +220,24 @@ Third-Party Model Licenses
 
 --- bsd-3-clause (BSD 3-Clause License) ---
 
+  char
+    https://github.com/polm/ipadic-py
+  dicrc
+    https://github.com/polm/ipadic-py
+  matrix
+    https://github.com/polm/ipadic-py
+  mecabrc
+    https://github.com/polm/ipadic-py
   RealESRGAN_x4plus
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
   RealESRGAN_x4plus_anime_6B
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth
   RealESRNet_x4plus
     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
+  sys
+    https://github.com/polm/ipadic-py
+  unk
+    https://github.com/polm/ipadic-py
 
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
@@ -562,6 +590,8 @@ Third-Party Model Licenses
     s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf
   supertonic2-q8_0
     s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q8_0.gguf
+  supertonic3-f16
+    https://huggingface.co/supertone/supertonic-3
 
 --- openrail++ ---
 
@@ -591,7 +621,7 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/decoder-audio@0.4.0
+  @qvac/decoder-audio@0.5.0
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.1
   @qvac/error@0.1.1
@@ -602,7 +632,7 @@ JavaScript Dependencies
   @qvac/logging@0.1.0
   @qvac/rag@0.6.4
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.6.0
+  @qvac/registry-client@0.6.1
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
@@ -622,8 +652,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-assert
   bare-buffer@3.6.0
     https://github.com/holepunchto/bare-buffer
-  bare-channel@5.2.3
-    https://github.com/holepunchto/bare-channel
   bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
@@ -676,8 +704,6 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stdio
   bare-stream@2.13.1
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.5.5
-    https://github.com/holepunchto/bare-structured-clone
   bare-tcp@2.5.1
     https://github.com/holepunchto/bare-tcp
   bare-tls@3.1.7

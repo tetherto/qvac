@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
 
-// Chatterbox multilingual supported languages (18). The engines support
+// Chatterbox multilingual supported languages (22). The engines support
 // different language sets, so the language enum is validated per engine.
 export const TTS_CHATTERBOX_LANGUAGES = [
   "en", // English
@@ -22,6 +22,10 @@ export const TTS_CHATTERBOX_LANGUAGES = [
   "sw", // Swahili
   "ar", // Arabic
   "ko", // Korean
+  "he", // Hebrew
+  "ru", // Russian
+  "zh", // Chinese
+  "hi", // Hindi
 ] as const;
 
 // Supertonic supported languages (31, as of Supertonic 3). Earlier Supertonic
@@ -68,14 +72,12 @@ const TTS_SUPERTONIC_ONLY_LANGUAGES = [
   "bg", // Bulgarian
   "cs", // Czech
   "et", // Estonian
-  "hi", // Hindi
   "hr", // Croatian
   "hu", // Hungarian
   "id", // Indonesian
   "lt", // Lithuanian
   "lv", // Latvian
   "ro", // Romanian
-  "ru", // Russian
   "sk", // Slovak
   "sl", // Slovenian
   "uk", // Ukrainian

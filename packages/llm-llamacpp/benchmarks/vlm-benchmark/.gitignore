@@ -1,8 +1,15 @@
-# Fixture images live in a fixture object store (not git); CI syncs them here.
-images/
+# Fixture images live in a fixture object store (S3, not git); CI syncs them here and
+# devs copy them here manually for local runs (see fixture/README.md). Track only the
+# README so the folder + instructions exist in git; never the image bytes.
+fixture/*
+!fixture/README.md
 # several-sources CLI build artifacts (built at CI time by build-cli-sources.js).
 cli-builds/
 cli-sources-resolved.json
+# candidate/baseline addon prebuilds staged by CI (A2); swapped into ./prebuilds.
+builds/
 # misc
 node_modules/
 *.tgz
+# Dima's internal reference (kept local, not committed per request)
+VLM_General_Benchmark.md

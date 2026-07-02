@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "engines": {
@@ -14,7 +14,8 @@
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "brittle-bare test/unit/*.test.js",
-    "test:integration": "brittle-bare test/integration/addon.test.js",
+    "test:integration": "brittle-bare test/integration/*.test.js",
+    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -58,7 +59,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/registry-client": "^0.6.0",
     "@types/node": "^22.15.3",

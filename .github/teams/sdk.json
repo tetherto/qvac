@@ -13,6 +13,8 @@
     "packages/rag/",
     "packages/logging/",
     "packages/error/",
-    "packages/ai-sdk-provider/"
+    "packages/ai-sdk-provider/",
+    "plugins/opencode/",
+    "plugins/openclaw/"
   ]
 }

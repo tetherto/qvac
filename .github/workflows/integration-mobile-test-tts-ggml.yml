@@ -154,6 +154,26 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Benchmark runs (run_rtf_benchmarks=true): the benchmark runners are
+      # intentionally NOT in test-groups.json, so they never run on normal PRs.
+      # For a benchmark run, build the device-farm test-groups from the addon's
+      # perf-tests.json so ONLY the benchmarks execute. To add a benchmark, add
+      # its function name to perf-tests.json — no workflow changes needed. On a
+      # normal run this step is skipped, the output is empty, and the action
+      # falls back to auto-detecting test-groups.json (the functional tests).
+      - name: Resolve benchmark test-groups from perf-tests.json
+        id: perf_groups
+        if: ${{ inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        run: |
+          GREP=$(jq -r 'join("|")' test/mobile/perf-tests.json)
+          if [ -z "$GREP" ]; then
+            echo "::error::perf-tests.json is empty — no benchmarks to run"
+            exit 1
+          fi
+          echo "Benchmark grep: $GREP"
+          printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -165,6 +185,9 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          # Empty on normal runs => action auto-detects test-groups.json
+          # (functional tests). Set on benchmark runs => only the benchmarks.
+          test-groups: ${{ steps.perf_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
@@ -208,7 +231,7 @@ jobs:
       # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
       # block per suite (RTF + streaming) into bare_console.log. Scrape every
       # block with --merge (no last-write-wins) and union them per device. The
-      # artifact name is what benchmark-rtf-tts-ggml.yml's summarize job
+      # artifact name is what benchmark-performance-tts-ggml.yml's summarize job
       # downloads (pattern perf-report-tts-ggml-*). Skipped on normal PR runs.
       - name: Extract and report TTS-GGML performance
         if: always() && !cancelled() && inputs.run_rtf_benchmarks && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''

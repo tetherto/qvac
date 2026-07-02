@@ -4,8 +4,7 @@ import { join } from 'node:path'
 import { load } from 'js-yaml'
 import type { HttpMethod, SpecEntry } from './types.js'
 
-const SPEC_URL =
-  'https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml'
+const SPEC_URL = 'https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml'
 
 const CACHE_DIR = join(homedir(), '.cache', 'qvac')
 const CACHE_SPEC = join(CACHE_DIR, 'openai-spec.yaml')
@@ -13,13 +12,13 @@ const CACHE_ETAG = join(CACHE_DIR, 'openai-spec.etag')
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch'])
 
-function normalizePath (rawPath: string): string {
+function normalizePath(rawPath: string): string {
   if (rawPath.startsWith('/v1/')) return rawPath
   if (rawPath.startsWith('/')) return `/v1${rawPath}`
   return `/v1/${rawPath}`
 }
 
-function parseSpecYaml (yamlText: string): SpecEntry[] {
+function parseSpecYaml(yamlText: string): SpecEntry[] {
   const doc = load(yamlText) as {
     paths?: Record<string, Record<string, unknown>>
   }
@@ -37,8 +36,7 @@ function parseSpecYaml (yamlText: string): SpecEntry[] {
         : []
       const xoai = op['x-oaiMeta'] as { group?: string } | undefined
       const group = typeof xoai?.group === 'string' ? xoai.group : undefined
-      const operationId =
-        typeof op['operationId'] === 'string' ? op['operationId'] : undefined
+      const operationId = typeof op['operationId'] === 'string' ? op['operationId'] : undefined
       const deprecated = op['deprecated'] === true
       const entry: SpecEntry = {
         method: methodLower.toUpperCase() as HttpMethod,
@@ -59,7 +57,7 @@ function parseSpecYaml (yamlText: string): SpecEntry[] {
   })
 }
 
-async function fetchSpecLive (): Promise<{ yaml: string; source: string }> {
+async function fetchSpecLive(): Promise<{ yaml: string; source: string }> {
   mkdirSync(CACHE_DIR, { recursive: true })
   const headers: Record<string, string> = {}
   try {
@@ -86,10 +84,12 @@ async function fetchSpecLive (): Promise<{ yaml: string; source: string }> {
   return { yaml, source: SPEC_URL }
 }
 
-export async function parseSpec (options: {
-  offline?: boolean
-  specPath?: string
-} = {}): Promise<{ entries: SpecEntry[]; source: string }> {
+export async function parseSpec(
+  options: {
+    offline?: boolean
+    specPath?: string
+  } = {}
+): Promise<{ entries: SpecEntry[]; source: string }> {
   if (options.specPath) {
     const yaml = readFileSync(options.specPath, 'utf8')
     return {

@@ -56,16 +56,21 @@
     "directory": "packages/ai-sdk-provider"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ai-sdk-provider#readme",
+  "homepage": "https://qvac.tether.io",
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "tsc -p tsconfig.test.json",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "update-models": "tsx ./models/update-models/index.ts",
-    "test": "tsx --test test/*.test.ts",
-    "test:unit": "tsx --test test/*.test.ts"
+    "check": "npm run lint && npm run format && npm run typecheck",
+    "test:unit": "tsx --test test/*.test.ts",
+    "test:e2e": "npm run test:integration",
+    "test:integration": "tsx --test test/managed-integration.test.ts"
   },
   "peerDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",
@@ -82,6 +87,9 @@
     "@qvac/registry-client": "^0.5.0",
     "@types/node": "^24.2.1",
     "ai": "^6.0",
+    "lunte": "^1.8.2",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

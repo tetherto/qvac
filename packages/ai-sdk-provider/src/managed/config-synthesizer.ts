@@ -40,24 +40,26 @@ const KNOWN_MODEL_NAMES: ReadonlySet<string> = new Set(allModels.map((m) => m.na
 
 // A model name is valid if it is a generated SDK constant or a public catalog
 // id (which resolves to a constant). Anything else is rejected up front.
-function isKnownModelName (name: string): boolean {
+function isKnownModelName(name: string): boolean {
   return KNOWN_MODEL_NAMES.has(name) || isCatalogId(name)
 }
 
-function normalizeModel (input: ManagedModelInput): QvacManagedModel {
+function normalizeModel(input: ManagedModelInput): QvacManagedModel {
   return typeof input === 'string' ? { name: input } : input
 }
 
 // Resolve the alias names from a model list (used to key the serve aliases and
 // for diagnostics). Preserves order and duplicates.
-export function modelNames (models: readonly ManagedModelInput[]): string[] {
+export function modelNames(models: readonly ManagedModelInput[]): string[] {
   return models.map((m) => normalizeModel(m).name)
 }
 
 // Validates the requested model names against the generated catalog and builds
 // the `qvac.config.json` shape. Pure — no filesystem side effects — so it is
 // trivial to unit test the JSON it produces.
-export function synthesizeServeConfig (models: readonly ManagedModelInput[]): SynthesizedServeConfig {
+export function synthesizeServeConfig(
+  models: readonly ManagedModelInput[]
+): SynthesizedServeConfig {
   if (models.length === 0) {
     throw new UnknownManagedModelError([])
   }
@@ -116,14 +118,16 @@ export interface EphemeralConfig {
 // Writes the synthesized config to a private temp directory and returns the
 // path plus an idempotent cleanup. The directory is unique per supervisor so
 // concurrent managed providers never clobber each other's config.
-export async function writeEphemeralConfig (models: readonly ManagedModelInput[]): Promise<EphemeralConfig> {
+export async function writeEphemeralConfig(
+  models: readonly ManagedModelInput[]
+): Promise<EphemeralConfig> {
   const config = synthesizeServeConfig(models)
   const dir = await mkdtemp(join(tmpdir(), 'qvac-managed-'))
   const configPath = join(dir, 'qvac.config.json')
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
 
   let cleaned = false
-  async function cleanup () {
+  async function cleanup() {
     if (cleaned) return
     cleaned = true
     await rm(dir, { recursive: true, force: true })

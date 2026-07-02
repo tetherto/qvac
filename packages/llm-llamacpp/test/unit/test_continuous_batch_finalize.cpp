@@ -27,14 +27,17 @@ public:
 
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
   [[nodiscard]] int32_t getNSlides() const override { return 0; }
+  [[nodiscard]] bool supportsSliding() const override { return true; }
   void validatePromptPolicy(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const PromptLayout&, bool) const override {}
-  std::vector<llama_token> preparePrefill(
+  PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
-      bool, bool) override {
+      const std::vector<std::vector<uint8_t>>&,
+      const std::vector<PlannedMedia>&, bool, bool) override {
     return {};
   }
+  llama_pos evalMediaSegment(size_t, llama_pos pos) override { return pos; }
   void onPrefillComplete(llama_pos, size_t) override {}
   void syncPosition(llama_pos) override {}
   SequenceStepResult onLogitsReady(

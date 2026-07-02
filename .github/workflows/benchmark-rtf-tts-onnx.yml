@@ -291,9 +291,8 @@ jobs:
             console.log(lines.join('\n'));
           " >> $GITHUB_STEP_SUMMARY
 
-  # Self-hosted RTF + streaming benchmark matrix. Covers the CUDA gap and
-  # provides a stable CPU baseline free of GitHub-hosted noisy-neighbour
-  # effects.
+  # Self-hosted RTF + streaming benchmark matrix. Provides a stable CPU
+  # baseline free of GitHub-hosted noisy-neighbour effects.
   benchmarks-self-hosted:
     needs: [context, prebuild]
     if: ${{ needs.context.outputs.include_desktop != 'false' }}
@@ -317,14 +316,6 @@ jobs:
             device_label: ai-run-ubuntu-22.04 (stable-baseline)
             benchmark_matrix_json: >-
               [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
-          - os: ai-run-linux-gpu
-            variant: q4
-            platform: linux
-            arch: x64
-            os_version: cuda
-            device_label: ai-run-linux-gpu (cuda)
-            benchmark_matrix_json: >-
-              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-en","useGPU":true,"backendHint":"cuda"},{"engine":"chatterbox-multi","useGPU":true,"backendHint":"cuda"},{"engine":"supertonic","useGPU":true,"backendHint":"cuda"}]
 
     steps:
       - name: Setup Node.js
@@ -567,7 +558,6 @@ jobs:
           echo "| Backend | Coverage | How |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|----------|-----|" >> "$GITHUB_STEP_SUMMARY"
           echo "| cpu | linux x64/arm64, win32 x64 | GitHub-hosted + self-hosted runners |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| cuda | linux x64 | self-hosted ai-run-linux-gpu |" >> "$GITHUB_STEP_SUMMARY"
           echo "| directml | win32 x64 | windows-2022 |" >> "$GITHUB_STEP_SUMMARY"
           echo "| mobile cpu | Android / iOS flagships | AWS Device Farm, opt-in via \`include_mobile=true\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| coreml | not on CI (darwin runner hang) | drop JSON into packages/tts-onnx/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"

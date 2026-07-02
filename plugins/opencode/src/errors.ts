@@ -12,7 +12,7 @@ export type QvacOpencodePluginErrorCode =
 export class QvacOpencodePluginError extends Error {
   readonly code: QvacOpencodePluginErrorCode
 
-  constructor (code: QvacOpencodePluginErrorCode, message: string, options?: { cause?: unknown }) {
+  constructor(code: QvacOpencodePluginErrorCode, message: string, options?: { cause?: unknown }) {
     super(message, options)
     this.name = 'QvacOpencodePluginError'
     this.code = code
@@ -22,7 +22,7 @@ export class QvacOpencodePluginError extends Error {
 export class InvalidOptionError extends QvacOpencodePluginError {
   readonly option: string
 
-  constructor (option: string, message: string) {
+  constructor(option: string, message: string) {
     super('INVALID_OPTION', `Invalid \`${option}\` option for @qvac/opencode-plugin: ${message}`)
     this.name = 'InvalidOptionError'
     this.option = option
@@ -30,7 +30,7 @@ export class InvalidOptionError extends QvacOpencodePluginError {
 }
 
 export class HostSpawnFailedError extends QvacOpencodePluginError {
-  constructor (message: string, cause?: unknown) {
+  constructor(message: string, cause?: unknown) {
     super('HOST_SPAWN_FAILED', message, cause === undefined ? undefined : { cause })
     this.name = 'HostSpawnFailedError'
   }
@@ -39,15 +39,18 @@ export class HostSpawnFailedError extends QvacOpencodePluginError {
 export class HostExitedError extends QvacOpencodePluginError {
   readonly exitCode: number | null
 
-  constructor (exitCode: number | null) {
-    super('HOST_EXITED', `qvac serve host exited (code ${exitCode ?? 'null'}) before it began listening`)
+  constructor(exitCode: number | null) {
+    super(
+      'HOST_EXITED',
+      `qvac serve host exited (code ${exitCode ?? 'null'}) before it began listening`
+    )
     this.name = 'HostExitedError'
     this.exitCode = exitCode
   }
 }
 
 export class HostListenTimeoutError extends QvacOpencodePluginError {
-  constructor (timeoutMs: number) {
+  constructor(timeoutMs: number) {
     super(
       'HOST_LISTEN_TIMEOUT',
       `qvac serve host did not begin listening within ${timeoutMs}ms. ` +

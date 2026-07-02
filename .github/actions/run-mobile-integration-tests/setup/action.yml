@@ -50,6 +50,19 @@ inputs:
       pin a specific published version.
     required: false
     default: ""
+  allow-npm-fallback:
+    description: |
+      Whether the npm fallback (npm pack <addon>@<version>) is allowed when
+      no CI prebuild artifacts are present. Defaults to "false" so that
+      PR-triggered runs (pull_request / pull_request_target) NEVER silently
+      test the published release instead of the PR's own binaries — a missing
+      artifact hard-fails in the "Verify and prepare prebuilds" step instead.
+      Regardless of this input, the fallback is implicitly enabled for every
+      NON-PR event (workflow_dispatch, schedule, push/on-merge, benchmarks),
+      where testing a published package is the intended behaviour. Set to
+      "true" to force-enable the fallback in a PR context.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -112,8 +125,50 @@ runs:
         merge-multiple: true
       continue-on-error: true
 
-    - name: Download prebuilds (from npm — fallback when no artifacts found)
+    # Did the per-matrix `<prefix><platform>-*` artifacts populate prebuilds/?
+    # On a prebuild CACHE HIT the build matrix is skipped, so those per-matrix
+    # artifacts do not exist this run — only the merged `prebuilds` artifact
+    # (re-published by the cache-restore job) does. Detect that here so the
+    # next step can recover the real PR binaries from the merged artifact
+    # instead of letting the npm fallback silently pull the published release.
+    - name: Check whether per-matrix prebuilds were found
+      id: check_prebuilds
       if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      run: |
+        if [ -d prebuilds ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Fallback for the cache-hit path: pull the merged `prebuilds` artifact
+    # (well-known name produced by reusable-prebuilds.yml; contains every
+    # platform dir, including android-*/ios-*). This keeps mobile E2E running
+    # against the PR's own binaries on JS-only pushes instead of @latest from
+    # npm. No-op for addons / runs that never produced this artifact (e.g.
+    # genuine workflow_dispatch), where the npm fallback below still applies.
+    - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
+      if: inputs.skip-prebuilds != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: prebuilds
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+      continue-on-error: true
+
+    # npm fallback — DISABLED for PR-triggered runs.
+    # On a PR (pull_request / pull_request_target) the only acceptable
+    # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
+    # or the merged `prebuilds` artifact handled above). If neither is
+    # present the run must hard-fail in "Verify and prepare prebuilds"
+    # below rather than silently `npm pack`-ing the PUBLISHED release and
+    # going green against the wrong binaries. For every non-PR event
+    # (workflow_dispatch, schedule, push/on-merge, benchmarks) testing a
+    # published package is the intended behaviour, so the fallback stays on.
+    # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
+    - name: Download prebuilds (from npm — fallback when no artifacts found)
+      if: inputs.skip-prebuilds != 'true' && (inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:

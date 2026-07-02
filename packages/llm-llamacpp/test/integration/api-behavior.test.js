@@ -141,6 +141,32 @@ safeTest('idle | run batch: returns ids, keyed chunks, ordered results', { timeo
   t.ok(toNumber(response?.stats?.avgConcurrentSeq) > 1.1, 'batch stats report concurrent sequence decoding')
 })
 
+safeTest('idle | run batch: provided falsy runOptions are rejected, not silently defaulted', { timeout: 600_000 }, async t => {
+  // Every provided-but-invalid runOptions must throw the same TypeError as the
+  // single-prompt path, instead of being coerced to {} and bypassing
+  // validation. Only undefined (property absent) is allowed to default, and
+  // that path is already exercised by the batch tests above.
+  const { model } = await setupModel(t, { parallel: '2' })
+  const prompt = [{ role: 'user', content: 'Say red.' }]
+
+  const invalidCases = [
+    { label: 'null', value: null },
+    { label: 'false', value: false },
+    { label: '0', value: 0 },
+    { label: 'empty string', value: '' },
+    { label: 'NaN', value: NaN },
+    { label: 'array', value: [] }
+  ]
+
+  for (const { label, value } of invalidCases) {
+    await t.exception.all(
+      () => model.run([{ prompt, runOptions: value }]),
+      /Run options must be an object when provided/,
+      `batch item with runOptions: ${label} rejects`
+    )
+  }
+})
+
 safeTest('idle | run batch without parallel >= 2: rejects before admission', { timeout: 600_000 }, async t => {
   // Default load (parallel = 1) leaves continuous batching inactive, so batch
   // input must be rejected up front rather than reaching the worker thread.

@@ -1,62 +1,63 @@
 'use strict'
-// QVAC-19178: offline metric-tuning harness. Re-scores REAL model predictions (captured
-// from a CI run's [VLMROW] markers) with the current aggregate.js scorers, so the
-// quality metric can be fine-tuned without re-running inference. Run: node score-check.cjs
-const { score } = require('./aggregate.js')
+// Offline metric-tuning harness. Re-scores REAL model
+// predictions with the current scorers so the quality metrics (VQA % and the OCR
+// CER/WER/BLEU) can be tuned WITHOUT re-running inference. Run: node score-check.cjs
+//
+// Golds are read live from fixture.data.cjs (so they stay in sync with curation);
+// only the predictions are embedded — captured from a local Qwen3.5-0.8B run
+// (llama-server, reasoning off, GPU). Replace/extend PRED with predictions from any
+// run you want to tune against.
+const { score, ocrScore, OCR_METRICS } = require('./aggregate.js')
+const fixture = require('./fixture.data.cjs')
 
-// Real qwen3.5 predictions from run 27154438683 (base preset, 3 samples/task, addon/cpu).
-const DATA = {
-  textvqa: {
-    metric: 'vqa',
-    items: [
-      { gold: ['philippe molitor', 'philippe molitor', 'philippe molitor', 'philippe molitor', 'clardajne', 'phillipe molida', 'l', 'no', 'phillipe meltow', 'philippe molitar'], pred: 'Philippe Molitor' },
-      { gold: ['2010', '2010', '2010', '2010', '2010', '2010', '2010', '2010', 'unanswerable', '2010'], pred: '2010' },
-      { gold: ['50', ' 50', '50', '50', '50', '50', '50', '50', '50', '50'], pred: '50' }
-    ]
-  },
-  vizwiz: {
-    metric: 'vqa',
-    items: [
-      { gold: ['no text identifying identification on side card', 'yes', 'unanswerable', 'no', 'no', 'unanswerable', 'unanswerable', 'no', 'no', 'no'], pred: 'yes' },
-      { gold: ['every now then', 'every now then', 'every no then', 'every now then', 'every now then', 'every now then', 'every now then', 'every now then', 'every now then', 'every now then'], pred: 'The title is "Every Now and Then"' },
-      { gold: ['already booted', 'already booted', 'booted', 'already booted', 'already booted', 'no', 'already booted', 'yes booted', 'booted', 'already booted'], pred: 'Yes' }
-    ]
-  },
-  gqa: {
-    metric: 'vqa',
-    items: [
-      { gold: ['girl'], pred: 'Dhammika Heenpella' },
-      { gold: ['picture'], pred: 'chocolate' },
-      { gold: ['yes'], pred: 'No' }
-    ]
-  },
-  docvqa: {
-    metric: 'anls',
-    items: [
-      { gold: ['To'], pred: 'from' },
-      { gold: ['Address', 'ADDRESS'], pred: 'NAME' },
-      { gold: ['10 pounds'], pred: '10' }
-    ]
-  },
-  ai2d: {
-    metric: 'mc',
-    items: [
-      { gold: ['D'], pred: 'C' },
-      { gold: ['A'], pred: 'C' },
-      { gold: ['A'], pred: 'D' }
-    ]
-  }
+// Real predictions captured per fixture item id (a few per task).
+const PRED = {
+  textvqa_0: 'Philippe Molitor',
+  textvqa_1: '2010',
+  textvqa_2: '50',
+  vizwiz_0: 'no',
+  vizwiz_1: '1989',
+  vizwiz_2: 'yes',
+  gqa_0: 'woman',
+  gqa_1: 'chalkboard',
+  gqa_2: 'no',
+  docvqa_0: 'TO',
+  docvqa_1: 'NAME',
+  docvqa_2: '10',
+  ai2d_0: 'C',
+  ai2d_1: 'A',
+  ai2d_2: 'A',
+  'ocr-small_0': 'A bad workman always blames his tools.',
+  'ocr-small_1': 'HONESTY IS THE BEST POLICY.',
+  'ocr-small_2': 'What is done cannot be undone',
+  'ocr-page_0': 'Ezequiel Kilback\n93293 Cedar Road\nJedediahport, Kansas 01204-1201\n\nWells Fargo\n\nPAY TO THE ORDER OF\nWilderman and Sons',
+  'ocr-page_2': '| Attributes | P (%) | R (%) | F1 (%) |\n|---|---|---|---|\n| Frame Color | 63.16 | 48.00 | 54.55 |\n| Lenses Color | 64.29'
 }
+const byId = Object.fromEntries(fixture.items.map(it => [it.id, it]))
 
+// ── VQA-family tasks: graded % per item, mean per task ─────────────────────
 const pct = x => (100 * x).toFixed(1).padStart(6)
+const tasks = {}
+for (const id of Object.keys(PRED)) {
+  const it = byId[id]; if (!it || OCR_METRICS.has(it.metric)) continue
+  ;(tasks[it.task] = tasks[it.task] || { metric: it.metric, s: [] }).s.push(score(it.metric, PRED[id], it.gold))
+}
+console.log('VQA quality (graded % — higher better)')
+console.log('task     metric  per-item                 mean %')
+console.log('-----------------------------------------------------')
 let sum = 0; let n = 0
-console.log('task     metric  per-item scores            mean %')
-console.log('-------------------------------------------------------')
-for (const [task, { metric, items }] of Object.entries(DATA)) {
-  const s = items.map(it => score(metric, it.pred, it.gold))
-  const mean = s.reduce((a, b) => a + b, 0) / s.length
-  sum += mean; n++
+for (const [task, { metric, s }] of Object.entries(tasks)) {
+  const mean = s.reduce((a, b) => a + b, 0) / s.length; sum += mean; n++
   console.log(`${task.padEnd(8)} ${metric.padEnd(6)} [${s.map(x => x.toFixed(2)).join(', ')}]   ${pct(mean)}`)
 }
-console.log('-------------------------------------------------------')
-console.log(`Overall % (equal-weight mean across tasks):       ${pct(sum / n)}`)
+console.log(`Overall %% (equal-weight mean across VQA tasks):    ${pct(sum / n)}`)
+
+// ── OCR tasks: CER / WER ↓ lower better · BLEU ↑ higher better ─────────────
+console.log('\nOCR quality (CER ↓ / WER ↓ · BLEU ↑)')
+console.log('item            CER     WER    BLEU')
+console.log('-----------------------------------------------------')
+for (const id of Object.keys(PRED)) {
+  const it = byId[id]; if (!it || !OCR_METRICS.has(it.metric)) continue
+  const o = ocrScore(PRED[id], it.gold)
+  console.log(`${id.padEnd(14)} ${o.cer.toFixed(3)}  ${o.wer.toFixed(3)}  ${o.bleu.toFixed(3)}`)
+}

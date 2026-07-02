@@ -15,8 +15,8 @@ import {
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
@@ -69,6 +69,7 @@ import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js"
 import { BciExecutor } from "../shared/executors/node/bci-executor.js";
 import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
+import { DownloadResilienceExecutor } from "../shared/executors/node/download-resilience-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/node/delegated-inference-executor.js";
 import { NodeDiffusionExecutor } from "../shared/executors/node/diffusion-executor.js";
 import { FinetuneExecutor } from "../shared/executors/node/finetune-executor.js";
@@ -259,13 +260,13 @@ resources.define("afriquegemma", {
 
 
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "chatterbox",
     language: "en",
     useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
@@ -489,6 +490,9 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new BciExecutor(resources),
     new VisionExecutor(resources),
+    // Must precede DownloadExecutor — its /^download-/ pattern also matches
+    // download-resilience-*, and dispatch is first-match-wins.
+    new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
