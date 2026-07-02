@@ -22,7 +22,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Production (manual PR)](#production-manual-pr)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
-  - [Docs Release](#2-docs-release)
+  - [SDK release docs (local, skill-driven)](#2-sdk-release-docs-local-skill-driven)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
@@ -237,7 +237,7 @@ content/docs/
 - **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk. Each carries both `latest` (precise patch, e.g. `v0.11.3`) and `latestSeries` (e.g. `v0.11.x`). The selector labels and URLs use the series form; the precise patch only surfaces in titles / description ranges.
 - **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `API` and `Release notes` entries are flat single-page links; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles series switching via full-page reload.
 
-The single **Docs Release** workflow handles every SDK release branch (`release-sdk-*` with changes under `packages/sdk/changelog/**`). The `release-version.ts` dispatcher reads the version, picks minor (freeze outgoing → regenerate) for `X.Y.0` and patch (insert `## vX.Y.Z` section under the minor block — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
+SDK release docs are generated **locally** as part of the release prep, not by a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the `release-version.ts` dispatcher in the same working tree as the changelog, so both land in a single release PR. The dispatcher reads the version, picks minor (freeze outgoing → regenerate) for `X.Y.0` and patch (insert `## vX.Y.Z` section under the minor block — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
 
 ### Minor vs patch release behavior
 
@@ -302,25 +302,22 @@ With `main` + `docs-production`, every production deploy has a reviewable PR sho
 ### Staging (automatic)
 
 ```
-SDK release branch pushed (touches packages/sdk/changelog/**)
+SDK release prep: qv-sdk-changelog skill (Step 8) generates docs locally
     │
     ▼
-Docs Release workflow dispatches minor/patch and runs the orchestrator
+Generated docs committed in the SDK release PR (alongside the changelog)
     │
     ▼
-Workflow opens PR: docs/release-sdk-v<X.Y.Z> -> main
-    │
-    ▼
-Reviewer approves and merges to main
+Release PR (and its backmerge) merges to main
     │
     ▼
 Hosting provider detects new commit on main and rebuilds staging
 ```
 
-The push-to-`main` is mediated by a reviewable PR rather than a bot
-auto-commit — generated docs always land on `main` via
-`peter-evans/create-pull-request`. Any other push to `main` (docs
-content changes, merged PRs from contributors) still triggers the
+Generated docs ship inside the reviewable SDK release PR rather than via a
+separate auto-opened docs PR — so the API reference and release notes are
+reviewed together with the changelog that produced them. Any other push to
+`main` (docs content changes, merged PRs from contributors) still triggers the
 hosting provider's build the same way.
 
 ### Production (manual PR)
@@ -350,7 +347,7 @@ the docs PR Checks have passed on `main` before merging into
 
 ## CI Workflows
 
-Two GitHub Actions workflows automate the docs lifecycle:
+One GitHub Actions workflow validates docs PRs; SDK release docs are generated locally by a Cursor skill (no release workflow).
 
 ### 1. Docs Website PR Checks
 
@@ -366,40 +363,26 @@ Two GitHub Actions workflows automate the docs lifecycle:
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-The API summary `index.mdx` lives at `content/docs/reference/api/` and is committed to the repo (refreshed by the `Docs Release` workflow on SDK release pushes), so PR checkouts always have it on disk — no placeholder step is needed.
+The API summary `index.mdx` lives at `content/docs/reference/api/` and is committed to the repo (refreshed locally by the `qv-sdk-changelog` skill Step 8 during SDK release prep), so PR checkouts always have it on disk — no placeholder step is needed.
 
-### 2. Docs Release
+### 2. SDK release docs (local, skill-driven)
 
-**File:** `.github/workflows/docs-release.yml`
+**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.cursor/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
 
-**Triggers:**
-- Push to `release-sdk-*` branches that touch `packages/sdk/changelog/**`
-- Manual dispatch with a version input (`X.Y.Z` — minor when `Z == 0`, patch otherwise)
+**When:** while preparing an `@qvac/sdk` release (after the changelog / `CHANGELOG_LLM.md` is generated). Skipped for non-`sdk` packages.
 
 **What it does:**
-1. **`label-gate`** — authorises secret access via the shared label-gate composite action (PAT required).
-2. **`docs-release-setup` composite action** opens the dual checkout (closes a race window where a PR landing on `main` mid-pipeline could smuggle a not-yet-released function into the rendered API summary):
-   - `main-tree/` — `main` HEAD: docs scripts + commit target.
-   - `release-tree/` — frozen at `github.sha`: SDK source + package CHANGELOGs.
-   `SDK_PATH` and `CHANGELOG_REPO_ROOT` both point at `release-tree/`, so TypeDoc and the release-notes generator only see the released state. The action also installs Bun + deps and extracts the version.
-3. **Detects release kind** — a small inline step matches the version against `^[0-9]+\.[0-9]+\.0$` and exposes `kind=minor|patch` for downstream steps.
-4. Runs `release-version.ts <version> --force-extract`, which dispatches:
+1. Runs `release-version.ts <version> --force-extract` from `docs/website`, which dispatches:
    - **Minor (`X.Y.0`)** — full flow: freezes the outgoing `index.mdx` into a series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx`, generates the new API summary into `index.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes into `index.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block), refreshes `src/lib/versions.ts`.
    - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block of `index.mdx`) or `patch-archived` (older minor: insert the same section into the existing `v<X.Y>.x.mdx`, no rename). The API summary page is never touched by patches.
-5. Runs TSDoc audit in warning mode (non-fatal, **minor only**) and link validation tests (always).
-6. **Opens a PR** `docs/release-sdk-v<X.Y.Z>` against `main` via `peter-evans/create-pull-request`. `add-paths` restricts the commit to the generated surfaces only. The PR title carries `(minor)` or `(patch)` for human readers.
+2. Runs `npm run build` from `docs/website` to verify the site still compiles (fail-stop on error).
+3. Only the generated surfaces are committed — `content/docs/reference/api/**`, `content/docs/reference/release-notes/**`, and `src/lib/versions.ts`. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
 
-Once a reviewer merges the PR, the hosting provider's `main` build picks it up and deploys to staging.
+The dual-checkout race window the old CI workflow guarded against does not apply locally: the skill runs in the single release working tree after the changelog is generated, so the SDK source and CHANGELOGs are already the released state.
+
+Once the SDK release PR (and its backmerge) lands on `main`, the hosting provider's `main` build picks it up and deploys to staging.
 
 Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
-
-**Required secrets/variables:**
-
-| Name | Type | Purpose |
-|---|---|---|
-| `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to short-circuit the workflow if it pushed the trigger commit |
-| `DOCS_SYNC_PAT` | Secret (optional) | PAT used by `peter-evans/create-pull-request` to push the docs branch and have the PR trigger downstream workflow checks (falls back to `GITHUB_TOKEN`, in which case the PR is created but downstream PR checks won't fire) |
-| `PAT_TOKEN` | Secret (required) | PAT used by `label-gate` for team membership lookups |
 
 ---
 
@@ -409,7 +392,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 
 | Script | npm alias | Description |
 |---|---|---|
-| `release-version.ts` | `docs:release-version` | Unified release dispatcher: parses the version and forwards to the minor or patch orchestrator. Called by `docs-release.yml`. |
+| `release-version.ts` | `docs:release-version` | Unified release dispatcher: parses the version and forwards to the minor or patch orchestrator. Called by the `qv-sdk-changelog` skill (Step 8) during release prep. |
 | `release-version-minor.ts` | -- | Minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest from per-package `CHANGELOG_LLM.md` → refresh `versions.ts`. Importable from `release-version.ts`. |
 | `release-version-patch.ts` | -- | Patch (X.Y.Z, Z>=1) orchestrator: insert `## v<X.Y.Z>` after the existing minor block on the appropriate series page. Never touches the API summary. Importable from `release-version.ts`. |
 | `generate-api-docs.ts` | `docs:generate-api` | Renders one minor series' API summary MDX. `--title-only` rewrites only the frontmatter title (called from the minor freeze flow); `--target=<file>` overrides the output filename. |

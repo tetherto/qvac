@@ -6195,6 +6195,92 @@
     "notes": "Q4_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+    "description": "Parakeet EOU 120M v1 GGUF",
+    "quantization": "f16",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet TDT 0.6B v3 GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "tdt",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "description": "Parakeet Sortformer 4SPK v1 GGUF",
+    "quantization": "f16",
+    "params": "123M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
+  },
+  {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "OCR-specialized vision-language model for document understanding",

@@ -937,6 +937,64 @@ async function ensureMecabDict (options = {}) {
   return { success: false, dir: targetDir }
 }
 
+/**
+ * Ensure the LavaSR enhancer GGUF is staged, returning its path.
+ * Resolution order: $LAVASR_ENHANCER_GGUF, then models/lavasr/lavasr-enhancer.gguf
+ * (and a couple of fallbacks), then the QVAC registry.
+ *
+ * NOTE: publishing the LavaSR enhancer GGUF to the registry is a tracked
+ * follow-up (assigned to @ishanvohra2). Until then there is no registryPath, so
+ * this resolves only a locally-staged / env-pointed file. Convert one with
+ * scripts/convert-lavasr-enhancer-to-gguf.py from the public LavaSRcpp ONNX
+ * release. Pass the returned path to TTSGgml as files.lavasrEnhancer.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - preferred dir (default models/lavasr).
+ * @param {string} [options.registryPath] - override once the GGUF is published.
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string }>}
+ */
+async function ensureLavaSREnhancerGguf (options = {}) {
+  const fileName = 'lavasr-enhancer.gguf'
+  const baseDir = getBaseDir()
+  const requestedDir = options.targetDir || path.join(baseDir, 'models', 'lavasr')
+
+  const envPath = process.env && process.env.LAVASR_ENHANCER_GGUF
+  if (envPath && fs.existsSync(envPath)) {
+    console.log(` ✓ using LavaSR enhancer GGUF at ${envPath} (LAVASR_ENHANCER_GGUF)`)
+    return { success: true, path: envPath, targetDir: path.dirname(envPath) }
+  }
+
+  const candidates = [
+    path.join(requestedDir, fileName),
+    path.join(baseDir, 'models', 'lavasr', fileName),
+    path.join(baseDir, 'models', fileName)
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      console.log(` ✓ using LavaSR enhancer GGUF at ${p}`)
+      return { success: true, path: p, targetDir: path.dirname(p) }
+    }
+  }
+
+  // Registry fetch (once the GGUF is published — see note above).
+  const gguf = options.registryPath
+    ? { name: fileName, registryPath: options.registryPath, registrySource: options.registrySource || 's3' }
+    : null
+  if (gguf && typeof tryFetchGgufsFromRegistry === 'function') {
+    if (await tryFetchGgufsFromRegistry([gguf], requestedDir)) {
+      return { success: true, path: path.join(requestedDir, fileName), targetDir: requestedDir }
+    }
+  }
+
+  console.log(' LavaSR enhancer GGUF not staged (and no registry mapping yet).')
+  console.log(' Convert it from the public LavaSRcpp ONNX release:')
+  console.log('   python scripts/convert-lavasr-enhancer-to-gguf.py \\')
+  console.log('     --backbone enhancer_backbone.onnx --spec-head enhancer_spec_head.onnx \\')
+  console.log(`     --out ${path.join(requestedDir, fileName)} --ftype f16`)
+  console.log(' or set LAVASR_ENHANCER_GGUF to its path.')
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
 module.exports = {
   ensureFileDownloaded,
   ensureWhisperModel,
@@ -945,5 +1003,6 @@ module.exports = {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
-  ensureMecabDict
+  ensureMecabDict,
+  ensureLavaSREnhancerGguf
 }
