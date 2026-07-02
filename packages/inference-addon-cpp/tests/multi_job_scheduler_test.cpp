@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -149,6 +150,48 @@ public:
   }
 };
 
+/// ConcurrentTestModel that additionally implements IModelJobStats, so the
+/// jobEnded tests can assert the output queue appends per-job observed stats
+/// to a tagged job's terminal snapshot. Kept out of the base model: only the
+/// per-job stats tests need it.
+class JobStatsTestModel final : public ConcurrentTestModel,
+                                public model::IModelJobStats {
+  mutable std::mutex statsMtx_;
+  mutable std::vector<JobId> consumedIds_;
+  std::unordered_set<JobId> knownIds_;
+
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  /// Make consumeJobStats(id) return a non-empty per-job snapshot.
+  void addJobStats(JobId id) {
+    std::lock_guard lock(statsMtx_);
+    knownIds_.insert(id);
+  }
+
+  RuntimeStats consumeJobStats(JobId id) const override {
+    std::lock_guard lock(statsMtx_);
+    consumedIds_.push_back(id);
+    if (knownIds_.count(id) == 0) {
+      return RuntimeStats{};
+    }
+    // The job's complete terminal snapshot: model-level entry plus the job's
+    // own figure under the shared key name.
+    return RuntimeStats{{"globalStat", int64_t{1}}, {"TPS", 42.0}};
+  }
+
+  std::vector<JobId> consumedIds() const {
+    std::lock_guard lock(statsMtx_);
+    return consumedIds_;
+  }
+
+  /// Global snapshot with an aggregate-only marker and a key the per-job
+  /// entries collide with.
+  RuntimeStats runtimeStats() const override {
+    return RuntimeStats{{"globalStat", int64_t{1}}, {"TPS", 1.0}};
+  }
+};
+
 /// Blocks until @p target jobs are concurrently active or the timeout lapses,
 /// returning the active count observed at exit.
 int waitForActive(const ConcurrentTestModel& model, int target,
@@ -190,6 +233,18 @@ protected:
     auto tracking = std::make_unique<StartTrackingTestModel>(processTime);
     StartTrackingTestModel* raw = tracking.get();
     model_ = std::move(tracking);
+    wire(maxConcurrency, queueCapacity);
+    return raw;
+  }
+
+  /// buildWithQueue with a JobStatsTestModel instead; returns it (non-owning)
+  /// so the test can seed and query per-job stats.
+  JobStatsTestModel* buildJobStatsWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      std::chrono::milliseconds processTime) {
+    auto stats = std::make_unique<JobStatsTestModel>(processTime);
+    JobStatsTestModel* raw = stats.get();
+    model_ = std::move(stats);
     wire(maxConcurrency, queueCapacity);
     return raw;
   }
@@ -553,6 +608,85 @@ TEST_F(MultiJobSchedulerTest, DestructorFailsQueuedJobs) {
   EXPECT_FALSE(tracking->started(2));
   EXPECT_EQ(erroredIds(outputQueue_->clear()).count(2), 1u)
       << "a queued job dropped at teardown must surface a terminal error";
+}
+
+namespace {
+
+/// The RuntimeStats snapshot queued as @p id's jobEnded event, or nullopt when
+/// the drained outputs carry none.
+std::optional<RuntimeStats> jobEndedStatsFor(
+    const std::vector<std::pair<JobId, std::any>>& outputs, JobId id) {
+  for (const auto& [outputId, payload] : outputs) {
+    if (outputId == id && payload.type() == typeid(RuntimeStats)) {
+      return std::any_cast<RuntimeStats>(payload);
+    }
+  }
+  return std::nullopt;
+}
+
+bool hasStatKey(const RuntimeStats& stats, const std::string& key) {
+  return std::any_of(stats.begin(), stats.end(), [&key](const auto& entry) {
+    return entry.first == key;
+  });
+}
+
+size_t countStatKey(const RuntimeStats& stats, const std::string& key) {
+  return static_cast<size_t>(
+      std::count_if(stats.begin(), stats.end(), [&key](const auto& entry) {
+        return entry.first == key;
+      }));
+}
+
+double statValue(const RuntimeStats& stats, const std::string& key) {
+  for (const auto& [name, value] : stats) {
+    if (name == key) {
+      return std::holds_alternative<double>(value)
+                 ? std::get<double>(value)
+                 : static_cast<double>(std::get<int64_t>(value));
+    }
+  }
+  return -1.0;
+}
+
+} // namespace
+
+// (l) Per-job stats: a tagged job's jobEnded payload IS the model's per-job
+// snapshot (IModelJobStats), consumed exactly once under that job's id — the
+// generic whole-model snapshot is not queried at all.
+TEST_F(MultiJobSchedulerTest, TaggedJobEndedUsesPerJobStats) {
+  JobStatsTestModel* stats =
+      buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
+  stats->addJobStats(5);
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 5));
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+
+  const auto snapshot = jobEndedStatsFor(outputQueue_->clear(), 5);
+  ASSERT_TRUE(snapshot.has_value()) << "job 5 must end with a stats snapshot";
+  EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"))
+      << "the per-job snapshot's model-level entries come through";
+  EXPECT_EQ(countStatKey(*snapshot, "TPS"), 1u);
+  EXPECT_DOUBLE_EQ(statValue(*snapshot, "TPS"), 42.0)
+      << "the payload must be the job's own snapshot, not the generic one";
+  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{5})
+      << "per-job stats must be consumed exactly once, under the job's id";
+}
+
+// (m) Per-job stats unknown to the model: the tagged jobEnded falls back to
+// the generic whole-model snapshot.
+TEST_F(MultiJobSchedulerTest, UnknownPerJobStatsFallBackToGenericSnapshot) {
+  JobStatsTestModel* stats =
+      buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 6));
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+
+  const auto snapshot = jobEndedStatsFor(outputQueue_->clear(), 6);
+  ASSERT_TRUE(snapshot.has_value()) << "job 6 must end with a stats snapshot";
+  EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"));
+  EXPECT_DOUBLE_EQ(statValue(*snapshot, "TPS"), 1.0)
+      << "with no per-job stats the aggregate values must stay untouched";
+  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{6});
 }
 
 } // namespace qvac_lib_inference_addon_cpp

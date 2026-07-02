@@ -33,6 +33,9 @@ class OutputQueue {
   std::vector<std::pair<JobId, std::any>> outputQueue_;
 
   const model::IModel& model_;
+  /// Non-null when the model reports per-job observed stats; discovered from
+  /// the model itself so no construction site changes.
+  const model::IModelJobStats* const jobStats_;
   OutputCallBackInterface& outputCallback_;
 
   void queueOutput(std::any&& output, JobId id) {
@@ -44,7 +47,9 @@ class OutputQueue {
 public:
   explicit OutputQueue(
       OutputCallBackInterface& outputCallback, const model::IModel& model)
-      : model_(model), outputCallback_(outputCallback) {}
+      : model_(model),
+        jobStats_(dynamic_cast<const model::IModelJobStats*>(&model)),
+        outputCallback_(outputCallback) {}
 
   ~OutputQueue() = default;
 
@@ -56,10 +61,27 @@ public:
     return result;
   }
 
-  /// Terminal event for a completed job. @p id routes the event; the payload is
-  /// a whole-model runtimeStats() snapshot (see IModel::runtimeStats), not this
-  /// job's private stats — under batching it aggregates across concurrent jobs.
+  /// Terminal event for a completed job. @p id routes the event. A tagged job
+  /// on a model implementing IModelJobStats gets its own snapshot as the
+  /// payload (empty answer -> generic snapshot, the model's way of saying this
+  /// job has no per-job figures). A tagged job on a model WITHOUT the
+  /// interface falls back to the generic whole-model runtimeStats() snapshot
+  /// with a warning. Untagged (kNoJobId) jobs use the generic snapshot by
+  /// default, silently.
   void queueJobEnded(JobId id = kNoJobId) {
+    if (id != kNoJobId) {
+      if (jobStats_ != nullptr) {
+        RuntimeStats jobStats = jobStats_->consumeJobStats(id);
+        if (!jobStats.empty()) {
+          queueOutput(std::move(jobStats), id);
+          return;
+        }
+      } else {
+        QLOG(logger::Priority::WARNING,
+            "Model has no per-job stats (IModelJobStats); using the "
+            "whole-model snapshot for a tagged job");
+      }
+    }
     queueOutput(model_.runtimeStats(), id);
   }
 

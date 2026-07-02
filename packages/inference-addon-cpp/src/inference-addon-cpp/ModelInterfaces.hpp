@@ -64,9 +64,29 @@ struct IModelMultiprocessor {
 
   virtual std::any process(const std::any& input, JobId id) = 0;
 
-  // No per-job runtimeStats(id) yet. There has not been a strong need for it.
-  // For example, on LLM, batched jobs report aggregated stats such as avg.
-  // decode speed.
+  // Whole-model runtimeStats() stays an aggregate (see IModel::runtimeStats);
+  // a model can additionally implement IModelJobStats to report per-job
+  // observed figures on a tagged job's terminal snapshot.
+};
+
+/// Per-job runtime stats: the complete terminal snapshot for one finished
+/// job, under the same key names as IModel::runtimeStats(), with the job's
+/// own observed end-to-end figures (e.g. time to first token, observed decode
+/// speed, token counts) where per-job values exist and model-level values for
+/// the rest. The output queue uses this as a tagged job's jobEnded payload
+/// instead of the generic whole-model snapshot.
+///
+/// Take-once semantics: a call hands over and erases the entry for @p id;
+/// unknown ids return an empty snapshot (the queue then falls back to the
+/// generic snapshot). Called from scheduler worker threads, so
+/// implementations must synchronize internally.
+struct IModelJobStats {
+  virtual ~IModelJobStats() = default;
+  IModelJobStats() = default;
+  IModelJobStats(const IModelJobStats&) = delete;
+  IModelJobStats& operator=(const IModelJobStats&) = delete;
+
+  [[nodiscard]] virtual RuntimeStats consumeJobStats(JobId id) const = 0;
 };
 
 /// Per-job cancellation: cancel just the in-flight call admitted under @p id.
