@@ -50,7 +50,8 @@ class LlamaModel : public IModel,
                    public IModelAsyncLoad,
                    public IModelCancel,
                    public IModelMultiprocessor,
-                   public IModelCancelById {
+                   public IModelCancelById,
+                   public IModelJobStats {
 public:
   LlamaModel(const LlamaModel&) = delete;
   LlamaModel& operator=(const LlamaModel&) = delete;
@@ -146,6 +147,16 @@ public:
   /// slot. No-op when @p id is unknown (already finished or never admitted).
   void cancelById(qvac_lib_inference_addon_cpp::JobId id) const final;
 
+  /// The complete terminal snapshot for a finished concurrent run (see
+  /// IModelJobStats), used as the tagged jobEnded payload: the whole-model
+  /// snapshot with the job's own observed figures in place of `TTFT`
+  /// (enqueue -> first token, ms), `TPS` (observed generation rate),
+  /// `generatedTokens` and `promptTokens`. For a tagged group run these are
+  /// the group aggregates (rates averaged, counts summed). Take-once: hands
+  /// over and erases the entry; unknown ids yield an empty snapshot.
+  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
+  consumeJobStats(qvac_lib_inference_addon_cpp::JobId id) const final;
+
   std::string processPrompt(const Prompt& prompt);
 
   /// Run several prompts in parallel via the continuous-batching session
@@ -234,7 +245,7 @@ private:
   /// order, the first time that slot streams. Lets the concurrent path bind a
   /// job id to its slot without the single-prompt batch callers paying for it.
   using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
-  std::vector<std::string> processPromptBatchImpl(
+  batching::BatchResult processPromptBatchImpl(
       const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned = {},
       const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
@@ -249,6 +260,13 @@ private:
   /// `cancelById` can target this job. Reuses processPromptBatchImpl machinery.
   std::string processConcurrent(
       const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id);
+
+  /// Tagged group run (a runBatched call admitted as one multi-job): runs the
+  /// prompts through the scheduler and leaves group-level observed figures
+  /// behind for consumeJobStats (rates averaged, counts summed).
+  std::vector<std::string> processConcurrentBatch(
+      const std::vector<Prompt>& prompts,
+      qvac_lib_inference_addon_cpp::JobId id);
 
   /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
   /// (single source of truth across all in-flight / queued batch work).
@@ -405,6 +423,16 @@ private:
   mutable std::mutex jobSeqMtx_;
   mutable std::unordered_map<qvac_lib_inference_addon_cpp::JobId, uint32_t>
       jobToSeq_;
+
+  /// Observed stats a finished concurrent job leaves behind for
+  /// consumeJobStats(). Guarded by `jobStatsMtx_`. Bounded by the job
+  /// lifecycle: written only when the job's run returns, consumed (erased) by
+  /// the output queue's jobEnded event right after; a throwing job writes
+  /// nothing.
+  mutable std::mutex jobStatsMtx_;
+  mutable std::unordered_map<
+      qvac_lib_inference_addon_cpp::JobId, batching::ObservedRequestStats>
+      jobStats_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();

@@ -353,8 +353,14 @@ export interface RuntimeStats {
    */
   thinkingBlockDiscards: number
   /**
-   * Average active sequences decoded together during the last request,
-   * including overlapping requests from other callers.
+   * How busy the shared backend was, not a property of your request: the
+   * mean number of sequences decoded together per engine step, including
+   * overlapping requests from other callers (capped by the `parallel`
+   * configuration). 1.0 = the model was effectively yours alone; ~N = your
+   * tokens shared compute with N-1 others, so this request's observed `TPS`
+   * is roughly the backend's aggregate rate divided by N. Even on a single
+   * request it tells apart "slow model" from "busy backend". Always
+   * model-level — never per-job.
    */
   avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'

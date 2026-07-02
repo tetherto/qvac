@@ -595,6 +595,13 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto inputsArray = js::Array{env, args.get(1, "inputsArray")};
+
+  // Streamed output is tagged with the minted id and the id is handed back in
+  // the result — for a batch too, so several batch groups can be in flight and
+  // each routes its terminal events (result, jobEnded stats) to its own
+  // response.
+  const JobId jobId = mintJobId();
+
   const bool isBatch = inputsArray.size(env) > 0 &&
                        inputsArray.get<js::Object>(env, 0)
                            .getOptionalProperty<js::Array>(env, "messages")
@@ -608,23 +615,19 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           "Batch run() requires the model loaded with parallel >= 2 "
           "(continuous batching, text-only model with n_seq_max > 1)");
     }
-    // Static to recycle vector capacity across calls; safe only while
-    // admissions stay serialized (one batch in flight). Demote to a local
-    // if that changes.
-    static JsBatchIds batchIds;
+    // Local: several batch admissions may now overlap, each with its own ids.
+    JsBatchIds batchIds;
     batchIds.reset(inputsArray.size(env));
     auto prompts = parseBatchInputs(env, instance, inputsArray, batchIds);
-    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)));
+    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)), jobId);
 
     js::Object result = js::Object::create(env);
     result.setProperty(env, "accepted", acceptedJs);
     result.setProperty(env, "ids", batchIds.toJsArray(env));
+    result.setProperty(
+        env, "id", js::Number::create(env, static_cast<double>(jobId)));
     return result;
   }
-
-  // Streamed output is tagged with the minted id and the id is handed back in
-  // the result, mirroring how batch ids are assigned above.
-  const JobId jobId = mintJobId();
 
   vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
   LlamaModel::Prompt prompt = parsePromptInputs(

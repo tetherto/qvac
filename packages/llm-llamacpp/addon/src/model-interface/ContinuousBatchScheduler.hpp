@@ -64,6 +64,31 @@ namespace qvac_lib_inference_addon_llama::batching {
     unsigned promptSize, unsigned promptKvSize, int nPredict,
     unsigned perSeqMaxTokens);
 
+/// Observed end-to-end figures for one finished request, computed from its
+/// wall-clock stamps at drain. This is what the submitting caller experienced
+/// (queue wait + shared-GPU decode) — NOT the request's isolated compute
+/// speed, which is unmeasurable under fused batch decode.
+struct ObservedRequestStats {
+  /// Enqueue -> first sampled token, ms. 0 when no token was ever sampled.
+  double ttftMs = 0.0;
+  /// Observed generation rate: (generatedTokens - 1) inter-token gaps over
+  /// firstTokenAt -> lastTokenAt, tok/s. 0 with fewer than two tokens.
+  double genTps = 0.0;
+  int64_t generatedTokens = 0;
+  int64_t promptTokens = 0;
+};
+
+/// Compute a request's observed stats from its stamps. @p enqueuedAt is when
+/// the caller handed the request to the scheduler (queue wait included).
+[[nodiscard]] ObservedRequestStats computeObservedStats(
+    std::chrono::steady_clock::time_point enqueuedAt, const Request& req);
+
+/// Group-level view of one submitted batch: TTFT and rate average across the
+/// requests that actually produced them (a request that never sampled a token
+/// does not drag the averages down), token counts sum over all.
+[[nodiscard]] ObservedRequestStats
+aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
+
 /// Per-request streaming sinks. Both are optional; missing callbacks
 /// are no-ops.
 struct StreamCallbacks {
@@ -98,6 +123,10 @@ struct SubmitRequest {
   /// are rejected at admission rather than silently truncated.
   GenerationParams overrides;
   StreamCallbacks streams;
+  /// When the caller built this request — the start of the observed timeline
+  /// (ObservedRequestStats.ttftMs counts queue wait from here).
+  std::chrono::steady_clock::time_point enqueuedAt =
+      std::chrono::steady_clock::now();
 };
 
 using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
@@ -140,6 +169,17 @@ struct RuntimeStatsSnapshot {
       int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
       const Request& req);
 
+  /// How busy the shared backend was, NOT a property of any one request: the
+  /// mean number of sequences decoded together, averaged over every
+  /// `llama_decode` step of the epoch (`concurrentSeqSum_ / decodeStepCount_`).
+  /// A request contributes at most 1; the rest is other traffic on the same
+  /// backend, capped by its configuration (`parallel`). 1.0 = the model was
+  /// effectively yours alone; ~N = your tokens shared compute with N-1 others,
+  /// so a request's observed `TPS` is roughly the aggregate rate divided by N
+  /// (`observed TPS * avgConcurrentSeq ~= aggregate TPS`). Useful even on a
+  /// single request: it tells apart "slow model" from "busy backend". Always
+  /// reported model-level, never overridden per job. See
+  /// docs/continuous-batching.md ("Stats").
   [[nodiscard]] double avgConcurrentSeq() const;
   [[nodiscard]] double elapsedMs() const;
 
@@ -171,6 +211,8 @@ private:
 struct BatchResult {
   std::vector<std::string> outputs;
   RuntimeStatsSnapshot stats;
+  /// Per-request observed figures, in input order (parallel to `outputs`).
+  std::vector<ObservedRequestStats> requestStats;
 };
 
 /// Builds the per-slot `SequenceDriver` at admission time. The model layer
@@ -322,9 +364,11 @@ private:
   };
 
   struct BatchGroup {
-    explicit BatchGroup(size_t requestCount) : outputs(requestCount) {}
+    explicit BatchGroup(size_t requestCount)
+        : outputs(requestCount), requestStats(requestCount) {}
 
     std::vector<std::string> outputs;
+    std::vector<ObservedRequestStats> requestStats;
     RuntimeStatsSnapshot stats;
     size_t completedCount = 0;
     size_t totalCount = 0;
@@ -348,6 +392,8 @@ private:
     bool saveCacheToDisk = false;
     bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
+    /// Carried from SubmitRequest so the drain can compute observed stats.
+    std::chrono::steady_clock::time_point enqueuedAt{};
   };
 
   void ensureWorkerStartedLocked();

@@ -763,7 +763,7 @@ std::any LlamaModel::process(const std::any& input) {
   }
   if (input.type() == typeid(std::vector<Prompt>)) {
     const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
-    return {processPromptBatchImpl(prompts)};
+    return {processPromptBatchImpl(prompts).outputs};
   }
   validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
@@ -799,12 +799,13 @@ bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
 
 std::any LlamaModel::process(
     const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
-  if (id == qvac_lib_inference_addon_cpp::kNoJobId ||
-      input.type() != typeid(Prompt)) {
+  const bool isSingle = input.type() == typeid(Prompt);
+  const bool isBatch = input.type() == typeid(std::vector<Prompt>);
+  if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
     return process(input);
   }
-  const auto& prompt = std::any_cast<const Prompt&>(input);
-  if (!isConcurrentEligible(prompt)) {
+  if (isSingle &&
+      !isConcurrentEligible(std::any_cast<const Prompt&>(input))) {
     return process(input);
   }
   std::shared_lock lock(stateMtx_);
@@ -812,7 +813,25 @@ std::any LlamaModel::process(
     lock.unlock();
     return process(input);
   }
-  return {processConcurrent(prompt, id)};
+  if (isBatch) {
+    return {processConcurrentBatch(
+        std::any_cast<const std::vector<Prompt>&>(input), id)};
+  }
+  return {processConcurrent(std::any_cast<const Prompt&>(input), id)};
+}
+
+std::vector<std::string> LlamaModel::processConcurrentBatch(
+    const std::vector<Prompt>& prompts,
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  batching::BatchResult result = processPromptBatchImpl(prompts);
+  // Leave the group-level observed figures behind for the tagged jobEnded
+  // event: TTFT/TPS averaged over the group's requests that produced them,
+  // token counts summed (see aggregateObservedStats).
+  if (!result.requestStats.empty()) {
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = batching::aggregateObservedStats(result.requestStats);
+  }
+  return std::move(result.outputs);
 }
 
 std::string LlamaModel::processConcurrent(
@@ -839,9 +858,48 @@ std::string LlamaModel::processConcurrent(
   };
 
   const std::vector<Prompt> singleBatch{prompt};
-  std::vector<std::string> outputs =
+  batching::BatchResult result =
       processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone);
-  return outputs.empty() ? std::string{} : std::move(outputs.front());
+  // Leave the job's observed figures behind for the tagged jobEnded event
+  // (consumeJobStats), queued right after this returns. A throwing job never
+  // gets a jobEnded, so nothing is stored on that path.
+  if (!result.requestStats.empty()) {
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = result.requestStats.front();
+  }
+  return result.outputs.empty() ? std::string{}
+                                : std::move(result.outputs.front());
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  batching::ObservedRequestStats observed;
+  {
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    const auto found = jobStats_.find(id);
+    if (found == jobStats_.end()) {
+      return {};
+    }
+    observed = found->second;
+    jobStats_.erase(found);
+  }
+  // The job's complete terminal snapshot: the whole-model snapshot with the
+  // job's own observed figures in place of the aggregate values, under the
+  // key names the consumer already knows. Everything else (ppTPS,
+  // avgConcurrentSeq, backendDevice, ...) stays model-level.
+  qvac_lib_inference_addon_cpp::RuntimeStats stats = runtimeStats();
+  for (auto& [key, value] : stats) {
+    if (key == "TTFT") {
+      value = observed.ttftMs;
+    } else if (key == "TPS") {
+      value = observed.genTps;
+    } else if (key == "generatedTokens") {
+      value = observed.generatedTokens;
+    } else if (key == "promptTokens") {
+      value = observed.promptTokens;
+    }
+  }
+  return stats;
 }
 
 void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
@@ -1059,7 +1117,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 std::vector<std::string>
 LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
   std::shared_lock lock(stateMtx_);
-  return processPromptBatchImpl(prompts);
+  return processPromptBatchImpl(prompts).outputs;
 }
 
 bool LlamaModel::supportsBatching() const {
@@ -1067,7 +1125,7 @@ bool LlamaModel::supportsBatching() const {
   return state_ && isMultiBatchActivated(*state_);
 }
 
-std::vector<std::string> LlamaModel::processPromptBatchImpl(
+batching::BatchResult LlamaModel::processPromptBatchImpl(
     const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned,
     const SeqObserver& onSeqDone) {
   // `onSeqAssigned` (optional) fires once per request when the scheduler
@@ -1197,9 +1255,7 @@ std::vector<std::string> LlamaModel::processPromptBatchImpl(
     requests.push_back(std::move(sr));
   }
 
-  batching::BatchResult result = scheduler.processBatch(std::move(requests));
-
-  return result.outputs;
+  return scheduler.processBatch(std::move(requests));
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
