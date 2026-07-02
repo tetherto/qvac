@@ -104,7 +104,7 @@ The OpenClaw plugin config uses the **catalog id without the `qvac/` prefix**. O
 | Plugin config | `<catalog-id>` | `qwen3.5-4b` |
 | OpenClaw model name | `qvac/<catalog-id>` | `qvac/qwen3.5-4b` |
 
-The first plugin release exposes these catalog ids:
+The OpenClaw plugin model picker shows the friendly ids that are published in QVAC's provider catalog:
 
 | Catalog id | Use it for |
 | --- | --- |
@@ -112,6 +112,8 @@ The first plugin release exposes these catalog ids:
 | `qwen3.5-4b` | Smaller machines and lighter prompts. |
 | `qwen3.5-2b` | Smoke tests or very constrained machines. |
 | `qwen3.5-0.8b` | Connectivity checks only; not recommended for agent work. |
+
+QVAC supports more SDK model constants than the friendly plugin catalog lists, including GPT-OSS and Gemma4 models. Use the manual HTTP-server path below when you want to run one of those constants directly.
 
 To switch models, update `plugins.entries.qvac.config.model`, then run OpenClaw onboarding again so it rewrites the provider defaults:
 
@@ -143,6 +145,44 @@ Advanced plugin options use camelCase because they configure the plugin, not `qv
 | `port` | Local HTTP server port. | `11434` |
 
 If you need a model that is not in the OpenClaw plugin catalog yet, use the manual HTTP-server path below. In that path, `qvac.config.json` can expose any supported SDK model constant under the alias you choose, and OpenClaw points at that alias through a custom OpenAI-compatible provider.
+
+Common raw SDK constants for larger local agent work include:
+
+| SDK constant | Suggested alias | Notes |
+| --- | --- | --- |
+| `GPT_OSS_20B_INST_Q4_K_M` | `gpt-oss-20b` | Larger local text/code model with Harmony tool-call support. |
+| `GEMMA4_31B_MULTIMODAL_Q4_K_M` | `gemma4-31b` | Larger Gemma4 model; needs a machine with enough memory. |
+| `GEMMA4_2B_MULTIMODAL_Q4_K_M` | `gemma4-2b` | Smaller Gemma4 model; useful for testing Gemma4 behavior. |
+
+For those models, the model format changes by layer:
+
+| Layer | Format | Example |
+| --- | --- | --- |
+| QVAC serve config value | SDK constant | `GPT_OSS_20B_INST_Q4_K_M` |
+| QVAC serve alias | Your chosen alias | `gpt-oss-20b` |
+| OpenClaw model name | `qvac/<alias>` | `qvac/gpt-oss-20b` |
+
+For example:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "gpt-oss-20b": {
+        "model": "GPT_OSS_20B_INST_Q4_K_M",
+        "preload": true,
+        "config": {
+          "ctx_size": 32768,
+          "reasoning_budget": 0,
+          "tools": true
+        }
+      }
+    }
+  }
+}
+```
+
+Start `qvac serve openai` with that config, register an OpenClaw custom provider whose model id is `gpt-oss-20b`, and select `qvac/gpt-oss-20b` in OpenClaw. The raw SDK constant belongs in `qvac.config.json`; the OpenClaw-facing model name should use the alias.
 
 ## Compatible tools
 
