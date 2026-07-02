@@ -549,15 +549,13 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // back to the single-job route when no batch scheduler is active), while
   // parallel >= 2 admits that many concurrent jobs. Raw model pointers stay
   // valid: AddonCpp owns the model for the scheduler's whole lifetime.
-  // Nearly unbounded waiting room so rejectWhenBusy:false callers are queued,
-  // not rejected; the cap only guards against a runaway producer.
-  const unsigned queueCapacity = MultiJobScheduler::DEFAULT_MAX_CAPACITY;
+  // The default queueCapacity gives a nearly unbounded waiting room, so
+  // rejectWhenBusy:false callers are queued, not rejected.
   auto scheduler = make_unique<MultiJobScheduler>(
       dynamic_cast<model::IModelMultiprocessor*>(model.get()),
       maxConcurrency,
       dynamic_cast<model::IModelCancel*>(model.get()),
-      dynamic_cast<model::IModelCancelById*>(model.get()),
-      queueCapacity);
+      dynamic_cast<model::IModelCancelById*>(model.get()));
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
