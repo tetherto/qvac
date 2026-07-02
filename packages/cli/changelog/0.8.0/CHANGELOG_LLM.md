@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.8.0
 
-This release brings the OpenAI-compatible server up to `@qvac/sdk` 0.14.0 and adds vision input plus two reasoning-control knobs to `/v1/chat/completions`. Installing this version is how OpenCode, the AI SDK provider, and direct `qvac serve` users pick up the SDK 0.14.0 runtime.
+This release brings the OpenAI-compatible server up to `@qvac/sdk` 0.14.1 and adds vision input plus two reasoning-control knobs to `/v1/chat/completions`. Installing this version is how OpenCode, the AI SDK provider, and direct `qvac serve` users pick up the SDK 0.14.1 runtime.
 
 ## New APIs
 
@@ -51,4 +51,4 @@ Gemma4 completion draining is hardened so requests that cap reasoning (for examp
 
 ## Other Changes
 
-The CLI's committed `@qvac/sdk` dependency now targets `^0.14.0`. Documentation gained an OpenCode plugin model-selection guide and an agent-stack test-ownership map, and the e2e suite was migrated from BATS to a `node:test` suite with added coverage for OpenAI chat-agent request shapes.
+The CLI's committed `@qvac/sdk` dependency now targets `^0.14.1`. Documentation gained an OpenCode plugin model-selection guide and an agent-stack test-ownership map, and the e2e suite was migrated from BATS to a `node:test` suite with added coverage for OpenAI chat-agent request shapes.
