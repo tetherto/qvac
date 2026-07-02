@@ -243,3 +243,68 @@ test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset (QVAC-19
   const defaulted = new TTSGgml({ files, config: { language: 'en' } })
   t.absent(defaulted._buildTtsParams().kvCacheType, 'kvCacheType omitted when unset so the addon applies its f16 default')
 })
+
+test('Chatterbox: enhancer GGUF path forwards lavasrEnhancerPath (no enhance flag)', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+
+  const enhanced = new TTSGgml({
+    files: { ...files, lavasrEnhancer: '/abs/enh.gguf' },
+    config: { language: 'en' }
+  })
+  const params = enhanced._buildTtsParams()
+  t.is(params.engineType, TTSGgml.ENGINE_CHATTERBOX, 'routes to chatterbox')
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer GGUF path forwarded')
+  t.absent(params.enhance, 'no separate enhance flag is forwarded')
+
+  const plain = new TTSGgml({ files, config: { language: 'en' } })
+  t.absent(plain._buildTtsParams().lavasrEnhancerPath, 'no enhancer params when absent')
+})
+
+test('Chatterbox: unknown enhancer.type is rejected at construction', (t) => {
+  t.exception(
+    () => new TTSGgml({
+      files: {
+        t3Model: './models/chatterbox-t3-turbo.gguf',
+        s3genModel: './models/chatterbox-s3gen.gguf',
+        lavasrEnhancer: '/abs/enh.gguf'
+      },
+      config: { language: 'en' },
+      enhancer: { type: 'nope' }
+    }),
+    /unknown enhancer\.type/,
+    'a typo in enhancer.type throws instead of silently disabling enhancement'
+  )
+})
+
+test('Chatterbox: enhancer + streamChunkTokens forwards both (streaming enhancement)', (t) => {
+  // Previously rejected; the addon now enhances each native-streaming chunk via
+  // a sliding-window StreamingEnhancer, so both knobs must reach the addon.
+  const model = new TTSGgml({
+    files: {
+      t3Model: './models/chatterbox-t3-turbo.gguf',
+      s3genModel: './models/chatterbox-s3gen.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    },
+    streamChunkTokens: 25,
+    config: { language: 'en' }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.streamChunkTokens, 25, 'streamChunkTokens forwarded')
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer path forwarded alongside streaming')
+})
+
+test('Chatterbox: outputSampleRate forwards to ttsParams; omitted when unset', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+
+  const withRate = new TTSGgml({ files, config: { language: 'en', outputSampleRate: 22050 } })
+  t.is(withRate._buildTtsParams().outputSampleRate, 22050, 'outputSampleRate forwarded to native params')
+
+  const noRate = new TTSGgml({ files, config: { language: 'en' } })
+  t.absent(noRate._buildTtsParams().outputSampleRate, 'no outputSampleRate when unset')
+})
