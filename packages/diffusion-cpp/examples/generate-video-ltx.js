@@ -7,7 +7,7 @@ const VideoStableDiffusion = require('../video')
 
 // ---------------------------------------------------------------------------
 // LTX-2.3 text-to-video (+ audio) — downloaded via:
-//   ./scripts/download-model-ltx.sh            # distilled-1.1 Q8_0 (default)
+//   ./scripts/download-model-ltx.sh            # distilled-1.1 Q5_K_M (default)
 //
 // LTX-2.3 is a joint audio+video model: one text prompt drives both the video
 // frames and a synchronized 48 kHz audio track. The audio is decoded by the
@@ -21,9 +21,10 @@ const VideoStableDiffusion = require('../video')
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
 
-// File names match scripts/download-model-ltx.sh (distilled-1.1 Q8_0 + the
-// "distilled" aux VAEs/connectors). Override via env vars to use --dev weights.
-const DIFFUSION_MODEL = process.env.LTX_MODEL || 'LTX-2.3-22B-distilled-1.1-Q8_0.gguf'
+// File names match scripts/download-model-ltx.sh (distilled-1.1 Q5_K_M + the
+// "distilled" aux VAEs/connectors). Override via env vars to use --dev weights
+// or a different quantization (e.g. LTX_MODEL=LTX-2.3-22B-distilled-1.1-Q8_0.gguf).
+const DIFFUSION_MODEL = process.env.LTX_MODEL || 'LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf'
 const LLM_MODEL = process.env.LTX_LLM || 'gemma-3-12b-it-UD-Q4_K_XL.gguf'
 const VIDEO_VAE = process.env.LTX_VAE || 'ltx-2.3-22b-distilled_video_vae.safetensors'
 const AUDIO_VAE = process.env.LTX_AUDIO_VAE || 'ltx-2.3-22b-distilled_audio_vae.safetensors'
