@@ -9,6 +9,8 @@ const { Readable } = require('bare-stream')
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+let _mobileModelManifest = null
 
 // ---------------------------------------------------------------------------
 // Performance reporter — captures Parakeet integration-test stats and emits
@@ -577,6 +579,53 @@ async function downloadFile (url, destPath) {
   })
 }
 
+function prestagedModelDir (modelName) {
+  if (platform !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+  } catch (_) {}
+  return null
+}
+
+function loadMobileModelManifest () {
+  if (_mobileModelManifest !== null) return _mobileModelManifest
+  _mobileModelManifest = {}
+
+  if (!isMobile) return _mobileModelManifest
+
+  const { samplesDir } = getTestPaths()
+  const candidates = []
+  if (samplesDir) candidates.push(path.join(samplesDir, 'model-manifest.json'))
+  if (global.assetPaths && global.assetPaths['../../testAssets/model-manifest.json']) {
+    candidates.push(global.assetPaths['../../testAssets/model-manifest.json'].replace('file://', ''))
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (!candidate || !fs.existsSync(candidate)) continue
+      _mobileModelManifest = JSON.parse(fs.readFileSync(candidate, 'utf8'))
+      console.log(`  Loaded mobile model manifest: ${candidate}`)
+      return _mobileModelManifest
+    } catch (err) {
+      console.log(`  Could not load mobile model manifest at ${candidate}: ${err.message}`)
+    }
+  }
+
+  return _mobileModelManifest
+}
+
+function manifestEntryForModel (modelName) {
+  const manifest = loadMobileModelManifest()
+  for (const entries of Object.values(manifest)) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries) {
+      if (entry && entry.name === modelName && entry.url) return entry
+    }
+  }
+  return null
+}
+
 /**
  * Ensures the default test GGUF model is downloaded and available.
  * The ggml backend ships a single `.gguf` per checkpoint; default to the
@@ -777,8 +826,9 @@ async function runTranscription (params, expectation = {}) {
 // Quantisation:
 //   - Desktop default is q8_0 (best WER per byte). `file` below.
 //   - Mobile default is q4_0 (~4x smaller than q8 on full models),
-//     fetched at runtime from the QVAC model registry into the app
-//     cache. `mobileFile` below. The size hit on accuracy is
+//     fetched at runtime into the app cache. Android CI pre-stages
+//     these via Device Farm host commands; iOS falls back to the
+//     generated mobile model manifest. The size hit on accuracy is
 //     acceptable for integration smoke tests; full WER gates remain
 //     a desktop-only signal.
 // Tests can override per-model with QVAC_TEST_GGUF_<TYPE> (e.g.
@@ -1000,16 +1050,19 @@ function quantFromGgufName (ggufPathOrName) {
  *   3. Existing cache in the test models dir for the preferred quant
  *      (q4_0 on mobile, q8_0 on desktop), then the other quant as a
  *      fallback.
- *   4. On mobile only: bundled GGUF in the React-Native asset cache,
+ *   4. Android only: host-prestaged GGUF under /data/local/tmp, copied
+ *      into the writable test models dir before use.
+ *   5. On mobile only: bundled GGUF in the React-Native asset cache,
  *      preferring `<samplesDir>/<mobileFile>` (q4_0). Surviving
  *      contract for dev flows that adb-push a GGUF into testAssets;
- *      production mobile CI no longer bundles GGUFs and relies on
- *      the registry fetch in step 6 instead.
- *   5. `QVAC_TEST_GGUF_DIR/<file>` -- copy from any pre-staged
+ *      production mobile CI no longer bundles GGUFs.
+ *   6. `QVAC_TEST_GGUF_DIR/<file>` -- copy from any pre-staged
  *      `models/` directory if present (typically the package's own
  *      `./models/` produced by `npm run setup-models` or
  *      `npm run download-models:registry`).
- *   6. QVAC model registry fetch into the test models dir, using the
+ *   7. On mobile only: generated `model-manifest.json` download URL
+ *      into the test models dir.
+ *   8. QVAC model registry fetch into the test models dir, using the
  *      `mobileRegistryPath` on mobile and `registryPath` on desktop.
  *
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
@@ -1047,6 +1100,18 @@ async function ensureGgufForType (modelType, override = null, options = {}) {
     return cachePath
   }
 
+  const staged = prestagedModelDir(preferred.file)
+  if (staged) {
+    fs.mkdirSync(modelsDir, { recursive: true })
+    console.log(`  Using pre-staged GGUF ${preferred.file} (copying into writable models dir)`)
+    fs.copyFileSync(path.join(staged, preferred.file), cachePath)
+    if (fs.existsSync(cachePath) &&
+        fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
+      return cachePath
+    }
+    try { fs.unlinkSync(cachePath) } catch (_) {}
+  }
+
   const otherFile = preferred.file === cfg.file ? cfg.mobileFile : cfg.file
   if (allowOtherQuant && otherFile) {
     const otherPath = path.join(modelsDir, otherFile)
@@ -1078,6 +1143,25 @@ async function ensureGgufForType (modelType, override = null, options = {}) {
         console.log(`  Staging GGUF from ${externalPath} -> ${stagedPath}`)
         fs.copyFileSync(externalPath, stagedPath)
         return stagedPath
+      }
+    }
+  }
+
+  if (isMobile) {
+    const manifestEntry = manifestEntryForModel(preferred.file)
+    if (manifestEntry) {
+      try {
+        console.log(`  Downloading ${preferred.file} from mobile model manifest...`)
+        await downloadFile(manifestEntry.url, cachePath)
+        if (fs.existsSync(cachePath) &&
+            fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
+          return cachePath
+        }
+        console.log(`  Manifest download too small: ${preferred.file}`)
+        try { fs.unlinkSync(cachePath) } catch (_) {}
+      } catch (err) {
+        console.log(`  Manifest download failed for ${preferred.file}: ${err.message}`)
+        try { fs.unlinkSync(cachePath) } catch (_) {}
       }
     }
   }

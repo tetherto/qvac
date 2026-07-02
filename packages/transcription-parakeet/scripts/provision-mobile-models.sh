@@ -13,7 +13,6 @@ if [ -z "$REGISTRY_BUCKET" ]; then
 fi
 
 MODELS_DIR="models"
-TEST_ASSETS_DIR="test/mobile/testAssets"
 REGISTRY_PREFIX_Q8_0="qvac_models_compiled/ggml/parakeet/2026-05-11"
 REGISTRY_PREFIX_Q4_0="qvac_models_compiled/ggml/parakeet/2026-05-27"
 REGISTRY_PREFIX_2026_07_01="qvac_models_compiled/ggml/parakeet/2026-07-01"
@@ -52,18 +51,7 @@ download_models_from_prefix() {
   done
 }
 
-stage_models_into_test_assets() {
-  for f in "$@"; do
-    if [ ! -s "$MODELS_DIR/$f" ]; then
-      echo "ERROR: missing or empty $MODELS_DIR/$f -- registry download may have failed" >&2
-      ls -la "$MODELS_DIR/" || true
-      exit 1
-    fi
-    cp "$MODELS_DIR/$f" "$TEST_ASSETS_DIR/"
-  done
-}
-
-mkdir -p "$MODELS_DIR" "$TEST_ASSETS_DIR"
+mkdir -p "$MODELS_DIR"
 
 download_models_from_prefix "$REGISTRY_PREFIX_2026_07_01" "${Q4_CTC_FILES[@]}"
 download_models_from_prefix "$REGISTRY_PREFIX_Q4_0" "${Q4_FILES[@]}"
@@ -73,8 +61,3 @@ download_models_from_prefix "$REGISTRY_PREFIX_STREAMING" "${STREAMING_FILES[@]}"
 echo ""
 echo "[$(basename "$0")] Downloaded GGUFs:"
 ls -lh "$MODELS_DIR"/*.gguf
-
-stage_models_into_test_assets "${ALL_FILES[@]}"
-
-echo "[$(basename "$0")] Staged GGUFs in $TEST_ASSETS_DIR/:"
-ls -lh "$TEST_ASSETS_DIR/"
