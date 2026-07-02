@@ -194,7 +194,7 @@ export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[]
     id: entry.id,
     name: entry.name,
     reasoning: true,
-    input: ['text', 'image'],
+    input: entry.constant.includes('MULTIMODAL') ? ['text', 'image'] : ['text'],
     cost: ZERO_COST,
     contextWindow: options.ctxSize,
     maxTokens: 8192,
