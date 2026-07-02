@@ -55,6 +55,30 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -87,8 +111,8 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep, label-gate]
+    if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep, ci-router, label-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -108,8 +132,8 @@ jobs:
     # cpp-lint.yaml's Resolve refs falls back to HEAD~1 for the format/tidy diff
     # base. Manual dispatch pointing at a branch lets us validate workflow
     # changes (e.g. the hip-backend ROCm setup) before they land on the base.
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
-    needs: [authorize, label-gate]
+    if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, ci-router, label-gate]
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -125,8 +149,8 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks, label-gate]
+    if: always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks, ci-router, label-gate]
     uses: ./.github/workflows/cpp-tests-vla.yml
     secrets: inherit
     with:
@@ -164,23 +188,96 @@ jobs:
           registry-type: gpr
           workdir: packages/vla-ggml
 
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, ci-router, label-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/vla-ggml
+
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs: [detect-native-changes, sanity-checks, label-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-vla.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
   prebuild:
     permissions:
       contents: write
       packages: write
       pull-requests: write
       id-token: write
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks, label-gate]
+    if: |
+      always() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
+    needs: [authorize, ci-router, sanity-checks, detect-native-changes, prebuild-artifact-reuse, label-gate]
     uses: ./.github/workflows/prebuilds-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
+  prebuild-artifact-save:
+    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs: [prebuild, detect-native-changes, label-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
   integration-tests:
-    needs: [authorize, prebuild, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -197,8 +294,8 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild, label-gate]
+    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    needs: [authorize, prebuild, prebuild-artifact-reuse, label-gate, ci-router]
     uses: ./.github/workflows/integration-mobile-test-vla.yml
     secrets: inherit
     with:
@@ -206,9 +303,9 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, run-mobile-integration-tests, ts-checks, ci-router, label-gate]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
