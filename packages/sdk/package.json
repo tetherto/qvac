@@ -213,7 +213,7 @@
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
     "@qvac/transcription-parakeet": "^0.8.1",
-    "@qvac/transcription-whispercpp": "^0.10.0",
+    "@qvac/transcription-whispercpp": "^0.11.0",
     "@qvac/translation-nmtcpp": "^6.3.0",
     "@qvac/tts-ggml": "^0.3.1",
     "@qvac/vla-ggml": "^0.7.0",
