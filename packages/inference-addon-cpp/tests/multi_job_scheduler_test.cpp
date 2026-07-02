@@ -124,6 +124,31 @@ public:
   }
 };
 
+/// ConcurrentTestModel that additionally records which ids reached process(),
+/// so the queued-cancellation tests can assert a dropped job never started.
+/// Kept out of the base model: only those tests need start tracking.
+class StartTrackingTestModel final : public ConcurrentTestModel {
+  mutable std::mutex startedMtx_;
+  std::unordered_set<JobId> startedIds_;
+
+public:
+  using ConcurrentTestModel::ConcurrentTestModel;
+
+  std::any process(const std::any& input, JobId id) override {
+    {
+      std::lock_guard lock(startedMtx_);
+      startedIds_.insert(id);
+    }
+    return ConcurrentTestModel::process(input, id);
+  }
+
+  /// Whether process() was ever entered for @p id.
+  bool started(JobId id) const {
+    std::lock_guard lock(startedMtx_);
+    return startedIds_.count(id) != 0;
+  }
+};
+
 /// Blocks until @p target jobs are concurrently active or the timeout lapses,
 /// returning the active count observed at exit.
 int waitForActive(const ConcurrentTestModel& model, int target,
@@ -153,8 +178,24 @@ protected:
   void buildWithQueue(
       unsigned maxConcurrency, unsigned queueCapacity,
       std::chrono::milliseconds processTime) {
-    callback_ = std::make_unique<MockOutputCallback>();
     model_ = std::make_unique<ConcurrentTestModel>(processTime);
+    wire(maxConcurrency, queueCapacity);
+  }
+
+  /// buildWithQueue with a StartTrackingTestModel instead; returns it
+  /// (non-owning) so the test can query started().
+  StartTrackingTestModel* buildTrackingWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      std::chrono::milliseconds processTime) {
+    auto tracking = std::make_unique<StartTrackingTestModel>(processTime);
+    StartTrackingTestModel* raw = tracking.get();
+    model_ = std::move(tracking);
+    wire(maxConcurrency, queueCapacity);
+    return raw;
+  }
+
+  void wire(unsigned maxConcurrency, unsigned queueCapacity) {
+    callback_ = std::make_unique<MockOutputCallback>();
     outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
     scheduler_ = std::make_unique<MultiJobScheduler>(
         model_.get(), maxConcurrency, model_.get(), model_.get(),
@@ -438,6 +479,80 @@ TEST_F(MultiJobSchedulerTest, ExclusiveJobThrowClearsExclusive) {
   EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1))
       << "a thrown exclusive job must not leave the scheduler wedged";
   scheduler_->cancelAll();
+}
+
+// (j) Cancelling a job still waiting in the queue must drop it: slot released
+// immediately, a terminal error emitted, and process() never sees the job.
+TEST_F(MultiJobSchedulerTest, CancelQueuedJobNeverRuns) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 1, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  ASSERT_EQ(scheduler_->activeJobs(), 2u);
+
+  scheduler_->cancel(2);
+  EXPECT_EQ(scheduler_->activeJobs(), 1u)
+      << "cancelling a queued job must release its admission slot immediately";
+
+  scheduler_->cancel(1);
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  EXPECT_FALSE(tracking->started(2))
+      << "a cancelled queued job must never reach process()";
+  const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
+  EXPECT_EQ(erroredIds(outputs).count(2), 1u)
+      << "a cancelled queued job must surface a terminal error";
+  for (const std::pair<JobId, std::any>& entry : outputs) {
+    if (entry.first == 2) {
+      EXPECT_EQ(entry.second.type(), typeid(Output::Error))
+          << "no result/jobEnded may be emitted for a cancelled queued job";
+    }
+  }
+}
+
+// (k) cancelAll must drop queued jobs too (interface contract: "Cancel every
+// in-flight and queued job"), not only the in-flight ones.
+TEST_F(MultiJobSchedulerTest, CancelAllDropsQueuedJobs) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 2, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 3));
+  ASSERT_EQ(scheduler_->activeJobs(), 3u);
+
+  scheduler_->cancelAll();
+
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+  EXPECT_FALSE(tracking->started(2));
+  EXPECT_FALSE(tracking->started(3))
+      << "queued jobs must never start after cancelAll";
+  const std::unordered_set<JobId> errored = erroredIds(outputQueue_->clear());
+  EXPECT_EQ(errored.count(2), 1u);
+  EXPECT_EQ(errored.count(3), 1u)
+      << "dropped queued jobs must surface terminal errors";
+}
+
+// (l) Destroying the scheduler while a job waits in the queue must fail that
+// job with a terminal error, not silently drop it.
+TEST_F(MultiJobSchedulerTest, DestructorFailsQueuedJobs) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 1, std::chrono::milliseconds{500});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+
+  scheduler_.reset(); // joins while job 1 is in flight; job 2 still queued
+
+  EXPECT_FALSE(tracking->started(2));
+  EXPECT_EQ(erroredIds(outputQueue_->clear()).count(2), 1u)
+      << "a queued job dropped at teardown must surface a terminal error";
 }
 
 } // namespace qvac_lib_inference_addon_cpp
