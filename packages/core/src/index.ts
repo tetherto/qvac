@@ -1,0 +1,216 @@
+// Public API exports only
+export {
+  completion,
+  deleteCache,
+  loadModel,
+  downloadAsset,
+  heartbeat,
+  startQVACProvider,
+  stopQVACProvider,
+  unloadModel,
+  transcribe,
+  transcribeStream,
+  bciTranscribe,
+  bciTranscribeStream,
+  embed,
+  finetune,
+  translate,
+  cancel,
+  ragChunk,
+  ragIngest,
+  ragSaveEmbeddings,
+  ragSearch,
+  ragDeleteEmbeddings,
+  ragReindex,
+  ragListWorkspaces,
+  ragCloseWorkspace,
+  ragDeleteWorkspace,
+  textToSpeech,
+  textToSpeechStream,
+  getModelInfo,
+  getLoadedModelInfo,
+  loggingStream,
+  subscribeServerLogs,
+  type ServerLogHandler,
+  ocr,
+  invokePlugin,
+  invokePluginStream,
+  diffusion,
+  type DiffusionProgressTick,
+  classify,
+  video,
+  type VideoProgressTick,
+  upscale,
+  modelRegistryList,
+  modelRegistrySearch,
+  modelRegistryGetModel,
+  type ModelRegistrySearchParams,
+  suspend,
+  resume,
+  state,
+  vla,
+  vlaHparams,
+  vlaPreprocessImage,
+  vlaPadState,
+  VLA_DEFAULT_IMAGE_SIZE,
+  type FinetuneHandle
+} from './api'
+
+// Engine lifecycle and explicit plugin assembly. Core registers no plugins by
+// default: an app assembles the engines it needs via `plugins([...])` or the
+// `registerPlugin`/`registerPlugins` primitives, then calls the operations.
+export { close } from './dispatch'
+export {
+  plugins,
+  registerPlugin,
+  registerPlugins,
+  getPlugin,
+  hasPlugin,
+  getAllPlugins,
+  unregisterPlugin
+} from './plugins'
+
+export {
+  type LifecycleState,
+  type ModelProgressUpdate,
+  type LoadModelOptions,
+  type LoadCustomPluginModelOptions,
+  type DownloadAssetOptions,
+  type Tool,
+  type ToolCall,
+  type ToolCallWithCall,
+  type ToolCallError,
+  type ToolCallEvent,
+  type CompletionEvent,
+  type CompletionFinal,
+  type CompletionRun,
+  type CompletionStats,
+  type EmbedStats,
+  VERBOSITY,
+  type Attachment,
+  type TranscribeStreamSession,
+  type TranscribeStreamMetadataSession,
+  type TranscribeStreamConversationSession,
+  type TranscribeStreamEvent,
+  type VadStateEvent,
+  type EndOfTurnEvent,
+  type TranscribeSegment,
+  type BciConfig,
+  type BciTranscribeClientParams,
+  type BciTranscribeStreamClientParams,
+  type BciTranscribeStreamSession,
+  type BciTranscribeStreamMetadataSession,
+  type BciStreamOpts,
+  type NeuralInput,
+  type TextToSpeechStreamSession,
+  type TextToSpeechStreamResponse,
+  type TextToSpeechStreamClientParams,
+  type CompletionParams,
+  type ToolDialect,
+  type RagSearchResult,
+  type RagSaveEmbeddingsResult,
+  type RagReindexResult,
+  type RagEmbeddedDoc,
+  type RagDoc,
+  type RagWorkspaceInfo,
+  type RagCloseWorkspaceParams,
+  type RagDeleteWorkspaceParams,
+  type RagIngestStage,
+  type RagReindexStage,
+  type RagSaveStage,
+  SDK_CLIENT_ERROR_CODES,
+  SDK_SERVER_ERROR_CODES,
+  RAG_ERROR_CODES,
+  type QvacConfig,
+  type ModelInfo,
+  type GetModelInfoParams,
+  type GetLoadedModelInfoParams,
+  type LoadedModelInfo,
+  type LoadedInstance,
+  type CacheFileInfo,
+  toolSchema,
+  TOOLS_MODE,
+  type ToolsMode,
+  type McpClient,
+  type McpClientInput,
+  type OCRClientParams,
+  type OCRTextBlock,
+  type OCROptions,
+  type ClassifyClientParams,
+  type ClassificationResult,
+  type DiffusionClientParams,
+  type DiffusionStreamResponse,
+  type DiffusionStats,
+  type VideoClientParams,
+  type VideoStreamResponse,
+  type VideoStats,
+  type UpscaleClientParams,
+  type UpscaleStreamResponse,
+  type UpscaleStats,
+  type VlaConfig,
+  type VlaClientRunParams,
+  type VlaClientRunResult,
+  type VlaHparams,
+  type VlaStats,
+  definePlugin,
+  defineHandler,
+  defineDuplexHandler,
+  type QvacPlugin,
+  type CreateModelParams,
+  type PluginModelResult,
+  type ModelRegistryEntry,
+  type ModelRegistryEntryAddon,
+  PLUGIN_LLM,
+  PLUGIN_EMBEDDING,
+  PLUGIN_WHISPER,
+  PLUGIN_BCI,
+  PLUGIN_NMT,
+  PLUGIN_TTS,
+  PLUGIN_OCR,
+  PLUGIN_DIFFUSION,
+  PLUGIN_VLA,
+  PLUGIN_CLASSIFICATION,
+  SDK_DEFAULT_PLUGINS,
+  type BuiltinPlugin,
+  type ProfilerMode,
+  type FinetuneValidation,
+  type FinetuneRunParams,
+  type FinetuneGetStateParams,
+  type FinetuneStopParams,
+  type FinetuneParams,
+  type FinetuneStatus,
+  type FinetuneProgress,
+  type FinetuneStats,
+  type FinetuneResult
+} from './schemas'
+
+export { type ToolInput, type ToolHandler } from './utils/tool-helpers'
+
+// Model types - canonical naming with backward-compatible aliases
+export { MODEL_TYPES, ModelType } from './schemas'
+
+// Model registry constants
+export * from './models/registry'
+
+export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
+
+// Error classes consumers need for `instanceof` checks on rejected promises.
+// In-process, a handler's thrown error propagates as its real typed instance,
+// so these match directly with no RPC reconstruction.
+export { InferenceCancelledError } from './utils/errors-server'
+export type { InferenceCancelledPartial } from './utils/errors-server'
+export {
+  ContextOverflowError,
+  RequestIdConflictError,
+  RequestNotFoundError,
+  RequestRejectedByPolicyError
+} from './utils/errors-server'
+export { RequestValidationFailedError } from './utils/errors-client'
+
+// Logging exports
+export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
+export type { Logger, LogTransport, LoggerOptions } from './logging'
+
+// Profiler exports
+export { profiler } from './profiling'
+export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'

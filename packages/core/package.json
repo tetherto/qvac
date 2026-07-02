@@ -1,0 +1,182 @@
+{
+  "name": "@qvac/core",
+  "version": "0.14.1",
+  "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "keywords": [
+    "ai",
+    "bare",
+    "core",
+    "diffusion",
+    "edge-ai",
+    "embeddings",
+    "gguf",
+    "holepunch",
+    "hyperswarm",
+    "inference",
+    "large-language-model",
+    "llama-cpp",
+    "llm",
+    "local",
+    "local-ai",
+    "ocr",
+    "offline",
+    "on-device",
+    "p2p",
+    "peer-to-peer",
+    "qvac",
+    "rag",
+    "speech-to-text",
+    "tether",
+    "text-to-speech",
+    "transcription",
+    "translation",
+    "tts",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package": "./package.json",
+    "./plugins": "./src/plugins/index.ts",
+    "./plugin-utils": "./src/schemas/plugin.ts",
+    "./logging": "./src/logging/index.ts",
+    "./models": "./src/models/registry/index.ts",
+    "./llamacpp-completion/plugin": "./src/plugins/builtin/llamacpp-completion/plugin.ts",
+    "./llamacpp-embedding/plugin": "./src/plugins/builtin/llamacpp-embedding/plugin.ts",
+    "./whispercpp-transcription/plugin": "./src/plugins/builtin/whispercpp-transcription/plugin.ts",
+    "./bci-whispercpp-transcription/plugin": "./src/plugins/builtin/bci-whispercpp-transcription/plugin.ts",
+    "./parakeet-transcription/plugin": "./src/plugins/builtin/parakeet-transcription/plugin.ts",
+    "./nmtcpp-translation/plugin": "./src/plugins/builtin/nmtcpp-translation/plugin.ts",
+    "./tts-ggml/plugin": "./src/plugins/builtin/tts-ggml/plugin.ts",
+    "./ggml-ocr/plugin": "./src/plugins/builtin/ggml-ocr/plugin.ts",
+    "./sdcpp-generation/plugin": "./src/plugins/builtin/sdcpp-generation/plugin.ts",
+    "./ggml-vla/plugin": "./src/plugins/builtin/ggml-vla/plugin.ts",
+    "./ggml-classification/plugin": "./src/plugins/builtin/ggml-classification/plugin.ts"
+  },
+  "files": [
+    "src/**/*",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "bare": "^1.30.3"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.1",
+    "@qvac/logging": "^0.1.0",
+    "@qvac/rag": "^0.6.4",
+    "@qvac/registry-client": "^0.6.1",
+    "bare-abort-controller": "^1.0.0",
+    "bare-buffer": "^3.6.1",
+    "bare-crypto": "^1.15.0",
+    "bare-env": "^3.0.0",
+    "bare-fetch": "^3.0.1",
+    "bare-fs": "^4.5.1",
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.1",
+    "bare-rpc": "^1.3.2",
+    "bare-stream": "^2.7.0",
+    "bare-zlib": "^1.3.1",
+    "compact-encoding": "^3.0.0",
+    "corestore": "^7.4.5",
+    "fast-safe-stringify": "2.1.1",
+    "hyperdrive": "^13.0.1",
+    "hyperswarm": "^4.14.0",
+    "semver": "^7.8.0",
+    "tar-stream": "^3.1.8",
+    "zod": "^4.3.0"
+  },
+  "peerDependencies": {
+    "@qvac/bci-whispercpp": "^0.3.2",
+    "@qvac/classification-ggml": "^0.7.0",
+    "@qvac/decoder-audio": "^0.5.0",
+    "@qvac/diffusion-cpp": "^0.12.0",
+    "@qvac/embed-llamacpp": "^0.23.0",
+    "@qvac/langdetect-text": "^0.1.2",
+    "@qvac/llm-llamacpp": "^0.31.2",
+    "@qvac/ocr-ggml": "^0.7.0",
+    "@qvac/transcription-parakeet": "^0.8.1",
+    "@qvac/transcription-whispercpp": "^0.10.0",
+    "@qvac/translation-nmtcpp": "^6.3.0",
+    "@qvac/tts-ggml": "^0.3.1",
+    "@qvac/vla-ggml": "^0.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/bci-whispercpp": {
+      "optional": true
+    },
+    "@qvac/classification-ggml": {
+      "optional": true
+    },
+    "@qvac/decoder-audio": {
+      "optional": true
+    },
+    "@qvac/diffusion-cpp": {
+      "optional": true
+    },
+    "@qvac/embed-llamacpp": {
+      "optional": true
+    },
+    "@qvac/langdetect-text": {
+      "optional": true
+    },
+    "@qvac/llm-llamacpp": {
+      "optional": true
+    },
+    "@qvac/ocr-ggml": {
+      "optional": true
+    },
+    "@qvac/transcription-parakeet": {
+      "optional": true
+    },
+    "@qvac/transcription-whispercpp": {
+      "optional": true
+    },
+    "@qvac/translation-nmtcpp": {
+      "optional": true
+    },
+    "@qvac/tts-ggml": {
+      "optional": true
+    },
+    "@qvac/vla-ggml": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@qvac/bci-whispercpp": "^0.3.2",
+    "@qvac/classification-ggml": "^0.7.0",
+    "@qvac/decoder-audio": "^0.5.0",
+    "@qvac/diffusion-cpp": "^0.12.0",
+    "@qvac/embed-llamacpp": "^0.23.0",
+    "@qvac/langdetect-text": "^0.1.2",
+    "@qvac/llm-llamacpp": "^0.31.2",
+    "@qvac/ocr-ggml": "^0.7.0",
+    "@qvac/transcription-parakeet": "^0.8.1",
+    "@qvac/transcription-whispercpp": "^0.10.0",
+    "@qvac/translation-nmtcpp": "^6.3.0",
+    "@qvac/tts-ggml": "^0.3.1",
+    "@qvac/vla-ggml": "^0.7.0",
+    "bare-stdio": "^1.0.2",
+    "lunte": "^1.8.3",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}

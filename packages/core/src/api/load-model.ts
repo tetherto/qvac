@@ -1,0 +1,368 @@
+import { send, stream } from '../dispatch'
+import { startLoggingStreamForModel } from './logging-stream-registry'
+import {
+  type LoadModelOptions,
+  type LoadCustomPluginModelOptions,
+  type LoadModelDescriptorOnlyOptions,
+  type LoadModelDescriptorParam,
+  type ReloadConfigOptions,
+  type RPCOptions,
+  type ModelDescriptor,
+  type SdcppConfig,
+  loadBuiltinToRequestSchema,
+  loadCustomPluginToRequestSchema,
+  reloadConfigOptionsToRequestSchema,
+  isBuiltInModelType,
+  isModelTypeAlias,
+  normalizeModelType,
+  inferModelTypeFromModelSrc,
+  ModelType
+} from '../schemas'
+import {
+  ModelLoadFailedError,
+  ModelTypeRequiredError,
+  StreamEndedError,
+  InvalidResponseError
+} from '../utils/errors-client'
+import { assertModelSrcMatchesModelType } from '../utils/load-model-validation'
+import { parseClientInput } from './parse-input'
+import { getClientLogger } from '../logging'
+import { decoratePromise } from '../utils/decorate-promise'
+import { generateClientRequestId } from './client-request-id'
+
+const logger = getClientLogger()
+
+interface ReactNativeRuntimeGlobal {
+  navigator?: { product?: string }
+}
+
+function isReactNativeRuntime() {
+  const runtime = globalThis as ReactNativeRuntimeGlobal
+  return runtime.navigator?.product === 'ReactNative'
+}
+
+let warnedLocalVideoModelLoad = false
+
+/**
+ * Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
+ * `modelConfig` narrows per-engine when `modelSrc.engine` is a literal,
+ * otherwise falls back to a permissive shape.
+ *
+ * @overloadLabel "From descriptor"
+ * @param options - Descriptor-based load options. `modelSrc` is a
+ *   `ModelDescriptor` (e.g. one of the `LLAMA_3_2_1B_INST_Q4_0`-style
+ *   constants); `modelType` is inferred from it.
+ * @param rpcOptions - Optional RPC options including per-call profiling.
+ * @returns Promise that resolves to the loaded model ID.
+ * @throws {ModelTypeRequiredError} When `modelType` cannot be inferred from `modelSrc` at runtime.
+ * @example
+ * ```typescript
+ * await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
+ * await loadModel({ modelSrc: WHISPER_TINY });
+ * ```
+ */
+export function loadModel<S extends ModelDescriptor>(
+  options: LoadModelDescriptorParam<S>,
+  rpcOptions?: RPCOptions
+): Promise<string> & { requestId: string }
+
+/**
+ * Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+ *
+ * This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+ * embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+ *
+ * When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+ * Otherwise, it uses a simple request-response pattern for faster execution.
+ *
+ * @overloadLabel "Load new model"
+ * @param options - An object that defines all configuration parameters required for loading the model, including:
+ *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
+ *   - modelType: The canonical type of model ("llamacpp-completion",
+ *     "whispercpp-transcription", "llamacpp-embedding", "nmtcpp-translation",
+ *     "tts-ggml", ...). May be omitted when `modelSrc` is a registry descriptor
+ *     that already carries the engine.
+ *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
+ *   - onProgress: Callback for download progress updates
+ *   - logger: Logger instance for model operation logs
+ * @param rpcOptions - Optional RPC options including per-call profiling configuration
+ *
+ * @returns Promise that resolves to the model ID (either the provided modelSrc or a generated ID)
+ *
+ * @throws {QvacErrorBase} When model loading fails, with details in the error message
+ * @throws {QvacErrorBase} When streaming ends unexpectedly (only when using onProgress)
+ * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ *
+ * @example
+ * ```typescript
+ * // Local file path - absolute path
+ * const localModelId = await loadModel({
+ *   modelSrc: "/home/user/models/llama-7b.gguf",
+ *   modelType: "llamacpp-completion",
+ *   modelConfig: { ctx_size: 2048 }
+ * });
+ *
+ * // Local file path - relative path
+ * const relativeModelId = await loadModel({
+ *   modelSrc: "./models/whisper-base.gguf",
+ *   modelType: "whispercpp-transcription"
+ * });
+ *
+ * // Hyperdrive URL with key and path
+ * const hyperdriveId = await loadModel({
+ *   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
+ *   modelType: "llamacpp-completion",
+ *   modelConfig: { ctx_size: 2048 }
+ * });
+ *
+ * // Remote HTTP/HTTPS URL with progress tracking
+ * const remoteId = await loadModel({
+ *   modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
+ *   modelType: "llamacpp-completion",
+ *   onProgress: (progress) => {
+ *     console.log(`Downloaded: ${progress.percentage}%`);
+ *   }
+ * });
+ *
+ * // Multimodal model with projection
+ * const multimodalId = await loadModel({
+ *   modelSrc: "https://huggingface.co/.../main-model.gguf",
+ *   modelType: "llamacpp-completion",
+ *   modelConfig: {
+ *     ctx_size: 512,
+ *     projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
+ *   },
+ *   onProgress: (progress) => {
+ *     console.log(`Loading: ${progress.percentage}%`);
+ *   }
+ * });
+ *
+ * // Whisper with VAD model
+ * const whisperId = await loadModel({
+ *   modelSrc: "https://huggingface.co/.../whisper-model.gguf",
+ *   modelType: "whispercpp-transcription",
+ *   modelConfig: {
+ *     mode: "caption",
+ *     output_format: "plaintext",
+ *     min_seconds: 2,
+ *     max_seconds: 6,
+ *     vadModelSrc: "https://huggingface.co/.../vad-model.bin"
+ *   }
+ * });
+ *
+ * // Load with automatic logging - logs from the model will be forwarded to your logger
+ * import { getLogger } from "../logging";
+ * const logger = getLogger("my-app");
+ *
+ * const modelId = await loadModel({
+ *   modelSrc: "/path/to/model.gguf",
+ *   modelType: "llamacpp-completion",
+ *   logger // Pass logger in options
+ * });
+ * ```
+ */
+export function loadModel(
+  options: LoadModelOptions,
+  rpcOptions?: RPCOptions
+): Promise<string> & { requestId: string }
+
+/**
+ * Loads a custom plugin model (any non-built-in `modelType` string).
+ * `modelConfig` is plugin-defined; the SDK does not narrow it.
+ *
+ * @overloadLabel "Custom plugin"
+ * @param options - Custom plugin load options. `modelType` can be any
+ *   string registered by a plugin; `modelConfig` is forwarded to the
+ *   plugin's `loadModel` handler unchanged.
+ * @param rpcOptions - Optional RPC options including per-call profiling.
+ * @returns Promise that resolves to the loaded model ID.
+ */
+export function loadModel<T extends string>(
+  options: LoadCustomPluginModelOptions<T>,
+  rpcOptions?: RPCOptions
+): Promise<string> & { requestId: string }
+
+/**
+ * Hot-reloads configuration on an already loaded model.
+ *
+ * @overloadLabel "Hot-reload config"
+ * @param options - Configuration for reloading config on an existing model:
+ *   - modelId: The ID of an existing loaded model
+ *   - modelType: The type of model (must match the loaded model)
+ *   - modelConfig: New configuration to apply
+ * @param rpcOptions - Optional RPC options including per-call profiling configuration
+ *
+ * @returns Promise that resolves to the model ID
+ *
+ * @throws {QvacErrorBase} When model reload fails, with details in the error message
+ * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ *
+ * @example
+ * ```typescript
+ * // Load new model
+ * const modelId = await loadModel({
+ *   modelSrc: "pear://<hyperdrive-key>/whisper-tiny.gguf",
+ *   modelType: "whisper",
+ *   modelConfig: { language: "en" },
+ * });
+ *
+ * // Later, update the config without reloading the model
+ * await loadModel({
+ *   modelId,
+ *   modelType: "whisper",
+ *   modelConfig: { language: "es" },
+ * });
+ * ```
+ */
+export function loadModel(
+  options: ReloadConfigOptions,
+  rpcOptions?: RPCOptions
+): Promise<string> & { requestId: string }
+
+export function loadModel(
+  options:
+    | LoadModelOptions
+    | LoadCustomPluginModelOptions<string>
+    | LoadModelDescriptorOnlyOptions
+    | ReloadConfigOptions,
+  rpcOptions?: RPCOptions
+): Promise<string> & { requestId: string } {
+  // Generate a stable `requestId` once, synchronously, before kicking
+  // off any async work. The same id is:
+  //   - threaded onto the request envelope (`request.requestId`) so the
+  //     server's `registry.begin(...)` records it on the registry
+  //     entry; and
+  //   - attached to the returned promise via `decoratePromise` so the
+  //     caller can target this exact call with `cancel({ requestId })`
+  //     before `await` resolves. Generating client-side and surfacing
+  //     it synchronously is what closes the "stop-button race" gap for
+  //     `loadModel` / `downloadAsset` callers — same shape as the
+  //     `CompletionRun.requestId` contract.
+  const requestId = generateClientRequestId()
+  const inner = runLoadModel(options, requestId, rpcOptions)
+  return decoratePromise(inner, { requestId })
+}
+
+async function runLoadModel(
+  options:
+    | LoadModelOptions
+    | LoadCustomPluginModelOptions<string>
+    | LoadModelDescriptorOnlyOptions
+    | ReloadConfigOptions,
+  requestId: string,
+  rpcOptions?: RPCOptions
+): Promise<string> {
+  const isReloadConfig = 'modelId' in options && !('modelSrc' in options)
+
+  // Infer `modelType` from `modelSrc` when omitted; the schema still validates
+  // the resolved options below.
+  let resolvedOptions = options as Record<string, unknown>
+  if (!isReloadConfig) {
+    let modelType = resolvedOptions['modelType']
+    if (typeof modelType === 'string') {
+      assertModelSrcMatchesModelType(resolvedOptions['modelSrc'], modelType)
+    } else if (modelType === undefined) {
+      const inferred = inferModelTypeFromModelSrc(resolvedOptions['modelSrc'])
+      if (!inferred) {
+        throw new ModelTypeRequiredError()
+      }
+      resolvedOptions = { ...resolvedOptions, modelType: inferred }
+      modelType = inferred
+    }
+
+    if (typeof modelType === 'string' && isModelTypeAlias(modelType)) {
+      const canonical = normalizeModelType(modelType)
+      logger.warn(
+        `Model type "${modelType}" is an alias and will be deprecated. Use "${canonical}" instead.`
+      )
+    }
+
+    const canonicalModelType =
+      typeof modelType === 'string' ? normalizeModelType(modelType) : modelType
+    const modelConfig = resolvedOptions['modelConfig'] as SdcppConfig | undefined
+    if (
+      isReactNativeRuntime() &&
+      canonicalModelType === ModelType.sdcppGeneration &&
+      modelConfig?.mode === 'video' &&
+      resolvedOptions['delegate'] === undefined &&
+      !warnedLocalVideoModelLoad
+    ) {
+      warnedLocalVideoModelLoad = true
+      const message =
+        'QVAC video generation works on React Native, but loading the video ' +
+        'model on-device will usually fail or take several minutes — the video ' +
+        'diffusion models currently shipped by the SDK are too large to load ' +
+        'on typical mobile devices. Pass a `delegate` to `loadModel(...)` to ' +
+        'run generation on a desktop peer instead.'
+      logger.warn(message)
+    }
+  }
+
+  // Splice the client-generated `requestId` onto the resolved options so
+  // the wire envelope carries it. The server uses the same value as the
+  // registry-entry key — that match is what makes
+  // `cancel({ requestId: op.requestId })` a no-op when no match exists
+  // and a precise abort when it does.
+  resolvedOptions = { ...resolvedOptions, requestId }
+
+  const request = isReloadConfig
+    ? parseClientInput(reloadConfigOptionsToRequestSchema, resolvedOptions)
+    : isBuiltInModelType(resolvedOptions['modelType'])
+      ? parseClientInput(loadBuiltinToRequestSchema, resolvedOptions)
+      : parseClientInput(loadCustomPluginToRequestSchema, resolvedOptions)
+  const modelLogger = isReloadConfig
+    ? undefined
+    : (resolvedOptions['logger'] as LoadModelOptions['logger'])
+  const onProgress = isReloadConfig
+    ? undefined
+    : (resolvedOptions['onProgress'] as LoadModelOptions['onProgress'])
+
+  if (onProgress) {
+    // Use streaming for progress updates
+    for await (const response of stream(request, rpcOptions)) {
+      if (response.type === 'modelProgress') {
+        onProgress(response)
+      } else if (response.type === 'loadModel') {
+        if (!response.success) {
+          throw new ModelLoadFailedError(response.error)
+        }
+
+        const modelId = response.modelId!
+
+        // Start logging stream in the background if logger is provided, catch to avoid failing the entire loadModel operation
+        if (modelLogger) {
+          try {
+            startLoggingStreamForModel(modelId, modelLogger)
+          } catch (error) {
+            logger.warn(`Failed to start logging stream for model ${modelId}:`, error)
+          }
+        }
+
+        return modelId
+      }
+    }
+    throw new StreamEndedError()
+  }
+
+  // Use regular send for simple loading
+  const response = await send(request, rpcOptions)
+  if (response.type !== 'loadModel') {
+    throw new InvalidResponseError('loadModel')
+  }
+
+  if (!response.success) {
+    throw new ModelLoadFailedError(response.error)
+  }
+
+  const modelId = response.modelId!
+
+  if (modelLogger) {
+    try {
+      startLoggingStreamForModel(modelId, modelLogger)
+    } catch (error) {
+      logger.warn(`Failed to start logging stream for model ${modelId}:`, error)
+    }
+  }
+
+  return modelId
+}
