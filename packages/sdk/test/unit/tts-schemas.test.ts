@@ -82,16 +82,17 @@ test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
   t.is(r.success, true);
 });
 
-test("TTS_CHATTERBOX_LANGUAGES: exposes all 18 supported languages", (t) => {
-  t.is(TTS_CHATTERBOX_LANGUAGES.length, 18);
+test("TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages", (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22);
   const expected = [
     "en", "es", "fr", "de", "it", "pt", "nl", "pl", "tr",
     "sv", "da", "fi", "no", "el", "ms", "sw", "ar", "ko",
+    "he", "ru", "zh", "hi",
   ];
   t.alike([...TTS_CHATTERBOX_LANGUAGES], expected);
 });
 
-test("ttsChatterboxRuntimeConfigSchema: accepts all 18 chatterbox languages", (t) => {
+test("ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages", (t) => {
   for (const language of TTS_CHATTERBOX_LANGUAGES) {
     const r = ttsChatterboxRuntimeConfigSchema.safeParse({
       ttsEngine: "chatterbox",
@@ -101,8 +102,17 @@ test("ttsChatterboxRuntimeConfigSchema: accepts all 18 chatterbox languages", (t
   }
 });
 
-test("ttsSupertonicRuntimeConfigSchema: only accepts its language subset", (t) => {
-  t.alike([...TTS_SUPERTONIC_LANGUAGES], ["en", "es", "fr", "pt", "ko"]);
+test("ttsSupertonicRuntimeConfigSchema: accepts all 31 supertonic languages", (t) => {
+  t.is(TTS_SUPERTONIC_LANGUAGES.length, 31);
+  t.alike(
+    [...TTS_SUPERTONIC_LANGUAGES],
+    [
+      "en", "ko", "ja", "ar", "bg", "cs", "da", "de",
+      "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
+      "id", "it", "lt", "lv", "nl", "pl", "pt", "ro",
+      "ru", "sk", "sl", "sv", "tr", "uk", "vi",
+    ],
+  );
   for (const language of TTS_SUPERTONIC_LANGUAGES) {
     const r = ttsSupertonicRuntimeConfigSchema.safeParse({
       ttsEngine: "supertonic",
@@ -113,21 +123,21 @@ test("ttsSupertonicRuntimeConfigSchema: only accepts its language subset", (t) =
 });
 
 test("ttsSupertonicRuntimeConfigSchema: rejects chatterbox-only languages", (t) => {
-  // 'de' is supported by chatterbox but not supertonic.
+  // 'no' (Norwegian) is supported by chatterbox but not supertonic.
   const r = ttsSupertonicRuntimeConfigSchema.safeParse({
     ttsEngine: "supertonic",
-    language: "de",
+    language: "no",
   });
-  t.is(r.success, false, "supertonic must reject 'de'");
+  t.is(r.success, false, "supertonic must reject 'no'");
 });
 
 test("ttsConfigSchema: accepts a chatterbox-only language for chatterbox", (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: "chatterbox",
-    language: "tr",
+    language: "he",
     s3genModelSrc: "s3:///example/s3gen.gguf",
   });
-  t.is(r.success, true, "chatterbox load config accepts 'tr'");
+  t.is(r.success, true, "chatterbox load config accepts 'he'");
 });
 
 test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {

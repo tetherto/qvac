@@ -30,7 +30,7 @@ const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
-const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { ensureChatterboxModels, ensureChatterboxMtlModels, ensureSupertonicModel, ensureSupertonicMtlModel, ensureSupertonic3Model } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
@@ -69,7 +69,7 @@ function expectsGpu () {
   )
 }
 
-function assertGpuBackend (t, engineTag, stats) {
+function assertGpuBackend (t, engineTag, stats, allowPolicyCpu = false) {
   if (!stats) {
     t.fail(`${engineTag}/GPU: no response.stats returned (cannot verify backend)`)
     return
@@ -81,6 +81,14 @@ function assertGpuBackend (t, engineTag, stats) {
 
   if (!expectsGpu()) {
     t.is(dev, 0, `${engineTag}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`)
+    return
+  }
+
+  // allowPolicyCpu hatch: an engine tts-cpp declines on a vendor would fall back
+  // to CPU and flag stats.gpuUnsupported. Chatterbox now runs on Mali GPU, so all
+  // callers assert strictly; the hatch stays for any future declined engine.
+  if (allowPolicyCpu && dev === 0 && stats.gpuUnsupported) {
+    t.pass(`${engineTag}/${platform}: GPU present but declined by policy (gpuUnsupported=1); correctly using CPU`)
     return
   }
 
@@ -139,10 +147,6 @@ function recordSmoke (t, label, result, wallMs) {
 }
 
 test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') {
-    t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes')
-    return
-  }
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 
@@ -176,23 +180,72 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     console.log(result.output)
     t.ok(result.passed, 'Chatterbox/GPU produced expected sample count')
     t.ok(result.data.sampleCount > 0, 'Chatterbox/GPU produced audio')
-    assertGpuBackend(t, 'Chatterbox', result.data.stats)
+    assertGpuBackend(t, 'Chatterbox', result.data.stats, /* allowPolicyCpu */ false)
     recordSmoke(t, 'chatterbox gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }
 })
 
-test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  // QVAC-19255 re-land: Supertonic GPU (Metal on Apple, Vulkan/CUDA on desktop)
-  // is consumed via tts-cpp@2026-06-05 (f7d4d6c overlay). Android (Adreno) is
-  // intentionally kept CPU-only at the engine boundary
-  // (SupertonicModel::loadLocked) because Adreno Vulkan/OpenCL ggml graph
-  // compute still aborts, so skip the GPU assertion there (mirrors Chatterbox).
-  if (platform === 'android') {
-    t.pass('Android: Supertonic GPU disabled at engine boundary pending Adreno Vulkan/OpenCL ggml fixes')
+// Multilingual (MTL) GPU smoke. The Chatterbox GPU smoke above loads the EN
+// Turbo model, whose step graph never CONTs the KV cache. The MULTILINGUAL
+// model does (eval_step_mtl's B=2 cond+uncond path), which made a q8_0 KV
+// cache hard-abort on Metal with GGML_ABORT("unsupported op 'CONT'") (the
+// ggml-speech Metal backend has no q8_0->q8_0 CONT). The addon now defaults
+// the KV cache to f16, which Metal's CONT supports. This entry is the
+// regression guard for that fix: it runs the MTL model with useGPU=true and
+// the default (f16) KV dtype, and would have aborted before the fix. Uses a
+// tier-1 non-English language so the multilingual path (tokenizer + run_t3
+// MTL dispatch) is actually exercised.
+test('Chatterbox MTL GPU smoke - multilingual model on GPU with the default (f16) KV cache', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureChatterboxMtlModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.fail('Chatterbox MTL GGUFs not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.')
     return
   }
+
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
+  if (!fs.existsSync(refWavPath)) {
+    t.pass('Skipped: reference audio missing')
+    return
+  }
+
+  const model = await loadChatterboxTTS({
+    modelDir: download.targetDir,
+    t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
+    s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
+    refWavPath,
+    language: 'es',
+    useGPU: true
+    // kvCacheType intentionally left unset so the run uses the addon default
+    // (f16) — the whole point of this regression guard.
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runChatterboxTTS(
+      model,
+      { text: 'Comprobación de la GPU multilingüe.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Chatterbox MTL/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Chatterbox MTL/GPU produced audio')
+    assertGpuBackend(t, 'Chatterbox MTL', result.data.stats, /* allowPolicyCpu */ false)
+    recordSmoke(t, 'chatterbox-mtl gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  // Supertonic GPU: Metal on Apple, Vulkan/CUDA on desktop, Vulkan/OpenCL on
+  // Android (Adreno/Xclipse/Mali, validated under QVAC-20557 / tts-cpp 2026-06-18).
+  // The strict assertion runs on every GPU-capable platform including Android.
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
 
@@ -224,6 +277,83 @@ test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     t.ok(result.data.sampleCount > 0, 'Supertonic/GPU produced audio')
     assertGpuBackend(t, 'Supertonic', result.data.stats)
     recordSmoke(t, 'supertonic gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+// Supertonic 2 (multilingual) GPU smoke. The Supertonic GPU smoke above
+// loads v1; v2 ships as a separate GGUF (supertonic2.gguf) with its own
+// weights, so it needs its own GPU coverage. Strict assertion, matching the
+// v1 entry — useGPU=true must engage the GPU backend on GPU-capable platforms
+// (Metal / Vulkan / CUDA / OpenCL), no silent CPU fallback.
+test('Supertonic 2 GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureSupertonicMtlModel({ targetDir: modelsDir })
+  if (!download || !download.success) {
+    t.fail('Supertonic 2 GGUF not available - registry fetch failed. Run `npm run download-models:registry -- --group supertonic2` or stage models locally.')
+    return
+  }
+
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: download.path,
+    language: 'en',
+    voice: 'F1',
+    useGPU: true
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runSupertonicTTS(
+      model,
+      { text: 'GPU smoke check for Supertonic 2.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Supertonic2/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Supertonic2/GPU produced audio')
+    assertGpuBackend(t, 'Supertonic2', result.data.stats)
+    recordSmoke(t, 'supertonic2 gpu-smoke', result, wallMs)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+// Supertonic 3 GPU smoke. v3 ships in multiple quant tiers (f16/f32/q8_0/q4_0);
+// the GPU smoke runs the q4_0 tier (the on-device shipping default) so the
+// quantised-weight Metal/Vulkan path is exercised — the same class of path that
+// surfaced the Chatterbox q8_0 Metal CONT abort. Strict assertion.
+test('Supertonic 3 GPU smoke (q4_0) - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureSupertonic3Model({ targetDir: modelsDir, quant: 'q4_0' })
+  if (!download || !download.success) {
+    t.fail('Supertonic 3 q4_0 GGUF not available - registry fetch failed. Run `npm run download-models:registry -- --group supertonic3` or stage models locally.')
+    return
+  }
+
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: download.path,
+    language: 'en',
+    voice: 'F1',
+    useGPU: true
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runSupertonicTTS(
+      model,
+      { text: 'GPU smoke check for Supertonic 3.' },
+      { minSamples: 5000 }
+    )
+    const wallMs = Date.now() - t0
+    console.log(result.output)
+    t.ok(result.passed, 'Supertonic3/GPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Supertonic3/GPU produced audio')
+    assertGpuBackend(t, 'Supertonic3', result.data.stats)
+    recordSmoke(t, 'supertonic3 q4_0 gpu-smoke', result, wallMs)
   } finally {
     try { await model.unload() } catch (_e) {}
   }

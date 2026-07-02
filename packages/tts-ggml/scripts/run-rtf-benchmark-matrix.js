@@ -11,7 +11,7 @@
  *     "engine": "chatterbox" | "chatterbox-mtl" | "supertonic" | "supertonic-mtl",
  *     "variant": "q4" | "q8" | "f16" | "mixed",              (optional, default q4)
  *     "useGPU": true | false,
- *     "backendHint": "cpu" | "metal" | "vulkan" | "cuda" | "opencl", (optional)
+ *     "backendHint": "cpu" | "metal" | "vulkan" | "opencl",  (optional)
  *     "deviceLabel": "...",                                  (optional)
  *     "runnerLabel": "...",                                  (optional)
  *     "label": "...",                                        (optional)
@@ -22,7 +22,7 @@
  *   }
  *
  * If QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON is empty, a small default matrix
- * (chatterbox + chatterbox-mtl + supertonic, CPU-only) is run.
+ * (chatterbox + chatterbox-mtl + supertonic + supertonic-mtl, CPU-only) is run.
  */
 
 const path = require('path')
@@ -67,7 +67,8 @@ function parseMatrixConfig () {
     return [
       { engine: 'chatterbox', useGPU: false, backendHint: 'cpu' },
       { engine: 'chatterbox-mtl', useGPU: false, backendHint: 'cpu' },
-      { engine: 'supertonic', useGPU: false, backendHint: 'cpu' }
+      { engine: 'supertonic', useGPU: false, backendHint: 'cpu' },
+      { engine: 'supertonic-mtl', useGPU: false, backendHint: 'cpu' }
     ]
   }
 

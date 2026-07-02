@@ -158,6 +158,40 @@ TEST(ChatterboxValidate, NegativeNCtxRejected) {
   EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
 }
 
+TEST(ChatterboxValidate, SpeedBelowRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.1f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedAboveRangeRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 8.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, SpeedZeroRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, ValidSpeedAccepted) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.speed = 0.8f; // a typical "slow it down" value
+  // Stub files pass validation; load is deferred, so construction succeeds.
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  EXPECT_NE(m, nullptr);
+}
+
+TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
+  // Unset speed means "no rate change" (1.0) at synthesis time — the addon
+  // applies no per-language default, preserving raw-model backward compat.
+  ChatterboxConfig cfg;
+  EXPECT_FALSE(cfg.speed.has_value());
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  ChatterboxConfig -> tts_cpp EngineOptions mapping.
 // ─────────────────────────────────────────────────────────────────────
@@ -165,19 +199,45 @@ TEST(ChatterboxValidate, NegativeNCtxRejected) {
 // The T3 KV cache is allocated up-front at n_ctx (Turbo GGUF ships
 // n_ctx=8196 ~= 1.6 GB of f32 KV), so the addon must cap it by default
 // rather than inherit tts-cpp's uncapped library default (QVAC-19557 iOS
-// OOM).  4096 + the q8_0 dtype default below ~= 210 MB.
+// OOM).  4096 + the f16 dtype default below ~= 390 MB.
 TEST(ChatterboxEngineOptions, NCtxDefaultsTo4096) {
   ChatterboxConfig cfg;
   const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
   EXPECT_EQ(opts.n_ctx, 4096);
 }
 
-// q8_0 KV by default: ~27% of f32's resident KV memory; Turbo greedy
-// decoding validated byte-identical across f32/f16/q8_0 upstream
-// (qvac-ext-lib-whisper.cpp#43).
-TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToQ8) {
+// f16 KV by default: ~50% of f32's resident KV memory and the safe
+// cross-backend default.  q8_0 (~27%, the prior 0.3.2 default) aborts the
+// multilingual model on Metal because the ggml-speech Metal backend has no
+// q8_0->q8_0 CONT, so it is opt-in rather than the default.
+TEST(ChatterboxEngineOptions, KvCacheTypeDefaultsToF16) {
   ChatterboxConfig cfg;
-  EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type, "q8_0");
+  EXPECT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type,
+      "f16");
+}
+
+// Tripwire (QVAC-21401): the *default* KV-cache dtype must be one every GPU
+// backend can run the full multilingual T3 step graph with.  The MTL graph
+// (tts-cpp eval_step_mtl) issues a ggml_cont on the KV cache, and ggml-speech's
+// Metal backend has no q8_0->q8_0 CONT, so a *quantized* default (q8_0, the
+// 0.3.2 QVAC-19557 default) hard-aborts the multilingual model on Metal with
+// GGML_ABORT("unsupported op 'CONT'").  This asserts the *property* (default is
+// f32/f16, never quantized), not just the current literal — so a future
+// re-flip to a quantized default trips this cheap, no-GPU PR check instead of
+// shipping and aborting on a user's Apple Silicon device.  Relax deliberately
+// only once tts-cpp's chatterbox_resolve_kv_type probes CONT (and auto-
+// downgrades quantized KV on backends that can't run it).
+TEST(ChatterboxEngineOptions, DefaultKvCacheTypeIsGpuSafeNotQuantized) {
+  ChatterboxConfig cfg;  // no kvCacheType -> addon default
+  const std::string def =
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).kv_cache_type;
+  EXPECT_TRUE(def == "f32" || def == "f16")
+      << "default KV-cache dtype '" << def << "' is not GPU-safe: a quantized "
+         "default aborts the multilingual Chatterbox model on Metal "
+         "(unsupported q8_0 CONT, QVAC-21401). Keep the default f16/f32, or "
+         "land the tts-cpp CONT-probe fix before re-quantizing it.";
+  EXPECT_NE(def, "q8_0");
 }
 
 TEST(ChatterboxEngineOptions, ExplicitKvCacheTypeForwarded) {

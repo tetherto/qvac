@@ -5,7 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.2] - 2026-06-24
+
+### Changed
+
+- New `getBackendInfo()` surfaces the active GPU hardware name. The native addon now captures `ggml_backend_dev_description()` for the resolved GPU device at `load()` (e.g. "NVIDIA GeForce RTX 3090", "Apple M2 Pro") and exposes it through `TranscriptionParakeet#getBackendInfo()` → `{ backendDevice, backendId, backendName, backendDescription }`. The RTF benchmark uses it as a fallback for `labels.gpuModel` on CI GPU runners where the host probe (nvidia-smi / procfs) can't see the device but the ggml CUDA/Vulkan/Metal backend still knows its name via `cudaGetDeviceProperties` / `VkPhysicalDeviceProperties` / `MTLDevice.name` (QVAC-21167).
+- Bumped the `parakeet-cpp` `version>=` constraint from `2026-06-18` to `2026-06-18#1`, which refreshes the bundled `ggml-speech` from `2026-06-09` to `2026-06-15` (speech branch tip `7bb9f229`), keeping it consistent with the other speech-stack addons (`tts-cpp` already pins `ggml-speech 2026-06-15`). The `parakeet-cpp` C++ source is unchanged (same `master` REF `b95ad447`), so this only moves `ggml-speech`. The registry baseline is left unchanged; `version>=` resolves the new port-version forward of the pinned baseline (QVAC-21322, registry [tetherto/qvac-registry-vcpkg#210](https://github.com/tetherto/qvac-registry-vcpkg/pull/210)).
+
+## Pull Requests
+
+- [#2743](https://github.com/tetherto/qvac/pull/2743) - QVAC-21167 feat[api]: expose addon GPU device name via getBackendInfo() (parakeet)
+- [#2847](https://github.com/tetherto/qvac/pull/2847) - QVAC-21322 transcription-parakeet: consume ggml-speech 2026-06-15 (parakeet-cpp 2026-06-18#1)
+
+## [0.8.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Package-local vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.8.0]
+
+### Added
+
+- **Android GPU for Parakeet (QVAC-20556).** Remove the `#ifdef __ANDROID__`
+  guard in `ParakeetModel::load` that forced `useGPU=false`; `useGPU` now flows
+  to `parakeet-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which runs
+  the encoder on the GPU and selects the backend per its Adreno-tier / vendor
+  policy — Adreno 700+ on OpenCL (TDT decode routed to the host so the missing
+  `ARGMAX` kernel can't abort), Mali / Xclipse on Vulkan, with unsupported
+  tiers/vendors routed to CPU and surfaced via the new `gpuUnsupported` runtime
+  stat (`index.d.ts` `RuntimeStats.gpuUnsupported`). `CMakeLists.txt` now stages
+  the Vulkan/OpenCL MODULE `.so`s in the Android prebuild (reverses the [0.7.2]
+  CPU-only packaging), and the `default-registry` baseline advances to `6fe4e2b`
+  so the new version resolves. The Android gpu-smoke skips are dropped (GPU
+  asserted on Adreno/Mali; a policy CPU fallback flagged via `gpuUnsupported` is
+  accepted).
 
 ### Changed
 

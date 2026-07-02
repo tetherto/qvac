@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
 
 // === BCI (whisper.cpp) engine config ===
 //
@@ -59,6 +60,7 @@ export const bciConfigSchema = z.object({
   contextParams: bciContextParamsSchema,
   miscConfig: bciMiscConfigSchema,
   backendsDir: z.string().optional(),
+  embedderModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type BciConfig = z.infer<typeof bciConfigSchema>;

@@ -2,6 +2,13 @@ import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
 import { TOOLS_MODE } from "./tools";
 
+/**
+ * Upper bound for `reasoning_budget`. Mirrors the llm-llamacpp addon, which
+ * stores the budget as a 32-bit `int` and rejects values above
+ * `std::numeric_limits<int>::max()`.
+ */
+export const REASONING_BUDGET_MAX = 2147483647;
+
 export const VERBOSITY = {
   ERROR: 0,
   WARN: 1,
@@ -62,10 +69,20 @@ export const llmConfigBaseSchema = z.object({
    */
   openclCacheDir: z.string().optional(),
   /**
-   * Reasoning channel token budget. `-1` = unrestricted, `0` = disabled.
+   * Reasoning channel token budget. `-1` = unrestricted, `0` = disabled, any
+   * positive integer caps the reasoning channel at that many tokens (the
+   * sampler force-emits the closing think tag once the budget is exhausted).
    */
-  reasoning_budget: z.union([z.literal(-1), z.literal(0)]).optional(),
+  reasoning_budget: z.number().int().min(-1).max(REASONING_BUDGET_MAX).optional(),
   projectionModelSrc: modelSrcInputSchema.optional(),
+  /**
+   * Qwen3.5-VL multi-tile image encoding mode (multimodal models only):
+   *   - `"sequential"` (default): encode image tiles one tile at a time.
+   *   - `"batched"`: encode all tiles in a single batched pass.
+   *   - `"disabled"`: no multi-tile encoding (single tile).
+   * Ignored by text-only models. Default is `"sequential"`.
+   */
+  image_tile_mode: z.enum(["disabled", "batched", "sequential"]).optional(),
 });
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>;
@@ -76,6 +93,7 @@ export const LLM_CONFIG_DEFAULTS = {
   gpu_layers: 99,
   device: "gpu",
   system_prompt: "You are a helpful assistant.",
+  image_tile_mode: "sequential",
 } as const satisfies Partial<LlmConfigInput>;
 
 // Full schema - applies defaults via transform (no duplication)

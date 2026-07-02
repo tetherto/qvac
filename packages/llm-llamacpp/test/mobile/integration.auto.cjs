@@ -381,6 +381,11 @@ async function runConfigParametersTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/config-parameters.test.js', options)
 }
 
+async function runContinuousBatchingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runContinuousBatchingTest')) return __FILTERED
+  return runIntegrationModule('../integration/continuous-batching.test.js', options)
+}
+
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
@@ -479,6 +484,11 @@ async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disab
 async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
+}
+
+async function runQwen35MultimodalCacheStressTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35MultimodalCacheStressTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-multimodal-cache-stress.test.js', options)
 }
 
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars

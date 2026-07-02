@@ -30,9 +30,8 @@
  * scripts/convert-supertonic2-to-gguf.py --arch supertonic.
  *
  * NOTE: Supertonic supports GPU on capable hosts (Metal on Apple,
- * Vulkan/CUDA on desktop) via tts-cpp@2026-06-05; opt in with
- * config: { useGPU: true }.  On Android it is forced to CPU at the engine
- * boundary (Adreno Vulkan/OpenCL is not yet stable).  This example keeps
+ * Vulkan/CUDA on desktop, and Android via tts-cpp's per-vendor
+ * allowlist); opt in with config: { useGPU: true }.  This example keeps
  * useGPU=false so it runs identically everywhere.
  */
 

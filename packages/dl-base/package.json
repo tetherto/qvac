@@ -31,7 +31,7 @@
     "directory": "packages/dl-base"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-base#readme",
+  "homepage": "https://qvac.tether.io",
   "files": [
     "src",
     "index.d.ts",

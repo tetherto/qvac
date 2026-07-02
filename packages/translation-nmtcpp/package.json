@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -63,9 +63,8 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/translation-nmtcpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/dl-base": "^0.1.0",
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",

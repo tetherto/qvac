@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.8.0] - 2026-06-30
+
+### Added
+
+- ROCm/HIP GPU backend for AMD GPUs on Linux (Strix Halo / gfx1151), built as a `GGML_BACKEND_DL` module (`libqvac-ggml-hip.so`) alongside Vulkan. `BackendSelection` prefers the ROCm device at runtime with Vulkan/CPU fallback; an unloadable HIP module or non-AMD target is skipped by the DL loader. Opt-in via the `qvac-fabric[hip-backend]` feature (linux-x64 only) — other consumers are unaffected and gain no ROCm dependency.
+
+### Changed
+
+- `default-registry` baseline raised to consume the published `qvac-fabric` `hip-backend` feature and the new `hip` port directly from the registry ([qvac-registry-vcpkg #206](https://github.com/tetherto/qvac-registry-vcpkg/pull/206)); no in-tree overlay ports.
+
+## Pull Requests
+
+- [#2781](https://github.com/tetherto/qvac/pull/2781) - QVAC-19291 feat[api]: vla-ggml ROCm/HIP backend (gfx1151, Strix Halo)
+
+## [0.7.0] - 2026-06-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0` (Qwen3.5-VL multi-tile batching; no API change for this package).
+
+## Pull Requests
+
+- [#2840](https://github.com/tetherto/qvac/pull/2840) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (vla-ggml)
+
+## [0.6.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.6.0] - 2026-06-22
 
 ### Changed

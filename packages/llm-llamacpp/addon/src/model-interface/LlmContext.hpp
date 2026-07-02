@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -14,6 +15,7 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 
 struct PromptLayout;
+struct mtmd_context;
 
 struct GenerationParams {
   std::optional<int> n_predict;
@@ -34,12 +36,27 @@ struct GenerationParams {
   // Mutually exclusive with `grammar` — the JS wrapper rejects requests
   // that set both. Mirrors the load-time `--json-schema` flag.
   std::optional<std::string> json_schema;
-  // Reasoning channel budget override. `-1` keeps reasoning on, `0` disables
-  // it for this request. Mirrors the load-time `reasoning-budget` config; the
-  // override is applied to `params_.reasoning_budget` for the duration of the
-  // request and restored on completion.
+  // Reasoning channel budget override. `-1` keeps reasoning unrestricted, `0`
+  // disables it, and positive values cap the reasoning channel at that many
+  // tokens. Mirrors the load-time `reasoning-budget` config; the override is
+  // applied to `params_.reasoning_budget` for the duration of the request and
+  // restored on completion.
   std::optional<int> reasoning_budget;
+  // Per-request override for the post-generation thinking-block KV
+  // cache compaction. Default-off at the context level; passing `true`
+  // here opts in for this request, `false` leaves the reasoning block
+  // in the cache. Throws `StatusError(InvalidArgument)` when set to
+  // `true` on a model with recurrent memory (SSM / hybrid SSM such as
+  // Qwen3.5). Restored at end-of-request.
+  std::optional<bool> remove_thinking_from_context;
 
+  // Reports overrides that need `applyGenerationParamsToContext` (sampler /
+  // common_params rebuild). Intentionally excludes
+  // `remove_thinking_from_context` — that toggle lives on `TextLlmContext`, not
+  // on `common_params`, and is applied directly via
+  // `setRemoveThinkingFromContext` on both the single- prompt and batch paths.
+  // Including it here would force a no-op `common_sampler_init` whenever it's
+  // the only override set.
   [[nodiscard]] bool hasOverrides() const {
     return n_predict || temp || top_p || top_k || frequency_penalty ||
            presence_penalty || repeat_penalty || seed || grammar ||
@@ -144,6 +161,26 @@ struct LlmModelContext {
   const llama_vocab* vocab = nullptr;
 };
 
+/// Canonical layout of the per-session cache metadata that every cache
+/// (de)serializer must persist and restore. Any driver implementing
+/// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
+///
+/// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
+/// separately from `nPast`/`firstMsgTokens` (logical positional span) because
+/// multimodal M-RoPE media can occupy more KV cells than its positional span.
+/// Persisting only the two positional fields would lose the media KV-cell
+/// counts and break context shifting after restore. See `getCacheTokens` /
+/// `getFirstMsgCacheTokens` below for the divergence these fields capture.
+enum class SessionMetadataField : uint8_t {
+  NPast = 0,
+  FirstMsgTokens = 1,
+  CacheTokens = 2,
+  FirstMsgCacheTokens = 3,
+};
+
+/// Number of `llama_token` fields in the session metadata contract above.
+inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -217,6 +254,13 @@ public:
   virtual common_params& getParams() = 0;
 
   /**
+   * The llama-side sequence id this context owns (0 for the single-prompt
+   * path, the scheduler-assigned slot id under continuous batching). Used as
+   * the `seq_id` argument when persisting/restoring per-sequence cache state.
+   */
+  [[nodiscard]] llama_seq_id getSeqId() const { return seqId_; }
+
+  /**
    * The get nPast method. It returns the nPast.
    *
    * @return - the nPast.
@@ -280,6 +324,14 @@ public:
    * Reset the slide counter to zero. Called at the start of each inference.
    */
   virtual void resetNSlides() = 0;
+
+  /**
+   * Number of `<think>` reasoning blocks compacted out of the KV
+   * cache during the most recent generation. 0 for contexts without
+   * reasoning channel support.
+   */
+  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
+  virtual void resetThinkingBlockDiscards() {}
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -351,6 +403,11 @@ public:
     (void)layout;
     (void)hasKvCacheContext;
   }
+
+  /// Loaded multimodal (mmproj) context this LLM context can hand to
+  /// per-slot batch drivers, or null for text-only contexts. Used by the
+  /// scheduler factory to detect media capability without a `dynamic_cast`.
+  [[nodiscard]] virtual mtmd_context* visionContext() const { return nullptr; }
 
 protected:
   void clearSequenceMemory(

@@ -5,6 +5,7 @@ import {
   generationParamsSchema,
   toolDialectSchema,
 } from "@/schemas/completion-stream";
+import { REASONING_BUDGET_MAX } from "@/schemas/llamacpp-config";
 
 test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
   t.is(
@@ -35,9 +36,41 @@ test("generationParamsSchema: accepts reasoning_budget -1 and 0", (t) => {
   t.is(generationParamsSchema.safeParse({ reasoning_budget: 0 }).success, true);
 });
 
+test("generationParamsSchema: accepts positive reasoning_budget (token cap)", (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: 1 }).success, true);
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: 128 }).success, true);
+});
+
 test("generationParamsSchema: rejects reasoning_budget other values", (t) => {
-  t.is(generationParamsSchema.safeParse({ reasoning_budget: 1 }).success, false);
   t.is(generationParamsSchema.safeParse({ reasoning_budget: -2 }).success, false);
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: 0.5 }).success, false);
+  t.is(
+    generationParamsSchema.safeParse({
+      reasoning_budget: REASONING_BUDGET_MAX + 1,
+    }).success,
+    false,
+  );
+});
+
+test("generationParamsSchema: accepts remove_thinking_from_context boolean", (t) => {
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: true })
+      .success,
+    true,
+  );
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: false })
+      .success,
+    true,
+  );
+});
+
+test("generationParamsSchema: rejects non-boolean remove_thinking_from_context", (t) => {
+  t.is(
+    generationParamsSchema.safeParse({ remove_thinking_from_context: 1 })
+      .success,
+    false,
+  );
 });
 
 test("toolDialectSchema: accepts qwen35 and gemma4", (t) => {

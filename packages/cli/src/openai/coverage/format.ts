@@ -1,12 +1,12 @@
 import type { CoverageCategory, CoverageReport, CoverageRow } from './types.js'
 
-function tagLabel (row: CoverageRow): string {
+function tagLabel(row: CoverageRow): string {
   const parts = [...row.tags]
   if (row.group && !parts.includes(row.group)) parts.push(row.group)
   return parts.length > 0 ? `(${parts.join(', ')})` : ''
 }
 
-function formatCategoryLine (
+function formatCategoryLine(
   label: string,
   summary: { implemented: number; total: number; percent: number }
 ): string {
@@ -16,7 +16,7 @@ function formatCategoryLine (
   return `  ${label.padEnd(14)} ${impl} / ${total}   (${pct}%)`
 }
 
-function appendUnknownNotice (lines: string[], report: CoverageReport): void {
+function appendUnknownNotice(lines: string[], report: CoverageReport): void {
   const unknownTotal = report.summary.byCategory.unknown.total
   if (unknownTotal === 0 || !report.summary.unknownBreakdown?.length) return
 
@@ -30,9 +30,7 @@ function appendUnknownNotice (lines: string[], report: CoverageReport): void {
   lines.push('Labels not in our category tables (OpenAPI tag or x-oaiMeta.group):')
   for (const item of report.summary.unknownBreakdown) {
     const kind = item.kind === 'tag' ? 'tag' : 'x-oaiMeta.group'
-    lines.push(
-      `  ${String(item.count).padStart(3)}  ${kind}: ${item.label}`
-    )
+    lines.push(`  ${String(item.count).padStart(3)}  ${kind}: ${item.label}`)
   }
   lines.push('')
   lines.push(
@@ -42,18 +40,13 @@ function appendUnknownNotice (lines: string[], report: CoverageReport): void {
   lines.push('')
 }
 
-export function formatCoverageReportHuman (
-  report: CoverageReport,
-  rows: CoverageRow[]
-): string {
+export function formatCoverageReportHuman(report: CoverageReport, rows: CoverageRow[]): string {
   const lines: string[] = []
   lines.push('qvac serve openai — coverage')
   lines.push('')
   appendUnknownNotice(lines, report)
   lines.push(`Spec: ${report.specSource} (${report.rows.length} endpoints)`)
-  lines.push(
-    `Router: ${report.routerSource} (${report.implementedCount} implemented)`
-  )
+  lines.push(`Router: ${report.routerSource} (${report.implementedCount} implemented)`)
   lines.push('')
   lines.push('Coverage by category:')
   const cats: Array<{ key: CoverageCategory; label: string }> = [
@@ -78,10 +71,7 @@ export function formatCoverageReportHuman (
     const mark = row.implemented ? '[x]' : '[ ]'
     const tag = tagLabel(row)
     const tagSuffix = tag ? `     ${tag}` : ''
-    lines.push(
-      `  ${mark} ${row.method} ${row.path}`.padEnd(52) +
-        `${row.category}${tagSuffix}`
-    )
+    lines.push(`  ${mark} ${row.method} ${row.path}`.padEnd(52) + `${row.category}${tagSuffix}`)
   }
   lines.push('')
   lines.push('For per-endpoint behavior notes and caveats:')
@@ -91,7 +81,7 @@ export function formatCoverageReportHuman (
   return lines.join('\n')
 }
 
-export function filterCoverageRows (
+export function filterCoverageRows(
   report: CoverageReport,
   options: {
     unsupported?: boolean

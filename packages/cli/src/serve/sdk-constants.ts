@@ -7,7 +7,7 @@ import type { ModelConstant } from '@qvac/sdk'
  * idempotent — callers are free to invoke it on each use rather than
  * threading the resulting map around.
  */
-export function loadModelConstants (): Map<string, ModelConstant> {
+export function loadModelConstants(): Map<string, ModelConstant> {
   const map = new Map<string, ModelConstant>()
   for (const value of Object.values(sdk)) {
     if (isModelConstant(value)) map.set(value.name, value)
@@ -15,7 +15,7 @@ export function loadModelConstants (): Map<string, ModelConstant> {
   return map
 }
 
-function isModelConstant (value: unknown): value is ModelConstant {
+function isModelConstant(value: unknown): value is ModelConstant {
   return (
     value !== null &&
     typeof value === 'object' &&

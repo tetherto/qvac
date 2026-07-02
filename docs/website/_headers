@@ -9,3 +9,13 @@
 # Agent discovery: SDK API summary
 /*
   Link: </reference/api/>; rel="service-doc"; type="text/html"; title="SDK API summary"
+
+# Per-page Markdown representations. Sevalla's static MIME map serves `.md`
+# as `application/octet-stream`, which forces a browser download and makes
+# some AI-agent fetchers treat the body as binary. Pin the canonical
+# Markdown content type (RFC 7763) so the `.md` siblings used by the in-page
+# "Copy as Markdown" action and the `Accept: text/markdown` negotiation flow
+# resolve as text. The wildcard is greedy, so it also covers nested paths
+# (e.g. `/reference/api.md`).
+/*.md
+  Content-Type: text/markdown; charset=utf-8

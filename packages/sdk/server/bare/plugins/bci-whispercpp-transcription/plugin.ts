@@ -24,11 +24,14 @@ import {
   bciTranscribeStream,
 } from "@/server/bare/ops/bci-transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
+import { buildBciWhispercppArgs } from "@/server/bare/plugins/bci-whispercpp-transcription/args";
+import { resolveBciConfig } from "@/server/bare/plugins/bci-whispercpp-transcription/resolve-config";
 
 function createBciModel(
   modelId: string,
   modelPath: string,
   bciConfig: BciConfig,
+  embedderPath: string,
 ) {
   const logger = createStreamLogger(
     modelId,
@@ -36,15 +39,7 @@ function createBciModel(
   );
   registerAddonLogger(modelId, ModelType.bciWhispercppTranscription, logger);
 
-  const args = {
-    files: {
-      model: modelPath,
-    },
-    logger,
-    opts: {
-      stats: true,
-    },
-  };
+  const args = buildBciWhispercppArgs(modelPath, embedderPath, logger);
 
   const model = new BCIWhispercpp(
     args,
@@ -60,6 +55,8 @@ export const bciPlugin = definePlugin({
   addonPackage: ADDON_BCI,
   loadConfigSchema: bciConfigSchema,
 
+  resolveConfig: resolveBciConfig,
+
   createModel(params: CreateModelParams): PluginModelResult {
     const bciConfig = (params.modelConfig ?? {}) as BciConfig;
 
@@ -67,6 +64,7 @@ export const bciPlugin = definePlugin({
       params.modelId,
       params.modelPath,
       bciConfig,
+      params.artifacts?.["embedderPath"] ?? "",
     );
 
     return { model };

@@ -20,7 +20,7 @@ import {
   unloadModel,
   type ModelProgressUpdate,
   LLAMA_3_2_1B_INST_Q4_0,
-  TTS_EN_SUPERTONIC_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
 } from "@qvac/sdk";
 import { createWav, playPcmInt16Chunk } from "./utils";
 
@@ -87,7 +87,7 @@ try {
 
   console.log("▸ Loading Supertonic TTS (registry)…");
   const ttsModelId = await loadModel({
-    modelSrc: TTS_EN_SUPERTONIC_Q8_0,
+    modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
     modelConfig: {
       ttsEngine: "supertonic",
       language: "en",

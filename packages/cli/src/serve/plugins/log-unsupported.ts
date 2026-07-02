@@ -1,5 +1,6 @@
 import type { preHandlerAsyncHookHandler } from 'fastify'
 
+// lunte-disable-next-line require-await
 export const logUnsupported: preHandlerAsyncHookHandler = async function (req) {
   const list = req.routeOptions?.config?.unsupportedParams
   if (!list || list.length === 0) return
@@ -13,7 +14,7 @@ export const logUnsupported: preHandlerAsyncHookHandler = async function (req) {
   }
 }
 
-function stringifyForLog (value: unknown): string {
+function stringifyForLog(value: unknown): string {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   try {

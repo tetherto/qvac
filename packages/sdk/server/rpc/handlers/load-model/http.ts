@@ -3,7 +3,7 @@ import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { Readable, type Writable } from "bare-stream";
 import fetch, { Headers } from "bare-fetch";
-import type { AbortSignal } from "bare-abort-controller";
+import { AbortController, type AbortSignal } from "bare-abort-controller";
 import { withTimeout } from "@/utils/withTimeout";
 import {
   getModelsCacheDir,
@@ -22,6 +22,7 @@ import {
   hasValidGGUFHeader,
 } from "@/server/utils";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import { getLifecycleState, onResume } from "@/server/bare/runtime-lifecycle";
 import {
   createHttpDownloadKey,
   startOrJoinDownload,
@@ -51,6 +52,10 @@ interface ShardDownloadState {
 }
 
 const DEFAULT_HTTP_CONNECTION_TIMEOUT_MS = 10_000;
+// If no bytes arrive for this long mid-stream, treat the transfer as stalled
+// (dead socket after a suspend or network drop that didn't surface an error)
+// and abort so the caller can resume from the partial via a Range request.
+const HTTP_STREAM_STALL_TIMEOUT_MS = 10_000;
 
 function extractFilenameFromUrl(url: string): string {
   // Parse URL to get the filename from the path
@@ -277,79 +282,155 @@ async function performHttpDownload(
         typeof (body as unknown as Readable).on === "function");
 
     if (isReadable) {
-      // Track progress by intercepting data events if possible
-      (body as Readable).on("data", (chunk) => {
-        downloadedBytes += (chunk as Buffer).length;
-        if (progressCallback) {
-          progressCallback({
-            type: "modelProgress",
-            downloaded: downloadedBytes,
-            total: totalBytes,
-            percentage: calculatePercentage(downloadedBytes, totalBytes),
-            downloadKey,
-          });
-        }
-      });
-
-      // Pipe directly to file
-      (body as Readable).pipe(writeStream as unknown as Writable);
-
       // Wait for download to complete
       await new Promise((resolve, reject) => {
-        // Handle abort signal
+        let stallTimer: ReturnType<typeof setTimeout> | undefined;
+        const clearStall = () => {
+          if (stallTimer) {
+            clearTimeout(stallTimer);
+            stallTimer = undefined;
+          }
+        };
+        // Reset on every chunk; if it ever fires, the socket went quiet
+        // mid-stream (suspend/drop) — abort so the caller resumes via Range.
+        const armStall = () => {
+          clearStall();
+          stallTimer = setTimeout(() => {
+            (body as Readable).destroy();
+            writeStream.destroy();
+            reject(
+              new Error(
+                `HTTP stream stalled: no data for ${HTTP_STREAM_STALL_TIMEOUT_MS}ms`,
+              ),
+            );
+          }, HTTP_STREAM_STALL_TIMEOUT_MS);
+        };
+
         const abortHandler = () => {
-          const error = new DownloadCancelledError();
+          clearStall();
           (body as Readable).destroy();
           writeStream.destroy();
-          reject(error);
+          reject(new DownloadCancelledError());
         };
 
         if (signal) {
+          if (signal.aborted) {
+            abortHandler();
+            return;
+          }
           signal.addEventListener("abort", abortHandler);
         }
 
+        // Track progress + keep the stall watchdog fed
+        (body as Readable).on("data", (chunk) => {
+          armStall();
+          downloadedBytes += (chunk as Buffer).length;
+          if (progressCallback) {
+            progressCallback({
+              type: "modelProgress",
+              downloaded: downloadedBytes,
+              total: totalBytes,
+              percentage: calculatePercentage(downloadedBytes, totalBytes),
+              downloadKey,
+            });
+          }
+        });
+
+        // Pipe directly to file
+        (body as Readable).pipe(writeStream as unknown as Writable);
+        armStall();
+
         writeStream.on("finish", () => {
+          clearStall();
           logger.info(`✅ Model downloaded successfully to ${modelPath}`);
           if (signal) {
             signal.removeEventListener("abort", abortHandler);
           }
           resolve(undefined);
         });
-        writeStream.on("error", reject);
-        (body as Readable).on("error", reject);
+        writeStream.on("error", (error) => {
+          clearStall();
+          reject(error);
+        });
+        (body as Readable).on("error", (error) => {
+          clearStall();
+          reject(error);
+        });
       });
     } else if (body[Symbol.asyncIterator]) {
-      // Body is an async iterable (for await...of)
-      for await (const chunk of body as AsyncIterable<Buffer | Uint8Array>) {
-        // Check if abort signal is triggered
-        if (signal && signal.aborted) {
-          writeStream.destroy();
-          throw new DownloadCancelledError();
-        }
+      // Body is an async iterable. Drive the iterator manually so each pull can
+      // race a stall timeout: a dead socket after suspend/drop produces neither
+      // a chunk nor an error, so the timeout converts it into a retriable
+      // failure and we abandon the iterator (which cancels the stream).
+      const iterator = (
+        body as AsyncIterable<Buffer | Uint8Array>
+      )[Symbol.asyncIterator]();
+      let stalled = false;
+      try {
+        for (;;) {
+          let stallTimer: ReturnType<typeof setTimeout> | undefined;
+          const nextPromise = iterator.next();
+          nextPromise.catch(() => {});
+          let step: IteratorResult<Buffer | Uint8Array>;
+          try {
+            step = await Promise.race([
+              nextPromise,
+              new Promise<never>((_, reject) => {
+                stallTimer = setTimeout(() => {
+                  stalled = true;
+                  reject(
+                    new Error(
+                      `HTTP stream stalled: no data for ${HTTP_STREAM_STALL_TIMEOUT_MS}ms`,
+                    ),
+                  );
+                }, HTTP_STREAM_STALL_TIMEOUT_MS);
+              }),
+            ]);
+          } finally {
+            if (stallTimer) clearTimeout(stallTimer);
+          }
 
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        downloadedBytes += buffer.length;
+          if (step.done) break;
 
-        if (progressCallback) {
-          progressCallback({
-            type: "modelProgress",
-            downloaded: downloadedBytes,
-            total: totalBytes,
-            percentage: calculatePercentage(downloadedBytes, totalBytes),
-            downloadKey,
+          if (signal?.aborted) {
+            writeStream.destroy();
+            throw new DownloadCancelledError();
+          }
+
+          const buffer = Buffer.isBuffer(step.value)
+            ? step.value
+            : Buffer.from(step.value);
+          downloadedBytes += buffer.length;
+
+          if (progressCallback) {
+            progressCallback({
+              type: "modelProgress",
+              downloaded: downloadedBytes,
+              total: totalBytes,
+              percentage: calculatePercentage(downloadedBytes, totalBytes),
+              downloadKey,
+            });
+          }
+
+          // Write chunk to file
+          await new Promise<void>((resolve, reject) => {
+            writeStream.write(buffer, (err) => {
+              if (err)
+                reject(
+                  new Error(err instanceof Error ? err.message : String(err)),
+                );
+              else resolve();
+            });
           });
         }
-
-        // Write chunk to file
-        await new Promise<void>((resolve, reject) => {
-          writeStream.write(buffer, (err) => {
-            if (err)
-              reject(
-                new Error(err instanceof Error ? err.message : String(err)),
-              );
-            else resolve();
-          });
-        });
+      } finally {
+        if (stalled) {
+          try {
+            await iterator.return?.();
+          } catch {
+            /* best effort: free the dead socket */
+          }
+        }
       }
 
       // Close the write stream
@@ -361,21 +442,54 @@ async function performHttpDownload(
         writeStream.on("error", reject);
       });
     } else {
-      // Fallback: try to use getReader() if it's a ReadableStream
+      // Fallback: getReader() for a WHATWG ReadableStream (bare-fetch body).
       const readableStreamBody = body as unknown as {
         getReader?: () => {
           read: () => Promise<{ done: boolean; value: Uint8Array }>;
           releaseLock: () => void;
+          cancel: (reason?: unknown) => Promise<void>;
         };
       };
       const reader = readableStreamBody.getReader
         ? readableStreamBody.getReader()
         : null;
       if (reader) {
+        let cancelled = false;
         try {
-          while (true) {
-            const { done, value } = await reader.read();
+          for (;;) {
+            // Race each read against a stall timeout. A dead socket after a
+            // suspend/drop yields no data and no error; the timeout converts
+            // that into a retriable failure so the caller resumes via Range.
+            let stallTimer: ReturnType<typeof setTimeout> | undefined;
+            const readPromise = reader.read();
+            // Avoid an unhandled rejection if the read loses the race.
+            readPromise.catch(() => {});
+            let result: { done: boolean; value: Uint8Array };
+            try {
+              result = await Promise.race([
+                readPromise,
+                new Promise<never>((_, reject) => {
+                  stallTimer = setTimeout(() => {
+                    cancelled = true;
+                    reject(
+                      new Error(
+                        `HTTP stream stalled: no data for ${HTTP_STREAM_STALL_TIMEOUT_MS}ms`,
+                      ),
+                    );
+                  }, HTTP_STREAM_STALL_TIMEOUT_MS);
+                }),
+              ]);
+            } finally {
+              if (stallTimer) clearTimeout(stallTimer);
+            }
+
+            const { done, value } = result;
             if (done) break;
+
+            if (signal?.aborted) {
+              cancelled = true;
+              throw new DownloadCancelledError();
+            }
 
             const buffer = Buffer.from(value);
             downloadedBytes += buffer.length;
@@ -402,6 +516,13 @@ async function performHttpDownload(
             });
           }
         } finally {
+          if (cancelled) {
+            try {
+              await reader.cancel();
+            } catch {
+              /* best effort: free the dead socket */
+            }
+          }
           reader.releaseLock();
         }
 
@@ -424,6 +545,114 @@ async function performHttpDownload(
       error instanceof Error ? error.message : String(error),
     );
     throw error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+const DEFAULT_HTTP_DOWNLOAD_MAX_RETRIES = 5;
+const HTTP_RETRY_BASE_DELAY_MS = 500;
+const LIFECYCLE_WAIT_POLL_MS = 200;
+const LIFECYCLE_WAIT_MAX_MS = 5 * 60_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A mid-stream socket/body error, a connection failure (HTTP status 0, no
+ * response), or our own resume-triggered abort is recoverable by resuming from
+ * the partial. A real HTTP status (4xx/5xx) or a missing/unreadable body is not.
+ *
+ * `DownloadCancelledError` is intentionally NOT excluded here: this is only
+ * reached after the caller's consumer-cancel gate, so a cancellation at this
+ * point is our per-attempt abort (resume interrupt), which must be retried.
+ */
+function isResumableTransferError(error: unknown): boolean {
+  if (
+    error instanceof NoResponseBodyError ||
+    error instanceof ResponseBodyNotReadableError ||
+    error instanceof PartialDownloadOfflineError
+  ) {
+    return false;
+  }
+  if (error instanceof HTTPError) return error.httpStatus === 0;
+  return error instanceof Error;
+}
+
+/**
+ * Block until the runtime is active again before retrying. After a suspend the
+ * socket is dead and the process can't service the transfer; resuming the fetch
+ * only makes sense once `resume()` has run. Bounded and abort-aware.
+ */
+async function waitForLifecycleActive(signal?: AbortSignal): Promise<void> {
+  if (getLifecycleState() === "active") return;
+  const start = Date.now();
+  while (getLifecycleState() !== "active") {
+    if (signal?.aborted) throw new DownloadCancelledError();
+    if (Date.now() - start > LIFECYCLE_WAIT_MAX_MS) return;
+    await sleep(LIFECYCLE_WAIT_POLL_MS);
+  }
+}
+
+/**
+ * Run `performHttpDownload` with bounded retry. On a recoverable interruption
+ * (mid-stream socket drop, or a dead socket after suspend/network loss) it
+ * waits for the runtime to be active and re-issues the request, which resumes
+ * from the on-disk partial via a Range header. No consumer-side babysitting.
+ *
+ * Each attempt runs on its own AbortController that is aborted either by the
+ * consumer `signal` (a real cancel — terminal) or by `resume()` (a proactive
+ * recovery — the in-flight socket is dead after a background, so abort and
+ * range-resume immediately instead of waiting for the stall watchdog).
+ */
+async function performHttpDownloadWithResume(
+  url: string,
+  modelPath: string,
+  downloadKey: string,
+  progressCallback?: (progress: ModelProgressUpdate) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const maxRetries = DEFAULT_HTTP_DOWNLOAD_MAX_RETRIES;
+
+  let attempt = 0;
+  for (;;) {
+    const attemptController = new AbortController();
+    const forwardCancel = () => attemptController.abort();
+    if (signal) {
+      if (signal.aborted) attemptController.abort();
+      else signal.addEventListener("abort", forwardCancel, { once: true });
+    }
+    // resume() → abort this attempt so it range-resumes now, not after the stall.
+    const offResume = onResume(() => attemptController.abort());
+
+    try {
+      await performHttpDownload(
+        url,
+        modelPath,
+        downloadKey,
+        progressCallback,
+        attemptController.signal,
+      );
+      return;
+    } catch (error) {
+      // A real consumer cancel is terminal; anything else (resume abort, stall,
+      // network error) is recoverable from the partial.
+      if (signal?.aborted) {
+        throw error instanceof DownloadCancelledError
+          ? error
+          : new DownloadCancelledError();
+      }
+      attempt++;
+      if (attempt > maxRetries || !isResumableTransferError(error)) throw error;
+
+      logger.warn(
+        `⚠️ HTTP download interrupted (attempt ${attempt}/${maxRetries}), resuming from partial: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      await waitForLifecycleActive(signal);
+      await sleep(HTTP_RETRY_BASE_DELAY_MS * attempt);
+    } finally {
+      if (signal) signal.removeEventListener("abort", forwardCancel);
+      offResume();
+    }
   }
 }
 
@@ -484,7 +713,7 @@ export async function downloadModelFromHttp(
         // Download the file
         hooks?.markCacheMiss?.();
         ctx.setCacheHit(false);
-        await performHttpDownload(
+        await performHttpDownloadWithResume(
           url,
           modelPath,
           downloadKey,
@@ -812,7 +1041,7 @@ async function downloadShardedModelFromArchive(
       }
 
       async function downloadAndExtractArchive() {
-        await performHttpDownload(
+        await performHttpDownloadWithResume(
           archiveUrl,
           archivePath,
           downloadKey,
@@ -873,7 +1102,7 @@ async function downloadShardsWithConcurrency(
           `📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`,
         );
 
-        await performHttpDownload(
+        await performHttpDownloadWithResume(
           state.shard.url,
           state.shardPath,
           downloadKey,

@@ -1,7 +1,15 @@
-import { runFfmpeg, FfmpegFailedError, FfmpegTimeoutError, type FfmpegRunOptions } from './ffmpeg.js'
+import {
+  runFfmpeg,
+  FfmpegFailedError,
+  FfmpegTimeoutError,
+  type FfmpegRunOptions
+} from './ffmpeg.js'
 
 export type AudioEncodeOptions = FfmpegRunOptions
-export { FfmpegFailedError as AudioEncodeFailedError, FfmpegTimeoutError as AudioEncodeTimeoutError }
+export {
+  FfmpegFailedError as AudioEncodeFailedError,
+  FfmpegTimeoutError as AudioEncodeTimeoutError
+}
 
 /** Encoded (transcoder-backed) speech formats, distinct from native wav/pcm. */
 export type EncodedSpeechFormat = 'mp3' | 'opus' | 'aac' | 'flac'
@@ -23,17 +31,21 @@ const ENCODE_ARGS: Record<EncodedSpeechFormat, readonly string[]> = {
 }
 
 /** Builds the full ffmpeg arg list for encoding WAV → `format`. Exported for unit tests. */
-export function speechEncodeArgs (format: EncodedSpeechFormat): string[] {
+export function speechEncodeArgs(format: EncodedSpeechFormat): string[] {
   return [
-    '-hide_banner', '-nostdin', '-loglevel', 'error',
-    '-i', 'pipe:0',
+    '-hide_banner',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    '-i',
+    'pipe:0',
     ...ENCODE_ARGS[format],
     'pipe:1'
   ]
 }
 
 /** Encode the route's WAV buffer into `format` via the system ffmpeg binary. */
-export async function transcodeWav (
+export async function transcodeWav(
   input: Buffer,
   format: EncodedSpeechFormat,
   opts: AudioEncodeOptions = {}

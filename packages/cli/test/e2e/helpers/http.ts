@@ -6,15 +6,27 @@ export type InjectResponse = Awaited<ReturnType<FastifyInstance['inject']>>
 export const JSON_HEADERS = { 'content-type': 'application/json' }
 
 // Assert an OpenAI-style error envelope: { error: { code, message } }.
-export function assertError (res: InjectResponse, expectedCode: string): void {
-  const body = res.json() as { error?: { code?: string, message?: unknown } }
-  assert.equal(body?.error?.code, expectedCode, `expected error.code=${expectedCode}, got body=${res.payload}`)
+export function assertError(res: InjectResponse, expectedCode: string): void {
+  const body = res.json() as { error?: { code?: string; message?: unknown } }
+  assert.equal(
+    body?.error?.code,
+    expectedCode,
+    `expected error.code=${expectedCode}, got body=${res.payload}`
+  )
   assert.equal(typeof body?.error?.message, 'string', 'error.message should be a string')
 }
 
 // Assert the HTTP status and the OpenAI error code together.
-export function assertStatusAndError (res: InjectResponse, status: number, expectedCode: string): void {
-  assert.equal(res.statusCode, status, `expected status ${status}, got ${res.statusCode}: ${res.payload}`)
+export function assertStatusAndError(
+  res: InjectResponse,
+  status: number,
+  expectedCode: string
+): void {
+  assert.equal(
+    res.statusCode,
+    status,
+    `expected status ${status}, got ${res.statusCode}: ${res.payload}`
+  )
   assertError(res, expectedCode)
 }
 
@@ -28,7 +40,10 @@ export interface MultipartField {
 
 // Build a multipart/form-data body for app.inject.
 // Returns the payload buffer and the matching content-type header.
-export function multipart (fields: MultipartField[]): { payload: Buffer, headers: Record<string, string> } {
+export function multipart(fields: MultipartField[]): {
+  payload: Buffer
+  headers: Record<string, string>
+} {
   const boundary = '----qvacE2EFormBoundary'
   const parts: Buffer[] = []
   for (const f of fields) {
@@ -56,7 +71,7 @@ export interface SSEEvent {
 // Parse an SSE response body (as captured by app.inject) into events.
 // Handles `event:` + `data:` lines; the `[DONE]` sentinel is kept as a
 // literal string so callers can assert on stream termination.
-export function collectSSE (payload: string): SSEEvent[] {
+export function collectSSE(payload: string): SSEEvent[] {
   const events: SSEEvent[] = []
   for (const frame of payload.split('\n\n')) {
     const trimmed = frame.trim()

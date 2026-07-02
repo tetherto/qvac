@@ -101,10 +101,22 @@ describe('extractImageGenerationParams', () => {
   })
 
   it('throws InvalidImageBatchCountError on n < 1, non-integer, or non-number', () => {
-    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: 0 }, 'm'), InvalidImageBatchCountError)
-    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: -3 }, 'm'), InvalidImageBatchCountError)
-    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: 1.5 }, 'm'), InvalidImageBatchCountError)
-    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: '4' }, 'm'), InvalidImageBatchCountError)
+    assert.throws(
+      () => extractImageGenerationParams({ prompt: 'p', n: 0 }, 'm'),
+      InvalidImageBatchCountError
+    )
+    assert.throws(
+      () => extractImageGenerationParams({ prompt: 'p', n: -3 }, 'm'),
+      InvalidImageBatchCountError
+    )
+    assert.throws(
+      () => extractImageGenerationParams({ prompt: 'p', n: 1.5 }, 'm'),
+      InvalidImageBatchCountError
+    )
+    assert.throws(
+      () => extractImageGenerationParams({ prompt: 'p', n: '4' }, 'm'),
+      InvalidImageBatchCountError
+    )
   })
 
   it('propagates parseImageSize errors', () => {
@@ -116,9 +128,14 @@ describe('extractImageGenerationParams', () => {
 })
 
 describe('logImageUnsupportedParams', () => {
-  function makeLogger (): { warnings: string[]; logger: Parameters<typeof logImageUnsupportedParams>[1] } {
+  function makeLogger(): {
+    warnings: string[]
+    logger: Parameters<typeof logImageUnsupportedParams>[1]
+  } {
     const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logImageUnsupportedParams>[1]
+    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<
+      typeof logImageUnsupportedParams
+    >[1]
     return { warnings, logger }
   }
 
@@ -130,30 +147,36 @@ describe('logImageUnsupportedParams', () => {
 
   it('warns for each advisory image param (no output-shaping ones — those throw)', () => {
     const { warnings, logger } = makeLogger()
-    logImageUnsupportedParams({
-      quality: 'high',
-      style: 'vivid',
-      moderation: 'low',
-      partial_images: 2,
-      user: 'end-user-42',
-      input_fidelity: 'high'
-    }, logger)
+    logImageUnsupportedParams(
+      {
+        quality: 'high',
+        style: 'vivid',
+        moderation: 'low',
+        partial_images: 2,
+        user: 'end-user-42',
+        input_fidelity: 'high'
+      },
+      logger
+    )
     assert.equal(warnings.length, 6)
-    assert.ok(warnings.some(w => w.includes('quality')))
-    assert.ok(warnings.some(w => w.includes('style')))
-    assert.ok(warnings.some(w => w.includes('moderation')))
-    assert.ok(warnings.some(w => w.includes('partial_images')))
-    assert.ok(warnings.some(w => w.includes('user')))
-    assert.ok(warnings.some(w => w.includes('input_fidelity')))
+    assert.ok(warnings.some((w) => w.includes('quality')))
+    assert.ok(warnings.some((w) => w.includes('style')))
+    assert.ok(warnings.some((w) => w.includes('moderation')))
+    assert.ok(warnings.some((w) => w.includes('partial_images')))
+    assert.ok(warnings.some((w) => w.includes('user')))
+    assert.ok(warnings.some((w) => w.includes('input_fidelity')))
   })
 
   it('does not warn on output-shaping params (they are rejected loudly elsewhere)', () => {
     const { warnings, logger } = makeLogger()
-    logImageUnsupportedParams({
-      output_format: 'jpeg',
-      output_compression: 60,
-      background: 'transparent'
-    }, logger)
+    logImageUnsupportedParams(
+      {
+        output_format: 'jpeg',
+        output_compression: 60,
+        background: 'transparent'
+      },
+      logger
+    )
     assert.equal(warnings.length, 0)
   })
 
@@ -186,7 +209,11 @@ describe('assertSupportedImageOutputParams', () => {
   it('throws unsupported_output_format on jpeg/webp', () => {
     for (const fmt of ['jpeg', 'webp', 'JPG', 'avif']) {
       let err: unknown
-      try { assertSupportedImageOutputParams({ output_format: fmt }) } catch (e) { err = e }
+      try {
+        assertSupportedImageOutputParams({ output_format: fmt })
+      } catch (e) {
+        err = e
+      }
       assert.ok(err instanceof UnsupportedImageOutputError)
       assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_output_format')
     }
@@ -194,7 +221,11 @@ describe('assertSupportedImageOutputParams', () => {
 
   it('throws unsupported_output_compression when output_compression is set', () => {
     let err: unknown
-    try { assertSupportedImageOutputParams({ output_compression: 80 }) } catch (e) { err = e }
+    try {
+      assertSupportedImageOutputParams({ output_compression: 80 })
+    } catch (e) {
+      err = e
+    }
     assert.ok(err instanceof UnsupportedImageOutputError)
     assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_output_compression')
   })
@@ -202,18 +233,24 @@ describe('assertSupportedImageOutputParams', () => {
   it('throws unsupported_background when background is set', () => {
     for (const bg of ['transparent', 'opaque', 'auto']) {
       let err: unknown
-      try { assertSupportedImageOutputParams({ background: bg }) } catch (e) { err = e }
+      try {
+        assertSupportedImageOutputParams({ background: bg })
+      } catch (e) {
+        err = e
+      }
       assert.ok(err instanceof UnsupportedImageOutputError)
       assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_background')
     }
   })
 
   it('treats undefined / null as absent', () => {
-    assert.doesNotThrow(() => assertSupportedImageOutputParams({
-      output_format: undefined,
-      output_compression: null,
-      background: undefined
-    }))
+    assert.doesNotThrow(() =>
+      assertSupportedImageOutputParams({
+        output_format: undefined,
+        output_compression: null,
+        background: undefined
+      })
+    )
   })
 })
 
@@ -291,16 +328,21 @@ describe('extractImageEditParams', () => {
 })
 
 describe('logImageEditExtraWarnings', () => {
-  function makeLogger (): { warnings: string[]; logger: Parameters<typeof logImageEditExtraWarnings>[2] } {
+  function makeLogger(): {
+    warnings: string[]
+    logger: Parameters<typeof logImageEditExtraWarnings>[2]
+  } {
     const warnings: string[] = []
-    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logImageEditExtraWarnings>[2]
+    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<
+      typeof logImageEditExtraWarnings
+    >[2]
     return { warnings, logger }
   }
 
   it('warns on extra images', () => {
     const { warnings, logger } = makeLogger()
     logImageEditExtraWarnings({}, { extraImageCount: 2 }, logger)
-    assert.ok(warnings.some(w => w.includes('3 files')))
+    assert.ok(warnings.some((w) => w.includes('3 files')))
   })
 
   it('does not warn when there is exactly one image', () => {

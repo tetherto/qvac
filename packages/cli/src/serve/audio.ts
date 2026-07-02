@@ -39,17 +39,14 @@ export interface SpeechFormatInvalid {
   message: string
 }
 
-export type MappedSpeechFormat =
-  | SpeechFormatNative
-  | SpeechFormatTranscoded
-  | SpeechFormatInvalid
+export type MappedSpeechFormat = SpeechFormatNative | SpeechFormatTranscoded | SpeechFormatInvalid
 
 // Default stays wav: it needs no transcoder, so it works on every host
 // regardless of whether ffmpeg is installed. OpenAI's documented default is
 // mp3, but switching to it would 503 wherever ffmpeg is absent.
 export const DEFAULT_SPEECH_FORMAT: SpeechResponseFormat = 'wav'
 
-export function mapResponseFormat (input: unknown): MappedSpeechFormat {
+export function mapResponseFormat(input: unknown): MappedSpeechFormat {
   if (input === undefined || input === null || input === '') {
     return formatNative(DEFAULT_SPEECH_FORMAT)
   }
@@ -80,7 +77,7 @@ export function mapResponseFormat (input: unknown): MappedSpeechFormat {
   }
 }
 
-function formatNative (format: SpeechResponseFormat): SpeechFormatNative {
+function formatNative(format: SpeechResponseFormat): SpeechFormatNative {
   // PCM uses a placeholder here; the route rebuilds it via pcmContentType()
   // once it knows the model's sample rate (RFC 2586 audio/L16 needs `rate`).
   return {
@@ -94,7 +91,7 @@ function formatNative (format: SpeechResponseFormat): SpeechFormatNative {
 // we emit little-endian, so consumers must read the `rate`/`channels` params.
 // We document the sample rate inline so HTTP clients can pick it up without
 // reaching for the `X-Audio-Sample-Rate` header.
-export function pcmContentType (sampleRate: number): string {
+export function pcmContentType(sampleRate: number): string {
   return `audio/L16; rate=${sampleRate}; channels=1`
 }
 
@@ -112,7 +109,7 @@ const ENGINE_SAMPLE_RATE: Record<string, number> = {
 // and is the right default when the engine is unknown.
 export const DEFAULT_SAMPLE_RATE = 24000
 
-export function resolveSampleRate (config: Record<string, unknown> | undefined): number {
+export function resolveSampleRate(config: Record<string, unknown> | undefined): number {
   if (!config) return DEFAULT_SAMPLE_RATE
 
   const explicit = config['sampleRate']
@@ -132,7 +129,7 @@ export function resolveSampleRate (config: Record<string, unknown> | undefined):
 // Convert Int16 PCM samples (number[] from the SDK) into a tightly packed
 // little-endian Buffer. Out-of-range values are clamped to the Int16 domain
 // to match the SDK example utility (packages/sdk/examples/tts/utils.ts).
-export function int16SamplesToBuffer (samples: number[]): Buffer {
+export function int16SamplesToBuffer(samples: number[]): Buffer {
   const buffer = Buffer.alloc(samples.length * 2)
   for (let i = 0; i < samples.length; i++) {
     const raw = samples[i] ?? 0
@@ -145,7 +142,7 @@ export function int16SamplesToBuffer (samples: number[]): Buffer {
 // Build a 44-byte RIFF/WAVE header for 16-bit signed PCM, mono, at the given
 // sample rate, followed by `dataLength` data bytes. Layout matches the
 // canonical PCM WAV format used by the SDK example helpers.
-export function buildWavHeader (dataLength: number, sampleRate: number): Buffer {
+export function buildWavHeader(dataLength: number, sampleRate: number): Buffer {
   const header = Buffer.alloc(44)
 
   header.write('RIFF', 0)
@@ -167,7 +164,7 @@ export function buildWavHeader (dataLength: number, sampleRate: number): Buffer 
   return header
 }
 
-export function buildWavBuffer (samples: number[], sampleRate: number): Buffer {
+export function buildWavBuffer(samples: number[], sampleRate: number): Buffer {
   const data = int16SamplesToBuffer(samples)
   const header = buildWavHeader(data.length, sampleRate)
   return Buffer.concat([header, data])
@@ -177,6 +174,6 @@ export function buildWavBuffer (samples: number[], sampleRate: number): Buffer {
 // back to the bare model name when no <model>-<voice> alias exists, so
 // existing single-alias TTS configs continue to work even when callers omit
 // or randomly pick a voice.
-export function speechAliasKey (model: string, voice: string): string {
+export function speechAliasKey(model: string, voice: string): string {
   return `${model}-${voice}`
 }

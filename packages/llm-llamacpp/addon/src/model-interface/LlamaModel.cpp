@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +27,8 @@
 #include <llama/mtmd/mtmd.h>
 #include <picojson/picojson.h>
 
+#include "BatchEntryGuard.hpp"
+#include "MediaLoadOrder.hpp"
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
@@ -98,7 +101,8 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
+    bool isMetal) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -143,13 +147,11 @@ void LlamaModel::tuneConfigMap(
     QLOG_IF(
         Priority::INFO,
         "[LlamaModel] BitNet model detected: disabling flash attention\n");
-  } else if (isOpenCl && notUserSet("flash-attn", "flash_attn")) {
+  } else if (notUserSet("flash-attn", "flash_attn")) {
     configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = "off";
+    configFilemap["flash-attn"] = "on";
     QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] OpenCL backend selected: disabling flash attention by "
-        "default (not reliably supported on OpenCL)\n");
+        Priority::INFO, "[LlamaModel] Enabling flash attention by default\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -213,21 +215,17 @@ void LlamaModel::tuneConfigMap(
     }
   }
 
-  // TurboQuant / PolarQuant KV-cache types (tbq3_0 / tbq4_0 / pq3_0 / pq4_0,
-  // ship Vulkan + CPU implementations only. On the OpenCL backend
-  // the kernels don't exist; on Metal the standalone MUL_MAT pipelines are
-  // explicitly disabled. Silently letting the user proceed lets llama.cpp
-  // commit KV-cache tensors to a backend that can't run the ops on them,
-  // which then aborts in ggml_backend_sched_split_graph at model load.
-  // Surface a clean error here instead.
-#if defined(__APPLE__)
-  constexpr bool kIsMetal = true;
-#else
-  constexpr bool kIsMetal = false;
-#endif
-  if (isOpenCl || kIsMetal) {
+  // Quantized KV-cache types are fragile on OpenCL: standard q-cache types can
+  // fail later during cache shifts, while TBQ/PQ kernels are not implemented.
+  // Surface a clean error here instead of letting llama.cpp commit KV-cache
+  // tensors to a backend that can't run the required ops.
+  if (isOpenCl || isMetal) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
+    };
+    auto isQuantizedKvType = [&](const std::string& v) {
+      return isTurboQuantKvType(v) || v == "q4_0" || v == "q4_1" ||
+             v == "q5_0" || v == "q5_1" || v == "q8_0" || v == "iq4_nl";
     };
     auto checkCacheType = [&](const char* hyphenKey,
                               const char* underscoreKey,
@@ -237,20 +235,30 @@ void LlamaModel::tuneConfigMap(
         it = configFilemap.find(underscoreKey);
       if (it == configFilemap.end())
         return;
-      if (!isTurboQuantKvType(it->second))
+      if (isOpenCl) {
+        if (!isQuantizedKvType(it->second))
+          return;
+      } else if (!isTurboQuantKvType(it->second)) {
         return;
+      }
       const char* backendName = isOpenCl ? "OpenCL" : "Metal";
+      const char* typeName = isTurboQuantKvType(it->second)
+                                 ? "TurboQuant/PolarQuant"
+                                 : "quantized";
+      const char* alternatives =
+          isOpenCl ? "f32/f16/bf16"
+                   : "f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant type "
-              "and is not supported on the %s backend (Vulkan and CPU only). "
-              "Either pick a different cache type (f32/f16/bf16/q4_0/q4_1/"
-              "q5_0/q5_1/q8_0/iq4_nl) or switch device to a Vulkan GPU or "
-              "CPU.\n",
+              "[LlamaModel] cache-type-%s=%s is a %s KV-cache type and is not "
+              "supported on the %s backend. Either pick a different cache "
+              "type (%s) or switch device to a Vulkan GPU or CPU.\n",
               side,
               it->second.c_str(),
-              backendName));
+              typeName,
+              backendName,
+              alternatives));
     };
     checkCacheType("cache-type-k", "cache_type_k", "k");
     checkCacheType("cache-type-v", "cache_type_v", "v");
@@ -436,9 +444,37 @@ void LlamaModel::init(bool acquireLock) {
 }
 
 bool LlamaModel::isMultiBatchActivated(ReloadableState& state) {
-  return state.llmContext_ && state.isTextLlm_ &&
-         llama_n_seq_max(state.llmContext_->getCtx()) > 1;
+  return state.llmContext_ && llama_n_seq_max(state.llmContext_->getCtx()) > 1;
 }
+
+namespace {
+
+// Single source of truth for per-slot driver selection. The model layer owns
+// this decision because driver construction needs model-owned handles (the
+// shared llama context and the already-loaded mmproj); the scheduler stays
+// agnostic of any concrete driver type. `sharedVision` is the loaded mmproj
+// (`state.llmContext_` outlives the scheduler, see ReloadableState
+// declaration order); null for text-only contexts selects the text driver.
+// Capability is queried via `visionContext()` rather than an RTTI cast, so a
+// future multimodal context is picked up without inheriting MtmdLlmContext.
+batching::DriverFactory
+buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
+  return [shared, sharedVision](
+             const common_params& params,
+             ToolsCompactController& tools,
+             uint32_t seqId,
+             llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
+    const auto sid = static_cast<llama_seq_id>(seqId);
+    if (sharedVision != nullptr) {
+      return std::make_unique<MtmdLlmContext>(
+          params, shared, tools, sharedVision, sid, perSeqCtxCeiling);
+    }
+    return std::make_unique<TextLlmContext>(
+        params, shared, tools, sid, perSeqCtxCeiling);
+  };
+}
+
+} // namespace
 
 std::unique_ptr<batching::ContinuousBatchScheduler>
 LlamaModel::initBatchScheduler(ReloadableState& state) {
@@ -462,15 +498,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       batchCapacity,
       cparams,
       state.configuredNDiscarded_,
-      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt);
-}
-
-batching::ContinuousBatchScheduler* LlamaModel::batchSchedulerForTesting() {
-  std::shared_lock lock(stateMtx_);
-  if (!state_) {
-    return nullptr;
-  }
-  return state_->batchScheduler_.get();
+      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
+      buildDriverFactory(shared, state.llmContext_->visionContext()));
 }
 
 void LlamaModel::setWeightsForFile(
@@ -615,6 +644,24 @@ std::any LlamaModel::process(const std::any& input) {
 LlamaModel::ResolvedPrompt
 LlamaModel::resolveChatAndTools(const Prompt& prompt) {
   ResolvedPrompt resolved;
+  // Load all prompt media (hoisted byte buffers and inline paths) in
+  // prompt-marker order so each bitmap binds to its own MTMD marker.
+  auto loadPlannedMedia = [this, &prompt](const ParsedPromptPayload& parsed) {
+    if (state_->isTextLlm_ && !parsed.mediaPlan.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(MediaNotSupported),
+          "Media not supported by text-only models");
+    }
+    validateByteBufferCount(parsed.mediaPlan, prompt.media.size());
+    for (const auto& step : computeMediaLoadOrder(parsed.mediaPlan)) {
+      if (step.source == MediaSource::ByteBuffer) {
+        loadMedia(prompt.media[step.byteIndex]);
+      } else {
+        state_->llmContext_->loadMedia(step.path);
+      }
+    }
+  };
   if (state_->cacheManager_.has_value()) {
     ParsedPromptPayload parsedPrompt;
     resolved.isCacheLoaded = state_->cacheManager_->handleCache(
@@ -624,6 +671,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
           return this->formatPrompt(inputPrompt);
         },
         prompt.cacheKey);
+    loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
@@ -632,6 +680,7 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
   } else {
     ParsedPromptPayload parsedPrompt = formatPrompt(prompt.input);
+    loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
     resolved.layout = std::move(parsedPrompt.layout);
@@ -654,13 +703,12 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     state_->batchScheduler_->resetRuntimeStats();
   }
 
-  // Reset per-inference slide counter so it doesn't leak across runs
+  // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetNSlides();
+  state_->llmContext_->resetThinkingBlockDiscards();
 
-  for (const auto& media : prompt.media) {
-    loadMedia(media);
-  }
-
+  // Prompt media (both hoisted byte buffers and inline paths) is loaded by
+  // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
 
@@ -750,26 +798,39 @@ bool LlamaModel::supportsBatching() const {
 
 std::vector<std::string>
 LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
-  activeBatchJobs_.fetch_add(1);
-  ScopeGuard jobGuard([this] { activeBatchJobs_.fetch_sub(1); });
-  validateBitnetQuantization();
-  state_->lastRun_ = {};
-  state_->lastRun_.wasBatch = true;
+  // Serialize the entry section (prior-count check, cache invalidation, KV
+  // wipe) under batchEntryMutex_. Without it a second caller can see
+  // activeBatchJobs_ == 0 before the first caller increments it, skip the wipe,
+  // and reach scheduler.processBatch() while the first caller is still clearing
+  // KV — wiping the second caller's sequences. The lock is released before
+  // scheduler.processBatch() so concurrent batch calls still overlap during
+  // generation; jobGuard outlives the lock so its decrement spans the whole
+  // job.
+  std::optional<batching::BatchEntryGuard> jobGuard;
+  {
+    std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
+    jobGuard.emplace(
+        activeBatchJobs_, [this] { validateBitnetQuantization(); });
+    const unsigned priorBatchJobs = jobGuard->prior();
+    state_->lastRun_ = {};
+    state_->lastRun_.wasBatch = true;
 
-  // Invalidate single-prompt cache state and clear any stale KV data left by
-  // single-prompt runs. The batch scheduler will manage KV slots itself.
-  if (state_->cacheManager_.has_value()) {
-    state_->cacheManager_->invalidate();
-  }
-  llama_context* lctx = getContext();
-  if (lctx != nullptr) {
-    llama_memory_t mem = llama_get_memory(lctx);
-    if (mem != nullptr) {
-      // Clear all sequences to ensure batch scheduler starts with clean KV
-      // state
-      const int nSeqMax = llama_n_seq_max(lctx);
-      for (int seqId = 0; seqId < nSeqMax; seqId++) {
-        llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+    // Invalidate single-prompt cache state and clear any stale KV left by
+    // single-prompt runs so the batch scheduler starts on clean KV. Only the
+    // first batch job entering does this: while another batch job is already in
+    // flight the scheduler owns the live KV slots, and an unconditional wipe
+    // here would clear that active job's sequences before its own admission.
+    if (priorBatchJobs == 0) {
+      if (state_->cacheManager_.has_value()) {
+        state_->cacheManager_->invalidate();
+      }
+      if (llama_context* lctx = getContext(); lctx != nullptr) {
+        if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
+          const int nSeqMax = llama_n_seq_max(lctx);
+          for (int seqId = 0; seqId < nSeqMax; seqId++) {
+            llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+          }
+        }
       }
     }
   }
@@ -782,8 +843,8 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
-        "Model is not configured for continuous batching: requires a "
-        "text-only model with n_seq_max > 1");
+        "Model is not configured for continuous batching: requires "
+        "n_seq_max > 1");
   }
   auto& scheduler = *state_->batchScheduler_;
 
@@ -801,11 +862,11 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
               "' with saveCacheToDisk in the same batch would overwrite "
               "itself; each saved cache must use a distinct key");
     }
-    if (!prompt.media.empty()) {
+    if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: media is not supported in batch mode");
+          "processPromptBatch: media requires a multimodal model");
     }
     if (prompt.finetuningParams.has_value()) {
       throw qvac_errors::StatusError(
@@ -820,10 +881,18 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           toString(EmptyPrompt),
           "processPromptBatch: prompt produced no chat messages");
     }
+    if (!parsed.mediaPaths.empty() && state_->isTextLlm_) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: media requires a multimodal model");
+    }
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
     sr.layout = std::move(parsed.layout);
+    sr.media = prompt.media;
+    sr.mediaPlan = std::move(parsed.mediaPlan);
     sr.prefill = prompt.prefill;
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
@@ -875,6 +944,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
 }
@@ -902,11 +972,14 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
       {"ppTPS", promptProcessingTPS},
-      {"CacheTokens", static_cast<int64_t>(state_->llmContext_->getNPast())},
+      {"CacheTokens",
+       static_cast<int64_t>(state_->llmContext_->getCacheTokens())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
       {"contextSlides",
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
+      {"thinkingBlockDiscards",
+       static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
 }
@@ -994,21 +1067,23 @@ void LlamaModel::commonParamsParse(
         "embedded chat template is applied\n");
   }
 
-  // reasoning-budget controls whether the model emits a <think> reasoning
-  // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
-  // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
-  // → 0) and throws an uncaught `std::out_of_range` on overflow.
+  // reasoning-budget controls the size of the model's <think> reasoning
+  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
+  // entirely, any positive N caps the reasoning channel at N tokens (the
+  // budget sampler forces </think> once N reasoning tokens have been
+  // emitted).
   auto parseReasoningBudget = [](const std::string& raw) {
     int value = 0;
     const char* begin = raw.data();
     const char* end = begin + raw.size();
     const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || (value != 0 && value != -1)) {
+    if (ec != std::errc{} || ptr != end || value < -1) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
               qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
+          "positive integer (token cap)");
     }
     return value;
   };
@@ -1016,6 +1091,68 @@ void LlamaModel::commonParamsParse(
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       params.reasoning_budget = parseReasoningBudget(it->second);
       configFilemap.erase(it);
+    }
+  }
+
+  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
+  // manually before configVector is built)
+  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string val = it->second;
+      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+      if (val == "0" || val == "batched") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
+      } else if (val == "1" || val == "sequential") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
+      } else if (val == "2" || val == "disabled") {
+        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_DISABLED;
+      } else {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-tile-mode must be 0/batched, 1/sequential, or "
+                "2/disabled, got: %s",
+                it->second.c_str()));
+      }
+      configFilemap.erase(it);
+    }
+  }
+
+  // parse image-max-tokens / image-min-tokens (override Qwen-VL default caps)
+  for (const std::string& key : {"image-max-tokens", "image_max_tokens"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      try {
+        params.image_max_tokens = std::stoi(it->second);
+      } catch (...) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-max-tokens must be an integer, got: %s",
+                it->second.c_str()));
+      }
+      configFilemap.erase(it);
+      break;
+    }
+  }
+  for (const std::string& key : {"image-min-tokens", "image_min_tokens"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      try {
+        params.image_min_tokens = std::stoi(it->second);
+      } catch (...) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "image-min-tokens must be an integer, got: %s",
+                it->second.c_str()));
+      }
+      configFilemap.erase(it);
+      break;
     }
   }
 
@@ -1114,6 +1251,7 @@ void LlamaModel::commonParamsParse(
   }
 
   bool isOpenCl = false;
+  bool isMetal = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -1180,6 +1318,9 @@ void LlamaModel::commonParamsParse(
 
     isOpenCl = chosenBackend.first == BackendType::GPU &&
                chosenBackend.second.find("opencl") != std::string::npos;
+    isMetal = chosenBackend.first == BackendType::GPU &&
+              (chosenBackend.second.find("metal") != std::string::npos ||
+               chosenBackend.second.rfind("mtl", 0) == 0);
   }
 
   tuneConfigMap(
@@ -1187,7 +1328,8 @@ void LlamaModel::commonParamsParse(
       metadata_,
       outAdrenoVersion,
       pendingFinetuneOverrides_,
-      isOpenCl);
+      isOpenCl,
+      isMetal);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
@@ -1309,10 +1451,6 @@ void LlamaModel::commonParamsParse(
 
   postprocess_cpu_params(params.cpuparams, nullptr);
   postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
-
-  postprocess_cpu_params(params.speculative.draft.cpuparams, &params.cpuparams);
-  postprocess_cpu_params(
-      params.speculative.draft.cpuparams_batch, &params.cpuparams_batch);
 
   if (!params.kv_overrides.empty()) {
     params.kv_overrides.emplace_back();
@@ -1447,7 +1585,10 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
           }
 
           if (!content.empty()) {
-            state_->llmContext_->loadMedia(content);
+            parsed.mediaPaths.push_back(content);
+            parsed.mediaPlan.push_back({MediaSource::Path, content});
+          } else {
+            parsed.mediaPlan.push_back({MediaSource::ByteBuffer, ""});
           }
           addMediaPlaceholder++;
           isNextUser = true;

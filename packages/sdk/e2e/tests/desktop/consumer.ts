@@ -7,17 +7,18 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
-  OCR_LATIN_RECOGNIZER_1,
+  OCR_CRAFT,
+  OCR_LATIN,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  TTS_S3GEN_EN_CHATTERBOX,
+  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
+  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -50,32 +51,33 @@ import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
-import { TranscriptionExecutor } from "./executors/transcription-executor.js";
-import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
-import { RagExecutor } from "./executors/rag-executor.js";
-import { OcrExecutor } from "./executors/ocr-executor.js";
+import { TranscriptionExecutor } from "../shared/executors/node/transcription-executor.js";
+import { TranscribeStreamEventsExecutor } from "../shared/executors/node/transcribe-stream-events-executor.js";
+import { RagExecutor } from "../shared/executors/node/rag-executor.js";
+import { OcrExecutor } from "../shared/executors/node/ocr-executor.js";
 import { VlaExecutor } from "../shared/executors/vla-executor.js";
-import { ClassificationExecutor } from "./executors/classification-executor.js";
-import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
+import { ClassificationExecutor } from "../shared/executors/node/classification-executor.js";
+import { ConfigReloadExecutor } from "../shared/executors/node/config-reload-executor.js";
+import { NodeLoggingExecutor } from "../shared/executors/node/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
-import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
-import { ParakeetExecutor } from "./executors/parakeet-executor.js";
-import { BciExecutor } from "./executors/bci-executor.js";
-import { VisionExecutor } from "./executors/vision-executor.js";
+import { ParakeetStreamExecutor } from "../shared/executors/node/parakeet-stream-executor.js";
+import { ParakeetExecutor } from "../shared/executors/node/parakeet-executor.js";
+import { BciExecutor } from "../shared/executors/node/bci-executor.js";
+import { VisionExecutor } from "../shared/executors/node/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
-import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
-import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
-import { FinetuneExecutor } from "./executors/finetune-executor.js";
+import { DownloadResilienceExecutor } from "../shared/executors/node/download-resilience-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/node/delegated-inference-executor.js";
+import { NodeDiffusionExecutor } from "../shared/executors/node/diffusion-executor.js";
+import { FinetuneExecutor } from "../shared/executors/node/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
+import { NoLingeringBareExecutor } from "../shared/executors/node/no-lingering-bare-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
-import { DesktopCancellationExecutor } from "./executors/cancellation-executor.js";
+import { NodeCancellationExecutor } from "../shared/executors/node/cancellation-executor.js";
 
 const resources = new ResourceManager({
   downloadTarget: "desktop",
@@ -148,9 +150,12 @@ resources.define("tools-gemma4", {
 });
 
 resources.define("ocr", {
-  constant: OCR_LATIN_RECOGNIZER_1,
-  type: "onnx-ocr",
-  config: { langList: ["en"] },
+  constant: OCR_LATIN,
+  type: "ggml-ocr",
+  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time
+  // and downloaded on-device, making the first OCR test cold-start time out on
+  // mobile). Mirrors the whisper VAD companion-download pattern.
+  config: { langList: ["en"], detectorModelSrc: OCR_CRAFT },
 });
 
 resources.define("vla", {
@@ -255,13 +260,13 @@ resources.define("afriquegemma", {
 
 
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
+  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "chatterbox",
     language: "en",
     useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX,
+    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
@@ -285,7 +290,7 @@ resources.define("tts-supertonic", {
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_MULTILINGUAL_SUPERTONIC2_Q8_0,
+  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   type: "tts-ggml",
   config: {
     ttsEngine: "supertonic",
@@ -477,7 +482,7 @@ export const executor = createExecutor({
     new ClassificationExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new DesktopLoggingExecutor(resources),
+    new NodeLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
@@ -485,15 +490,18 @@ export const executor = createExecutor({
     new ParakeetExecutor(resources),
     new BciExecutor(resources),
     new VisionExecutor(resources),
+    // Must precede DownloadExecutor — its /^download-/ pattern also matches
+    // download-resilience-*, and dispatch is first-match-wins.
+    new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DesktopDiffusionExecutor(resources),
+    new NodeDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
-    new DesktopCancellationExecutor(resources),
+    new NodeCancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

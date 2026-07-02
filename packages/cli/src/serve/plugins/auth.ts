@@ -4,9 +4,11 @@ import { HttpError } from '../lib/http-error.js'
 
 const PUBLIC_PATHS = new Set(['/openapi.json', '/docs', '/docs/'])
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync<{ apiKey: string }> = async (app, opts) => {
   const expected = `Bearer ${opts.apiKey}`
 
+  // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
     // Strip query before whitelist lookup so `/openapi.json?pretty=1` (or any
     // tool that tacks on params) still resolves to the public path.

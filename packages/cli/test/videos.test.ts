@@ -11,11 +11,14 @@ import { createVideoJobsStore, type VideoJob } from '../src/serve/core/video-job
 import { tearDownJob, resolveInputReferenceImage } from '../src/serve/routes/videos.js'
 import type { QvacContext } from '../src/serve/lib/types.js'
 
-function expectIssue (input: unknown, path: string): { message: string } {
+function expectIssue(input: unknown, path: string): { message: string } {
   const result = videosCreateBody.safeParse(input)
   assert.equal(result.success, false, `expected validation to fail for ${JSON.stringify(input)}`)
   const issue = result.error!.issues.find((i) => i.path.join('/') === path)
-  assert.ok(issue, `expected an issue at path "${path}"; got ${JSON.stringify(result.error!.issues)}`)
+  assert.ok(
+    issue,
+    `expected an issue at path "${path}"; got ${JSON.stringify(result.error!.issues)}`
+  )
   return { message: issue.message }
 }
 
@@ -78,17 +81,23 @@ describe('videosCreateBody (Zod validation)', () => {
   })
 
   it('accepts input_reference with image_url as a flat string', () => {
-    assert.equal(videosCreateBody.safeParse({
-      prompt: 'p',
-      input_reference: { image_url: 'data:image/jpeg;base64,/9j/' }
-    }).success, true)
+    assert.equal(
+      videosCreateBody.safeParse({
+        prompt: 'p',
+        input_reference: { image_url: 'data:image/jpeg;base64,/9j/' }
+      }).success,
+      true
+    )
   })
 
   it('accepts input_reference with file_id', () => {
-    assert.equal(videosCreateBody.safeParse({
-      prompt: 'p',
-      input_reference: { file_id: 'file-abc123' }
-    }).success, true)
+    assert.equal(
+      videosCreateBody.safeParse({
+        prompt: 'p',
+        input_reference: { file_id: 'file-abc123' }
+      }).success,
+      true
+    )
   })
 
   it('rejects input_reference with neither image_url nor file_id', () => {
@@ -250,13 +259,19 @@ describe('createVideoJobsStore', () => {
     const c = store.create({ model: 'wan', prompt: 'c', size: '480x832', seconds: '4' })
 
     const page1 = store.list({ limit: 2 })
-    assert.deepEqual(page1.data.map((j) => j.id), [c.id, b.id])
+    assert.deepEqual(
+      page1.data.map((j) => j.id),
+      [c.id, b.id]
+    )
     assert.equal(page1.first_id, c.id)
     assert.equal(page1.last_id, b.id)
     assert.equal(page1.has_more, true)
 
     const page2 = store.list({ limit: 2, after: b.id })
-    assert.deepEqual(page2.data.map((j) => j.id), [a.id])
+    assert.deepEqual(
+      page2.data.map((j) => j.id),
+      [a.id]
+    )
     assert.equal(page2.has_more, false)
   })
 
@@ -265,7 +280,10 @@ describe('createVideoJobsStore', () => {
     const a = store.create({ model: 'wan', prompt: 'a', size: '480x832', seconds: '4' })
     const b = store.create({ model: 'wan', prompt: 'b', size: '480x832', seconds: '4' })
     const page = store.list({ order: 'asc' })
-    assert.deepEqual(page.data.map((j) => j.id), [a.id, b.id])
+    assert.deepEqual(
+      page.data.map((j) => j.id),
+      [a.id, b.id]
+    )
   })
 
   it('evicts oldest job when maxEntries exceeded', () => {
@@ -290,33 +308,37 @@ describe('createVideoJobsStore', () => {
     assert.equal(store.get(a.id), undefined)
     assert.ok(store.get(b.id))
   })
-
 })
 
 // ─── tearDownJob ───────────────────────────────────────────────────────
 
-function makeCtxStub (opts: {
-  cancelOverride?: QvacContext['cancelOverride']
-  removed?: string[]
-  files?: Record<string, { data: Buffer } | undefined>
-} = {}): QvacContext {
+function makeCtxStub(
+  opts: {
+    cancelOverride?: QvacContext['cancelOverride']
+    removed?: string[]
+    files?: Record<string, { data: Buffer } | undefined>
+  } = {}
+): QvacContext {
   const removed = opts.removed ?? []
   const files = opts.files ?? {}
   const stub = {
     logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
     ephemeralFiles: {
-      remove: (id: string) => { removed.push(id) },
+      remove: (id: string) => {
+        removed.push(id)
+      },
       get: (id: string) => files[id]
     }
   } as unknown as QvacContext
   if (opts.cancelOverride) {
-    (stub as { cancelOverride?: QvacContext['cancelOverride'] }).cancelOverride = opts.cancelOverride
+    ;(stub as { cancelOverride?: QvacContext['cancelOverride'] }).cancelOverride =
+      opts.cancelOverride
   }
   return stub
 }
 
 // Temporarily replaces globalThis.fetch for a single async test body; always restores.
-async function withMockFetch<T> (mock: typeof globalThis.fetch, fn: () => Promise<T>): Promise<T> {
+async function withMockFetch<T>(mock: typeof globalThis.fetch, fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch
   globalThis.fetch = mock
   try {
@@ -326,7 +348,7 @@ async function withMockFetch<T> (mock: typeof globalThis.fetch, fn: () => Promis
   }
 }
 
-function makeJob (overrides: Partial<VideoJob> = {}): VideoJob {
+function makeJob(overrides: Partial<VideoJob> = {}): VideoJob {
   const base: VideoJob = {
     id: 'video_test',
     object: 'video',
@@ -387,7 +409,10 @@ describe('resolveInputReferenceImage', () => {
   it('returns decoded bytes for a valid data URI', async () => {
     const ctx = makeCtxStub()
     // "AQID" is base64 for [0x01, 0x02, 0x03]
-    const result = await resolveInputReferenceImage({ image_url: 'data:image/png;base64,AQID' }, ctx)
+    const result = await resolveInputReferenceImage(
+      { image_url: 'data:image/png;base64,AQID' },
+      ctx
+    )
     assert.deepEqual(result, new Uint8Array([0x01, 0x02, 0x03]))
   })
 
@@ -397,7 +422,8 @@ describe('resolveInputReferenceImage', () => {
     const ctx = makeCtxStub()
     await assert.rejects(
       () => resolveInputReferenceImage({ image_url: 'ftp://example.com/img.png' }, ctx),
-      (err: unknown) => err instanceof Error && err.message.includes('base64 data URI or an HTTP(S) URL')
+      (err: unknown) =>
+        err instanceof Error && err.message.includes('base64 data URI or an HTTP(S) URL')
     )
   })
 
@@ -423,7 +449,8 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL that returns a non-200 response', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
-      async () => ({ ok: false, status: 404 } as Response),
+      // lunte-disable-next-line require-await
+      async () => ({ ok: false, status: 404 }) as Response,
       async () => {
         await assert.rejects(
           () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
@@ -436,7 +463,10 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL when fetch throws a network error', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
-      async () => { throw new Error('ECONNREFUSED') },
+      // lunte-disable-next-line require-await
+      async () => {
+        throw new Error('ECONNREFUSED')
+      },
       async () => {
         await assert.rejects(
           () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
@@ -450,7 +480,10 @@ describe('resolveInputReferenceImage', () => {
     const ctx = makeCtxStub()
     const timeoutErr = Object.assign(new Error('fetch timed out'), { name: 'TimeoutError' })
     await withMockFetch(
-      async () => { throw timeoutErr },
+      // lunte-disable-next-line require-await
+      async () => {
+        throw timeoutErr
+      },
       async () => {
         await assert.rejects(
           () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
@@ -464,17 +497,21 @@ describe('resolveInputReferenceImage', () => {
     const ctx = makeCtxStub()
     const bigChunk = new Uint8Array(101 * 1024 * 1024)
     await withMockFetch(
-      async () => ({
-        ok: true,
-        status: 200,
-        body: {
-          getReader: () => ({
-            read: async () => ({ done: false, value: bigChunk }),
-            cancel: async () => {},
-            releaseLock: () => {}
-          })
-        }
-      } as unknown as Response),
+      // lunte-disable-next-line require-await
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              // lunte-disable-next-line require-await
+              read: async () => ({ done: false, value: bigChunk }),
+              // lunte-disable-next-line require-await
+              cancel: async () => {},
+              releaseLock: () => {}
+            })
+          }
+        }) as unknown as Response,
       async () => {
         await assert.rejects(
           () => resolveInputReferenceImage({ image_url: 'https://example.com/big.png' }, ctx),
@@ -487,21 +524,28 @@ describe('resolveInputReferenceImage', () => {
   it('rejects HTTP URL when body read throws an error', async () => {
     const ctx = makeCtxStub()
     await withMockFetch(
-      async () => ({
-        ok: true,
-        status: 200,
-        body: {
-          getReader: () => ({
-            read: async () => { throw new Error('stream error') },
-            cancel: async () => {},
-            releaseLock: () => {}
-          })
-        }
-      } as unknown as Response),
+      // lunte-disable-next-line require-await
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              // lunte-disable-next-line require-await
+              read: async () => {
+                throw new Error('stream error')
+              },
+              // lunte-disable-next-line require-await
+              cancel: async () => {},
+              releaseLock: () => {}
+            })
+          }
+        }) as unknown as Response,
       async () => {
         await assert.rejects(
           () => resolveInputReferenceImage({ image_url: 'https://example.com/img.png' }, ctx),
-          (err: unknown) => err instanceof Error && err.message.includes('failed reading response body')
+          (err: unknown) =>
+            err instanceof Error && err.message.includes('failed reading response body')
         )
       }
     )
@@ -512,7 +556,11 @@ describe('tearDownJob', () => {
   it('aborts the controller and cancels the SDK request for in-progress jobs', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
-      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+      // lunte-disable-next-line require-await
+      cancelOverride: async (opts) => {
+        cancelled.push(opts)
+        return undefined as never
+      }
     })
     const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })
     tearDownJob(ctx, job)
@@ -523,7 +571,11 @@ describe('tearDownJob', () => {
   it('skips cancel for completed jobs', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
-      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+      // lunte-disable-next-line require-await
+      cancelOverride: async (opts) => {
+        cancelled.push(opts)
+        return undefined as never
+      }
     })
     const job = makeJob({ status: 'completed', requestId: 'req-abc', aviFileId: 'file-1' })
     tearDownJob(ctx, job)
@@ -534,7 +586,11 @@ describe('tearDownJob', () => {
   it('skips cancel when requestId is not yet set', () => {
     const cancelled: Array<{ requestId: string }> = []
     const ctx = makeCtxStub({
-      cancelOverride: async (opts) => { cancelled.push(opts); return undefined as never }
+      // lunte-disable-next-line require-await
+      cancelOverride: async (opts) => {
+        cancelled.push(opts)
+        return undefined as never
+      }
     })
     const job = makeJob({ status: 'queued', requestId: null })
     tearDownJob(ctx, job)
@@ -552,7 +608,10 @@ describe('tearDownJob', () => {
 
   it('survives a rejecting cancelFn (no throw)', () => {
     const ctx = makeCtxStub({
-      cancelOverride: async () => { throw new Error('worker down') }
+      // lunte-disable-next-line require-await
+      cancelOverride: async () => {
+        throw new Error('worker down')
+      }
     })
     const job = makeJob({ status: 'in_progress', requestId: 'req-abc' })
     assert.doesNotThrow(() => tearDownJob(ctx, job))

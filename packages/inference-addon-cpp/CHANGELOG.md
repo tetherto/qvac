@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.2.2] - 2026-06-30
+
+### Fixed
+- Self-pin the addon's shared library (`pinAddon()` in `Pin.hpp`, hooked once in `JsInterface::createInstance`) so that bare's `dlclose()` on `worklet.terminate()` can never unmap addon code that still has `thread_local` / `pthread_key_t` destructors registered (ggml, OpenMP, …). On Android (bionic) `dlclose()` unmaps that code, so a later thread exit jumped into now-unmapped memory and aborted (SIGSEGV); the SDK worked around this by never terminating worklets, leaking ~150 MB per load/unload cycle. Each addon now takes an `RTLD_NOLOAD | RTLD_NODELETE` reference to its own library (`GET_MODULE_HANDLE_EX_FLAG_PIN` on Windows) on first instance creation — only the small, fixed code mapping stays resident; the isolate + thread are still fully torn down. Idempotent and thread-safe (single atomic guard). Matches the existing `bare-crypto` / `bare-tls` approach. Validated on-device (Pixel 10 Pro XL, bionic): the destructor-after-`dlclose` case crashes without the pin and survives with it.
+
 ## [1.2.1] - 2026-05-20
 
 ### Fixed

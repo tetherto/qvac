@@ -1,6 +1,16 @@
 # KV Cache API
 
-Cache control is managed through `runOptions`, the second argument to `model.run()`.
+Cache control is managed through `runOptions`. For a single prompt, pass `runOptions` as the second argument to `model.run(prompt, runOptions)`.
+
+For a batch (`model.run([...])`) there is no top-level second argument — set cache options **per prompt** in `BatchPrompt.runOptions` (`cacheKey`, `saveCacheToDisk`, `prefill`, `generationParams`). Passing a second argument to a batch `run()` throws.
+
+```js
+// Batch: cache options go per item, not as a second run() argument.
+await model.run([
+  { prompt: [{ role: 'user', content: 'Hi' }], runOptions: { cacheKey: 'a.bin', saveCacheToDisk: true } },
+  { prompt: [{ role: 'user', content: 'Yo' }], runOptions: { cacheKey: 'b.bin' } },
+])
+```
 
 ## runOptions reference
 
