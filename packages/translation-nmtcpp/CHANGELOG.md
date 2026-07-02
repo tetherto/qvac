@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.1] - 2026-07-02
+
+### Fixed
+
+- Bump `qvac-lib-inference-addon-cpp` to 1.2.3 to pick up the JsLogger teardown / re-`setLogger` crash fix (tetherto/qvac#2932, QVAC-21544): tearing down a Bare worklet or soft-reloading it while the C++→JS logger is active no longer aborts (`SIGABRT`/`SIGTRAP` in `js_delete_reference` / `GlobalHandles::Release`). Reproduced and verified on-device (Pixel 10 Pro XL, Android 16) via the translation worklet reload flow. Pinned through a local `vcpkg/overlay-ports` entry (merged commit `a3df3804`) so the registry baseline — and thus qvac-fabric/whisper/tts — stays put.
+
+## Pull Requests
+
+- [#2932](https://github.com/tetherto/qvac/pull/2932) - QVAC-21544 fix[api]: fix JsLogger crashes on worklet teardown and re-setLogger (inference-addon-cpp 1.2.3)
+
 ## [6.3.0] - 2026-06-24
 
 ### Changed
