@@ -1,4 +1,28 @@
 # Changelog
+## [0.31.0] - 2026-06-30
+
+### Added
+
+- Multimodal (vision) model support in continuous batching: vision models now enter the batch scheduler via a new `DriverFactory` pattern that decouples the scheduler from concrete context types. Admits multiple prompts containing images and text.
+- `PrefillPlan` for sequencing media evaluation: prefill stream now carries text tokens plus `MediaBarrier` entries. The scheduler pauses slots at barriers and evaluates media between batch steps, allowing other slots to progress while vision processing is underway.
+- `SequenceDriver` abstraction: `MtmdLlmContext` and `TextLlmContext` now both implement a common interface, enabling the scheduler to work with any driver type without hardcoded multimodal checks.
+
+### Fixed
+
+- Isolated media-evaluation failures to the offending slot's request group, preventing cascade cancellations when vision processing fails mid-batch.
+- Improved KV-cell accounting for media slots in overlapping batch admissions.
+- Fixed Windows path serialization in JSON by using `generic_string()` instead of `string()` (forward slashes instead of backslashes).
+
+### Changed
+
+- `BatchPrompt.prompt` now accepts any `Message` type (previously text-only), enabling multimodal batches.
+- `ContinuousBatchScheduler` no longer imports or references concrete context types; driver selection fully delegated to the model layer.
+- Consolidated sequence KV cleanup into a single `clearSeqKv()` helper, eliminating six inline copies across slot-teardown paths.
+
+### Pull Requests
+
+- [#2543](https://github.com/tetherto/qvac/pull/2543) - QVAC-19983: Continuous Batching (Single-job MTMD)
+
 ## [0.30.2] - 2026-06-29
 
 This patch release fixes `image_max_tokens` and `image_min_tokens` being silently dropped when loading a model via the SDK config string map, making the tiling speedup invisible to SDK users.

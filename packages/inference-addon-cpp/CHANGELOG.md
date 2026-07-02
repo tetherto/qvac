@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.3] - 2026-07-02
+
+### Fixed
+- `JsLogger` no longer crashes during Bare runtime/worklet teardown or on a subsequent `setLogger()` after a soft reload (QVAC-21544). Two related lifecycle bugs are addressed: (1) a `js_add_teardown_callback` now disarms the logger (nulls the shared state and `uv_close`s the async handle) while the env is being destroyed, so the teardown's final `uv_run` can no longer dispatch `asyncCallback` against a disposing JS context (`SIGABRT`); and (2) `setLogger()` / `releaseLogger()` now only delete the previously stored callback ref when it belongs to the current live env (`oldState->env == env`) — a soft reload leaves a stale ref owned by an already-disposed env whose V8 global handles are gone, so deleting it crashed in `GlobalHandles::Release`. Verified on-device (Pixel, Android 16) with the translation addon: reload followed by re-translate no longer aborts.
+
+### Added
+- JS integration test `tests/integration_js/logger/teardown.test.js` reproducing the forced worker-runtime teardown race that surfaces the crash above.
+
+## [1.2.2] - 2026-06-30
+
+### Fixed
+- Self-pin the addon's shared library (`pinAddon()` in `Pin.hpp`, hooked once in `JsInterface::createInstance`) so that bare's `dlclose()` on `worklet.terminate()` can never unmap addon code that still has `thread_local` / `pthread_key_t` destructors registered (ggml, OpenMP, …). On Android (bionic) `dlclose()` unmaps that code, so a later thread exit jumped into now-unmapped memory and aborted (SIGSEGV); the SDK worked around this by never terminating worklets, leaking ~150 MB per load/unload cycle. Each addon now takes an `RTLD_NOLOAD | RTLD_NODELETE` reference to its own library (`GET_MODULE_HANDLE_EX_FLAG_PIN` on Windows) on first instance creation — only the small, fixed code mapping stays resident; the isolate + thread are still fully torn down. Idempotent and thread-safe (single atomic guard). Matches the existing `bare-crypto` / `bare-tls` approach. Validated on-device (Pixel 10 Pro XL, bionic): the destructor-after-`dlclose` case crashes without the pin and survives with it.
+
 ## [1.2.1] - 2026-05-20
 
 ### Fixed

@@ -143,8 +143,11 @@ function buildCliArgs (spec) {
     args.push('--chat-template', patched)
   }
 
-  // Opt-in: print the fully-rendered prompt (after chat-template) for parity audits.
-  if (spec.verbosePrompt) args.push('--verbose-prompt')
+  // NOTE: `--verbose-prompt` (a prompt dump for parity audits) was removed — llama.cpp
+  // dropped the flag around build 8828 ("error: invalid argument: --verbose-prompt"),
+  // which made the CLIs fail outright at the auto-resolved build. Nothing in the pipeline
+  // parses its output (metrics come from the timing lines, not the prompt dump), so it is
+  // simply gone rather than gated on a build check.
 
   args.push('-p', spec.prompt)
 
@@ -199,7 +202,12 @@ function runOnceCli (spec) {
     throw new Error(`CLI spawn failed: ${result.error.message}`)
   }
   if (result.status !== 0) {
-    const tail = (result.stderr || '').trim().split('\n').slice(-10).join('\n')
+    // Surface the ACTUAL llama/mtmd failure, not just the trailing `/usr/bin/time -v`
+    // resource summary (~23 lines) that the wrapper appends. Pull any error-looking lines
+    // plus a generous tail so the real cause (load/flag/assert error) is visible.
+    const lines = (result.stderr || '').trim().split('\n')
+    const errish = lines.filter(l => /error|fail|assert|unknown|unrecognized|invalid|unsupported|terminate|what\(\)|GGML_|exception|cannot|no such/i.test(l))
+    const tail = [...new Set([...errish, ...lines.slice(-25)])].join('\n')
     throw new Error(`CLI exited with status ${result.status}:\n${tail}`)
   }
 

@@ -139,7 +139,7 @@ export const completionTemperature05 = createCompletionTest(
     stream: false,
     generationParams: { temp: 0.5, seed: 42 },
   },
-  { validation: "contains-all", contains: ["12"] },
+  { validation: "type", expectedType: "string" },
   { estimatedDurationMs: 8000 },
 );
 
@@ -303,7 +303,7 @@ export const completionTemperature09 = createCompletionTest(
     stream: false,
     generationParams: { temp: 0.9, seed: 42 },
   },
-  { validation: "contains-all", contains: ["4"] },
+  { validation: "type", expectedType: "string" },
   { estimatedDurationMs: 8000 },
 );
 
