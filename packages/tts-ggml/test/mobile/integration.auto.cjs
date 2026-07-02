@@ -26,8 +26,16 @@ async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
 
+async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
+}
+
 async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
+}
+
+async function runOutputSampleRateTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/output-sample-rate.test.js', options)
 }
 
 async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -56,7 +64,9 @@ module.exports = {
   runChatterboxMtlTest,
   runChatterboxSpeedTest,
   runGpuSmokeTest,
+  runLavasrEnhancerTest,
   runMultipleRunsTest,
+  runOutputSampleRateTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
