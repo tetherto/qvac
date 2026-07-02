@@ -162,7 +162,7 @@ jobs:
               bare-make build
               bare-make install
               if [ "${{ matrix.run_tests }}" = "true" ]; then
-                bare test.js
+                npm test
               fi
             ); then
               echo "$package_name passed"
@@ -202,7 +202,7 @@ jobs:
               if [ "${{ matrix.run_tests }}" = "true" ]; then
                 LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8 \
                 ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:alloc_dealloc_mismatch=0 \
-                bare test.js
+                npm test
               fi
             ); then
               echo "$package_name ASAN passed"
