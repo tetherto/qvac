@@ -42,6 +42,10 @@ private:
 };
 
 class SingleJobScheduler final : public IJobScheduler {
+  /// AddonCpp verifies (via model_) that a caller-supplied scheduler was built
+  /// against the very model instance it owns.
+  friend class AddonCpp;
+
   std::shared_ptr<OutputQueue> outputQueue_;
   model::IModel* const model_;
   model::IModelCancel* const modelCancel_;
@@ -172,6 +176,12 @@ public:
     lock.unlock();
     processCv_.notify_one();
     return true;
+  }
+
+  /// The single slot admits at most one job and is therefore already
+  /// exclusive: delegate to runJob.
+  bool runExclusiveJob(std::any input, JobId id = kNoJobId) override {
+    return runJob(std::move(input), id);
   }
 
   /// Cancel the single slot. Only the untagged sentinel is honoured; a tagged

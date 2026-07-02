@@ -43,6 +43,10 @@ namespace qvac_lib_inference_addon_cpp {
 /// while it runs every runJob admission is refused. This is where the
 /// finetune<->inference mutual exclusion is enforced.
 class MultiJobScheduler final : public IJobScheduler {
+  /// AddonCpp verifies (via multiprocessor_) that a caller-supplied scheduler
+  /// was built against the very model instance it owns.
+  friend class AddonCpp;
+
   struct PendingJob {
     std::any input;
     JobId id;
@@ -147,18 +151,28 @@ class MultiJobScheduler final : public IJobScheduler {
   }
 
 public:
-  /// Nearly unbounded queueCapacity: large enough that a "queue me, don't reject
-  /// me" caller is never refused under realistic load, while still capping memory
-  /// against a runaway producer.
+  /// Default queueCapacity: nearly unbounded, so a "queue me, don't reject me"
+  /// caller is never refused under realistic load, while still capping memory
+  /// against a runaway producer. Pass 0 for strict reject-at-pool.
   static constexpr unsigned DEFAULT_MAX_CAPACITY = 16384;
 
+  /// @throws std::invalid_argument on a null @p multiprocessor or a zero
+  /// @p maxConcurrency — zero workers could never drain an admitted job, so
+  /// accepting either would only fail later, off in a worker or as a hang.
   MultiJobScheduler(
       model::IModelMultiprocessor* multiprocessor, unsigned maxConcurrency,
       model::IModelCancel* cancel, model::IModelCancelById* cancelById,
-      unsigned queueCapacity = 0)
+      unsigned queueCapacity = DEFAULT_MAX_CAPACITY)
       : multiprocessor_(multiprocessor), cancel_(cancel),
         cancelById_(cancelById), maxConcurrency_(maxConcurrency),
-        queueCapacity_(queueCapacity) {}
+        queueCapacity_(queueCapacity) {
+    if (multiprocessor_ == nullptr) {
+      throw std::invalid_argument("multiprocessor must not be null");
+    }
+    if (maxConcurrency_ == 0) {
+      throw std::invalid_argument("maxConcurrency must be > 0");
+    }
+  }
 
   void start(std::shared_ptr<OutputQueue> outputQueue) override {
     outputQueue_ = std::move(outputQueue);
@@ -198,7 +212,9 @@ public:
 
   bool runJob(std::any input, JobId id) override {
     std::unique_lock lock(mtx_);
-    if (exclusiveActive_ || admittedCount_ >= maxConcurrency_ + queueCapacity_) {
+    // Widen before adding so the cap cannot wrap for extreme ctor arguments.
+    if (exclusiveActive_ ||
+        admittedCount_ >= std::size_t{maxConcurrency_} + queueCapacity_) {
       // Pool + queue full, or an exclusive job (finetune) holds the model:
       // reject so no output is ever queued for this job.
       return false;
@@ -250,7 +266,10 @@ public:
     }
     if (cancelById_ != nullptr) {
       cancelById_->cancelById(id);
+      return;
     }
+    QLOG(logger::Priority::WARNING,
+        "Model does not support per-job cancellation (cancelById)");
   }
 
   void cancelAll() override {

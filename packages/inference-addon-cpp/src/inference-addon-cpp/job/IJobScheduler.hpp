@@ -31,12 +31,8 @@ struct IJobScheduler {
 
   /// Admit an exclusive job: one that must run with the model to itself (e.g. a
   /// finetune, which reloads weights). Rejected unless the scheduler is
-  /// otherwise idle; while it runs, every runJob admission is rejected. The
-  /// default delegates to runJob because single-job schedulers admit at most one
-  /// job and are therefore already exclusive.
-  virtual bool runExclusiveJob(std::any input, JobId id) {
-    return runJob(std::move(input), id);
-  }
+  /// otherwise idle; while it runs, every runJob admission is rejected.
+  virtual bool runExclusiveJob(std::any input, JobId id) = 0;
 
   /// Cancel one job by id. Single-job implementations ignore @p id.
   virtual void cancel(JobId id) = 0;
