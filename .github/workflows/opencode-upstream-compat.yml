@@ -72,6 +72,7 @@ jobs:
         with:
           script: |
             const title = 'OpenCode upstream compatibility smoke failing';
+            const label = 'github_actions';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [
               `Scheduled OpenCode upstream compatibility smoke failed.`,
@@ -82,13 +83,14 @@ jobs:
               `- Likely cause: latest \`opencode-ai\` changed plugin/provider behavior, request shape, model handling, or runtime assumptions that the latest published \`@qvac/opencode-plugin\` no longer satisfies.`,
             ].join('\n');
 
-            const { data: issues } = await github.rest.issues.listForRepo({
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
+              labels: label,
               per_page: 100,
             });
-            const existing = issues.find((issue) => issue.title === title);
+            const existing = issues.find((issue) => issue.pull_request === undefined && issue.title === title);
 
             if (existing !== undefined) {
               await github.rest.issues.createComment({
@@ -104,6 +106,7 @@ jobs:
                 repo: context.repo.repo,
                 title,
                 body,
+                labels: [label],
               });
               core.info(`Opened new issue #${created.data.number}`);
             }
