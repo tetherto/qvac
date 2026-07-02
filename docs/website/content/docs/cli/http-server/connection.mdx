@@ -93,7 +93,56 @@ openclaw agent --local \
   --json
 ```
 
-The first run may download model files before the answer appears. Use `qwen3.5-9b` or a stronger raw QVAC model constant for real agent work; smaller models can answer simple prompts but are less reliable with tool-heavy agent sessions.
+The first run may download model files before the answer appears. Use `qwen3.5-9b` for real agent work; smaller models can answer simple prompts but are less reliable with tool-heavy agent sessions.
+
+### Use a different OpenClaw model
+
+The OpenClaw plugin config uses the **catalog id without the `qvac/` prefix**. OpenClaw commands and model pickers use the same id with the provider prefix:
+
+| Where | Format | Example |
+| --- | --- | --- |
+| Plugin config | `<catalog-id>` | `qwen3.5-4b` |
+| OpenClaw model name | `qvac/<catalog-id>` | `qvac/qwen3.5-4b` |
+
+The first plugin release exposes these catalog ids:
+
+| Catalog id | Use it for |
+| --- | --- |
+| `qwen3.5-9b` | Recommended local agent default. |
+| `qwen3.5-4b` | Smaller machines and lighter prompts. |
+| `qwen3.5-2b` | Smoke tests or very constrained machines. |
+| `qwen3.5-0.8b` | Connectivity checks only; not recommended for agent work. |
+
+To switch models, update `plugins.entries.qvac.config.model`, then run OpenClaw onboarding again so it rewrites the provider defaults:
+
+```bash
+QVAC_BIN="$(which qvac)"
+
+openclaw config set plugins.entries.qvac.config \
+  "{\"model\":\"qwen3.5-4b\",\"qvacCommand\":\"$QVAC_BIN\",\"ctxSize\":32768,\"tools\":true}" \
+  --strict-json
+
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --mode local \
+  --auth-choice qvac \
+  --skip-search \
+  --skip-health
+```
+
+Advanced plugin options use camelCase because they configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config that OpenClaw starts through `localService`.
+
+| Plugin option | What it controls | Default |
+| --- | --- | --- |
+| `model` | QVAC catalog id to preload and select. | `qwen3.5-9b` |
+| `qvacCommand` | Command or absolute path for the `qvac` binary. | `qvac` |
+| `ctxSize` | Context window written as `ctx_size` in the generated serve config. | `32768` |
+| `reasoningBudget` | QVAC reasoning budget; `0` disables reasoning and `-1` enables the model default. | `-1` |
+| `tools` | Enables QVAC tool-call formatting for agent use. | `true` |
+| `port` | Local HTTP server port. | `11434` |
+
+If you need a model that is not in the OpenClaw plugin catalog yet, use the manual HTTP-server path below. In that path, `qvac.config.json` can expose any supported SDK model constant under the alias you choose, and OpenClaw points at that alias through a custom OpenAI-compatible provider.
 
 ## Compatible tools
 
