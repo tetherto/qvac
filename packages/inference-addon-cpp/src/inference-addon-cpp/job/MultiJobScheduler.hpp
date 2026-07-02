@@ -4,7 +4,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
-#include <deque>
+#include <list>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -30,10 +31,12 @@ namespace qvac_lib_inference_addon_cpp {
 /// of 0 means reject-at-pool (no waiting room). Per-job state lives only inside
 /// the worker stack, so one job's throw can never tear another's slot.
 ///
-/// Cancellation routes to the model: cancel(id) targets one job via
-/// cancelById(); cancelAll() uses the model's whole-model cancel(), which stops
-/// every in-flight job in one call. The id -> internal-slot mapping is the
-/// model's concern; the scheduler only counts admissions for back-pressure.
+/// Cancelling a job still waiting in the queue is the scheduler's concern (the
+/// model cannot know ids it never received): the job is unlinked in O(1) via
+/// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
+/// queued as its terminal event. In-flight cancellation routes to the model:
+/// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(); that
+/// id -> internal-slot mapping is the model's concern.
 ///
 /// runExclusiveJob admits a job that must run with the model to itself (a
 /// finetune reloads weights): it is refused unless the scheduler is idle, and
@@ -57,7 +60,10 @@ class MultiJobScheduler final : public IJobScheduler {
 
   mutable std::mutex mtx_;
   mutable std::condition_variable workCv_;
-  std::deque<PendingJob> queued_;
+  std::list<PendingJob> queued_;
+  /// id -> queued_ node (first occurrence), so cancelling a not-yet-started
+  /// job unlinks it in O(1) instead of scanning the queue.
+  std::map<JobId, std::list<PendingJob>::iterator> queuedIndex_;
   /// Admitted (queued + in-flight) job count; the figure admission is capped
   /// against. Decremented when a job finishes.
   std::size_t admittedCount_{0};
@@ -71,6 +77,25 @@ class MultiJobScheduler final : public IJobScheduler {
   void runResult(std::any&& output, JobId id) {
     outputQueue_->queueResult(std::move(output), id);
     outputQueue_->queueJobEnded(id);
+  }
+
+  /// Unlinks every still-queued job, releasing its slot and exclusivity;
+  /// returns the dropped ids so the caller can queue their terminal errors
+  /// outside the lock.
+  std::vector<JobId> dropQueued() {
+    std::lock_guard lock(mtx_);
+    std::vector<JobId> dropped;
+    dropped.reserve(queued_.size());
+    for (const PendingJob& job : queued_) {
+      if (job.exclusive) {
+        exclusiveActive_ = false;
+      }
+      dropped.push_back(job.id);
+    }
+    admittedCount_ -= queued_.size();
+    queued_.clear();
+    queuedIndex_.clear();
+    return dropped;
   }
 
   /// Worker body. Per-job input/id are copied onto the stack while the lock is
@@ -89,8 +114,13 @@ class MultiJobScheduler final : public IJobScheduler {
         break;
       }
 
-      PendingJob job = std::move(queued_.front());
-      queued_.pop_front();
+      const std::list<PendingJob>::iterator front = queued_.begin();
+      PendingJob job = std::move(*front);
+      const auto indexed = queuedIndex_.find(job.id);
+      if (indexed != queuedIndex_.end() && indexed->second == front) {
+        queuedIndex_.erase(indexed);
+      }
+      queued_.erase(front);
       lock.unlock();
 
       try {
@@ -155,6 +185,15 @@ public:
         worker.join();
       }
     }
+    if (outputQueue_ == nullptr) {
+      return; // never started, nothing was admitted
+    }
+    // Workers are gone; fail whatever never started so no accepted job ends
+    // without a terminal event.
+    for (const JobId id : dropQueued()) {
+      outputQueue_->queueException(
+          std::runtime_error("Job cancelled: scheduler destroyed"), id);
+    }
   }
 
   bool runJob(std::any input, JobId id) override {
@@ -166,6 +205,7 @@ public:
     }
     ++admittedCount_;
     queued_.push_back(PendingJob{std::move(input), id});
+    queuedIndex_.emplace(id, std::prev(queued_.end()));
     lock.unlock();
     workCv_.notify_one();
     return true;
@@ -181,18 +221,42 @@ public:
     exclusiveActive_ = true;
     ++admittedCount_;
     queued_.push_back(PendingJob{std::move(input), id, /*exclusive=*/true});
+    queuedIndex_.emplace(id, std::prev(queued_.end()));
     lock.unlock();
     workCv_.notify_one();
     return true;
   }
 
   void cancel(JobId id) override {
+    bool dropped = false;
+    {
+      std::lock_guard lock(mtx_);
+      const auto indexed = queuedIndex_.find(id);
+      if (indexed != queuedIndex_.end()) {
+        if (indexed->second->exclusive) {
+          exclusiveActive_ = false;
+        }
+        queued_.erase(indexed->second);
+        queuedIndex_.erase(indexed);
+        --admittedCount_;
+        dropped = true;
+      }
+    }
+    if (dropped) {
+      // Never reached the model, so there is nothing to cancel there; this
+      // error is the job's terminal event.
+      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+      return;
+    }
     if (cancelById_ != nullptr) {
       cancelById_->cancelById(id);
     }
   }
 
   void cancelAll() override {
+    for (const JobId id : dropQueued()) {
+      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    }
     if (cancel_ != nullptr) {
       cancel_->cancel();
       return;
