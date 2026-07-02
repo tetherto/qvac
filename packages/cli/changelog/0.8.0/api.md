@@ -34,8 +34,8 @@ PR: [#2797](https://github.com/tetherto/qvac/pull/2797)
 // SDK — drop this turn's reasoning block from the KV cache after generation
 await model.completion({
   history,
-  generationParams: { remove_thinking_from_context: true },
-});
+  generationParams: { remove_thinking_from_context: true }
+})
 ```
 
 ```jsonc
@@ -58,4 +58,3 @@ PR: [#2802](https://github.com/tetherto/qvac/pull/2802)
 ```
 
 ---
-

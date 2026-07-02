@@ -437,9 +437,7 @@ The wire is the new `requestId` exposed synchronously on the SDK's decorated pro
 import { sdkCompletion } from '@qvac/cli/serve/core/sdk'
 import { bindClientDisconnectCancel } from '@qvac/cli/serve/core/cancel-bridge'
 
-const run = sdkCompletion({
-  /* ... */
-})
+const run = sdkCompletion({/* ... */})
 bindClientDisconnectCancel(req, res, run.requestId, logger)
 const final = await run.final
 ```

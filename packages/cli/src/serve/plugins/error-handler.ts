@@ -34,8 +34,7 @@ const plugin: FastifyPluginAsync = async (app) => {
 
     if (hasZodFastifySchemaValidationErrors(err)) {
       const issue = err.validation[0] as
-        | { instancePath?: string; message?: string; keyword?: string }
-        | undefined
+        { instancePath?: string; message?: string; keyword?: string } | undefined
       const head = headFromInstancePath(issue?.instancePath)
       const code = head in ZOD_PATH_TO_CODE ? ZOD_PATH_TO_CODE[head]! : 'invalid_request'
       const detail = issue?.message ?? 'Request body failed validation.'

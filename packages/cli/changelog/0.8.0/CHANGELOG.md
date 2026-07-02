@@ -22,4 +22,3 @@ Release Date: 2026-06-29
 ## 🧹 Chores
 
 - Switch @qvac/cli to Lunte and Prettier. (see PR [#2829](https://github.com/tetherto/qvac/pull/2829))
-
