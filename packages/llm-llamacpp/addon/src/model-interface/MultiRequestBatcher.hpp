@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -40,6 +41,11 @@ struct Request {
   bool slideCapable = false;
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
+  /// Observed wall-clock stamps for the per-request end-to-end stats: fixed by
+  /// the first sampled token, advanced by every sample (see
+  /// sampleAndAppendIdle). Batch-shared decode makes an isolated per-request
+  /// compute rate unmeasurable; these give the observed timeline instead.
+  std::optional<std::chrono::steady_clock::time_point> firstTokenAt, lastTokenAt;
 
   Request(
       uint32_t rid, PrefillPlan&& plan, unsigned maxTokens,

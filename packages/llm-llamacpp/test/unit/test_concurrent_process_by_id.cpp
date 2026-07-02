@@ -132,6 +132,170 @@ TEST_F(ConcurrentProcessByIdTest, TwoConcurrentJobsRunIsolatedAndOverlap) {
          "avgConcurrentSeq=" << avgConcurrentSeq;
 }
 
+/// Variant: parallel = 1, single request. The tagged call falls back to the
+/// single-prompt path: no per-job entry is left (the generic snapshot already
+/// IS that request's figures), and generic runtimeStats() reports the run.
+TEST_F(ConcurrentProcessByIdTest, ParallelOneSingleUsesGenericStatsOnly) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "1";
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  std::any out = model->process(
+      std::any(makePrompt("What is two plus two? One word.")), JobId{1});
+  EXPECT_FALSE(std::any_cast<std::string>(out).empty());
+
+  EXPECT_TRUE(model->consumeJobStats(JobId{1}).empty())
+      << "the single-prompt fallback must not leave per-job stats";
+
+  const auto stats = model->runtimeStats();
+  EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+  EXPECT_GT(test_common::getStatValue(stats, "TPS"), 0.0);
+  EXPECT_DOUBLE_EQ(test_common::getStatValue(stats, "avgConcurrentSeq"), 1.0);
+}
+
+/// Variant: multiple concurrent single requests (parallel > 1). Each finished
+/// tagged job leaves its own observed figures under the snapshot's key names,
+/// consumable exactly once; generic runtimeStats() keeps the whole-model
+/// aggregate including avgConcurrentSeq.
+TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsReportsObservedFigures) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  auto runJob = [&model](const LlamaModel::Prompt& prompt, JobId id) {
+    std::any out = model->process(std::any(prompt), id);
+    return std::any_cast<std::string>(out);
+  };
+  auto promptA = makePrompt("What is the capital of France? One word.");
+  auto promptB = makePrompt("What is two plus two? One word.");
+  auto futureA = std::async(std::launch::async, runJob, promptA, JobId{1});
+  auto futureB = std::async(std::launch::async, runJob, promptB, JobId{2});
+  ASSERT_EQ(
+      futureA.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  ASSERT_EQ(
+      futureB.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_FALSE(futureA.get().empty());
+  EXPECT_FALSE(futureB.get().empty());
+
+  int64_t perJobGenerated = 0;
+  for (const JobId id : {JobId{1}, JobId{2}}) {
+    const auto stats = model->consumeJobStats(id);
+    ASSERT_FALSE(stats.empty()) << "job " << id << " left no observed stats";
+    EXPECT_GT(test_common::getStatValue(stats, "TTFT"), 0.0);
+    EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+    EXPECT_GT(test_common::getStatValue(stats, "promptTokens"), 0.0);
+    EXPECT_GE(test_common::getStatValue(stats, "TPS"), 0.0);
+    perJobGenerated +=
+        static_cast<int64_t>(
+            test_common::getStatValue(stats, "generatedTokens"));
+    EXPECT_TRUE(model->consumeJobStats(id).empty())
+        << "per-job stats must be take-once";
+  }
+
+  EXPECT_TRUE(model->consumeJobStats(JobId{999}).empty())
+      << "unknown ids must consume to empty";
+
+  // Generic (untagged) stats stay the whole-model aggregate.
+  const auto generic = model->runtimeStats();
+  EXPECT_GE(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0);
+  EXPECT_EQ(
+      static_cast<int64_t>(
+          test_common::getStatValue(generic, "generatedTokens")),
+      perJobGenerated)
+      << "the aggregate must equal the sum of the jobs' own counts";
+}
+
+/// Variant: multiple concurrent batched runs (micro-batch < parallel). Each
+/// tagged group leaves ONE aggregated per-job entry (rates averaged over its
+/// own requests, counts summed), so two concurrent groups never read each
+/// other's figures; generic runtimeStats() spans both.
+TEST_F(ConcurrentProcessByIdTest, ConcurrentBatchGroupsAggregateOwnStats) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel(); // parallel = 4, micro-batches of 2
+
+  auto runGroup = [&model](
+                      const std::vector<LlamaModel::Prompt>& prompts,
+                      JobId id) {
+    std::any out = model->process(std::any(prompts), id);
+    return std::any_cast<std::vector<std::string>>(out);
+  };
+  const std::vector<LlamaModel::Prompt> groupA{
+      makePrompt("What is the capital of France? One word."),
+      makePrompt("What is two plus two? One word.")};
+  const std::vector<LlamaModel::Prompt> groupB{
+      makePrompt("What color is the sky on a clear day? One word."),
+      makePrompt("What do bees make? One word.")};
+
+  auto futureA = std::async(std::launch::async, runGroup, groupA, JobId{11});
+  auto futureB = std::async(std::launch::async, runGroup, groupB, JobId{12});
+  ASSERT_EQ(
+      futureA.wait_for(std::chrono::seconds(240)), std::future_status::ready);
+  ASSERT_EQ(
+      futureB.wait_for(std::chrono::seconds(240)), std::future_status::ready);
+  EXPECT_EQ(futureA.get().size(), 2u);
+  EXPECT_EQ(futureB.get().size(), 2u);
+
+  int64_t perGroupGenerated = 0;
+  for (const JobId id : {JobId{11}, JobId{12}}) {
+    const auto stats = model->consumeJobStats(id);
+    ASSERT_FALSE(stats.empty()) << "group " << id << " left no observed stats";
+    EXPECT_GT(test_common::getStatValue(stats, "TTFT"), 0.0);
+    // Two prompts' generation summed into the group's count.
+    EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
+    EXPECT_GT(test_common::getStatValue(stats, "promptTokens"), 0.0);
+    EXPECT_GE(test_common::getStatValue(stats, "TPS"), 0.0);
+    perGroupGenerated +=
+        static_cast<int64_t>(
+            test_common::getStatValue(stats, "generatedTokens"));
+    EXPECT_TRUE(model->consumeJobStats(id).empty());
+  }
+
+  const auto generic = model->runtimeStats();
+  EXPECT_GE(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0);
+  EXPECT_EQ(
+      static_cast<int64_t>(
+          test_common::getStatValue(generic, "generatedTokens")),
+      perGroupGenerated)
+      << "the aggregate must span both groups' counts";
+}
+
+/// Variant: one batched run of exactly `parallel` prompts (full width). The
+/// group fills every engine slot, so it degenerates to the legacy bundled
+/// batch: same engine path, and the group's observed figures span the whole
+/// epoch — group counts equal the generic aggregate exactly.
+TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel(); // parallel = 4, batch of 4 = full width
+
+  const std::vector<LlamaModel::Prompt> group{
+      makePrompt("What is the capital of France? One word."),
+      makePrompt("What is two plus two? One word."),
+      makePrompt("What color is the sky on a clear day? One word."),
+      makePrompt("What do bees make? One word.")};
+
+  std::any out = model->process(std::any(group), JobId{21});
+  EXPECT_EQ(std::any_cast<std::vector<std::string>>(out).size(), 4u);
+
+  const auto stats = model->consumeJobStats(JobId{21});
+  ASSERT_FALSE(stats.empty());
+  const auto generic = model->runtimeStats();
+  EXPECT_EQ(
+      static_cast<int64_t>(
+          test_common::getStatValue(stats, "generatedTokens")),
+      static_cast<int64_t>(
+          test_common::getStatValue(generic, "generatedTokens")))
+      << "a full-width group IS the epoch: group counts == aggregate";
+  EXPECT_EQ(
+      static_cast<int64_t>(test_common::getStatValue(stats, "promptTokens")),
+      static_cast<int64_t>(
+          test_common::getStatValue(generic, "promptTokens")));
+  EXPECT_GT(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0)
+      << "full-width admission must actually decode in parallel";
+}
+
 /// cancelById(id) must cancel only the targeted job: the cancelled job stops
 /// early (short output) while the other job runs to completion. The target
 /// fires cancelById on its own first token so the cut happens mid-generation.

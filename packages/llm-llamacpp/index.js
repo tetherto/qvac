@@ -266,7 +266,6 @@ class LlmLlamacpp {
     /// Maps the native-assigned jobId → response for active concurrent requests.
     this._jobSinks = new Map()
     this._batchHandler = new BatchHandler({
-      job: this._job,
       parsePrompt: promptToAddonMessages,
       cancelHandler: () => this.addon?.cancel(),
       runJob: (items) => this.addon.runJob(items)
@@ -351,11 +350,11 @@ class LlmLlamacpp {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
+    // Group state is dropped by the handler itself when the group's terminal
+    // event (JobEnded / Error) lands, so concurrent batch runs stay isolated.
     const response = await this._batchHandler.run(batchInput)
 
-    const finalized = response.await().finally(() => {
-      this._batchHandler.clear()
-    })
+    const finalized = response.await()
     finalized.catch((err) => {
       this.logger?.warn?.('Batch inference response rejected:', err?.message || err)
     })
@@ -381,7 +380,7 @@ class LlmLlamacpp {
     this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
     const promptMessages = promptToAddonMessages(prompt, runOptions)
 
-    let jobId
+    let jobId = null
     const response = new QvacResponse({ cancelHandler: () => this.addon?.cancelJob(jobId) })
     /// For cap=1 (single-job), also register with _job so that legacy untagged
     /// callbacks (no 5th jobId arg) can still be routed via _job.active.
@@ -465,14 +464,31 @@ class LlmLlamacpp {
     })
   }
 
-  /// Route an output event to the correct sink. When jobId is a number,
-  /// inference events are directed to the per-job QvacResponse stored in
-  /// _jobSinks; untagged events (jobId === undefined) fall through to _job
-  /// for backward-compatible batch / finetune handling.
+  /// Route an output event to the correct sink. A tagged event owned by an
+  /// in-flight batch group goes to that group's response; other tagged events
+  /// go to the per-job QvacResponse stored in _jobSinks; untagged events
+  /// (jobId === undefined) fall through to _job for backward-compatible
+  /// finetune handling (and streamed batch chunks, routed by string id).
   _handleAddonOutputEvent(eventType, data, error, jobId) {
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
       this.logger?.info?.(logMsg)
+      return
+    }
+
+    // A tagged event owned by an in-flight batch group routes to that group:
+    // its terminal BatchResult / JobEnded (per-group stats) / Error settle the
+    // group's own response, so concurrent batch runs never cross.
+    if (this._batchHandler.owns(jobId)) {
+      if (eventType === 'Error') {
+        this.logger.error('Batch job failed with error:', error)
+        this._batchHandler.onError(jobId, error)
+      } else if (eventType === 'BatchResult') {
+        this._batchHandler.onResult(jobId, data)
+      } else if (eventType === 'JobEnded') {
+        this.logger.info('Batch job completed')
+        this._batchHandler.onJobEnded(jobId, this.opts.stats ? data : null)
+      }
       return
     }
 
@@ -486,9 +502,9 @@ class LlmLlamacpp {
         this._job.fail(error)
       }
     } else if (eventType === 'BatchOutput') {
+      // Streaming chunks are untagged; the handler routes them by their
+      // per-prompt string id.
       this._batchHandler.onOutput(data)
-    } else if (eventType === 'BatchResult') {
-      this._batchHandler.onResult(data)
     } else if (eventType === 'Output') {
       if (sink) {
         sink.updateOutput(data)
@@ -512,18 +528,14 @@ class LlmLlamacpp {
         if (this.opts.stats && data != null) sink.updateStats(data)
         sink.ended()
       } else {
-        const batchResult = this._batchHandler.buildFinalResultIfActive()
-        if (batchResult !== null) {
-          this._job.end(this.opts.stats ? data : null, batchResult)
-        } else {
-          this._job.end(this.opts.stats ? data : null)
-        }
+        this._job.end(this.opts.stats ? data : null)
       }
     }
   }
 
-  /// Native output callback. The 5th arg carries the numeric jobId minted by
-  /// _runInternal, or undefined for untagged (batch / finetune) events.
+  /// Native output callback. The 5th arg carries the numeric jobId minted
+  /// natively for single and batch runs, or undefined for untagged events
+  /// (streamed batch chunks, finetune).
   _addonOutputCallback(addon, event, data, error, jobId) {
     const mapped = mapAddonEvent(event, data, error, this._addonEventState)
     if (mapped === null) return
@@ -600,6 +612,7 @@ class LlmLlamacpp {
         sink.failed(new Error('Model was unloaded'))
       }
       this._jobSinks.clear()
+      this._batchHandler.failAll(new Error('Model was unloaded'))
       if (this.addon) {
         await this.addon.unload()
         // Null the addon reference so post-unload `cancel()` / `run()` calls hit the

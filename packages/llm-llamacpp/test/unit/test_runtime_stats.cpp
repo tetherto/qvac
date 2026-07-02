@@ -257,5 +257,88 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
   EXPECT_EQ(stats.promptTokens, 42);
 }
 
+// Per-request observed stats: end-to-end figures as the submitting caller
+// experienced them (queue wait + shared-GPU decode), computed from the
+// request's wall-clock stamps at drain. Distinct from the snapshot rates
+// above, which are whole-scheduler aggregates.
+
+TEST(ObservedRequestStats, ComputesTtftAndObservedTps) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(10, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+  ASSERT_TRUE(req.isPrefillComplete());
+
+  const auto enqueued = std::chrono::steady_clock::time_point{};
+  req.firstTokenAt = enqueued + milliseconds(100);
+  req.lastTokenAt = enqueued + milliseconds(1100);
+  req.generatedTokens.assign(11, 7);
+
+  const ObservedRequestStats observed = computeObservedStats(enqueued, req);
+  // Enqueue -> first token.
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 100.0);
+  // 10 inter-token gaps over 1 s = 10 tok/s observed.
+  EXPECT_DOUBLE_EQ(observed.genTps, 10.0);
+  EXPECT_EQ(observed.generatedTokens, 11);
+  EXPECT_EQ(observed.promptTokens, 10);
+}
+
+TEST(ObservedRequestStats, NoSampledTokenYieldsZeroTimingFigures) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(5, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 0.0);
+  EXPECT_DOUBLE_EQ(observed.genTps, 0.0);
+  EXPECT_EQ(observed.generatedTokens, 0);
+  // Nothing was fed yet: the partial prefill count is 0.
+  EXPECT_EQ(observed.promptTokens, 0);
+}
+
+TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
+  // Two active requests and one that never sampled a token (cancelled before
+  // generation): rates/TTFT average only over the active two, counts sum over
+  // all three.
+  const std::vector<ObservedRequestStats> group{
+      {.ttftMs = 100.0, .genTps = 10.0, .generatedTokens = 11, .promptTokens = 10},
+      {.ttftMs = 300.0, .genTps = 30.0, .generatedTokens = 31, .promptTokens = 20},
+      {.ttftMs = 0.0, .genTps = 0.0, .generatedTokens = 0, .promptTokens = 5}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(group);
+  EXPECT_DOUBLE_EQ(agg.ttftMs, 200.0);
+  EXPECT_DOUBLE_EQ(agg.genTps, 20.0);
+  EXPECT_EQ(agg.generatedTokens, 42);
+  EXPECT_EQ(agg.promptTokens, 35);
+}
+
+TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {
+  const ObservedRequestStats agg = aggregateObservedStats({});
+  EXPECT_DOUBLE_EQ(agg.ttftMs, 0.0);
+  EXPECT_DOUBLE_EQ(agg.genTps, 0.0);
+  EXPECT_EQ(agg.generatedTokens, 0);
+  EXPECT_EQ(agg.promptTokens, 0);
+}
+
+TEST(ObservedRequestStats, SingleTokenHasTtftButNoRate) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+
+  const auto enqueued = std::chrono::steady_clock::time_point{};
+  req.firstTokenAt = enqueued + milliseconds(50);
+  req.lastTokenAt = req.firstTokenAt;
+  req.generatedTokens.assign(1, 7);
+
+  const ObservedRequestStats observed = computeObservedStats(enqueued, req);
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 50.0);
+  // A single token spans no interval; no honest rate exists.
+  EXPECT_DOUBLE_EQ(observed.genTps, 0.0);
+  EXPECT_EQ(observed.generatedTokens, 1);
+}
+
 } // namespace
 } // namespace qvac_lib_inference_addon_llama::batching

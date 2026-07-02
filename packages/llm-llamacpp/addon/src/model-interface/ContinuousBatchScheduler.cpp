@@ -243,7 +243,10 @@ ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
   if (group->error) {
     std::rethrow_exception(group->error);
   }
-  return {.outputs = std::move(group->outputs), .stats = group->stats};
+  return {
+      .outputs = std::move(group->outputs),
+      .stats = group->stats,
+      .requestStats = std::move(group->requestStats)};
 }
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
@@ -505,7 +508,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
           .activeCacheSavedToDisk = isCacheLoaded,
-          .prefillOnly = request.prefill});
+          .prefillOnly = request.prefill,
+          .enqueuedAt = request.enqueuedAt});
   cacheGuard.dismiss();
   return seqId;
 }
@@ -1281,6 +1285,63 @@ void ContinuousBatchScheduler::saveCacheForSlot(
   slot.activeCacheSavedToDisk = true;
 }
 
+ObservedRequestStats computeObservedStats(
+    const std::chrono::steady_clock::time_point enqueuedAt,
+    const Request& req) {
+  ObservedRequestStats observed;
+  observed.generatedTokens = static_cast<int64_t>(req.generatedTokens.size());
+  // Mirror accumulateSlot: full prompt once prefill completed, the partial
+  // fed count for a request cancelled mid/pre-prefill.
+  observed.promptTokens = req.isPrefillComplete()
+                              ? static_cast<int64_t>(req.prefillTokenCount)
+                              : static_cast<int64_t>(req.prefillFedCount);
+  if (!req.firstTokenAt.has_value() || !req.lastTokenAt.has_value()) {
+    return observed; // never sampled a token: no timing figures exist
+  }
+  observed.ttftMs = std::chrono::duration<double, std::milli>(
+                        *req.firstTokenAt - enqueuedAt)
+                        .count();
+  const double genWindowMs = std::chrono::duration<double, std::milli>(
+                                 *req.lastTokenAt - *req.firstTokenAt)
+                                 .count();
+  // N tokens span N-1 inter-token gaps; a single token has no honest rate.
+  if (observed.generatedTokens > 1 && genWindowMs > 0.0) {
+    constexpr double kMillisInSecond = 1000.0;
+    observed.genTps = kMillisInSecond *
+                      static_cast<double>(observed.generatedTokens - 1) /
+                      genWindowMs;
+  }
+  return observed;
+}
+
+ObservedRequestStats
+aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
+  ObservedRequestStats agg;
+  double ttftSum = 0.0;
+  double tpsSum = 0.0;
+  int64_t ttftCount = 0;
+  int64_t tpsCount = 0;
+  for (const ObservedRequestStats& stats : all) {
+    agg.generatedTokens += stats.generatedTokens;
+    agg.promptTokens += stats.promptTokens;
+    if (stats.ttftMs > 0.0) {
+      ttftSum += stats.ttftMs;
+      ++ttftCount;
+    }
+    if (stats.genTps > 0.0) {
+      tpsSum += stats.genTps;
+      ++tpsCount;
+    }
+  }
+  if (ttftCount > 0) {
+    agg.ttftMs = ttftSum / static_cast<double>(ttftCount);
+  }
+  if (tpsCount > 0) {
+    agg.genTps = tpsSum / static_cast<double>(tpsCount);
+  }
+  return agg;
+}
+
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
@@ -1302,6 +1363,13 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
         static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
   }
   stats_.accumulateSlot(nPast, nSlides, thinkingDiscards, req);
+  // Every terminal path that folds a slot into the aggregate also records the
+  // request's observed end-to-end figures for its submitter, next to its
+  // output.
+  if (slot.group) {
+    slot.group->requestStats[slot.outputIndex] =
+        computeObservedStats(slot.enqueuedAt, req);
+  }
 }
 
 } // namespace qvac_lib_inference_addon_llama::batching
