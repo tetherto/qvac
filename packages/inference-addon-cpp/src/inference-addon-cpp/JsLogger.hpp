@@ -72,12 +72,21 @@ namespace qvac_lib_inference_addon_cpp::logger {
 
       auto oldState = storeState(newState);
       if (oldState && oldState->env == env) {
-        // Only delete the previous callback ref when it belongs to THIS live
-        // env. After a worker teardown / soft-reload (QVAC-21544 reinit path),
-        // oldState->env is a different, already-disposed env whose V8 global
-        // handles are gone; js_delete_reference on it crashes in
-        // GlobalHandles::Release. A stale ref from a dead env is dropped here
-        // (its handles died with that env).
+        // Only delete the previous callback ref when it belongs to THIS env.
+        //
+        // The logger state is a process-global singleton, so it assumes a
+        // single live env owns it at a time. The supported flow is sequential
+        // worklet teardown / soft-reload (QVAC-21544): the previous env has
+        // already been (or is being) torn down, its V8 global handles are gone,
+        // and js_delete_reference on it would crash in GlobalHandles::Release —
+        // so when oldState->env != env we drop the stale ref instead of freeing
+        // it here (it dies with its env / its onEnvTeardown).
+        //
+        // NOTE: concurrent *live* envs (e.g. two worklets/bare-thread workers
+        // logging at once) are NOT supported by this singleton — the second
+        // setLogger would leak the first's live ref and leave logger_async_ on
+        // the wrong loop. Supporting that needs per-js_env_t*-keyed state; see
+        // follow-up ticket.
         releaseJsRefs((oldState->env), oldState->cb);
       }
 
