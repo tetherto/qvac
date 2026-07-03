@@ -16,6 +16,7 @@ import path from "bare-path";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
 import { downloadModelFromRegistry } from "./registry";
+import { getExplicitRegistryMetadata } from "./registry-metadata";
 import {
   downloadModelFromHttpWithStats,
   downloadModelFromHyperdriveWithStats,
@@ -162,14 +163,26 @@ async function resolveModelPathCore(
 
     // Look up model metadata for checksum validation
     const modelMetadata = getModelByPath(registryPath);
-    const expectedChecksum = modelMetadata?.sha256Checksum;
+    const explicitMetadata = getExplicitRegistryMetadata(modelSrc);
+    const expectedChecksum =
+      modelMetadata?.sha256Checksum ?? explicitMetadata?.sha256Checksum;
 
     const result = mode === "stats"
       ? await downloadModelFromRegistryWithStats(
-          registryPath, registrySource, progressCallback, expectedChecksum, hooks,
+          registryPath,
+          registrySource,
+          progressCallback,
+          expectedChecksum,
+          hooks,
+          explicitMetadata,
         )
       : await downloadModelFromRegistry(
-          registryPath, registrySource, progressCallback, expectedChecksum, hooks,
+          registryPath,
+          registrySource,
+          progressCallback,
+          expectedChecksum,
+          hooks,
+          explicitMetadata,
         );
     logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`);
     return buildResult(result, "registry");

@@ -16,6 +16,9 @@
 namespace tts_cpp::supertonic {
 class Engine;
 }
+namespace tts_cpp::lavasr {
+class Enhancer;
+}
 
 namespace qvac::ttsggml::supertonic {
 
@@ -73,6 +76,10 @@ private:
 
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::supertonic::Engine> engine_;
+  // LavaSR enhancer: loaded alongside the engine when
+  // cfg_.enhancerGgufPath is set; null disables enhancement. Holds only
+  // const weights, so it is safe to share across concurrent enhance() calls.
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
 
   std::atomic_bool jobInProgress_{false};
 

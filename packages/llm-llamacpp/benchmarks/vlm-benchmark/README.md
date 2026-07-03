@@ -275,3 +275,11 @@ env vars, launch grammar); `markers-v2.sample.txt` is its executable sample;
 
 **Reused from the package** (not copied): the addon (`../../index.js`) and `ensureModel`
 (`../../test/integration/utils.js`).
+
+## 9 · Checkpoints
+
+Periodic, reproducible baselines — Qwen3.5-0.8B vs Gemma-4-E2B across every platform ×
+accelerator — captured over time to track improvements and regressions in the VLM
+ecosystem, live in **[`checkpoint/`](./checkpoint/)**. See `checkpoint/README.md` for the
+procedure (3 CI runs → two `avg ± deviation%` tables via `aggregate-checkpoint.cjs`) and
+`checkpoint/checkpoints/` for collected snapshots.
