@@ -215,6 +215,18 @@ int waitForActive(const ConcurrentTestModel& model, int target,
   return model.active();
 }
 
+/// Blocks until the scheduler reports no admitted jobs (in-flight + queued
+/// drained) or the timeout lapses.
+void waitForIdle(
+    const MultiJobScheduler& scheduler, std::chrono::milliseconds timeout) {
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + timeout;
+  while (scheduler.activeJobs() != 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+}
+
 } // namespace
 
 class MultiJobSchedulerTest : public ::testing::Test {
@@ -428,9 +440,12 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
     });
   }
 
+  int admitted = 0;
   for (int iteration = 0; iteration < 2000; ++iteration) {
     const JobId id = nextId.fetch_add(1);
-    scheduler_->runJob(std::string("job"), id);
+    if (scheduler_->runJob(std::string("job"), id)) {
+      ++admitted;
+    }
     if (iteration % 16 == 0) {
       std::this_thread::yield();
     }
@@ -440,11 +455,24 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
   for (std::thread& thread : cancelThreads) {
     thread.join();
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  // Poll for a genuine drain instead of guessing with a fixed sleep: with the
+  // cancel threads joined only the workers remain, and each queues a job's
+  // terminal event before releasing its admission slot, so once the scheduler
+  // reports idle every terminal event has been queued.
+  waitForIdle(*scheduler_, std::chrono::seconds{10});
+  EXPECT_EQ(scheduler_->activeJobs(), 0u)
+      << "every admitted job must drain (in-flight + queued)";
 
   const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
+  int terminal = 0;
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    if (entry.second.type() == typeid(Output::Error)) {
+    // Each admitted job produces exactly one terminal event: a jobEnded stats
+    // snapshot when it completes, or an error when it is dropped/cancelled. The
+    // success result payload (the echoed input) is not terminal.
+    if (entry.second.type() == typeid(RuntimeStats)) {
+      ++terminal;
+    } else if (entry.second.type() == typeid(Output::Error)) {
+      ++terminal;
       const Output::Error error = std::any_cast<Output::Error>(entry.second);
       const bool slotTear =
           error.find("bad_optional_access") != std::string::npos ||
@@ -453,18 +481,9 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
           << "Slot tear under contention. Error: " << error;
     }
   }
-}
-
-/// Blocks until the scheduler reports no admitted jobs (in-flight + queued
-/// drained) or the timeout lapses.
-void waitForIdle(const MultiJobScheduler& scheduler,
-                 std::chrono::milliseconds timeout) {
-  const std::chrono::steady_clock::time_point deadline =
-      std::chrono::steady_clock::now() + timeout;
-  while (scheduler.activeJobs() != 0 &&
-         std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds{2});
-  }
+  EXPECT_EQ(terminal, admitted)
+      << "every admitted job must produce exactly one terminal event; a "
+         "dropped or duplicated job under contention would break this";
 }
 
 // (f) Exclusive admission (finetune <-> inference mutual exclusion): an
