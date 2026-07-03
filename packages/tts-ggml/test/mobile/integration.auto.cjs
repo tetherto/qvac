@@ -10,10 +10,6 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
-async function runChatterboxJaMecabTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/chatterbox-ja-mecab.test.js', options)
-}
-
 async function runChatterboxKvCacheGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-kv-cache-gpu.test.js', options)
 }
@@ -30,8 +26,16 @@ async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
 
+async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
+}
+
 async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
+}
+
+async function runOutputSampleRateTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/output-sample-rate.test.js', options)
 }
 
 async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -56,12 +60,13 @@ async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line n
 
 module.exports = {
   runAddonTest,
-  runChatterboxJaMecabTest,
   runChatterboxKvCacheGpuTest,
   runChatterboxMtlTest,
   runChatterboxSpeedTest,
   runGpuSmokeTest,
+  runLavasrEnhancerTest,
   runMultipleRunsTest,
+  runOutputSampleRateTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
