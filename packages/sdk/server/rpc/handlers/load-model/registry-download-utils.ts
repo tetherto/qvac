@@ -1,44 +1,38 @@
-import type { ModelProgressUpdate } from "@/schemas";
-import type { QVACBlobBinding } from "@qvac/registry-client";
-import { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
-import type { AbortSignal } from "bare-abort-controller";
-import {
-  measureChecksum,
-  calculatePercentage,
-} from "@/server/utils";
-import { getRegistryClient } from "@/server/bare/registry/registry-client";
-import { getSDKConfig } from "@/server/bare/registry/config-registry";
-import { buildRegistryClientOptions } from "./registry-client-options";
-import {
-  ChecksumValidationFailedError,
-  DownloadCancelledError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import type { DownloadHooks } from "./types";
+import type { ModelProgressUpdate } from '@/schemas'
+import type { QVACBlobBinding } from '@qvac/registry-client'
+import { promises as fsPromises } from 'bare-fs'
+import path from 'bare-path'
+import type { AbortSignal } from 'bare-abort-controller'
+import { measureChecksum, calculatePercentage } from '@/server/utils'
+import { getRegistryClient } from '@/server/bare/registry/registry-client'
+import { getSDKConfig } from '@/server/bare/registry/config-registry'
+import { buildRegistryClientOptions } from './registry-client-options'
+import { ChecksumValidationFailedError, DownloadCancelledError } from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import type { DownloadHooks } from './types'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 export {
   DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,
-  buildRegistryClientOptions,
-} from "./registry-client-options";
-export type { RegistryClientDownloadOptions } from "./registry-client-options";
+  buildRegistryClientOptions
+} from './registry-client-options'
+export type { RegistryClientDownloadOptions } from './registry-client-options'
 
 export function buildBlobBinding(meta: {
-  blobCoreKey: string;
-  blobBlockOffset: number;
-  blobBlockLength: number;
-  blobByteOffset: number;
-  expectedSize: number;
+  blobCoreKey: string
+  blobBlockOffset: number
+  blobBlockLength: number
+  blobByteOffset: number
+  expectedSize: number
 }): QVACBlobBinding {
   return {
     coreKey: meta.blobCoreKey,
     blockOffset: meta.blobBlockOffset,
     blockLength: meta.blobBlockLength,
     byteOffset: meta.blobByteOffset,
-    byteLength: meta.expectedSize,
-  };
+    byteLength: meta.expectedSize
+  }
 }
 
 /**
@@ -49,40 +43,40 @@ export async function validateCachedFile(
   modelFileName: string,
   expectedSize: number,
   expectedChecksum?: string,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ): Promise<string | null> {
   try {
-    await fsPromises.access(modelPath);
+    await fsPromises.access(modelPath)
 
-    const localStats = await fsPromises.stat(modelPath);
-    const localSize = localStats.size;
+    const localStats = await fsPromises.stat(modelPath)
+    const localSize = localStats.size
 
     if (localSize === expectedSize) {
-      logger.info(`✅ Model cached with correct size: ${modelPath}`);
+      logger.info(`✅ Model cached with correct size: ${modelPath}`)
 
       if (expectedChecksum && expectedChecksum.length === 64) {
-        const checksum = await measureChecksum(modelPath, hooks);
+        const checksum = await measureChecksum(modelPath, hooks)
         if (checksum !== expectedChecksum) {
           throw new ChecksumValidationFailedError(
-            `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`,
-          );
+            `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}. File may be corrupted`
+          )
         }
       }
-      logger.info(`✅ Model already cached and validated: ${modelPath}`);
-      return modelPath;
+      logger.info(`✅ Model already cached and validated: ${modelPath}`)
+      return modelPath
     }
 
     logger.warn(
-      `🗑️ Removing incomplete cached file (expected ${expectedSize}, got ${localSize}): ${modelPath}`,
-    );
-    await fsPromises.unlink(modelPath);
-    return null;
+      `🗑️ Removing incomplete cached file (expected ${expectedSize}, got ${localSize}): ${modelPath}`
+    )
+    await fsPromises.unlink(modelPath)
+    return null
   } catch (error) {
     if (error instanceof ChecksumValidationFailedError) {
-      logger.warn(`🗑️ Removing corrupted cached file: ${modelPath}`);
-      await fsPromises.unlink(modelPath).catch(() => {});
+      logger.warn(`🗑️ Removing corrupted cached file: ${modelPath}`)
+      await fsPromises.unlink(modelPath).catch(() => {})
     }
-    return null;
+    return null
   }
 }
 
@@ -102,75 +96,73 @@ export async function downloadSingleFileFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   blobBinding?: QVACBlobBinding,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ): Promise<void> {
   if (signal?.aborted) {
-    throw new DownloadCancelledError();
+    throw new DownloadCancelledError()
   }
 
-  const client = await getRegistryClient();
+  const client = await getRegistryClient()
 
-  const dir = path.dirname(modelPath);
-  await fsPromises.mkdir(dir, { recursive: true });
+  const dir = path.dirname(modelPath)
+  await fsPromises.mkdir(dir, { recursive: true })
 
   const onProgress = progressCallback
     ? (progress: { downloaded: number; total: number }) => {
-        const total = progress.total || expectedSize || progress.downloaded;
+        const total = progress.total || expectedSize || progress.downloaded
         progressCallback({
-          type: "modelProgress",
+          type: 'modelProgress',
           downloaded: progress.downloaded,
           total,
-          percentage: total > 0
-            ? calculatePercentage(progress.downloaded, total)
-            : 0,
-          downloadKey,
-        });
+          percentage: total > 0 ? calculatePercentage(progress.downloaded, total) : 0,
+          downloadKey
+        })
       }
-    : undefined;
+    : undefined
 
   const clientOptions = buildRegistryClientOptions({
     sdkConfig: getSDKConfig(),
     outputFile: modelPath,
     onProgress,
-    signal,
-  });
+    signal
+  })
 
   if (blobBinding) {
-    logger.info(`📥 Downloading blob directly: ${modelFileName}`);
-    await client.downloadBlob(blobBinding, clientOptions);
+    logger.info(`📥 Downloading blob directly: ${modelFileName}`)
+    await client.downloadBlob(blobBinding, clientOptions)
   } else {
-    logger.info(`📥 Downloading from registry: ${registryPath}`);
-    await client.downloadModel(registryPath, registrySource, clientOptions);
+    logger.info(`📥 Downloading from registry: ${registryPath}`)
+    await client.downloadModel(registryPath, registrySource, clientOptions)
   }
 
-  logger.info(`✅ Downloaded to ${modelPath}`);
+  logger.info(`✅ Downloaded to ${modelPath}`)
 
-  const stats = await fsPromises.stat(modelPath);
+  const stats = await fsPromises.stat(modelPath)
   if (expectedSize && stats.size !== expectedSize) {
-    await fsPromises.unlink(modelPath).catch(() => {});
+    await fsPromises.unlink(modelPath).catch(() => {})
     throw new ChecksumValidationFailedError(
-      `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`,
-    );
+      `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`
+    )
   }
 
   if (expectedChecksum && expectedChecksum.length === 64) {
-    const checksum = await measureChecksum(modelPath, hooks);
+    const checksum = await measureChecksum(modelPath, hooks)
     if (checksum !== expectedChecksum) {
-      await fsPromises.unlink(modelPath);
+      await fsPromises.unlink(modelPath)
       throw new ChecksumValidationFailedError(
-        `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`,
-      );
+        `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`
+      )
     }
-    logger.info(`✅ Checksum validated for ${modelFileName}`);
+    logger.info(`✅ Checksum validated for ${modelFileName}`)
   }
 
   if (progressCallback) {
     progressCallback({
-      type: "modelProgress",
+      type: 'modelProgress',
       downloaded: stats.size,
       total: stats.size,
       percentage: 100,
-      downloadKey,
-    });
+      downloadKey
+    })
   }
 }

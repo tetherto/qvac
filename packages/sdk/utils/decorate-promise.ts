@@ -32,7 +32,7 @@
  */
 export function decoratePromise<T, M extends Record<string, unknown>>(
   promise: Promise<T>,
-  metadata: M,
+  metadata: M
 ): Promise<T> & M {
-  return Object.assign(promise, metadata);
+  return Object.assign(promise, metadata)
 }

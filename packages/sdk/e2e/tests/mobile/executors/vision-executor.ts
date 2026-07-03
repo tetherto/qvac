@@ -1,158 +1,172 @@
-import { completion } from "@qvac/sdk";
+import { completion } from '@qvac/sdk'
 import {
   ValidationHelpers,
   type TestResult,
-  type Expectation,
-} from "@tetherto/qvac-test-suite/mobile";
-import type { ResourceManager } from "../../shared/resource-manager.js";
-import { ModelAssetExecutor } from "./model-asset-executor.js";
-import { visionTests } from "../../vision-tests.js";
-import { callWhenAddonIdle } from "../../shared/utils/addon-idle.js";
+  type Expectation
+} from '@tetherto/qvac-test-suite/mobile'
+import type { ResourceManager } from '../../shared/resource-manager.js'
+import { ModelAssetExecutor } from './model-asset-executor.js'
+import { visionTests } from '../../vision-tests.js'
+import { callWhenAddonIdle } from '../../shared/utils/addon-idle.js'
 
 type VisionParams = {
-  history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>;
-  stream?: boolean;
-  generationParams?: Record<string, unknown>;
-};
+  history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>
+  stream?: boolean
+  generationParams?: Record<string, unknown>
+}
 
 export class MobileVisionExecutor extends ModelAssetExecutor<typeof visionTests> {
-  pattern = /^vision-/;
+  pattern = /^vision-/
 
   protected handlers = Object.fromEntries(
     visionTests.map((test) => {
-      if (test.testId.endsWith("-streaming")) {
-        return [test.testId, this.streaming.bind(this)];
+      if (test.testId.endsWith('-streaming')) {
+        return [test.testId, this.streaming.bind(this)]
       }
-      if (test.testId.endsWith("-stats")) {
-        return [test.testId, this.withStats.bind(this)];
+      if (test.testId.endsWith('-stats')) {
+        return [test.testId, this.withStats.bind(this)]
       }
-      return [test.testId, this.generic.bind(this)];
-    }),
-  ) as never;
-  protected defaultHandler = undefined;
+      return [test.testId, this.generic.bind(this)]
+    })
+  ) as never
+  protected defaultHandler = undefined
 
-  private imageAssets: Record<string, number> | null = null;
+  private imageAssets: Record<string, number> | null = null
 
   constructor(resources: ResourceManager) {
-    super(resources);
+    super(resources)
   }
 
   private async loadImageAssets() {
     if (!this.imageAssets) {
       // @ts-ignore - assets.ts is generated at consumer build time
-      const assets = await import("../../../../assets");
-      this.imageAssets = assets.images;
+      const assets = await import('../../../../assets')
+      this.imageAssets = assets.images
     }
-    return this.imageAssets!;
+    return this.imageAssets!
   }
 
-  private async resolveAttachments(
-    history: VisionParams["history"],
-  ) {
-    const images = await this.loadImageAssets();
-    const resolved = [];
+  private async resolveAttachments(history: VisionParams['history']) {
+    const images = await this.loadImageAssets()
+    const resolved = []
 
     for (const msg of history) {
       if (!msg.attachments?.length) {
-        resolved.push(msg);
-        continue;
+        resolved.push(msg)
+        continue
       }
 
-      const resolvedAttachments = [];
+      const resolvedAttachments = []
       for (const att of msg.attachments) {
-        const fileName = att.path.split("/").pop()!;
-        const assetModule = images[fileName];
+        const fileName = att.path.split('/').pop()!
+        const assetModule = images[fileName]
         if (!assetModule) {
-          throw new Error(`Image file not found in assets: ${fileName}`);
+          throw new Error(`Image file not found in assets: ${fileName}`)
         }
-        const imageUri = await this.resolveAsset(assetModule);
-        resolvedAttachments.push({ path: imageUri });
+        const imageUri = await this.resolveAsset(assetModule)
+        resolvedAttachments.push({ path: imageUri })
       }
 
-      resolved.push({ ...msg, attachments: resolvedAttachments });
+      resolved.push({ ...msg, attachments: resolvedAttachments })
     }
 
-    return resolved;
+    return resolved
   }
 
   async generic(params: unknown, expectation: Expectation): Promise<TestResult> {
-    const p = params as VisionParams;
-    const visionModelId = await this.resources.ensureLoaded("vision");
+    const p = params as VisionParams
+    const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history);
-      const text = await callWhenAddonIdle(() =>
-        completion({ modelId: visionModelId, history, stream: false, ...(p.generationParams && { generationParams: p.generationParams }) } as never).text,
-      );
-      return ValidationHelpers.validate(text, expectation);
+      const history = await this.resolveAttachments(p.history)
+      const text = await callWhenAddonIdle(
+        () =>
+          completion({
+            modelId: visionModelId,
+            history,
+            stream: false,
+            ...(p.generationParams && { generationParams: p.generationParams })
+          } as never).text
+      )
+      return ValidationHelpers.validate(text, expectation)
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (expectation.validation === "throws-error") {
-        return ValidationHelpers.validate(errorMsg, expectation);
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (expectation.validation === 'throws-error') {
+        return ValidationHelpers.validate(errorMsg, expectation)
       }
-      return { passed: false, output: `Vision failed: ${errorMsg}` };
+      return { passed: false, output: `Vision failed: ${errorMsg}` }
     }
   }
 
   async streaming(params: unknown, expectation: Expectation): Promise<TestResult> {
-    const p = params as VisionParams;
-    const visionModelId = await this.resources.ensureLoaded("vision");
+    const p = params as VisionParams
+    const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history);
+      const history = await this.resolveAttachments(p.history)
       const tokens = await callWhenAddonIdle(async () => {
-        const result = completion({ modelId: visionModelId, history, stream: true, ...(p.generationParams && { generationParams: p.generationParams }) } as never);
-        const acc: string[] = [];
+        const result = completion({
+          modelId: visionModelId,
+          history,
+          stream: true,
+          ...(p.generationParams && { generationParams: p.generationParams })
+        } as never)
+        const acc: string[] = []
         for await (const token of result.tokenStream) {
-          acc.push(token);
+          acc.push(token)
         }
-        return acc;
-      });
+        return acc
+      })
 
       if (tokens.length === 0) {
-        return { passed: false, output: "Streaming produced zero tokens" };
+        return { passed: false, output: 'Streaming produced zero tokens' }
       }
 
-      const text = tokens.join("");
-      const validation = ValidationHelpers.validate(text, expectation);
+      const text = tokens.join('')
+      const validation = ValidationHelpers.validate(text, expectation)
       return {
         ...validation,
-        output: `${validation.output} (streamed ${tokens.length} tokens)`,
-      };
+        output: `${validation.output} (streamed ${tokens.length} tokens)`
+      }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Vision streaming failed: ${errorMsg}` };
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Vision streaming failed: ${errorMsg}` }
     }
   }
 
   async withStats(params: unknown, expectation: Expectation): Promise<TestResult> {
-    const p = params as VisionParams;
-    const visionModelId = await this.resources.ensureLoaded("vision");
+    const p = params as VisionParams
+    const visionModelId = await this.resources.ensureLoaded('vision')
 
     try {
-      const history = await this.resolveAttachments(p.history);
+      const history = await this.resolveAttachments(p.history)
       const { text, stats } = await callWhenAddonIdle(async () => {
-        const result = completion({ modelId: visionModelId, history, stream: false, ...(p.generationParams && { generationParams: p.generationParams }) } as never);
-        return { text: await result.text, stats: await result.stats };
-      });
+        const result = completion({
+          modelId: visionModelId,
+          history,
+          stream: false,
+          ...(p.generationParams && { generationParams: p.generationParams })
+        } as never)
+        return { text: await result.text, stats: await result.stats }
+      })
 
-      const textValidation = ValidationHelpers.validate(text, expectation);
-      if (!textValidation.passed) return textValidation;
+      const textValidation = ValidationHelpers.validate(text, expectation)
+      if (!textValidation.passed) return textValidation
 
       if (!stats) {
-        return { passed: false, output: `Vision OK but stats were undefined. Text: "${text}"` };
+        return { passed: false, output: `Vision OK but stats were undefined. Text: "${text}"` }
       }
-      if (typeof stats.timeToFirstToken !== "number" || typeof stats.tokensPerSecond !== "number") {
-        return { passed: false, output: `Stats missing fields. Got: ${JSON.stringify(stats)}` };
+      if (typeof stats.timeToFirstToken !== 'number' || typeof stats.tokensPerSecond !== 'number') {
+        return { passed: false, output: `Stats missing fields. Got: ${JSON.stringify(stats)}` }
       }
 
       return {
         passed: true,
-        output: `Text: "${text}", ttft: ${stats.timeToFirstToken}ms, tps: ${stats.tokensPerSecond}`,
-      };
+        output: `Text: "${text}", ttft: ${stats.timeToFirstToken}ms, tps: ${stats.tokensPerSecond}`
+      }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Vision stats failed: ${errorMsg}` };
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Vision stats failed: ${errorMsg}` }
     }
   }
 }

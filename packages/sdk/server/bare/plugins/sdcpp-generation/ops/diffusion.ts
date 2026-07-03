@@ -1,26 +1,24 @@
-import { getModel } from "@/server/bare/registry/model-registry";
+import { getModel } from '@/server/bare/registry/model-registry'
 import type {
   DiffusionRequest,
   DiffusionStreamResponse,
-  DiffusionStats,
-} from "@/schemas/sdcpp-config";
+  DiffusionStats
+} from '@/schemas/sdcpp-config'
 
 interface ResponseWithStats {
-  stats?: DiffusionStats;
+  stats?: DiffusionStats
 }
 
 export async function* diffusion(
-  request: DiffusionRequest,
+  request: DiffusionRequest
 ): AsyncGenerator<DiffusionStreamResponse> {
-  const model = getModel(request.modelId);
+  const model = getModel(request.modelId)
 
-  const init_image = request.init_image
-    ? Buffer.from(request.init_image, "base64")
-    : undefined;
+  const init_image = request.init_image ? Buffer.from(request.init_image, 'base64') : undefined
 
   const init_images = request.init_images
-    ? request.init_images.map((b64) => Buffer.from(b64, "base64"))
-    : undefined;
+    ? request.init_images.map((b64) => Buffer.from(b64, 'base64'))
+    : undefined
 
   const response = await model.run({
     prompt: request.prompt,
@@ -43,28 +41,28 @@ export async function* diffusion(
     auto_resize_ref_image: request.auto_resize_ref_image,
     strength: request.strength,
     lora: request.lora,
-    upscale: request.upscale === false ? undefined : request.upscale,
-  });
+    upscale: request.upscale === false ? undefined : request.upscale
+  })
 
-  let outputIndex = 0;
+  let outputIndex = 0
 
   for await (const chunk of response.iterate()) {
     if (chunk instanceof Uint8Array) {
       yield {
-        type: "diffusionStream",
-        data: Buffer.from(chunk).toString("base64"),
-        outputIndex: outputIndex++,
-      };
-    } else if (typeof chunk === "string") {
+        type: 'diffusionStream',
+        data: Buffer.from(chunk).toString('base64'),
+        outputIndex: outputIndex++
+      }
+    } else if (typeof chunk === 'string') {
       try {
-        const tick = JSON.parse(chunk) as Record<string, unknown>;
-        if ("step" in tick) {
+        const tick = JSON.parse(chunk) as Record<string, unknown>
+        if ('step' in tick) {
           yield {
-            type: "diffusionStream",
-            step: tick["step"] as number,
-            totalSteps: tick["total"] as number,
-            elapsedMs: tick["elapsed_ms"] as number,
-          };
+            type: 'diffusionStream',
+            step: tick['step'] as number,
+            totalSteps: tick['total'] as number,
+            elapsedMs: tick['elapsed_ms'] as number
+          }
         }
       } catch {
         // Non-JSON string output — skip
@@ -72,10 +70,10 @@ export async function* diffusion(
     }
   }
 
-  const responseWithStats = response as unknown as ResponseWithStats;
+  const responseWithStats = response as unknown as ResponseWithStats
   yield {
-    type: "diffusionStream",
+    type: 'diffusionStream',
     done: true,
-    stats: responseWithStats.stats ?? undefined,
-  };
+    stats: responseWithStats.stats ?? undefined
+  }
 }
