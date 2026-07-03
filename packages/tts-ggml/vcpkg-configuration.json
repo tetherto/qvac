@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "4fdb29905bcc6573b715796ce92424b11e01548c",
+    "baseline": "2d57e9ebf9502e2658ae1569c98330a53fd80fde",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
     "reference": "test/ggml-speech-opencl-soa-fix"
   },
