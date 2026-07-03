@@ -42,6 +42,20 @@ test('synthesizeServeConfig keys a catalog id by its friendly alias, model = con
   })
 })
 
+test('synthesizeServeConfig resolves larger catalog ids to SDK constants', () => {
+  const config = synthesizeServeConfig(['gpt-oss-20b', 'gemma4-31b'])
+
+  assert.deepEqual(config.serve.models['gpt-oss-20b'], {
+    model: 'GPT_OSS_20B_INST_Q4_K_M',
+    preload: true,
+    default: true
+  })
+  assert.deepEqual(config.serve.models['gemma4-31b'], {
+    model: 'GEMMA4_31B_MULTIMODAL_Q4_K_M',
+    preload: true
+  })
+})
+
 test('synthesizeServeConfig carries per-model config under a catalog-id alias', () => {
   const config = synthesizeServeConfig([
     { name: 'qwen3.5-9b', config: { ctx_size: 32768, reasoning_budget: -1 } }

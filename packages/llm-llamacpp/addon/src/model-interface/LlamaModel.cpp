@@ -706,6 +706,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetNSlides();
   state_->llmContext_->resetThinkingBlockDiscards();
+  state_->llmContext_->resetVisionEncodeMs();
 
   // Prompt media (both hoisted byte buffers and inline paths) is loaded by
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
@@ -945,6 +946,9 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"promptTokens", stats.promptTokens},
       {"contextSlides", stats.contextSlides},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
+      // prompts share the one per-context accumulator (reset per prompt), so a
+      // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
 }
@@ -980,6 +984,14 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getNSlides())},
       {"thinkingBlockDiscards",
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
+      // Vision-encode time + slice count for the most recent inference.
+      // Single-sequence semantics: the context accumulator resets per prompt,
+      // so these are only meaningful on this single-prompt path — intentionally
+      // NOT emitted from batchRuntimeStatsLocked (multiple prompts share one
+      // context, so a per-batch value would be misattributed).
+      {"visionEncodeMs", state_->llmContext_->getVisionEncodeMs()},
+      {"visionEncodeTiles",
+       static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
 }

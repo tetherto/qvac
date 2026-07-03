@@ -63,6 +63,7 @@ test('resolveOptions returns OpenClaw-safe defaults', () => {
 
 test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () => {
   const model = openClawModels.find((entry) => entry.id === 'qwen3.5-9b')
+  const gptOss = openClawModels.find((entry) => entry.id === 'gpt-oss-20b')
 
   assert.ok(model)
   assert.equal(model.name, 'Qwen3.5 9B')
@@ -72,6 +73,11 @@ test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () 
   assert.equal(model.maxTokens, 8192)
   assert.deepEqual(model.compat, { requiresStringContent: true })
   assert.deepEqual(model.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
+
+  assert.ok(gptOss)
+  assert.equal(gptOss.name, 'GPT-OSS 20B')
+  assert.deepEqual(gptOss.input, ['text'])
+  assert.equal(gptOss.reasoning, true)
 })
 
 test('createOpenClawModels advertises the configured context window', () => {
@@ -166,13 +172,14 @@ test('applyQvacSetupConfig returns a complete OpenClaw config for non-interactiv
 
 test('createQvacServeModels carries serve model guardrails for qvac.config.json generation', () => {
   const models = createQvacServeModels(resolveOptions({
+    model: 'gpt-oss-20b',
     ctxSize: 65536,
     reasoningBudget: 0,
     tools: false
   }))
 
-  assert.deepEqual(models['qwen3.5-9b'], {
-    model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M',
+  assert.deepEqual(models['gpt-oss-20b'], {
+    model: 'GPT_OSS_20B_INST_Q4_K_M',
     preload: true,
     default: true,
     config: {
@@ -181,6 +188,7 @@ test('createQvacServeModels carries serve model guardrails for qvac.config.json 
       tools: false
     }
   })
+  assert.equal(models['qwen3.5-9b']?.default, undefined)
 })
 
 test('registerQvacProvider registers a catalog provider for OpenClaw', async () => {
@@ -255,6 +263,10 @@ test('registerQvacProvider registers static model catalog rows for OpenClaw mode
     { kind: 'text', provider: 'qvac', model: 'qwen3.5-0.8b', label: 'Qwen3.5 0.8B', source: 'static' },
     { kind: 'text', provider: 'qvac', model: 'qwen3.5-2b', label: 'Qwen3.5 2B', source: 'static' },
     { kind: 'text', provider: 'qvac', model: 'qwen3.5-4b', label: 'Qwen3.5 4B', source: 'static' },
-    { kind: 'text', provider: 'qvac', model: 'qwen3.5-9b', label: 'Qwen3.5 9B', source: 'static' }
+    { kind: 'text', provider: 'qvac', model: 'qwen3.5-9b', label: 'Qwen3.5 9B', source: 'static' },
+    { kind: 'text', provider: 'qvac', model: 'qwen3.6-27b', label: 'Qwen3.6 27B', source: 'static' },
+    { kind: 'text', provider: 'qvac', model: 'qwen3.6-35b-a3b', label: 'Qwen3.6 35B A3B', source: 'static' },
+    { kind: 'text', provider: 'qvac', model: 'gpt-oss-20b', label: 'GPT-OSS 20B', source: 'static' },
+    { kind: 'text', provider: 'qvac', model: 'gemma4-31b', label: 'Gemma4 31B', source: 'static' }
   ])
 })
