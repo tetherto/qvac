@@ -50,6 +50,17 @@ inputs:
       pin a specific published version.
     required: false
     default: ""
+  force-npm-prebuild:
+    description: |
+      When "true", ignore ALL CI prebuild artifacts (per-matrix and the merged
+      `prebuilds` artifact) and pull the native prebuild from npm at
+      `package-version`. Used by the baseline leg of a candidate-vs-baseline
+      benchmark: without this, the merged `prebuilds` artifact (built from the
+      candidate in the same run) is pulled in when the per-matrix artifact is
+      absent, so the baseline session would silently run the candidate binary.
+      Defaults to "false" so existing artifact-first callers are unchanged.
+    required: false
+    default: "false"
   allow-npm-fallback:
     description: |
       Whether the npm fallback (npm pack <addon>@<version>) is allowed when
@@ -108,7 +119,7 @@ runs:
         npm install -g --force @expo/cli@latest
 
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -117,7 +128,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -150,7 +161,7 @@ runs:
     # npm. No-op for addons / runs that never produced this artifact (e.g.
     # genuine workflow_dispatch), where the npm fallback below still applies.
     - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
-      if: inputs.skip-prebuilds != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         name: prebuilds
@@ -168,7 +179,7 @@ runs:
     # published package is the intended behaviour, so the fallback stays on.
     # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
     - name: Download prebuilds (from npm — fallback when no artifacts found)
-      if: inputs.skip-prebuilds != 'true' && (inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
+      if: inputs.skip-prebuilds != 'true' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
