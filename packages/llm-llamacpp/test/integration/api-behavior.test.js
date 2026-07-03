@@ -210,6 +210,37 @@ safeTest(
 )
 
 safeTest(
+  'idle | run batch: reserved batch- id prefix rejects before admission',
+  { timeout: 600_000 },
+  async (t) => {
+    // The 'batch-' prefix is reserved for natively auto-minted ids. A caller
+    // using it could collide with a mint (e.g. 'batch-7') in another in-flight
+    // group, silently rerouting that group's streamed chunks, so it is rejected
+    // up front.
+    const { model } = await setupModel(t, { parallel: '2' })
+    const prompt = [{ role: 'user', content: 'Say red.' }]
+
+    await t.exception.all(
+      () => model.run([{ id: 'batch-7', prompt }]),
+      /reserved/,
+      'batch item with reserved batch- id prefix rejects'
+    )
+
+    // Prefix must match exactly: ids merely containing or resembling it pass.
+    const response = await model.run([
+      { id: 'batch_7', prompt },
+      { id: 'my-batch-1', prompt }
+    ])
+    const results = await response.await()
+    t.alike(
+      results.map((result) => result.id),
+      ['batch_7', 'my-batch-1'],
+      'similar non-reserved ids are accepted'
+    )
+  }
+)
+
+safeTest(
   'idle | run with prefill: evaluates prompt without token generation',
   { timeout: 600_000 },
   async (t) => {

@@ -311,6 +311,11 @@ export interface RunOptions {
 }
 
 export interface BatchPrompt {
+  /**
+   * Correlates streamed chunks and results to this prompt. Auto-minted
+   * (`batch-N`) when omitted; the `batch-` prefix is reserved for those
+   * mints, so a provided id must not start with it.
+   */
   id?: string
   prompt: Message[]
   runOptions?: RunOptions

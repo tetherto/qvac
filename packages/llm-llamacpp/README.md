@@ -302,7 +302,7 @@ const results = await response.await()
 // results: [ { id: 'batch-1', output: 'Apple' }, { id: 'batch-2', output: 'France' }, { id: 'batch-3', output: 'Blue' } ]
 ```
 
-Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`:
+Pass `BatchPrompt` objects to supply a caller-assigned id or per-prompt `runOptions`. The `batch-` prefix is reserved for auto-minted ids and rejected on caller-assigned ones:
 
 ```javascript
 const response = await model.run([
