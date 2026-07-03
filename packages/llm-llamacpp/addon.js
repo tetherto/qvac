@@ -148,6 +148,11 @@ class LlamaInterface {
    */
   async cancelJob(id) {
     if (!this._handle) return
+    // The native binding treats a missing id as cancel-all; cancelling every
+    // job is cancel()'s job, so require an explicit id here.
+    if (typeof id !== 'number') {
+      throw new TypeError('cancelJob(id) requires a numeric job id; use cancel() to cancel all jobs')
+    }
     await this._binding.cancelJob(this._handle, id)
   }
 

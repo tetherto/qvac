@@ -672,22 +672,6 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-inline js_value_t* cancelJob(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
-  // A missing id resolves to kNoJobId, a no-op; whole-model cancel() remains
-  // the path for finetune / unload / explicit cancel-all.
-  const auto jobId = args.getIntegralOptional<JobId>(1).value_or(kNoJobId);
-
-  // shared_ptr capture so the addon outlives a concurrent destroyInstance()
-  // while the async cancel runs — see cancel() above.
-  auto addonCppRef = instance.addonCpp;
-  return js::JsAsyncTask::run(
-      env, [addonCppRef, jobId]() { addonCppRef->cancelJob(jobId); });
-}
-JSCATCH
 
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
