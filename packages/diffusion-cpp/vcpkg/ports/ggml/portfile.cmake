@@ -5,7 +5,7 @@
 # downstream LTX support currently under review.
 #
 # Pulls from tetherto/qvac-ext-ggml branch 2026-06-06-on-fabric-ggml (REF
-# pinned to its tip 12b744dc for reproducibility). This rebases the 2026-06-06
+# pinned to its tip 01a74afa for reproducibility). This rebases the 2026-06-06
 # compute stack on the fabric ggml subtree, including the Adreno OpenCL Q4_0
 # allocation fix plus the OpenCL SOA tensor-upload serialization fix found on
 # the S25. It also carries the merged Metal fused Flux RoPE kernel,
@@ -15,7 +15,7 @@
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/tetherto/qvac-ext-ggml.git"
-    REF 12b744dc145b9bd691d1bc41debc3e865e4f513c
+    REF 01a74afa875902d46ec2b4a03a955f1201060d97
 )
 
 # Only build Release; ggml's Android install exports release CMake package
@@ -103,8 +103,23 @@ if(VCPKG_TARGET_IS_ANDROID AND "vulkan" IN_LIST FEATURES)
          DESTINATION "${SOURCE_PATH}/src/")
 endif()
 
+# QVAC diffusion-cpp publishes one static addon per desktop platform, so every
+# generated Vulkan shader byte is duplicated across npm prebuilds. The supported
+# model set does not include TBQ/PQ quantized checkpoints; keep the generated
+# symbol names so ggml's pipeline registration still compiles, but replace those
+# shader bodies with tiny no-op compute shaders.
+set(_QVAC_VULKAN_SHADER_GEN "${SOURCE_PATH}/src/ggml-vulkan/vulkan-shaders/vulkan-shaders-gen.cpp")
+file(READ "${_QVAC_VULKAN_SHADER_GEN}" _qvac_vulkan_shader_gen)
+string(REPLACE
+    "void string_to_spv_func(std::string name, std::string in_path, std::string out_path, std::map<std::string, std::string> defines, bool coopmat, bool dep_file, compile_count_guard slot) {\n    std::string target_env"
+    "void string_to_spv_func(std::string name, std::string in_path, std::string out_path, std::map<std::string, std::string> defines, bool coopmat, bool dep_file, compile_count_guard slot) {\n    if (name.find(\"tbq\") != std::string::npos || name.find(\"pq\") != std::string::npos) {\n        const std::string noop_path = out_path + \".noop.comp\";\n        write_binary_file(noop_path, \"#version 450\\nlayout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;\\nvoid main() {}\\n\");\n        in_path = noop_path;\n        defines.clear();\n        coopmat = false;\n    }\n\n    std::string target_env"
+    _qvac_vulkan_shader_gen "${_qvac_vulkan_shader_gen}")
+file(WRITE "${_QVAC_VULKAN_SHADER_GEN}" "${_qvac_vulkan_shader_gen}")
+unset(_qvac_vulkan_shader_gen)
+
 # --- Platform options ---
 set(PLATFORM_OPTIONS)
+set(GGML_VULKAN_BUILD_ADRENO_SHADERS OFF)
 
 if(VCPKG_TARGET_IS_IOS)
     list(APPEND PLATFORM_OPTIONS -DGGML_BLAS=OFF -DGGML_ACCELERATE=OFF)
@@ -119,6 +134,7 @@ if(VCPKG_TARGET_IS_ANDROID)
         -DGGML_VULKAN_DISABLE_COOPMAT=ON
         -DGGML_VULKAN_DISABLE_COOPMAT2=ON
     )
+    set(GGML_VULKAN_BUILD_ADRENO_SHADERS ON)
 endif()
 
 # --- Configure & build ---
@@ -137,6 +153,7 @@ vcpkg_cmake_configure(
         -DGGML_CUDA=${GGML_CUDA}
         -DGGML_OPENCL=${GGML_OPENCL}
         -DGGML_OPENCL_KERNEL_CACHE=OFF
+        -DGGML_VULKAN_BUILD_ADRENO_SHADERS=${GGML_VULKAN_BUILD_ADRENO_SHADERS}
         -DGGML_MAX_NAME=128
         ${GGML_CUDA_COMPILER_OPTION}
         ${PLATFORM_OPTIONS}

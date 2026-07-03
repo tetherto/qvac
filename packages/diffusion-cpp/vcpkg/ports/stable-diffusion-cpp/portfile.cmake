@@ -3,14 +3,45 @@
 # Builds the stable-diffusion.cpp inference library and links against the
 # system-installed ggml provided by the separate ggml overlay port.
 #
-# Pulls from tetherto/qvac-ext-stable-diffusion.cpp#13 (branch 2026-06-04-ltx).
+# Pulls from tetherto/qvac-ext-stable-diffusion.cpp (branch 2026-06-04).
 # REF is pinned to the PR head commit for reproducibility while the dependency
 # PR is under review.
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL "https://github.com/tetherto/qvac-ext-stable-diffusion.cpp.git"
-    REF 26d85c702253b2c23d8e991a0817a8fa2017d515
+    REF 5cd1a79a71870c80dd18d1d7fb297567203c12a3
 )
+
+# QVAC diffusion-cpp does not expose upstream Lens/PiD model paths, but the
+# upstream tokenizer bundle embeds their GPT-OSS and Gemma2 vocab assets into
+# every static prebuild. Keep the function symbols for source compatibility and
+# replace the heavy embedded blobs with runtime failures if those unsupported
+# paths are ever exercised.
+set(_QVAC_VOCAB_CPP "${SOURCE_PATH}/src/tokenizers/vocab/vocab.cpp")
+file(READ "${_QVAC_VOCAB_CPP}" _qvac_vocab_cpp)
+string(REPLACE "#include \"gemma2_merges.hpp\"\n" "" _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REPLACE "#include \"gemma2_vocab.hpp\"\n" "" _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REPLACE "#include \"gpt_oss_merges.hpp\"\n" "" _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REPLACE "#include \"gpt_oss_vocab.hpp\"\n" "" _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REPLACE "#include \"vocab.h\"\n" "#include \"vocab.h\"\n#include <stdexcept>\n" _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REGEX REPLACE
+    "std::string load_gemma2_merges\\(\\) \\{[^}]*\\}"
+    "std::string load_gemma2_merges() { throw std::runtime_error(\"Gemma2 tokenizer is disabled in the QVAC diffusion-cpp build\"); }"
+    _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REGEX REPLACE
+    "std::string load_gemma2_vocab_json\\(\\) \\{[^}]*\\}"
+    "std::string load_gemma2_vocab_json() { throw std::runtime_error(\"Gemma2 tokenizer is disabled in the QVAC diffusion-cpp build\"); }"
+    _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REGEX REPLACE
+    "std::string load_gpt_oss_merges\\(\\) \\{[^}]*\\}"
+    "std::string load_gpt_oss_merges() { throw std::runtime_error(\"GPT-OSS tokenizer is disabled in the QVAC diffusion-cpp build\"); }"
+    _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+string(REGEX REPLACE
+    "std::string load_gpt_oss_vocab_json\\(\\) \\{[^}]*\\}"
+    "std::string load_gpt_oss_vocab_json() { throw std::runtime_error(\"GPT-OSS tokenizer is disabled in the QVAC diffusion-cpp build\"); }"
+    _qvac_vocab_cpp "${_qvac_vocab_cpp}")
+file(WRITE "${_QVAC_VOCAB_CPP}" "${_qvac_vocab_cpp}")
+unset(_qvac_vocab_cpp)
 
 set(SD_FLASH_ATTN OFF)
 
