@@ -147,15 +147,17 @@ async function runBlocking(
       `  completion done tokens=${completionTokens} finish=${finishReason}`
     )
 
-    reply.send(chatCompletionResponse({
-      id: `chatcmpl-${randomId()}`,
-      created: Math.floor(Date.now() / 1000),
-      model: p.modelAlias,
-      text,
-      toolCalls,
-      completionTokens,
-      finishReason
-    }))
+    reply.send(
+      chatCompletionResponse({
+        id: `chatcmpl-${randomId()}`,
+        created: Math.floor(Date.now() / 1000),
+        model: p.modelAlias,
+        text,
+        toolCalls,
+        completionTokens,
+        finishReason
+      })
+    )
   } finally {
     await Promise.all(tmpPaths.map((path) => unlink(path).catch(() => undefined)))
   }
@@ -188,14 +190,15 @@ async function runStreaming(
       delta: ChatCompletionDelta,
       finishReason: OpenAiFinishReason | null,
       usage?: ChatCompletionUsage
-    ) => chatCompletionChunk({
-      id,
-      created,
-      model: p.modelAlias,
-      delta,
-      finishReason,
-      ...(usage !== undefined ? { usage } : {})
-    })
+    ) =>
+      chatCompletionChunk({
+        id,
+        created,
+        model: p.modelAlias,
+        delta,
+        finishReason,
+        ...(usage !== undefined ? { usage } : {})
+      })
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
@@ -213,11 +216,14 @@ async function runStreaming(
       sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
       sendSSE(raw, chunk({}, 'tool_calls'))
     } else {
-      sendSSE(raw, chunk({}, finishReason, {
-        prompt_tokens: 0,
-        completion_tokens: completionTokens,
-        total_tokens: completionTokens
-      }))
+      sendSSE(
+        raw,
+        chunk({}, finishReason, {
+          prompt_tokens: 0,
+          completion_tokens: completionTokens,
+          total_tokens: completionTokens
+        })
+      )
     }
 
     endSSE(raw)

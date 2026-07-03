@@ -6,7 +6,7 @@ const path = require('path')
 const { QVACRegistryClient } = require('@qvac/registry-client')
 
 const REGISTRY_SOURCE = 's3'
-const REGISTRY_DATE_F16 = '2026-05-08'
+const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl* q4_0 (under ggml/chatterbox/)
 const REGISTRY_DATE_Q4_0 = '2026-05-18'
 // Supertonic 3: fp16 + fp32 GGUFs published under the 2026-06-10 build
 // (QVAC-20568); the block-quant q8_0 / q4_0 tiers under the 2026-06-15 build
@@ -23,7 +23,7 @@ const GROUPS = {
     },
     {
       name: 'chatterbox-s3gen.gguf',
-      registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen.gguf`
+      registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-q4_0.gguf`
     }
   ],
   'chatterbox-mtl': [
@@ -33,7 +33,7 @@ const GROUPS = {
     },
     {
       name: 'chatterbox-s3gen-mtl.gguf',
-      registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen-mtl.gguf`
+      registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-mtl-q4_0.gguf`
     }
   ],
   supertonic: [

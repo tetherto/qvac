@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -60,7 +60,7 @@
     "@fastify/multipart": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
-    "@qvac/sdk": "^0.13.1",
+    "@qvac/sdk": "^0.14.1",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
     "fastify": "^5.0.0",

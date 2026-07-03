@@ -405,10 +405,9 @@ async function ensureWhisperModel (targetPath = null) {
 //   - chatterbox-t3-turbo / -t3-mtl / supertonic / supertonic2:
 //     q4_0 + q8_0 published under qvac_models_compiled/ggml/<engine>/
 //     2026-05-18/ (added in qvac2 commit 029aafe6).
-//   - chatterbox-s3gen / -s3gen-mtl: only f16 exists under
-//     qvac_models_compiled/chatterbox/2026-05-08/ (the vocoder /
-//     HiFT side hasn't been quantised yet; once it lands here, point
-//     the entries below at the q4_0 path and drop the f16 fallback).
+//   - chatterbox-s3gen / -s3gen-mtl: q4_0 (also q5_0 / q8_0) published
+//     under qvac_models_compiled/ggml/chatterbox/2026-06-01/. (The prior
+//     f16-only build lived under qvac_models_compiled/chatterbox/2026-05-08/.)
 //
 // On-disk filenames stay at the historical `<name>.gguf` shape so the
 // TTSGgml index.js resolver finds them without changing its hard-coded
@@ -417,7 +416,7 @@ async function ensureWhisperModel (targetPath = null) {
 // quantisation levels; tts-cpp reads the quant from the GGUF metadata
 // at load time, not from the filename.
 const REGISTRY_SOURCE = 's3'
-const REGISTRY_DATE_F16 = '2026-05-08' // chatterbox-s3gen* (no quant variant yet)
+const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl* q4_0 (under ggml/chatterbox/)
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
 const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32 (QVAC-20568)
 const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0 (QVAC-20686)
@@ -428,7 +427,11 @@ const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
 // headroom on each side of the actual on-registry size to absorb future
 // re-quantisation passes without needing a code change here.
 const SIZE_CHATTERBOX_T3_Q4_0 = { minSize: 100_000_000, maxSize: 500_000_000 }
-const SIZE_CHATTERBOX_S3GEN_F16 = { minSize: 500_000_000, maxSize: 2_000_000_000 }
+// q4_0 s3gen keeps the S3TokenizerV2 encoder + CAMPPlus + mel filterbanks +
+// norms/biases at source dtype (per the converter deny-list) and only block-
+// quantises the big linears/conv kernels, so it is smaller than the ~1 GB f16
+// build but still a few hundred MB. Generous band covers q4_0..f16 either way.
+const SIZE_CHATTERBOX_S3GEN_Q4_0 = { minSize: 150_000_000, maxSize: 2_000_000_000 }
 const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
@@ -446,8 +449,8 @@ const CHATTERBOX_GGUFS = [
   },
   {
     name: 'chatterbox-s3gen.gguf',
-    ...SIZE_CHATTERBOX_S3GEN_F16,
-    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen.gguf`,
+    ...SIZE_CHATTERBOX_S3GEN_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-q4_0.gguf`,
     registrySource: REGISTRY_SOURCE
   }
 ]
@@ -461,8 +464,8 @@ const CHATTERBOX_MTL_GGUFS = [
   },
   {
     name: 'chatterbox-s3gen-mtl.gguf',
-    ...SIZE_CHATTERBOX_S3GEN_F16,
-    registryPath: `qvac_models_compiled/chatterbox/${REGISTRY_DATE_F16}/chatterbox-s3gen-mtl.gguf`,
+    ...SIZE_CHATTERBOX_S3GEN_Q4_0,
+    registryPath: `qvac_models_compiled/ggml/chatterbox/${REGISTRY_DATE_S3GEN_Q4_0}/chatterbox-s3gen-mtl-q4_0.gguf`,
     registrySource: REGISTRY_SOURCE
   }
 ]
@@ -995,6 +998,128 @@ async function ensureLavaSREnhancerGguf (options = {}) {
   return { success: false, path: null, targetDir: requestedDir }
 }
 
+// Minimum plausible size of a real Cangjie5_TC TSV (the full table is ~1 MB;
+// 400 KB guards against a truncated / placeholder download).
+const CANGJIE_TSV_MIN_BYTES = 400000
+
+// Cangjie5_TC.json ships as a JSON array of "<char>\t<code>" strings.  Pull
+// every JSON string literal out (regex avoids a full parse of the large blob)
+// and unescape the standard JSON escapes we care about.
+function extractCangjieEntries (raw) {
+  const str = typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8')
+  const entries = []
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"/g
+  let m
+  while ((m = re.exec(str)) !== null) {
+    const val = m[1]
+      .replace(/\\t/g, '\t')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\"/g, '"')
+    entries.push(val)
+  }
+  return entries
+}
+
+// Convert the Cangjie5_TC.json array into the two-column "<char>\t<code>" TSV
+// that tts-cpp's CangjieTable::load() (parse_tsv_line) expects: first column a
+// single-codepoint hanzi, second column the Cangjie code.  De-dupes on the
+// leading codepoint, matching tts-cpp (which keeps the first entry per char).
+function writeCangjieJsonArrayToTsv (jsonBody, tsvPath) {
+  const data = extractCangjieEntries(jsonBody)
+  if (data.length === 0) {
+    throw new Error('Cangjie JSON: no entries extracted')
+  }
+  const lines = []
+  const seenFirstCp = new Set()
+  for (const entry of data) {
+    const tabIdx = entry.indexOf('\t')
+    if (tabIdx <= 0) continue
+    const ch = entry.slice(0, tabIdx)
+    const code = entry.slice(tabIdx + 1)
+    if (ch.length === 0) continue
+    const cp = ch.codePointAt(0)
+    if (seenFirstCp.has(cp)) continue
+    seenFirstCp.add(cp)
+    lines.push(`${ch}\t${code}`)
+  }
+  fs.writeFileSync(tsvPath, lines.join('\n') + '\n', 'utf8')
+}
+
+/**
+ * Ensure the Cangjie5_TC TSV used for Chatterbox MTL Chinese ("zh") is staged,
+ * returning its path.  Resolution order: $CHATTERBOX_CANGJIE_TSV, a cached
+ * Cangjie5_TC.tsv under the models dir, then a download+convert of the upstream
+ * Cangjie5_TC.json.  Pass the returned path to TTSGgml as files.cangjieTsvPath.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - preferred dir (default models/).
+ * @returns {Promise<{ success: boolean, path: string|null, targetDir: string }>}
+ */
+async function ensureCangjieTsv (options = {}) {
+  const baseDir = getBaseDir()
+  const requestedDir = options.targetDir || path.join(baseDir, 'models')
+  const fileName = 'Cangjie5_TC.tsv'
+
+  const envPath = process.env && process.env.CHATTERBOX_CANGJIE_TSV
+  if (envPath && fs.existsSync(envPath)) {
+    console.log(` ✓ using Cangjie TSV at ${envPath} (CHATTERBOX_CANGJIE_TSV)`)
+    return { success: true, path: envPath, targetDir: path.dirname(envPath) }
+  }
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    const p = path.join(dir, fileName)
+    if (fs.existsSync(p)) {
+      try {
+        if (fs.statSync(p).size >= CANGJIE_TSV_MIN_BYTES) {
+          console.log(` ✓ using Cangjie TSV at ${p}`)
+          return { success: true, path: p, targetDir: dir }
+        }
+      } catch (_e) {}
+    }
+  }
+
+  const tsvPath = path.join(requestedDir, fileName)
+  const jsonPath = path.join(requestedDir, 'Cangjie5_TC.json')
+  const cangjieJsonUrl =
+    'https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/Cangjie5_TC.json'
+
+  console.log(' Downloading Cangjie5_TC.json...')
+  const dl = await ensureFileDownloaded(cangjieJsonUrl, jsonPath)
+  if (!dl.success || !fs.existsSync(jsonPath)) {
+    console.log(' Cangjie JSON download failed; zh synthesis will be skipped.')
+    return { success: false, path: null, targetDir: requestedDir }
+  }
+
+  try {
+    const jsonBody = fs.readFileSync(jsonPath, 'utf8')
+    writeCangjieJsonArrayToTsv(jsonBody, tsvPath)
+    const size = fs.statSync(tsvPath).size
+    if (size >= CANGJIE_TSV_MIN_BYTES) {
+      console.log(` ✓ built Cangjie TSV: ${tsvPath} (${size} bytes)`)
+      return { success: true, path: tsvPath, targetDir: requestedDir }
+    }
+    console.log(` Cangjie TSV too small: ${size} bytes`)
+    if (fs.existsSync(tsvPath)) fs.unlinkSync(tsvPath)
+  } catch (e) {
+    console.log(` Cangjie parse/write error: ${e.message}`)
+    if (fs.existsSync(tsvPath)) fs.unlinkSync(tsvPath)
+  }
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
 module.exports = {
   ensureFileDownloaded,
   ensureWhisperModel,
@@ -1004,5 +1129,6 @@ module.exports = {
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
   ensureMecabDict,
+  ensureCangjieTsv,
   ensureLavaSREnhancerGguf
 }

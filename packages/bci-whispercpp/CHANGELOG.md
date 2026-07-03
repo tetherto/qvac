@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
 - Bumped the `whisper-cpp` vcpkg override from `1.8.5#5` to `1.9.1`, which pulls
   the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
   `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,
