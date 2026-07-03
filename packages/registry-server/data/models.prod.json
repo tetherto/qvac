@@ -4989,6 +4989,38 @@
     "link": "https://huggingface.co/spaces/YatharthS/LavaSR "
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "lavasr",
+      "denoiser",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "lavasr",
+      "denoiser",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",

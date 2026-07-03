@@ -55,14 +55,16 @@ const GGUF_MAGIC_BE = 0x47475546; // "FUGG" big-endian
 // File-local error for streaming parser control flow
 // Used to signal "keep reading chunks" rather than an actual failure
 class NeedMoreDataError extends Error {
-  constructor(
-    public readonly currentOffset: number,
-    public readonly bytesNeeded: number,
-  ) {
+  readonly currentOffset: number;
+  readonly bytesNeeded: number;
+
+  constructor(currentOffset: number, bytesNeeded: number) {
     super(
       `Need more data: offset ${currentOffset} requires ${bytesNeeded} more bytes`,
     );
     this.name = "NeedMoreDataError";
+    this.currentOffset = currentOffset;
+    this.bytesNeeded = bytesNeeded;
   }
 }
 
