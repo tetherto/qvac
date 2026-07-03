@@ -450,7 +450,9 @@ export function registerQvacProvider(
         label: 'Local QVAC',
         hint: 'Start qvac serve through OpenClaw localService',
         kind: 'custom',
+        // lunte-disable-next-line require-await
         run: async ({ config }) => createQvacSetupResult(config, mergedOptions()),
+        // lunte-disable-next-line require-await
         runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
       }
     ],
@@ -463,10 +465,12 @@ export function registerQvacProvider(
       resolvedApiKey === 'custom-local' || resolvedApiKey === 'qvac-local',
     catalog: {
       order: 'simple',
+      // lunte-disable-next-line require-await
       run: async () => ({ provider: providerConfig() })
     },
     staticCatalog: {
       order: 'simple',
+      // lunte-disable-next-line require-await
       run: async () => ({ provider: providerConfig() })
     },
     wizard: {
