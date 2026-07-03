@@ -24,6 +24,7 @@ export const cancelInferenceBaseSchema = z.object({
 const cancelKindSchema = z
   .enum([
     "completion",
+    "batchCompletion",
     "embeddings",
     "transcribe",
     "translate",
@@ -88,9 +89,7 @@ const cancelByRequestIdParamsSchema = z.object({
  */
 const cancelBroadParamsSchema = z.object({
   operation: z.literal("broad").describe("Operation type"),
-  modelId: z
-    .string()
-    .describe("Cancel every in-flight request on this model"),
+  modelId: z.string().describe("Cancel every in-flight request on this model"),
   kind: cancelKindSchema.optional(),
 });
 
