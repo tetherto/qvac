@@ -63,8 +63,13 @@ for (const f of files) {
     // Speed Details: `model` · ACCEL | host | n | err | mmproj | tiles | TTFT | encTPS | decTPS | gen | wall
     if (m && c.length === 11 && /^\d+$/.test(c[2]) && /^\d+$/.test(c[3])) {
       const [, model, accel] = m; const host = c[1]
+      // Record mmproj-enc and TTFT INDEPENDENTLY. Previously this was XOR
+      // (mmproj on desktop, else TTFT on mobile), but the addon now reports a
+      // vision-encode stat on mobile too, so mobile rows carry BOTH columns.
+      // XOR would silently stop recording mobile TTFT, breaking comparability
+      // with older TTFT-based checkpoints. Record whichever columns are present.
       if (c[4] !== '—' && c[4] !== '') put(model, host, accel, 'mmproj', parseFloat(c[4]))
-      else put(model, host, accel, 'ttft', parseFloat(c[6]))
+      if (c[6] !== '—' && c[6] !== '') put(model, host, accel, 'ttft', parseFloat(c[6]))
       put(model, host, accel, 'wall', parseFloat(c[10]))
       continue
     }
