@@ -126,7 +126,7 @@ TEST_F(JobRunnerTest, BasicJobExecution) {
       std::make_unique<JobRunner>(model_.get(), model_.get());
   jobRunner_->start(outputQueue_);
 
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
 
   // Wait for job to complete
   std::this_thread::sleep_for(std::chrono::milliseconds{200});
@@ -145,14 +145,14 @@ TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
   jobRunner_->start(outputQueue_);
 
   // Start a job
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
 
   // Give it a moment to start processing
   std::this_thread::sleep_for(std::chrono::milliseconds{50});
 
   // Try to cancel from another thread with a timeout
-  auto cancel_future =
-      std::async(std::launch::async, [this]() { jobRunner_->cancel(); });
+  auto cancel_future = std::async(
+      std::launch::async, [this]() { jobRunner_->cancel(kNoJobId); });
 
   // Wait for cancel to complete with timeout
   auto status = cancel_future.wait_for(std::chrono::seconds{2});
@@ -168,7 +168,7 @@ TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
 // Test cancel on a job that hasn't started yet
 TEST_F(JobRunnerTest, CancelBeforeProcessing) {
   // Don't start a job, just call cancel
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should complete without issue and quickly (not hang)
   SUCCEED();
@@ -183,10 +183,10 @@ TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
   jobRunner_->start(outputQueue_);
 
   // Call cancel when no job is running
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should be able to run a job normally after cancel with no job
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
 
   // Wait for job to complete
   std::this_thread::sleep_for(std::chrono::milliseconds{150});
@@ -213,7 +213,8 @@ TEST_F(JobRunnerTest, MultipleJobsSequential) {
   jobRunner_->start(outputQueue_);
 
   for (int i = 0; i < 3; ++i) {
-    jobRunner_->runJob(std::string("test input ") + std::to_string(i));
+    jobRunner_->runJob(
+        std::string("test input ") + std::to_string(i), kNoJobId);
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
   }
 
@@ -230,10 +231,10 @@ TEST_F(JobRunnerTest, CannotRunJobWhileProcessing) {
   jobRunner_->start(outputQueue_);
 
   // Start first job
-  EXPECT_TRUE(jobRunner_->runJob(std::string("test input 1")));
+  EXPECT_TRUE(jobRunner_->runJob(std::string("test input 1"), kNoJobId));
 
   // Immediately try to start another
-  EXPECT_FALSE(jobRunner_->runJob(std::string("test input 2")));
+  EXPECT_FALSE(jobRunner_->runJob(std::string("test input 2"), kNoJobId));
 }
 
 // Stress test: multiple rapid cancel calls
@@ -245,13 +246,14 @@ TEST_F(JobRunnerTest, MultipleRapidCancels) {
   jobRunner_->start(outputQueue_);
 
   // Start a job
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
 
   // Call cancel multiple times from different threads
   std::vector<std::future<void>> futures;
   for (int i = 0; i < 5; ++i) {
-    futures.push_back(
-        std::async(std::launch::async, [this]() { jobRunner_->cancel(); }));
+    futures.push_back(std::async(std::launch::async, [this]() {
+      jobRunner_->cancel(kNoJobId);
+    }));
   }
 
   // Wait for all cancels with timeout
@@ -275,14 +277,14 @@ TEST_F(JobRunnerTest, CancelInCriticalWindowNoDeadlock) {
   // Run multiple iterations to increase chance of hitting the critical window
   for (int iteration = 0; iteration < 10; ++iteration) {
     // Start a job
-    jobRunner_->runJob(std::string("test input"));
+    jobRunner_->runJob(std::string("test input"), kNoJobId);
 
     // Cancel almost immediately - trying to hit the window between
     // model_->process() returning and the lock being reacquired
     std::this_thread::sleep_for(std::chrono::milliseconds{40});
 
-    auto cancel_future =
-        std::async(std::launch::async, [this]() { jobRunner_->cancel(); });
+    auto cancel_future = std::async(
+        std::launch::async, [this]() { jobRunner_->cancel(kNoJobId); });
 
     auto status = cancel_future.wait_for(std::chrono::seconds{1});
     ASSERT_NE(status, std::future_status::timeout)
@@ -304,14 +306,14 @@ TEST_F(JobRunnerTest, CancelWaitsForProcessingToComplete) {
   jobRunner_->start(outputQueue_);
 
   // Start a job
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
 
   // Wait until processing has started
   std::this_thread::sleep_for(std::chrono::milliseconds{50});
   ASSERT_TRUE(model_->isProcessing()) << "Model should be processing";
 
   // Call cancel while processing - it should block until processing completes
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // After cancel() returns, processing must be complete
   EXPECT_FALSE(model_->isProcessing())
@@ -335,11 +337,11 @@ TEST_F(JobRunnerTest, CancelWhileAccessingInputNoCrash) {
   // Run multiple iterations to increase chance of hitting the race condition
   for (int iteration = 0; iteration < 5; ++iteration) {
     // Start a job with input data
-    local_job_runner->runJob(std::string("test input with data"));
+    local_job_runner->runJob(std::string("test input with data"), kNoJobId);
 
     // Cancel quickly while model is accessing input
     std::this_thread::sleep_for(std::chrono::milliseconds{20});
-    local_job_runner->cancel();
+    local_job_runner->cancel(kNoJobId);
 
     // After cancel returns, processing must be complete
     EXPECT_FALSE(model_ptr->isProcessing())
@@ -376,7 +378,7 @@ TEST_F(
   for (int t = 0; t < 4; ++t) {
     cancel_threads.push_back(std::async(std::launch::async, [this, &stop]() {
       while (!stop.load()) {
-        jobRunner_->cancel();
+        jobRunner_->cancel(kNoJobId);
         std::this_thread::yield(); // Give other threads a chance
       }
     }));
@@ -384,7 +386,7 @@ TEST_F(
 
   // Main thread submits jobs rapidly
   for (int i = 0; i < 200; ++i) {
-    jobRunner_->runJob(std::string("test"));
+    jobRunner_->runJob(std::string("test"), kNoJobId);
     iterations++;
 
     // Occasionally yield to give cancel threads a chance to run
@@ -436,17 +438,17 @@ TEST_F(JobRunnerTest, MultipleCancelsInSequence) {
   jobRunner_->start(outputQueue_);
 
   // Start a job
-  jobRunner_->runJob(std::string("test input"));
+  jobRunner_->runJob(std::string("test input"), kNoJobId);
   std::this_thread::sleep_for(std::chrono::milliseconds{20});
 
   // Cancel it
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Call cancel again - should be safe even though no job is running
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // And again
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should complete without hanging or crashing
   SUCCEED();
@@ -460,7 +462,7 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
       std::make_unique<JobRunner>(model_.get(), model_.get());
   jobRunner_->start(outputQueue_);
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("long job")));
+  EXPECT_TRUE(jobRunner_->runJob(std::string("long job"), kNoJobId));
 
   std::chrono::steady_clock::time_point wait_deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -473,7 +475,7 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
   std::chrono::steady_clock::time_point before_cancel =
       std::chrono::steady_clock::now();
 
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   std::chrono::milliseconds cancel_elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -487,9 +489,9 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
       << "ms — model did not receive stop signal (would have taken 10000ms "
          "without cancellation)";
 
-  EXPECT_TRUE(jobRunner_->runJob(std::string("follow-up")))
+  EXPECT_TRUE(jobRunner_->runJob(std::string("follow-up"), kNoJobId))
       << "Job slot should be free after cancel";
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 }
 
 /// Proves SingleJobScheduler satisfies IJobScheduler through a base pointer:

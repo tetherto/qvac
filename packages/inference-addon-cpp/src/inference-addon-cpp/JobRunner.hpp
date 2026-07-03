@@ -157,7 +157,7 @@ public:
 
   /// Admit an untagged job. The single-slot implementation cannot correlate
   /// outputs to a tagged request, so a non-sentinel @p id is rejected.
-  bool runJob(std::any input, JobId id = kNoJobId) override {
+  bool runJob(std::any input, JobId id) override {
     if (id != kNoJobId) {
       throw std::invalid_argument(
           "SingleJobScheduler does not support tagged jobs; id must be "
@@ -180,13 +180,13 @@ public:
 
   /// The single slot admits at most one job and is therefore already
   /// exclusive: delegate to runJob.
-  bool runExclusiveJob(std::any input, JobId id = kNoJobId) override {
+  bool runExclusiveJob(std::any input, JobId id) override {
     return runJob(std::move(input), id);
   }
 
   /// Cancel the single slot. Only the untagged sentinel is honoured; a tagged
   /// @p id cannot be correlated to the slot, so it is warned about and ignored.
-  void cancel(JobId id = kNoJobId) override {
+  void cancel(JobId id) override {
     if (id != kNoJobId) {
       QLOG(logger::Priority::WARNING,
           "SingleJobScheduler ignores cancel() for a tagged job id");
