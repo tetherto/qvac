@@ -1,0 +1,5 @@
+CI label-order test marker (throwaway).
+
+This file exists only to trigger the diffusion-cpp PR workflow so we can
+observe the ci-router routing decision under different label-application
+orders. Safe to delete. PR variant: B (verified applied first, stage labels last).
