@@ -46,6 +46,7 @@
   },
   {
     "package": "openclaw-plugin",
-    "path": "plugins/openclaw"
+    "path": "plugins/openclaw",
+    "sdk_sources": ["workspace"]
   }
 ]
