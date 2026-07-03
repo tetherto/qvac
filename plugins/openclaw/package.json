@@ -54,7 +54,6 @@
     "lint": "tsc -p tsconfig.test.json",
     "test": "tsx --test test/*.test.ts",
     "test:unit": "tsx --test test/*.test.ts",
-    "sdk-source:workspace": "npm install --no-save --package-lock=false ../../packages/ai-sdk-provider ../../packages/cli",
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
   "dependencies": {
