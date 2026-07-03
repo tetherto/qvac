@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chatterbox MTL Chinese (`zh`) synthesis.** `config.language: 'zh'` is now
+  accepted for the multilingual Chatterbox model. Chinese flows through the
+  Cangjie (hanzi → code) tokenizer path, so it requires a `Cangjie5_TC` TSV
+  supplied via `files.cangjieTsvPath` — when it is missing, `tts-cpp` throws a
+  clear error at load instead of silently degrading. Bumps the `tts-cpp`
+  requirement to `2026-07-03#0`, the registry port that adds `zh` to
+  `mtl_tokenizer::supported_languages()` (qvac-ext-lib-whisper.cpp PR #77).
+  The multilingual integration suite replaces its previous `zh` rejection
+  assertion with a real Chinese synthesis test (mirroring the Japanese/MeCab
+  test), and `downloadModel.js` gains `ensureCangjieTsv()` to stage/convert the
+  Cangjie5_TC table. The s3gen model downloads now pull the published q4_0
+  GGUFs (`chatterbox-s3gen-q4_0.gguf` / `chatterbox-s3gen-mtl-q4_0.gguf`)
+  instead of f16.
+
 - **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
   bandwidth-extends synthesized audio to **48 kHz** using the LavaSR Vocos
   enhancer (ConvNeXt backbone + ISTFT spec head), converted to a single GGUF.
@@ -63,8 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the `mecab.lib` / `bare_delay_load.lib` `DllMain` conflict.
 - **Chatterbox MTL language coverage now includes Japanese and Italian in the
   shared multilingual suite.** The standalone Japanese test has been folded into
-  `chatterbox-mtl.test.js`, which also keeps an explicit `zh` rejection
-  assertion until Chinese tokenizer support is enabled upstream.
+  `chatterbox-mtl.test.js`. (Chinese `zh` synthesis is now enabled — see the
+  Added section above.)
 - **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
   GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
   master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
