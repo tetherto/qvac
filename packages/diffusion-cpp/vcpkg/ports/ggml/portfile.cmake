@@ -1,4 +1,5 @@
-# ggml vcpkg overlay port for qvac-ext-ggml 2026-06-06-on-fabric-ggml-adreno-teardown.
+# ggml vcpkg overlay port for qvac-ext-ggml 2026-07-03 (tip b84554ae, a clone of
+# 2026-06-06-on-fabric-ggml-adreno-teardown).
 #
 # This fabric-based branch preserves qvac-fabric-llm.cpp's Adreno OpenCL Q4_0
 # preallocated transpose-buffer path, then replays the QVAC stable-diffusion.cpp

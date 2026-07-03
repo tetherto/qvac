@@ -8,7 +8,7 @@
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-07-01"
+      "version>=": "2026-07-03"
     },
     {
       "name": "vcpkg-cmake",

@@ -1,13 +1,13 @@
 # stable-diffusion.cpp vcpkg overlay port.
 #
-# This local overlay keeps the same qvac-ext-stable-diffusion.cpp LTX source
-# while forcing the dependency edge to the package-local ggml overlay pinned to
-# qvac-ext-ggml 2026-06-06-on-fabric-ggml.
+# Pinned to qvac-ext-stable-diffusion.cpp 2026-07-03 (tip 385c3326, a clone of
+# 2026-06-04-ltx) which exposes sd_ctx_params_t::backend, and forces the
+# dependency edge to the package-local ggml overlay (qvac-ext-ggml 2026-07-03).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 11717d225f13eb21f0a7fe5c8c5c7d733b1203a7
-    SHA512 554e9f51fa63ab0a528f7c33cfd8823144fd8ea36f7a2d4e8388adb5bb554e08fa7d66d989f1a26eee7ebdf6276bf0c0a9eacf9f4fe13bba676350e78dc3a8fd
+    REF 385c33265a4d8c535180849e95ac1e67733c9f1f
+    SHA512 13a7ae0d533a9e75ce630253ffa3151152a3f4aa1679e0d7370d290055c0f6a37b6d6700b477ac01c769cba826624615e0adf485478000497843961b763d78f0
     PATCHES
         resolve-backend-registry-alias.patch
 )
