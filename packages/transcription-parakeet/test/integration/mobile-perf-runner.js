@@ -101,8 +101,16 @@ function loadSampleAudio () {
 }
 
 async function runMobilePerfCase (t, opts) {
+  if (!opts.quant) {
+    await runMobilePerfCase(t, { ...opts, quant: 'q4_0' })
+    await runMobilePerfCase(t, { ...opts, quant: 'q8_0' })
+    await runMobilePerfCase(t, { ...opts, quant: 'f16' })
+    return
+  }
+
   const modelType = opts.modelType
   const useGPU = opts.useGPU
+  const quant = opts.quant
   const epLabel = useGPU ? '[GPU]' : '[CPU]'
   const modelLabel = `[${modelType}]`
 
@@ -135,11 +143,12 @@ async function runMobilePerfCase (t, opts) {
     console.log('='.repeat(60))
     console.log(` Platform: ${platform}`)
     console.log(` Model type: ${modelType}`)
+    if (quant) console.log(` Requested quant: ${quant}`)
     console.log(` Number of transcriptions: ${NUM_TRANSCRIPTIONS}`)
     console.log(` useGPU: ${useGPU}`)
     console.log('='.repeat(60) + '\n')
 
-    const modelPath = await loadGgufOrSkip(t, modelType)
+    const modelPath = await loadGgufOrSkip(t, modelType, quant ? { quant } : {})
     if (!modelPath) return
     const resolvedQuant = quantFromGgufName(modelPath) || 'q4_0'
     const quantLabel = `[${resolvedQuant}]`

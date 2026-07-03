@@ -43,7 +43,10 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: 60
+    # Longer than the default budget: the RTF benchmark leg now sweeps three
+    # quants (f16 + q8_0 + q4_0) across four model types, and GPU runners run
+    # both CPU and Vulkan legs (24 benchmark entries), each with warmup + runs.
+    timeout-minutes: 120
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -182,25 +185,39 @@ jobs:
           hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
           enable-cross-os: 'false'
 
-      # Stage both quantisations the RTF benchmark matrix sweeps:
-      #   q8_0 (2026-05-11 prefix) — desktop default, best WER per byte.
-      #   q4_0 (2026-05-27 prefix) — the mobile-shippable quant, benchmarked
-      #     on desktop too so the perf report can compare quants side by side.
-      # The recursive --include grabs whichever q4_0 builds the registry
-      # publishes (tdt / eou / sortformer today); a model type without a
-      # published q4_0 is simply absent and its matrix entry no-ops.
-      - name: Download Parakeet GGUFs from QVAC registry (q8_0 + q4_0)
+      # Stage every desktop quantisation the RTF benchmark matrix sweeps
+      # (f16 + q8_0 + q4_0), mirroring the registry prefixes encoded in
+      # test/integration/helpers.js MODEL_CONFIGS:
+      #   - f16        -> parakeet/2026-07-01 (all four model types)
+      #   - q8_0       -> parakeet/2026-05-11 (all four model types)
+      #   - q4_0       -> parakeet/2026-05-27 (tdt / eou / sortformer)
+      #   - ctc q4_0   -> parakeet/2026-07-01 (ctc q4_0 lives with the f16 set)
+      # Mobile q4_0 / q8_0 coverage is handled by the Device Farm workflow.
+      - name: Download Parakeet GGUFs from QVAC registry (f16 + q8_0 + q4_0)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           set -euo pipefail
           mkdir -p models
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
-            --recursive --exclude "*" --include "*.q8_0.gguf"
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/ models/ \
-            --recursive --exclude "*" --include "*.q4_0.gguf"
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf models/
+          # f16 for all four model types + ctc q4_0 (both live under 2026-07-01).
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-07-01/" models/ \
+            --recursive --exclude "*" --include "*.f16.gguf" --include "parakeet-ctc-0.6b.q4_0.gguf"
+          # q8_0 for all four model types.
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-11/" models/ \
+            --recursive --exclude "*" \
+            --include "parakeet-tdt-0.6b-v3.q8_0.gguf" \
+            --include "parakeet-ctc-0.6b.q8_0.gguf" \
+            --include "parakeet-eou-120m-v1.q8_0.gguf" \
+            --include "sortformer-4spk-v1.q8_0.gguf"
+          # q4_0 for tdt / eou / sortformer (ctc q4_0 already fetched above).
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-27/" models/ \
+            --recursive --exclude "*" \
+            --include "parakeet-tdt-0.6b-v3.q4_0.gguf" \
+            --include "parakeet-eou-120m-v1.q4_0.gguf" \
+            --include "sortformer-4spk-v1.q4_0.gguf"
           ls -lh models/
 
       - name: Run integration test
@@ -239,15 +256,23 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
-          # Quant sweep: q8_0 for all four model types; q4_0 for the three
-          # types the registry publishes a q4_0 build for (tdt / eou /
-          # sortformer — there is no ctc q4_0). CPU-only runners run the CPU
-          # legs; GPU runners additionally run the Vulkan GPU legs.
-          if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false}]'
-          else
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false},{"modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]'
-          fi
+          # Desktop quant sweep: f16 + q8_0 + q4_0 for all four model types.
+          # CPU-only runners run CPU legs; GPU runners additionally run the
+          # Vulkan GPU legs. The matrix is generated programmatically so the
+          # quant x model-type x backend product stays readable and consistent.
+          MODEL_TYPES="tdt ctc eou sortformer"
+          QUANTS="f16 q8_0 q4_0"
+          entries=""
+          for t in $MODEL_TYPES; do
+            for q in $QUANTS; do
+              entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":false},"
+              if [ "${{ matrix.no_gpu || 'false' }}" != "true" ]; then
+                entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":true,\"backendHint\":\"vulkan\"},"
+              fi
+            done
+          done
+          export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON="[${entries%,}]"
+          echo "Benchmark matrix: $QVAC_PARAKEET_BENCHMARK_MATRIX_JSON"
           node scripts/run-rtf-benchmark-matrix.js
 
       # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
