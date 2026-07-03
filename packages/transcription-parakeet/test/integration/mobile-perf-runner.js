@@ -104,6 +104,7 @@ async function runMobilePerfCase (t, opts) {
   if (!opts.quant) {
     await runMobilePerfCase(t, { ...opts, quant: 'q4_0' })
     await runMobilePerfCase(t, { ...opts, quant: 'q8_0' })
+    await runMobilePerfCase(t, { ...opts, quant: 'f16' })
     return
   }
 
