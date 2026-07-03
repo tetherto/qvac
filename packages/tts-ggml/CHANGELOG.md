@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
 ### Added
 
 - **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
@@ -54,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   look-ahead latency.
 - When the enhancer is active it produces 48 kHz; if `outputSampleRate` is also
   set, the enhanced audio is resampled to that rate afterwards.
+
 
 ### Fixed
 
