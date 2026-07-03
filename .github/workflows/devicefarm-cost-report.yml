@@ -1,0 +1,77 @@
+name: Device Farm — Weekly Cost Report
+
+# Weekly (and on-demand) AWS Device Farm cost report (QVAC-21758).
+# Fetches metered device-minutes per project and posts a week-over-week
+# cost breakdown to the run's Step Summary + a JSON artifact, so we can
+# tell whether the CI cost optimisations are actually moving the number.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Mondays 08:00 UTC (09:00 CET)
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Window length in days"
+        type: number
+        required: false
+        default: 7
+      rate:
+        description: "USD per metered device-minute"
+        type: string
+        required: false
+        default: "0.17"
+
+# Read-only clone + OIDC token exchange. `id-token: write` is required for
+# the AWS OIDC role assumption below (Device Farm read-only in us-west-2).
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cost-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Trust relationship: GitHub OIDC -> AWS_OIDC_ROLE_ARN. The role must
+      # allow devicefarm:ListProjects + devicefarm:ListRuns account-wide in
+      # us-west-2 (see scripts/devicefarm-cost/README.md).
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Generate Device Farm cost report
+        env:
+          # Constrained inputs, but read via env (not ${{ }} interpolation
+          # inside run:) to keep expression injection out of the shell.
+          REPORT_DAYS: ${{ inputs.days || '7' }}
+          REPORT_RATE: ${{ inputs.rate || '0.17' }}
+        run: |
+          mkdir -p reports
+          node scripts/devicefarm-cost/report.js \
+            --days "$REPORT_DAYS" \
+            --rate "$REPORT_RATE" \
+            --summary \
+            --json reports/devicefarm-cost.json
+
+      - name: Upload cost report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: devicefarm-cost-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 90
+          if-no-files-found: warn
