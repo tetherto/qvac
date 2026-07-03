@@ -341,8 +341,15 @@ public:
   [[nodiscard]] virtual double getVisionEncodeMs() const { return 0.0; }
 
   /**
-   * Reset the vision-encode accumulator to zero. Called at the start of
-   * each inference. No-op for text-only contexts.
+   * Number of vision-encode slices (image chunks encoded) in the most recent
+   * inference — the `tiles` the report shows next to the encode time. 0 for
+   * text-only contexts.
+   */
+  [[nodiscard]] virtual int32_t getVisionEncodeTiles() const { return 0; }
+
+  /**
+   * Reset the vision-encode accumulators (ms + slice count) to zero. Called at
+   * the start of each inference. No-op for text-only contexts.
    */
   virtual void resetVisionEncodeMs() {}
 

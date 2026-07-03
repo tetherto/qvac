@@ -582,18 +582,27 @@ bool MtmdLlmContext::evalMessageWithTools(
     }
     int32_t res;
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
-      // Time just the ViT encode (this matches the desktop "mmproj enc (ms)"
-      // metric, which parses clip's native "slice encoded in N ms" stderr
-      // line) so it can be surfaced in runtimeStats on EVERY platform —
-      // including mobile, where that native line is not captured. We then run
-      // the same image-token ingest the mtmd helper would: encode ->
-      // get_output_embd -> decode_image_chunk (all public mtmd APIs, same
-      // args mtmd_helper_eval_chunk_single passes internally).
+      // Inlined copy of the IMAGE branch of qvac-fabric's
+      // mtmd_helper_eval_chunk_single (tools/mtmd/mtmd-helper.cpp): encode ->
+      // get_output_embd -> decode_image_chunk, called with the SAME args the
+      // helper passes internally. We inline it ONLY to wrap mtmd_encode_chunk
+      // with a timer (the helper neither returns nor exposes the encode time),
+      // so the pure ViT-encode ms + slice count reach runtimeStats on EVERY
+      // platform — including mobile, where the helper's native "slice encoded
+      // in N ms" line is not captured (Android logcat / iOS console) and the
+      // desktop stderr parse yields nothing. The slice count replaces the
+      // `tiles` the stderr parse used to supply for addon legs.
+      // KEEP IN SYNC with qvac-fabric's helper: mirrors it as of fabric 9341.x.
+      // If the image branch gains fabric-specific logic (Vulkan sync, batching,
+      // embd handling) on a fabric bump, replicate it here. Long-term, have
+      // fabric expose the encode time so this copy can be dropped and the
+      // helper called directly.
       const auto encT0 = std::chrono::steady_clock::now();
       res = mtmd_encode_chunk(visionContext(), chunk);
       visionEncodeMs_ += std::chrono::duration<double, std::milli>(
                              std::chrono::steady_clock::now() - encT0)
                              .count();
+      ++visionEncodeTiles_;
       if (res == 0) {
         float* imageEmbd = mtmd_get_output_embd(visionContext());
         res = mtmd_helper_decode_image_chunk(
@@ -999,7 +1008,13 @@ int32_t MtmdLlmContext::getNSlides() const { return nSlides_; }
 void MtmdLlmContext::resetNSlides() { nSlides_ = 0; }
 
 double MtmdLlmContext::getVisionEncodeMs() const { return visionEncodeMs_; }
-void MtmdLlmContext::resetVisionEncodeMs() { visionEncodeMs_ = 0.0; }
+int32_t MtmdLlmContext::getVisionEncodeTiles() const {
+  return visionEncodeTiles_;
+}
+void MtmdLlmContext::resetVisionEncodeMs() {
+  visionEncodeMs_ = 0.0;
+  visionEncodeTiles_ = 0;
+}
 
 int32_t MtmdLlmContext::getThinkingBlockDiscards() const {
   return thinkingBlockDiscards_;
@@ -1210,6 +1225,7 @@ void MtmdLlmContext::resetState(bool resetStats) {
     nSlides_ = 0;
     thinkingBlockDiscards_ = 0;
     visionEncodeMs_ = 0.0;
+    visionEncodeTiles_ = 0;
   }
 
   thinkSpan_.reset();
@@ -1384,13 +1400,15 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
   constexpr bool logitsLast = false;
   int32_t res;
   if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
-    // Pure ViT-encode timing (see evalMessageWithTools for rationale); the
-    // image-token ingest below mirrors mtmd_helper_eval_chunk_single.
+    // Pure ViT-encode timing + slice count (see evalMessageWithTools for the
+    // full rationale and the KEEP-IN-SYNC note); the image-token ingest below
+    // mirrors qvac-fabric's mtmd_helper_eval_chunk_single image branch.
     const auto encT0 = std::chrono::steady_clock::now();
     res = mtmd_encode_chunk(visionContext(), chunk);
     visionEncodeMs_ += std::chrono::duration<double, std::milli>(
                            std::chrono::steady_clock::now() - encT0)
                            .count();
+    ++visionEncodeTiles_;
     if (res == 0) {
       float* imageEmbd = mtmd_get_output_embd(visionContext());
       res = mtmd_helper_decode_image_chunk(
