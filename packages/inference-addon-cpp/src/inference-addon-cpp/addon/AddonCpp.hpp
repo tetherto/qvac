@@ -8,11 +8,11 @@
 #include <stdexcept>
 
 #include "../Logger.hpp"
-#include "../JobRunner.hpp"
 #include "../ModelInterfaces.hpp"
 #include "../job/IJobScheduler.hpp"
 #include "../job/JobId.hpp"
 #include "../job/MultiJobScheduler.hpp"
+#include "../job/SingleJobScheduler.hpp"
 #include "../queue/OutputCallbackInterface.hpp"
 #include "../queue/OutputQueue.hpp"
 

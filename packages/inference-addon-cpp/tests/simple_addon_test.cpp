@@ -319,7 +319,8 @@ TEST(SimpleAddonTest, JobCancellationWorks) {
 }
 
 // Reproduces the bug where cancel() runs before the worker thread takes the
-// job: without JobRunner signalling completion in that case, nothing ever
+// job: without SingleJobScheduler signalling completion in that case, nothing
+// ever
 // queues job-ended or error, so "wait for completion" would hang (JS
 // _finishPromise never resolves). We run many iterations of runJob()+cancel()
 // and wait for completion (job-ended or error); without the fix, some
@@ -340,7 +341,8 @@ TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
     addon->runJob(std::any(std::string("quick")));
     addon->cancelJob();
 
-    // Wait for completion (job-ended or error). JobRunner signals either
+    // Wait for completion (job-ended or error). SingleJobScheduler signals
+    // either
     // queueJobEnded() or queueException("Job cancelled") when cancel() runs
     // before the worker takes the job.
     bool received = completionState->waitForCompletion(waitTimeout);
@@ -349,7 +351,8 @@ TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
         << "Iteration " << i << ": completion was not received within "
         << waitTimeout.count()
         << " ms. Simulates the stuck wait when cancel() runs before the "
-           "worker takes the job and JobRunner does not signal completion.";
+           "worker takes the job and SingleJobScheduler does not signal "
+           "completion.";
   }
 }
 
