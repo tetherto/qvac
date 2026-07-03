@@ -73,7 +73,8 @@
     "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "test": "brittle-bare 'test/**/*.test.ts'"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -173,7 +174,9 @@
     "@qvac/translation-nmtcpp": "^6.3.0",
     "@qvac/tts-ggml": "^0.3.1",
     "@qvac/vla-ggml": "^0.7.0",
+    "@types/brittle": "^3.5.0",
     "bare-stdio": "^1.0.2",
+    "brittle": "^4.0.0",
     "lunte": "^1.8.3",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
