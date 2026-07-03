@@ -131,6 +131,9 @@ public:
 class StartTrackingTestModel final : public ConcurrentTestModel {
   mutable std::mutex startedMtx_;
   std::unordered_set<JobId> startedIds_;
+  /// Ids in the order process() was entered, so a test can assert FIFO
+  /// admission — not merely that a job started.
+  std::vector<JobId> startOrder_;
 
 public:
   using ConcurrentTestModel::ConcurrentTestModel;
@@ -139,6 +142,7 @@ public:
     {
       std::lock_guard lock(startedMtx_);
       startedIds_.insert(id);
+      startOrder_.push_back(id);
     }
     return ConcurrentTestModel::process(input, id);
   }
@@ -147,6 +151,12 @@ public:
   bool started(JobId id) const {
     std::lock_guard lock(startedMtx_);
     return startedIds_.count(id) != 0;
+  }
+
+  /// Ids in the order process() was entered.
+  std::vector<JobId> startOrder() const {
+    std::lock_guard lock(startedMtx_);
+    return startOrder_;
   }
 };
 
@@ -517,6 +527,27 @@ TEST_F(MultiJobSchedulerTest, QueuesBeyondWorkerCount) {
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   EXPECT_EQ(scheduler_->activeJobs(), 0u)
       << "all admitted (in-flight + queued) jobs must complete";
+}
+
+// (g2) FIFO admission order: queued jobs must start in submission order. A
+// single worker makes this deterministic — it always dequeues the front — so
+// the observed start order pins the deque contract. A regression to LIFO or
+// unordered admission (which the count-only tests would miss) fails here.
+TEST_F(MultiJobSchedulerTest, StartsQueuedJobsInFifoOrder) {
+  constexpr unsigned kConcurrency = 1;
+  constexpr unsigned kQueue = 3;
+  StartTrackingTestModel* tracking = buildTrackingWithQueue(
+      kConcurrency, kQueue, std::chrono::milliseconds{30});
+
+  for (JobId id = 1; id <= 4; ++id) { // pool (1) + queue (3)
+    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id))
+        << "job " << id << " within pool+queue must be admitted";
+  }
+
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+  EXPECT_EQ(tracking->startOrder(), (std::vector<JobId>{1, 2, 3, 4}))
+      << "queued jobs must start in FIFO (submission) order";
 }
 
 /// Collects the JobIds for which an Output::Error was queued.
