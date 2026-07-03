@@ -10,13 +10,7 @@
     },
     {
       "name": "tts-cpp",
-      "version>=": "2026-07-03#1"
-    }
-  ],
-  "overrides": [
-    {
-      "name": "ggml-speech",
-      "version": "2026-07-03"
+      "version>=": "2026-07-03#2"
     }
   ],
   "features": {

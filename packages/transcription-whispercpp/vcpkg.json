@@ -28,11 +28,8 @@
   "overrides": [
     {
       "name": "whisper-cpp",
-      "version": "1.9.1"
-    },
-    {
-      "name": "ggml-speech",
-      "version": "2026-07-03"
+      "version": "1.9.1",
+      "port-version": 1
     }
   ]
 }

@@ -4,19 +4,19 @@
   "dependencies": [
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-18#1",
+      "version>=": "2026-06-18#3",
       "features": ["metal"],
       "platform": "osx | ios"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-18#1",
+      "version>=": "2026-06-18#3",
       "features": ["vulkan", "opencl"],
       "platform": "android"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-06-18#1",
+      "version>=": "2026-06-18#3",
       "features": ["vulkan"],
       "platform": "!(osx | ios | android)"
     },
@@ -35,12 +35,6 @@
     {
       "name": "vcpkg-cmake-config",
       "host": true
-    }
-  ],
-  "overrides": [
-    {
-      "name": "ggml-speech",
-      "version": "2026-07-03"
     }
   ],
   "features": {
