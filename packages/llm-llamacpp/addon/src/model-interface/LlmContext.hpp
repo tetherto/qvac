@@ -334,6 +334,26 @@ public:
   virtual void resetThinkingBlockDiscards() {}
 
   /**
+   * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
+   * forward + projection) during the most recent inference. 0 for
+   * text-only contexts, which never run a vision encoder.
+   */
+  [[nodiscard]] virtual double getVisionEncodeMs() const { return 0.0; }
+
+  /**
+   * Number of vision-encode slices (image chunks encoded) in the most recent
+   * inference — the `tiles` the report shows next to the encode time. 0 for
+   * text-only contexts.
+   */
+  [[nodiscard]] virtual int32_t getVisionEncodeTiles() const { return 0; }
+
+  /**
+   * Reset the vision-encode accumulators (ms + slice count) to zero. Called at
+   * the start of each inference. No-op for text-only contexts.
+   */
+  virtual void resetVisionEncodeMs() {}
+
+  /**
    * The load media method. It loads the media from memory buffer.
    * Default implementation does nothing (for text-only contexts).
    * Override in multimodal contexts to provide media loading functionality.
