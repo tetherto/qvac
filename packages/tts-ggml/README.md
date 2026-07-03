@@ -245,8 +245,49 @@ Notes:
   streaming.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
-  different rate (`TTSOutputChunk.sampleRate` reports the actual rate). The
-  LavaSR denoiser stage is a planned follow-up.
+  different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+
+### Denoiser
+
+LavaSR's first stage — the UL-UNAS **denoiser**, which cleans the signal before
+the enhancer bandwidth-extends it — is wired through the addon. It is enabled the
+same way as the enhancer, via `files.lavasrDenoiser` (or a
+`denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the
+enhancer (rate-preserving) on the batch path for both engines:
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  files: {
+    supertonicModel,
+    lavasrDenoiser: 'models/lavasr/lavasr-denoiser.gguf', // cleaned first…
+    lavasrEnhancer: 'models/lavasr/lavasr-enhancer.gguf'  // …then upsampled
+  },
+  config: { language: 'en' }
+})
+```
+
+Convert the GGUF from the public [LavaSRcpp](https://github.com/Topping1/LavaSRcpp)
+ONNX release:
+
+```bash
+python scripts/convert-lavasr-denoiser-to-gguf.py \
+  --denoiser denoiser_core_legacy_fixed63.onnx \
+  --out models/lavasr/lavasr-denoiser.gguf --ftype f16   # or f32
+```
+
+Notes:
+
+- The UL-UNAS forward runs at 16 kHz internally (resampled in/out), so the
+  denoiser is **rate-preserving**: the emitted audio keeps the engine's sample
+  rate. With no denoiser path the output is unchanged (full backward compat).
+- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is
+  rejected up front — a stateful streaming denoiser is the follow-up. Use batch
+  synthesis, or drop the denoiser for streaming.
+- The tts-cpp UL-UNAS forward is implemented in
+  [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
+  (scalar CPU port, validated bit-close to the ONNX reference) and is active as of
+  the `tts-cpp` pin `2026-07-03#1` (this package's `vcpkg.json`).
 
 ## Backends & GPU acceleration
 

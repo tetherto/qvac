@@ -159,7 +159,12 @@ function normalizeDesktopRecord (report, sourceFile) {
     quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
-    gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
+    // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
+    // to them — the probe stamps the GPU name onto every report regardless of
+    // whether that run used it (QVAC-21618).
+    gpuModel: useGPU
+      ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
+      : null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddev: Number(rtf.stddev),
@@ -187,7 +192,7 @@ function normalizeManualRecord (record, sourceFile) {
     quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
-    gpuModel: record.gpuModel || record.gpu_model || null,
+    gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
     stddev: Number(record.stddev),
@@ -265,7 +270,18 @@ function normalizeMobileRecords (report, sourceFile) {
       })
     }
     const group = byModelAndProvider.get(key)
-    if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    // Mobile runs report real_time_factor as null (the mobile inference stats
+    // don't carry it), so the RTF/P50/P95 columns rendered empty and the
+    // Android/iOS rows looked unpopulated. Derive RTF from the wall time over
+    // the audio duration when the explicit value is missing (QVAC-21618).
+    const rtf = typeof metrics.real_time_factor === 'number'
+      ? metrics.real_time_factor
+      : (typeof metrics.wall_time_ms === 'number' &&
+         typeof metrics.audio_duration_ms === 'number' &&
+         metrics.audio_duration_ms > 0
+          ? metrics.wall_time_ms / metrics.audio_duration_ms
+          : null)
+    if (typeof rtf === 'number' && Number.isFinite(rtf)) group.rtf.push(rtf)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
   }
 
@@ -281,7 +297,7 @@ function normalizeMobileRecords (report, sourceFile) {
       quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
-      gpuModel: device.gpu || null,
+      gpuModel: useGPU ? (device.gpu || null) : null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),
       stddev: stddev(values.rtf),
@@ -618,4 +634,12 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeDesktopRecord,
+  normalizeManualRecord,
+  normalizeMobileRecords
+}
