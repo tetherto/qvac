@@ -13,6 +13,12 @@
       "version>=": "2026-07-03#1"
     }
   ],
+  "overrides": [
+    {
+      "name": "ggml-speech",
+      "version": "2026-07-03"
+    }
+  ],
   "features": {
     "tests": {
       "description": "Build C++ unit tests",
