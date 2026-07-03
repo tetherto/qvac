@@ -24,7 +24,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("activeJobs", qvac_lib_inference_addon_cpp::JsInterface::activeJobs)
   V("cancel", qvac_lib_inference_addon_llama::cancel)
-  V("cancelJob", qvac_lib_inference_addon_llama::cancelJob)
+  V("cancelJob", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("finetune", qvac_lib_inference_addon_llama::finetune)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
