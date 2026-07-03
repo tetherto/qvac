@@ -59,6 +59,12 @@ struct SdCtxConfig {
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
   std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
                           // fast preview)
+  // -- LTX-2 (LTXAV) video model inputs --------------------------------------
+  // LTX-2 reuses diffusionModelPath (diffusion transformer), llmPath (Gemma
+  // text encoder) and vaePath (video VAE). These two are LTX-only extras:
+  std::string audioVaePath; // audio_vae_path        -- LTX-2 audio VAE decoder
+  std::string embeddingsConnectorsPath; // embeddings_connectors_path -- LTX-2
+                                        // text-embedding connector weights
 
   // -- Compute ---------------------------------------------------------------
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores

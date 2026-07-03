@@ -118,6 +118,38 @@ exports.config = {
       }
     };
 
+    // Android: synchronously dump the full device logcat to
+    // $DEVICEFARM_LOG_DIR/logcat_full.txt. The testspec post_test phase writes
+    // the same file, but Device Farm skips post_test when the test phase exits
+    // non-zero OR the app crashes — so we also capture here on the failure and
+    // crash paths (test phase). Kept synchronous so the crash path finishes the
+    // dump before the queued process.exit(1) fires. Writes only when adb
+    // produced output, so a dead/offline device leaves no misleading empty file.
+    // Mirrors the post_test dump in generate-testspec.sh — keep buffer flags and
+    // filename in sync. No-op on iOS (which has no logcat; it uses flushBareLog).
+    global.isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
+    global.dumpAndroidLogcat = function (reason) {
+      if (!global.isAndroid) return;
+      try {
+        var cp = require('child_process');
+        var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
+        var udid = process.env.DEVICEFARM_DEVICE_UDID || '';
+        var sel = udid ? ('-s ' + udid + ' ') : '';
+        var out = cp.execSync('adb ' + sel + 'logcat -d -b all', {
+          maxBuffer: 512 * 1024 * 1024,
+          timeout: 120000,
+        });
+        if (out && out.length) {
+          require('fs').writeFileSync(logDir + '/logcat_full.txt', out);
+          console.log('[logcat] ' + reason + ' dump ok (' + out.length + ' bytes)');
+        } else {
+          console.log('[logcat] ' + reason + ' produced no output; left existing file untouched');
+        }
+      } catch (e) {
+        console.log('[logcat] ' + reason + ' dump failed: ' + e.message);
+      }
+    };
+
     // Crash detection — shared by named checkpoints and the optional 15s
     // background poller. Disables itself after 5 consecutive queryAppState
     // errors to avoid flooding logs when the device is unrecoverable.
@@ -136,6 +168,10 @@ exports.config = {
             global.testResults.crashed = true;
             global.flushTestResults();
           }
+          // Android: grab logcat NOW — post_test won't run on a crashed shard.
+          // Synchronous, so it completes before the process.exit(1) timer below
+          // can fire. iOS relies on the flushBareLog pull further down.
+          global.dumpAndroidLogcat('crash-' + stage);
           setTimeout(function () { process.exit(1); }, 5000);
           try {
             await browser.pause(1500);
@@ -228,6 +264,16 @@ exports.config = {
     console.log('[bare-log] Waiting for log flush...');
     await browser.pause(3000);
     if (global.flushBareLog) await global.flushBareLog('after');
+
+    // Android: on FAILURE, dump logcat here (test phase) so the bare runtime
+    // TAP output survives — Device Farm skips the post_test dump when the test
+    // phase exits non-zero. On a clean pass (result === 0) we skip it and let
+    // post_test write the file, so the happy path does no redundant work.
+    // `result !== 0` also fires on an undefined/ambiguous result (fail-safe).
+    // Crashes are already covered in checkAppCrash above.
+    if (result !== 0) {
+      global.dumpAndroidLogcat('after-fail');
+    }
 
     // Perf extraction — pull perf-report.json from the device while the
     // Appium session is still alive. See perf-extract.js for the full

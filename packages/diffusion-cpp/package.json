@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -14,6 +14,8 @@
     "generate:sdxl": "bare examples/generate-image-sdxl.js",
     "generate:sd3": "bare examples/generate-image-sd3.js",
     "generate:video": "bare examples/generate-video-wan.js",
+    "generate:ltx": "bare examples/generate-video-ltx.js",
+    "test:ltx": "bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy sd prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy sd prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy sd prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",

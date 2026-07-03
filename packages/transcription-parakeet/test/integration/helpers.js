@@ -9,6 +9,8 @@ const { Readable } = require('bare-stream')
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+let _mobileModelManifest = null
 
 // ---------------------------------------------------------------------------
 // Performance reporter — captures Parakeet integration-test stats and emits
@@ -162,16 +164,33 @@ function recordParakeetStats (label, stats, extra) {
   const epOverride = extra && extra.executionProvider
   const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
-  const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
   const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
   const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
   const wallMs = (extra && typeof extra.wallMs === 'number')
     ? Math.round(extra.wallMs)
     : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
-  const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
   const encoderMs = typeof stats.encoderMs === 'number' ? Math.round(stats.encoderMs) : null
   const decoderMs = typeof stats.decoderMs === 'number' ? Math.round(stats.decoderMs) : null
   const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+  const totalTokens = typeof stats.totalTokens === 'number' ? stats.totalTokens : null
+
+  // parakeet.cpp (GGML) does not populate realTimeFactor / tokensPerSecond in
+  // its runtimeStats — they come back absent (or 0), so the mobile perf table
+  // rendered both as "-". Prefer a positive addon-reported value when a future
+  // build provides one; otherwise derive them the same way the desktop RTF
+  // benchmark (test/benchmark/rtf-benchmark.test.js) does:
+  //   RTF = wall time / audio duration (both ms)
+  //   TPS = total decoded tokens / total inference time (s)
+  const rtf = (typeof stats.realTimeFactor === 'number' && stats.realTimeFactor > 0)
+    ? stats.realTimeFactor
+    : (Number.isFinite(wallMs) && wallMs > 0 && Number.isFinite(audioMs) && audioMs > 0
+        ? wallMs / audioMs
+        : null)
+  const tps = (typeof stats.tokensPerSecond === 'number' && stats.tokensPerSecond > 0)
+    ? stats.tokensPerSecond
+    : (Number.isFinite(totalTokens) && totalTokens > 0 && Number.isFinite(totalTimeSec) && totalTimeSec > 0
+        ? totalTokens / totalTimeSec
+        : null)
 
   _perfReporter.record(label, {
     real_time_factor: rtf,
@@ -577,6 +596,53 @@ async function downloadFile (url, destPath) {
   })
 }
 
+function prestagedModelDir (modelName) {
+  if (platform !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+  } catch (_) {}
+  return null
+}
+
+function loadMobileModelManifest () {
+  if (_mobileModelManifest !== null) return _mobileModelManifest
+  _mobileModelManifest = {}
+
+  if (!isMobile) return _mobileModelManifest
+
+  const { samplesDir } = getTestPaths()
+  const candidates = []
+  if (samplesDir) candidates.push(path.join(samplesDir, 'model-manifest.json'))
+  if (global.assetPaths && global.assetPaths['../../testAssets/model-manifest.json']) {
+    candidates.push(global.assetPaths['../../testAssets/model-manifest.json'].replace('file://', ''))
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (!candidate || !fs.existsSync(candidate)) continue
+      _mobileModelManifest = JSON.parse(fs.readFileSync(candidate, 'utf8'))
+      console.log(`  Loaded mobile model manifest: ${candidate}`)
+      return _mobileModelManifest
+    } catch (err) {
+      console.log(`  Could not load mobile model manifest at ${candidate}: ${err.message}`)
+    }
+  }
+
+  return _mobileModelManifest
+}
+
+function manifestEntryForModel (modelName) {
+  const manifest = loadMobileModelManifest()
+  for (const entries of Object.values(manifest)) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries) {
+      if (entry && entry.name === modelName && entry.url) return entry
+    }
+  }
+  return null
+}
+
 /**
  * Ensures the default test GGUF model is downloaded and available.
  * The ggml backend ships a single `.gguf` per checkpoint; default to the
@@ -777,8 +843,9 @@ async function runTranscription (params, expectation = {}) {
 // Quantisation:
 //   - Desktop default is q8_0 (best WER per byte). `file` below.
 //   - Mobile default is q4_0 (~4x smaller than q8 on full models),
-//     fetched at runtime from the QVAC model registry into the app
-//     cache. `mobileFile` below. The size hit on accuracy is
+//     fetched at runtime into the app cache. Android CI pre-stages
+//     these via Device Farm host commands; iOS falls back to the
+//     generated mobile model manifest. The size hit on accuracy is
 //     acceptable for integration smoke tests; full WER gates remain
 //     a desktop-only signal.
 // Tests can override per-model with QVAC_TEST_GGUF_<TYPE> (e.g.
@@ -795,6 +862,7 @@ async function runTranscription (params, expectation = {}) {
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
+const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
 
 function _registryQ8 (file) {
@@ -802,6 +870,9 @@ function _registryQ8 (file) {
 }
 function _registryQ4 (file) {
   return `${REGISTRY_PREFIX_Q4_0}/${file}`
+}
+function _registry20260701 (file) {
+  return `${REGISTRY_PREFIX_2026_07_01}/${file}`
 }
 function _registryStreaming (file) {
   return `${REGISTRY_PREFIX_STREAMING}/${file}`
@@ -811,32 +882,40 @@ const MODEL_CONFIGS = {
   ctc: {
     file: 'parakeet-ctc-0.6b.q8_0.gguf',
     mobileFile: 'parakeet-ctc-0.6b.q4_0.gguf',
+    f16File: 'parakeet-ctc-0.6b.f16.gguf',
     registryPath: _registryQ8('parakeet-ctc-0.6b.q8_0.gguf'),
-    mobileRegistryPath: _registryQ4('parakeet-ctc-0.6b.q4_0.gguf'),
+    mobileRegistryPath: _registry20260701('parakeet-ctc-0.6b.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-ctc-0.6b.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   tdt: {
     file: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
     mobileFile: 'parakeet-tdt-0.6b-v3.q4_0.gguf',
+    f16File: 'parakeet-tdt-0.6b-v3.f16.gguf',
     registryPath: _registryQ8('parakeet-tdt-0.6b-v3.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('parakeet-tdt-0.6b-v3.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-tdt-0.6b-v3.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   eou: {
     file: 'parakeet-eou-120m-v1.q8_0.gguf',
     mobileFile: 'parakeet-eou-120m-v1.q4_0.gguf',
+    f16File: 'parakeet-eou-120m-v1.f16.gguf',
     registryPath: _registryQ8('parakeet-eou-120m-v1.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('parakeet-eou-120m-v1.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('parakeet-eou-120m-v1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
   sortformer: {
     file: 'sortformer-4spk-v1.q8_0.gguf',
     mobileFile: 'sortformer-4spk-v1.q4_0.gguf',
+    f16File: 'sortformer-4spk-v1.f16.gguf',
     registryPath: _registryQ8('sortformer-4spk-v1.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('sortformer-4spk-v1.q4_0.gguf'),
+    f16RegistryPath: _registry20260701('sortformer-4spk-v1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
@@ -848,8 +927,10 @@ const MODEL_CONFIGS = {
   sortformerStreaming: {
     file: 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
     mobileFile: 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    f16File: 'diar_streaming_sortformer_4spk-v2.1.f16.gguf',
     registryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
     mobileRegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf'),
+    f16RegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   }
@@ -934,7 +1015,7 @@ function _preferredGgufFor (cfg) {
 //
 // MODEL_CONFIGS stores the q8_0 build under `file`/`registryPath` and the
 // q4_0 build under `mobileFile`/`mobileRegistryPath`; the streaming sortformer
-// additionally publishes f16 under the same prefix.
+// additionally publishes full-precision variants under the same prefix.
 function _ggufForQuant (cfg, quant) {
   const q = String(quant || '').toLowerCase()
   if (!q) return null
@@ -945,12 +1026,15 @@ function _ggufForQuant (cfg, quant) {
   if (q === 'q4_0' && cfg.mobileFile && cfg.mobileRegistryPath) {
     return { file: cfg.mobileFile, registryPath: cfg.mobileRegistryPath, quant: 'q4_0' }
   }
+  if (q === 'f16' && cfg.f16File && cfg.f16RegistryPath) {
+    return { file: cfg.f16File, registryPath: cfg.f16RegistryPath, quant: 'f16' }
+  }
 
-  // Derive any other quant (e.g. f16) by swapping the quant token in the q8_0
+  // Derive any other quant by swapping the quant token in the q8_0
   // filename and reusing its registry prefix. Only resolves when both the
   // filename and prefix are known.
   if (cfg.file && cfg.registryPath) {
-    const file = cfg.file.replace(/\.(q8_0|q4_0|f16)\.gguf$/i, `.${q}.gguf`)
+    const file = cfg.file.replace(/\.(q8_0|q4_0|f16|f32)\.gguf$/i, `.${q}.gguf`)
     if (file !== cfg.file) {
       const prefix = cfg.registryPath.slice(0, cfg.registryPath.lastIndexOf('/'))
       return { file, registryPath: `${prefix}/${file}`, quant: q }
@@ -962,13 +1046,13 @@ function _ggufForQuant (cfg, quant) {
 
 /**
  * Quantisation of a GGUF, derived from its filename (e.g. `q8_0`, `q4_0`,
- * `f16`). Returns '' when no recognised quant token is present.
+ * `f16`, `f32`). Returns '' when no recognised quant token is present.
  * @param {string} ggufPathOrName - GGUF file path or basename
  * @returns {string}
  */
 function quantFromGgufName (ggufPathOrName) {
   const base = path.basename(String(ggufPathOrName || ''))
-  const match = base.match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  const match = base.match(/\.(q8_0|q4_0|f16|f32)\.gguf$/i)
   return match ? match[1].toLowerCase() : ''
 }
 
@@ -983,16 +1067,19 @@ function quantFromGgufName (ggufPathOrName) {
  *   3. Existing cache in the test models dir for the preferred quant
  *      (q4_0 on mobile, q8_0 on desktop), then the other quant as a
  *      fallback.
- *   4. On mobile only: bundled GGUF in the React-Native asset cache,
+ *   4. Android only: host-prestaged GGUF under /data/local/tmp, copied
+ *      into the writable test models dir before use.
+ *   5. On mobile only: bundled GGUF in the React-Native asset cache,
  *      preferring `<samplesDir>/<mobileFile>` (q4_0). Surviving
  *      contract for dev flows that adb-push a GGUF into testAssets;
- *      production mobile CI no longer bundles GGUFs and relies on
- *      the registry fetch in step 6 instead.
- *   5. `QVAC_TEST_GGUF_DIR/<file>` -- copy from any pre-staged
+ *      production mobile CI no longer bundles GGUFs.
+ *   6. `QVAC_TEST_GGUF_DIR/<file>` -- copy from any pre-staged
  *      `models/` directory if present (typically the package's own
  *      `./models/` produced by `npm run setup-models` or
  *      `npm run download-models:registry`).
- *   6. QVAC model registry fetch into the test models dir, using the
+ *   7. On mobile only: generated `model-manifest.json` download URL
+ *      into the test models dir.
+ *   8. QVAC model registry fetch into the test models dir, using the
  *      `mobileRegistryPath` on mobile and `registryPath` on desktop.
  *
  * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
@@ -1030,6 +1117,18 @@ async function ensureGgufForType (modelType, override = null, options = {}) {
     return cachePath
   }
 
+  const staged = prestagedModelDir(preferred.file)
+  if (staged) {
+    fs.mkdirSync(modelsDir, { recursive: true })
+    console.log(`  Using pre-staged GGUF ${preferred.file} (copying into writable models dir)`)
+    fs.copyFileSync(path.join(staged, preferred.file), cachePath)
+    if (fs.existsSync(cachePath) &&
+        fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
+      return cachePath
+    }
+    try { fs.unlinkSync(cachePath) } catch (_) {}
+  }
+
   const otherFile = preferred.file === cfg.file ? cfg.mobileFile : cfg.file
   if (allowOtherQuant && otherFile) {
     const otherPath = path.join(modelsDir, otherFile)
@@ -1061,6 +1160,25 @@ async function ensureGgufForType (modelType, override = null, options = {}) {
         console.log(`  Staging GGUF from ${externalPath} -> ${stagedPath}`)
         fs.copyFileSync(externalPath, stagedPath)
         return stagedPath
+      }
+    }
+  }
+
+  if (isMobile) {
+    const manifestEntry = manifestEntryForModel(preferred.file)
+    if (manifestEntry) {
+      try {
+        console.log(`  Downloading ${preferred.file} from mobile model manifest...`)
+        await downloadFile(manifestEntry.url, cachePath)
+        if (fs.existsSync(cachePath) &&
+            fs.statSync(cachePath).size >= (cfg.minSize || 0)) {
+          return cachePath
+        }
+        console.log(`  Manifest download too small: ${preferred.file}`)
+        try { fs.unlinkSync(cachePath) } catch (_) {}
+      } catch (err) {
+        console.log(`  Manifest download failed for ${preferred.file}: ${err.message}`)
+        try { fs.unlinkSync(cachePath) } catch (_) {}
       }
     }
   }
@@ -1098,11 +1216,8 @@ async function ensureModelForType (modelType) {
  * every integration test that needs a real model -- when the GGUF is
  * available the function returns its path; when it isn't, behaviour is:
  *
- *   - Mobile + ctc: skip-as-pass. We intentionally do not exercise
- *     CTC on mobile (redundant with TDT for transcription tests;
- *     shares the same FastConformer encoder). Letting this one case
- *     stay as `t.pass` keeps the multi-model test green on mobile
- *     while still actually exercising TDT / EOU / Sortformer there.
+ *   - Mobile + ctc: skip-as-pass for older test bundles that intentionally
+ *     did not stage CTC. Current mobile perf provisioning stages CTC too.
  *   - Everything else: hard fail via `t.fail`. A missing model means
  *     none of the resolution sources (env var, local cache, mobile
  *     asset bundle, external dir, QVAC registry) returned a usable
@@ -1112,12 +1227,13 @@ async function ensureModelForType (modelType) {
  * @param {Object} t - brittle test object (must have `.fail(message)` /
  *                     `.pass(message)`)
  * @param {string} [modelType='tdt']
+ * @param {Object} [options] - Resolution options passed to ensureGgufForType.
  * @returns {Promise<string|null>} GGUF path on success, or `null` on
  *   miss (in which case the function has already recorded
  *   `t.pass` / `t.fail` and the caller should `return` early).
  */
-async function loadGgufOrSkip (t, modelType = 'tdt') {
-  const ggufPath = await ensureGgufForType(modelType)
+async function loadGgufOrSkip (t, modelType = 'tdt', options = {}) {
+  const ggufPath = await ensureGgufForType(modelType, null, options)
   if (ggufPath && fs.existsSync(ggufPath)) {
     return ggufPath
   }

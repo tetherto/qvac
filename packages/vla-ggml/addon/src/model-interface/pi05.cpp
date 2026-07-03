@@ -68,14 +68,18 @@ Pi05PatchPosOutputs pi05BuildSiglipPatchPosGraph(
   // array, which is what the PyTorch reference stores.
   const int nPatches = static_cast<int>(x->ne[0]) * static_cast<int>(x->ne[1]);
   const int hidden = static_cast<int>(x->ne[2]);
+  // Batch = number of camera images stacked on the conv's N axis. 1 for the
+  // single-image path; nImages when the towers are processed in one batched
+  // pass (the matmuls then run at full occupancy instead of 3× tiny launches).
+  const int batch = static_cast<int>(x->ne[3]);
 
-  // Reshape (W, H, C, 1) → (n_patches, C) — note: in ggml, dim 0 is the
+  // Reshape (W, H, C, B) → (n_patches, C, B) — note: in ggml, dim 0 is the
   // fastest axis, so we put n_patches first to keep (W,H) flattened in
   // memory order. Then transpose to put C on the fast axis so the bias
-  // (which has shape (C,)) broadcasts across the slow axis (patches),
+  // (which has shape (C,)) broadcasts across the slow axes (patches, batch),
   // which is the only direction ggml_add supports without an explicit
   // repeat.
-  x = ggml_reshape_2d(ctx, x, nPatches, hidden);
+  x = ggml_reshape_3d(ctx, x, nPatches, hidden, batch);
   x = ggml_cont(ctx, ggml_transpose(ctx, x));
 
   if (patchEmbedB != nullptr) {
@@ -147,6 +151,10 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
     return nullptr;
   }
   const int headDim = hidden / nHeads;
+  // Batch dim (number of camera images processed together); 1 for the
+  // single-image path. Threads through every reshape so the attention runs
+  // independently per (head, image) without an explicit mask.
+  const int batch = static_cast<int>(x->ne[2]);
 
   // ── Pre-attention LayerNorm + MHSA + residual ───────────────────────
   struct ggml_tensor* residual = x;
@@ -156,33 +164,38 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
   struct ggml_tensor* k = pi05Linear(ctx, h, w.attn_k_w, w.attn_k_b);
   struct ggml_tensor* v = pi05Linear(ctx, h, w.attn_v_w, w.attn_v_b);
 
-  // Reshape (hidden, n_patches) → (head_dim, n_heads, n_patches).
-  q = ggml_reshape_3d(ctx, q, headDim, nHeads, nPatches);
-  k = ggml_reshape_3d(ctx, k, headDim, nHeads, nPatches);
-  v = ggml_reshape_3d(ctx, v, headDim, nHeads, nPatches);
+  // Reshape (hidden, n_patches, B) → (head_dim, n_heads, n_patches, B).
+  q = ggml_reshape_4d(ctx, q, headDim, nHeads, nPatches, batch);
+  k = ggml_reshape_4d(ctx, k, headDim, nHeads, nPatches, batch);
+  v = ggml_reshape_4d(ctx, v, headDim, nHeads, nPatches, batch);
 
-  // Permute to (head_dim, n_patches, n_heads) so ggml_mul_mat sees each
-  // head as an independent (n_patches × head_dim) matmul.
+  // Permute to (head_dim, n_patches, n_heads, B) so ggml_mul_mat sees each
+  // (head, image) as an independent (n_patches × head_dim) matmul.
   q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
   k = ggml_cont(ctx, ggml_permute(ctx, k, 0, 2, 1, 3));
   v = ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
 
-  // Scaled dot-product attention: softmax(Q K^T / sqrt(d)) V.
-  // ggml_mul_mat(k, q) → (n_patches, n_patches, n_heads).
-  struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
-  struct ggml_tensor* attn = ggml_soft_max_ext(
-      ctx,
-      logits,
-      nullptr,
-      1.0f / std::sqrt(static_cast<float>(headDim)),
-      0.0f);
-  // (head_dim, n_patches, n_heads): transpose v to (n_patches, head_dim,
-  // n_heads) then mul_mat with the (n_patches, n_patches, n_heads) attn.
-  struct ggml_tensor* attnOut =
-      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
-  // Back to (hidden, n_patches).
-  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
-  attnOut = ggml_reshape_2d(ctx, attnOut, hidden, nPatches);
+  // Fused flash-attention: q/k/v are [head_dim, n_patches, n_heads, B].
+  // SigLIP is full (non-causal) MHA, so the mask is null. F16 K/V with F32
+  // accumulation. FA output is [head_dim, n_heads, n_patches, B] → reshape
+  // straight to [hidden, n_patches, B].
+  //
+  // FA portability note (canonical for all three pi0.5 FA sites — VLM
+  // prefill block and expert block reference this one): ggml_flash_attn_ext
+  // here is benchmarked accuracy-neutral and faster than the unfused
+  // path on HIP/gfx1151 (Strix Halo, end-to-end cos 0.9994), and correct on
+  // Strix Vulkan (cos 0.9990) and CPU. It is NOT yet benchmarked on Intel
+  // Iris Xe / Adreno / Metal — where smolvla measured FA ~3× slower on Iris
+  // Xe Vulkan (see smolvla.cpp). pi0.5 is a desktop-class target, so FA is
+  // the right default here; revisit if a mobile GPU backend is added.
+  struct ggml_tensor* kf16 = ggml_cast(ctx, k, GGML_TYPE_F16);
+  struct ggml_tensor* vf16 = ggml_cast(ctx, v, GGML_TYPE_F16);
+  struct ggml_tensor* attnOut = ggml_flash_attn_ext(
+      ctx, q, kf16, vf16, /*mask=*/nullptr,
+      1.0f / std::sqrt(static_cast<float>(headDim)), /*max_bias=*/0.0f,
+      /*logit_softcap=*/0.0f);
+  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
+  attnOut = ggml_reshape_3d(ctx, attnOut, hidden, nPatches, batch);
 
   // Output projection + residual.
   struct ggml_tensor* proj =
@@ -360,30 +373,38 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   // n_kv_heads] — identical to what `pi05BuildExpertBlockGraph`
   // accepts as cached_k/cached_v. `ggml_set_output` is critical: it
   // prevents `ggml_gallocr` from reusing the K/V buffers after their
-  // last in-graph consumer (the joint softmax / attn matmul), which
-  // would otherwise corrupt them by the time the caller reads back via
+  // last in-graph consumer (the flash-attention node), which would
+  // otherwise corrupt them by the time the caller reads back via
   // `ggml_backend_tensor_get`.
+  // Cache K/V as F16 (llama.cpp-style KV cache) — the ODE expert reads these
+  // through flash-attention, which consumes F16 K/V, so caching F16 halves the
+  // prefix-KV bandwidth and avoids per-step casts. Numerics unchanged. The
+  // SAME F16 K/V feed THIS block's flash-attention below, so cast k/v once and
+  // reuse for both the cache tap and the kernel — no second cast dispatch.
+  struct ggml_tensor* kf16 = ggml_cast(ctx, k, GGML_TYPE_F16);
+  struct ggml_tensor* vf16 = ggml_cast(ctx, v, GGML_TYPE_F16);
   if (outKPostRope != nullptr) {
-    ggml_set_output(k);
-    *outKPostRope = k;
+    ggml_set_output(kf16);
+    *outKPostRope = kf16;
   }
   if (outV != nullptr) {
-    ggml_set_output(v);
-    *outV = v;
+    ggml_set_output(vf16);
+    *outV = vf16;
   }
 
-  // Attention: softmax(K^T · Q / sqrt(head_dim) + mask) · V.
-  // mul_mat(K, Q) broadcasts K's kv_heads=1 across Q's n_heads=8.
-  struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
+  // Attention via fused flash-attention. q is [head_dim, seq, n_heads],
+  // k/v are [head_dim, seq, n_kv_heads] (MQA broadcast handled inside FA).
+  // F32 accumulation keeps the numerics within the cos>0.999 bar. Output is
+  // [head_dim, n_heads, seq], which reshapes straight back to [hidden, seq] —
+  // no permute needed.
+  // FA portability: see the canonical note at the SigLIP block FA site
+  // (accuracy-neutral + faster on HIP/gfx1151 & Vulkan & CPU; not yet
+  // benchmarked on Intel Iris Xe / Adreno / Metal; desktop-class target).
   const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
-  struct ggml_tensor* attn =
-      ggml_soft_max_ext(ctx, logits, attnMask, scale, /*max_bias=*/0.0f);
-  // V^T: (n_patches, head_dim, n_kv_heads). mul_mat with attn (n_k, n_q,
-  // n_heads) → (head_dim, n_q, n_heads).
-  struct ggml_tensor* attnOut =
-      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
-  // Back to (hidden, seq_q).
-  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
+  struct ggml_tensor* attnOut = ggml_flash_attn_ext(
+      ctx, q, kf16, vf16, attnMask, scale, /*max_bias=*/0.0f,
+      /*logit_softcap=*/0.0f);
+  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, hidden, seqLen);
 
   // O proj + residual.
@@ -395,10 +416,12 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   h = pi05GemmaRmsNorm(ctx, h, w.pre_ffw_norm_scale, rmsNormEps);
   struct ggml_tensor* gate = pi05Linear(ctx, h, w.mlp_gate_w, nullptr);
   struct ggml_tensor* up = pi05Linear(ctx, h, w.mlp_up_w, nullptr);
-  // GeGLU: gelu(gate) * up. ggml_gelu is the tanh approximation —
-  // matches PyTorch's `gelu_pytorch_tanh` (lerobot pi05 hidden_act).
-  gate = ggml_gelu(ctx, gate);
-  struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
+  // GeGLU: gelu(gate) * up, as ONE fused op. ggml_geglu uses the tanh-approx
+  // gelu (matches PyTorch's gelu_pytorch_tanh). Fusing gelu+mul keeps the
+  // intermediate on-chip (one read+write instead of three) and lets ggml-cuda
+  // fuse it with the gate/up matmuls — reduces DRAM traffic on the
+  // memory-bound iGPU. ggml_geglu_split(a,b) = gelu(a)*b.
+  struct ggml_tensor* ff = ggml_geglu_split(ctx, gate, up);
   struct ggml_tensor* down = pi05Linear(ctx, ff, w.mlp_down_w, nullptr);
   return ggml_add(ctx, down, residual);
 }
@@ -522,42 +545,61 @@ Pi05AdaSplit pi05BuildAdarmsSplitGraph(
   return out;
 }
 
+// Views-only adaRMSNorm split: takes a PRECOMPUTED modulation vector
+// `mod` (ne[0] = 3*hidden) — already the result of the per-site Linear(cond)
+// — and slices it into (scale, shift, gate). Used by the batched-conditioning
+// path: because the modulations depend only on the diffusion timestep (not on
+// the evolving action latent), they're computed once for all ODE steps in a
+// single batched matmul and then fed per step, replacing 10× batch-1 gemvs.
+static Pi05AdaSplit pi05AdaViewsFromMod(
+    struct ggml_context* ctx, struct ggml_tensor* mod, int hidden) {
+  Pi05AdaSplit out{nullptr, nullptr, nullptr};
+  if (ctx == nullptr || mod == nullptr || hidden <= 0) {
+    return out;
+  }
+  const size_t es = ggml_element_size(mod);
+  out.scale = ggml_view_1d(ctx, mod, hidden, /*offset=*/0);
+  out.shift = ggml_view_1d(ctx, mod, hidden, /*offset=*/hidden * es);
+  out.gate = ggml_view_1d(ctx, mod, hidden, /*offset=*/2 * hidden * es);
+  return out;
+}
+
 // ── adaRMSNorm application: `(1 + ada_scale) * rms_norm(x) + ada_shift` ─
-// Per openpi/gemma.py:130. The base `.scale` weight is *not* used in the
-// adaptive branch (the formula doesn't reference it). For pi05_base the
-// converter writes that weight as zeros anyway — see the rationale in
-// `_optional_pt_keys_with_shape` in convert_pi05_to_gguf.py.
+// Per openpi/gemma.py:130. `adaScalePlus1` already holds (1 + ada_scale) —
+// the `+1` is folded into the precomputed modulation (see the ODE precompute)
+// so this is a single `rms_norm(x) * weight + bias`, which ggml-cuda fuses
+// into ONE kernel ({RMS_NORM, MUL, ADD} → rms_norm_fused_add). That collapses
+// the previous rms_norm + mul + add + add (4 DRAM round-trips) — a real win on
+// the memory-bound iGPU since this runs N_layers × N_steps times in the ODE.
 static struct ggml_tensor* pi05AdarmsApply(
     struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* adaScale, struct ggml_tensor* adaShift, float eps) {
+    struct ggml_tensor* adaScalePlus1, struct ggml_tensor* adaShift,
+    float eps) {
   struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
-  // normed * (1 + ada_scale) = normed + normed * ada_scale
-  struct ggml_tensor* s =
-      ggml_add(ctx, normed, ggml_mul(ctx, normed, adaScale));
-  return ggml_add(ctx, s, adaShift);
+  return ggml_add(ctx, ggml_mul(ctx, normed, adaScalePlus1), adaShift);
 }
 
 // ── M3.9: one expert block (Gemma-1 300M) with joint attention ──────────
 struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx, struct ggml_tensor* xExp,
-    struct ggml_tensor* actPositions, struct ggml_tensor* cachedK,
-    struct ggml_tensor* cachedV, struct ggml_tensor* cond,
+    struct ggml_tensor* actPositions, struct ggml_tensor* kBuf,
+    struct ggml_tensor* vBuf, struct ggml_tensor* modPreAttn,
+    struct ggml_tensor* modPreFfw,
+    std::vector<struct ggml_tensor*>& kvWrites,
     const Pi05ExpertBlockWeights& w, int expertHidden, int nHeads, int nKvHeads,
     int headDim, int prefixLen, int nAct, float rmsNormEps,
     float ropeFreqBase) {
   if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
-      cachedK == nullptr || cachedV == nullptr || cond == nullptr ||
-      w.pre_attn_ada_w == nullptr || w.pre_attn_ada_b == nullptr ||
-      w.pre_ffw_ada_w == nullptr || w.pre_ffw_ada_b == nullptr ||
+      kBuf == nullptr || vBuf == nullptr || modPreAttn == nullptr ||
+      modPreFfw == nullptr ||
       w.attn_q_w == nullptr || w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
       w.attn_o_w == nullptr || w.mlp_gate_w == nullptr ||
       w.mlp_up_w == nullptr || w.mlp_down_w == nullptr) {
     return nullptr;
   }
 
-  // ── Pre-attn adaRMSNorm + per-block ada split ──────────────────────
-  Pi05AdaSplit a = pi05BuildAdarmsSplitGraph(
-      ctx, cond, w.pre_attn_ada_w, w.pre_attn_ada_b, expertHidden);
+  // ── Pre-attn adaRMSNorm (modulation precomputed for this ODE step) ──
+  Pi05AdaSplit a = pi05AdaViewsFromMod(ctx, modPreAttn, expertHidden);
   if (a.scale == nullptr) {
     return nullptr;
   }
@@ -616,32 +658,56 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
   kExp = ggml_cont(ctx, ggml_permute(ctx, kExp, 0, 2, 1, 3));
   vExp = ggml_cont(ctx, ggml_permute(ctx, vExp, 0, 2, 1, 3));
 
-  // The cached prefix K/V is stored ne=[head_dim, prefix_len, n_kv_heads]
-  // already — no permute needed, and tensors from ggml_new_tensor_3d +
-  // ggml_backend_tensor_set are inherently contiguous.
-  struct ggml_tensor* kCachedC = cachedK;
-  struct ggml_tensor* vCachedC = cachedV;
+  // Unified KV cache (llama.cpp-style): kBuf/vBuf are a single persistent F16
+  // buffer ne=[head_dim, prefix_len + n_act, n_kv_heads]. The prefix slice
+  // [0:prefix_len] was written once (from the VLM prefill); here we write this
+  // step's fresh action K/V into the tail slice [prefix_len:] via an in-graph
+  // copy (F32→F16), then flash-attend over the WHOLE buffer. This replaces the
+  // per-step F32 concat + full-join F16 cast with a tail-only F16 write — no
+  // concat (which the HIP backend only supports in F32), half the KV bandwidth
+  // in attention, and the prefix is never re-touched. The copy nodes are
+  // returned via `kvWrites` so the caller expands them into the graph (they
+  // are side-effects not reachable from the attention output). Math unchanged.
+  const size_t es = ggml_element_size(kBuf);
+  const int jointLen = static_cast<int>(kBuf->ne[1]);
+  // The tail write targets buffer rows [prefixLen : prefixLen + nAct]. If the
+  // caller's prefix + action lengths exceed the unified buffer's seq extent,
+  // the view (and the ggml_cpy below) would overrun kBuf/vBuf. This has held
+  // only by caller convention across call sites; enforce it here so a bad
+  // prefixLen/nAct fails the graph build instead of corrupting memory.
+  if (prefixLen < 0 || nAct < 0 || prefixLen + nAct > jointLen) {
+    return nullptr;
+  }
+  struct ggml_tensor* kAct = ggml_view_3d(
+      ctx, kBuf, headDim, nAct, nKvHeads, static_cast<size_t>(headDim) * es,
+      static_cast<size_t>(jointLen) * headDim * es,
+      static_cast<size_t>(prefixLen) * headDim * es);
+  struct ggml_tensor* vAct = ggml_view_3d(
+      ctx, vBuf, headDim, nAct, nKvHeads, static_cast<size_t>(headDim) * es,
+      static_cast<size_t>(jointLen) * headDim * es,
+      static_cast<size_t>(prefixLen) * headDim * es);
+  // Ordering invariant: these tail writes must execute BEFORE this block's
+  // flash-attention reads kBuf/vBuf below. There is NO data-flow (DAG) edge
+  // from the cpy nodes to the FA node — FA reads kBuf/vBuf directly, not the
+  // cpy output — so ggml's topological sort cannot order them on its own.
+  // The caller guarantees it by `ggml_build_forward_expand`-ing every
+  // kvWrites entry FIRST (insertion order), then the final output. Do not
+  // reorder or drop that expansion or the prefix+stale-tail will be attended.
+  kvWrites.push_back(ggml_cpy(ctx, kExp, kAct));
+  kvWrites.push_back(ggml_cpy(ctx, vExp, vAct));
 
-  // Concatenate on the seq axis (ggml dim 1). Both halves are
-  // ne=[head_dim, seq_*, n_kv_heads]; the joint K/V is
-  // ne=[head_dim, prefix_len + n_act, n_kv_heads].
-  struct ggml_tensor* kJoint = ggml_concat(ctx, kCachedC, kExp, /*dim=*/1);
-  struct ggml_tensor* vJoint = ggml_concat(ctx, vCachedC, vExp, /*dim=*/1);
-
-  // Joint softmax. mul_mat(K_joint, Q) broadcasts kv_heads=1 across
-  // Q's n_heads=8, producing ne=[seq_k, seq_q, n_heads].
-  struct ggml_tensor* logits = ggml_mul_mat(ctx, kJoint, q);
+  // Joint attention: q is [head_dim, n_act, n_heads]; kBuf/vBuf are
+  // [head_dim, prefix_len + n_act, n_kv_heads] (MQA broadcast inside FA).
+  // F32 accumulation holds accuracy. Output is [head_dim, n_heads, n_act] →
+  // reshape to [n_heads*head_dim, n_act].
+  // FA portability: see the canonical note at the SigLIP block FA site
+  // (accuracy-neutral + faster on HIP/gfx1151 & Vulkan & CPU; not yet
+  // benchmarked on Intel Iris Xe / Adreno / Metal; desktop-class target).
   const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
-  struct ggml_tensor* attn = ggml_soft_max_ext(
-      ctx, logits, /*mask=*/nullptr, scale, /*max_bias=*/0.0f);
-
-  // V_joint^T then mul_mat with attn → ne=[head_dim, seq_q, n_heads].
-  struct ggml_tensor* attnOut =
-      ggml_mul_mat(ctx, ggml_cont(ctx, ggml_transpose(ctx, vJoint)), attn);
-  // Back to (head_dim*n_heads, n_act) = (expert_q_dim, n_act). The
-  // expert's o_proj reads (n_heads*head_dim, expert_hidden), so we
-  // reshape to ne=[n_heads*head_dim, n_act].
-  attnOut = ggml_cont(ctx, ggml_permute(ctx, attnOut, 0, 2, 1, 3));
+  struct ggml_tensor* attnOut = ggml_flash_attn_ext(
+      ctx, q, kBuf, vBuf, /*mask=*/nullptr, scale, /*max_bias=*/0.0f,
+      /*logit_softcap=*/0.0f);
+  ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, nHeads * headDim, nAct);
 
   // O-proj + gated residual.
@@ -651,8 +717,7 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
   h = ggml_add(ctx, xExp, ggml_mul(ctx, proj, a.gate));
 
   // ── Pre-FFW adaRMSNorm + GeGLU MLP + gated residual ────────────────
-  Pi05AdaSplit b = pi05BuildAdarmsSplitGraph(
-      ctx, cond, w.pre_ffw_ada_w, w.pre_ffw_ada_b, expertHidden);
+  Pi05AdaSplit b = pi05AdaViewsFromMod(ctx, modPreFfw, expertHidden);
   if (b.scale == nullptr) {
     return nullptr;
   }
@@ -660,8 +725,9 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
       pi05AdarmsApply(ctx, h, b.scale, b.shift, rmsNormEps);
   struct ggml_tensor* gate = pi05Linear(ctx, normedFfw, w.mlp_gate_w, nullptr);
   struct ggml_tensor* up = pi05Linear(ctx, normedFfw, w.mlp_up_w, nullptr);
-  gate = ggml_gelu(ctx, gate);
-  struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
+  // Fused GeGLU (gelu(gate)*up) — see VLM block for the memory-traffic
+  // rationale; runs 10× per inference here so the saving compounds.
+  struct ggml_tensor* ff = ggml_geglu_split(ctx, gate, up);
   struct ggml_tensor* down = pi05Linear(ctx, ff, w.mlp_down_w, nullptr);
   return ggml_add(ctx, h, ggml_mul(ctx, down, b.gate));
 }
@@ -670,18 +736,23 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
 Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     struct ggml_context* ctx, struct ggml_tensor* xExp,
     struct ggml_tensor* actPositions,
-    const std::vector<struct ggml_tensor*>& cachedK,
-    const std::vector<struct ggml_tensor*>& cachedV, struct ggml_tensor* cond,
+    const std::vector<struct ggml_tensor*>& kBufs,
+    const std::vector<struct ggml_tensor*>& vBufs,
+    const std::vector<struct ggml_tensor*>& modsPreAttn,
+    const std::vector<struct ggml_tensor*>& modsPreFfw,
+    struct ggml_tensor* modFinal,
+    std::vector<struct ggml_tensor*>& kvWrites,
     const std::vector<Pi05ExpertBlockWeights>& blocks,
-    struct ggml_tensor* finalNormAdaW, struct ggml_tensor* finalNormAdaB,
     struct ggml_tensor* actionOutProjW, struct ggml_tensor* actionOutProjB,
     int expertHidden, int nHeads, int nKvHeads, int headDim, int prefixLen,
     int nAct, float rmsNormEps, float ropeFreqBase) {
   Pi05ExpertODEStepOutputs out{nullptr, nullptr};
   if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
-      cond == nullptr || blocks.empty() || cachedK.size() != blocks.size() ||
-      cachedV.size() != blocks.size() || finalNormAdaW == nullptr ||
-      finalNormAdaB == nullptr || actionOutProjW == nullptr ||
+      modFinal == nullptr || blocks.empty() ||
+      kBufs.size() != blocks.size() ||
+      vBufs.size() != blocks.size() ||
+      modsPreAttn.size() != blocks.size() ||
+      modsPreFfw.size() != blocks.size() || actionOutProjW == nullptr ||
       actionOutProjB == nullptr) {
     return out;
   }
@@ -691,9 +762,11 @@ Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
         ctx,
         h,
         actPositions,
-        cachedK[i],
-        cachedV[i],
-        cond,
+        kBufs[i],
+        vBufs[i],
+        modsPreAttn[i],
+        modsPreFfw[i],
+        kvWrites,
         blocks[i],
         expertHidden,
         nHeads,
@@ -707,9 +780,8 @@ Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
       return out;
     }
   }
-  // Final adaRMSNorm — same modulation form as the per-block norms.
-  Pi05AdaSplit fin = pi05BuildAdarmsSplitGraph(
-      ctx, cond, finalNormAdaW, finalNormAdaB, expertHidden);
+  // Final adaRMSNorm — modulation precomputed for this ODE step.
+  Pi05AdaSplit fin = pi05AdaViewsFromMod(ctx, modFinal, expertHidden);
   if (fin.scale == nullptr) {
     return out;
   }
@@ -1161,6 +1233,23 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
         " expert_n_kv_heads=" + std::to_string(m->expert_n_kv_heads) + ")");
   }
 
+  // The unified F16 KV cache writes the VLM prefix slice into the
+  // [0:prefix_len] head of each per-layer buffer assuming MQA — a single
+  // K/V head, so the prefix is contiguous at offset 0 with no per-head
+  // stride. A checkpoint with n_kv_heads > 1 would silently corrupt the
+  // layout (prefix bytes landing across head boundaries) and read past the
+  // intended region. The prefix is produced from `vlm_n_kv_heads` (perLayerKv)
+  // and consumed by the expert buffer sized for `expert_n_kv_heads`, so BOTH
+  // must be 1. The geometry check above already ties them together, but assert
+  // each explicitly so the MQA invariant is local and survives reordering.
+  if (m->expert_n_kv_heads != 1 || m->vlm_n_kv_heads != 1) {
+    throw std::runtime_error(
+        "pi05LoadModel: unified KV cache requires MQA (n_kv_heads==1), got "
+        "vlm_n_kv_heads=" +
+        std::to_string(m->vlm_n_kv_heads) +
+        " expert_n_kv_heads=" + std::to_string(m->expert_n_kv_heads));
+  }
+
   // GPU only: allocate a backend buffer and copy the GGUF data into
   // it. Required for GPU compute — without it the tensors' `data`
   // pointers stay NULL (no_alloc=true) and graph_compute segfaults
@@ -1285,6 +1374,32 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     bw.mlp_down_w = mustGet(b + ".mlp.down.weight");
   }
 
+  // adaRMSNorm modulation width sanity. The ODE precompute reads
+  // `modDim = expert_final_norm_ada_w->ne[1]` and `pi05AdaViewsFromMod`
+  // slices it into THREE `expert_hidden`-wide views (scale | shift | gate),
+  // and the host `addOneToScale` writes `expert_hidden` floats into the
+  // scale third. A modulation tensor narrower than 3*expert_hidden would
+  // make those slices/writes read or write out of bounds. Validate all ada
+  // weights (per-block pre-attn/pre-ffw + the final norm) up front.
+  const int64_t expectedModDim = static_cast<int64_t>(3) * m->expert_hidden;
+  if (m->expert_final_norm_ada_w->ne[1] != expectedModDim) {
+    throw std::runtime_error(
+        "pi05LoadModel: expert.final_norm.ada.weight has ne[1]=" +
+        std::to_string(m->expert_final_norm_ada_w->ne[1]) +
+        ", expected 3*expert_hidden=" + std::to_string(expectedModDim));
+  }
+  for (int i = 0; i < m->expert_n_layers; ++i) {
+    const auto& bw = m->expert_blocks[i];
+    if (bw.pre_attn_ada_w->ne[1] != expectedModDim ||
+        bw.pre_ffw_ada_w->ne[1] != expectedModDim) {
+      throw std::runtime_error(
+          "pi05LoadModel: expert.blk." + std::to_string(i) +
+          " ada modulation weight width mismatch (expected ne[1]=3*"
+          "expert_hidden=" +
+          std::to_string(expectedModDim) + ")");
+    }
+  }
+
   // Projections
   m->action_in_w = mustGet("proj.action_in.weight");
   m->action_in_b = mustGet("proj.action_in.bias");
@@ -1364,17 +1479,29 @@ static bool pi05Inference(
   tw.head_w = m.vision_head_w;
   tw.head_b = m.vision_head_b;
 
-  for (int cam = 0; cam < nImages; ++cam) {
-    // CHW row-major is already ggml's (W, H, C, 1) layout for square images.
-    const float* imgData = images[cam];
-
+  // All cameras run the identical SigLIP tower over independent images, so
+  // we stack them on the conv's batch (N) axis and run ONE batched pass.
+  // Each (head, image) attention is independent in ggml's high dims, so no
+  // cross-image masking is needed and the result is numerically identical to
+  // N separate passes — but the matmuls run at full GPU occupancy (e.g.
+  // 768 patches at once) instead of N tiny back-to-back launches.
+  {
     Pi05StagedGuard vg;
     vg.sg = pi05BuildStaged(size_t{32} * 1024 * 1024, 8192);
     if (vg.sg.ctx == nullptr) {
       return false;
     }
     struct ggml_tensor* pixels =
-        ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, h, h, 3, 1);
+        ggml_new_tensor_4d(vg.sg.ctx, GGML_TYPE_F32, h, h, 3, nImages);
+    ggml_set_input(pixels);
+    // The per-camera loop below writes nImages slots of imgFloats each into
+    // `pixels`. That equals the tensor's capacity by construction here, but
+    // assert it so a future divergence between nImages and the batch (N) dim
+    // can't silently overrun the buffer during the uploads.
+    if (static_cast<size_t>(nImages) * imgFloats * sizeof(float) !=
+        ggml_nbytes(pixels)) {
+      return false;
+    }
 
     auto outs = pi05BuildSiglipTowerGraph(
         vg.sg.ctx,
@@ -1389,6 +1516,7 @@ static bool pi05Inference(
     if (outs.head_out == nullptr) {
       return false;
     }
+    ggml_set_output(outs.head_out);
     ggml_build_forward_expand(vg.sg.gf, outs.head_out);
 
     // Vision tower has Conv2d in patch embed — that's the op that may
@@ -1401,16 +1529,28 @@ static bool pi05Inference(
     if (!ok) {
       return false;
     }
-    ggml_backend_tensor_set(pixels, imgData, 0, imgFloats * sizeof(float));
+    // Upload every camera's CHW pixels into its slot on the batch axis.
+    for (int cam = 0; cam < nImages; ++cam) {
+      ggml_backend_tensor_set(
+          pixels,
+          images[cam],
+          static_cast<size_t>(cam) * imgFloats * sizeof(float),
+          imgFloats * sizeof(float));
+    }
     if (!pi05ComputeStaged(vg.sg, m.backend)) {
       return false;
     }
-    imageFeatures[cam].resize(perImageOut);
-    ggml_backend_tensor_get(
-        outs.head_out,
-        imageFeatures[cam].data(),
-        0,
-        perImageOut * sizeof(float));
+    // head_out is (proj_dim, n_patches, nImages) contiguous → camera `cam`
+    // occupies the [cam*perImageOut, (cam+1)*perImageOut) slice, which is
+    // exactly the per-camera (n_patches, proj_dim) layout the prefix expects.
+    for (int cam = 0; cam < nImages; ++cam) {
+      imageFeatures[cam].resize(perImageOut);
+      ggml_backend_tensor_get(
+          outs.head_out,
+          imageFeatures[cam].data(),
+          static_cast<size_t>(cam) * perImageOut * sizeof(float),
+          perImageOut * sizeof(float));
+    }
   }
   const auto tVisEnd = std::chrono::steady_clock::now();
 
@@ -1466,9 +1606,12 @@ static bool pi05Inference(
   const auto tPrefillStart = std::chrono::steady_clock::now();
   const size_t perLayerKv =
       static_cast<size_t>(m.vlm_head_dim) * prefixLen * m.vlm_n_kv_heads;
-  // Flat buffers — one allocation each instead of n_layers separate vectors.
-  std::vector<float> kCache(static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
-  std::vector<float> vCache(static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
+  // Flat F16 buffers — taps are cached as F16 (see VLM block) for the
+  // unified F16 KV cache the ODE expert flash-attends over.
+  std::vector<ggml_fp16_t> kCache(
+      static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
+  std::vector<ggml_fp16_t> vCache(
+      static_cast<size_t>(m.vlm_n_layers) * perLayerKv);
   {
     Pi05StagedGuard pg;
     pg.sg = pi05BuildStaged(size_t{64} * 1024 * 1024, 65536);
@@ -1529,122 +1672,295 @@ static bool pi05Inference(
           outKeys[l],
           kCache.data() + static_cast<size_t>(l) * perLayerKv,
           0,
-          perLayerKv * sizeof(float));
+          perLayerKv * sizeof(ggml_fp16_t));
       ggml_backend_tensor_get(
           outValues[l],
           vCache.data() + static_cast<size_t>(l) * perLayerKv,
           0,
-          perLayerKv * sizeof(float));
+          perLayerKv * sizeof(ggml_fp16_t));
     }
   }
   const auto tPrefillEnd = std::chrono::steady_clock::now();
 
   // ── ODE loop (10 steps) ────────────────────────────────────────────
+  // The expert graph topology, the cached VLM K/V, and the action positions
+  // are identical across all N steps — only xT (the evolving action latent)
+  // and the time-conditioning sincos change. So we build the graph + the
+  // multi-backend scheduler ONCE, upload the constant inputs (K/V, positions)
+  // ONCE, and per step only re-set the two changing inputs and recompute.
+  // This removes the per-step scheduler creation + full K/V re-upload that
+  // previously dominated the loop's non-compute time (math is identical, so
+  // accuracy is unchanged). After the first compute allocates the graph, the
+  // scheduler keeps is_alloc=true, so subsequent computes skip the re-split
+  // and re-allocation; ggml_set_input keeps the constant K/V buffers pinned.
   const auto tOdeStart = std::chrono::steady_clock::now();
-  const float dt = -1.0f / m.n_inference_steps;
+  const int nSteps = m.n_inference_steps;
+  const float dt = -1.0f / nSteps;
   std::vector<float> xT(static_cast<size_t>(m.action_horizon) * m.action_dim);
   std::memcpy(xT.data(), noise, xT.size() * sizeof(float));
-  std::vector<float> sincosBuf(m.cond_dim);
   std::vector<int32_t> actPosData(m.action_horizon);
   for (int i = 0; i < m.action_horizon; ++i) {
     actPosData[i] = prefixLen + i;
   }
   std::vector<float> xNextBuf(xT.size());
 
-  for (int step = 0; step < m.n_inference_steps; ++step) {
-    const float t = 1.0f + step * dt;
-    pi05ComputeTimeSincos(
-        t, m.cond_dim, m.min_period, m.max_period, sincosBuf.data());
-
-    Pi05StagedGuard og;
-    og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
-    if (og.sg.ctx == nullptr) {
+  // ── Batched adaRMSNorm conditioning precompute ─────────────────────
+  // The per-layer adaRMSNorm modulations (scale/shift/gate) are a function
+  // of the diffusion timestep ONLY (cond = TimeMLP(sincos(t))), not of the
+  // evolving action latent. Computing them inside the ODE step graph meant
+  // ~3·18·N batch-1 gemvs (one weight read each). Instead we compute the
+  // TimeMLP + every site's ada-projection ONCE for all N steps as batched
+  // (n=N) matmuls — each weight is read once instead of N times — and feed
+  // the right column per step. Math is identical → accuracy unchanged.
+  const int nBlocks = m.expert_n_layers;
+  const int modDim = static_cast<int>(m.expert_final_norm_ada_w->ne[1]);
+  std::vector<float> modPreAttnAll(
+      static_cast<size_t>(nBlocks) * modDim * nSteps);
+  std::vector<float> modPreFfwAll(
+      static_cast<size_t>(nBlocks) * modDim * nSteps);
+  std::vector<float> modFinalAll(static_cast<size_t>(modDim) * nSteps);
+  {
+    std::vector<float> sincosAll(static_cast<size_t>(m.cond_dim) * nSteps);
+    for (int s = 0; s < nSteps; ++s) {
+      pi05ComputeTimeSincos(
+          1.0f + s * dt, m.cond_dim, m.min_period, m.max_period,
+          sincosAll.data() + static_cast<size_t>(s) * m.cond_dim);
+    }
+    Pi05StagedGuard pc;
+    pc.sg = pi05BuildStaged(size_t{64} * 1024 * 1024, 8192);
+    if (pc.sg.ctx == nullptr) {
       return false;
     }
-    struct ggml_tensor* xTT = ggml_new_tensor_2d(
-        og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
-    struct ggml_tensor* sincosT =
-        ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, m.cond_dim);
-    struct ggml_tensor* actPosT =
-        ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
-    std::vector<struct ggml_tensor*> cachedKT(m.expert_n_layers);
-    std::vector<struct ggml_tensor*> cachedVT(m.expert_n_layers);
-    for (int l = 0; l < m.expert_n_layers; ++l) {
-      cachedKT[l] = ggml_new_tensor_3d(
-          og.sg.ctx,
-          GGML_TYPE_F32,
-          m.expert_head_dim,
-          prefixLen,
-          m.expert_n_kv_heads);
-      cachedVT[l] = ggml_new_tensor_3d(
-          og.sg.ctx,
-          GGML_TYPE_F32,
-          m.expert_head_dim,
-          prefixLen,
-          m.expert_n_kv_heads);
-    }
-
-    struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
-        og.sg.ctx,
-        sincosT,
-        m.time_mlp_in_w,
-        m.time_mlp_in_b,
-        m.time_mlp_out_w,
-        m.time_mlp_out_b);
-
-    struct ggml_tensor* xExpT = ggml_mul_mat(og.sg.ctx, m.action_in_w, xTT);
-    xExpT = ggml_add(
-        og.sg.ctx, xExpT, ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
-
-    auto outs = pi05BuildExpertOdeStepGraph(
-        og.sg.ctx,
-        xExpT,
-        actPosT,
-        cachedKT,
-        cachedVT,
-        cond,
-        m.expert_blocks,
-        m.expert_final_norm_ada_w,
-        m.expert_final_norm_ada_b,
-        m.action_out_w,
-        m.action_out_b,
-        m.expert_hidden,
-        m.expert_n_heads,
-        m.expert_n_kv_heads,
-        m.expert_head_dim,
-        prefixLen,
-        m.action_horizon,
-        m.rms_norm_eps,
-        m.rope_freq_base);
-    if (outs.v_t == nullptr) {
+    struct ggml_tensor* sincosAllT =
+        ggml_new_tensor_2d(pc.sg.ctx, GGML_TYPE_F32, m.cond_dim, nSteps);
+    ggml_set_input(sincosAllT);
+    struct ggml_tensor* condsAll = pi05BuildTimeMlpGraph(
+        pc.sg.ctx, sincosAllT, m.time_mlp_in_w, m.time_mlp_in_b,
+        m.time_mlp_out_w, m.time_mlp_out_b);
+    if (condsAll == nullptr) {
       return false;
     }
-    struct ggml_tensor* xNext =
-        pi05BuildEulerStepGraph(og.sg.ctx, xTT, outs.v_t, dt);
-    ggml_build_forward_expand(og.sg.gf, xNext);
-
-    const bool ok = m.has_gpu
-                        ? pi05AllocStagedSched(og.sg, m.backend, m.backend_cpu)
-                        : pi05AllocStagedSimple(og.sg, m.backend_cpu);
+    std::vector<struct ggml_tensor*> mA(nBlocks), mF(nBlocks);
+    for (int l = 0; l < nBlocks; ++l) {
+      mA[l] = pi05Linear(
+          pc.sg.ctx, condsAll, m.expert_blocks[l].pre_attn_ada_w,
+          m.expert_blocks[l].pre_attn_ada_b);
+      mF[l] = pi05Linear(
+          pc.sg.ctx, condsAll, m.expert_blocks[l].pre_ffw_ada_w,
+          m.expert_blocks[l].pre_ffw_ada_b);
+      ggml_set_output(mA[l]);
+      ggml_set_output(mF[l]);
+      ggml_build_forward_expand(pc.sg.gf, mA[l]);
+      ggml_build_forward_expand(pc.sg.gf, mF[l]);
+    }
+    struct ggml_tensor* mFin = pi05Linear(
+        pc.sg.ctx, condsAll, m.expert_final_norm_ada_w,
+        m.expert_final_norm_ada_b);
+    ggml_set_output(mFin);
+    ggml_build_forward_expand(pc.sg.gf, mFin);
+    // Every op here (TimeMLP + ada projections) runs on the GPU, so use the
+    // lightweight single-backend gallocr instead of the multi-backend
+    // scheduler — it skips the ~14ms ggml_backend_sched_new setup.
+    const bool ok =
+        pi05AllocStagedSimple(pc.sg, m.has_gpu ? m.backend : m.backend_cpu);
     if (!ok) {
       return false;
     }
+    ggml_backend_tensor_set(
+        sincosAllT, sincosAll.data(), 0, sincosAll.size() * sizeof(float));
+    if (!pi05ComputeStaged(pc.sg, m.backend)) {
+      return false;
+    }
+    const size_t perSite = static_cast<size_t>(modDim) * nSteps;
+    for (int l = 0; l < nBlocks; ++l) {
+      ggml_backend_tensor_get(
+          mA[l], modPreAttnAll.data() + static_cast<size_t>(l) * perSite, 0,
+          perSite * sizeof(float));
+      ggml_backend_tensor_get(
+          mF[l], modPreFfwAll.data() + static_cast<size_t>(l) * perSite, 0,
+          perSite * sizeof(float));
+    }
+    ggml_backend_tensor_get(
+        mFin, modFinalAll.data(), 0, perSite * sizeof(float));
+    // Fold the adaRMSNorm `+1` into the scale half of each modulation column
+    // (scale occupies the first expert_hidden of each modDim block) so the
+    // apply becomes a single fusable rms_norm*scale+shift. modDim layout per
+    // column is [scale | shift | gate], each `expert_hidden` wide.
+    const int eh = m.expert_hidden;
+    auto addOneToScale = [&](std::vector<float>& buf, int nSites) {
+      for (int site = 0; site < nSites; ++site) {
+        for (int s = 0; s < nSteps; ++s) {
+          float* col = buf.data() + static_cast<size_t>(site) * perSite +
+                       static_cast<size_t>(s) * modDim;
+          for (int i = 0; i < eh; ++i) col[i] += 1.0f;
+        }
+      }
+    };
+    addOneToScale(modPreAttnAll, nBlocks);
+    addOneToScale(modPreFfwAll, nBlocks);
+    addOneToScale(modFinalAll, 1);
+  }
+
+  // ── Unified F16 KV cache (llama.cpp-style) ─────────────────────────
+  // One persistent F16 buffer per layer, ne=[head_dim, prefix+action,
+  // n_kv_heads], allocated outside the per-step graph (like weights). The
+  // prefix slice is written ONCE from the VLM prefill below; each ODE step
+  // writes its fresh action K/V into the tail slice in-graph (see the expert
+  // block). Avoids the F32-only HIP concat, halves attention KV bandwidth,
+  // and never re-touches the prefix. RAII guard frees the buffer on all exits.
+  //
+  // Declared BEFORE `og` on purpose: the per-step graph/scheduler in `og`
+  // reference these buffers as leaf tensors, and guards destruct in reverse
+  // declaration order — so `kvg` must be declared first to outlive `og` and
+  // its graph, avoiding a use-after-free at teardown.
+  const int jointLen = prefixLen + m.action_horizon;
+  ggml_backend_t kvBackend = m.has_gpu ? m.backend : m.backend_cpu;
+  struct Pi05KvBufGuard {
+    ggml_backend_buffer_t buf = nullptr;
+    struct ggml_context* ctx = nullptr;
+    ~Pi05KvBufGuard() {
+      if (buf) ggml_backend_buffer_free(buf);
+      if (ctx) ggml_free(ctx);
+    }
+  } kvg;
+  {
+    struct ggml_init_params kvParams{
+        ggml_tensor_overhead() *
+            (static_cast<size_t>(2) * m.expert_n_layers + 8),
+        nullptr, /*no_alloc=*/true};
+    kvg.ctx = ggml_init(kvParams);
+    if (kvg.ctx == nullptr) {
+      return false;
+    }
+  }
+  std::vector<struct ggml_tensor*> kBufs(m.expert_n_layers);
+  std::vector<struct ggml_tensor*> vBufs(m.expert_n_layers);
+  for (int l = 0; l < m.expert_n_layers; ++l) {
+    kBufs[l] = ggml_new_tensor_3d(
+        kvg.ctx, GGML_TYPE_F16, m.expert_head_dim, jointLen,
+        m.expert_n_kv_heads);
+    vBufs[l] = ggml_new_tensor_3d(
+        kvg.ctx, GGML_TYPE_F16, m.expert_head_dim, jointLen,
+        m.expert_n_kv_heads);
+  }
+  kvg.buf = ggml_backend_alloc_ctx_tensors(kvg.ctx, kvBackend);
+  if (kvg.buf == nullptr) {
+    return false;
+  }
+  // Write the prefix slice once (F16). MQA (n_kv_heads=1) → contiguous at 0.
+  for (int l = 0; l < m.expert_n_layers; ++l) {
+    ggml_backend_tensor_set(
+        kBufs[l], kCache.data() + static_cast<size_t>(l) * perLayerKv, 0,
+        perLayerKv * sizeof(ggml_fp16_t));
+    ggml_backend_tensor_set(
+        vBufs[l], vCache.data() + static_cast<size_t>(l) * perLayerKv, 0,
+        perLayerKv * sizeof(ggml_fp16_t));
+  }
+
+  Pi05StagedGuard og;
+  og.sg = pi05BuildStaged(size_t{96} * 1024 * 1024, 32768);
+  if (og.sg.ctx == nullptr) {
+    return false;
+  }
+  struct ggml_tensor* xTT = ggml_new_tensor_2d(
+      og.sg.ctx, GGML_TYPE_F32, m.action_dim, m.action_horizon);
+  struct ggml_tensor* actPosT =
+      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_I32, m.action_horizon);
+  ggml_set_input(xTT);
+  ggml_set_input(actPosT);
+  // Per-step adaRMSNorm modulation inputs (sliced from the batched precompute).
+  std::vector<struct ggml_tensor*> modPreAttnT(nBlocks);
+  std::vector<struct ggml_tensor*> modPreFfwT(nBlocks);
+  for (int l = 0; l < nBlocks; ++l) {
+    modPreAttnT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+    modPreFfwT[l] = ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+    ggml_set_input(modPreAttnT[l]);
+    ggml_set_input(modPreFfwT[l]);
+  }
+  struct ggml_tensor* modFinalT =
+      ggml_new_tensor_1d(og.sg.ctx, GGML_TYPE_F32, modDim);
+  ggml_set_input(modFinalT);
+
+  struct ggml_tensor* xExpT = ggml_mul_mat(og.sg.ctx, m.action_in_w, xTT);
+  xExpT = ggml_add(
+      og.sg.ctx, xExpT, ggml_cast(og.sg.ctx, m.action_in_b, GGML_TYPE_F32));
+
+  std::vector<struct ggml_tensor*> kvWrites;
+  auto outs = pi05BuildExpertOdeStepGraph(
+      og.sg.ctx,
+      xExpT,
+      actPosT,
+      kBufs,
+      vBufs,
+      modPreAttnT,
+      modPreFfwT,
+      modFinalT,
+      kvWrites,
+      m.expert_blocks,
+      m.action_out_w,
+      m.action_out_b,
+      m.expert_hidden,
+      m.expert_n_heads,
+      m.expert_n_kv_heads,
+      m.expert_head_dim,
+      prefixLen,
+      m.action_horizon,
+      m.rms_norm_eps,
+      m.rope_freq_base);
+  if (outs.v_t == nullptr) {
+    return false;
+  }
+  struct ggml_tensor* xNext =
+      pi05BuildEulerStepGraph(og.sg.ctx, xTT, outs.v_t, dt);
+  ggml_set_output(xNext);
+  // Expand the action-K/V writes FIRST so each block's copy node is inserted
+  // before that block's flash-attention read (which is pulled in by the next
+  // block's copy / the final output). This guarantees the tail slice is
+  // written before it is attended over, every step.
+  for (struct ggml_tensor* w : kvWrites) {
+    ggml_build_forward_expand(og.sg.gf, w);
+  }
+  ggml_build_forward_expand(og.sg.gf, xNext);
+
+  const bool odeOk = m.has_gpu
+                         ? pi05AllocStagedSched(og.sg, m.backend, m.backend_cpu)
+                         : pi05AllocStagedSimple(og.sg, m.backend_cpu);
+  if (!odeOk) {
+    return false;
+  }
+  // Upload the step-invariant action positions once. The cached prefix K/V
+  // already lives in the persistent unified buffer (written above); only the
+  // action tail is written in-graph each step.
+  ggml_backend_tensor_set(
+      actPosT, actPosData.data(), 0, actPosData.size() * sizeof(int32_t));
+
+  const size_t perSite = static_cast<size_t>(modDim) * nSteps;
+  for (int step = 0; step < nSteps; ++step) {
     ggml_backend_tensor_set(xTT, xT.data(), 0, xT.size() * sizeof(float));
-    ggml_backend_tensor_set(
-        sincosT, sincosBuf.data(), 0, sincosBuf.size() * sizeof(float));
-    ggml_backend_tensor_set(
-        actPosT, actPosData.data(), 0, actPosData.size() * sizeof(int32_t));
-    for (int l = 0; l < m.expert_n_layers; ++l) {
+    // Feed this step's precomputed modulations (column `step` of each site).
+    const size_t col = static_cast<size_t>(step) * modDim;
+    for (int l = 0; l < nBlocks; ++l) {
       ggml_backend_tensor_set(
-          cachedKT[l],
-          kCache.data() + static_cast<size_t>(l) * perLayerKv,
-          0,
-          perLayerKv * sizeof(float));
+          modPreAttnT[l],
+          modPreAttnAll.data() + static_cast<size_t>(l) * perSite + col, 0,
+          static_cast<size_t>(modDim) * sizeof(float));
       ggml_backend_tensor_set(
-          cachedVT[l],
-          vCache.data() + static_cast<size_t>(l) * perLayerKv,
-          0,
-          perLayerKv * sizeof(float));
+          modPreFfwT[l],
+          modPreFfwAll.data() + static_cast<size_t>(l) * perSite + col, 0,
+          static_cast<size_t>(modDim) * sizeof(float));
+    }
+    ggml_backend_tensor_set(
+        modFinalT, modFinalAll.data() + col, 0,
+        static_cast<size_t>(modDim) * sizeof(float));
+    // GPU (multi-backend scheduler) pins graph inputs in dedicated split
+    // buffers, so action positions uploaded once above survive every
+    // recompute. The CPU-only gallocr path packs inputs alongside reused
+    // intermediates, so re-set the step-invariant action positions each step.
+    // (The unified KV buffer is external/persistent on both paths, so its
+    // prefix slice is never clobbered and needs no re-upload.)
+    if (!m.has_gpu) {
+      ggml_backend_tensor_set(
+          actPosT, actPosData.data(), 0, actPosData.size() * sizeof(int32_t));
     }
     if (!pi05ComputeStaged(og.sg, m.backend)) {
       return false;

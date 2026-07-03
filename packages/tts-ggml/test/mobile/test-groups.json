@@ -3,12 +3,13 @@
   "ios": {
     "functional": [
       "runAddonTest",
-      "runChatterboxJaMecabTest",
       "runChatterboxKvCacheGpuTest",
       "runChatterboxMtlTest",
       "runChatterboxSpeedTest",
       "runGpuSmokeTest",
+      "runLavasrEnhancerTest",
       "runMultipleRunsTest",
+      "runOutputSampleRateTest",
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"
@@ -17,12 +18,13 @@
   "android": {
     "functional": [
       "runAddonTest",
-      "runChatterboxJaMecabTest",
       "runChatterboxKvCacheGpuTest",
       "runChatterboxMtlTest",
       "runChatterboxSpeedTest",
       "runGpuSmokeTest",
+      "runLavasrEnhancerTest",
       "runMultipleRunsTest",
+      "runOutputSampleRateTest",
       "runSupertonicMtlTest",
       "runSupertonicTest",
       "runSupertonic3QuantTest"

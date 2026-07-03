@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "d1b2497b1707baf7bd1f352eb08097c7f9d5cfd9",
+    "baseline": "348b2a1b51306b6523d144174354be97ad88fd0a",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -12,6 +12,7 @@
       "packages": [
         "gtest",
         "picojson",
+        "spirv-headers",
         "stb"
       ]
     }

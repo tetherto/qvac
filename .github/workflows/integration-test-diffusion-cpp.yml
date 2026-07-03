@@ -52,6 +52,10 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/diffusion-cpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # Enables the LTX-2.3 video smoke test to download its (lightest-quant)
+      # weights into the cached test/model dir and run. Only set on backends
+      # where the LTX op set is supported (Metal); elsewhere the LTX test skips.
+      LTX_DOWNLOAD: ${{ matrix.ltx || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -82,6 +86,7 @@ jobs:
             platform: darwin
             arch: arm64
             runner: mac-mini-m4-gpu
+            ltx: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64

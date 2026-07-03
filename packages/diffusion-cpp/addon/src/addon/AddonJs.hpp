@@ -89,6 +89,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.vaePath = args.getMapEntry(1, "vaePath");
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
+  // LTX-2 (LTXAV) extras: audio VAE + text-embedding connectors. Empty for
+  // every non-LTX model (getMapEntry returns "" for absent keys).
+  config.audioVaePath = args.getMapEntry(1, "audioVaePath");
+  config.embeddingsConnectorsPath =
+      args.getMapEntry(1, "embeddingsConnectorsPath");
 
   // -- Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object -------------
   // configMap holds the flat key/value pairs from the second constructor arg
