@@ -35,7 +35,9 @@ interface PluginManifest {
 }
 
 test('package.json declares the OpenClaw runtime extension entrypoint', () => {
-  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as PackageJson
+  const packageJson = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+  ) as PackageJson
 
   assert.deepEqual(packageJson.openclaw?.extensions, ['./dist/index.js'])
 })
@@ -55,30 +57,38 @@ test('package entrypoint exports the plugin and serve config helpers', () => {
 })
 
 test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
-  const manifest = JSON.parse(readFileSync(new URL('../openclaw.plugin.json', import.meta.url), 'utf8')) as PluginManifest
+  const manifest = JSON.parse(
+    readFileSync(new URL('../openclaw.plugin.json', import.meta.url), 'utf8')
+  ) as PluginManifest
 
   assert.equal(manifest.modelCatalog?.providers?.qvac?.api, 'openai-completions')
   assert.equal(manifest.modelCatalog?.discovery?.qvac, 'static')
-  assert.deepEqual(manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.id), [
-    'qwen3.5-0.8b',
-    'qwen3.5-2b',
-    'qwen3.5-4b',
-    'qwen3.5-9b',
-    'qwen3.6-27b',
-    'qwen3.6-35b-a3b',
-    'gpt-oss-20b',
-    'gemma4-31b'
-  ])
-  assert.deepEqual(manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.input), [
-    ['text', 'image'],
-    ['text', 'image'],
-    ['text', 'image'],
-    ['text', 'image'],
-    ['text', 'image'],
-    ['text', 'image'],
-    ['text'],
-    ['text', 'image']
-  ])
+  assert.deepEqual(
+    manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.id),
+    [
+      'qwen3.5-0.8b',
+      'qwen3.5-2b',
+      'qwen3.5-4b',
+      'qwen3.5-9b',
+      'qwen3.6-27b',
+      'qwen3.6-35b-a3b',
+      'gpt-oss-20b',
+      'gemma4-31b'
+    ]
+  )
+  assert.deepEqual(
+    manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.input),
+    [
+      ['text', 'image'],
+      ['text', 'image'],
+      ['text', 'image'],
+      ['text', 'image'],
+      ['text', 'image'],
+      ['text', 'image'],
+      ['text'],
+      ['text', 'image']
+    ]
+  )
   assert.deepEqual(
     manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.compat),
     [
