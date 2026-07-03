@@ -36,6 +36,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
 find_package(tts-cpp CONFIG REQUIRED)
+find_package(mecab CONFIG REQUIRED)
 # Pull in ggml directly (in addition to the transitive
 # find_package(ggml) that tts-cppConfig.cmake already does) so the
 # `GGML_AVAILABLE_BACKENDS` list and per-backend `ggml::<backend>`
@@ -168,6 +169,7 @@ target_link_libraries(
   ${tts-ggml}
   PRIVATE
     tts-cpp::tts-cpp
+    mecab::mecab
 )
 
 target_compile_definitions(${tts-ggml} PUBLIC JS_LOGGER)
@@ -197,6 +199,21 @@ if(ANDROID)
     PRIVATE
       -Wl,-z,max-page-size=16384
       -Wl,-z,common-page-size=16384
+  )
+endif()
+
+if(WIN32)
+  # mecab.lib and bare_delay_load.lib both export DllMain. mecab's
+  # libmecab.cpp defines a stub that returns TRUE; bare_delay_load defines
+  # the real entry point used to dispatch the /DELAYLOAD:bare.exe imports
+  # the module relies on. bare_delay_load.lib is listed before mecab.lib in
+  # the link line, so /FORCE:MULTIPLE makes the linker pick the
+  # bare_delay_load DllMain and discard the mecab stub. Mirrors
+  # packages/tts-onnx/CMakeLists.txt.
+  target_link_options(
+    ${tts-ggml}_module
+    PRIVATE
+      /FORCE:MULTIPLE
   )
 endif()
 
@@ -300,6 +317,7 @@ if(BUILD_TESTING)
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_supertonic_config.cpp
       addon/tests/test_time_stretch.cpp
+      addon/tests/test_streaming_enhancer.cpp
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp

@@ -202,6 +202,12 @@ jobs:
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
+      # Runner enumerates the Intel iGPU at index 0 and the NVIDIA card at
+      # index 1; pin ggml to the NVIDIA device (re-check if the image changes).
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Pin ggml Vulkan to the NVIDIA GPU on Windows
+        run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
+
       - name: Cache TTS GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
