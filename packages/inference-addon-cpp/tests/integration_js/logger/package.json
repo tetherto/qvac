@@ -6,7 +6,7 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "lint": "standard",
     "lint:fix": "standard --fix",
-    "test": "bare test.js"
+    "test": "bare test.js && bare teardown.test.js"
   },
   "files": [
     "binding.js",
@@ -28,6 +28,7 @@
   ],
   "license": "Apache-2.0",
   "devDependencies": {
+    "bare-thread": "^1.2.4",
     "brittle": "^3.16.3",
     "cmake-bare": "^1.5.2",
     "standard": "^17.0.0"

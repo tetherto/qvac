@@ -31,6 +31,10 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import type { DownloadHooks } from "./types";
+import {
+  resolveRegistryDownloadMetadata,
+  type ExplicitRegistryMetadata,
+} from "./registry-metadata";
 
 const logger = getServerLogger();
 
@@ -273,6 +277,7 @@ export async function downloadModelFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
   hooks?: DownloadHooks,
+  explicitMetadata?: ExplicitRegistryMetadata,
 ): Promise<string> {
   const downloadKey = createRegistryDownloadKey(registrySource, registryPath);
   hooks?.onDownloadKey?.(downloadKey);
@@ -397,9 +402,11 @@ export async function downloadModelFromRegistry(
 
       const modelPath = getSingleFileCachePath(registryPath);
 
-      const expectedSize = modelMetadata?.expectedSize || 0;
-      const checksum =
-        expectedChecksum || modelMetadata?.sha256Checksum || "";
+      const { expectedSize, checksum } = resolveRegistryDownloadMetadata(
+        modelMetadata,
+        explicitMetadata,
+        expectedChecksum,
+      );
 
       const cachedPath = await validateCachedFile(
         modelPath,

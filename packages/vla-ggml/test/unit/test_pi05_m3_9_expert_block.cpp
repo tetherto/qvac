@@ -176,6 +176,43 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
       ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
   ASSERT_NE(cpu_backend, nullptr);
 
+  // ── 3a. Unified F16 KV cache (llama.cpp-style), mirroring production. ──
+  // One persistent F16 buffer ne=[head_dim, prefix+act, n_kv_heads] in its
+  // own backend buffer (like the model weights). The prefix slice is written
+  // ONCE here (F32 dump → F16); the expert block writes this step's action
+  // K/V into the tail slice in-graph and flash-attends over the whole buffer.
+  const int JOINT_LEN = VALID_PREFIX_LEN + N_ACT;
+  struct ggml_init_params kvp{
+      ggml_tensor_overhead() * (2 * 1 + 8),
+      nullptr,
+      /*.no_alloc=*/true,
+  };
+  struct ggml_context* ctx_kv = ggml_init(kvp);
+  ASSERT_NE(ctx_kv, nullptr);
+  struct ggml_tensor* kBuf = ggml_new_tensor_3d(
+      ctx_kv, GGML_TYPE_F16, EXPERT_HEAD_DIM, JOINT_LEN, EXPERT_N_KV_HEADS);
+  struct ggml_tensor* vBuf = ggml_new_tensor_3d(
+      ctx_kv, GGML_TYPE_F16, EXPERT_HEAD_DIM, JOINT_LEN, EXPERT_N_KV_HEADS);
+  ggml_backend_buffer_t kv_backbuf =
+      ggml_backend_alloc_ctx_tensors(ctx_kv, cpu_backend);
+  ASSERT_NE(kv_backbuf, nullptr);
+  // Prefix write: convert the F32 cache slice → F16 and write the [0:prefix]
+  // slice (MQA, n_kv_heads=1 → contiguous at offset 0).
+  const size_t prefix_elems = static_cast<size_t>(VALID_PREFIX_LEN) *
+                              EXPERT_N_KV_HEADS * EXPERT_HEAD_DIM;
+  std::vector<ggml_fp16_t> kPrefixF16(prefix_elems);
+  std::vector<ggml_fp16_t> vPrefixF16(prefix_elems);
+  ggml_fp32_to_fp16_row(
+      k_cache_valid.data(), kPrefixF16.data(),
+      static_cast<int64_t>(prefix_elems));
+  ggml_fp32_to_fp16_row(
+      v_cache_valid.data(), vPrefixF16.data(),
+      static_cast<int64_t>(prefix_elems));
+  ggml_backend_tensor_set(
+      kBuf, kPrefixF16.data(), 0, kPrefixF16.size() * sizeof(ggml_fp16_t));
+  ggml_backend_tensor_set(
+      vBuf, vPrefixF16.data(), 0, vPrefixF16.size() * sizeof(ggml_fp16_t));
+
   // ── 4. Build & run the M3.9 graph (gallocr-backed). ──────────────────
   const size_t graph_ctx_mem = size_t{32} * 1024 * 1024; // 32 MiB
   std::vector<uint8_t> graph_mem(graph_ctx_mem);
@@ -196,23 +233,15 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   struct ggml_tensor* act_pos_t =
       ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, N_ACT);
   ggml_set_name(act_pos_t, "in.act_pos");
-  struct ggml_tensor* cached_k_t = ggml_new_tensor_3d(
-      ctx_g,
-      GGML_TYPE_F32,
-      EXPERT_HEAD_DIM,
-      VALID_PREFIX_LEN,
-      EXPERT_N_KV_HEADS);
-  ggml_set_name(cached_k_t, "in.cached_k");
-  struct ggml_tensor* cached_v_t = ggml_new_tensor_3d(
-      ctx_g,
-      GGML_TYPE_F32,
-      EXPERT_HEAD_DIM,
-      VALID_PREFIX_LEN,
-      EXPERT_N_KV_HEADS);
-  ggml_set_name(cached_v_t, "in.cached_v");
   struct ggml_tensor* cond_t =
       ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, COND_DIM);
   ggml_set_name(cond_t, "in.cond");
+  // Constant fold vector that adds the adaRMSNorm `+1` into the scale third
+  // only (first EXPERT_HIDDEN of the 3·hidden modulation), reproducing
+  // production's host-side `addOneToScale`.
+  struct ggml_tensor* fold_t =
+      ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, 3 * EXPERT_HIDDEN);
+  ggml_set_name(fold_t, "in.fold");
 
   // x_exp = action_in_proj(noise) = noise @ W^T + b
   // action_in_w is (ne=[ACTION_DIM, EXPERT_HIDDEN]) F16-stored; ggml_mul_mat
@@ -225,14 +254,31 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   x_exp_t = ggml_add(ctx_g, x_exp_t, action_in_b_f32);
   ggml_set_name(x_exp_t, "x_exp");
 
+  // Precompute the adaRMSNorm modulations in-graph from cond: this is exactly
+  // production's batched `Linear(cond, ada_w, ada_b)` followed by the `+1`
+  // fold into the scale half. Layout per vector is [scale+1 | shift | gate].
+  auto buildMod = [&](struct ggml_tensor* ada_w, struct ggml_tensor* ada_b) {
+    struct ggml_tensor* m = ggml_mul_mat(ctx_g, ada_w, cond_t);
+    m = ggml_add(ctx_g, m, ggml_cast(ctx_g, ada_b, GGML_TYPE_F32));
+    m = ggml_add(ctx_g, m, fold_t);
+    return m;
+  };
+  struct ggml_tensor* mod_pre_attn =
+      buildMod(bw.pre_attn_ada_w, bw.pre_attn_ada_b);
+  struct ggml_tensor* mod_pre_ffw =
+      buildMod(bw.pre_ffw_ada_w, bw.pre_ffw_ada_b);
+
   using qvac_lib_infer_vla_ggml::pi05BuildExpertBlockGraph;
+  std::vector<struct ggml_tensor*> kvWrites;
   struct ggml_tensor* out = pi05BuildExpertBlockGraph(
       ctx_g,
       x_exp_t,
       act_pos_t,
-      cached_k_t,
-      cached_v_t,
-      cond_t,
+      kBuf,
+      vBuf,
+      mod_pre_attn,
+      mod_pre_ffw,
+      kvWrites,
       bw,
       EXPERT_HIDDEN,
       EXPERT_N_HEADS,
@@ -245,6 +291,11 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   ASSERT_NE(out, nullptr);
 
   struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 8192, false);
+  // Expand the action-K/V tail writes FIRST so each copy node is ordered
+  // before the flash-attention that reads the unified buffer.
+  for (struct ggml_tensor* w : kvWrites) {
+    ggml_build_forward_expand(gf, w);
+  }
   ggml_build_forward_expand(gf, out);
 
   ggml_gallocr_t allocr =
@@ -252,27 +303,24 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   ASSERT_NE(allocr, nullptr);
   ASSERT_TRUE(ggml_gallocr_alloc_graph(allocr, gf));
 
-  // Upload inputs after allocation.
+  // Upload inputs after allocation. The prefix KV already lives in the
+  // persistent unified buffer (written above).
   std::vector<int32_t> act_pos_data(N_ACT);
   for (int i = 0; i < N_ACT; ++i) {
     act_pos_data[i] = VALID_PREFIX_LEN + i; // 832..881
+  }
+  std::vector<float> fold_data(3 * EXPERT_HIDDEN, 0.0f);
+  for (int i = 0; i < EXPERT_HIDDEN; ++i) {
+    fold_data[i] = 1.0f;
   }
   ggml_backend_tensor_set(
       noise_t, noise.data(), 0, noise.size() * sizeof(float));
   ggml_backend_tensor_set(
       act_pos_t, act_pos_data.data(), 0, act_pos_data.size() * sizeof(int32_t));
   ggml_backend_tensor_set(
-      cached_k_t,
-      k_cache_valid.data(),
-      0,
-      k_cache_valid.size() * sizeof(float));
-  ggml_backend_tensor_set(
-      cached_v_t,
-      v_cache_valid.data(),
-      0,
-      v_cache_valid.size() * sizeof(float));
-  ggml_backend_tensor_set(
       cond_t, cond_data.data(), 0, cond_data.size() * sizeof(float));
+  ggml_backend_tensor_set(
+      fold_t, fold_data.data(), 0, fold_data.size() * sizeof(float));
 
   ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
@@ -307,6 +355,8 @@ TEST(Pi05M3_9, ExpertBlock0JointAttnMatchesPytorch) {
   EXPECT_LT(diff / std::max(max_abs_expected, 1e-9f), 5e-2f);
 
   ggml_gallocr_free(allocr);
+  ggml_backend_buffer_free(kv_backbuf);
+  ggml_free(ctx_kv);
   ggml_backend_free(cpu_backend);
   ggml_free(ctx_g);
   gguf_free(gguf);
