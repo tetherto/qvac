@@ -1,5 +1,6 @@
 import type { ModelProgressUpdate } from "@/schemas";
 import type { DownloadStats, DownloadResult, DownloadHooks, ResolveResult } from "./types";
+import type { ExplicitRegistryMetadata } from "./registry-metadata";
 import { downloadModelFromHttp } from "./http";
 import { downloadModelFromRegistry } from "./registry";
 import { downloadModelFromHyperdrive } from "./hyperdrive";
@@ -126,6 +127,7 @@ export async function downloadModelFromRegistryWithStats(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
   downloadHooks?: DownloadHooks,
+  explicitMetadata?: ExplicitRegistryMetadata,
 ): Promise<DownloadResult> {
   const collector = createStatsCollector();
   const hooks: DownloadHooks = { ...downloadHooks, ...createStatsHooks(collector) };
@@ -136,6 +138,7 @@ export async function downloadModelFromRegistryWithStats(
     wrappedCallback,
     expectedChecksum,
     hooks,
+    explicitMetadata,
   );
   const stats = computeStats(collector);
   return stats ? { path, stats } : { path };
@@ -202,4 +205,3 @@ export function mergeDownloadStats(
 
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
-

@@ -11,10 +11,13 @@
 #include <vector>
 
 #include <tts-cpp/chatterbox/engine.h>
+#include <tts-cpp/lavasr/enhancer.h>
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/OutputResampler.hpp"
+#include "model-interface/StreamingEnhancer.hpp"
 #include "model-interface/chatterbox/TimeStretch.hpp"
 
 namespace qvac::ttsggml::chatterbox {
@@ -115,6 +118,18 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   // so tts-cpp keeps its character-level fallback.
   if (!cfg.mecabDictPath.empty())  opts.mecab_dict_path  = cfg.mecabDictPath;
   if (!cfg.cangjieTsvPath.empty()) opts.cangjie_tsv_path = cfg.cangjieTsvPath;
+
+  // Output-frequency selection. Forward to the engine (output_sample_rate;
+  // 0 = native), which resamples (batch once / streaming per-chunk, seam-free).
+  // When the LavaSR enhancer is active the engine emits its native rate and the
+  // addon resamples after enhancement instead — both on the batch path
+  // (synthesize()) and the native-streaming path (StreamingEnhancer, which also
+  // applies any requested output rate) — so pass 0 here.
+  {
+    const bool enhancerActive = !cfg.enhancerGgufPath.empty();
+    opts.output_sample_rate =
+        enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
+  }
   return opts;
 }
 
@@ -141,6 +156,13 @@ bool speedActive(float speed) {
 constexpr float MIN_SPEED = 0.25f;
 constexpr float MAX_SPEED = 4.0f;
 
+// Chatterbox's S3Gen/HiFT vocoder emits 24 kHz. When the LavaSR enhancer is
+// active the engine is configured to emit this native rate (output_sample_rate
+// = 0 in toEngineOptions) and the addon enhances/resamples afterwards, so the
+// streaming enhancer feeds the enhancer at this rate. Matches the literal
+// AddonJs uses to tag the un-enhanced native rate.
+constexpr int CHATTERBOX_NATIVE_RATE = 24000;
+
 } // namespace
 
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
@@ -161,6 +183,12 @@ ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
 ChatterboxModel::~ChatterboxModel() noexcept = default;
 
 void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
+  if (!cfg.enhancerGgufPath.empty() &&
+      !std::filesystem::exists(cfg.enhancerGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr enhancer GGUF not found: " + cfg.enhancerGgufPath);
+  }
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpu = *cfg.useGpu;
     const int  layers   = *cfg.nGpuLayers;
@@ -287,10 +315,26 @@ void ChatterboxModel::loadLocked() {
   gpuUnsupported_ =
       engine_->gpu_unsupported() ||
       (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
+
+  // LavaSR enhancer: load when a GGUF path is set (the path is the on switch).
+  // CPU-only neural post-process; empty path = disabled.
+  if (!cfg_.enhancerGgufPath.empty()) {
+    try {
+      enhancer_ = tts_cpp::lavasr::Enhancer::load(cfg_.enhancerGgufPath);
+    } catch (const std::exception& e) {
+      enhancer_.reset();
+      throw createTTSError(
+          TTSErrorCode::InitializationFailed,
+          std::string("ChatterboxModel::load: lavasr enhancer: ") + e.what());
+    }
+  } else {
+    enhancer_.reset();
+  }
 }
 
 void ChatterboxModel::unloadLocked() {
   engine_.reset();
+  enhancer_.reset();
 }
 
 void ChatterboxModel::cancel() const {
@@ -314,9 +358,11 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   // concurrently swaps a new one in.  Reload's new engine takes effect
   // on the NEXT synthesize call.
   std::shared_ptr<tts_cpp::chatterbox::Engine> engine;
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
+    enhancer = enhancer_;
   }
   if (!engine) {
     throw createTTSError(TTSErrorCode::ModelNotLoaded,
@@ -355,30 +401,85 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   // synchronously on this thread, so a plain counter is safe.
   std::size_t streamedSamples = 0;
 
+  // LavaSR enhancer rates. When enhancing, the engine emits its native rate and
+  // the enhancer upsamples to its work rate (48 kHz); we then resample to any
+  // caller-requested outputSampleRate. `streamFinalRate` is what the streaming
+  // callback ultimately emits at (and what the duration stat must use, since
+  // result.sample_rate stays at the engine's native rate on the streaming
+  // path).
+  const int enhancerWorkRate =
+      enhancer ? enhancer->output_sample_rate() : 0; // 48 kHz
+  const int requestedRate =
+      (cfg_.outputSampleRate.has_value() && *cfg_.outputSampleRate > 0)
+          ? *cfg_.outputSampleRate
+          : 0;
+  const int streamFinalRate =
+      enhancer ? (requestedRate > 0 ? requestedRate : enhancerWorkRate) : 0;
+
   tts_cpp::chatterbox::SynthesisResult result;
   try {
     if (wasStreaming) {
       auto stretcher =
           stretch ? std::make_shared<WsolaTimeStretch>(speed) : nullptr;
+      // Streaming bandwidth extension: re-runs the one-shot enhancer over a
+      // sliding window with look-ahead + crossfade so each emitted chunk is
+      // enhanced (and resampled to streamFinalRate) seam-free. Adds ~0.34 s of
+      // algorithmic latency (the enhancer's receptive field). The final engine
+      // chunk drains the held look-ahead via flush().
+      std::shared_ptr<StreamingEnhancer> senh;
+      if (enhancer) {
+        senh = std::make_shared<StreamingEnhancer>(
+            [enhancer, enhancerWorkRate, streamFinalRate](
+                const std::vector<float>& raw) {
+              std::vector<float> e =
+                  enhancer->enhance(raw, CHATTERBOX_NATIVE_RATE);
+              if (streamFinalRate != enhancerWorkRate) {
+                e = OutputResampler::resample(
+                    e, enhancerWorkRate, streamFinalRate);
+              }
+              return e;
+            },
+            CHATTERBOX_NATIVE_RATE,
+            streamFinalRate);
+      }
       result = engine->synthesize(
           text,
-          [&chunkCallback, stretcher, &streamedSamples](
+          [&chunkCallback, senh, stretcher, &streamedSamples](
               const float* pcm,
               std::size_t samples,
               int chunkIndex,
               bool isLast) {
-            if (!stretcher) {
+            // Fast path: no post-processing -> forward the raw chunk untouched.
+            if (!senh && !stretcher) {
               streamedSamples += samples;
               chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
               return;
             }
-            std::vector<float> out = stretcher->feed(pcm, samples);
-            if (isLast) {
-              std::vector<float> tail = stretcher->flush();
-              out.insert(out.end(), tail.begin(), tail.end());
+            // Stage 1: streaming LavaSR enhancement (seam-free; may emit fewer
+            // samples than it consumed on early chunks while the look-ahead
+            // fills, and the bulk of the tail on the final chunk).
+            std::vector<float> audio;
+            if (senh) {
+              audio = senh->feed(pcm, samples);
+              if (isLast) {
+                std::vector<float> tail = senh->flush();
+                audio.insert(audio.end(), tail.begin(), tail.end());
+              }
+            } else {
+              audio.assign(pcm, pcm + samples);
             }
-            streamedSamples += out.size();
-            chunkCallback(pcmFloatToInt16(out), chunkIndex, isLast);
+            // Stage 2: WSOLA speed stretch (rate-agnostic, seam-free).
+            if (stretcher) {
+              std::vector<float> s =
+                  stretcher->feed(audio.data(), audio.size());
+              if (isLast) {
+                std::vector<float> tail = stretcher->flush();
+                s.insert(s.end(), tail.begin(), tail.end());
+              }
+              audio = std::move(s);
+            }
+            streamedSamples += audio.size();
+            chunkCallback(pcmFloatToInt16(audio), chunkIndex, isLast);
           });
     } else {
       result = engine->synthesize(text);
@@ -386,6 +487,30 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   } catch (const std::exception& e) {
     throw createTTSError(TTSErrorCode::SynthesisFailed,
                          std::string("engine.synthesize: ") + e.what());
+  }
+
+  // LavaSR neural bandwidth extension (batch path). The streaming path enhances
+  // per chunk inside the callback above (StreamingEnhancer); here we enhance
+  // the whole utterance at once. Applied before the WSOLA speed stretch so rate
+  // control operates on the 48 kHz enhanced signal; result.sample_rate is
+  // updated so the stats below are correct and the JS callback reports 48000.
+  if (!wasStreaming && enhancer) {
+    try {
+      result.pcm = enhancer->enhance(result.pcm, result.sample_rate);
+      result.sample_rate = enhancer->output_sample_rate();
+    } catch (const std::exception& e) {
+      throw createTTSError(
+          TTSErrorCode::SynthesisFailed,
+          std::string("chatterbox.lavasr: ") + e.what());
+    }
+    // Honor outputSampleRate after enhancement (the enhancer emits 48 kHz; the
+    // engine's output_sample_rate was bypassed while enhancing).
+    if (cfg_.outputSampleRate.has_value() && *cfg_.outputSampleRate > 0 &&
+        *cfg_.outputSampleRate != result.sample_rate) {
+      result.pcm = OutputResampler::resample(
+          result.pcm, result.sample_rate, *cfg_.outputSampleRate);
+      result.sample_rate = *cfg_.outputSampleRate;
+    }
   }
 
   // Batch: build the PCM we return (stretched in-place if a speed is active).
@@ -406,11 +531,18 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   const double elapsedSec =
       std::chrono::duration<double>(tEnd - tStart).count();
 
+  // Rate the output was actually emitted at. On the streaming+enhancer path the
+  // chunks are emitted at streamFinalRate while result.sample_rate stays at the
+  // engine's native rate (the engine emitted native; the addon enhanced after),
+  // so use streamFinalRate there; otherwise result.sample_rate is already the
+  // emitted rate (batch enhance/resample updates it in place).
+  const int emittedRate =
+      (wasStreaming && enhancer) ? streamFinalRate : result.sample_rate;
   totalTime_ = elapsedSec;
   totalSamples_ = static_cast<int64_t>(outSamples);
-  audioDurationMs_ = result.sample_rate > 0
+  audioDurationMs_ = emittedRate > 0
                          ? (static_cast<double>(outSamples) * 1000.0 /
-                            static_cast<double>(result.sample_rate))
+                            static_cast<double>(emittedRate))
                          : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
