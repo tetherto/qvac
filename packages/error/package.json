@@ -4,10 +4,10 @@
   "description": "Base error handling library for QVAC",
   "main": "index.js",
   "scripts": {
-    "lint": "lunte",
-    "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "build:types": "tsc",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
     "test:dts": "tsc index.d.ts --noEmit",
