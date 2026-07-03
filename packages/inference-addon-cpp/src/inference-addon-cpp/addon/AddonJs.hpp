@@ -2,6 +2,8 @@
 
 #include <js.h>
 
+#include <optional>
+
 #include "../JsBlobsStream.hpp"
 #include "../JsUtils.hpp"
 #include "../Logger.hpp"
@@ -49,13 +51,22 @@ public:
   }
 
   /**
-   * @brief Cancels the currently running job asynchronously
+   * @brief Cancels jobs asynchronously
+   * @param id Optional job id. Absent cancels every in-flight and queued job
+   *        (cancelAll); present cancels only that job. A scheduler that cannot
+   *        map the id to a job warns and does nothing — a targeted cancel is
+   *        never escalated to cancelAll.
    * @return JavaScript Promise that resolves when cancellation completes
    * @note This is a non-blocking operation that returns a future/promise
    */
-  js_value_t* cancelJob() {
-    return js::JsAsyncTask::run(
-        env_, [addonCppRef = addonCpp]() { addonCppRef->cancelJob(); });
+  js_value_t* cancelJob(std::optional<JobId> id = std::nullopt) {
+    return js::JsAsyncTask::run(env_, [addonCppRef = addonCpp, id]() {
+      if (id.has_value()) {
+        addonCppRef->cancelJob(*id);
+      } else {
+        addonCppRef->cancelAllJobs();
+      }
+    });
   }
 
   /**

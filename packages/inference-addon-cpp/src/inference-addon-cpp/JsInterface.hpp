@@ -294,11 +294,13 @@ public:
   }
   JSCATCH
 
+  /// Cancel jobs. Arg 1 is an optional job id: omitted (or null/undefined)
+  /// cancels every job, a number cancels only that job.
   static auto cancel(js_env_t* env, js_callback_info_t* info)
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto& instance = getInstance(env, argsParser.get(0, "instance"));
-    return instance.cancelJob();
+    return instance.cancelJob(argsParser.getIntegralOptional<JobId>(1));
   }
   JSCATCH
 };
