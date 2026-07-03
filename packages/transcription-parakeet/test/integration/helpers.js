@@ -164,16 +164,33 @@ function recordParakeetStats (label, stats, extra) {
   const epOverride = extra && extra.executionProvider
   const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
-  const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
   const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
   const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
   const wallMs = (extra && typeof extra.wallMs === 'number')
     ? Math.round(extra.wallMs)
     : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
-  const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
   const encoderMs = typeof stats.encoderMs === 'number' ? Math.round(stats.encoderMs) : null
   const decoderMs = typeof stats.decoderMs === 'number' ? Math.round(stats.decoderMs) : null
   const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+  const totalTokens = typeof stats.totalTokens === 'number' ? stats.totalTokens : null
+
+  // parakeet.cpp (GGML) does not populate realTimeFactor / tokensPerSecond in
+  // its runtimeStats — they come back absent (or 0), so the mobile perf table
+  // rendered both as "-". Prefer a positive addon-reported value when a future
+  // build provides one; otherwise derive them the same way the desktop RTF
+  // benchmark (test/benchmark/rtf-benchmark.test.js) does:
+  //   RTF = wall time / audio duration (both ms)
+  //   TPS = total decoded tokens / total inference time (s)
+  const rtf = (typeof stats.realTimeFactor === 'number' && stats.realTimeFactor > 0)
+    ? stats.realTimeFactor
+    : (Number.isFinite(wallMs) && wallMs > 0 && Number.isFinite(audioMs) && audioMs > 0
+        ? wallMs / audioMs
+        : null)
+  const tps = (typeof stats.tokensPerSecond === 'number' && stats.tokensPerSecond > 0)
+    ? stats.tokensPerSecond
+    : (Number.isFinite(totalTokens) && totalTokens > 0 && Number.isFinite(totalTimeSec) && totalTimeSec > 0
+        ? totalTokens / totalTimeSec
+        : null)
 
   _perfReporter.record(label, {
     real_time_factor: rtf,
