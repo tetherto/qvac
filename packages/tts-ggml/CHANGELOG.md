@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
+  bandwidth-extends synthesized audio to **48 kHz** using the LavaSR Vocos
+  enhancer (ConvNeXt backbone + ISTFT spec head), converted to a single GGUF.
+  Enhancement is enabled simply by supplying the enhancer GGUF — there is no
+  separate on/off flag:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel, lavasrEnhancer: 'lavasr-enhancer.gguf' }
+  })
+  ```
+
+  The path may instead be given via an `enhancer: { type: 'lavasr', enhancerPath }`
+  block; an unknown `enhancer.type` is rejected so a typo can't silently disable
+  enhancement. When active, `TTSOutputChunk.sampleRate` is `48000` for both
+  engines. Convert the GGUF from the public LavaSRcpp ONNX release with
+  `scripts/convert-lavasr-enhancer-to-gguf.py` (f32 or f16). Examples:
+  `examples/supertonic-enhanced.js`, `examples/chatterbox-enhanced.js`.
+  Requires the `tts-cpp` pin that ships `tts_cpp::lavasr::Enhancer`
+  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is a planned follow-up.
+
+- **Selectable output sample rate.** `outputSampleRate` (8000–192000 Hz,
+  runtime config) now resamples the synthesized audio to the requested rate,
+  and `TTSOutputChunk.sampleRate` reports it. Without the enhancer the tts-cpp
+  engine resamples (batch once / streaming per-chunk, seam-free;
+  `EngineOptions::output_sample_rate`, qvac-ext-lib-whisper.cpp PR #69); with
+  the enhancer active the 48 kHz enhanced signal is resampled to the requested
+  rate afterwards. Omit it to keep the engine's native rate (default, zero
+  behaviour change).
+
+- **Enhancer + Chatterbox native chunk streaming.** The LavaSR enhancer now
+  works with `streamChunkTokens > 0` (previously rejected). The addon runs the
+  enhancer over a sliding window with look-ahead + crossfade, so each streamed
+  chunk is bandwidth-extended seam-free and tagged 48 kHz (or `outputSampleRate`)
+  — matching the batch result. It adds **~0.34 s of look-ahead latency**,
+  inherent to the enhancer's receptive field.
+
+### Notes
+
+- Enhancement works on the batch path, sentence-level streaming, and Chatterbox
+  native chunk streaming. Native-streaming enhancement adds ~0.34 s of
+  look-ahead latency.
+- When the enhancer is active it produces 48 kHz; if `outputSampleRate` is also
+  set, the enhanced audio is resampled to that rate afterwards.
+
+### Fixed
+
+- **Chatterbox MTL Japanese now builds with MeCab support from the published
+  registry ports.** Bumps the `tts-cpp` requirement to `2026-06-30`, links
+  `mecab::mecab` directly, and keeps the Windows `/FORCE:MULTIPLE` workaround
+  for the `mecab.lib` / `bare_delay_load.lib` `DllMain` conflict.
+- **Chatterbox MTL language coverage now includes Japanese and Italian in the
+  shared multilingual suite.** The standalone Japanese test has been folded into
+  `chatterbox-mtl.test.js`, which also keeps an explicit `zh` rejection
+  assertion until Chinese tokenizer support is enabled upstream.
+- **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
+  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
+  master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
+  in turn requires `ggml-speech 2026-06-26` (`qvac-ext-ggml` speech `f5727c32`,
+  PR #30); the `default-registry` baseline advances to `162f8f7c` so the new pins
+  resolve.
+  - **GPU (ARM Mali / Vulkan — Google Tensor / Pixel):** the CFM estimator's f32
+    `ggml_flash_attn_ext` miscomputed on Mali, blowing the f0 predictor up to NaN
+    and collapsing the audio into a clean ~1.3 s followed by a buzzy "blank +
+    beeps" break. Chatterbox now runs on Mali via an `is_arm_mali`-gated unfused
+    CFM attention (`soft_max` + separate-V matmul, numerically equivalent and
+    still on the GPU). Zero change off ARM Mali; CPU output byte-identical.
+  - **CPU (ARM SVE — Google Tensor / Pixel):** the SVE leftover-tail of
+    `ggml_vec_dot_f32` dropped the main loop's partial sums on inactive lanes
+    (`svmad_f32_m` → `svmla_f32_m`), biasing the HiFT `conv_transpose_1d` inner
+    dot and producing a constant ~12 kHz Nyquist tone. NEON/x86/RISC-V and all
+    non-CPU backends are byte-identical.
+
 ## [0.3.6] - 2026-06-25
 
 ### Fixed

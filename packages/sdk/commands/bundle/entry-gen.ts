@@ -3,6 +3,7 @@ import { parseBuiltinSpecifier } from "@/commands/bundle/plugins";
 export function generateWorkerEntry(
   pluginSpecifiers: string[],
   sdkName: string,
+  resolveImport: (specifier: string) => string = (specifier) => specifier,
 ): string {
   const imports: string[] = [];
   const registrations: string[] = [];
@@ -12,12 +13,12 @@ export function generateWorkerEntry(
     const builtin = parseBuiltinSpecifier(specifier, sdkName);
     if (builtin) {
       imports.push(
-        `import { ${builtin.exportName} } from "${sdkName}/${builtin.suffix}/plugin";`,
+        `import { ${builtin.exportName} } from "${resolveImport(`${sdkName}/${builtin.suffix}/plugin`)}";`,
       );
       registrations.push(`registerPlugin(${builtin.exportName});`);
     } else {
       const varName = `customPlugin${varIndex++}`;
-      imports.push(`import ${varName} from "${specifier}";`);
+      imports.push(`import ${varName} from "${resolveImport(specifier)}";`);
       registrations.push(`registerPlugin(${varName});`);
     }
   }
@@ -34,9 +35,9 @@ export function generateWorkerEntry(
 ${pluginsList}
  */
 
-import { initializeWorkerCore, ensureRPCSetup } from "${sdkName}/worker-core";
-import { registerPlugin } from "${sdkName}/plugins";
-import { getServerLogger } from "${sdkName}/logging";
+import { initializeWorkerCore, ensureRPCSetup } from "${resolveImport(`${sdkName}/worker-core`)}";
+import { registerPlugin } from "${resolveImport(`${sdkName}/plugins`)}";
+import { getServerLogger } from "${resolveImport(`${sdkName}/logging`)}";
 
 ${importsStr}
 

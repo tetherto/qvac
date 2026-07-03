@@ -1,4 +1,47 @@
 # Changelog
+
+## [0.31.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.31.0] - 2026-06-30
+
+### Added
+
+- Multimodal (vision) model support in continuous batching: vision models now enter the batch scheduler via a new `DriverFactory` pattern that decouples the scheduler from concrete context types. Admits multiple prompts containing images and text.
+- `PrefillPlan` for sequencing media evaluation: prefill stream now carries text tokens plus `MediaBarrier` entries. The scheduler pauses slots at barriers and evaluates media between batch steps, allowing other slots to progress while vision processing is underway.
+- `SequenceDriver` abstraction: `MtmdLlmContext` and `TextLlmContext` now both implement a common interface, enabling the scheduler to work with any driver type without hardcoded multimodal checks.
+
+### Fixed
+
+- Isolated media-evaluation failures to the offending slot's request group, preventing cascade cancellations when vision processing fails mid-batch.
+- Improved KV-cell accounting for media slots in overlapping batch admissions.
+- Fixed Windows path serialization in JSON by using `generic_string()` instead of `string()` (forward slashes instead of backslashes).
+
+### Changed
+
+- `BatchPrompt.prompt` now accepts any `Message` type (previously text-only), enabling multimodal batches.
+- `ContinuousBatchScheduler` no longer imports or references concrete context types; driver selection fully delegated to the model layer.
+- Consolidated sequence KV cleanup into a single `clearSeqKv()` helper, eliminating six inline copies across slot-teardown paths.
+
+### Pull Requests
+
+- [#2543](https://github.com/tetherto/qvac/pull/2543) - QVAC-19983: Continuous Batching (Single-job MTMD)
+
+## [0.30.2] - 2026-06-29
+
+This patch release fixes `image_max_tokens` and `image_min_tokens` being silently dropped when loading a model via the SDK config string map, making the tiling speedup invisible to SDK users.
+
+### Fixed
+
+- `LlamaModel::commonParamsParse` now reads `image_max_tokens` and `image_min_tokens` from the config string map into `common_params`, following the same pattern as `image_tile_mode`. Without this fix, SDK users setting `image_max_tokens: 4096` had the value silently dropped and the 2048 Qwen-VL cap still applied regardless of tile mode.
+
+## Pull Requests
+
+- [#2887](https://github.com/tetherto/qvac/pull/2887) - fix[api]: parse image_max_tokens/image_min_tokens from SDK config
+
 ## [0.30.1] - 2026-06-25
 
 This patch release hardens Qwen3.5-VL cache accounting for multi-turn multimodal chats. It keeps runtime cache-token statistics aligned with llama memory while covering cancellation, cache reload, context sliding, and image-heavy cache pressure paths.

@@ -3,7 +3,12 @@ import {
   loadModelOptionsToRequestSchema,
   loadModelSrcRequestSchema,
 } from "@/schemas/load-model";
-import { ModelType } from "@/schemas";
+import { llmConfigBaseSchema, ModelType } from "@/schemas";
+import {
+  getExplicitRegistryMetadata,
+  resolveRegistryDownloadMetadata,
+} from "@/server/rpc/handlers/load-model/registry-metadata";
+import type { RegistryItem } from "@/models/registry";
 
 test("loadModelSrcRequestSchema: rejects unknown top-level keys", (t) => {
   const invalidRequest = {
@@ -87,6 +92,96 @@ test("loadModelSrcRequestSchema: accepts companion sources inside modelConfig", 
 
   t.is(loadModelSrcRequestSchema.safeParse(validWhisperRequest).success, true);
   t.is(loadModelSrcRequestSchema.safeParse(validOcrRequest).success, true);
+});
+
+test("llmConfigBaseSchema: preserves projection descriptor cache metadata", (t) => {
+  const descriptor = {
+    src: "registry://hf/future/Qwen3.5-2B.mmproj-Q8_0.gguf",
+    name: "MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0",
+    expectedSize: 364_664_384,
+    sha256Checksum:
+      "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+  };
+
+  const parsed = llmConfigBaseSchema.parse({
+    projectionModelSrc: descriptor,
+  });
+
+  t.alike(parsed.projectionModelSrc, descriptor);
+});
+
+test("getExplicitRegistryMetadata: ignores non-registry descriptors", (t) => {
+  const metadata = getExplicitRegistryMetadata({
+    src: "https://example.com/model.gguf",
+    expectedSize: 123,
+    sha256Checksum:
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+
+  t.is(metadata, undefined);
+});
+
+test("getExplicitRegistryMetadata: ignores registry descriptors without cache metadata", (t) => {
+  const metadata = getExplicitRegistryMetadata({
+    src: "registry://hf/future/model.gguf",
+    name: "FUTURE_MODEL",
+  });
+
+  t.is(metadata, undefined);
+});
+
+test("resolveRegistryDownloadMetadata: descriptor metadata covers uncatalogued registry paths", (t) => {
+  const metadata = resolveRegistryDownloadMetadata(
+    undefined,
+    {
+      expectedSize: 364_664_384,
+      sha256Checksum:
+        "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+    },
+    undefined,
+  );
+
+  t.is(metadata.expectedSize, 364_664_384);
+  t.is(
+    metadata.checksum,
+    "526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64",
+  );
+});
+
+test("resolveRegistryDownloadMetadata: catalog metadata wins over descriptor metadata", (t) => {
+  const catalogMetadata: RegistryItem = {
+    name: "CATALOG_MODEL",
+    registryPath: "known/model.gguf",
+    registrySource: "hf",
+    blobCoreKey: "catalog-core-key",
+    blobBlockOffset: 1,
+    blobBlockLength: 2,
+    blobByteOffset: 3,
+    modelId: "model.gguf",
+    addon: "llm",
+    expectedSize: 123,
+    sha256Checksum:
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    engine: "llamacpp-completion",
+    quantization: "q4_0",
+    params: "1B",
+  };
+
+  const metadata = resolveRegistryDownloadMetadata(
+    catalogMetadata,
+    {
+      expectedSize: 999,
+      sha256Checksum:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    },
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  );
+
+  t.is(metadata.expectedSize, 123);
+  t.is(
+    metadata.checksum,
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  );
 });
 
 test("loadModelSrcRequestSchema: accepts classification load with empty modelSrc (bundled weights)", (t) => {

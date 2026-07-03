@@ -434,8 +434,19 @@ const SHARDED_REPOS = [
   }
 ]
 
-function shouldInclude (scope, options) {
-  if (options.ciOnly) return scope === 'ci'
+function currentPlatformKey () {
+  return `${process.platform}-${process.arch}`
+}
+
+// `scope` gates by run mode (see SINGLE_FILE_MANIFEST). An optional
+// `platforms` array further restricts an entry to specific
+// `${process.platform}-${process.arch}` keys (e.g. 'linux-x64') so large,
+// platform-gated fixtures are only fetched where their tests actually run.
+function shouldInclude (entry, options) {
+  if (options.ciOnly && entry.scope !== 'ci') return false
+  if (entry.platforms && !entry.platforms.includes(currentPlatformKey())) {
+    return false
+  }
   return true
 }
 
@@ -450,14 +461,14 @@ async function ensureUnitTestModels (options = {}) {
 
   try {
     for (const entry of SINGLE_FILE_MANIFEST) {
-      if (!shouldInclude(entry.scope, opts)) continue
+      if (!shouldInclude(entry, opts)) continue
       await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest), {
         sha256: entry.sha256
       })
     }
 
     for (const repo of SHARDED_REPOS) {
-      if (!shouldInclude(repo.scope, opts)) continue
+      if (!shouldInclude(repo, opts)) continue
       log(`sharded: ${repo.label}`)
       await downloadShardedRepo(repo.baseUrl, repo.files, repo.sha256)
     }

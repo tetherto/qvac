@@ -16,6 +16,10 @@ inputs:
   addon-npm-name:
     description: "NPM package name (used as artifact suffix)"
     required: true
+  artifact-name-suffix:
+    description: "Optional extra suffix appended to the artifact names, for callers that run several jobs per platform and would otherwise collide (upload-artifact rejects duplicates)"
+    required: false
+    default: ""
   enables-perf:
     description: "true if the addon emits perf data"
     required: false
@@ -52,10 +56,12 @@ runs:
       shell: bash
       env:
         ADDON_NAME: ${{ inputs.addon-npm-name }}
+        EXTRA: ${{ inputs.artifact-name-suffix }}
       run: |
         # Strip @ + replace / with - so @qvac/transcription-whispercpp ->
         # qvac-transcription-whispercpp (used in upload-artifact names).
         SUFFIX=$(echo "$ADDON_NAME" | sed 's|@||g' | tr '/' '-')
+        if [ -n "$EXTRA" ]; then SUFFIX="${SUFFIX}-${EXTRA}"; fi
         echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
 
     - name: Download Device Farm logs
