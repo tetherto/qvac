@@ -258,6 +258,18 @@ protected:
     scheduler_->start(outputQueue_);
   }
 
+  /// Build a scheduler whose model exposes no per-job cancellation (cancelById
+  /// = nullptr), so cancel(id) for an in-flight job hits the unsupported path.
+  void buildNoCancelById(
+      unsigned maxConcurrency, std::chrono::milliseconds processTime) {
+    model_ = std::make_unique<ConcurrentTestModel>(processTime);
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        model_.get(), maxConcurrency, model_.get(), /*cancelById=*/nullptr, 0);
+    scheduler_->start(outputQueue_);
+  }
+
   void TearDown() override {
     scheduler_.reset();
     outputQueue_.reset();
@@ -331,6 +343,31 @@ TEST_F(MultiJobSchedulerTest, CancelOneLeavesOthersRunning) {
   // Peers stay alive long enough to confirm isolation.
   std::this_thread::sleep_for(std::chrono::milliseconds{100});
   EXPECT_EQ(model_->active(), target);
+
+  scheduler_->cancelAll();
+}
+
+// (c2) cancel(id) on a model without per-job cancel (cancelById = nullptr) is a
+// no-op: the targeted job keeps running. A targeted cancel must never silently
+// escalate to cancelAll.
+TEST_F(MultiJobSchedulerTest, CancelByIdWithoutCancelByIdModelIsNoOp) {
+  constexpr unsigned kConcurrency = 2;
+  buildNoCancelById(kConcurrency, std::chrono::milliseconds{10000});
+
+  for (JobId id = 1; id <= kConcurrency; ++id) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  }
+  ASSERT_EQ(
+      waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
+      static_cast<int>(kConcurrency));
+
+  EXPECT_NO_THROW(scheduler_->cancel(1));
+
+  // Give any (erroneous) cancellation time to land, then confirm both jobs are
+  // still in flight: the unsupported per-job cancel must stop nothing.
+  std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  EXPECT_EQ(model_->active(), static_cast<int>(kConcurrency))
+      << "cancel(id) without a cancelById model must not stop any job";
 
   scheduler_->cancelAll();
 }
