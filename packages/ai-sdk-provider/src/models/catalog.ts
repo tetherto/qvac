@@ -23,14 +23,17 @@ export interface QvacCatalogEntry {
   readonly name: string
 }
 
-// The Qwen3.5 multimodal family, defaulting to the Q4_K_M quantization (the
-// balance of quality/footprint shipped to models.dev). Extend this as more
-// families are published to the catalog.
+// Public provider catalog entries, defaulting to the quantization shipped to
+// models.dev for each friendly id.
 export const qvacCatalog: readonly QvacCatalogEntry[] = [
   { id: 'qwen3.5-0.8b', constant: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M', name: 'Qwen3.5 0.8B' },
   { id: 'qwen3.5-2b', constant: 'QWEN3_5_2B_MULTIMODAL_Q4_K_M', name: 'Qwen3.5 2B' },
   { id: 'qwen3.5-4b', constant: 'QWEN3_5_4B_MULTIMODAL_Q4_K_M', name: 'Qwen3.5 4B' },
-  { id: 'qwen3.5-9b', constant: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M', name: 'Qwen3.5 9B' }
+  { id: 'qwen3.5-9b', constant: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M', name: 'Qwen3.5 9B' },
+  { id: 'qwen3.6-27b', constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL', name: 'Qwen3.6 27B' },
+  { id: 'qwen3.6-35b-a3b', constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', name: 'Qwen3.6 35B A3B' },
+  { id: 'gpt-oss-20b', constant: 'GPT_OSS_20B_INST_Q4_K_M', name: 'GPT-OSS 20B' },
+  { id: 'gemma4-31b', constant: 'GEMMA4_31B_MULTIMODAL_Q4_K_M', name: 'Gemma4 31B' }
 ]
 
 const byId = new Map(qvacCatalog.map((entry) => [entry.id, entry]))
