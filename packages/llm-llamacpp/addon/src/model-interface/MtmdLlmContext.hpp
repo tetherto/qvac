@@ -174,6 +174,10 @@ public:
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
+  [[nodiscard]] double getVisionEncodeMs() const override;
+  [[nodiscard]] int32_t getVisionEncodeTiles() const override;
+  void resetVisionEncodeMs() override;
+
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
@@ -336,6 +340,8 @@ private:
   llama_pos nDiscarded_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   int32_t nSlides_ = 0;
+  double visionEncodeMs_ = 0.0;
+  int32_t visionEncodeTiles_ = 0;
   bool pendingBatchFirstMsg_ = false;
 
   // UTF-8 token buffer for handling incomplete emoji sequences

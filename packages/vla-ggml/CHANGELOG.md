@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.2] - 2026-07-03
+
+### Changed
+
+- pi0.5 HIP warm-path inference optimized ~479 → 384 ms (**-18%**) on Strix Halo / gfx1151, accuracy-neutral (cos = 0.9994 vs PyTorch). Combines graph reuse across ODE steps, batched vision, flash-attention at the three attention sites (SigLIP, VLM prefill, expert block), batched AdaLN, a llama.cpp-style unified F16 KV cache, and a fused GeGLU + adaRMSNorm path. No public API change.
+
+### Added
+
+- Load-time validation on pi0.5 checkpoints: rejects non-MQA expert KV configs (`expert_n_kv_heads != 1` — the unified KV cache assumes a single K/V head so the VLM prefix is contiguous at offset 0) and validates adaRMSNorm modulation width (`3 × expert_hidden`), failing fast at load instead of silently corrupting the KV layout or reading out of bounds.
+
+## Pull Requests
+
+- [#2971](https://github.com/tetherto/qvac/pull/2971) - QVAC-21319 perf[vla]: pi05 HIP warm-path optimization (479->384ms, accuracy-neutral)
+
+## [0.8.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
 ## [0.8.0] - 2026-06-30
 
 ### Added
