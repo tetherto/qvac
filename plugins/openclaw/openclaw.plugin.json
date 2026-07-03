@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "providers": ["qvac"],
   "modelSupport": {
-    "modelPrefixes": ["qwen3.5-"]
+    "modelPrefixes": ["qwen3.5-", "qwen3.6-", "gpt-oss-", "gemma4-"]
   },
   "modelCatalog": {
     "providers": {
@@ -53,6 +53,54 @@
           {
             "id": "qwen3.5-9b",
             "name": "Qwen3.5 9B",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192,
+            "compat": {
+              "requiresStringContent": true
+            }
+          },
+          {
+            "id": "qwen3.6-27b",
+            "name": "Qwen3.6 27B",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192,
+            "compat": {
+              "requiresStringContent": true
+            }
+          },
+          {
+            "id": "qwen3.6-35b-a3b",
+            "name": "Qwen3.6 35B A3B",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192,
+            "compat": {
+              "requiresStringContent": true
+            }
+          },
+          {
+            "id": "gpt-oss-20b",
+            "name": "GPT-OSS 20B",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 32768,
+            "maxTokens": 8192,
+            "compat": {
+              "requiresStringContent": true
+            }
+          },
+          {
+            "id": "gemma4-31b",
+            "name": "Gemma4 31B",
             "reasoning": true,
             "input": ["text", "image"],
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
