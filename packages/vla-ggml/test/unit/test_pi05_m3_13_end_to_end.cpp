@@ -198,14 +198,16 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   // ── 1. VLM prefill with K/V taps. ────────────────────────────────────
   // Captures 18 per-layer post-RoPE K/V tensors into CPU buffers, then
   // tears down the prefill graph.
-  const size_t per_layer_kv_bytes = static_cast<size_t>(VLM_HEAD_DIM) *
-                                    VALID_PREFIX_LEN * VLM_N_KV_HEADS *
-                                    sizeof(float);
-  std::vector<std::vector<float>> k_cache(VLM_N_LAYERS);
-  std::vector<std::vector<float>> v_cache(VLM_N_LAYERS);
+  // The prefill K/V taps are emitted as F16 (llama.cpp-style unified KV
+  // cache) — so they feed straight into the expert's F16 KV buffers below
+  // without a conversion.
+  const size_t per_layer_kv_elems =
+      static_cast<size_t>(VLM_HEAD_DIM) * VALID_PREFIX_LEN * VLM_N_KV_HEADS;
+  std::vector<std::vector<ggml_fp16_t>> k_cache(VLM_N_LAYERS);
+  std::vector<std::vector<ggml_fp16_t>> v_cache(VLM_N_LAYERS);
   for (int L = 0; L < VLM_N_LAYERS; ++L) {
-    k_cache[L].resize(per_layer_kv_bytes / sizeof(float));
-    v_cache[L].resize(per_layer_kv_bytes / sizeof(float));
+    k_cache[L].resize(per_layer_kv_elems);
+    v_cache[L].resize(per_layer_kv_elems);
   }
 
   {
@@ -276,16 +278,55 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
 
     ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
 
-    // Pull K/V out into the CPU caches.
+    // Pull K/V out into the CPU caches (F16).
     for (int L = 0; L < VLM_N_LAYERS; ++L) {
       ggml_backend_tensor_get(
-          out_keys[L], k_cache[L].data(), 0, per_layer_kv_bytes);
+          out_keys[L], k_cache[L].data(), 0,
+          per_layer_kv_elems * sizeof(ggml_fp16_t));
       ggml_backend_tensor_get(
-          out_values[L], v_cache[L].data(), 0, per_layer_kv_bytes);
+          out_values[L], v_cache[L].data(), 0,
+          per_layer_kv_elems * sizeof(ggml_fp16_t));
     }
 
     ggml_gallocr_free(allocr);
     ggml_free(ctx_g);
+  }
+
+  // ── 1b. Per-layer unified F16 KV cache for the expert ODE. ───────────
+  // Allocated once; the prefix slice is the F16 prefill tap above (no
+  // conversion). Each ODE step writes its action K/V into the tail in-graph.
+  const int JOINT_LEN = VALID_PREFIX_LEN + N_ACT;
+  struct ggml_init_params kvp{
+      ggml_tensor_overhead() * (2 * EXPERT_N_LAYERS + 8),
+      nullptr,
+      /*.no_alloc=*/true,
+  };
+  struct ggml_context* ctx_kv = ggml_init(kvp);
+  ASSERT_NE(ctx_kv, nullptr);
+  std::vector<struct ggml_tensor*> kBufs(EXPERT_N_LAYERS);
+  std::vector<struct ggml_tensor*> vBufs(EXPERT_N_LAYERS);
+  for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
+    kBufs[L] = ggml_new_tensor_3d(
+        ctx_kv, GGML_TYPE_F16, EXPERT_HEAD_DIM, JOINT_LEN, EXPERT_N_KV_HEADS);
+    vBufs[L] = ggml_new_tensor_3d(
+        ctx_kv, GGML_TYPE_F16, EXPERT_HEAD_DIM, JOINT_LEN, EXPERT_N_KV_HEADS);
+  }
+  ggml_backend_buffer_t kv_backbuf =
+      ggml_backend_alloc_ctx_tensors(ctx_kv, cpu_backend);
+  ASSERT_NE(kv_backbuf, nullptr);
+  for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
+    ggml_backend_tensor_set(
+        kBufs[L], k_cache[L].data(), 0,
+        k_cache[L].size() * sizeof(ggml_fp16_t));
+    ggml_backend_tensor_set(
+        vBufs[L], v_cache[L].data(), 0,
+        v_cache[L].size() * sizeof(ggml_fp16_t));
+  }
+
+  // Constant fold vector: adds the adaRMSNorm `+1` into the scale third only.
+  std::vector<float> fold_data(3 * EXPERT_HIDDEN, 0.0f);
+  for (int i = 0; i < EXPERT_HIDDEN; ++i) {
+    fold_data[i] = 1.0f;
   }
 
   // ── 2. ODE loop using the live K/V cache. ────────────────────────────
@@ -318,22 +359,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
         ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, COND_DIM);
     struct ggml_tensor* act_pos_t =
         ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, N_ACT);
-    std::vector<struct ggml_tensor*> cached_k_t(EXPERT_N_LAYERS);
-    std::vector<struct ggml_tensor*> cached_v_t(EXPERT_N_LAYERS);
-    for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
-      cached_k_t[L] = ggml_new_tensor_3d(
-          ctx_g,
-          GGML_TYPE_F32,
-          EXPERT_HEAD_DIM,
-          VALID_PREFIX_LEN,
-          EXPERT_N_KV_HEADS);
-      cached_v_t[L] = ggml_new_tensor_3d(
-          ctx_g,
-          GGML_TYPE_F32,
-          EXPERT_HEAD_DIM,
-          VALID_PREFIX_LEN,
-          EXPERT_N_KV_HEADS);
-    }
+    struct ggml_tensor* fold_t =
+        ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, 3 * EXPERT_HIDDEN);
 
     using qvac_lib_infer_vla_ggml::pi05BuildTimeMlpGraph;
     struct ggml_tensor* cond = pi05BuildTimeMlpGraph(
@@ -343,17 +370,38 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
     x_exp_t =
         ggml_add(ctx_g, x_exp_t, ggml_cast(ctx_g, action_in_b, GGML_TYPE_F32));
 
+    // Precompute the per-layer adaRMSNorm modulations in-graph from cond.
+    auto buildMod = [&](struct ggml_tensor* ada_w, struct ggml_tensor* ada_b) {
+      struct ggml_tensor* m = ggml_mul_mat(ctx_g, ada_w, cond);
+      m = ggml_add(ctx_g, m, ggml_cast(ctx_g, ada_b, GGML_TYPE_F32));
+      m = ggml_add(ctx_g, m, fold_t);
+      return m;
+    };
+    std::vector<struct ggml_tensor*> mods_pre_attn(EXPERT_N_LAYERS);
+    std::vector<struct ggml_tensor*> mods_pre_ffw(EXPERT_N_LAYERS);
+    for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
+      mods_pre_attn[L] =
+          buildMod(expert_blocks[L].pre_attn_ada_w,
+                   expert_blocks[L].pre_attn_ada_b);
+      mods_pre_ffw[L] =
+          buildMod(expert_blocks[L].pre_ffw_ada_w,
+                   expert_blocks[L].pre_ffw_ada_b);
+    }
+    struct ggml_tensor* mod_final = buildMod(final_norm_ada_w, final_norm_ada_b);
+
     using qvac_lib_infer_vla_ggml::pi05BuildExpertOdeStepGraph;
+    std::vector<struct ggml_tensor*> kvWrites;
     auto outs = pi05BuildExpertOdeStepGraph(
         ctx_g,
         x_exp_t,
         act_pos_t,
-        cached_k_t,
-        cached_v_t,
-        cond,
+        kBufs,
+        vBufs,
+        mods_pre_attn,
+        mods_pre_ffw,
+        mod_final,
+        kvWrites,
         expert_blocks,
-        final_norm_ada_w,
-        final_norm_ada_b,
         action_out_w,
         action_out_b,
         EXPERT_HIDDEN,
@@ -371,6 +419,11 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
         pi05BuildEulerStepGraph(ctx_g, x_t_t, outs.v_t, STEP_DT);
 
     struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);
+    // Expand the action-K/V tail writes FIRST so each copy node is ordered
+    // before that layer's flash-attention read.
+    for (struct ggml_tensor* w : kvWrites) {
+      ggml_build_forward_expand(gf, w);
+    }
     ggml_build_forward_expand(gf, x_next);
 
     ggml_gallocr_t allocr =
@@ -385,18 +438,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
         act_pos_data.data(),
         0,
         act_pos_data.size() * sizeof(int32_t));
-    for (int L = 0; L < EXPERT_N_LAYERS; ++L) {
-      ggml_backend_tensor_set(
-          cached_k_t[L],
-          k_cache[L].data(),
-          0,
-          k_cache[L].size() * sizeof(float));
-      ggml_backend_tensor_set(
-          cached_v_t[L],
-          v_cache[L].data(),
-          0,
-          v_cache[L].size() * sizeof(float));
-    }
+    ggml_backend_tensor_set(
+        fold_t, fold_data.data(), 0, fold_data.size() * sizeof(float));
 
     ASSERT_EQ(ggml_backend_graph_compute(cpu_backend, gf), GGML_STATUS_SUCCESS);
     ggml_backend_tensor_get(
@@ -432,6 +475,8 @@ TEST(Pi05M3_13, EndToEndPrefillThenOdeMatchesPytorch) {
   EXPECT_GT(cos, 0.999f);
   EXPECT_LT(diff / std::max(max_abs, 1e-9f), 0.05f);
 
+  ggml_backend_buffer_free(kv_backbuf);
+  ggml_free(ctx_kv);
   ggml_backend_free(cpu_backend);
   gguf_free(gguf);
   ggml_free(ctx_w);

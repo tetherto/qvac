@@ -697,14 +697,17 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     // addon.test.js (which uses absolute max-abs < 0.6 on Vulkan).
     const isCpu = (model.backendName.toLowerCase() === 'cpu')
     const cosBar = isCpu ? 0.999 : 0.99
-    // The most-aggressive quant on the CPU path lands ~0.053 rel_max under
-    // GGML_BACKEND_DL (GGML_CPU_ALL_VARIANTS + repack kernels), marginally
-    // above the 0.05 bar that the static native build comfortably met. CPU is
-    // not pi05's primary route (GPU is) and cos still clears > 0.999, so the
-    // aggressive quant is allowed a slightly looser rel_max; every other quant
-    // keeps the tight 0.05 CPU bar.
+    // The most-aggressive quant on the CPU path lands ~0.053 rel_max on
+    // linux-x64 under GGML_BACKEND_DL (GGML_CPU_ALL_VARIANTS + repack kernels),
+    // but a single element of the 50×32 action chunk rounds differently across
+    // CPU ISAs — ~0.063 on arm64 (NEON) and ~0.067 on win32 (x86 repack) — so
+    // the tight bar only held on the architecture it was calibrated on. This is
+    // the same per-backend rounding spread the GPU bar already absorbs at 0.20;
+    // CPU is not pi05's primary route (GPU is) and cos still clears > 0.999
+    // everywhere, so the aggressive quant gets a cross-arch rel_max of 0.08 with
+    // cos as the real correctness gate. Every other quant keeps the 0.05 CPU bar.
     const isAggressive = /aggressive/i.test(quant)
-    const relBar = isCpu ? (isAggressive ? 0.06 : 0.05) : 0.20
+    const relBar = isCpu ? (isAggressive ? 0.08 : 0.05) : 0.20
     t.ok(cos > cosBar, `[${tag}] cos sim ${cos} > ${cosBar} (${isCpu ? 'CPU' : 'GPU-class'} bar)`)
     t.ok(rel < relBar, `[${tag}] rel max diff ${rel} < ${relBar}`)
 

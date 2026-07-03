@@ -68,67 +68,15 @@ jobs:
       run_desktop: ${{ steps.route.outputs.run_desktop }}
       run_mobile: ${{ steps.route.outputs.run_mobile }}
     steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
       - name: Route CI stages
         id: route
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
-             [ "$EVENT_NAME" = "workflow_call" ] || \
-             [ "$EVENT_NAME" = "push" ] || \
-             [ "$EVENT_NAME" = "schedule" ]; then
-            echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
-            for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile; do
-              echo "$out=true" >> "$GITHUB_OUTPUT"
-            done
-            exit 0
-          fi
-          # First pass: detect which labels are present (order-independent).
-          HAS_VERIFIED=false
-          HAS_PREBUILDS=false
-          HAS_CPP=false
-          HAS_DESKTOP=false
-          HAS_MOBILE=false
-          if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
-            for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
-              case "$label" in
-                verified)                 HAS_VERIFIED=true ;;
-                prebuilds)                HAS_PREBUILDS=true ;;
-                run-cpp-addon-tests)      HAS_CPP=true ;;
-                run-desktop-addon-tests)  HAS_DESKTOP=true ;;
-                run-mobile-addon-tests)   HAS_MOBILE=true ;;
-              esac
-            done
-          fi
-
-          VERIFIED=false
-          PREBUILDS=false
-          CPP_TESTS=false
-          DESKTOP=false
-          MOBILE=false
-
-          # `verified` is the trust gate and ONLY the trust gate: it authorises
-          # a PR to run expensive / secret-exposing jobs, but no longer selects
-          # any stage on its own. Each heavy stage runs only when its granular
-          # label is present AND `verified` authorises it — so a granular label
-          # without `verified` never triggers anything (the security invariant),
-          # and `verified` alone runs only the baseline verified checks.
-          # cpp-tests builds the addon itself (different flag) so it does NOT
-          # depend on prebuilds; desktop + mobile DO need prebuilds.
-          if [ "$HAS_VERIFIED" = "true" ]; then
-            VERIFIED=true
-            [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
-            [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
-            [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
-            [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
-          fi
-          echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
-          echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
-          echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
-          echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
-          echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
-          echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/ci-router
 
   authorize:
     runs-on: ubuntu-latest
@@ -253,136 +201,15 @@ jobs:
       native_changed: ${{ steps.detect.outputs.native_changed }}
       native_hash: ${{ steps.detect.outputs.native_hash }}
     steps:
-      - name: Checkout base branch
+      - name: Checkout composite source (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - name: Detect native file changes
         id: detect
-        env:
-          WORKDIR: packages/llm-llamacpp
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_ACTION: ${{ github.event.action }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
-             [ "$EVENT_NAME" = "workflow_call" ] || \
-             [ "$EVENT_NAME" = "push" ]; then
-            echo "Trusted event ($EVENT_NAME) — treating native files as changed"
-            echo "native_changed=true" >> "$GITHUB_OUTPUT"
-            echo "native_hash=dispatch-$(date +%s)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Fetch the PR head commit for read-only git operations (diff + ls-tree).
-          # Same-repo PRs: fetch by SHA from origin.
-          # Fork PRs: SHA may not be fetchable from origin — fetch from
-          # the fork repo by ref instead. Does NOT check out PR code.
-          FETCHED=false
-          if [ -n "$HEAD_SHA" ]; then
-            if git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null; then
-              FETCHED=true
-            elif [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
-              echo "SHA not fetchable from origin (likely fork PR) — trying $HEAD_REPO/$HEAD_REF"
-              if git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=1 2>/dev/null; then
-                HEAD_SHA=$(git rev-parse FETCH_HEAD)
-                FETCHED=true
-              fi
-            fi
-          fi
-
-          if [ "$FETCHED" != "true" ]; then
-            echo "::warning::Could not fetch PR head — treating as changed (cache disabled for this push)"
-            echo "native_changed=true" >> "$GITHUB_OUTPUT"
-            echo "native_hash=unfetchable-$(date +%s)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Pick the diff base by how the PR head moved on THIS event:
-          #   • opened                      → full PR diff (base..head): first
-          #     evaluation, so the whole PR delta is the right thing to inspect.
-          #   • head advanced (synchronize) → previous head..current head, the
-          #     per-push delta. github.event.before is populated only for
-          #     synchronize, so a JS-only push after earlier C++ commits reports
-          #     native_changed=false and restores from cache.
-          #   • labeled / reopened on an UNCHANGED head → before is empty, so we
-          #     diff head..head (empty) → native_changed=false. Adding a routing
-          #     label (e.g. run-mobile-addon-tests) on an already-built head must
-          #     NOT rerun the prebuild matrix.
-          # native_hash always uses the full HEAD tree for cache-key correctness,
-          # so a wrong "false" can never restore a stale binary — the key (which
-          # encodes the HEAD native tree) simply would not match.
-          DIFF_FROM="$HEAD_SHA"
-          if [ "$EVENT_ACTION" = "opened" ]; then
-            DIFF_FROM="$BASE_SHA"
-          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$HEAD_SHA" ]; then
-            DIFF_FROM="$BEFORE_SHA"
-            # Fetch BEFORE_SHA — same fork fallback as HEAD_SHA.
-            # For fork PRs the previous head may only exist in the fork repo.
-            if ! git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null; then
-              if [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
-                git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=50 2>/dev/null || true
-              fi
-              # If BEFORE_SHA is still unreachable, fall back to base..head diff.
-              if ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
-                echo "::warning::BEFORE_SHA ($BEFORE_SHA) unreachable — falling back to base..head diff"
-                DIFF_FROM="$BASE_SHA"
-              fi
-            fi
-          fi
-
-          # Ensure the diff base (DIFF_FROM) is present locally. The checkout is
-          # shallow and only HEAD_SHA / BEFORE_SHA were fetched above; the PR base
-          # SHA is otherwise absent, so `git diff` would fail and force the safe
-          # rebuild-everything fallback — silently defeating the cache. BASE_SHA
-          # always lives in origin (the base repo), so a plain fetch suffices.
-          if [ -n "$DIFF_FROM" ] && ! git cat-file -e "$DIFF_FROM" 2>/dev/null; then
-            git fetch origin "$DIFF_FROM" --depth=1 2>/dev/null || true
-          fi
-
-          CHANGED=false
-          if [ -n "$DIFF_FROM" ] && [ -n "$HEAD_SHA" ]; then
-            DIFF_FILES=$(git diff --name-only "$DIFF_FROM" "$HEAD_SHA" -- 2>&1) || {
-              echo "::warning::git diff failed — treating as changed"
-              echo "native_changed=true" >> "$GITHUB_OUTPUT"
-              echo "native_hash=diff-failed-$(date +%s)" >> "$GITHUB_OUTPUT"
-              exit 0
-            }
-            if [ -n "$DIFF_FILES" ]; then
-              while IFS= read -r file; do
-                case "$file" in
-                  ${WORKDIR}/*.cpp|${WORKDIR}/*.hpp|${WORKDIR}/*.c|${WORKDIR}/*.h) CHANGED=true; break ;;
-                  ${WORKDIR}/*CMakeLists.txt) CHANGED=true; break ;;
-                  ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) CHANGED=true; break ;;
-                  ${WORKDIR}/vcpkg/*) CHANGED=true; break ;;
-                esac
-              done <<< "$DIFF_FILES"
-            fi
-          else
-            echo "No base/head SHA — treating as changed"
-            CHANGED=true
-          fi
-
-          # Hash from the PR HEAD tree. The file set MUST stay in lockstep with
-          # the detection predicate above (source *.cpp/*.hpp/*.c/*.h, any
-          # CMakeLists.txt, vcpkg manifests, and ANY file under vcpkg/ —
-          # overlays / portfiles / patches / triplets). If the hash were
-          # narrower than detection, a native change could trigger a rebuild
-          # without moving the cache key; `cache/save` would then no-op on the
-          # existing key and a later JS-only push would restore the stale
-          # pre-change binary. We therefore ls-tree the whole package and apply
-          # the same predicate as detection. git ls-tree reads the tree object
-          # without checkout — secure and correct.
-          NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" 2>/dev/null \
-            | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/' \
-            | sha256sum | cut -d' ' -f1)
-          [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
-
-          echo "Native changed: $CHANGED | Hash: ${NATIVE_HASH:0:16}"
-          echo "native_changed=$CHANGED" >> "$GITHUB_OUTPUT"
-          echo "native_hash=${NATIVE_HASH:0:16}" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/llm-llamacpp
 
   # Reuse a prior run's prebuilds via ARTIFACTS rather than actions/cache.
   # actions/cache cannot WRITE from a pull_request_target trigger (the reserve
@@ -405,49 +232,22 @@ jobs:
       contents: read
       actions: read
     outputs:
-      reuse_hit: ${{ steps.reuse.outputs.hit }}
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
     steps:
-      - name: Find + download a matching prebuilds artifact from a prior run
-        id: reuse
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          NATIVE_HASH: ${{ needs.detect-native-changes.outputs.native_hash }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -u
-          # Marker is scoped by PR NUMBER (globally unique in the base repo) so a
-          # PR can only ever reuse ITS OWN prior prebuilds — a malicious PR's
-          # artifact can never be served to a different (victim) PR even if they
-          # share a fork branch name and native_hash. (Restores the per-PR
-          # isolation the replaced actions/cache key had.)
-          WANT="prebuilds-cache-pr-${PR_NUMBER}-${NATIVE_HASH}"
-          echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
-          RUNS=$(gh api "repos/$REPO/actions/workflows/on-pr-llm-llamacpp.yml/runs?branch=${HEAD_REF}&per_page=40" \
-                   --jq ".workflow_runs[] | select(.id != ${RUN_ID}) | .id")
-          HIT=false
-          for rid in $RUNS; do
-            NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
-                      --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
-            if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "prebuilds"; then
-              echo "Match in run $rid — downloading its prebuilds artifact"
-              if gh run download "$rid" --repo "$REPO" --name prebuilds --dir cached-prebuilds; then
-                HIT=true
-                echo "reused-run=$rid" >> "$GITHUB_OUTPUT"
-                break
-              fi
-            fi
-          done
-          echo "hit=$HIT" >> "$GITHUB_OUTPUT"
-          echo "Prebuild reuse hit: $HIT"
-      - name: Re-publish reused prebuilds for downstream jobs
-        if: steps.reuse.outputs.hit == 'true'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          name: prebuilds
-          path: cached-prebuilds
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-llm-llamacpp.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   prebuild:
     needs:
@@ -493,16 +293,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Write reuse marker
-        run: |
-          mkdir -p reuse-marker
-          echo "$GITHUB_RUN_ID" > reuse-marker/producing-run-id.txt
-      - name: Upload reuse marker (named with native hash)
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          name: prebuilds-cache-pr-${{ github.event.pull_request.number }}-${{ needs.detect-native-changes.outputs.native_hash }}
-          path: reuse-marker
-          retention-days: 14
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
     if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-07-01
 
 ### Changed
 
@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registry baseline is left unchanged; the override resolves the new version
   forward of the pinned baseline against
   [tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)
-  (`whisper-cpp 1.9.1` port, REF `cb91a378`). No addon version bump (QVAC-21582).
+  (`whisper-cpp 1.9.1` port, REF `cb91a378`). This release ships it as `0.11.0`.
 
 ## [0.10.2] - 2026-06-24
 
