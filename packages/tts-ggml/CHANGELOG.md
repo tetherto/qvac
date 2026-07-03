@@ -57,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chatterbox MTL runs its q8_0 KV cache on the Metal GPU (iOS/macOS).** The
+  MTL variant previously crashed on Metal with a quantized KV cache and fell
+  back to an f32 cache; it now keeps the quantized KV cache on the GPU. Bumps
+  the `tts-cpp` requirement to `2026-07-02`.
 - **Chatterbox MTL Japanese now builds with MeCab support from the published
   registry ports.** Bumps the `tts-cpp` requirement to `2026-06-30`, links
   `mecab::mecab` directly, and keeps the Windows `/FORCE:MULTIPLE` workaround
