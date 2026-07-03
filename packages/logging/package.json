@@ -4,10 +4,10 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "lint": "lunte",
-    "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "test": "npm run lint && npm run format && npm run test:unit",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js"
