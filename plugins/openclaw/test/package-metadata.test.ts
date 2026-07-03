@@ -21,6 +21,7 @@ interface PluginManifest {
         readonly models?: readonly {
           readonly id: string
           readonly name: string
+          readonly input?: readonly string[]
           readonly compat?: {
             readonly requiresStringContent?: boolean
           }
@@ -62,11 +63,29 @@ test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
     'qwen3.5-0.8b',
     'qwen3.5-2b',
     'qwen3.5-4b',
-    'qwen3.5-9b'
+    'qwen3.5-9b',
+    'qwen3.6-27b',
+    'qwen3.6-35b-a3b',
+    'gpt-oss-20b',
+    'gemma4-31b'
+  ])
+  assert.deepEqual(manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.input), [
+    ['text', 'image'],
+    ['text', 'image'],
+    ['text', 'image'],
+    ['text', 'image'],
+    ['text', 'image'],
+    ['text', 'image'],
+    ['text'],
+    ['text', 'image']
   ])
   assert.deepEqual(
     manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.compat),
     [
+      { requiresStringContent: true },
+      { requiresStringContent: true },
+      { requiresStringContent: true },
+      { requiresStringContent: true },
       { requiresStringContent: true },
       { requiresStringContent: true },
       { requiresStringContent: true },

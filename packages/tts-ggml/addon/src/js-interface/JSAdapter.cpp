@@ -130,6 +130,14 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.mecabDictPath  = readOptionalString(configurationParams, env, "mecabDictPath");
   cfg.cangjieTsvPath = readOptionalString(configurationParams, env, "cangjieTsvPath");
+  // LavaSR neural enhancement: a non-empty GGUF path turns it on.
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  // LavaSR neural denoiser (runs before the enhancer): a non-empty GGUF path
+  // turns it on. The tts-cpp UL-UNAS forward is implemented in
+  // qvac-ext-lib-whisper.cpp PR #78 (activates once the pinned tts-cpp has it).
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 
@@ -152,6 +160,14 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
   cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
+  // LavaSR neural enhancement: a non-empty GGUF path turns it on.
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  // LavaSR neural denoiser (runs before the enhancer): a non-empty GGUF path
+  // turns it on. The tts-cpp UL-UNAS forward is implemented in
+  // qvac-ext-lib-whisper.cpp PR #78 (activates once the pinned tts-cpp has it).
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 
