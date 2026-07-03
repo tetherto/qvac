@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.13.0] - 2026-07-03
+
+This release adds LTX-2 text-to-video support alongside the existing Wan video path. LTX-2 jobs can now generate synchronized video and audio through the diffusion addon, with model-aware validation and documentation for the additional runtime files required by the LTX engine.
+
+### Features
+
+#### LTX-2 video and audio generation
+
+`VideoStableDiffusion` now accepts the LTX-2 companion files needed for text-to-video with audio: a Gemma text encoder through `files.llm`, an audio VAE through `files.audioVae`, and embedding connector weights through `files.embeddingsConnectors`. When the native engine returns audio, the addon muxes the generated PCM stream into the output AVI and reports `hasAudio` and `audioSampleRate` in video runtime stats.
+
+#### Model-aware video validation
+
+The JavaScript and native validation layers now distinguish Wan from LTX-2 video jobs. Wan keeps its existing 16-aligned dimension and `4*k+1` frame-count rules, while LTX-2 requires 32-aligned dimensions and `8*k+1` frame counts, up to 257 frames. The new `temporal_tiling` option is forwarded to the LTX-2 video VAE decode path to reduce peak memory pressure.
+
+#### LTX examples and integration coverage
+
+The package now includes `examples/generate-video-ltx.js`, `scripts/download-model-ltx.sh`, the `npm run generate:ltx` and `npm run test:ltx` scripts, and an LTX-2 integration smoke test that can download or reuse local model weights.
+
+### Changed
+
+- The diffusion addon now consumes LTX-capable `ggml` and `stable-diffusion-cpp` vcpkg registry ports rather than package-local overlay ports.
+- `video.d.ts` documents the LTX-only file inputs, validation rules, audio stats, and progress behavior.
+
+## Pull Requests
+
+- [#2518](https://github.com/tetherto/qvac/pull/2518) - QVAC-19914 feat(diffusion-cpp): LTX-2 video + audio support in the addon
+
 ## [0.12.1] - 2026-07-01
 
 ### Changed
