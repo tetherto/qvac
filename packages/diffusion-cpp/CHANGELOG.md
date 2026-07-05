@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.13.1] - 2026-07-05
+
+This release restores the diffusion-cpp npm publish path after the LTX dependency update made the native prebuild package too large. The addon now consumes slimmed `stable-diffusion-cpp` and `ggml` registry ports that remove unused tokenizer and Vulkan shader payloads while preserving the supported LTX, FLUX, SD3, and Wan model paths.
+
+### Changed
+
+- `stable-diffusion-cpp` now resolves to `2026-07-03#1`, which depends on the matching slim `ggml` port revision.
+- The diffusion-cpp vcpkg registry baseline is restored to the pre-LTX value while the package explicitly opts into the bumped `stable-diffusion-cpp` port revision.
+
+### Fixed
+
+#### Keep LTX prebuilds under the npm package size limit
+
+The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets or desktop Adreno/TBQ/PQ Vulkan shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
+
+#### Reduce LTX smoke-test memory pressure
+
+The LTX integration smoke test now uses a smaller text-encoder configuration so CI can exercise the slim dependency stack without exceeding Metal memory on M4 runners.
+
+## Pull Requests
+
+- [#3058](https://github.com/tetherto/qvac/pull/3058) - chore(diffusion-cpp): reduce package size
+
 ## [0.13.0] - 2026-07-03
 
 This release adds LTX-2 text-to-video support alongside the existing Wan video path. LTX-2 jobs can now generate synchronized video and audio through the diffusion addon, with model-aware validation and documentation for the additional runtime files required by the LTX engine.
