@@ -1,10 +1,10 @@
-import type { ExpoConfig } from "expo/config";
-import * as fs from "fs";
-import * as path from "path";
-import { resolveSDKPackageDir } from "@/expo/plugins/resolve-sdk-package-dir";
-import { getProjectRootFromBaseConfig } from "@/expo/plugins/get-project-root";
+import type { ExpoConfig } from 'expo/config'
+import * as fs from 'fs'
+import * as path from 'path'
+import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
+import { getProjectRootFromBaseConfig } from '@/expo/plugins/get-project-root'
 
-let didRun = false;
+let didRun = false
 
 /**
  * Expo plugin that stubs expo-device-info when expo-device is not a declared
@@ -14,38 +14,30 @@ let didRun = false;
  */
 function withDeviceInfo(config: ExpoConfig): ExpoConfig {
   if (didRun) {
-    return config;
+    return config
   }
-  didRun = true;
-  const projectRoot = getProjectRootFromBaseConfig(config);
+  didRun = true
+  const projectRoot = getProjectRootFromBaseConfig(config)
   if (!projectRoot) {
-    return config;
+    return config
   }
 
-  const { dir: qvacSdkPath } = resolveSDKPackageDir(projectRoot);
+  const { dir: qvacSdkPath } = resolveSDKPackageDir(projectRoot)
 
-  const appPackageJsonPath = path.join(projectRoot, "package.json");
-  let hasExpoDevice = false;
+  const appPackageJsonPath = path.join(projectRoot, 'package.json')
+  let hasExpoDevice = false
   if (fs.existsSync(appPackageJsonPath)) {
-    const appPackageJson = JSON.parse(
-      fs.readFileSync(appPackageJsonPath, "utf-8"),
-    ) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
+    const appPackageJson = JSON.parse(fs.readFileSync(appPackageJsonPath, 'utf-8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
     hasExpoDevice =
-      "expo-device" in (appPackageJson.dependencies ?? {}) ||
-      "expo-device" in (appPackageJson.devDependencies ?? {});
+      'expo-device' in (appPackageJson.dependencies ?? {}) ||
+      'expo-device' in (appPackageJson.devDependencies ?? {})
   }
 
   if (!hasExpoDevice) {
-    const deviceInfoPath = path.join(
-      qvacSdkPath,
-      "dist",
-      "client",
-      "rpc",
-      "expo-device-info.js",
-    );
+    const deviceInfoPath = path.join(qvacSdkPath, 'dist', 'client', 'rpc', 'expo-device-info.js')
     if (fs.existsSync(deviceInfoPath)) {
       fs.writeFileSync(
         deviceInfoPath,
@@ -55,20 +47,18 @@ function withDeviceInfo(config: ExpoConfig): ExpoConfig {
           `async function getDeviceInfo() {`,
           `  return { platform: undefined, deviceModel: undefined, deviceBrand: undefined };`,
           `}`,
-          `exports.getDeviceInfo = getDeviceInfo;`,
-        ].join("\n"),
-      );
+          `exports.getDeviceInfo = getDeviceInfo;`
+        ].join('\n')
+      )
       console.log(
-        "[withDeviceInfo] 🔧 QVAC: expo-device not in app dependencies, stubbed device info",
-      );
+        '[withDeviceInfo] 🔧 QVAC: expo-device not in app dependencies, stubbed device info'
+      )
     }
   } else {
-    console.log(
-      "[withDeviceInfo] 🔧 QVAC: expo-device in app dependencies, using expo-device info",
-    );
+    console.log('[withDeviceInfo] 🔧 QVAC: expo-device in app dependencies, using expo-device info')
   }
 
-  return config;
+  return config
 }
 
-export default withDeviceInfo;
+export default withDeviceInfo

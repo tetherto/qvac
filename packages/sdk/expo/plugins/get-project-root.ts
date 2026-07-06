@@ -1,5 +1,5 @@
-import type { ExportedConfigWithProps } from "@expo/config-plugins";
-import type { ExpoConfig } from "expo/config";
+import type { ExportedConfigWithProps } from '@expo/config-plugins'
+import type { ExpoConfig } from 'expo/config'
 
 /**
  * `projectRoot` resolution in Expo plugins depends on plugin type:
@@ -18,11 +18,11 @@ import type { ExpoConfig } from "expo/config";
  * silently disagreed on which directory they were resolving against.
  */
 function getProjectRootFromMod(config: ExportedConfigWithProps<unknown>) {
-  return config.modRequest.projectRoot;
+  return config.modRequest.projectRoot
 }
 
 function getProjectRootFromBaseConfig(config: ExpoConfig) {
-  return config._internal?.["projectRoot"] as string | undefined;
+  return config._internal?.['projectRoot'] as string | undefined
 }
 
-export { getProjectRootFromMod, getProjectRootFromBaseConfig };
+export { getProjectRootFromMod, getProjectRootFromBaseConfig }

@@ -23,7 +23,7 @@ ecosystem under test* changes over time:
 | Models | `qwen3.5-q8` (LLM Q8_0 + mmproj Q8_0) · `gemma4-q4` (LLM Q4_K_M + mmproj Q8_0) |
 | Preset | `full` (cognitive VQA×5 + ocr-small ×5 + 1 ocr-page) |
 | Desktop | `linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu` |
-| Mobile | `s26,iphone17pro,pixel9` (each = CPU+GPU in one Device-Farm session) |
+| Mobile | `s26,iphone17pro,pixel9` (each = CPU+GPU in one Device-Farm session). Plain tokens select the **exact model** (MODEL EQUALS) — checkpoints must never mix subfamily variants (the first checkpoint's pixel9 row predates this and mixed Pixel 9 Pro / Pro XL). Do **not** use `<token>any` in checkpoints. |
 | Addon | **latest published** `@qvac/llm-llamacpp` (the `addon` source packs `@latest`) |
 | Dispatch ref | `main` (uses the current benchmark tooling + published addon) |
 | Runs | **3**, run **sequentially** (see gotchas) |

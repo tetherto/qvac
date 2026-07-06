@@ -1,105 +1,101 @@
-import test from "brittle";
-import {
-  embedRequestSchema,
-  embedResponseSchema,
-  embedStatsSchema,
-} from "@/schemas/embed";
+import test from 'brittle'
+import { embedRequestSchema, embedResponseSchema, embedStatsSchema } from '@/schemas/embed'
 
 test("embedStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
-  t.is(embedStatsSchema.safeParse({ backendDevice: "cpu" }).success, true);
-  t.is(embedStatsSchema.safeParse({ backendDevice: "gpu" }).success, true);
-});
+  t.is(embedStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)
+  t.is(embedStatsSchema.safeParse({ backendDevice: 'gpu' }).success, true)
+})
 
-test("embedStatsSchema: rejects unknown backendDevice values", (t) => {
-  const result = embedStatsSchema.safeParse({ backendDevice: "tpu" });
-  t.is(result.success, false);
-});
+test('embedStatsSchema: rejects unknown backendDevice values', (t) => {
+  const result = embedStatsSchema.safeParse({ backendDevice: 'tpu' })
+  t.is(result.success, false)
+})
 
-test("embedStatsSchema: backendDevice is optional", (t) => {
+test('embedStatsSchema: backendDevice is optional', (t) => {
   const result = embedStatsSchema.safeParse({
     totalTime: 12,
     tokensPerSecond: 100,
-    totalTokens: 1200,
-  });
-  t.is(result.success, true);
-});
+    totalTokens: 1200
+  })
+  t.is(result.success, true)
+})
 
-test("embedStatsSchema: accepts contextSize", (t) => {
-  const result = embedStatsSchema.safeParse({ contextSize: 512 });
-  t.is(result.success, true);
-  if (result.success) t.is(result.data.contextSize, 512);
-});
+test('embedStatsSchema: accepts contextSize', (t) => {
+  const result = embedStatsSchema.safeParse({ contextSize: 512 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.contextSize, 512)
+})
 
-test("embedStatsSchema: contextSize is optional", (t) => {
-  const result = embedStatsSchema.safeParse({ backendDevice: "gpu" });
-  t.is(result.success, true);
-  if (result.success) t.is(result.data.contextSize, undefined);
-});
+test('embedStatsSchema: contextSize is optional', (t) => {
+  const result = embedStatsSchema.safeParse({ backendDevice: 'gpu' })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.contextSize, undefined)
+})
 
-test("embedResponseSchema: round-trips contextSize through stats", (t) => {
+test('embedResponseSchema: round-trips contextSize through stats', (t) => {
   const result = embedResponseSchema.safeParse({
-    type: "embed",
+    type: 'embed',
     success: true,
     embedding: [0.1, 0.2, 0.3],
     stats: {
       totalTime: 5,
       tokensPerSecond: 200,
       totalTokens: 1000,
-      contextSize: 512,
-    },
-  });
-  t.is(result.success, true);
+      contextSize: 512
+    }
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.stats?.contextSize, 512);
+    t.is(result.data.stats?.contextSize, 512)
   }
-});
+})
 
-test("embedResponseSchema: round-trips backendDevice through stats", (t) => {
+test('embedResponseSchema: round-trips backendDevice through stats', (t) => {
   const result = embedResponseSchema.safeParse({
-    type: "embed",
+    type: 'embed',
     success: true,
     embedding: [0.1, 0.2, 0.3],
     stats: {
       totalTime: 5,
       tokensPerSecond: 200,
       totalTokens: 1000,
-      backendDevice: "gpu",
-    },
-  });
-  t.is(result.success, true);
+      backendDevice: 'gpu'
+    }
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.stats?.backendDevice, "gpu");
+    t.is(result.data.stats?.backendDevice, 'gpu')
   }
-});
+})
 
-test("embedRequestSchema: accepts an optional requestId", (t) => {
+test('embedRequestSchema: accepts an optional requestId', (t) => {
   const result = embedRequestSchema.safeParse({
-    type: "embed",
-    modelId: "m1",
-    text: "hello",
-    requestId: "req-1",
-  });
-  t.is(result.success, true);
+    type: 'embed',
+    modelId: 'm1',
+    text: 'hello',
+    requestId: 'req-1'
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.requestId, "req-1");
+    t.is(result.data.requestId, 'req-1')
   }
-});
+})
 
-test("embedRequestSchema: requestId is optional (server falls back to a generated id for older clients)", (t) => {
+test('embedRequestSchema: requestId is optional (server falls back to a generated id for older clients)', (t) => {
   const result = embedRequestSchema.safeParse({
-    type: "embed",
-    modelId: "m1",
-    text: "hello",
-  });
-  t.is(result.success, true);
-});
+    type: 'embed',
+    modelId: 'm1',
+    text: 'hello'
+  })
+  t.is(result.success, true)
+})
 
-test("embedRequestSchema: rejects empty-string requestId", (t) => {
+test('embedRequestSchema: rejects empty-string requestId', (t) => {
   const result = embedRequestSchema.safeParse({
-    type: "embed",
-    modelId: "m1",
-    text: "hello",
-    requestId: "",
-  });
-  t.is(result.success, false);
-});
+    type: 'embed',
+    modelId: 'm1',
+    text: 'hello',
+    requestId: ''
+  })
+  t.is(result.success, false)
+})
