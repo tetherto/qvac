@@ -87,8 +87,16 @@ jobs:
         run: npm install
         working-directory: ${{ env.WORKDIR }}
 
-      - name: Run checks
-        run: npm run check
+      - name: Run format
+        run: npm run format
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Run lint
+        run: npm run lint
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Run typecheck
+        run: npm run typecheck
         working-directory: ${{ env.WORKDIR }}
 
       - name: Build

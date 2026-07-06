@@ -3,10 +3,10 @@
   "version": "0.6.4",
   "main": "index.js",
   "scripts": {
-    "lint": "lunte",
-    "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/*.test.js",
     "test": "npm run lint && npm run format && npm run test:unit && npm run test:integration",
@@ -67,7 +67,7 @@
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
     "lunte": "^1.8.1",
-    "prettier": "^3.8.4",
+    "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "test-tmp": "^1.4.0"
   },

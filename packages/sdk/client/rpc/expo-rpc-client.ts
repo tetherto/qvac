@@ -182,24 +182,12 @@ export async function close(): Promise<void> {
   closingPromise = (async () => {
     logger.info('🧹 Closing RPC client (Expo)')
 
-    // terminate() crashes on Android (addon dlclose leaves pthread_key_t
-    // destructors dangling); iOS dyld no-ops dlclose so it's safe there.
-    // Non-iOS: drop refs only -- sending __shutdown__ without a follow-up
-    // terminate would clear the worker plugin registry.
-    let platform: string | undefined
-    try {
-      platform = (await getRuntimeContext()).platform
-    } catch (err) {
-      logger.debug('Failed to resolve runtime context for close()', { err })
-    }
-
-    if (platform !== 'ios') {
-      rpcInstance = null
-      rpcPromise = null
-      return
-    }
-
-    // iOS: existing pre-terminate cleanup + terminate.
+    // The inference addons self-pin (RTLD_NODELETE, qvac-lib-inference-addon-cpp
+    // >= 1.2.2), so dlclose() during terminate() no longer unmaps addon code
+    // with dangling pthread_key_t destructors. terminate() is therefore safe on
+    // every platform (previously it was skipped on non-iOS to avoid a SIGSEGV in
+    // pthread_key_clean_all), so we always run the full pre-terminate cleanup +
+    // terminate path.
     if (rpcInstance) {
       logger.info('🧹 Requesting worker pre-terminate cleanup')
       await sendShutdownMessage(rpcInstance)
