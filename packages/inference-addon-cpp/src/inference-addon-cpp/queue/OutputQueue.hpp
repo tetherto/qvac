@@ -92,7 +92,16 @@ public:
     queueOutput(std::move(output), id);
   }
 
+  /// Terminal event for a job that ended in error (worker throw, queued
+  /// cancellation, or teardown). A tagged job's take-once per-job stats entry
+  /// (IModelJobStats::consumeJobStats) must not outlive this event — it is
+  /// the only terminal event on the error path, so it is where the entry is
+  /// reclaimed; an unconsumed entry here would be handed to a later job that
+  /// reuses this id.
   void queueException(const std::exception& exception, JobId id = kNoJobId) {
+    if (id != kNoJobId && jobStats_ != nullptr) {
+      static_cast<void>(jobStats_->consumeJobStats(id));
+    }
     queueOutput(Output::Error{exception}, id);
   }
 };
