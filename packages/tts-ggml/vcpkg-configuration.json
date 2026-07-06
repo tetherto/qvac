@@ -11,11 +11,19 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "gtest",
-        "mecab",
         "vulkan",
         "vulkan-headers",
         "vulkan-loader",
         "spirv-headers"
+      ]
+    },
+    {
+      "kind": "git",
+      "reference": "QVAC-21839/mecab-port-windows-ninja",
+      "baseline": "bc4e8f3b575eaf741777e68a28f39862e6ecc747",
+      "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
+      "packages": [
+        "mecab"
       ]
     }
   ]
