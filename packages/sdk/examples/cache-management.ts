@@ -1,113 +1,107 @@
-import { WHISPER_TINY } from "@/models/registry";
-import type { ModelInfo } from "@/schemas";
-import { downloadAsset, getModelInfo, loadModel, unloadModel } from "..";
+import { WHISPER_TINY } from '@/models/registry'
+import type { ModelInfo } from '@/schemas'
+import { downloadAsset, getModelInfo, loadModel, unloadModel } from '..'
 
 const printModelStatus = (info: ModelInfo, label: string) => {
-  console.log(`\n▸ ${label}`);
-  console.log(`▸ Model Name: ${info.name}`);
-  console.log(`▸ Model ID: ${info.modelId}`);
-  console.log(
-    `▸ Blob Core Key: ${info.blobCoreKey?.substring(0, 16) || "N/A"}...`,
-  );
-  console.log(
-    `▸ Expected Size: ${(info.expectedSize / 1024 / 1024).toFixed(2)} MB`,
-  );
-  console.log(`▸ Addon: ${info.addon}`);
-  console.log(`▸ Cache Files: ${info.cacheFiles.length}`);
-  console.log(`▸ Is Cached: ${info.isCached ? "yes" : "no"}`);
-  console.log(`▸ Is Loaded: ${info.isLoaded ? "yes" : "no"}`);
+  console.log(`\n▸ ${label}`)
+  console.log(`▸ Model Name: ${info.name}`)
+  console.log(`▸ Model ID: ${info.modelId}`)
+  console.log(`▸ Blob Core Key: ${info.blobCoreKey?.substring(0, 16) || 'N/A'}...`)
+  console.log(`▸ Expected Size: ${(info.expectedSize / 1024 / 1024).toFixed(2)} MB`)
+  console.log(`▸ Addon: ${info.addon}`)
+  console.log(`▸ Cache Files: ${info.cacheFiles.length}`)
+  console.log(`▸ Is Cached: ${info.isCached ? 'yes' : 'no'}`)
+  console.log(`▸ Is Loaded: ${info.isLoaded ? 'yes' : 'no'}`)
 
   if (info.isCached) {
     if (info.cacheFiles.length === 1) {
-      console.log(`▸ Cache Path: ${info.cacheFiles[0]?.path}`);
+      console.log(`▸ Cache Path: ${info.cacheFiles[0]?.path}`)
     } else {
-      const cachedFiles = info.cacheFiles.filter((f) => f.isCached).length;
-      console.log(`▸ Cached: ${cachedFiles}/${info.cacheFiles.length}`);
+      const cachedFiles = info.cacheFiles.filter((f) => f.isCached).length
+      console.log(`▸ Cached: ${cachedFiles}/${info.cacheFiles.length}`)
     }
-    console.log(
-      `▸ Actual Size: ${(info.actualSize! / 1024 / 1024).toFixed(2)} MB`,
-    );
-    console.log(`▸ Cached At: ${info.cachedAt?.toLocaleString()}`);
+    console.log(`▸ Actual Size: ${(info.actualSize! / 1024 / 1024).toFixed(2)} MB`)
+    console.log(`▸ Cached At: ${info.cachedAt?.toLocaleString()}`)
   }
 
   if (info.loadedInstances && info.loadedInstances.length > 0) {
-    console.log(`▸ Loaded Instances: ${info.loadedInstances.length}`);
+    console.log(`▸ Loaded Instances: ${info.loadedInstances.length}`)
     info.loadedInstances.forEach((instance, i) => {
-      console.log(`▸ ${i + 1}. Registry ID: ${instance.registryId}`);
-      console.log(`▸    Loaded At: ${instance.loadedAt.toLocaleString()}`);
-    });
+      console.log(`▸ ${i + 1}. Registry ID: ${instance.registryId}`)
+      console.log(`▸    Loaded At: ${instance.loadedAt.toLocaleString()}`)
+    })
   }
-};
+}
 
 try {
-  console.log("▸ Model Cache Management Demo");
+  console.log('▸ Model Cache Management Demo')
 
   // 1. Check initial status
-  console.log("\n▸ 1. INITIAL STATUS CHECK");
-  const initialInfo = await getModelInfo(WHISPER_TINY);
-  printModelStatus(initialInfo, "Initial Status:");
+  console.log('\n▸ 1. INITIAL STATUS CHECK')
+  const initialInfo = await getModelInfo(WHISPER_TINY)
+  printModelStatus(initialInfo, 'Initial Status:')
 
   // 2. Download if not cached
   if (!initialInfo.isCached) {
-    console.log("\n▸ 2. DOWNLOADING MODEL (not cached)");
-    console.log("▸ Downloading from hyperdrive...");
-    await downloadAsset({ assetSrc: WHISPER_TINY });
-    console.log("▸ Download complete!");
+    console.log('\n▸ 2. DOWNLOADING MODEL (not cached)')
+    console.log('▸ Downloading from hyperdrive...')
+    await downloadAsset({ assetSrc: WHISPER_TINY })
+    console.log('▸ Download complete!')
 
-    const afterDownload = await getModelInfo(WHISPER_TINY);
-    printModelStatus(afterDownload, "Status After Download:");
+    const afterDownload = await getModelInfo(WHISPER_TINY)
+    printModelStatus(afterDownload, 'Status After Download:')
   } else {
-    console.log("\n▸ 2. MODEL ALREADY CACHED");
-    console.log("▸ Skipping download...");
+    console.log('\n▸ 2. MODEL ALREADY CACHED')
+    console.log('▸ Skipping download...')
   }
 
   // 3. Load if not loaded
-  console.log("\n▸ 3. LOADING MODEL INTO MEMORY");
-  const beforeLoad = await getModelInfo(WHISPER_TINY);
+  console.log('\n▸ 3. LOADING MODEL INTO MEMORY')
+  const beforeLoad = await getModelInfo(WHISPER_TINY)
 
-  let modelId: string;
+  let modelId: string
   if (!beforeLoad.isLoaded) {
-    console.log("▸ Loading model into memory...");
+    console.log('▸ Loading model into memory...')
     modelId = await loadModel({
-      modelSrc: WHISPER_TINY,
-    });
-    console.log(`▸ Model loaded! ID: ${modelId}`);
+      modelSrc: WHISPER_TINY
+    })
+    console.log(`▸ Model loaded! ID: ${modelId}`)
 
-    const afterLoad = await getModelInfo(WHISPER_TINY);
-    printModelStatus(afterLoad, "Status After Load:");
+    const afterLoad = await getModelInfo(WHISPER_TINY)
+    printModelStatus(afterLoad, 'Status After Load:')
   } else {
-    console.log("▸ Model already loaded!");
-    const instances = beforeLoad.loadedInstances;
+    console.log('▸ Model already loaded!')
+    const instances = beforeLoad.loadedInstances
     if (!instances || instances.length === 0) {
-      throw new Error("Model is loaded but no instances found");
+      throw new Error('Model is loaded but no instances found')
     }
-    const firstInstance = instances[0];
+    const firstInstance = instances[0]
     if (!firstInstance) {
-      throw new Error("First instance is undefined");
+      throw new Error('First instance is undefined')
     }
-    modelId = firstInstance.registryId;
-    console.log(`▸ Using existing model ID: ${modelId}`);
+    modelId = firstInstance.registryId
+    console.log(`▸ Using existing model ID: ${modelId}`)
   }
 
   // 4. Demonstrate unload
-  console.log("\n▸ 4. UNLOADING MODEL");
-  console.log("▸ Unloading model from memory...");
-  await unloadModel({ modelId });
-  console.log("▸ Model unloaded!");
+  console.log('\n▸ 4. UNLOADING MODEL')
+  console.log('▸ Unloading model from memory...')
+  await unloadModel({ modelId })
+  console.log('▸ Model unloaded!')
 
-  const afterUnload = await getModelInfo(WHISPER_TINY);
-  printModelStatus(afterUnload, "Status After Unload:");
+  const afterUnload = await getModelInfo(WHISPER_TINY)
+  printModelStatus(afterUnload, 'Status After Unload:')
 
   // 5. Summary
-  console.log("\n▸ 5. SUMMARY");
-  console.log("▸ Model Info API works correctly");
-  console.log("▸ Cache status tracked accurately");
-  console.log("▸ Loaded status reflects memory state");
-  console.log("▸ All operations completed successfully");
+  console.log('\n▸ 5. SUMMARY')
+  console.log('▸ Model Info API works correctly')
+  console.log('▸ Cache status tracked accurately')
+  console.log('▸ Loaded status reflects memory state')
+  console.log('▸ All operations completed successfully')
 
-  console.log("\n▸ Demo Complete\n");
-  process.exit(0);
+  console.log('\n▸ Demo Complete\n')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

@@ -1,214 +1,200 @@
-import { RAG, HyperDBAdapter, type EmbeddingFunction } from "@qvac/rag";
-import Corestore from "corestore";
-import fs, { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
-import { getConfiguredCacheDir } from "@/server/bare/registry/config-registry";
-import {
-  RAGWorkspaceModelMismatchError,
-  RAGWorkspaceNotOpenError,
-} from "@/utils/errors-server";
-import { validateAndJoinPath } from "@/server/utils/path-security";
-import {
-  createStreamLogger,
-  getServerLogger,
-  RAG_NAMESPACE,
-} from "@/logging";
-import { cancelAllRagOperations } from "@/server/bare/rag-hyperdb/rag-operation-manager";
-import {
-  registerCorestore,
-  unregisterCorestore,
-} from "@/server/bare/runtime-lifecycle";
+import { RAG, HyperDBAdapter, type EmbeddingFunction } from '@qvac/rag'
+import Corestore from 'corestore'
+import fs, { promises as fsPromises } from 'bare-fs'
+import path from 'bare-path'
+import { getConfiguredCacheDir } from '@/server/bare/registry/config-registry'
+import { RAGWorkspaceModelMismatchError, RAGWorkspaceNotOpenError } from '@/utils/errors-server'
+import { validateAndJoinPath } from '@/server/utils/path-security'
+import { createStreamLogger, getServerLogger, RAG_NAMESPACE } from '@/logging'
+import { cancelAllRagOperations } from '@/server/bare/rag-hyperdb/rag-operation-manager'
+import { registerCorestore, unregisterCorestore } from '@/server/bare/runtime-lifecycle'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 // Workspace-based RAG storage
 interface RagWorkspaceEntry {
-  corestore: Corestore;
-  dbAdapter: HyperDBAdapter;
-  rag?: RAG;
-  modelId?: string;
+  corestore: Corestore
+  dbAdapter: HyperDBAdapter
+  rag?: RAG
+  modelId?: string
 }
 
-const ragWorkspaces = new Map<string, RagWorkspaceEntry>();
+const ragWorkspaces = new Map<string, RagWorkspaceEntry>()
 
-export const DEFAULT_WORKSPACE = "default";
+export const DEFAULT_WORKSPACE = 'default'
 
 function getWorkspaceKey(workspace?: string) {
-  return workspace ?? DEFAULT_WORKSPACE;
+  return workspace ?? DEFAULT_WORKSPACE
 }
 
 function getRagBaseDir() {
-  const cacheDir = getConfiguredCacheDir();
-  return path.join(path.dirname(cacheDir), "rag-hyperdb");
+  const cacheDir = getConfiguredCacheDir()
+  return path.join(path.dirname(cacheDir), 'rag-hyperdb')
 }
 
 function getStorePath(workspace: string) {
-  return validateAndJoinPath(getRagBaseDir(), workspace);
+  return validateAndJoinPath(getRagBaseDir(), workspace)
 }
 
 export function hasRagWorkspaceStorage(workspace?: string) {
-  const key = getWorkspaceKey(workspace);
-  if (ragWorkspaces.has(key)) return true;
-  return fs.existsSync(getStorePath(key));
+  const key = getWorkspaceKey(workspace)
+  if (ragWorkspaces.has(key)) return true
+  return fs.existsSync(getStorePath(key))
 }
 
 async function getOrCreateWorkspaceEntry(workspace?: string) {
-  const key = getWorkspaceKey(workspace);
-  const existing = ragWorkspaces.get(key);
+  const key = getWorkspaceKey(workspace)
+  const existing = ragWorkspaces.get(key)
   if (existing) {
-    return existing;
+    return existing
   }
 
-  const storePath = getStorePath(key);
-  const corestore = new Corestore(storePath);
+  const storePath = getStorePath(key)
+  const corestore = new Corestore(storePath)
 
   const dbAdapter = new HyperDBAdapter({
     store: corestore,
-    dbName: key,
-  });
+    dbName: key
+  })
 
-  await dbAdapter.ready();
+  await dbAdapter.ready()
 
   registerCorestore(corestore, {
     label: `rag-workspace:${key}`,
-    createdAt: Date.now(),
-  });
+    createdAt: Date.now()
+  })
 
   const entry: RagWorkspaceEntry = {
     corestore,
-    dbAdapter,
-  };
+    dbAdapter
+  }
 
-  ragWorkspaces.set(key, entry);
-  return entry;
+  ragWorkspaces.set(key, entry)
+  return entry
 }
 
 export async function getRagDbAdapter(workspace?: string) {
-  const entry = await getOrCreateWorkspaceEntry(workspace);
-  return entry.dbAdapter;
+  const entry = await getOrCreateWorkspaceEntry(workspace)
+  return entry.dbAdapter
 }
 
 export async function getRagInstance(
   modelId: string,
   embeddingFunction: EmbeddingFunction,
-  workspace?: string,
+  workspace?: string
 ): Promise<RAG> {
-  const key = getWorkspaceKey(workspace);
-  const entry = await getOrCreateWorkspaceEntry(workspace);
+  const key = getWorkspaceKey(workspace)
+  const entry = await getOrCreateWorkspaceEntry(workspace)
 
   if (entry.rag) {
     if (entry.modelId && entry.modelId !== modelId) {
-      throw new RAGWorkspaceModelMismatchError(key, entry.modelId, modelId);
+      throw new RAGWorkspaceModelMismatchError(key, entry.modelId, modelId)
     }
-    return entry.rag;
+    return entry.rag
   }
 
-  const workspaceLogger = createStreamLogger(key, RAG_NAMESPACE);
+  const workspaceLogger = createStreamLogger(key, RAG_NAMESPACE)
 
   const rag = new RAG({
     dbAdapter: entry.dbAdapter,
     embeddingFunction,
-    logger: workspaceLogger,
-  });
+    logger: workspaceLogger
+  })
 
-  await rag.ready();
-  entry.rag = rag;
-  entry.modelId = modelId;
+  await rag.ready()
+  entry.rag = rag
+  entry.modelId = modelId
 
-  return rag;
+  return rag
 }
 
 export async function closeRagInstance(workspace?: string) {
-  const key = getWorkspaceKey(workspace);
-  const entry = ragWorkspaces.get(key);
+  const key = getWorkspaceKey(workspace)
+  const entry = ragWorkspaces.get(key)
 
   if (!entry) {
-    throw new RAGWorkspaceNotOpenError(key);
+    throw new RAGWorkspaceNotOpenError(key)
   }
 
   if (entry.rag) {
-    await entry.rag.close();
+    await entry.rag.close()
   }
-  await entry.dbAdapter.close();
-  await entry.corestore.close();
-  unregisterCorestore(entry.corestore);
-  ragWorkspaces.delete(key);
+  await entry.dbAdapter.close()
+  await entry.corestore.close()
+  unregisterCorestore(entry.corestore)
+  ragWorkspaces.delete(key)
 }
 
-let isCleaningUp = false;
+let isCleaningUp = false
 
 export async function closeAllRagInstances() {
-  if (isCleaningUp) return;
-  isCleaningUp = true;
+  if (isCleaningUp) return
+  isCleaningUp = true
 
   try {
-    cancelAllRagOperations();
+    cancelAllRagOperations()
 
-    const closures = Array.from(ragWorkspaces.entries()).map(
-      async ([key, entry]) => {
-        if (entry.rag) {
-          await entry.rag.close();
-        }
-        await entry.dbAdapter.close();
-        await entry.corestore.close();
-        unregisterCorestore(entry.corestore);
-        ragWorkspaces.delete(key);
-      },
-    );
+    const closures = Array.from(ragWorkspaces.entries()).map(async ([key, entry]) => {
+      if (entry.rag) {
+        await entry.rag.close()
+      }
+      await entry.dbAdapter.close()
+      await entry.corestore.close()
+      unregisterCorestore(entry.corestore)
+      ragWorkspaces.delete(key)
+    })
 
-    await Promise.all(closures);
+    await Promise.all(closures)
   } catch (error) {
-    logger.error("❌ Error during RAG cleanup:", error);
+    logger.error('❌ Error during RAG cleanup:', error)
   } finally {
-    isCleaningUp = false;
+    isCleaningUp = false
   }
 }
 
 // ============== Workspace Management ==============
 
 export interface RagWorkspaceInfo {
-  name: string;
-  open: boolean;
+  name: string
+  open: boolean
 }
 
 export function listWorkspaces(): RagWorkspaceInfo[] {
-  const baseDir = getRagBaseDir();
+  const baseDir = getRagBaseDir()
 
   if (!fs.existsSync(baseDir)) {
-    return [];
+    return []
   }
 
   const entries = fs.readdirSync(baseDir, {
-    withFileTypes: true,
+    withFileTypes: true
   }) as unknown as Array<{
-    name: string;
-    isDirectory: () => boolean;
-  }>;
+    name: string
+    isDirectory: () => boolean
+  }>
 
-  const directories = entries.filter(
-    (entry) => entry.isDirectory() && !entry.name.startsWith("."),
-  );
+  const directories = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
 
   return directories.map((entry) => ({
     name: entry.name,
-    open: ragWorkspaces.has(entry.name),
-  }));
+    open: ragWorkspaces.has(entry.name)
+  }))
 }
 
 export function isWorkspaceLoaded(workspace: string) {
-  const key = getWorkspaceKey(workspace);
-  return ragWorkspaces.has(key);
+  const key = getWorkspaceKey(workspace)
+  return ragWorkspaces.has(key)
 }
 
 export async function deleteWorkspace(workspace: string) {
-  const key = getWorkspaceKey(workspace);
-  const storePath = getStorePath(key);
+  const key = getWorkspaceKey(workspace)
+  const storePath = getStorePath(key)
 
   if (!fs.existsSync(storePath)) {
-    return false;
+    return false
   }
 
-  await fsPromises.rm(storePath, { recursive: true, force: true });
+  await fsPromises.rm(storePath, { recursive: true, force: true })
 
-  return true;
+  return true
 }
