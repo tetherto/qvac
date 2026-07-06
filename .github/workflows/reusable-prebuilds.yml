@@ -196,7 +196,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@8a6f28922952761978b02b8d9a706d2ab8e69ac6
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@qvac-21544-adopt-addon-1.2.3-all
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
