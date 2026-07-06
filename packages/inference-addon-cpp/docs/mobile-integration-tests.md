@@ -39,25 +39,33 @@ test addons and drives the shared `.github/actions/run-mobile-integration-tests/
 composites (setup → build-mobile-app → upload-to-devicefarm → schedule
 [single-pool] → monitor). One Device Farm app + run per addon per platform (6).
 
-## ⛔ Blocked on infra — required before this can go green
+### Device Farm secrets (no new infra required)
 
-1. **AWS Device Farm project + device pools**, added as GitHub secrets
-   (naming follows the existing convention, e.g. `AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED`):
-   - `AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP`
-   - `ANDROID_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP`
-   - `IOS_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP`
-   - (reuses existing `AWS_OIDC_ROLE_ARN`, `PAT_TOKEN`, and the iOS signing secrets)
-2. **Mobile build of the test addons.** These addons have no prebuild pipeline,
+These are trivial functional test addons — no model inference, no
+device-specific requirement — so they **reuse the shared LLM Device Farm
+project + pools** rather than provisioning a dedicated project:
+
+- `LLM_AWS_DEVICE_FARM_PROJECT_ARN`
+- `LLM_ANDROID_DEVICE_POOL_ARN`
+- `LLM_IOS_DEVICE_POOL_ARN`
+
+This is the same group `classification-ggml` and `diffusion-cpp` already
+piggyback on. Shared secrets `AWS_OIDC_ROLE_ARN`, `PAT_TOKEN`, and the iOS
+signing set are reused as-is. No infra ticket needed.
+
+## ⛔ Remaining before this can go green
+
+1. **Mobile build of the test addons.** These addons have no prebuild pipeline,
    so the workflow sets `skip-prebuilds: true` to build from source for the
    device target. Confirm the harness cross-compiles a bare addon (with
    `add_bare_module` + the `../../../src` include of inference-addon-cpp) for
    android-arm64 / ios-arm64 during app build; if not, add a prebuilds workflow
    for each test addon and drop `skip-prebuilds`.
-3. **npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
+2. **npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
    `output-callback-lifetime`). The harness/`build-mobile-app` was written for
    `@qvac/*` packages; verify packing/app-build works for unscoped names (or
    scope them).
-4. **PR trigger wiring.** This workflow is currently `workflow_dispatch` +
+3. **PR trigger wiring.** This workflow is currently `workflow_dispatch` +
    `workflow_call` only. To run on PRs like the other addons it needs a
    `pull_request_target` `on-pr-inference-addon-cpp.yml` with the
    label-gate / authorize / verified gates (those provide the secret + OIDC
@@ -68,6 +76,6 @@ composites (setup → build-mobile-app → upload-to-devicefarm → schedule
 
 The addon-side scaffolding follows the embed-llamacpp reference exactly, but the
 Device Farm run, the on-device app build, and the cross-compile path could not
-be exercised without the ARNs, the private `tetherto/qvac-test-addon-mobile`
-framework, and a device. Treat the workflow as a starting point to iterate on
-once infra (1) is in place.
+be exercised without the private `tetherto/qvac-test-addon-mobile` framework and
+a device. Treat the workflow as a starting point to iterate on; the open
+question is the cross-compile path in item (1) above.

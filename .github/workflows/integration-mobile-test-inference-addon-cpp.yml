@@ -9,10 +9,15 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # run-mobile-integration-tests composite over each test addon (one Device Farm
 # app + single-pool run per addon per platform).
 #
-# ⚠️ DRAFT — cannot go green until infra provisions (see
+# Device Farm secrets: these are trivial functional test addons (no model
+# inference, no device-specific requirement), so they reuse the shared LLM
+# Device Farm project + pools (LLM_AWS_DEVICE_FARM_PROJECT_ARN /
+# LLM_ANDROID_DEVICE_POOL_ARN / LLM_IOS_DEVICE_POOL_ARN) — the same group
+# classification-ggml and diffusion-cpp already piggyback on. No new infra
+# secrets required.
+#
+# ⚠️ DRAFT — remaining open item (see
 # packages/inference-addon-cpp/docs/mobile-integration-tests.md):
-#   - AWS Device Farm project + pools: AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP,
-#     ANDROID_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP, IOS_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP
 #   - a mobile prebuild source for each test addon (skip-prebuilds builds from
 #     source; confirm the harness cross-compiles these bare addons on device
 #     targets)
@@ -124,16 +129,16 @@ jobs:
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
 
       - name: Schedule Device Farm test run
         id: schedule
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform.name }}
-          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_INFERENCE_ADDON_CPP }}
-          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP }}
-          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_INFERENCE_ADDON_CPP }}
+          device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
+          android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
+          ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
