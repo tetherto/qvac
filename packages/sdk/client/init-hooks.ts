@@ -1,56 +1,52 @@
-import type { QvacConfig, RuntimeContext } from "@/schemas";
-import {
-  getClientLogger,
-  setGlobalLogLevel,
-  setGlobalConsoleOutput,
-} from "@/logging";
-import { SetConfigFailedError } from "@/utils/errors-client";
+import type { QvacConfig, RuntimeContext } from '@/schemas'
+import { getClientLogger, setGlobalLogLevel, setGlobalConsoleOutput } from '@/logging'
+import { SetConfigFailedError } from '@/utils/errors-client'
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
-type ResolveConfigFn = () => Promise<QvacConfig | undefined>;
+type ResolveConfigFn = () => Promise<QvacConfig | undefined>
 
 // Minimal RPC interface for config initialization
 // Using loose types to avoid Buffer type conflicts between Node/Bare runtimes
 interface RPCClient {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  request(command: number): any;
+  request(command: number): any
 }
 
 function applyClientLoggerSettings(config: QvacConfig) {
   if (config.loggerLevel !== undefined) {
-    setGlobalLogLevel(config.loggerLevel);
+    setGlobalLogLevel(config.loggerLevel)
   }
   if (config.loggerConsoleOutput !== undefined) {
-    setGlobalConsoleOutput(config.loggerConsoleOutput);
+    setGlobalConsoleOutput(config.loggerConsoleOutput)
   }
 }
 
 async function sendInitMessage(
   rpc: RPCClient,
   config: QvacConfig | undefined,
-  runtimeContext: RuntimeContext | undefined,
+  runtimeContext: RuntimeContext | undefined
 ) {
   const initMessage = {
-    type: "__init_config",
+    type: '__init_config',
     config,
-    runtimeContext,
-  };
+    runtimeContext
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const req = rpc.request(1);
+  const req = rpc.request(1)
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  req.send(JSON.stringify(initMessage), "utf8");
+  req.send(JSON.stringify(initMessage), 'utf8')
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const response = await req.reply("utf8");
+  const response = await req.reply('utf8')
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
   const parsed = JSON.parse(response.toString()) as {
-    success: boolean;
-    error?: string;
-  };
+    success: boolean
+    error?: string
+  }
 
   if (!parsed.success) {
-    throw new SetConfigFailedError(parsed.error ?? "Unknown error");
+    throw new SetConfigFailedError(parsed.error ?? 'Unknown error')
   }
 }
 
@@ -65,30 +61,30 @@ async function sendInitMessage(
 export async function initializeConfig(
   rpc: RPCClient,
   resolveConfig: ResolveConfigFn,
-  runtimeContext?: RuntimeContext,
+  runtimeContext?: RuntimeContext
 ) {
-  const config = await resolveConfig();
+  const config = await resolveConfig()
 
   // Nothing to initialize
   if (!config && !runtimeContext) {
-    return;
+    return
   }
 
   // Apply client-side logger settings
   if (config) {
-    applyClientLoggerSettings(config);
-    logger.info("📦 Initializing SDK config");
+    applyClientLoggerSettings(config)
+    logger.info('📦 Initializing SDK config')
   }
 
   if (runtimeContext) {
-    logger.info("📱 Runtime context:", runtimeContext);
+    logger.info('📱 Runtime context:', runtimeContext)
   }
 
   try {
-    await sendInitMessage(rpc, config, runtimeContext);
-    logger.info("✅ Initialization complete");
+    await sendInitMessage(rpc, config, runtimeContext)
+    logger.info('✅ Initialization complete')
   } catch (error) {
-    logger.error("❌ Initialization failed:", error);
+    logger.error('❌ Initialization failed:', error)
   }
 }
 
@@ -98,6 +94,6 @@ export async function initializeConfig(
  */
 export function replayConfigIfCached() {
   logger.warn(
-    "⚠️ replayConfigIfCached is deprecated and has no effect. Config is now loaded from file during initialization.",
-  );
+    '⚠️ replayConfigIfCached is deprecated and has no effect. Config is now loaded from file during initialization.'
+  )
 }

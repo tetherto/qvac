@@ -3,7 +3,10 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <optional>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -221,6 +224,38 @@ void SdModel::load() {
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
+
+  std::string mainGpuBackend;
+  if (!config_.mainGpu.empty() &&
+      sd_backend_selection::parseConfigDeviceString(config_.device) ==
+          sd_backend_selection::ConfigDevice::Gpu) {
+    auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
+    if (auto resolved =
+            sd_backend_selection::resolveMainGpuBackendName(*mainGpuSpec);
+        resolved.has_value()) {
+      mainGpuBackend = *resolved;
+      params.backend = mainGpuBackend.c_str();
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "main-gpu pinning stable-diffusion backend '" + mainGpuBackend + "'");
+    } else {
+      // An explicit main-gpu request (e.g. 'integrated' on a host with no
+      // integrated GPU, 'dedicated' with no discrete GPU, or an out-of-range
+      // index) could not be satisfied. Fall back to CPU instead of silently
+      // using the first enumerated GPU, so the requested device class is never
+      // substituted by a different device. (An unset main-gpu keeps the
+      // backend default, i.e. the first enumerated device.)
+      params.preferred_gpu_backend = SD_BACKEND_PREF_CPU;
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "main-gpu '" + config_.mainGpu +
+              "' not available; falling back to CPU");
+    }
+  } else if (!config_.mainGpu.empty()) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "main-gpu ignored because device is 'cpu'");
+  }
 
   QLOG_IF(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,

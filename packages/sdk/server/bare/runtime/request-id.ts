@@ -1,4 +1,4 @@
-import { randomUUID } from "bare-crypto";
+import { randomUUID } from 'bare-crypto'
 
 /**
  * Server-side fallback for `requestId`. The new wire contract is that
@@ -11,5 +11,5 @@ import { randomUUID } from "bare-crypto";
  * Bare-runtime safe. Returns a v4 UUID.
  */
 export function generateServerRequestId(): string {
-  return randomUUID();
+  return randomUUID()
 }

@@ -23,57 +23,57 @@
  * module evaluations and runtimes.
  */
 
-import type { LogLevel } from "@qvac/logging";
-import type { Logger } from "./types";
+import type { LogLevel } from '@qvac/logging'
+import type { Logger } from './types'
 
-const REGISTRY_KEY = Symbol.for("@qvac/sdk:logger-registry");
-const GLOBAL_LEVEL_KEY = Symbol.for("@qvac/sdk:global-log-level");
-const GLOBAL_CONSOLE_KEY = Symbol.for("@qvac/sdk:global-console-output");
+const REGISTRY_KEY = Symbol.for('@qvac/sdk:logger-registry')
+const GLOBAL_LEVEL_KEY = Symbol.for('@qvac/sdk:global-log-level')
+const GLOBAL_CONSOLE_KEY = Symbol.for('@qvac/sdk:global-console-output')
 
 type GlobalState = {
-  [REGISTRY_KEY]?: Set<Logger>;
-  [GLOBAL_LEVEL_KEY]?: LogLevel;
-  [GLOBAL_CONSOLE_KEY]?: boolean;
-};
+  [REGISTRY_KEY]?: Set<Logger>
+  [GLOBAL_LEVEL_KEY]?: LogLevel
+  [GLOBAL_CONSOLE_KEY]?: boolean
+}
 
 function getGlobal(): GlobalState {
-  return globalThis as GlobalState;
+  return globalThis as GlobalState
 }
 
 function getRegistry(): Set<Logger> {
-  const global = getGlobal();
+  const global = getGlobal()
   if (!global[REGISTRY_KEY]) {
-    global[REGISTRY_KEY] = new Set<Logger>();
+    global[REGISTRY_KEY] = new Set<Logger>()
   }
-  return global[REGISTRY_KEY];
+  return global[REGISTRY_KEY]
 }
 
 export function registerLogger(logger: Logger) {
-  const global = getGlobal();
-  getRegistry().add(logger);
+  const global = getGlobal()
+  getRegistry().add(logger)
 
   if (global[GLOBAL_LEVEL_KEY] !== undefined) {
-    logger.setLevel(global[GLOBAL_LEVEL_KEY]);
+    logger.setLevel(global[GLOBAL_LEVEL_KEY])
   }
   if (global[GLOBAL_CONSOLE_KEY] !== undefined) {
-    logger.setConsoleOutput(global[GLOBAL_CONSOLE_KEY]);
+    logger.setConsoleOutput(global[GLOBAL_CONSOLE_KEY])
   }
 }
 
 export function unregisterLogger(logger: Logger) {
-  getRegistry().delete(logger);
+  getRegistry().delete(logger)
 }
 
 export function setGlobalLogLevel(level: LogLevel) {
-  getGlobal()[GLOBAL_LEVEL_KEY] = level;
+  getGlobal()[GLOBAL_LEVEL_KEY] = level
   for (const logger of getRegistry()) {
-    logger.setLevel(level);
+    logger.setLevel(level)
   }
 }
 
 export function setGlobalConsoleOutput(enabled: boolean) {
-  getGlobal()[GLOBAL_CONSOLE_KEY] = enabled;
+  getGlobal()[GLOBAL_CONSOLE_KEY] = enabled
   for (const logger of getRegistry()) {
-    logger.setConsoleOutput(enabled);
+    logger.setConsoleOutput(enabled)
   }
 }

@@ -1,5 +1,5 @@
-import { send } from "@/client/rpc/rpc-client";
-import { InvalidResponseError } from "@/utils/errors-client";
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
  * Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore
@@ -31,8 +31,8 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * console.log(await state()); // "suspended"
  */
 export async function suspend(): Promise<void> {
-  const response = await send({ type: "suspend" });
-  if (response.type !== "suspend") {
-    throw new InvalidResponseError("suspend");
+  const response = await send({ type: 'suspend' })
+  if (response.type !== 'suspend') {
+    throw new InvalidResponseError('suspend')
   }
 }
