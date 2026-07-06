@@ -10,8 +10,6 @@ import { validateConfig, type QvacConfig } from './config-utils'
 import { ConfigFileInvalidError, ConfigFileParseFailedError } from '../utils/errors-client'
 import { getClientLogger } from '../logging'
 
-declare function require(modulePath: string): { default?: unknown }
-
 const SUPPORTED_CONFIG_FILE_EXTS = ['.js', '.json']
 
 const logger = getClientLogger()
@@ -34,11 +32,11 @@ function assertBareConfigExtension(filePath: string) {
   }
 }
 
-function loadConfigFromPath(filePath: string): QvacConfig {
+async function loadConfigFromPath(filePath: string): Promise<QvacConfig> {
   assertBareConfigExtension(filePath)
   try {
-    const configModule: { default?: unknown } = require(filePath)
-    return validateConfig(configModule.default || configModule)
+    const mod = (await import('file://' + filePath)) as { default?: unknown }
+    return validateConfig(mod.default ?? mod)
   } catch (error) {
     throw new ConfigFileParseFailedError(
       filePath,
@@ -67,7 +65,6 @@ function findConfigFile(searchDir: string): string | undefined {
  * 2. Config file in project root (qvac.config.js, qvac.config.json)
  * 3. SDK defaults
  */
-// eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
   const configPath = env['QVAC_CONFIG_PATH']
 
@@ -75,7 +72,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
     const normalizedPath = path.resolve(configPath)
 
     if (fileExists(normalizedPath)) {
-      const config = loadConfigFromPath(normalizedPath)
+      const config = await loadConfigFromPath(normalizedPath)
 
       logger.info(`✅ Loaded config from: ${normalizedPath}`)
       return config
@@ -86,7 +83,7 @@ export async function resolveConfig(): Promise<QvacConfig | undefined> {
   if (projectRoot) {
     const configFilePath = findConfigFile(projectRoot)
     if (configFilePath) {
-      const config = loadConfigFromPath(configFilePath)
+      const config = await loadConfigFromPath(configFilePath)
 
       logger.info(`✅ Loaded config from: ${configFilePath}`)
       return config
