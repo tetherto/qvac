@@ -194,6 +194,8 @@
     "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
     "bare:example": "bare ./scripts/bare-bootstrap.js",
+    "contract:export": "tsx ./scripts/export-contract.ts",
+    "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
     "update-models": "tsx ./models/update-models/index.ts",
