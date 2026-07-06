@@ -101,39 +101,39 @@ export const ttsSupertonicSentenceStream: TestDefinition = {
 // public TTS result exposes only the PCM buffer (no sampleRate/stats), so a
 // relative sample-count comparison is the strongest available assertion.
 export const ttsSupertonicOutputSampleRate: TestDefinition = {
-  testId: "tts-supertonic-output-sample-rate",
+  testId: 'tts-supertonic-output-sample-rate',
   params: {
-    text: "This is a test of the output sample rate configuration for speech synthesis.",
-    stream: false,
+    text: 'This is a test of the output sample rate configuration for speech synthesis.',
+    stream: false
   },
   expectation: {
-    validation: "contains-all",
-    contains: ["outputSampleRate-verified", "samples"],
+    validation: 'contains-all',
+    contains: ['outputSampleRate-verified', 'samples']
   },
   metadata: {
-    category: "tts",
-    dependency: "tts-supertonic+tts-supertonic-8k",
-    estimatedDurationMs: 90000,
-  },
-};
+    category: 'tts',
+    dependency: 'tts-supertonic+tts-supertonic-8k',
+    estimatedDurationMs: 90000
+  }
+}
 
 // LavaSR denoiser + enhancer: proves the two-stage LavaSR chain wires up,
 // downloads its GGUFs, and produces valid audio end to end. The enhancer forces
 // 48 kHz internally, but that rate isn't observable through the public TTS
 // result, so this asserts a non-empty buffer (the executor fails on 0 samples).
 export const ttsSupertonicEnhanced: TestDefinition = {
-  testId: "tts-supertonic-enhanced",
+  testId: 'tts-supertonic-enhanced',
   params: {
-    text: "This is a test of the LavaSR speech enhancer and denoiser.",
-    stream: false,
+    text: 'This is a test of the LavaSR speech enhancer and denoiser.',
+    stream: false
   },
-  expectation: { validation: "contains-all", contains: ["enhanced", "samples"] },
+  expectation: { validation: 'contains-all', contains: ['enhanced', 'samples'] },
   metadata: {
-    category: "tts",
-    dependency: "tts-supertonic-enhanced",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'tts',
+    dependency: 'tts-supertonic-enhanced',
+    estimatedDurationMs: 60000
+  }
+}
 
 export const ttsTests = [
   ttsChatterboxShortText,
@@ -147,5 +147,5 @@ export const ttsTests = [
   ttsSupertonicMultilingualText,
   ttsSupertonicSentenceStream,
   ttsSupertonicOutputSampleRate,
-  ttsSupertonicEnhanced,
-];
+  ttsSupertonicEnhanced
+]

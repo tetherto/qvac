@@ -40,24 +40,20 @@ function rejectLegacyOnnxFields(cfg: object) {
 
 // Resolve the optional LavaSR enhancer/denoiser GGUFs shared by both engines.
 async function resolveLavasrArtifacts(
-  lavasrEnhancerModelSrc: TtsChatterboxLoadConfig["lavasrEnhancerModelSrc"],
-  lavasrDenoiserModelSrc: TtsChatterboxLoadConfig["lavasrDenoiserModelSrc"],
-  ctx: ResolveContext,
+  lavasrEnhancerModelSrc: TtsChatterboxLoadConfig['lavasrEnhancerModelSrc'],
+  lavasrDenoiserModelSrc: TtsChatterboxLoadConfig['lavasrDenoiserModelSrc'],
+  ctx: ResolveContext
 ) {
-  const resolve = ctx.resolveModelPath;
+  const resolve = ctx.resolveModelPath
   const [lavasrEnhancerPath, lavasrDenoiserPath] = await Promise.all([
-    lavasrEnhancerModelSrc
-      ? resolve(lavasrEnhancerModelSrc)
-      : Promise.resolve(undefined),
-    lavasrDenoiserModelSrc
-      ? resolve(lavasrDenoiserModelSrc)
-      : Promise.resolve(undefined),
-  ]);
+    lavasrEnhancerModelSrc ? resolve(lavasrEnhancerModelSrc) : Promise.resolve(undefined),
+    lavasrDenoiserModelSrc ? resolve(lavasrDenoiserModelSrc) : Promise.resolve(undefined)
+  ])
 
   return {
     ...(lavasrEnhancerPath ? { lavasrEnhancerPath } : {}),
-    ...(lavasrDenoiserPath ? { lavasrDenoiserPath } : {}),
-  };
+    ...(lavasrDenoiserPath ? { lavasrDenoiserPath } : {})
+  }
 }
 
 async function resolveChatterboxConfig(
@@ -72,53 +68,53 @@ async function resolveChatterboxConfig(
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
     ...runtime
-  } = config;
+  } = config
   if (!s3genModelSrc) {
     throw new TtsArtifactsRequiredError()
   }
 
-  const resolve = ctx.resolveModelPath;
+  const resolve = ctx.resolveModelPath
   const [s3genPath, referenceAudioPath, lavasrArtifacts] = await Promise.all([
     resolve(s3genModelSrc),
     referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
-    resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx),
-  ]);
+    resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx)
+  ])
 
   return {
     config: runtime,
     artifacts: {
       s3genPath,
       ...(referenceAudioPath ? { referenceAudioPath } : {}),
-      ...lavasrArtifacts,
-    },
-  };
+      ...lavasrArtifacts
+    }
+  }
 }
 
 async function resolveSupertonicConfig(
   config: TtsSupertonicLoadConfig,
-  ctx: ResolveContext,
+  ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
-  rejectLegacyOnnxFields(config);
+  rejectLegacyOnnxFields(config)
 
-  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config;
+  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
   const lavasrArtifacts = await resolveLavasrArtifacts(
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
-    ctx,
-  );
+    ctx
+  )
 
-  return { config: runtime, artifacts: lavasrArtifacts };
+  return { config: runtime, artifacts: lavasrArtifacts }
 }
 
 // Build the optional LavaSR `files` entries from resolved artifacts. Supplying
 // a path is what enables the stage in @qvac/tts-ggml — there is no on/off flag.
 function lavasrFiles(artifacts: Record<string, string | undefined>) {
-  const lavasrEnhancer = artifacts["lavasrEnhancerPath"];
-  const lavasrDenoiser = artifacts["lavasrDenoiserPath"];
+  const lavasrEnhancer = artifacts['lavasrEnhancerPath']
+  const lavasrDenoiser = artifacts['lavasrDenoiserPath']
   return {
     ...(lavasrEnhancer ? { lavasrEnhancer } : {}),
-    ...(lavasrDenoiser ? { lavasrDenoiser } : {}),
-  };
+    ...(lavasrDenoiser ? { lavasrDenoiser } : {})
+  }
 }
 
 function createChatterboxModel(
@@ -168,7 +164,7 @@ function createSupertonicModel(
   modelId: string,
   config: TtsSupertonicRuntimeConfig,
   params: CreateModelParams,
-  artifacts: Record<string, string | undefined>,
+  artifacts: Record<string, string | undefined>
 ): PluginModelResult {
   const supertonicModel = params.modelPath
   if (!supertonicModel) {
@@ -181,17 +177,17 @@ function createSupertonicModel(
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
     files: { supertonicModel, ...lavasrFiles(artifacts) },
-    voice: config.voice ?? "F1",
+    voice: config.voice ?? 'F1',
     ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
     ...(config.ttsNumInferenceSteps !== undefined
       ? { numInferenceSteps: config.ttsNumInferenceSteps }
       : {}),
     config: {
-      language: config.language ?? "en",
+      language: config.language ?? 'en',
       useGPU: config.useGPU ?? false,
       ...(config.outputSampleRate !== undefined
         ? { outputSampleRate: config.outputSampleRate }
-        : {}),
+        : {})
     },
     logger,
     opts: { stats: true },
@@ -211,8 +207,8 @@ export const ttsPlugin = definePlugin({
     const { ttsEngine } = cfg as { ttsEngine?: string }
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
-    if (ttsEngine === "supertonic") {
-      return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx);
+    if (ttsEngine === 'supertonic') {
+      return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
     }
     return resolveChatterboxConfig(cfg as TtsChatterboxLoadConfig, ctx)
   },
@@ -221,8 +217,8 @@ export const ttsPlugin = definePlugin({
     const config = (params.modelConfig ?? {}) as TtsRuntimeConfig
     const artifacts = params.artifacts ?? {}
 
-    if (config.ttsEngine === "supertonic") {
-      return createSupertonicModel(params.modelId, config, params, artifacts);
+    if (config.ttsEngine === 'supertonic') {
+      return createSupertonicModel(params.modelId, config, params, artifacts)
     }
 
     return createChatterboxModel(params.modelId, config, params, artifacts)

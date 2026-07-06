@@ -16,13 +16,13 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
 
   protected handlers = Object.fromEntries(
     ttsTests.map((test) => {
-      const params = test.params as TtsParams;
-      const dep = test.metadata?.dependency || "tts-chatterbox";
-      if (test.testId === "tts-supertonic-output-sample-rate") {
-        return [test.testId, this.makeOutputSampleRateComparison()];
+      const params = test.params as TtsParams
+      const dep = test.metadata?.dependency || 'tts-chatterbox'
+      if (test.testId === 'tts-supertonic-output-sample-rate') {
+        return [test.testId, this.makeOutputSampleRateComparison()]
       }
-      if (test.testId === "tts-supertonic-enhanced") {
-        return [test.testId, this.makeEnhanced(dep)];
+      if (test.testId === 'tts-supertonic-enhanced') {
+        return [test.testId, this.makeEnhanced(dep)]
       }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
@@ -44,11 +44,11 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
     const result: TtsResult = textToSpeech({
       modelId,
       text,
-      inputType: "text",
-      stream: false,
-    });
-    const audioBuffer = await result.buffer;
-    return audioBuffer?.length ?? 0;
+      inputType: 'text',
+      stream: false
+    })
+    const audioBuffer = await result.buffer
+    return audioBuffer?.length ?? 0
   }
 
   // LavaSR enhancer + denoiser happy path: the enhancer forces 48 kHz internally,
@@ -56,25 +56,25 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   // two-stage chain produces a non-empty buffer end to end.
   private makeEnhanced(dep: string) {
     return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {
-      const modelId = await this.resources.ensureLoaded(dep);
+      const modelId = await this.resources.ensureLoaded(dep)
 
       try {
-        const samples = await this.countSamples(modelId, params.text);
+        const samples = await this.countSamples(modelId, params.text)
         if (samples === 0) {
           return {
             passed: false,
-            output: "LavaSR enhanced synthesis produced no audio (0 samples)",
-          };
+            output: 'LavaSR enhanced synthesis produced no audio (0 samples)'
+          }
         }
         return ValidationHelpers.validate(
           `LavaSR enhanced synthesis produced ${samples} samples`,
-          expectation,
-        );
+          expectation
+        )
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return { passed: false, output: `TTS enhanced error: ${errorMsg}` };
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        return { passed: false, output: `TTS enhanced error: ${errorMsg}` }
       }
-    };
+    }
   }
 
   // outputSampleRate happy path: run the same text through the native-rate
@@ -84,37 +84,37 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   // effect. Only the ratio-pass branch emits `outputSampleRate-verified`.
   private makeOutputSampleRateComparison() {
     return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {
-      const nativeId = await this.resources.ensureLoaded("tts-supertonic");
-      const downId = await this.resources.ensureLoaded("tts-supertonic-8k");
+      const nativeId = await this.resources.ensureLoaded('tts-supertonic')
+      const downId = await this.resources.ensureLoaded('tts-supertonic-8k')
 
       try {
-        const nativeSamples = await this.countSamples(nativeId, params.text);
-        const downSamples = await this.countSamples(downId, params.text);
+        const nativeSamples = await this.countSamples(nativeId, params.text)
+        const downSamples = await this.countSamples(downId, params.text)
 
         if (nativeSamples === 0 || downSamples === 0) {
           return {
             passed: false,
-            output: `outputSampleRate comparison produced empty audio (native=${nativeSamples}, down=${downSamples})`,
-          };
+            output: `outputSampleRate comparison produced empty audio (native=${nativeSamples}, down=${downSamples})`
+          }
         }
 
-        const ratio = nativeSamples / downSamples;
+        const ratio = nativeSamples / downSamples
         if (ratio < 3) {
           return {
             passed: false,
-            output: `outputSampleRate ratio too low: native/down=${ratio.toFixed(2)} (native=${nativeSamples} @44100, down=${downSamples} @8000)`,
-          };
+            output: `outputSampleRate ratio too low: native/down=${ratio.toFixed(2)} (native=${nativeSamples} @44100, down=${downSamples} @8000)`
+          }
         }
 
         return ValidationHelpers.validate(
           `outputSampleRate-verified: native=${nativeSamples} @44100 vs down=${downSamples} @8000 (ratio ${ratio.toFixed(2)}, samples compared)`,
-          expectation,
-        );
+          expectation
+        )
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return { passed: false, output: `TTS outputSampleRate error: ${errorMsg}` };
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        return { passed: false, output: `TTS outputSampleRate error: ${errorMsg}` }
       }
-    };
+    }
   }
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
