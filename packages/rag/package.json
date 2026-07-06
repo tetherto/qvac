@@ -67,7 +67,7 @@
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
     "lunte": "^1.8.1",
-    "prettier": "^3.8.4",
+    "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "test-tmp": "^1.4.0"
   },

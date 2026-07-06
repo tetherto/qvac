@@ -24,7 +24,7 @@
   "devDependencies": {
     "brittle": "^3.15.0",
     "lunte": "^1.8.1",
-    "prettier": "^3.8.4",
+    "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0"
   },
   "imports": {
