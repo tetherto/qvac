@@ -1,7 +1,7 @@
-import { type HeartbeatRequest, type HeartbeatResponse } from "@/schemas";
-import type { DelegateBase } from "@/schemas/delegate";
-import { send } from "@/client/rpc/rpc-client";
-import { InvalidResponseError } from "@/utils/errors-client";
+import { type HeartbeatRequest, type HeartbeatResponse } from '@/schemas'
+import type { DelegateBase } from '@/schemas/delegate'
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
  * Checks if a delegated provider is online by sending a heartbeat round-trip.
@@ -27,19 +27,16 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * // Check if the local SDK worker is responsive
  * await heartbeat();
  */
-export async function heartbeat(params?: {
-  delegate?: DelegateBase;
-}): Promise<HeartbeatResponse> {
+export async function heartbeat(params?: { delegate?: DelegateBase }): Promise<HeartbeatResponse> {
   const request: HeartbeatRequest = {
-    type: "heartbeat",
-    ...(params?.delegate && { delegate: params.delegate }),
-  };
-
-  const response = await send(request);
-  if (response.type !== "heartbeat") {
-    throw new InvalidResponseError("heartbeat");
+    type: 'heartbeat',
+    ...(params?.delegate && { delegate: params.delegate })
   }
 
-  return response;
-}
+  const response = await send(request)
+  if (response.type !== 'heartbeat') {
+    throw new InvalidResponseError('heartbeat')
+  }
 
+  return response
+}

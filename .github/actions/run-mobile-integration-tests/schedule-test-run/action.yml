@@ -22,10 +22,14 @@ description: |
 
   4. Single-device (test-specs has 1 entry AND scheduling-mode=single-device):
        Schedule ONE run on ONE device picked by a model filter
-       (device-model CONTAINS + optional device-manufacturer EQUALS,
+       (device-model with the device-model-operator — default CONTAINS,
+       EQUALS to pin an exact model — + optional device-manufacturer EQUALS,
        maxDevices 1). Used by the VLM benchmark to pin each leg to exactly
        one phone — extra devices only add Device Farm queue/concurrency
-       contention and can outwait the caller's job ceiling.
+       contention and can outwait the caller's job ceiling. CONTAINS matches
+       every model containing the value ("Pixel 9" also matches "Pixel 9 Pro
+       XL"; Device Farm then picks by availability), so callers that need a
+       specific subfamily member pass EQUALS with the exact model string.
 
 inputs:
   platform:
@@ -58,7 +62,11 @@ inputs:
     required: false
     default: "dual-flagship"
   device-model:
-    description: "single-device mode: MODEL CONTAINS filter value, e.g. 'S25 Ultra', 'iPhone 17'"
+    description: "single-device mode: MODEL filter value, e.g. 'Pixel 9', 'iPhone 17 Pro' (matched per device-model-operator)"
+    required: false
+    default: ""
+  device-model-operator:
+    description: "single-device mode: MODEL filter operator — CONTAINS (default; any model containing the value, availability-picked) or EQUALS (exact model only). Empty = CONTAINS, preserving pre-existing behavior for all callers."
     required: false
     default: ""
   device-manufacturer:
@@ -94,6 +102,7 @@ runs:
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
         SCHEDULING_MODE: ${{ inputs.scheduling-mode }}
         DEVICE_MODEL: ${{ inputs.device-model }}
+        DEVICE_MODEL_OPERATOR: ${{ inputs.device-model-operator }}
         DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
       run: |
@@ -180,10 +189,20 @@ runs:
           fi
           SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
-          FILTER=$(jq -nc --arg plat "$PLAT_UPPER" --arg model "$DEVICE_MODEL" --arg man "$DEVICE_MANUFACTURER" '{
+          # MODEL operator: empty input = CONTAINS (pre-existing behavior — any model
+          # containing the value is eligible and Device Farm picks by availability).
+          # EQUALS pins the exact model so subfamily variants (e.g. "Pixel 9 Pro XL"
+          # for "Pixel 9") can never be substituted. Validate to fail loud on typos.
+          MODEL_OP="${DEVICE_MODEL_OPERATOR:-CONTAINS}"
+          case "$MODEL_OP" in
+            EQUALS|CONTAINS) ;;
+            *) echo "ERROR: device-model-operator must be EQUALS or CONTAINS (got '$MODEL_OP')" >&2; exit 1 ;;
+          esac
+          echo "Device filter: MODEL $MODEL_OP '$DEVICE_MODEL' (manufacturer: ${DEVICE_MANUFACTURER:-any})"
+          FILTER=$(jq -nc --arg plat "$PLAT_UPPER" --arg model "$DEVICE_MODEL" --arg op "$MODEL_OP" --arg man "$DEVICE_MANUFACTURER" '{
             filters: ([
-              {attribute:"PLATFORM", operator:"EQUALS",   values:[$plat]},
-              {attribute:"MODEL",    operator:"CONTAINS", values:[$model]}
+              {attribute:"PLATFORM", operator:"EQUALS", values:[$plat]},
+              {attribute:"MODEL",    operator:$op,      values:[$model]}
             ] + (if $man != "" then [{attribute:"MANUFACTURER", operator:"EQUALS", values:[$man]}] else [] end)),
             maxDevices: 1
           }')

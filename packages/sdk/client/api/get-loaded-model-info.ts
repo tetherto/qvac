@@ -1,11 +1,11 @@
 import {
   type GetLoadedModelInfoParams,
   type GetLoadedModelInfoRequest,
-  type LoadedModelInfo,
-} from "@/schemas";
-import { type RPCOptions } from "@/schemas/common";
-import { send } from "@/client/rpc/rpc-client";
-import { InvalidResponseError } from "@/utils/errors-client";
+  type LoadedModelInfo
+} from '@/schemas'
+import { type RPCOptions } from '@/schemas/common'
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
  * Returns introspection info for a loaded `modelId` (local or delegated).
@@ -30,17 +30,17 @@ import { InvalidResponseError } from "@/utils/errors-client";
  */
 export async function getLoadedModelInfo(
   params: GetLoadedModelInfoParams,
-  rpcOptions?: RPCOptions,
+  rpcOptions?: RPCOptions
 ): Promise<LoadedModelInfo> {
   const request: GetLoadedModelInfoRequest = {
-    type: "getLoadedModelInfo",
-    modelId: params.modelId,
-  };
-
-  const response = await send(request, rpcOptions);
-  if (response.type !== "getLoadedModelInfo") {
-    throw new InvalidResponseError("getLoadedModelInfo");
+    type: 'getLoadedModelInfo',
+    modelId: params.modelId
   }
 
-  return response.info;
+  const response = await send(request, rpcOptions)
+  if (response.type !== 'getLoadedModelInfo') {
+    throw new InvalidResponseError('getLoadedModelInfo')
+  }
+
+  return response.info
 }

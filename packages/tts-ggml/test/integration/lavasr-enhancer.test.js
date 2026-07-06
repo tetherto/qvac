@@ -198,7 +198,7 @@ test('Chatterbox + LavaSR enhancer + native chunk streaming emits 48 kHz chunks'
       lavasrEnhancer: enh.path
     },
     referenceAudio: resolveRefWavPath({}),
-    streamChunkTokens: 25, // native chunk streaming + enhancer (the QVAC-21482 path)
+    streamChunkTokens: 25, // native chunk streaming + enhancer (the path)
     config: { language: 'en', useGPU: false },
     opts: { stats: true }
   })
