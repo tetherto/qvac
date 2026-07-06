@@ -14,10 +14,12 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const isWindows = platform === 'win32'
+const isMobile = platform === 'android' || platform === 'ios'
 
-// Windows Vulkan backend is slower, increase timeout
+// Windows Vulkan and mobile GPU backends are much slower; increase timeout so a
+// slow load/generation (or a retried large-model download) doesn't fail the test.
 const BASE_TIMEOUT = 600_000
-const testTimeout = isWindows ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const testTimeout = (isWindows || isMobile) ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 const DEFAULT_MODEL = {
   name: 'stable-diffusion-v2-1-Q8_0.gguf',
