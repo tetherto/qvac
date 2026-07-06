@@ -776,4 +776,85 @@ TEST_F(MultiJobSchedulerTest, UnknownPerJobStatsFallBackToGenericSnapshot) {
   EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{6});
 }
 
+// (n) The multi-job path is the tagged path: the untagged sentinel carries no
+// identity to correlate or cancel by, so it must be refused (return false, the
+// existing "false = rejected" idiom), not admitted.
+TEST_F(MultiJobSchedulerTest, RejectsNoJobIdSentinel) {
+  build(2, std::chrono::milliseconds{50});
+
+  EXPECT_FALSE(scheduler_->runJob(std::string("job"), kNoJobId))
+      << "runJob must reject the untagged sentinel on the tagged path";
+  EXPECT_EQ(scheduler_->activeJobs(), 0u)
+      << "a rejected sentinel job must not be admitted";
+}
+
+// (o) Duplicate id of a QUEUED job: the second submission is refused, and the
+// original queued job still runs exactly once (no silent no-op overwrite of the
+// queued-index entry). A single worker holds the pool so the second job would
+// have to queue behind the first.
+TEST_F(MultiJobSchedulerTest, RejectsDuplicateOfQueuedJob) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 2, std::chrono::milliseconds{60});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("inflight"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  ASSERT_EQ(scheduler_->activeJobs(), 2u);
+
+  EXPECT_FALSE(scheduler_->runJob(std::string("dup"), 2))
+      << "a duplicate of a queued id must be rejected";
+  EXPECT_EQ(scheduler_->activeJobs(), 2u)
+      << "a rejected duplicate must not inflate the admitted count";
+
+  scheduler_->cancel(1);
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  const std::vector<JobId> order = tracking->startOrder();
+  EXPECT_EQ(std::count(order.begin(), order.end(), JobId{2}), 1)
+      << "the queued job must run exactly once, not be duplicated";
+}
+
+// (p) Duplicate id of an IN-FLIGHT job: while a long-running job holds id 1, a
+// second runJob with id 1 must be refused. Uses the blocking-model pattern to
+// pin the job in flight.
+TEST_F(MultiJobSchedulerTest, RejectsDuplicateOfInFlightJob) {
+  build(2, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+
+  EXPECT_FALSE(scheduler_->runJob(std::string("dup"), 1))
+      << "a duplicate of an in-flight id must be rejected";
+  EXPECT_EQ(scheduler_->activeJobs(), 1u)
+      << "a rejected duplicate must not inflate the admitted count";
+
+  scheduler_->cancelAll();
+}
+
+// (q) The idle-path exclusive admission is also the tagged path: runExclusiveJob
+// must refuse the untagged sentinel from an idle scheduler.
+TEST_F(MultiJobSchedulerTest, ExclusiveRejectsNoJobIdSentinel) {
+  build(2, std::chrono::milliseconds{50});
+
+  EXPECT_FALSE(scheduler_->runExclusiveJob(std::string("finetune"), kNoJobId))
+      << "runExclusiveJob must reject the untagged sentinel";
+  EXPECT_EQ(scheduler_->activeJobs(), 0u);
+}
+
+// (r) An id is only reserved while its job is live: once the job completes, the
+// same id is admissible again (uniqueness must track live ids, not ban an id
+// forever).
+TEST_F(MultiJobSchedulerTest, IdReusableAfterCompletion) {
+  build(2, std::chrono::milliseconds{20});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("first"), 7));
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("second"), 7))
+      << "an id must be admissible again once its prior job has completed";
+  scheduler_->cancelAll();
+}
+
 } // namespace qvac_lib_inference_addon_cpp
