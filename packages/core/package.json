@@ -74,7 +74,8 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
-    "test": "brittle-bare 'test/**/*.test.ts'"
+    "test": "brittle-bare 'test/**/*.test.ts'",
+    "test:bare": "bun run test"
   },
   "engines": {
     "bare": "^1.30.3"

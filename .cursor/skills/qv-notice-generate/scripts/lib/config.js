@@ -42,12 +42,14 @@ for (const [engine, pkgDir] of Object.entries(ENGINE_MAP)) {
 
 // ---------------------------------------------------------------------------
 // Packages that get the FULL model list in their NOTICE
-// bare-sdk re-exports sdk's compiled output, so it must carry the same
-// model attributions (Gemma terms, etc.) as sdk.
+// bare-sdk re-exports sdk's compiled output, and core ships the same
+// models/registry catalog, so both must carry the same model attributions
+// (Gemma terms, etc.) as sdk.
 // ---------------------------------------------------------------------------
 const FULL_MODEL_LIST_PACKAGES = [
   'sdk',
   'bare-sdk',
+  'core',
   'registry-server/client'
 ]
 

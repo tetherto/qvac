@@ -10,6 +10,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/core/**"
   pull_request_target:
     types:
       - opened
@@ -25,6 +26,7 @@ on:
     paths:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
+      - "packages/core/**"
 
   workflow_dispatch:
     inputs:
@@ -128,22 +130,24 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify @qvac/sdk and @qvac/bare-sdk version lockstep
+      - name: Verify @qvac/sdk, @qvac/bare-sdk and @qvac/core version lockstep
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          # pull_request_target pins the working tree to base.sha; read both
-          # manifests from the PR head SHA so a missed bare-sdk bump fails pre-merge.
+          # pull_request_target pins the working tree to base.sha; read the
+          # manifests from the PR head SHA so a missed bare-sdk/core bump fails
+          # pre-merge. All three ship in lockstep at one version.
           set -euo pipefail
           REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
-          if [ "$SDK_VER" != "$BARE_VER" ]; then
-            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
+          CORE_VER=$(git show "${REF}":packages/core/package.json | jq -r .version)
+          if [ "$SDK_VER" != "$BARE_VER" ] || [ "$SDK_VER" != "$CORE_VER" ]; then
+            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER vs @qvac/core@$CORE_VER at ${REF}. All three must share the same version (lockstep release). Bump them together in the release branch."
             exit 1
           fi
-          echo "OK: @qvac/sdk and @qvac/bare-sdk both at $SDK_VER (verified at ${REF})"
+          echo "OK: @qvac/sdk, @qvac/bare-sdk and @qvac/core all at $SDK_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -498,6 +502,61 @@ jobs:
           workdir: ${{ env.WORKDIR_BARE }}
           name-suffix: "-mono"
 
+  publish-gpr-core:
+    name: Publish @qvac/core to GitHub Packages (GPR)
+    needs: [publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WORKDIR_CORE: packages/core
+    steps:
+      # @qvac/core ships its TypeScript source (files: src/**), so there is no
+      # build/dist step — the checkout already carries what gets published.
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Modify core package name for branch-based test publishing
+        working-directory: ${{ env.WORKDIR_CORE }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          case "$BRANCH_NAME" in
+            dev)
+              SUFFIX="dev"
+              ;;
+            fix-*|feature-*)
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              ;;
+            *)
+              echo "Branch $BRANCH_NAME not configured for modified package name"
+              exit 0
+              ;;
+          esac
+
+          echo "Modifying core package name for branch: $BRANCH_NAME → suffix: $SUFFIX"
+
+          ORIGINAL_NAME=$(node -p "require('./package.json').name")
+          NEW_NAME="${ORIGINAL_NAME}-${SUFFIX}"
+
+          jq ".name = \"${NEW_NAME}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          MODIFIED_NAME=$(node -p "require('./package.json').name")
+          echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
+
+      - name: Publish to GitHub Package Registry
+        id: publish
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ inputs.tag || github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag || 'dev'}}
+          workdir: ${{ env.WORKDIR_CORE }}
+          name-suffix: "-mono"
+
   publish-npm:
     name: Publish to NPM
     needs:
@@ -505,6 +564,9 @@ jobs:
       - publish-logic
       - release-merge-guard
       - label-gate
+      # Core publishes first so @qvac/core@<version> is on npm before the SDK
+      # that will depend on it (acyclic: core is a leaf).
+      - publish-npm-core
     if: >-
       needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
@@ -610,14 +672,62 @@ jobs:
           tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.WORKDIR_BARE }}
 
+  publish-npm-core:
+    name: Publish @qvac/core to NPM
+    needs:
+      - publish-logic
+      - release-merge-guard
+      - label-gate
+    if: >-
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    runs-on: ubuntu-latest
+    environment: npm
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    env:
+      WORKDIR_CORE: packages/core
+    steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
+      # @qvac/core ships source (files: src/**) — no dist artifact to download.
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Determine dist-tag
+        id: dist-tag-core
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ env.WORKDIR_CORE }}
+          tag: ${{ inputs.npm_tag }}
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          tag: ${{ steps.dist-tag-core.outputs.tag }}
+          workdir: ${{ env.WORKDIR_CORE }}
+
   # Create GitHub release only for actual releases (after NPM publish).
-  # Gated on BOTH publish-npm jobs succeeding so we never tag a release
-  # where @qvac/sdk shipped but @qvac/bare-sdk failed (or vice versa)
+  # Gated on ALL THREE publish-npm jobs succeeding so we never tag a release
+  # where one of @qvac/sdk, @qvac/bare-sdk or @qvac/core shipped but another failed.
   publish-release:
-    needs: [publish-npm, publish-npm-bare-sdk]
+    needs: [publish-npm, publish-npm-bare-sdk, publish-npm-core]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
       && needs.publish-npm-bare-sdk.result == 'success' && needs.publish-npm-bare-sdk.outputs.published_version != ''
+      && needs.publish-npm-core.result == 'success' && needs.publish-npm-core.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
