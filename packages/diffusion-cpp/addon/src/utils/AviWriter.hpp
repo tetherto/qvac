@@ -28,6 +28,15 @@ namespace qvac_lib_inference_addon_sd {
  *     idx1 <size>
  *       00dc 0x10 <offset> <size>   x num_frames
  *
+ * Optional audio: when `audio` is non-null and carries samples, a second
+ * AVI stream (`auds` / WAVE_FORMAT_IEEE_FLOAT, 32-bit float) is added and the
+ * decoded waveform is written as a single trailing `01wb` chunk. The engine
+ * hands back PLANAR channel-major float (`data[c*sample_count + s]`); this
+ * function de-planarizes it to the interleaved layout AVI requires. The
+ * single-chunk (non-interleaved) layout is chosen for simplicity and is
+ * played correctly by VLC (the target player). Passing `audio == nullptr`
+ * (e.g. every Wan run) produces a byte-identical video-only AVI.
+ *
  * @param frames       Pointer to contiguous sd_image_t array. Every frame
  *                     must share the same width / height / channel count;
  *                     channels must be 3 (RGB) or 4 (RGBA, alpha dropped by
@@ -36,12 +45,17 @@ namespace qvac_lib_inference_addon_sd {
  * @param fps          Frames per second written into the AVI main header and
  *                     stream header. Must be > 0.
  * @param jpegQuality  JPEG quality (1-100); 90 is a reasonable default.
+ * @param audio        Optional LTX-2 audio waveform (48 kHz IEEE float).
+ *                     Null / empty for video-only output.
  * @return             Encoded AVI as a byte vector.
  *
  * @throws qvac_errors::StatusError on: numFrames == 0, fps <= 0, unsupported
- *         channel count, or JPEG encode failure.
+ *         channel count, JPEG encode failure, or malformed audio (zero
+ *         channels / sample rate, or a sample buffer that overflows the AVI
+ *         1.0 uint32 size fields).
  */
 std::vector<uint8_t> encodeFramesToAvi(
-    const sd_image_t* frames, int numFrames, int fps, int jpegQuality = 90);
+    const sd_image_t* frames, int numFrames, int fps, int jpegQuality = 90,
+    const sd_audio_t* audio = nullptr);
 
 } // namespace qvac_lib_inference_addon_sd

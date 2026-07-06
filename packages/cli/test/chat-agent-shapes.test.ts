@@ -30,9 +30,10 @@ describe('chat agent OpenAI shapes', () => {
   })
 
   it('emits JSON-serializable streaming tool-call deltas', () => {
-    const deltas = sdkToolCallsToOpenaiDeltas([
-      { id: 'call_weather', name: 'get_weather', arguments: { location: 'Tokyo' } }
-    ]) ?? []
+    const deltas =
+      sdkToolCallsToOpenaiDeltas([
+        { id: 'call_weather', name: 'get_weather', arguments: { location: 'Tokyo' } }
+      ]) ?? []
     const toolChunk = chatCompletionChunk({
       id: 'chatcmpl_stream',
       created: 100,
@@ -48,7 +49,9 @@ describe('chat agent OpenAI shapes', () => {
       finishReason: 'tool_calls'
     })
 
-    const serialized = [toolChunk, doneChunk].map((chunk) => JSON.parse(JSON.stringify(chunk)) as typeof chunk)
+    const serialized = [toolChunk, doneChunk].map(
+      (chunk) => JSON.parse(JSON.stringify(chunk)) as typeof chunk
+    )
     const toolCall = serialized[0]!.choices[0]!.delta.tool_calls![0]!
 
     assert.equal(serialized[0]!.object, 'chat.completion.chunk')

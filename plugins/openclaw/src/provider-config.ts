@@ -1,7 +1,11 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { qvacCatalog, resolveModelConstant } from '@qvac/ai-sdk-provider/models'
+import {
+  qvacCatalog as sharedQvacCatalog,
+  resolveModelConstant as resolveSharedModelConstant,
+  type QvacCatalogEntry
+} from '@qvac/ai-sdk-provider/models'
 import type { ModelProviderConfig } from 'openclaw/plugin-sdk/provider-model-shared'
 
 export interface ResolvedOptions {
@@ -189,12 +193,40 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 
 const ZERO_COST: OpenClawCost = Object.freeze({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
 
+const OPENCLAW_CATALOG_OVERLAY: readonly QvacCatalogEntry[] = [
+  { id: 'qwen3.6-27b', constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL', name: 'Qwen3.6 27B' },
+  { id: 'qwen3.6-35b-a3b', constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', name: 'Qwen3.6 35B A3B' },
+  { id: 'gpt-oss-20b', constant: 'GPT_OSS_20B_INST_Q4_K_M', name: 'GPT-OSS 20B' },
+  { id: 'gemma4-31b', constant: 'GEMMA4_31B_MULTIMODAL_Q4_K_M', name: 'Gemma4 31B' }
+]
+
+function createOpenClawCatalog (): readonly QvacCatalogEntry[] {
+  const seen = new Set(sharedQvacCatalog.map((entry) => entry.id))
+  const entries: QvacCatalogEntry[] = [...sharedQvacCatalog]
+  for (const entry of OPENCLAW_CATALOG_OVERLAY) {
+    if (seen.has(entry.id)) continue
+    seen.add(entry.id)
+    entries.push(entry)
+  }
+  return entries
+}
+
+const openClawCatalog = createOpenClawCatalog()
+const openClawCatalogById = new Map(openClawCatalog.map((entry) => [entry.id, entry]))
+const openClawCatalogByConstant = new Map(openClawCatalog.map((entry) => [entry.constant, entry]))
+
+function resolveOpenClawModelConstant (idOrConstant: string): string {
+  return openClawCatalogById.get(idOrConstant)?.constant
+    ?? openClawCatalogByConstant.get(idOrConstant)?.constant
+    ?? resolveSharedModelConstant(idOrConstant)
+}
+
 export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[] {
-  return qvacCatalog.map((entry) => ({
+  return openClawCatalog.map((entry) => ({
     id: entry.id,
     name: entry.name,
     reasoning: true,
-    input: ['text', 'image'],
+    input: entry.constant.includes('MULTIMODAL') ? ['text', 'image'] : ['text'],
     cost: ZERO_COST,
     contextWindow: options.ctxSize,
     maxTokens: 8192,
@@ -204,7 +236,7 @@ export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[]
 
 export const openClawModels: OpenClawModel[] = createOpenClawModels(DEFAULT_OPTIONS)
 
-export const openClawCatalogRows: readonly OpenClawCatalogRow[] = qvacCatalog.map((entry) => ({
+export const openClawCatalogRows: readonly OpenClawCatalogRow[] = openClawCatalog.map((entry) => ({
   kind: 'text',
   provider: 'qvac',
   model: entry.id,
@@ -274,9 +306,9 @@ export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
 
 export function createQvacServeModels (options: ResolvedOptions): Record<string, QvacServeModel> {
   const models: Record<string, QvacServeModel> = {}
-  for (const entry of qvacCatalog) {
+  for (const entry of openClawCatalog) {
     models[entry.id] = {
-      model: resolveModelConstant(entry.id),
+      model: resolveOpenClawModelConstant(entry.id),
       preload: entry.id === options.model,
       ...(entry.id === options.model ? { default: true as const } : {}),
       config: {

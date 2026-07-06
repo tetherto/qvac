@@ -1,17 +1,16 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 export const getLoadedModelInfoParamsSchema = z.object({
-  modelId: z.string(),
-});
+  modelId: z.string()
+})
 
-export const getLoadedModelInfoRequestSchema =
-  getLoadedModelInfoParamsSchema.extend({
-    type: z.literal("getLoadedModelInfo"),
-  });
+export const getLoadedModelInfoRequestSchema = getLoadedModelInfoParamsSchema.extend({
+  type: z.literal('getLoadedModelInfo')
+})
 
 const delegatedProviderInfoSchema = z.object({
-  providerPublicKey: z.string(),
-});
+  providerPublicKey: z.string()
+})
 
 /**
  * Loaded local model: routing plugin known on this node, so modelType +
@@ -26,8 +25,8 @@ const localLoadedModelInfoSchema = z.object({
   addonPackage: z.string().optional(),
   loadedAt: z.coerce.date(),
   name: z.string().optional(),
-  path: z.string().optional(),
-});
+  path: z.string().optional()
+})
 
 /**
  * Loaded delegated model: this node only stores routing info, so `modelType`,
@@ -38,26 +37,20 @@ const delegatedLoadedModelInfoSchema = z.object({
   modelId: z.string(),
   isDelegated: z.literal(true),
   handlers: z.array(z.string()),
-  providerInfo: delegatedProviderInfoSchema,
-});
+  providerInfo: delegatedProviderInfoSchema
+})
 
-export const loadedModelInfoSchema = z.discriminatedUnion("isDelegated", [
+export const loadedModelInfoSchema = z.discriminatedUnion('isDelegated', [
   localLoadedModelInfoSchema,
-  delegatedLoadedModelInfoSchema,
-]);
+  delegatedLoadedModelInfoSchema
+])
 
 export const getLoadedModelInfoResponseSchema = z.object({
-  type: z.literal("getLoadedModelInfo"),
-  info: loadedModelInfoSchema,
-});
+  type: z.literal('getLoadedModelInfo'),
+  info: loadedModelInfoSchema
+})
 
-export type GetLoadedModelInfoParams = z.input<
-  typeof getLoadedModelInfoParamsSchema
->;
-export type GetLoadedModelInfoRequest = z.infer<
-  typeof getLoadedModelInfoRequestSchema
->;
-export type GetLoadedModelInfoResponse = z.infer<
-  typeof getLoadedModelInfoResponseSchema
->;
-export type LoadedModelInfo = z.infer<typeof loadedModelInfoSchema>;
+export type GetLoadedModelInfoParams = z.input<typeof getLoadedModelInfoParamsSchema>
+export type GetLoadedModelInfoRequest = z.infer<typeof getLoadedModelInfoRequestSchema>
+export type GetLoadedModelInfoResponse = z.infer<typeof getLoadedModelInfoResponseSchema>
+export type LoadedModelInfo = z.infer<typeof loadedModelInfoSchema>

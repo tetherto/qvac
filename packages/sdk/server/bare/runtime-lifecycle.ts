@@ -1,39 +1,35 @@
-import type { LifecycleState, Request } from "@/schemas";
-import { getServerLogger } from "@/logging";
-import { LifecycleOperationBlockedError } from "@/utils/errors-server";
+import type { LifecycleState, Request } from '@/schemas'
+import { getServerLogger } from '@/logging'
+import { LifecycleOperationBlockedError } from '@/utils/errors-server'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set([
-  "suspend",
-  "resume",
-  "state",
-]);
+const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set(['suspend', 'resume', 'state'])
 
 export interface SuspendableSwarm {
-  readonly suspended: boolean;
-  suspend(): Promise<void>;
-  resume(): Promise<void>;
+  readonly suspended: boolean
+  suspend(): Promise<void>
+  resume(): Promise<void>
 }
 
 export interface SuspendableStore {
-  suspend(): Promise<void>;
-  resume(): Promise<void>;
+  suspend(): Promise<void>
+  resume(): Promise<void>
 }
 
 interface ResourceMeta {
-  label: string;
-  createdAt: number;
+  label: string
+  createdAt: number
 }
 
-const swarms = new Map<SuspendableSwarm, ResourceMeta>();
-const stores = new Map<SuspendableStore, ResourceMeta>();
+const swarms = new Map<SuspendableSwarm, ResourceMeta>()
+const stores = new Map<SuspendableStore, ResourceMeta>()
 
-type ResumeListener = () => void;
-const resumeListeners = new Set<ResumeListener>();
+type ResumeListener = () => void
+const resumeListeners = new Set<ResumeListener>()
 
-let state: LifecycleState = "active";
-let transitionPromise: Promise<void> | null = null;
+let state: LifecycleState = 'active'
+let transitionPromise: Promise<void> | null = null
 
 /**
  * Register a callback fired after the runtime returns to "active". Lets in-flight
@@ -43,200 +39,196 @@ let transitionPromise: Promise<void> | null = null;
  * listener doesn't leak into the next operation.
  */
 export function onResume(listener: ResumeListener): () => void {
-  resumeListeners.add(listener);
-  return () => resumeListeners.delete(listener);
+  resumeListeners.add(listener)
+  return () => resumeListeners.delete(listener)
 }
 
 function notifyResume(): void {
   for (const listener of Array.from(resumeListeners)) {
     try {
-      listener();
+      listener()
     } catch (error) {
-      logger.error("Lifecycle: onResume listener threw:", error);
+      logger.error('Lifecycle: onResume listener threw:', error)
     }
   }
 }
 
 export function registerSwarm(swarm: SuspendableSwarm, meta: ResourceMeta) {
-  swarms.set(swarm, meta);
-  logger.debug(`Lifecycle: registered swarm [${meta.label}]`);
+  swarms.set(swarm, meta)
+  logger.debug(`Lifecycle: registered swarm [${meta.label}]`)
 }
 
 export function unregisterSwarm(swarm: SuspendableSwarm) {
-  const meta = swarms.get(swarm);
-  swarms.delete(swarm);
+  const meta = swarms.get(swarm)
+  swarms.delete(swarm)
   if (meta) {
-    logger.debug(`Lifecycle: unregistered swarm [${meta.label}]`);
+    logger.debug(`Lifecycle: unregistered swarm [${meta.label}]`)
   }
 }
 
 export function registerCorestore(store: SuspendableStore, meta: ResourceMeta) {
-  stores.set(store, meta);
-  logger.debug(`Lifecycle: registered corestore [${meta.label}]`);
+  stores.set(store, meta)
+  logger.debug(`Lifecycle: registered corestore [${meta.label}]`)
 }
 
 export function unregisterCorestore(store: SuspendableStore) {
-  const meta = stores.get(store);
-  stores.delete(store);
+  const meta = stores.get(store)
+  stores.delete(store)
   if (meta) {
-    logger.debug(`Lifecycle: unregistered corestore [${meta.label}]`);
+    logger.debug(`Lifecycle: unregistered corestore [${meta.label}]`)
   }
 }
 
 export function getLifecycleState(): LifecycleState {
-  return state;
+  return state
 }
 
 export function assertLifecycleAllowed(request: Request): void {
-  if (state === "active" || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return;
+  if (state === 'active' || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return
 
-  throw new LifecycleOperationBlockedError(request.type, state);
+  throw new LifecycleOperationBlockedError(request.type, state)
 }
 
 export function getRegisteredResourceCounts() {
-  return { swarms: swarms.size, stores: stores.size };
+  return { swarms: swarms.size, stores: stores.size }
 }
 
 export function resetLifecycleState() {
-  swarms.clear();
-  stores.clear();
-  resumeListeners.clear();
-  state = "active";
-  transitionPromise = null;
+  swarms.clear()
+  stores.clear()
+  resumeListeners.clear()
+  state = 'active'
+  transitionPromise = null
 }
 
 async function runPhase<T>(
   snapshot: Array<[T, ResourceMeta]>,
   liveSet: Map<T, ResourceMeta>,
   fn: (resource: T) => Promise<void>,
-  phaseLabel: string,
+  phaseLabel: string
 ) {
-  const errors: unknown[] = [];
+  const errors: unknown[] = []
 
   for (const [resource, meta] of snapshot) {
     try {
-      await fn(resource);
-      logger.debug(`Lifecycle: ${phaseLabel} [${meta.label}] OK`);
+      await fn(resource)
+      logger.debug(`Lifecycle: ${phaseLabel} [${meta.label}] OK`)
     } catch (error) {
-      if (!liveSet.has(resource)) continue;
-      logger.error(`Lifecycle: ${phaseLabel} [${meta.label}] failed:`, error);
-      errors.push(new Error(`${meta.label}: ${String(error)}`));
+      if (!liveSet.has(resource)) continue
+      logger.error(`Lifecycle: ${phaseLabel} [${meta.label}] failed:`, error)
+      errors.push(new Error(`${meta.label}: ${String(error)}`))
     }
   }
 
   if (errors.length > 0) {
-    throw new AggregateError(errors, `Lifecycle ${phaseLabel} phase failed`);
+    throw new AggregateError(errors, `Lifecycle ${phaseLabel} phase failed`)
   }
 }
 
 export async function suspendRuntime(): Promise<void> {
-  if (state === "suspended") return;
+  if (state === 'suspended') return
 
-  if (state === "suspending" && transitionPromise) return transitionPromise;
+  if (state === 'suspending' && transitionPromise) return transitionPromise
 
   // Opposite transition in flight: wait for it, then re-evaluate
-  if (state === "resuming" && transitionPromise) {
-    await transitionPromise;
-    return suspendRuntime();
+  if (state === 'resuming' && transitionPromise) {
+    await transitionPromise
+    return suspendRuntime()
   }
 
-  state = "suspending";
+  state = 'suspending'
 
-  logger.info(
-    `⏸️ Suspending runtime (${stores.size} stores, ${swarms.size} swarms)`,
-  );
+  logger.info(`⏸️ Suspending runtime (${stores.size} stores, ${swarms.size} swarms)`)
 
   transitionPromise = (async () => {
-    const swarmSnapshot = Array.from(swarms.entries());
-    const storeSnapshot = Array.from(stores.entries());
+    const swarmSnapshot = Array.from(swarms.entries())
+    const storeSnapshot = Array.from(stores.entries())
 
     await runPhase(
       storeSnapshot,
       stores,
       async (store) => {
-        await store.suspend();
+        await store.suspend()
       },
-      "suspend-store",
-    );
+      'suspend-store'
+    )
 
     await runPhase(
       swarmSnapshot,
       swarms,
       async (swarm) => {
-        if (!swarm.suspended) await swarm.suspend();
+        if (!swarm.suspended) await swarm.suspend()
       },
-      "suspend-swarm",
-    );
+      'suspend-swarm'
+    )
   })()
     .then(() => {
-      state = "suspended";
-      logger.info("⏸️ Runtime suspended");
+      state = 'suspended'
+      logger.info('⏸️ Runtime suspended')
     })
     .catch((error: unknown) => {
       // Partial failure: commit to target so recovery resume() can repair
       // instead of leaving state as "suspending" which blocks all future calls.
-      state = "suspended";
-      logger.error("⏸️ Runtime suspend partially failed, state committed for recovery");
-      throw error;
+      state = 'suspended'
+      logger.error('⏸️ Runtime suspend partially failed, state committed for recovery')
+      throw error
     })
     .finally(() => {
-      transitionPromise = null;
-    });
+      transitionPromise = null
+    })
 
-  return transitionPromise;
+  return transitionPromise
 }
 
 export async function resumeRuntime(): Promise<void> {
-  if (state === "active") return;
+  if (state === 'active') return
 
-  if (state === "resuming" && transitionPromise) return transitionPromise;
+  if (state === 'resuming' && transitionPromise) return transitionPromise
 
-  if (state === "suspending" && transitionPromise) {
-    await transitionPromise;
-    return resumeRuntime();
+  if (state === 'suspending' && transitionPromise) {
+    await transitionPromise
+    return resumeRuntime()
   }
 
-  state = "resuming";
+  state = 'resuming'
 
-  logger.info(
-    `▶️ Resuming runtime (${swarms.size} swarms, ${stores.size} stores)`,
-  );
+  logger.info(`▶️ Resuming runtime (${swarms.size} swarms, ${stores.size} stores)`)
 
   transitionPromise = (async () => {
-    const swarmSnapshot = Array.from(swarms.entries());
-    const storeSnapshot = Array.from(stores.entries());
+    const swarmSnapshot = Array.from(swarms.entries())
+    const storeSnapshot = Array.from(stores.entries())
 
     await runPhase(
       swarmSnapshot,
       swarms,
       async (swarm) => {
-        await swarm.resume();
+        await swarm.resume()
       },
-      "resume-swarm",
-    );
+      'resume-swarm'
+    )
 
     await runPhase(
       storeSnapshot,
       stores,
       async (store) => {
-        await store.resume();
+        await store.resume()
       },
-      "resume-store",
-    );
+      'resume-store'
+    )
   })()
     .then(() => {
-      state = "active";
-      logger.info("▶️ Runtime resumed");
-      notifyResume();
+      state = 'active'
+      logger.info('▶️ Runtime resumed')
+      notifyResume()
     })
     .catch((error: unknown) => {
-      state = "suspended";
-      logger.error("▶️ Runtime resume partially failed, staying suspended for retry");
-      throw error;
+      state = 'suspended'
+      logger.error('▶️ Runtime resume partially failed, staying suspended for retry')
+      throw error
     })
     .finally(() => {
-      transitionPromise = null;
-    });
+      transitionPromise = null
+    })
 
-  return transitionPromise;
+  return transitionPromise
 }
