@@ -1,4 +1,4 @@
-import { send, stream as streamRpc } from "@/client/rpc/rpc-client";
+import { send, stream as streamRpc } from '@/client/rpc/rpc-client'
 import {
   finetuneRunParamsSchema,
   finetuneRunRequestSchema,
@@ -13,47 +13,38 @@ import {
   type FinetuneResult,
   type FinetuneRunParams,
   type FinetuneStopParams,
-  type RPCOptions,
-} from "@/schemas";
-import {
-  InvalidResponseError,
-  StreamEndedError,
-} from "@/utils/errors-client";
-import { parseClientInput } from "@/client/parse-input";
+  type RPCOptions
+} from '@/schemas'
+import { InvalidResponseError, StreamEndedError } from '@/utils/errors-client'
+import { parseClientInput } from '@/client/parse-input'
 
 export interface FinetuneHandle {
-  progressStream: AsyncGenerator<FinetuneProgress>;
-  result: Promise<FinetuneResult>;
+  progressStream: AsyncGenerator<FinetuneProgress>
+  result: Promise<FinetuneResult>
 }
 
-type FinetuneReplyParams =
-  | FinetuneStopParams
-  | FinetuneGetStateParams;
+type FinetuneReplyParams = FinetuneStopParams | FinetuneGetStateParams
 
-function isFinetuneReplyParams(
-  params: FinetuneParams,
-): params is FinetuneReplyParams {
+function isFinetuneReplyParams(params: FinetuneParams): params is FinetuneReplyParams {
   return (
-    params.operation === "pause" ||
-    params.operation === "cancel" ||
-    params.operation === "getState"
-  );
+    params.operation === 'pause' || params.operation === 'cancel' || params.operation === 'getState'
+  )
 }
 
 function createFinetuneReplyRequest(params: FinetuneReplyParams) {
-  if (params.operation === "getState") {
-    const getStateParams = parseClientInput(finetuneGetStateParamsSchema, params);
+  if (params.operation === 'getState') {
+    const getStateParams = parseClientInput(finetuneGetStateParamsSchema, params)
     return parseClientInput(finetuneGetStateRequestSchema, {
-      type: "finetune",
-      ...getStateParams,
-    });
+      type: 'finetune',
+      ...getStateParams
+    })
   }
 
   return parseClientInput(finetuneStopRequestSchema, {
-    type: "finetune",
+    type: 'finetune',
     modelId: params.modelId,
-    operation: params.operation,
-  });
+    operation: params.operation
+  })
 }
 
 /**
@@ -126,10 +117,7 @@ function createFinetuneReplyRequest(params: FinetuneReplyParams) {
  * @returns A `FinetuneHandle` with `progressStream` (yields per-step loss
  *   metrics) and `result` (resolves once the run terminates).
  */
-export function finetune(
-  params: FinetuneRunParams,
-  rpcOptions?: RPCOptions,
-): FinetuneHandle;
+export function finetune(params: FinetuneRunParams, rpcOptions?: RPCOptions): FinetuneHandle
 
 /**
  * Stop / pause / cancel an in-flight finetune, or query its current state.
@@ -143,73 +131,70 @@ export function finetune(
  */
 export function finetune(
   params: FinetuneReplyParams,
-  rpcOptions?: RPCOptions,
-): Promise<FinetuneResult>;
+  rpcOptions?: RPCOptions
+): Promise<FinetuneResult>
 
 export function finetune(
   params: FinetuneParams,
-  rpcOptions?: RPCOptions,
+  rpcOptions?: RPCOptions
 ): FinetuneHandle | Promise<FinetuneResult> {
   if (isFinetuneReplyParams(params)) {
-    const request = createFinetuneReplyRequest(params);
+    const request = createFinetuneReplyRequest(params)
 
     const resultPromise = (async () => {
-      const response = await send(request, rpcOptions);
+      const response = await send(request, rpcOptions)
 
       if (
         !response ||
-        typeof response !== "object" ||
-        !("type" in response) ||
-        response.type !== "finetune"
+        typeof response !== 'object' ||
+        !('type' in response) ||
+        response.type !== 'finetune'
       ) {
-        throw new InvalidResponseError("finetune");
+        throw new InvalidResponseError('finetune')
       }
 
-      return finetuneResponseSchema.parse(response);
-    })();
+      return finetuneResponseSchema.parse(response)
+    })()
 
-    resultPromise.catch(() => { });
+    resultPromise.catch(() => {})
 
-    return resultPromise;
+    return resultPromise
   }
 
-  const runParams = parseClientInput(finetuneRunParamsSchema, params);
+  const runParams = parseClientInput(finetuneRunParamsSchema, params)
 
-  let resultResolver: (value: FinetuneResult) => void = () => { };
-  let resultRejecter: (error: unknown) => void = () => { };
+  let resultResolver: (value: FinetuneResult) => void = () => {}
+  let resultRejecter: (error: unknown) => void = () => {}
   const resultPromise = new Promise<FinetuneResult>((resolve, reject) => {
-    resultResolver = resolve;
-    resultRejecter = reject;
-  });
+    resultResolver = resolve
+    resultRejecter = reject
+  })
 
-  resultPromise.catch(() => { });
+  resultPromise.catch(() => {})
 
-  const progressQueue: FinetuneProgress[] = [];
-  let progressDone = false;
-  let progressResolve: (() => void) | null = null;
-  let streamError: Error | null = null;
+  const progressQueue: FinetuneProgress[] = []
+  let progressDone = false
+  let progressResolve: (() => void) | null = null
+  let streamError: Error | null = null
 
   const processResponses = async () => {
     try {
-      let sawTerminalResponse = false;
+      let sawTerminalResponse = false
       const request = parseClientInput(finetuneRunRequestSchema, {
-        type: "finetune",
+        type: 'finetune',
         ...runParams,
-        withProgress: true,
-      });
-      const responses: AsyncGenerator<unknown> = streamRpc(
-        request,
-        rpcOptions,
-      );
+        withProgress: true
+      })
+      const responses: AsyncGenerator<unknown> = streamRpc(request, rpcOptions)
 
       for await (const response of responses) {
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "finetune:progress"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'finetune:progress'
         ) {
-          const progressResponse = finetuneProgressResponseSchema.parse(response);
+          const progressResponse = finetuneProgressResponseSchema.parse(response)
           progressQueue.push({
             is_train: progressResponse.is_train,
             loss: progressResponse.loss,
@@ -221,70 +206,70 @@ export function finetune(
             current_batch: progressResponse.current_batch,
             total_batches: progressResponse.total_batches,
             elapsed_ms: progressResponse.elapsed_ms,
-            eta_ms: progressResponse.eta_ms,
-          });
+            eta_ms: progressResponse.eta_ms
+          })
 
           if (progressResolve) {
-            progressResolve();
-            progressResolve = null;
+            progressResolve()
+            progressResolve = null
           }
-          continue;
+          continue
         }
 
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "finetune"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'finetune'
         ) {
-          sawTerminalResponse = true;
-          const finetuneResponse = finetuneResponseSchema.parse(response);
-          resultResolver(finetuneResponse);
-          progressDone = true;
+          sawTerminalResponse = true
+          const finetuneResponse = finetuneResponseSchema.parse(response)
+          resultResolver(finetuneResponse)
+          progressDone = true
           if (progressResolve) {
-            progressResolve();
-            progressResolve = null;
+            progressResolve()
+            progressResolve = null
           }
         } else {
-          throw new InvalidResponseError("finetune");
+          throw new InvalidResponseError('finetune')
         }
       }
 
       if (!sawTerminalResponse) {
-        throw new StreamEndedError();
+        throw new StreamEndedError()
       }
     } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error));
-      resultRejecter(error);
-      progressDone = true;
+      streamError = error instanceof Error ? error : new Error(String(error))
+      resultRejecter(error)
+      progressDone = true
       if (progressResolve) {
-        progressResolve();
-        progressResolve = null;
+        progressResolve()
+        progressResolve = null
       }
     }
-  };
+  }
 
-  void processResponses();
+  void processResponses()
 
   const progressStream = (async function* () {
     while (true) {
       if (progressQueue.length > 0) {
-        yield progressQueue.shift()!;
+        yield progressQueue.shift()!
       } else if (progressDone) {
         if (streamError !== null) {
-          throw streamError as Error;
+          throw streamError as Error
         }
-        break;
+        break
       } else {
         await new Promise<void>((resolve) => {
-          progressResolve = resolve;
-        });
+          progressResolve = resolve
+        })
       }
     }
-  })();
+  })()
 
   return {
     progressStream,
-    result: resultPromise,
-  };
+    result: resultPromise
+  }
 }

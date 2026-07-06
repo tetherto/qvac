@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { modelSrcInputSchema } from "./model-src-utils";
+import { z } from 'zod'
+import { modelSrcInputSchema } from './model-src-utils'
 
 // === BCI (whisper.cpp) engine config ===
 //
@@ -27,32 +27,32 @@ const bciWhisperConfigSchema = z
     print_timestamps: z.boolean().optional(),
     detect_language: z.boolean().optional(),
     greedy_best_of: z.number().int().optional(),
-    beam_search_beam_size: z.number().int().optional(),
+    beam_search_beam_size: z.number().int().optional()
   })
-  .optional();
+  .optional()
 
 const bciSessionConfigSchema = z
   .object({
     // Session day index used to select day-specific projection matrices.
     // `-1` enables mel passthrough (parity testing only).
-    day_idx: z.number().int().optional(),
+    day_idx: z.number().int().optional()
   })
-  .optional();
+  .optional()
 
 const bciContextParamsSchema = z
   .object({
     model: z.string().optional(),
     use_gpu: z.boolean().optional(),
     flash_attn: z.boolean().optional(),
-    gpu_device: z.number().optional(),
+    gpu_device: z.number().optional()
   })
-  .optional();
+  .optional()
 
 const bciMiscConfigSchema = z
   .object({
-    caption_enabled: z.boolean().optional(),
+    caption_enabled: z.boolean().optional()
   })
-  .optional();
+  .optional()
 
 export const bciConfigSchema = z.object({
   whisperConfig: bciWhisperConfigSchema,
@@ -60,7 +60,7 @@ export const bciConfigSchema = z.object({
   contextParams: bciContextParamsSchema,
   miscConfig: bciMiscConfigSchema,
   backendsDir: z.string().optional(),
-  embedderModelSrc: modelSrcInputSchema.optional(),
-});
+  embedderModelSrc: modelSrcInputSchema.optional()
+})
 
-export type BciConfig = z.infer<typeof bciConfigSchema>;
+export type BciConfig = z.infer<typeof bciConfigSchema>

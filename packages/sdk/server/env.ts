@@ -1,15 +1,15 @@
-import env from "bare-env";
-import { isBareKit } from "which-runtime";
-import { z } from "zod";
+import env from 'bare-env'
+import { isBareKit } from 'which-runtime'
+import { z } from 'zod'
 
 const envSchema = z.object({
   QVAC_IPC_SOCKET_PATH: z.string().optional(),
-  HOME_DIR: z.string(),
-});
+  HOME_DIR: z.string()
+})
 
-type WorkerEnv = z.infer<typeof envSchema>;
+type WorkerEnv = z.infer<typeof envSchema>
 
-let validatedEnv: WorkerEnv | null = null;
+let validatedEnv: WorkerEnv | null = null
 
 /**
  * Initialize the worker environment. Call once at worker startup.
@@ -18,29 +18,29 @@ let validatedEnv: WorkerEnv | null = null;
 export function initEnv(): { hasRPCConfig: boolean } {
   const defaultHomeDir =
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
-    env["SNAP_USER_COMMON"] ?? env["HOME"] ?? env["USERPROFILE"] ?? "/tmp";
+    env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
   let envConfig: Record<string, string | undefined> = {
-    HOME_DIR: defaultHomeDir,
-  };
-  let hasRPCConfig = false;
+    HOME_DIR: defaultHomeDir
+  }
+  let hasRPCConfig = false
 
   if (isBareKit && Bare.argv[0]) {
-    envConfig["HOME_DIR"] = Bare.argv[0];
+    envConfig['HOME_DIR'] = Bare.argv[0]
   }
 
   // Try to parse any argument as JSON config (fail gracefully)
   if (Bare.argv[2]) {
     try {
-      const rpcArgs = JSON.parse(Bare.argv[2]) as Record<string, string>;
-      envConfig = { ...envConfig, ...rpcArgs };
-      hasRPCConfig = true;
+      const rpcArgs = JSON.parse(Bare.argv[2]) as Record<string, string>
+      envConfig = { ...envConfig, ...rpcArgs }
+      hasRPCConfig = true
     } catch {
       // Not JSON or invalid - use defaults (direct mode)
     }
   }
 
-  validatedEnv = envSchema.parse(envConfig);
-  return { hasRPCConfig };
+  validatedEnv = envSchema.parse(envConfig)
+  return { hasRPCConfig }
 }
 
 /**
@@ -49,12 +49,12 @@ export function initEnv(): { hasRPCConfig: boolean } {
 export function getEnv() {
   if (!validatedEnv) {
     // Fallback initialization for cases where initEnv wasn't called
-    initEnv();
+    initEnv()
   }
   return {
     ...env,
-    ...validatedEnv!,
-  };
+    ...validatedEnv!
+  }
 }
 
 /**
@@ -62,7 +62,7 @@ export function getEnv() {
  */
 export function getValidatedEnv() {
   if (!validatedEnv) {
-    initEnv();
+    initEnv()
   }
-  return validatedEnv!;
+  return validatedEnv!
 }

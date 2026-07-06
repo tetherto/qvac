@@ -133,8 +133,8 @@ Plugin config can override the local service launcher:
       qvac: {
         enabled: true,
         config: {
-          model: "qwen3.5-9b",
-          qvacCommand: "/absolute/path/to/qvac",
+          model: 'qwen3.5-9b',
+          qvacCommand: '/absolute/path/to/qvac',
           port: 11434,
           ctxSize: 32768,
           tools: true

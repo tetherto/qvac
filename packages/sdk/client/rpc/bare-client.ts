@@ -3,257 +3,230 @@ import type {
   Response,
   RuntimeContext,
   CanonicalModelType,
-  ProfilingRequestMeta,
-} from "@/schemas";
-import { normalizeModelType, PROFILING_KEY } from "@/schemas";
-import os from "bare-os";
-import type { Readable } from "bare-stream";
-import { registry } from "@/server/rpc/handler-registry";
-import type { HandlerEntry } from "@/server/rpc/handler-utils";
-import {
-  handlerSupportsProgress,
-  selectHandler,
-} from "@/server/rpc/handler-selection";
-import { createErrorResponse } from "@/schemas";
-import {
-  RPCNoHandlerError,
-  RPCRequestNotSentError,
-} from "@/utils/errors-client";
-import { initializeConfig } from "@/client/init-hooks";
-import { setSDKConfig } from "@/server/bare/registry/config-registry";
-import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
-import { resolveModelConfig } from "@/server/bare/registry/model-config-registry";
-import { resolveConfig } from "@/client/config-loader/resolve-config.bare";
-import {
-  initializeWorkerCore,
-  cleanupForTerminate,
-} from "@/server/worker-core";
-import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
-import { ensurePluginsRegistered } from "@/client/rpc/ensure-worker-ready";
+  ProfilingRequestMeta
+} from '@/schemas'
+import { normalizeModelType, PROFILING_KEY } from '@/schemas'
+import os from 'bare-os'
+import type { Readable } from 'bare-stream'
+import { registry } from '@/server/rpc/handler-registry'
+import type { HandlerEntry } from '@/server/rpc/handler-utils'
+import { handlerSupportsProgress, selectHandler } from '@/server/rpc/handler-selection'
+import { createErrorResponse } from '@/schemas'
+import { RPCNoHandlerError, RPCRequestNotSentError } from '@/utils/errors-client'
+import { initializeConfig } from '@/client/init-hooks'
+import { setSDKConfig } from '@/server/bare/registry/config-registry'
+import { setRuntimeContext } from '@/server/bare/registry/runtime-context-registry'
+import { resolveModelConfig } from '@/server/bare/registry/model-config-registry'
+import { resolveConfig } from '@/client/config-loader/resolve-config.bare'
+import { initializeWorkerCore, cleanupForTerminate } from '@/server/worker-core'
+import { assertLifecycleAllowed } from '@/server/bare/runtime-lifecycle'
+import { ensurePluginsRegistered } from '@/client/rpc/ensure-worker-ready'
 
 async function ensureWorkerReady() {
-  initializeWorkerCore();
-  await ensurePluginsRegistered();
+  initializeWorkerCore()
+  await ensurePluginsRegistered()
 }
 
 // Handler function types
 type Handler =
   | ((
       req: Request,
-      arg?: ((update: Response) => void) | DirectHandlerOptions,
+      arg?: ((update: Response) => void) | DirectHandlerOptions
     ) => Promise<Response> | Response)
   | ((
       req: Request,
-      arg?: ((update: Response) => void) | DirectHandlerOptions,
-    ) => AsyncGenerator<Response>);
+      arg?: ((update: Response) => void) | DirectHandlerOptions
+    ) => AsyncGenerator<Response>)
 
-type HandlerResult = Promise<Response> | Response | AsyncGenerator<Response>;
+type HandlerResult = Promise<Response> | Response | AsyncGenerator<Response>
 
 interface DirectHandlerOptions {
-  progressCallback?: (update: Response) => void;
-  profilingMeta?: ProfilingRequestMeta;
+  progressCallback?: (update: Response) => void
+  profilingMeta?: ProfilingRequestMeta
 }
 
 function getHandlerEntry(type: string): HandlerEntry {
-  const entry = registry[type];
+  const entry = registry[type]
   if (!entry) {
-    throw new RPCNoHandlerError(type);
+    throw new RPCNoHandlerError(type)
   }
-  return entry;
+  return entry
 }
 
 function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
-  if (request.type !== "loadModel" || !("modelSrc" in request)) {
-    return request;
+  if (request.type !== 'loadModel' || !('modelSrc' in request)) {
+    return request
   }
 
-  let canonicalType: CanonicalModelType;
+  let canonicalType: CanonicalModelType
   try {
-    canonicalType = normalizeModelType(request.modelType) as CanonicalModelType;
+    canonicalType = normalizeModelType(request.modelType) as CanonicalModelType
   } catch {
-    return request;
+    return request
   }
 
-  const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
-  const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
+  const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {}
+  const configWithDefaults = resolveModelConfig(canonicalType, rawConfig)
 
-  return { ...request, modelConfig: configWithDefaults };
+  return { ...request, modelConfig: configWithDefaults }
 }
 
-function getProfilingMetaFromRequest(
-  request: Request,
-): ProfilingRequestMeta | undefined {
+function getProfilingMetaFromRequest(request: Request): ProfilingRequestMeta | undefined {
   if (PROFILING_KEY in request) {
-    return (request as Record<string, unknown>)[
-      PROFILING_KEY
-    ] as ProfilingRequestMeta;
+    return (request as Record<string, unknown>)[PROFILING_KEY] as ProfilingRequestMeta
   }
-  return undefined;
+  return undefined
 }
 
 function createDelegatedOptions(
   request: Request,
-  progressCallback?: (update: Response) => void,
+  progressCallback?: (update: Response) => void
 ): DirectHandlerOptions | undefined {
-  const profilingMeta = getProfilingMetaFromRequest(request);
+  const profilingMeta = getProfilingMetaFromRequest(request)
   if (!profilingMeta && !progressCallback) {
-    return undefined;
+    return undefined
   }
 
-  const options: DirectHandlerOptions = {};
+  const options: DirectHandlerOptions = {}
   if (progressCallback) {
-    options.progressCallback = progressCallback;
+    options.progressCallback = progressCallback
   }
   if (profilingMeta) {
-    options.profilingMeta = profilingMeta;
+    options.profilingMeta = profilingMeta
   }
-  return options;
+  return options
 }
 
 function executeDirectHandler(
   request: Request,
-  handler: HandlerEntry["handler"],
-  isDelegated: boolean,
+  handler: HandlerEntry['handler'],
+  isDelegated: boolean
 ): HandlerResult {
-  const directHandler = handler as Handler;
+  const directHandler = handler as Handler
   if (isDelegated) {
-    return directHandler(request, createDelegatedOptions(request));
+    return directHandler(request, createDelegatedOptions(request))
   }
-  return directHandler(request);
+  return directHandler(request)
 }
 
-function isAsyncGenerator(
-  result: HandlerResult,
-): result is AsyncGenerator<Response> {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    Symbol.asyncIterator in result
-  );
+function isAsyncGenerator(result: HandlerResult): result is AsyncGenerator<Response> {
+  return typeof result === 'object' && result !== null && Symbol.asyncIterator in result
 }
 
 async function* streamWithProgress(
   request: Request,
-  handler: HandlerEntry["handler"],
-  isDelegated: boolean,
+  handler: HandlerEntry['handler'],
+  isDelegated: boolean
 ) {
-  const queue: Response[] = [];
-  const errors: Error[] = [];
-  let done = false;
+  const queue: Response[] = []
+  const errors: Error[] = []
+  let done = false
   function progressCallback(update: Response) {
-    queue.push(update);
+    queue.push(update)
   }
-  const directHandler = handler as Handler;
+  const directHandler = handler as Handler
 
   Promise.resolve(
     directHandler(
       request,
-      isDelegated
-        ? createDelegatedOptions(request, progressCallback)
-        : progressCallback,
-    ) as Promise<Response> | Response,
+      isDelegated ? createDelegatedOptions(request, progressCallback) : progressCallback
+    ) as Promise<Response> | Response
   )
     .then((final) => {
-      queue.push(final);
-      done = true;
+      queue.push(final)
+      done = true
     })
     .catch((error: Error) => {
-      errors.push(error);
-      done = true;
-    });
+      errors.push(error)
+      done = true
+    })
 
   while (!done || queue.length > 0) {
     if (queue.length > 0) {
-      yield queue.shift()!;
+      yield queue.shift()!
     } else {
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10))
     }
   }
 
-  const handlerError = errors[0];
+  const handlerError = errors[0]
   if (handlerError) {
-    throw handlerError;
+    throw handlerError
   }
 }
 
 export async function send<T extends Request>(request: T): Promise<Response> {
-  assertLifecycleAllowed(request);
+  assertLifecycleAllowed(request)
 
-  const processedRequest = applyDeviceDefaultsToLoadModel(request);
-  const entry = getHandlerEntry(processedRequest.type);
-  const { handler, isDelegated } = selectHandler(entry, processedRequest);
-  return (await executeDirectHandler(
-    processedRequest,
-    handler,
-    isDelegated,
-  )) as Response;
+  const processedRequest = applyDeviceDefaultsToLoadModel(request)
+  const entry = getHandlerEntry(processedRequest.type)
+  const { handler, isDelegated } = selectHandler(entry, processedRequest)
+  return (await executeDirectHandler(processedRequest, handler, isDelegated)) as Response
 }
 
 async function* stream<T extends Request>(request: T) {
-  assertLifecycleAllowed(request);
+  assertLifecycleAllowed(request)
 
-  const processedRequest = applyDeviceDefaultsToLoadModel(request);
-  const entry = getHandlerEntry(processedRequest.type);
-  const { handler, isDelegated } = selectHandler(entry, processedRequest);
+  const processedRequest = applyDeviceDefaultsToLoadModel(request)
+  const entry = getHandlerEntry(processedRequest.type)
+  const { handler, isDelegated } = selectHandler(entry, processedRequest)
 
   if (handlerSupportsProgress(entry, processedRequest)) {
-    yield* streamWithProgress(processedRequest, handler, isDelegated);
+    yield* streamWithProgress(processedRequest, handler, isDelegated)
   } else {
-    const result = executeDirectHandler(processedRequest, handler, isDelegated);
+    const result = executeDirectHandler(processedRequest, handler, isDelegated)
 
     // Check if the handler returns a Promise or AsyncGenerator
     if (isAsyncGenerator(result)) {
       // It's an AsyncGenerator
-      yield* result;
+      yield* result
     } else {
       // It's a Promise, await and yield the single result
-      yield await result;
+      yield await result
     }
   }
 }
 
 function createMockRPCRequest() {
-  let requestData: Request | { type: string; config: unknown } | null = null;
+  let requestData: Request | { type: string; config: unknown } | null = null
 
   return {
     send(payload: string) {
       // Parse the JSON payload to get the actual request data
-      requestData = JSON.parse(payload) as
-        | Request
-        | { type: string; config: unknown };
+      requestData = JSON.parse(payload) as Request | { type: string; config: unknown }
     },
 
     async reply() {
       if (!requestData) {
-        throw new RPCRequestNotSentError();
+        throw new RPCRequestNotSentError()
       }
 
       // Handle special internal config initialization message
       if (
-        typeof requestData === "object" &&
-        "type" in requestData &&
-        requestData.type === "__init_config"
+        typeof requestData === 'object' &&
+        'type' in requestData &&
+        requestData.type === '__init_config'
       ) {
         try {
           const initData = requestData as {
-            type: string;
-            config: unknown;
-            runtimeContext?: RuntimeContext;
-          };
+            type: string
+            config: unknown
+            runtimeContext?: RuntimeContext
+          }
           if (initData.config) {
-            setSDKConfig(initData.config);
+            setSDKConfig(initData.config)
           }
           if (initData.runtimeContext) {
-            setRuntimeContext(initData.runtimeContext);
+            setRuntimeContext(initData.runtimeContext)
           }
-          return Buffer.from(JSON.stringify({ success: true }));
+          return Buffer.from(JSON.stringify({ success: true }))
         } catch (error) {
           return Buffer.from(
             JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : String(error),
-            }),
-          );
+              error: error instanceof Error ? error.message : String(error)
+            })
+          )
         }
       }
 
@@ -261,110 +234,110 @@ function createMockRPCRequest() {
       // bare runtime is the host JS context, so we run cleanup but never
       // exit the process here.
       if (
-        typeof requestData === "object" &&
-        "type" in requestData &&
-        requestData.type === "__shutdown__"
+        typeof requestData === 'object' &&
+        'type' in requestData &&
+        requestData.type === '__shutdown__'
       ) {
         try {
-          await cleanupForTerminate();
-          return Buffer.from(JSON.stringify({ success: true }));
+          await cleanupForTerminate()
+          return Buffer.from(JSON.stringify({ success: true }))
         } catch (error) {
           return Buffer.from(
             JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : String(error),
-            }),
-          );
+              error: error instanceof Error ? error.message : String(error)
+            })
+          )
         }
       }
 
-      const response = await send(requestData as Request);
-      return Buffer.from(JSON.stringify(response));
+      const response = await send(requestData as Request)
+      return Buffer.from(JSON.stringify(response))
     },
 
     async *createResponseStream() {
       if (!requestData) {
-        throw new RPCRequestNotSentError();
+        throw new RPCRequestNotSentError()
       }
 
       for await (const response of stream(requestData as Request)) {
-        yield Buffer.from(JSON.stringify(response) + "\n");
+        yield Buffer.from(JSON.stringify(response) + '\n')
       }
-    },
-  };
+    }
+  }
 }
 
-let configInitialized = false;
+let configInitialized = false
 
 // No child worker on Bare-direct — `#rpc` interface stub.
 export function getWorkerLifeSignal(): AbortSignal | null {
-  return null;
+  return null
 }
 
 export async function getRPC() {
-  await ensureWorkerReady();
+  await ensureWorkerReady()
 
   const mockRPC = {
     request() {
-      return createMockRPCRequest();
-    },
-  };
+      return createMockRPCRequest()
+    }
+  }
 
   // Initialize config once on first call
   if (!configInitialized) {
     const runtimeContext: RuntimeContext = {
-      runtime: "bare",
-      platform: os.platform(),
-    };
-    await initializeConfig(mockRPC, resolveConfig, runtimeContext);
-    configInitialized = true;
+      runtime: 'bare',
+      platform: os.platform()
+    }
+    await initializeConfig(mockRPC, resolveConfig, runtimeContext)
+    configInitialized = true
   }
 
-  return mockRPC;
+  return mockRPC
 }
 
 export async function close() {
-  await cleanupForTerminate();
+  await cleanupForTerminate()
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function createDuplexSession(payload: string, _commandId: number) {
-  await getRPC();
+  await getRPC()
 
-  const { PassThrough } = await import("bare-stream");
-  const request = JSON.parse(payload) as Request;
+  const { PassThrough } = await import('bare-stream')
+  const request = JSON.parse(payload) as Request
 
-  assertLifecycleAllowed(request);
+  assertLifecycleAllowed(request)
 
-  const entry = registry[request.type];
-  if (!entry || entry.type !== "duplex") {
-    throw new RPCNoHandlerError(request.type);
+  const entry = registry[request.type]
+  if (!entry || entry.type !== 'duplex') {
+    throw new RPCNoHandlerError(request.type)
   }
 
-  const inputStream = new PassThrough();
-  const outputStream = new PassThrough();
+  const inputStream = new PassThrough()
+  const outputStream = new PassThrough()
 
   const duplexHandler = entry.handler as (
     req: Request,
-    stream: Readable,
-  ) => AsyncGenerator<Response>;
+    stream: Readable
+  ) => AsyncGenerator<Response>
 
   void (async () => {
     try {
       for await (const response of duplexHandler(request, inputStream)) {
-        outputStream.write(JSON.stringify(response) + "\n", "utf-8");
+        outputStream.write(JSON.stringify(response) + '\n', 'utf-8')
       }
     } catch (error) {
-      inputStream.destroy();
-      const errorResponse = createErrorResponse(error);
-      outputStream.write(JSON.stringify(errorResponse) + "\n", "utf-8");
+      inputStream.destroy()
+      const errorResponse = createErrorResponse(error)
+      outputStream.write(JSON.stringify(errorResponse) + '\n', 'utf-8')
     } finally {
-      outputStream.end();
+      outputStream.end()
     }
-  })();
+  })()
 
   return {
     requestStream: inputStream,
-    responseStream: outputStream,
-  };
+    responseStream: outputStream
+  }
 }

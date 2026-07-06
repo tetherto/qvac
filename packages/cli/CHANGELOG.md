@@ -36,7 +36,13 @@ Reasoning models can now discard a turn's thinking block from the KV cache after
 
 ```jsonc
 // POST /v1/chat/completions
-{ "model": "qwen3...", "messages": [/* ... */], "remove_thinking_from_context": true }
+{
+  "model": "qwen3...",
+  "messages": [
+    /* ... */
+  ],
+  "remove_thinking_from_context": true
+}
 ```
 
 ### Sturdier Gemma4 completions
@@ -437,7 +443,9 @@ The wire is the new `requestId` exposed synchronously on the SDK's decorated pro
 import { sdkCompletion } from '@qvac/cli/serve/core/sdk'
 import { bindClientDisconnectCancel } from '@qvac/cli/serve/core/cancel-bridge'
 
-const run = sdkCompletion({/* ... */})
+const run = sdkCompletion({
+  /* ... */
+})
 bindClientDisconnectCancel(req, res, run.requestId, logger)
 const final = await run.final
 ```

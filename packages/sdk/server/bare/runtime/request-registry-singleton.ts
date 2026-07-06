@@ -1,7 +1,7 @@
 import {
   createRequestRegistry as createRegistry,
-  type RequestRegistry,
-} from "@/server/bare/runtime/request-registry";
+  type RequestRegistry
+} from '@/server/bare/runtime/request-registry'
 
 /**
  * Worker-process singleton. Every long-running request in this Bare
@@ -14,7 +14,7 @@ import {
  * shared instance. On first use the singleton registers the SDK's
  * baseline concurrency policies.
  */
-let registry: RequestRegistry | null = null;
+let registry: RequestRegistry | null = null
 
 function installDefaultPolicies(r: RequestRegistry): void {
   // A loaded model is a single native context (one KV-cache, single-slot
@@ -23,19 +23,19 @@ function installDefaultPolicies(r: RequestRegistry): void {
   // today's reality — raise it once continuous batching lands. The depth cap
   // bounds queue memory.
   r.policy({
-    kind: "completion",
+    kind: 'completion',
     maxConcurrentPerModel: 1,
-    onOverflow: "queue",
-    maxQueueDepthPerModel: 64,
-  });
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
 }
 
 export function getRequestRegistry(): RequestRegistry {
   if (!registry) {
-    registry = createRegistry();
-    installDefaultPolicies(registry);
+    registry = createRegistry()
+    installDefaultPolicies(registry)
   }
-  return registry;
+  return registry
 }
 
-export { createRegistry as createRequestRegistry };
+export { createRegistry as createRequestRegistry }
