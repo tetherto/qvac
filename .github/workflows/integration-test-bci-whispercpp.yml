@@ -83,7 +83,7 @@ jobs:
             platform: win32
             arch: x64
             runner: qvac-win25-x64-gpu
-            no_gpu: 'true'
+            no_gpu: 'false'
 
     steps:
       - name: Setup Node.js
