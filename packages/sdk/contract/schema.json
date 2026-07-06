@@ -1001,7 +1001,7 @@
                 },
                 "required": ["type", "seq", "text"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem1"
+                "title": "CompletionStreamResponseEventsItemContentDelta"
               },
               {
                 "type": "object",
@@ -1021,7 +1021,7 @@
                 },
                 "required": ["type", "seq", "text"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem2"
+                "title": "CompletionStreamResponseEventsItemRawDelta"
               },
               {
                 "type": "object",
@@ -1041,7 +1041,7 @@
                 },
                 "required": ["type", "seq", "text"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem3"
+                "title": "CompletionStreamResponseEventsItemThinkingDelta"
               },
               {
                 "type": "object",
@@ -1070,7 +1070,7 @@
                           "type": "string"
                         },
                         "additionalProperties": {},
-                        "title": "CompletionStreamResponseEventsItem4CallArguments"
+                        "title": "CompletionStreamResponseEventsItemToolCallCallArguments"
                       },
                       "raw": {
                         "type": "string"
@@ -1078,12 +1078,12 @@
                     },
                     "required": ["id", "name", "arguments"],
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItem4Call"
+                    "title": "CompletionStreamResponseEventsItemToolCallCall"
                   }
                 },
                 "required": ["type", "seq", "call"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem4"
+                "title": "CompletionStreamResponseEventsItemToolCall"
               },
               {
                 "type": "object",
@@ -1103,7 +1103,7 @@
                       "code": {
                         "type": "string",
                         "enum": ["PARSE_ERROR", "VALIDATION_ERROR", "UNKNOWN_TOOL"],
-                        "title": "CompletionStreamResponseEventsItem5ErrorCode"
+                        "title": "CompletionStreamResponseEventsItemToolErrorErrorCode"
                       },
                       "message": {
                         "type": "string"
@@ -1114,12 +1114,12 @@
                     },
                     "required": ["code", "message"],
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItem5Error"
+                    "title": "CompletionStreamResponseEventsItemToolErrorError"
                   }
                 },
                 "required": ["type", "seq", "error"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem5"
+                "title": "CompletionStreamResponseEventsItemToolError"
               },
               {
                 "type": "object",
@@ -1154,16 +1154,16 @@
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
-                        "title": "CompletionStreamResponseEventsItem6StatsBackendDevice"
+                        "title": "CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice"
                       }
                     },
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItem6Stats"
+                    "title": "CompletionStreamResponseEventsItemCompletionStatsStats"
                   }
                 },
                 "required": ["type", "seq", "stats"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem6"
+                "title": "CompletionStreamResponseEventsItemCompletionStats"
               },
               {
                 "type": "object",
@@ -1190,7 +1190,7 @@
                     },
                     "required": ["message"],
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItemErrorError"
+                    "title": "CompletionStreamResponseEventsItemCompletionDoneError"
                   },
                   "raw": {
                     "type": "object",
@@ -1201,12 +1201,12 @@
                     },
                     "required": ["fullText"],
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItemErrorRaw"
+                    "title": "CompletionStreamResponseEventsItemCompletionDoneRaw"
                   }
                 },
                 "required": ["type", "seq", "stopReason", "error"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItemError"
+                "title": "CompletionStreamResponseEventsItemCompletionDone"
               },
               {
                 "type": "object",
@@ -1223,7 +1223,7 @@
                   "stopReason": {
                     "type": "string",
                     "enum": ["eos", "length", "stopSequence", "cancelled"],
-                    "title": "CompletionStreamResponseEventsItem8StopReason"
+                    "title": "CompletionStreamResponseEventsItemCompletionDoneStopReason"
                   },
                   "raw": {
                     "type": "object",
@@ -1234,12 +1234,12 @@
                     },
                     "required": ["fullText"],
                     "additionalProperties": false,
-                    "title": "CompletionStreamResponseEventsItem8Raw"
+                    "title": "CompletionStreamResponseEventsItemCompletionDoneRaw2"
                   }
                 },
                 "required": ["type", "seq"],
                 "additionalProperties": false,
-                "title": "CompletionStreamResponseEventsItem8"
+                "title": "CompletionStreamResponseEventsItemCompletionDone2"
               }
             ]
           }
@@ -1264,7 +1264,7 @@
             }
           },
           "required": ["type", "all"],
-          "title": "DeleteCacheRequest1"
+          "title": "DeleteCacheAllRequest"
         },
         {
           "type": "object",
@@ -1281,7 +1281,7 @@
             }
           },
           "required": ["type", "kvCacheKey"],
-          "title": "DeleteCacheRequest2"
+          "title": "DeleteCacheKvEntryRequest"
         }
       ]
     },
@@ -1771,7 +1771,7 @@
                       },
                       "required": ["type"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequest1OptionsValidationNone"
+                      "title": "FinetuneRunRequestOptionsValidationNone"
                     },
                     {
                       "type": "object",
@@ -1788,7 +1788,7 @@
                       },
                       "required": ["type"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequest1OptionsValidationSplit"
+                      "title": "FinetuneRunRequestOptionsValidationSplit"
                     },
                     {
                       "type": "object",
@@ -1804,7 +1804,7 @@
                       },
                       "required": ["type", "path"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequest1OptionsValidationDataset"
+                      "title": "FinetuneRunRequestOptionsValidationDataset"
                     }
                   ]
                 },
@@ -1877,7 +1877,7 @@
                 "lrScheduler": {
                   "type": "string",
                   "enum": ["constant", "cosine", "linear"],
-                  "title": "FinetuneRequest1OptionsLrScheduler"
+                  "title": "FinetuneRunRequestOptionsLrScheduler"
                 },
                 "lrMin": {
                   "type": "number",
@@ -1906,7 +1906,7 @@
               },
               "required": ["trainDatasetDir", "validation", "outputParametersDir"],
               "additionalProperties": false,
-              "title": "FinetuneRequest1Options"
+              "title": "FinetuneRunRequestOptions"
             },
             "type": {
               "type": "string",
@@ -1915,7 +1915,7 @@
             "operation": {
               "type": "string",
               "enum": ["start", "resume"],
-              "title": "FinetuneRequest1Operation"
+              "title": "FinetuneRunRequestOperation"
             },
             "withProgress": {
               "type": "boolean"
@@ -1928,7 +1928,7 @@
           },
           "required": ["modelId", "options", "type"],
           "additionalProperties": false,
-          "title": "FinetuneRequest1"
+          "title": "FinetuneRunRequest"
         },
         {
           "type": "object",
@@ -1955,7 +1955,7 @@
                       },
                       "required": ["type"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequestGetStateOptionsValidationNone"
+                      "title": "FinetuneGetStateRequestOptionsValidationNone"
                     },
                     {
                       "type": "object",
@@ -1972,7 +1972,7 @@
                       },
                       "required": ["type"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequestGetStateOptionsValidationSplit"
+                      "title": "FinetuneGetStateRequestOptionsValidationSplit"
                     },
                     {
                       "type": "object",
@@ -1988,7 +1988,7 @@
                       },
                       "required": ["type", "path"],
                       "additionalProperties": false,
-                      "title": "FinetuneRequestGetStateOptionsValidationDataset"
+                      "title": "FinetuneGetStateRequestOptionsValidationDataset"
                     }
                   ]
                 },
@@ -2061,7 +2061,7 @@
                 "lrScheduler": {
                   "type": "string",
                   "enum": ["constant", "cosine", "linear"],
-                  "title": "FinetuneRequestGetStateOptionsLrScheduler"
+                  "title": "FinetuneGetStateRequestOptionsLrScheduler"
                 },
                 "lrMin": {
                   "type": "number",
@@ -2090,7 +2090,7 @@
               },
               "required": ["trainDatasetDir", "validation", "outputParametersDir"],
               "additionalProperties": false,
-              "title": "FinetuneRequestGetStateOptions"
+              "title": "FinetuneGetStateRequestOptions"
             },
             "type": {
               "type": "string",
@@ -2103,7 +2103,7 @@
           },
           "required": ["modelId", "options", "type", "operation"],
           "additionalProperties": false,
-          "title": "FinetuneRequestGetState"
+          "title": "FinetuneGetStateRequest"
         },
         {
           "type": "object",
@@ -2118,12 +2118,12 @@
             "operation": {
               "type": "string",
               "enum": ["pause", "cancel"],
-              "title": "FinetuneRequest3Operation"
+              "title": "FinetuneStopRequestOperation"
             }
           },
           "required": ["modelId", "type", "operation"],
           "additionalProperties": false,
-          "title": "FinetuneRequest3"
+          "title": "FinetuneStopRequest"
         }
       ]
     },
@@ -2416,7 +2416,7 @@
               },
               "required": ["modelId", "isDelegated", "modelType", "handlers", "loadedAt"],
               "additionalProperties": false,
-              "title": "GetLoadedModelInfoResponseInfo1"
+              "title": "LocalLoadedModelInfo"
             },
             {
               "type": "object",
@@ -2443,12 +2443,12 @@
                   },
                   "required": ["providerPublicKey"],
                   "additionalProperties": false,
-                  "title": "GetLoadedModelInfoResponseInfo2ProviderInfo"
+                  "title": "DelegatedLoadedModelInfoProviderInfo"
                 }
               },
               "required": ["modelId", "isDelegated", "handlers", "providerInfo"],
               "additionalProperties": false,
-              "title": "GetLoadedModelInfoResponseInfo2"
+              "title": "DelegatedLoadedModelInfo"
             }
           ]
         }
@@ -2700,6 +2700,7 @@
       "title": "LoadModelRequest",
       "anyOf": [
         {
+          "title": "LoadModelBySrcRequest",
           "anyOf": [
             {
               "type": "object",
@@ -2750,7 +2751,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1LlamacppCompletionDelegate"
+                  "title": "LoadModelBySrcRequestLlamacppCompletionDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -2862,7 +2863,7 @@
                       "type": "string",
                       "enum": ["static", "dynamic"],
                       "description": "Controls tool placement in the prompt. \"static\" (default) prepends the tool set once and reuses it across the session. \"dynamic\" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.",
-                      "title": "LoadModelRequest1LlamacppCompletionModelConfigToolsMode"
+                      "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigToolsMode"
                     },
                     "cache-type-k": {
                       "type": "string"
@@ -2880,14 +2881,14 @@
                         {
                           "type": "string",
                           "enum": ["integrated", "dedicated"],
-                          "title": "LoadModelRequest1LlamacppCompletionModelConfigMainGpu2"
+                          "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigMainGpu2"
                         }
                       ]
                     },
                     "split-mode": {
                       "type": "string",
                       "enum": ["none", "layer", "row"],
-                      "title": "LoadModelRequest1LlamacppCompletionModelConfigSplitMode"
+                      "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "tensor-split": {
                       "type": "string"
@@ -2967,7 +2968,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1LlamacppCompletionModelConfigProjectionModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigProjectionModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -2977,22 +2978,22 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1LlamacppCompletionModelConfigProjectionModelSrc2"
+                          "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigProjectionModelSrc2"
                         }
                       ]
                     },
                     "image_tile_mode": {
                       "type": "string",
                       "enum": ["disabled", "batched", "sequential"],
-                      "title": "LoadModelRequest1LlamacppCompletionModelConfigImageTileMode"
+                      "title": "LoadModelBySrcRequestLlamacppCompletionModelConfigImageTileMode"
                     }
                   },
-                  "title": "LoadModelRequest1LlamacppCompletionModelConfig"
+                  "title": "LoadModelBySrcRequestLlamacppCompletionModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1LlamacppCompletion"
+              "title": "LoadModelBySrcRequestLlamacppCompletion"
             },
             {
               "type": "object",
@@ -3043,7 +3044,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1WhispercppTranscriptionDelegate"
+                  "title": "LoadModelBySrcRequestWhispercppTranscriptionDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -3060,7 +3061,7 @@
                     "strategy": {
                       "type": "string",
                       "enum": ["greedy", "beam_search"],
-                      "title": "LoadModelRequest1WhispercppTranscriptionModelConfigStrategy"
+                      "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigStrategy"
                     },
                     "n_threads": {
                       "type": "integer",
@@ -3204,12 +3205,12 @@
                           "type": "number"
                         }
                       },
-                      "title": "LoadModelRequest1WhispercppTranscriptionModelConfigVadParams"
+                      "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigVadParams"
                     },
                     "audio_format": {
                       "type": "string",
                       "enum": ["f32le", "s16le"],
-                      "title": "LoadModelRequest1WhispercppTranscriptionModelConfigAudioFormat"
+                      "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigAudioFormat"
                     },
                     "contextParams": {
                       "type": "object",
@@ -3227,7 +3228,7 @@
                           "type": "number"
                         }
                       },
-                      "title": "LoadModelRequest1WhispercppTranscriptionModelConfigContextParams"
+                      "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigContextParams"
                     },
                     "miscConfig": {
                       "type": "object",
@@ -3236,7 +3237,7 @@
                           "type": "boolean"
                         }
                       },
-                      "title": "LoadModelRequest1WhispercppTranscriptionModelConfigMiscConfig"
+                      "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "vadModelSrc": {
                       "anyOf": [
@@ -3305,7 +3306,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1WhispercppTranscriptionModelConfigVadModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigVadModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -3315,17 +3316,17 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1WhispercppTranscriptionModelConfigVadModelSrc2"
+                          "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfigVadModelSrc2"
                         }
                       ]
                     }
                   },
-                  "title": "LoadModelRequest1WhispercppTranscriptionModelConfig"
+                  "title": "LoadModelBySrcRequestWhispercppTranscriptionModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1WhispercppTranscription"
+              "title": "LoadModelBySrcRequestWhispercppTranscription"
             },
             {
               "type": "object",
@@ -3376,7 +3377,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1BciWhispercppTranscriptionDelegate"
+                  "title": "LoadModelBySrcRequestBciWhispercppTranscriptionDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -3450,7 +3451,7 @@
                           "maximum": 9007199254740991
                         }
                       },
-                      "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigWhisperConfig"
+                      "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig"
                     },
                     "bciConfig": {
                       "type": "object",
@@ -3461,7 +3462,7 @@
                           "maximum": 9007199254740991
                         }
                       },
-                      "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigBciConfig"
+                      "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigBciConfig"
                     },
                     "contextParams": {
                       "type": "object",
@@ -3479,7 +3480,7 @@
                           "type": "number"
                         }
                       },
-                      "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigContextParams"
+                      "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigContextParams"
                     },
                     "miscConfig": {
                       "type": "object",
@@ -3488,7 +3489,7 @@
                           "type": "boolean"
                         }
                       },
-                      "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigMiscConfig"
+                      "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "backendsDir": {
                       "type": "string"
@@ -3560,7 +3561,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigEmbedderModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -3570,17 +3571,17 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfigEmbedderModelSrc2"
+                          "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc2"
                         }
                       ]
                     }
                   },
-                  "title": "LoadModelRequest1BciWhispercppTranscriptionModelConfig"
+                  "title": "LoadModelBySrcRequestBciWhispercppTranscriptionModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1BciWhispercppTranscription"
+              "title": "LoadModelBySrcRequestBciWhispercppTranscription"
             },
             {
               "type": "object",
@@ -3631,7 +3632,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1ParakeetTranscriptionDelegate"
+                  "title": "LoadModelBySrcRequestParakeetTranscriptionDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -3748,12 +3749,12 @@
                     "modelType": {}
                   },
                   "additionalProperties": false,
-                  "title": "LoadModelRequest1ParakeetTranscriptionModelConfig"
+                  "title": "LoadModelBySrcRequestParakeetTranscriptionModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1ParakeetTranscription"
+              "title": "LoadModelBySrcRequestParakeetTranscription"
             },
             {
               "type": "object",
@@ -3804,7 +3805,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1LlamacppEmbeddingDelegate"
+                  "title": "LoadModelBySrcRequestLlamacppEmbeddingDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -3826,7 +3827,7 @@
                     "device": {
                       "type": "string",
                       "enum": ["gpu", "cpu"],
-                      "title": "LoadModelRequest1LlamacppEmbeddingModelConfigDevice"
+                      "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigDevice"
                     },
                     "batchSize": {
                       "type": "integer",
@@ -3836,12 +3837,12 @@
                     "pooling": {
                       "type": "string",
                       "enum": ["none", "mean", "cls", "last", "rank"],
-                      "title": "LoadModelRequest1LlamacppEmbeddingModelConfigPooling"
+                      "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigPooling"
                     },
                     "attention": {
                       "type": "string",
                       "enum": ["causal", "non-causal"],
-                      "title": "LoadModelRequest1LlamacppEmbeddingModelConfigAttention"
+                      "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigAttention"
                     },
                     "embdNormalize": {
                       "type": "integer",
@@ -3851,7 +3852,7 @@
                     "flashAttention": {
                       "type": "string",
                       "enum": ["on", "off", "auto"],
-                      "title": "LoadModelRequest1LlamacppEmbeddingModelConfigFlashAttention"
+                      "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigFlashAttention"
                     },
                     "mainGpu": {
                       "anyOf": [
@@ -3863,14 +3864,14 @@
                         {
                           "type": "string",
                           "enum": ["integrated", "dedicated"],
-                          "title": "LoadModelRequest1LlamacppEmbeddingModelConfigMainGpu2"
+                          "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigMainGpu2"
                         }
                       ]
                     },
                     "splitMode": {
                       "type": "string",
                       "enum": ["none", "layer", "row"],
-                      "title": "LoadModelRequest1LlamacppEmbeddingModelConfigSplitMode"
+                      "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
                       "type": "string"
@@ -3899,12 +3900,12 @@
                       "type": "string"
                     }
                   },
-                  "title": "LoadModelRequest1LlamacppEmbeddingModelConfig"
+                  "title": "LoadModelBySrcRequestLlamacppEmbeddingModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1LlamacppEmbedding"
+              "title": "LoadModelBySrcRequestLlamacppEmbedding"
             },
             {
               "type": "object",
@@ -3955,7 +3956,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1NmtcppTranslationDelegate"
+                  "title": "LoadModelBySrcRequestNmtcppTranslationDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -3974,7 +3975,7 @@
                         "mode": {
                           "type": "string",
                           "enum": ["full"],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotMode"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotMode"
                         },
                         "beamsize": {
                           "type": "number"
@@ -4062,7 +4063,7 @@
                             "tr",
                             "vi"
                           ],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotFrom"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotFrom"
                         },
                         "to": {
                           "type": "string",
@@ -4122,7 +4123,7 @@
                             "tr",
                             "vi"
                           ],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotTo"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotTo"
                         },
                         "srcVocabSrc": {
                           "anyOf": [
@@ -4191,7 +4192,7 @@
                                         "vla",
                                         "classification"
                                       ],
-                                      "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotSrcVocabSrc2Addon1"
+                                      "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc2Addon1"
                                     },
                                     {
                                       "type": "string",
@@ -4201,7 +4202,7 @@
                                 }
                               },
                               "required": ["src"],
-                              "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotSrcVocabSrc2"
+                              "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc2"
                             }
                           ]
                         },
@@ -4272,7 +4273,7 @@
                                         "vla",
                                         "classification"
                                       ],
-                                      "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotDstVocabSrc2Addon1"
+                                      "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc2Addon1"
                                     },
                                     {
                                       "type": "string",
@@ -4282,7 +4283,7 @@
                                 }
                               },
                               "required": ["src"],
-                              "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotDstVocabSrc2"
+                              "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc2"
                             }
                           ]
                         },
@@ -4295,7 +4296,7 @@
                             "mode": {
                               "type": "string",
                               "enum": ["full"],
-                              "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelMode"
+                              "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
                             },
                             "beamsize": {
                               "type": "number"
@@ -4388,7 +4389,7 @@
                                             "vla",
                                             "classification"
                                           ],
-                                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelModelSrc2Addon1"
+                                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc2Addon1"
                                         },
                                         {
                                           "type": "string",
@@ -4398,7 +4399,7 @@
                                     }
                                   },
                                   "required": ["src"],
-                                  "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelModelSrc2"
+                                  "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc2"
                                 }
                               ]
                             },
@@ -4469,7 +4470,7 @@
                                             "vla",
                                             "classification"
                                           ],
-                                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc2Addon1"
+                                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc2Addon1"
                                         },
                                         {
                                           "type": "string",
@@ -4479,7 +4480,7 @@
                                     }
                                   },
                                   "required": ["src"],
-                                  "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc2"
+                                  "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc2"
                                 }
                               ]
                             },
@@ -4550,7 +4551,7 @@
                                             "vla",
                                             "classification"
                                           ],
-                                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2Addon1"
+                                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2Addon1"
                                         },
                                         {
                                           "type": "string",
@@ -4560,7 +4561,7 @@
                                     }
                                   },
                                   "required": ["src"],
-                                  "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2"
+                                  "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc2"
                                 }
                               ]
                             },
@@ -4569,11 +4570,11 @@
                             }
                           },
                           "required": ["modelSrc"],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamotPivotModel"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamotPivotModel"
                         }
                       },
                       "required": ["engine", "from", "to"],
-                      "title": "LoadModelRequest1NmtcppTranslationModelConfigBergamot"
+                      "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigBergamot"
                     },
                     {
                       "type": "object",
@@ -4581,7 +4582,7 @@
                         "mode": {
                           "type": "string",
                           "enum": ["full"],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigIndicTransMode"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigIndicTransMode"
                         },
                         "beamsize": {
                           "type": "number"
@@ -4641,7 +4642,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigIndicTransFrom"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigIndicTransFrom"
                         },
                         "to": {
                           "type": "string",
@@ -4673,18 +4674,18 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
-                          "title": "LoadModelRequest1NmtcppTranslationModelConfigIndicTransTo"
+                          "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigIndicTransTo"
                         }
                       },
                       "required": ["engine", "from", "to"],
-                      "title": "LoadModelRequest1NmtcppTranslationModelConfigIndicTrans"
+                      "title": "LoadModelBySrcRequestNmtcppTranslationModelConfigIndicTrans"
                     }
                   ]
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1NmtcppTranslation"
+              "title": "LoadModelBySrcRequestNmtcppTranslation"
             },
             {
               "type": "object",
@@ -4735,7 +4736,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1TtsGgmlDelegate"
+                  "title": "LoadModelBySrcRequestTtsGgmlDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -4781,7 +4782,7 @@
                             "zh",
                             "hi"
                           ],
-                          "title": "LoadModelRequest1TtsGgmlModelConfigChatterboxLanguage"
+                          "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterboxLanguage"
                         },
                         "voice": {
                           "type": "string"
@@ -4886,7 +4887,7 @@
                                         "vla",
                                         "classification"
                                       ],
-                                      "title": "LoadModelRequest1TtsGgmlModelConfigChatterboxS3genModelSrc2Addon1"
+                                      "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc2Addon1"
                                     },
                                     {
                                       "type": "string",
@@ -4896,7 +4897,7 @@
                                 }
                               },
                               "required": ["src"],
-                              "title": "LoadModelRequest1TtsGgmlModelConfigChatterboxS3genModelSrc2"
+                              "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc2"
                             }
                           ]
                         },
@@ -4967,7 +4968,7 @@
                                         "vla",
                                         "classification"
                                       ],
-                                      "title": "LoadModelRequest1TtsGgmlModelConfigChatterboxReferenceAudioSrc2Addon1"
+                                      "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2Addon1"
                                     },
                                     {
                                       "type": "string",
@@ -4977,7 +4978,7 @@
                                 }
                               },
                               "required": ["src"],
-                              "title": "LoadModelRequest1TtsGgmlModelConfigChatterboxReferenceAudioSrc2"
+                              "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc2"
                             }
                           ]
                         },
@@ -4997,7 +4998,7 @@
                       },
                       "required": ["ttsEngine", "language"],
                       "additionalProperties": false,
-                      "title": "LoadModelRequest1TtsGgmlModelConfigChatterbox"
+                      "title": "LoadModelBySrcRequestTtsGgmlModelConfigChatterbox"
                     },
                     {
                       "type": "object",
@@ -5041,7 +5042,7 @@
                             "uk",
                             "vi"
                           ],
-                          "title": "LoadModelRequest1TtsGgmlModelConfigSupertonicLanguage"
+                          "title": "LoadModelBySrcRequestTtsGgmlModelConfigSupertonicLanguage"
                         },
                         "voice": {
                           "type": "string"
@@ -5071,14 +5072,14 @@
                       },
                       "required": ["ttsEngine", "language"],
                       "additionalProperties": false,
-                      "title": "LoadModelRequest1TtsGgmlModelConfigSupertonic"
+                      "title": "LoadModelBySrcRequestTtsGgmlModelConfigSupertonic"
                     }
                   ]
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1TtsGgml"
+              "title": "LoadModelBySrcRequestTtsGgml"
             },
             {
               "type": "object",
@@ -5129,7 +5130,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1GgmlOcrDelegate"
+                  "title": "LoadModelBySrcRequestGgmlOcrDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -5152,7 +5153,7 @@
                     "pipelineType": {
                       "type": "string",
                       "enum": ["easyocr", "doctr"],
-                      "title": "LoadModelRequest1GgmlOcrModelConfigPipelineType"
+                      "title": "LoadModelBySrcRequestGgmlOcrModelConfigPipelineType"
                     },
                     "magRatio": {
                       "type": "number"
@@ -5181,7 +5182,7 @@
                     "backendDevice": {
                       "type": "string",
                       "enum": ["cpu", "vulkan", "metal", "opencl"],
-                      "title": "LoadModelRequest1GgmlOcrModelConfigBackendDevice"
+                      "title": "LoadModelBySrcRequestGgmlOcrModelConfigBackendDevice"
                     },
                     "gpuDevice": {
                       "type": "number"
@@ -5253,7 +5254,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1GgmlOcrModelConfigDetectorModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestGgmlOcrModelConfigDetectorModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5263,17 +5264,17 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1GgmlOcrModelConfigDetectorModelSrc2"
+                          "title": "LoadModelBySrcRequestGgmlOcrModelConfigDetectorModelSrc2"
                         }
                       ]
                     }
                   },
-                  "title": "LoadModelRequest1GgmlOcrModelConfig"
+                  "title": "LoadModelBySrcRequestGgmlOcrModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1GgmlOcr"
+              "title": "LoadModelBySrcRequestGgmlOcr"
             },
             {
               "type": "object",
@@ -5324,7 +5325,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1SdcppGenerationDelegate"
+                  "title": "LoadModelBySrcRequestSdcppGenerationDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -5343,7 +5344,7 @@
                       "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigMode"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigMode"
                     },
                     "threads": {
                       "type": "number"
@@ -5351,13 +5352,13 @@
                     "device": {
                       "type": "string",
                       "enum": ["gpu", "cpu"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigDevice"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigDevice"
                     },
                     "prediction": {
                       "description": "Prediction type; auto-detected from model when omitted",
                       "type": "string",
                       "enum": ["auto", "eps", "v", "edm_v", "flow", "flux2_flow"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigPrediction"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigPrediction"
                     },
                     "type": {
                       "description": "Weight quantization type override; auto-detected when omitted",
@@ -5378,17 +5379,17 @@
                         "q6_k",
                         "q8_0"
                       ],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigType"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigType"
                     },
                     "rng": {
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigRng"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigRng"
                     },
                     "sampler_rng": {
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigSamplerRng"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigSamplerRng"
                     },
                     "clip_on_cpu": {
                       "description": "Force CLIP text encoder to run on CPU",
@@ -5418,7 +5419,7 @@
                       "description": "How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
                       "type": "string",
                       "enum": ["auto", "immediately", "at_runtime"],
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigLoraApplyMode"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigLoraApplyMode"
                     },
                     "verbosity": {
                       "type": "number"
@@ -5491,7 +5492,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigClipLModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipLModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5501,7 +5502,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigClipLModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipLModelSrc2"
                         }
                       ]
                     },
@@ -5573,7 +5574,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigClipGModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipGModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5583,7 +5584,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigClipGModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipGModelSrc2"
                         }
                       ]
                     },
@@ -5655,7 +5656,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigT5XxlModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigT5XxlModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5665,7 +5666,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigT5XxlModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigT5XxlModelSrc2"
                         }
                       ]
                     },
@@ -5737,7 +5738,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigLlmModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigLlmModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5747,7 +5748,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigLlmModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigLlmModelSrc2"
                         }
                       ]
                     },
@@ -5819,7 +5820,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigVaeModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigVaeModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5829,7 +5830,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigVaeModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigVaeModelSrc2"
                         }
                       ]
                     },
@@ -5901,7 +5902,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigHighNoiseDiffusionModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5911,7 +5912,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigHighNoiseDiffusionModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc2"
                         }
                       ]
                     },
@@ -5983,7 +5984,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest1SdcppGenerationModelConfigClipVisionModelSrc2Addon1"
+                                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipVisionModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -5993,7 +5994,7 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest1SdcppGenerationModelConfigClipVisionModelSrc2"
+                          "title": "LoadModelBySrcRequestSdcppGenerationModelConfigClipVisionModelSrc2"
                         }
                       ]
                     },
@@ -6074,7 +6075,7 @@
                                         "vla",
                                         "classification"
                                       ],
-                                      "title": "LoadModelRequest1SdcppGenerationModelConfigUpscalerModelSrc2Addon1"
+                                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigUpscalerModelSrc2Addon1"
                                     },
                                     {
                                       "type": "string",
@@ -6084,7 +6085,7 @@
                                 }
                               },
                               "required": ["src"],
-                              "title": "LoadModelRequest1SdcppGenerationModelConfigUpscalerModelSrc2"
+                              "title": "LoadModelBySrcRequestSdcppGenerationModelConfigUpscalerModelSrc2"
                             }
                           ]
                         },
@@ -6118,15 +6119,15 @@
                         }
                       },
                       "additionalProperties": false,
-                      "title": "LoadModelRequest1SdcppGenerationModelConfigUpscaler"
+                      "title": "LoadModelBySrcRequestSdcppGenerationModelConfigUpscaler"
                     }
                   },
-                  "title": "LoadModelRequest1SdcppGenerationModelConfig"
+                  "title": "LoadModelBySrcRequestSdcppGenerationModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1SdcppGeneration"
+              "title": "LoadModelBySrcRequestSdcppGeneration"
             },
             {
               "type": "object",
@@ -6177,7 +6178,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1GgmlVlaDelegate"
+                  "title": "LoadModelBySrcRequestGgmlVlaDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -6195,7 +6196,7 @@
                       "description": "Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
                       "type": "string",
                       "enum": ["auto", "cpu"],
-                      "title": "LoadModelRequest1GgmlVlaModelConfigBackend"
+                      "title": "LoadModelBySrcRequestGgmlVlaModelConfigBackend"
                     },
                     "verbosity": {
                       "description": "Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
@@ -6204,12 +6205,12 @@
                       "maximum": 9007199254740991
                     }
                   },
-                  "title": "LoadModelRequest1GgmlVlaModelConfig"
+                  "title": "LoadModelBySrcRequestGgmlVlaModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1GgmlVla"
+              "title": "LoadModelBySrcRequestGgmlVla"
             },
             {
               "type": "object",
@@ -6260,7 +6261,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest1GgmlClassificationDelegate"
+                  "title": "LoadModelBySrcRequestGgmlClassificationDelegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -6286,12 +6287,12 @@
                       "type": "boolean"
                     }
                   },
-                  "title": "LoadModelRequest1GgmlClassificationModelConfig"
+                  "title": "LoadModelBySrcRequestGgmlClassificationModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType"],
               "additionalProperties": false,
-              "title": "LoadModelRequest1GgmlClassification"
+              "title": "LoadModelBySrcRequestGgmlClassification"
             },
             {
               "type": "object",
@@ -6342,7 +6343,7 @@
                     }
                   },
                   "required": ["providerPublicKey"],
-                  "title": "LoadModelRequest112Delegate"
+                  "title": "LoadModelBySrcRequest12Delegate"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -6358,11 +6359,11 @@
                     "type": "string"
                   },
                   "additionalProperties": {},
-                  "title": "LoadModelRequest112ModelConfig"
+                  "title": "LoadModelBySrcRequest12ModelConfig"
                 }
               },
               "required": ["type", "modelSrc", "modelType"],
-              "title": "LoadModelRequest112"
+              "title": "LoadModelBySrcRequest12"
             }
           ]
         },
@@ -6395,7 +6396,7 @@
                   "type": "string",
                   "enum": ["whisper", "whispercpp-transcription"],
                   "description": "Whisper model type: \"whisper\" (alias) or \"whispercpp-transcription\" (canonical)",
-                  "title": "LoadModelRequest2LoadModelModelType"
+                  "title": "ReloadModelConfigRequest1ModelType"
                 },
                 "modelConfig": {
                   "type": "object",
@@ -6403,7 +6404,7 @@
                     "strategy": {
                       "type": "string",
                       "enum": ["greedy", "beam_search"],
-                      "title": "LoadModelRequest2LoadModelModelConfigStrategy"
+                      "title": "ReloadModelConfigRequest1ModelConfigStrategy"
                     },
                     "n_threads": {
                       "type": "integer",
@@ -6547,12 +6548,12 @@
                           "type": "number"
                         }
                       },
-                      "title": "LoadModelRequest2LoadModelModelConfigVadParams"
+                      "title": "ReloadModelConfigRequest1ModelConfigVadParams"
                     },
                     "audio_format": {
                       "type": "string",
                       "enum": ["f32le", "s16le"],
-                      "title": "LoadModelRequest2LoadModelModelConfigAudioFormat"
+                      "title": "ReloadModelConfigRequest1ModelConfigAudioFormat"
                     },
                     "contextParams": {
                       "type": "object",
@@ -6570,7 +6571,7 @@
                           "type": "number"
                         }
                       },
-                      "title": "LoadModelRequest2LoadModelModelConfigContextParams"
+                      "title": "ReloadModelConfigRequest1ModelConfigContextParams"
                     },
                     "miscConfig": {
                       "type": "object",
@@ -6579,7 +6580,7 @@
                           "type": "boolean"
                         }
                       },
-                      "title": "LoadModelRequest2LoadModelModelConfigMiscConfig"
+                      "title": "ReloadModelConfigRequest1ModelConfigMiscConfig"
                     },
                     "vadModelSrc": {
                       "anyOf": [
@@ -6648,7 +6649,7 @@
                                     "vla",
                                     "classification"
                                   ],
-                                  "title": "LoadModelRequest2LoadModelModelConfigVadModelSrc2Addon1"
+                                  "title": "ReloadModelConfigRequest1ModelConfigVadModelSrc2Addon1"
                                 },
                                 {
                                   "type": "string",
@@ -6658,18 +6659,19 @@
                             }
                           },
                           "required": ["src"],
-                          "title": "LoadModelRequest2LoadModelModelConfigVadModelSrc2"
+                          "title": "ReloadModelConfigRequest1ModelConfigVadModelSrc2"
                         }
                       ]
                     }
                   },
-                  "title": "LoadModelRequest2LoadModelModelConfig"
+                  "title": "ReloadModelConfigRequest1ModelConfig"
                 }
               },
               "required": ["type", "modelId", "modelType", "modelConfig"],
-              "title": "LoadModelRequest2LoadModel"
+              "title": "ReloadModelConfigRequest1"
             }
-          ]
+          ],
+          "title": "ReloadModelConfigRequest"
         }
       ]
     },
@@ -8987,7 +8989,7 @@
               "type": "string",
               "enum": ["nmt", "nmtcpp-translation"],
               "description": "NMT model-type variant identifier.",
-              "title": "TranslateRequest1ModelType"
+              "title": "TranslateNmtRequestModelType"
             },
             "type": {
               "type": "string",
@@ -9000,7 +9002,7 @@
             }
           },
           "required": ["modelId", "text", "stream", "modelType", "type"],
-          "title": "TranslateRequest1"
+          "title": "TranslateNmtRequest"
         },
         {
           "type": "object",
@@ -9022,7 +9024,7 @@
               "type": "string",
               "enum": ["llm", "llamacpp-completion"],
               "description": "LLM model-type variant identifier.",
-              "title": "TranslateRequest2ModelType"
+              "title": "TranslateLlmRequestModelType"
             },
             "from": {
               "description": "Source language code. When omitted, the SDK attempts to auto-detect the source language.",
@@ -9047,7 +9049,7 @@
             }
           },
           "required": ["modelId", "text", "stream", "modelType", "to", "type"],
-          "title": "TranslateRequest2"
+          "title": "TranslateLlmRequest"
         }
       ]
     },

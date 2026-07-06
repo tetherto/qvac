@@ -164,19 +164,28 @@ function unionArmsOf(node: JsonSchema): JsonSchema[] | undefined {
 }
 
 /**
- * Property key that discriminates a set of sibling union arms: a `const`
- * string that, wherever present across the arms, never repeats. Doesn't
- * require every arm to carry it — e.g. `loadModel`'s custom-plugin catch-all
- * arm has no `modelType` const, but the other 11 arms' distinct `modelType`
- * values are still worth using for those 11.
+ * Property key that best discriminates a set of sibling union arms: the
+ * `const` string field, wherever present, that splits the arms into the most
+ * distinct groups. Picks the *best* key rather than requiring perfection —
+ * two shortcomings otherwise cause bad names:
  *
- * Deliberately not a fixed guess-list of names (`type`/`operation`/...): the
- * wire method discriminator (`type`) is IDENTICAL across every arm of a
+ * - Requiring every arm to carry the key: `loadModel`'s custom-plugin
+ *   catch-all arm has no `modelType` const, so demanding full coverage threw
+ *   away `modelType` for the other 11 arms too.
+ * - Requiring the value to never repeat: `completionStream`'s event union
+ *   has two arms both typed `completionDone` (success vs. error), so
+ *   demanding perfect uniqueness rejected `type` for all 8 events, even
+ *   though it cleanly separates the other 6. A same-named pair among many
+ *   otherwise-unique arms still bumps to `...2` via `ensureUniqueTitle`
+ *   downstream — better than every arm losing its name to that one clash.
+ *
+ * Also deliberately not a fixed guess-list of names (`type`/`operation`/...):
+ * the wire method discriminator (`type`) is IDENTICAL across every arm of a
  * single method's own operation union (e.g. every `rag` arm has
  * `type: 'rag'`), so guessing by name picked the one field that never
  * discriminates anything and produced `RagRequestRag`, `RagRequestRag2`, ...
- * Scanning for whichever key is actually unique per arm works regardless of
- * what the schema author named it (`operation`, `modelType`, `ttsEngine`, ...).
+ * A key with only one distinct value across all arms is rejected outright —
+ * it's exactly this "same value everywhere" case.
  */
 function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
   const candidateKeys = new Set<string>()
@@ -186,6 +195,8 @@ function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
       for (const key of Object.keys(properties)) candidateKeys.add(key)
     }
   }
+  let bestKey: string | undefined
+  let bestGroupCount = 1 // a key with only 1 distinct value discriminates nothing
   for (const key of candidateKeys) {
     const values: string[] = []
     for (const arm of arms) {
@@ -195,11 +206,13 @@ function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
         values.push(field['const'])
       }
     }
-    if (values.length > 0 && new Set(values).size === values.length) {
-      return key
+    const groupCount = new Set(values).size
+    if (groupCount > bestGroupCount) {
+      bestKey = key
+      bestGroupCount = groupCount
     }
   }
-  return undefined
+  return bestKey
 }
 
 function ensureUniqueTitle(base: string, seenTitles: Set<string>): string {
@@ -238,13 +251,23 @@ function nameUnionArms(arms: JsonSchema[], namePrefix: string): string[] {
  * Without this, nested/inline Zod schemas reach Python codegen (verified
  * against datamodel-code-generator) as positionally-numbered classes
  * (`Stats13`, `Events7`) with no indication of what they represent.
+ *
+ * If `node` already carries a `title` (a schema author's explicit Zod
+ * `.meta({ title: ... })`, e.g. `FinetuneRunRequest`), that title wins over
+ * `namePrefix` — both for `node` itself and as the prefix for its own
+ * children — instead of being silently discarded the moment `node` also
+ * happens to be a union wrapper.
  */
 function titleSchemaNode(node: unknown, namePrefix: string, seenTitles: Set<string>): void {
   if (!isSchemaObject(node)) return
 
+  const existingTitle = typeof node['title'] === 'string' ? node['title'] : undefined
+  if (existingTitle) seenTitles.add(existingTitle)
+  const effectivePrefix = existingTitle ?? namePrefix
+
   const arms = unionArmsOf(node)
   if (arms) {
-    const armNames = nameUnionArms(arms, namePrefix)
+    const armNames = nameUnionArms(arms, effectivePrefix)
     arms.forEach(function (arm, index) {
       titleSchemaNode(arm, armNames[index] as string, seenTitles)
     })
@@ -254,21 +277,21 @@ function titleSchemaNode(node: unknown, namePrefix: string, seenTitles: Set<stri
   const isEnum = Array.isArray(node['enum'])
   const isObject = node['type'] === 'object' || isSchemaObject(node['properties'])
   const hasConst = node['const'] !== undefined
-  if ((isEnum || isObject) && !hasConst && typeof node['title'] !== 'string') {
+  if ((isEnum || isObject) && !hasConst && !existingTitle) {
     node['title'] = ensureUniqueTitle(namePrefix, seenTitles)
   }
 
   const properties = node['properties']
   if (isSchemaObject(properties)) {
     for (const [key, propSchema] of Object.entries(properties)) {
-      titleSchemaNode(propSchema, `${namePrefix}${toPascalCase(key)}`, seenTitles)
+      titleSchemaNode(propSchema, `${effectivePrefix}${toPascalCase(key)}`, seenTitles)
     }
   }
   if (node['items'] !== undefined) {
-    titleSchemaNode(node['items'], `${namePrefix}Item`, seenTitles)
+    titleSchemaNode(node['items'], `${effectivePrefix}Item`, seenTitles)
   }
   if (isSchemaObject(node['additionalProperties'])) {
-    titleSchemaNode(node['additionalProperties'], `${namePrefix}Value`, seenTitles)
+    titleSchemaNode(node['additionalProperties'], `${effectivePrefix}Value`, seenTitles)
   }
 }
 

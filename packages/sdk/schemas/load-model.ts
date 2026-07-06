@@ -595,6 +595,7 @@ export const loadModelSrcRequestSchema = z
     ...data,
     seed: data.seed ?? false
   }))
+  .meta({ title: 'LoadModelBySrcRequest' })
 
 // Combined request schema: load new model OR reload config
 export const loadModelRequestSchema = z.union([

@@ -111,6 +111,7 @@ export const finetuneRunRequestSchema = finetuneRunParamsSchemaBase
       )
   })
   .strict()
+  .meta({ title: 'FinetuneRunRequest' })
 
 export const finetuneGetStateRequestSchema = finetuneRunParamsSchemaBase
   .extend({
@@ -118,6 +119,7 @@ export const finetuneGetStateRequestSchema = finetuneRunParamsSchemaBase
     operation: z.literal('getState')
   })
   .strict()
+  .meta({ title: 'FinetuneGetStateRequest' })
 
 export const finetuneStopRequestSchema = finetuneModelParamsSchema
   .extend({
@@ -125,6 +127,7 @@ export const finetuneStopRequestSchema = finetuneModelParamsSchema
     operation: z.enum(['pause', 'cancel'])
   })
   .strict()
+  .meta({ title: 'FinetuneStopRequest' })
 
 export const finetuneRequestSchema = z.union([
   finetuneRunRequestSchema,
