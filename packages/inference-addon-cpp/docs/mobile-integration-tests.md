@@ -79,17 +79,33 @@ This is the same group `classification-ggml` and `diffusion-cpp` already
 piggyback on. Shared secrets `AWS_OIDC_ROLE_ARN`, `PAT_TOKEN`, and the iOS
 signing set are reused as-is. No infra ticket needed.
 
-## ⛔ Remaining before this can go green
+## PR trigger
 
-1. **npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
-   `output-callback-lifetime`). The harness/`build-mobile-app` was written for
-   `@qvac/*` packages; verify packing/app-build works for unscoped names (or
-   scope them).
-2. **PR trigger wiring.** This workflow is currently `workflow_dispatch` +
-   `workflow_call` only. To run on PRs like the other addons it needs a
-   `pull_request_target` `on-pr-inference-addon-cpp.yml` with the
-   label-gate / authorize / verified gates (those provide the secret + OIDC
-   access forks can't get from `pull_request`). Wire the mobile job there.
+`on-pr-inference-addon-cpp.yml` — a `pull_request_target` workflow (path-filtered
+to `packages/inference-addon-cpp/**`) that runs the shared `label-gate` /
+`ci-router` / `authorize-pr` gates and then calls the mobile workflow with
+`secrets: inherit`. `pull_request_target` (not `pull_request`) is required
+because the mobile suite needs secrets — Device Farm ARNs, AWS OIDC, Apple
+signing, PAT — which GitHub does not expose to fork `pull_request` runs; the
+gates make running fork code with secrets safe. It is intentionally MOBILE-ONLY:
+the desktop/native suites already run on `pull_request` via
+`pr-test-inference-addon-cpp{,-js}.yml`, and it carries no prebuild job because
+the mobile workflow self-contains its own.
+
+The Device Farm run is opt-in: `ci-router` only sets `run_mobile` when the PR
+carries **both** the `verified` label (authorises) and the `run-mobile-addon-tests`
+label (selects the stage). A trusted reviewer applies them after reviewing the diff.
+
+## ⚠️ Open item (not a blocker)
+
+**npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
+`output-callback-lifetime`) whereas the harness was written for `@qvac/*`. In
+practice this is low-risk: desktop builds these purely by local path (never by
+npm name), and the mobile harness likewise packs/builds from the local dir — the
+only name-sensitive path is `setup`'s npm fallback (`npm pack <name>@latest`),
+which is disabled on PRs and bypassed whenever prebuild artifacts are present (now
+always). Worth confirming the fallback never fires, or scoping the three addons to
+`@qvac/*` for consistency — but not a correctness blocker.
 
 ## Not validated locally
 

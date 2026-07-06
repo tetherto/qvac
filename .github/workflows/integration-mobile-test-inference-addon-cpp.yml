@@ -22,10 +22,10 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # classification-ggml and diffusion-cpp already piggyback on. No new infra
 # secrets required.
 #
-# NOTE: to run on PRs like the other addons this still needs a
-# pull_request_target on-pr-inference-addon-cpp.yml (label-gate / authorize /
-# verified gates) to call this workflow — it is workflow_call + workflow_dispatch
-# only today. See packages/inference-addon-cpp/docs/mobile-integration-tests.md.
+# Triggered on PRs by on-pr-inference-addon-cpp.yml (pull_request_target +
+# label-gate / ci-router / authorize gates), which is what grants the secret +
+# OIDC access a fork `pull_request` can't get. Also runnable via workflow_dispatch.
+# See packages/inference-addon-cpp/docs/mobile-integration-tests.md.
 
 on:
   workflow_call:

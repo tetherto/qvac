@@ -1,0 +1,125 @@
+name: On PR Trigger (inference-addon-cpp mobile)
+
+# QVAC-21737: trigger the inference-addon-cpp mobile Device Farm suite on PRs.
+#
+# Scope — MOBILE ONLY. The desktop/native suites already run on `pull_request`
+# via pr-test-inference-addon-cpp-js.yml and pr-test-inference-addon-cpp.yml
+# (they build + run on the runner and need no secrets, so a plain pull_request
+# trigger is fine there). This workflow exists solely because the mobile suite
+# needs SECRETS — Device Farm ARNs, AWS OIDC role, Apple signing, PAT — which
+# GitHub does NOT expose to `pull_request` runs from forks. `pull_request_target`
+# runs in the base-repo context (so secrets are available), which means it can
+# run untrusted fork code with secrets in scope; the label-gate / authorize
+# gates below are what make that safe (a trusted reviewer applies the label
+# after reviewing the diff) and keep the paid Device Farm run opt-in.
+#
+# Thin by design: unlike on-pr-embed-llamacpp.yml, there is no prebuild job here
+# — integration-mobile-test-inference-addon-cpp.yml self-contains its own
+# `prebuild` job (cross-compiling the test addons' .bare for android/ios), so
+# this wrapper only has to gate and call it.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/inference-addon-cpp/**"
+      - ".github/workflows/*inference-addon-cpp*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # allow commenting Device Farm results on the PR
+      id-token: write
+    if: >-
+      always() &&
+      needs.ci-router.outputs.run_mobile == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - label-gate
+      - ci-router
+    uses: ./.github/workflows/integration-mobile-test-inference-addon-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
