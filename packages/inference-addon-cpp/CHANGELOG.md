@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0] - 2026-07-06
+
+### Added
+- Swappable job admission: a new `IJobScheduler` strategy interface on `AddonCpp` (`src/inference-addon-cpp/job/IJobScheduler.hpp`). The single-job default is unchanged; a caller wanting cross-request continuous batching builds a `MultiJobScheduler` (fixed worker pool + bounded waiting-room queue, FIFO admission, back-pressure via `runJob` returning `false` at capacity, exclusive-job support for e.g. finetune/inference mutual exclusion) and passes it into the `AddonCpp` constructor.
+- Per-job cancellation: `AddonCpp::cancelJob(JobId id = kNoJobId)` targets one job (omit the id to cancel everything, same as `cancelAllJobs()`); the JS `cancel()` binding now accepts an optional job id (`cancel(id)` → per-job, no id → cancel-all). Native job ids are back on queued/output events — carried once in 1.1.3 and reverted in 1.1.4 for being layered awkwardly on top of the single-job runner. This time id routing lives inside the scheduler itself, which guarantees exactly one terminal event per admitted job (including cancelled and queue-dropped jobs), so the same approach that was unsound in 1.1.3 is sound now.
+- Per-job observed stats: models implementing the new `IModelJobStats` interface report end-to-end TTFT/TPS/token counts for each tagged job on its `jobEnded` event, instead of only the whole-model aggregate.
+- `AddonCpp::activeJobs()` / JS `activeJobs` expose the scheduler's live admitted-job count (in-flight + queued) as the authoritative concurrency figure, replacing ad hoc in-flight counters in consumers.
+- `llm-llamacpp` wires a `MultiJobScheduler` sized from `parallel` so independent `run()` calls decode together via true cross-request continuous batching; a 1-slot pool behaves exactly as before.
+
+### Breaking
+- `OutputQueue::clear()` now returns `std::vector<std::pair<JobId, std::any>>` instead of `std::vector<std::any>` — every drained entry carries its originating job id.
+- `JobRunner` is renamed `SingleJobScheduler` and moved from the root-level `JobRunner.hpp` to `job/SingleJobScheduler.hpp`. Its constructor no longer takes an `outputQueue` parameter; the queue is now supplied via `start(std::shared_ptr<OutputQueue>)`. The `JobRunner.hpp` backward-compatibility forwarding header (with its `using JobRunner = SingleJobScheduler` alias) has been removed — includers of `JobRunner.hpp` or the `JobRunner` name must switch to `job/SingleJobScheduler.hpp` / `SingleJobScheduler`.
+
 ## [1.2.4] - 2026-07-13
 
 ### Fixed

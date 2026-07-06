@@ -3,7 +3,7 @@
 > ⚠️ **Warning:** These diagrams can become outdated as code evolves.  
 > For debugging, consider regenerating flow diagrams from actual code execution or recent code analysis rather than relying solely on these static diagrams.
 
-This document describes how data moves through the `inference-addon-cpp` system, including the primary inference path and weight loading flow.
+This document describes how data moves through the `inference-addon-cpp` system, including the primary inference path and weight loading flow. The inference path below describes the default `SingleJobScheduler` (one job at a time); see [Multi-Job Flow](#multi-job-flow-opt-in) for how an opt-in `MultiJobScheduler` differs.
 
 **Audience:** Developers debugging complex behavior, contributors understanding system interactions.
 
@@ -16,8 +16,8 @@ This document describes how data moves through the `inference-addon-cpp` system,
 - Cross-thread communication: JS → runJob → wake C++ thread → process → output → uv_async_send → JS callback
 
 **Inference Path:**
-- JS calls `runJob(input)` → converts JS type to `std::any` → passes to JobRunner
-- JobRunner calls `model->process(std::any)` on processing thread
+- JS calls `runJob(input)` → converts JS type to `std::any` → passes to SingleJobScheduler
+- SingleJobScheduler calls `model->process(std::any)` on processing thread
 - Model returns `std::any` output
 - Output queued as `std::any` → output handlers match by type via `canHandle()`
 - Triggers JS callback asynchronously
@@ -34,6 +34,7 @@ This document describes how data moves through the `inference-addon-cpp` system,
 
 - [Communication Pattern](#communication-pattern)
 - [Primary Inference Path](#primary-inference-path)
+- [Multi-Job Flow (opt-in)](#multi-job-flow-opt-in)
 - [Weight Loading Flow](#weight-loading-flow)
 
 ---
@@ -47,7 +48,7 @@ sequenceDiagram
     participant JS as JavaScript Thread
     participant UV as UV Event Loop
     participant Mtx as Mutex/CV
-    participant JR as JobRunner
+    participant JR as SingleJobScheduler
     participant Model as Model Backend
     
     JS->>+Mtx: addon.runJob(input)
@@ -89,25 +90,25 @@ sequenceDiagram
 
 1. **JS Thread:** User calls `addon.runJob(input)`
 2. **JS Thread:** JsInterface converts JS type to `std::any`
-3. **JS Thread:** Passes input to JobRunner
+3. **JS Thread:** Passes input to SingleJobScheduler
 4. **JS Thread:** Signals condition variable
 5. **JS Thread:** Returns immediately (non-blocking)
 
 **Phase 2: Processing (C++ Background Thread)**
 
-6. **JobRunner:** Wakes from `cv.wait()`
-7. **JobRunner:** Acquires mutex and job input
-8. **JobRunner:** Releases mutex **before processing**
-9. **JobRunner:** Calls `model->process(std::any input)`
+6. **SingleJobScheduler:** Wakes from `cv.wait()`
+7. **SingleJobScheduler:** Acquires mutex and job input
+8. **SingleJobScheduler:** Releases mutex **before processing**
+9. **SingleJobScheduler:** Calls `model->process(std::any input)`
 10. **Model:** Executes inference (may take seconds/minutes)
 11. **Model:** Returns `std::any` output
 
 **Phase 3: Output Delivery (C++ → JavaScript)**
 
-12. **JobRunner:** Routes output through output handlers
-13. **JobRunner:** Acquires mutex, adds output to queue
-14. **JobRunner:** Releases mutex
-15. **JobRunner:** Calls `uv_async_send()`
+12. **SingleJobScheduler:** Routes output through output handlers
+13. **SingleJobScheduler:** Acquires mutex, adds output to queue
+14. **SingleJobScheduler:** Releases mutex
+15. **SingleJobScheduler:** Calls `uv_async_send()`
 
 **Phase 4: Callback Invocation (JavaScript Thread)**
 
@@ -134,7 +135,7 @@ This flowchart shows the flow of a job from JavaScript through processing to out
 ```mermaid
 flowchart TD
     Start([JS: runJob#40;input#41;]) --> ConvertInput["Convert JS → std::any"]
-    ConvertInput --> PassToRunner["Pass to JobRunner"]
+    ConvertInput --> PassToRunner["Pass to SingleJobScheduler"]
     PassToRunner --> ReturnImmediate([Return immediately])
     
     ReturnImmediate -.->|Wakes| ProcessThread[Processing Thread]
@@ -159,11 +160,11 @@ flowchart TD
 
 **JavaScript Side:**
 1. **Convert** - Convert JavaScript value to `std::any`
-2. **Submit** - Pass to JobRunner
+2. **Submit** - Pass to SingleJobScheduler
 3. **Return** - Immediately return (non-blocking)
 
 **Processing Thread:**
-1. **Wake** - JobRunner wakes from wait
+1. **Wake** - SingleJobScheduler wakes from wait
 2. **Copy Input** - Copy job input while holding lock
 3. **Release Lock** - Release mutex before processing
 4. **Process** - Call `model->process(std::any)`
@@ -206,7 +207,7 @@ Output handlers convert `std::any` to appropriate format:
 
 **Error Handling:**
 
-- **Model throws exception:** JobRunner catches, queues `Output::Error`
+- **Model throws exception:** SingleJobScheduler catches, queues `Output::Error`
 - **Type mismatch in std::any_cast:** Exception thrown, caught and queued as `Output::Error`
 - **Cancellation:** Model's `cancel()` called, model throws, error queued
 
@@ -220,6 +221,20 @@ Output handlers convert `std::any` to appropriate format:
 | `Output::LogMsg` | Model logs message | `CppLogMsgOutputHandler` or JS equivalent |
 
 </details>
+
+---
+
+## Multi-Job Flow (opt-in)
+
+`MultiJobScheduler` (`job/MultiJobScheduler.hpp`) replaces the single dedicated thread above with a fixed pool of worker threads, admitting several jobs at once instead of rejecting `runJob()` while one is in flight:
+
+- **Submission:** `addon.runJob(input, id)` pushes a `{input, id}` pair onto a FIFO queue (`queued_`) and notifies one worker; admission is rejected once `in-flight + queued` would exceed `maxConcurrency + queueCapacity` (back-pressure), or while an exclusive job (e.g. a finetune, via `runExclusiveJob`) holds the model.
+- **Processing:** each idle worker pops the queue front, copies the job onto its stack, releases the lock, then calls `model->process(input, id)` — the model must implement `IModelMultiprocessor` for calls to actually overlap. Peer workers keep draining the queue concurrently.
+- **Output:** every event (`queueResult`, `queueException`, `queueJobEnded`) carries the job's `JobId`, so a single shared `OutputQueue` can still fan events back out to the right JS-side consumer. `queueJobEnded` asks the model for a per-job snapshot via `IModelJobStats` when available, falling back to the whole-model `runtimeStats()` otherwise.
+- **Cancellation:** `cancel(id)` unlinks a still-queued job in O(1) (via `queuedIndex_`) and queues its terminal "Job cancelled" error directly; an in-flight job instead routes to the model's `IModelCancelById::cancelById(id)`. `cancelAll()` drops every queued job the same way, then calls the model's whole-model `cancel()`.
+- **Teardown:** the destructor stops every worker, then drains and fails any job still queued so no admitted job is ever left without a terminal event.
+
+Everything else — the JS↔C++ bridging, output handler routing, and weight loading flow below — is unchanged between the two schedulers.
 
 ---
 
@@ -417,4 +432,4 @@ JavaScript sends each file separately with unique filename. C++ concatenates blo
 **Related Documents:**
 - [architecture.md](architecture.md) - Main architecture documentation
 
-**Last Updated:** 2025-12-15
+**Last Updated:** 2026-07-06

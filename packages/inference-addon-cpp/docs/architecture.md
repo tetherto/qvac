@@ -1,6 +1,6 @@
 # inference-addon-cpp Architecture Documentation
 
-**Version:** 1.1.7
+**Version:** 1.3.0
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -25,7 +25,7 @@
   - [Decision 2: Dedicated Processing Thread](#decision-2-dedicated-processing-thread)
   - [Decision 3: Streaming Weight Loading](#decision-3-streaming-weight-loading)
   - [Decision 4: Why Bare Runtime](#decision-4-why-bare-runtime)
-  - [Decision 5: Single Job Runner](#decision-5-single-job-runner)
+  - [Decision 5: Pluggable Job Scheduler Strategy](#decision-5-pluggable-job-scheduler-strategy)
   - [Decision 6: Output Events via Callbacks](#decision-6-output-events-via-callbacks)
   - [Decision 7: Multiple Optional Interfaces](#decision-7-multiple-optional-interfaces)
   - [Decision 8: Output Handlers Pattern](#decision-8-output-handlers-pattern)
@@ -44,7 +44,7 @@ This library enables developers to build native inference addons by implementing
 ### Key Features
 
 - **Simple addon framework** with `process(std::any)` interface for model implementations
-- **Single job runner** with cancellation support on a dedicated thread
+- **Pluggable job scheduler** — single job by default, opt-in multi-job continuous batching — with per-job cancellation support
 - **Streaming weight loader** for efficient loading of large model files (including sharded GGUF models)
 - **JavaScript-C++ bridge** with comprehensive type marshalling and error handling
 - **Output handlers** for flexible output type conversion
@@ -182,6 +182,9 @@ The library exposes the following main entry points for addon developers:
 4. **Optional Model Interfaces:**
    - `IModelAsyncLoad` - Asynchronous weight loading
    - `IModelCancel` - Job cancellation support
+   - `IModelMultiprocessor` - Concurrent processing, required to be admitted by `MultiJobScheduler`
+   - `IModelCancelById` - Per-job cancellation under `MultiJobScheduler`
+   - `IModelJobStats` - Per-job observed stats (TTFT/TPS/token counts) on tagged `jobEnded`
 5. **`OutputHandlerInterface<T>`** - Virtual interface for handling different output types
 
 #### API Structure
@@ -213,10 +216,13 @@ classDiagram
     }
     
     class AddonCpp {
-        +AddonCpp(outputCallback, model)
+        +AddonCpp(outputCallback, model, scheduler)
         +activate() void
-        +runJob(std::any input) bool
-        +cancelJob() void
+        +runJob(std::any input, JobId id) bool
+        +runExclusiveJob(std::any input, JobId id) bool
+        +cancelJob(JobId id) void
+        +cancelAllJobs() void
+        +activeJobs() size_t
         +model IModel&
     }
     
@@ -224,14 +230,32 @@ classDiagram
         +AddonJs(env, outputCallback, model)
         +loadWeights(env, weightsData) void
         +runJob(input) js_value_t*
-        +cancelJob() js_value_t*
+        +cancelJob(optional id) js_value_t*
     }
     
-    class JobRunner {
-        +JobRunner(outputQueue, model, modelCancel)
-        +start() void
-        +runJob(std::any input) bool
-        +cancel() void
+    class IJobScheduler {
+        <<interface>>
+        +start(outputQueue) void
+        +runJob(std::any input, JobId id) bool
+        +runExclusiveJob(std::any input, JobId id) bool
+        +cancel(JobId id) void
+        +cancelAll() void
+        +activeJobs() size_t
+    }
+    
+    class SingleJobScheduler {
+        +SingleJobScheduler(model, modelCancel)
+        +start(outputQueue) void
+        +runJob(std::any input, JobId id) bool
+        +cancel(JobId id) void
+    }
+    
+    class MultiJobScheduler {
+        +MultiJobScheduler(multiprocessor, maxConcurrency, cancel, cancelById, queueCapacity)
+        +start(outputQueue) void
+        +runJob(std::any input, JobId id) bool
+        +runExclusiveJob(std::any input, JobId id) bool
+        +cancel(JobId id) void
     }
     
     IModel <|.. ConcreteModel : implements
@@ -241,8 +265,11 @@ classDiagram
     OutputHandlerInterface <|.. CppContainerOutputHandler : implements
     OutputHandlerInterface <|.. JsStringOutputHandler : implements
     
+    IJobScheduler <|.. SingleJobScheduler : implements
+    IJobScheduler <|.. MultiJobScheduler : implements
+    
     AddonCpp o-- IModel : uses
-    AddonCpp o-- JobRunner : uses
+    AddonCpp o-- IJobScheduler : uses (single-job default, or caller-supplied)
     AddonCpp o-- OutputHandlerInterface : uses
     AddonJs o-- AddonCpp : wraps
 ```
@@ -260,6 +287,7 @@ classDiagram
    - Optional interfaces (mixins):
      - `IModelAsyncLoad` - Asynchronous weight loading
      - `IModelCancel` - Job cancellation support
+     - `IModelMultiprocessor` / `IModelCancelById` / `IModelJobStats` - Concurrent processing, per-job cancel, and per-job stats, required for `MultiJobScheduler`
 
 2. **OutputHandlerInterface<T>** (Virtual Interface - Output Type Handling)
    - Handles type erasure via `std::any`
@@ -267,19 +295,20 @@ classDiagram
    - Concrete implementations: `CppContainerOutputHandler<T>`, `JsStringOutputHandler`, etc.
 
 3. **AddonCpp** (Non-Template Class - Framework Core)
-   - Constructor: Takes output callback and model
-   - Job execution: `runJob(std::any input)` - runs single job
-   - Cancellation: `cancelJob()` - cancels current job
+   - Constructor: Takes output callback, model, and an optional `IJobScheduler` (defaults to a single-job scheduler when omitted)
+   - Job execution: `runJob(std::any input, JobId id = kNoJobId)` / `runExclusiveJob(...)` - admits jobs via the scheduler
+   - Cancellation: `cancelJob(JobId id = kNoJobId)` cancels one job (or every job when `id` is omitted); `cancelAllJobs()` always cancels every job
+   - Introspection: `activeJobs()` - number of in-flight + queued jobs per the scheduler
    - Lifecycle: `activate()` - Start processing
 
 4. **AddonJs** (Non-Template Class - JavaScript Wrapper)
    - Wraps AddonCpp with JavaScript integration
-   - Methods: `loadWeights()`, `activate()`, `runJob()`, `cancelJob()`
+   - Methods: `loadWeights()`, `activate()`, `runJob()`, `cancelJob(optional id)`, `activeJobs()`
 
-5. **JobRunner** (Internal Class - Job Execution)
-   - Manages single job execution on dedicated thread
-   - Supports cancellation via `IModelCancel` interface
-   - One job at a time (not a queue)
+5. **IJobScheduler** (Internal Interface - Job Admission Strategy)
+   - Admission strategy AddonCpp delegates job execution to; a caller may supply one, otherwise AddonCpp builds a default
+   - **SingleJobScheduler** (formerly `JobRunner`) - one job at a time on a dedicated thread, cancellation via `IModelCancel`; this is the default
+   - **MultiJobScheduler** - fixed worker pool + bounded waiting queue, jobs tagged with a `JobId` so outputs can be correlated, opt-in per-job cancellation via `IModelCancelById`, and exclusive-job admission for e.g. finetune/inference mutual exclusion
 
 **Usage Pattern:**
 
@@ -307,11 +336,11 @@ addon->runJob(std::any(std::string("Hello")));
 
 #### Architectural Pattern
 
-The library follows a **single-job processing model** with a **dedicated processing thread** for addons that use `AddonCpp`/`JobRunner`. Some consumers, such as synchronous `AddonJs` integrations, may intentionally run model work on the caller thread.
+The library follows a **pluggable scheduling model** behind `IJobScheduler`, with a **single-job scheduler as the default** for addons that use `AddonCpp`. A caller wanting concurrent jobs opts into `MultiJobScheduler`, which runs a fixed worker pool instead of one dedicated thread. Some consumers, such as synchronous `AddonJs` integrations, may intentionally run model work on the caller thread.
 
 - **Type erasure via `std::any`** - Model receives and returns `std::any` for flexible input/output types
-- **Single job runner** - Processes one job at a time with cancellation support
-- **Dedicated processing thread** - Isolates heavy inference work from JavaScript event loop for `AddonCpp` users
+- **Pluggable job scheduler (`IJobScheduler`)** - `SingleJobScheduler` processes one job at a time (the default); `MultiJobScheduler` admits several concurrently across a worker pool, both with cancellation support
+- **Dedicated processing thread(s)** - Isolates heavy inference work from the JavaScript event loop; one thread for `SingleJobScheduler`, one per worker for `MultiJobScheduler`
 - **Mutex-protected synchronization** - Thread-safe job execution and cancellation
 - **RAII** throughout for automatic resource management
 
@@ -323,8 +352,8 @@ graph TB
         ASYNC_CB[UV Async Callback]
     end
     
-    subgraph "Processing Thread"
-        JOB_RUNNER[JobRunner]
+    subgraph "Processing Thread(s)"
+        JOB_RUNNER[IJobScheduler impl:<br/>SingleJobScheduler or<br/>MultiJobScheduler worker#40;s#41;]
         MODEL[Model.process#40;std::any#41;]
     end
     
@@ -360,9 +389,9 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 - Handles all JavaScript API calls (runJob, cancel, etc.)
 - Receives async callbacks with model outputs
 
-**Thread 2: Processing Thread (Dedicated C++ Thread)**
-- Runs inference workloads via `JobRunner`
-- Calls `model->process(const std::any&)`
+**Thread 2: Processing Thread(s) (Dedicated C++ Thread(s))**
+- Runs inference workloads via the active `IJobScheduler` implementation: one dedicated thread for `SingleJobScheduler` (the default), or one thread per worker for an opt-in `MultiJobScheduler`
+- Calls `model->process(const std::any&)` (or `process(input, id)` for the multi-job path)
 - Blocks for seconds/minutes on model processing
 - Isolated from JavaScript event loop
 
@@ -375,11 +404,11 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 
 1. **JS → C++ (Job Submission)**
    - JS calls `addon.runJob(input)` → JsInterface method
-   - Lock mutex → Pass job to JobRunner → Signal condition variable
+   - Lock mutex → Pass job to the scheduler (`SingleJobScheduler` by default, or `MultiJobScheduler` if configured) → Signal condition variable
    - Return immediately (non-blocking)
 
 2. **C++ Processing**
-   - JobRunner wakes from wait
+   - Scheduler wakes from wait
    - Copies job input, releases lock
    - Calls `model->process(input)` **while mutex unlocked**
    - Output handlers convert result
@@ -404,19 +433,29 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 
 **Key Internals:**
 - **Model:** `std::unique_ptr<model::IModel>` - Virtual interface to model implementation
-- **JobRunner:** Manages single job execution on dedicated thread
-- **Output Queue:** `OutputQueue` - Thread-safe output queue
+- **IJobScheduler:** Pluggable job admission strategy (defaults to `SingleJobScheduler` when the caller supplies none)
+- **Output Queue:** `OutputQueue` - Thread-safe output queue; each entry carries the originating `JobId`
 - **Output Callback:** `OutputCallBackInterface` - Handles output delivery
 
-**JobRunner.hpp - Single Job Execution**
+**job/SingleJobScheduler.hpp - Single Job Execution (default)**
 
-**Responsibility:** Executes a single job at a time on a dedicated thread with cancellation support
+**Responsibility:** Executes a single job at a time on a dedicated thread with cancellation support. Renamed from `JobRunner` (root-level `JobRunner.hpp`, since removed) in 1.3.0.
 
 **Key Features:**
-- Single job execution (not a queue)
+- Single job execution (not a queue); a tagged (non-`kNoJobId`) job is rejected, since a single slot cannot correlate outputs to it
 - Cancellation via `IModelCancel` interface
 - Lock released during `model->process()` to allow cancellation
 - Thread-safe job submission
+
+**job/MultiJobScheduler.hpp - Concurrent Job Execution (opt-in)**
+
+**Responsibility:** Admits up to `maxConcurrency` jobs at once onto a fixed worker pool, each driving `model->process(input, id)` in parallel, with a bounded waiting-room queue beyond the pool
+
+**Key Features:**
+- FIFO admission queue with O(1) cancel-while-queued via an id → queue-node index
+- Back-pressure: `runJob` rejects once in-flight + queued would exceed `maxConcurrency + queueCapacity`
+- Per-job cancellation via `IModelCancelById` (`cancel(id)`); whole-model `cancelAll()` always available
+- `runExclusiveJob` reserves the model for one job at a time (e.g. finetune vs. inference mutual exclusion)
 
 **Output Handlers - Output Type Routing**
 
@@ -500,9 +539,9 @@ Use `std::any` in the model interface: `process(const std::any& input) → std::
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Dedicated std::thread via JobRunner  
+**Chose:** Dedicated std::thread(s) owned by the job scheduler (`SingleJobScheduler` by default)  
 **Why:** Need cancellation support, persistent model state  
-**Cost:** One thread per addon instance
+**Cost:** One thread per addon instance (one per worker for the opt-in `MultiJobScheduler`)
 
 </details>
 
@@ -512,7 +551,7 @@ Inference is CPU-intensive and blocking (seconds to minutes per job), must integ
 
 **Decision**
 
-Spawn dedicated `std::thread` for processing via `JobRunner`.
+Spawn dedicated `std::thread`(s) for processing inside the active `IJobScheduler` implementation — `SingleJobScheduler` by default, or an opt-in `MultiJobScheduler` worker pool (see Decision 5).
 
 **Rationale**
 - **Cancellation:** Can interrupt long-running jobs via `IModelCancel`
@@ -543,42 +582,43 @@ Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with chunke
 
 </details>
 
-### Decision 5: Single Job Runner
+### Decision 5: Pluggable Job Scheduler Strategy
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Single job runner instead of priority queue  
-**Why:** Simpler implementation, sufficient for most use cases  
-**Cost:** No priority scheduling, one job at a time
+**Chose:** `IJobScheduler` strategy interface, with `SingleJobScheduler` (one job at a time) as the default and an opt-in `MultiJobScheduler` (worker pool + bounded queue) for concurrent decode  
+**Why:** Keep the common single-request case simple while letting models that support batching (e.g. llama.cpp continuous batching) admit and run several jobs at once  
+**Cost:** Two scheduler implementations to maintain; a caller-supplied scheduler must be built against the same model instance passed to `AddonCpp` (verified at construction)
 
 </details>
 
 **Context**
 
-Need to execute inference jobs from JavaScript without blocking.
+The original design (through 1.2.x) hard-wired a single job runner (`JobRunner`) into `AddonCpp`: exactly one job in flight, every other `runJob()` call rejected until it finished. This was simple and matched most addons, but a model capable of decoding multiple requests together (cross-request continuous batching) had no way to expose that: `AddonCpp` gave it one job at a time regardless.
 
 **Decision**
 
-Implement single job runner that processes one job at a time with cancellation support.
+Extract job admission behind an `IJobScheduler` interface (`start`, `runJob`, `runExclusiveJob`, `cancel`, `cancelAll`, `activeJobs`). `AddonCpp` builds a `SingleJobScheduler` — the renamed former `JobRunner`, unchanged behavior — when the caller supplies none, preserving the old default exactly. A caller wanting concurrency instead constructs a `MultiJobScheduler` (sized to a worker count, with a bounded waiting-room queue and FIFO admission) and passes it to the `AddonCpp` constructor; jobs are tagged with a `JobId` so concurrent outputs can be correlated back to their request, and `runExclusiveJob` still lets an addon reserve the model for one job at a time (e.g. a finetune) regardless of which scheduler is active.
 
 **Rationale**
-- **Simplicity:** Easier to reason about than priority queue
-- **Cancellation:** Clear cancellation semantics for single active job
-- **Sufficient:** Most addons process one request at a time anyway
-- **Reliability:** Recent 1.1.x fixes focus on cancellation while active, async cancel behavior, callback lifetime, and integration_js coverage; consult `CHANGELOG.md` when changing these paths.
+- **Backward compatible by default:** Addons that never opt in see no behavior change — same single-job semantics, same rejection behavior, just renamed internals.
+- **Capability-gated:** Multi-job admission requires the model to implement `IModelMultiprocessor`; a model that can't run concurrently is never handed more than one job, regardless of which scheduler wraps it.
+- **Correlated output:** Every event (result, error, jobEnded) carries the admitting job's `JobId`, so a multi-job consumer's output callback can route interleaved events without inventing its own correlation.
+- **Job-id support returns soundly this time:** Native job ids shipped once before (1.1.3) and were reverted (1.1.4) because they were layered on top of a scheduler that could only ever run one job — the id had nothing structural to route against, and the accounting was error-prone. Here, id routing is the scheduler's own responsibility (`queuedIndex_` in `MultiJobScheduler`) and every admitted job — including one dropped from the queue by cancellation or teardown — is guaranteed exactly one terminal event, so the same feature that failed once now has a scheduler underneath it that can actually keep the promise.
+- **Reliability:** Recent 1.1.x/1.2.x fixes on cancellation, async cancel behavior, and callback lifetime apply to `SingleJobScheduler`'s unchanged code path; consult `CHANGELOG.md` when changing it.
 
 **Trade-offs**
 
 ✅ **Benefits:**
-- Simple implementation and mental model
-- Clear cancellation semantics
-- Lower complexity than priority queue
+- Single-job addons keep the simple mental model and unchanged behavior
+- Multi-job addons get real concurrency without forking the framework
+- Clear, per-scheduler cancellation semantics (single-slot vs. per-id vs. cancel-all)
 
 ❌ **Drawbacks:**
-- No priority scheduling
-- Cannot queue multiple jobs
-- Application must manage job ordering if needed
+- No priority scheduling in either scheduler (FIFO only)
+- Two implementations of the same interface to keep in sync
+- `MultiJobScheduler` requires the model to implement additional optional interfaces (`IModelMultiprocessor`, `IModelCancelById`) to get full functionality
 
 ### Decision 6: Output Events via Callbacks
 
@@ -629,7 +669,7 @@ Split model capabilities into separate interfaces:
    }
    
    auto* cancelable = dynamic_cast<IModelCancel*>(model.get());
-   // JobRunner can check cancelable != nullptr before calling cancel()
+   // The scheduler can check cancelable != nullptr before calling cancel()
    ```
    This is cleaner than:
    - Throwing exceptions from empty implementations
@@ -697,7 +737,7 @@ Implement a pluggable output handler system:
    ```
    This consistency simplifies understanding and maintenance.
 
-2. **Extensibility Without Modifying Base Classes:** Adding support for a new output type requires only creating a new handler class—no changes to `AddonCpp`, `JobRunner`, or other framework code:
+2. **Extensibility Without Modifying Base Classes:** Adding support for a new output type requires only creating a new handler class—no changes to `AddonCpp`, the job schedulers, or other framework code:
    ```cpp
    // Add support for a new custom output type
    struct JsCustomTypeOutputHandler : JsBaseOutputHandler<MyCustomType> {
@@ -760,5 +800,5 @@ Implement a pluggable output handler system:
 
 ---
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-07-06
 **Maintainer:** QVAC Team
