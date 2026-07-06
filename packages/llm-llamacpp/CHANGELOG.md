@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.32.0] - 2026-07-06
+
+### Added
+
+- KV-cache auto-default: when the caller does not set `cache-type-k`/`cache-type-v`, both now default to `q8_0` on Metal and Vulkan GPUs (with flash attention on) — quality-neutral vs `f16` and ~47% smaller KV cache. CPU and OpenCL (Adreno) keep the `f16` default (ARM CPU `q8_0` has a measured quality/throughput cost; quantized KV-cache shifts abort on Adreno). Skipped for finetuning, when flash attention is off, and on Adreno+Vulkan. An explicit user cache type is always respected on CPU/Vulkan/Metal.
+- Mixed/asymmetric K≠V warning: when `cache-type-k` and `cache-type-v` differ and at least one side is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty for no quality benefit) but proceeds.
+- Adreno 800+ Vulkan guard: quantized KV with flash attention on an Adreno Vulkan backend is rejected with a clean `StatusError` instead of a native abort (defensive — Adreno selects OpenCL by default).
+
+### Changed
+
+- OpenCL (Adreno) KV-cache rejection now carries an actionable message: only `f32`/`f16`/`bf16` are accepted, and any quantized type (`q8_0`, `q4_0`, …) throws a `StatusError` explaining that a quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts (ggml-opencl has no `F32→quantized` requantize kernel; CI-confirmed for both `q8_0` and `q4_0`).
+- The KV-cache guards read flash-attention state from both the `flash-attn` and `flash_attn` config keys, so the underscore variant arms the auto-default and the Adreno guard.
+- README documents the KV-cache type policy (`cache-type-k`/`cache-type-v` rows + the auto-default, OpenCL allowlist, and mixed-K/V warning).
+
+### Pull Requests
+
+- [#2921](https://github.com/tetherto/qvac/pull/2921) - QVAC-21318 feat: default KV-cache to q8_0 on GPU backends except OpenCL
+
 ## [0.31.1] - 2026-07-01
 
 ### Changed
