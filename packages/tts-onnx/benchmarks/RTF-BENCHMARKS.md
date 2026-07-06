@@ -24,7 +24,7 @@ when the filesystem isn't accessible, then `aggregate.js` +
 `render-step-summary.js` produce the rendered Step Summary.
 
 > **Mobile RTF benchmarks** (Android / iOS via AWS Device Farm) are tracked
-> separately under QVAC-18544 and are intentionally NOT wired into this
+> separately and are intentionally NOT wired into this
 > orchestrator yet. The aggregator and report schema already understand
 > mobile-shaped records, so once the mobile pipeline lands the consolidated
 > findings table will pick them up automatically.
@@ -82,7 +82,7 @@ node scripts/perf-report/aggregate-onnx-tts-rtf.js \
 | `QVAC_ONNX_TTS_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st of these becomes `summary.coldRtf`). |
 | `QVAC_ONNX_TTS_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
 | `QVAC_ONNX_TTS_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard (e.g. `10.0`). No bound = numbers-only, no pass/fail gate on RTF. |
-| `QVAC_ONNX_TTS_BENCHMARK_NUM_THREADS` | — | Requested CPU thread count. **Currently plumbed into the report, but the ONNX addon's `numThreads` option is still landing** via QVAC-17236 — the field is reported but does not yet change thread count until that PR merges and the utility loaders (`test/utils/runChatterboxTTS.js`, `test/utils/runSupertonicTTS.js`) forward the option. |
+| `QVAC_ONNX_TTS_BENCHMARK_NUM_THREADS` | — | Requested CPU thread count. **Currently plumbed into the report, but the ONNX addon's `numThreads` option is still landing** — the field is reported but does not yet change thread count until that PR merges and the utility loaders (`test/utils/runChatterboxTTS.js`, `test/utils/runSupertonicTTS.js`) forward the option. |
 
 ### Streaming benchmark only
 
@@ -129,11 +129,11 @@ workflow.
 | darwin / arm64 | cpu + coreml + variant sweep (fp32/fp16/q4/q4f16) | `macos-14-xlarge` |
 | darwin / x64 | cpu + coreml | `macos-15-large` |
 | win32 / x64 | cpu + directml | `windows-2022` |
-| iOS | cpu + coreml | **QVAC-18544** — AWS Device Farm wiring tracked separately |
-| Android | cpu + nnapi | **QVAC-18544** — AWS Device Farm wiring tracked separately |
+| iOS | cpu + coreml | AWS Device Farm wiring tracked separately |
+| Android | cpu + nnapi | AWS Device Farm wiring tracked separately |
 | linux / x64 | rocm | **Manual** — drop JSON under `manual-results/` |
 
-Not yet in this PR: mobile RTF benchmarks (split out under QVAC-18544),
+Not yet in this PR: mobile RTF benchmarks (split out separately),
 Qualcomm QNN-only Android variants (Device Farm doesn't pool those
 separately), discrete-GPU DirectML dev boxes.
 
