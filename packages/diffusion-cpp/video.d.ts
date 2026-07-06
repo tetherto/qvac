@@ -6,7 +6,7 @@ import type { SamplerMethod, ScheduleType, SdConfig, CacheMode } from './index'
 export type VideoMode = 'txt2vid' | 'img2vid'
 
 /**
- * File paths for a Wan video model context.
+ * File paths for a video model context (Wan 2.1 / 2.2 or LTX-2 / LTXAV).
  *
  * Wan 2.1 uses a single diffusion expert -- set `model` to the only expert
  * and leave `highNoiseDiffusionModel` unset.
@@ -14,6 +14,12 @@ export type VideoMode = 'txt2vid' | 'img2vid'
  * Wan 2.2 uses a mixture-of-experts layout -- set `model` to the low-noise
  * expert and `highNoiseDiffusionModel` to the high-noise expert. The split
  * is governed at runtime by `moe_boundary`.
+ *
+ * LTX-2 (LTXAV) uses `model` for the diffusion transformer, `llm` for the
+ * Gemma text encoder, `vae` for the video VAE, plus the LTX-only
+ * `audioVae` and `embeddingsConnectors`. Supplying `embeddingsConnectors`
+ * or `audioVae` switches the wrapper into LTX validation mode (8*k+1 frames,
+ * dimensions multiple of 32).
  */
 export interface VideoDiffusionFiles {
   /** Absolute path to the (low-noise / single) diffusion expert. */
@@ -22,7 +28,12 @@ export interface VideoDiffusionFiles {
   highNoiseDiffusionModel?: string
   /** Absolute path to the UMT5-XXL text encoder. */
   t5Xxl?: string
-  /** Absolute path to the Wan VAE. */
+  /**
+   * LTX-2 only: absolute path to the Gemma text encoder (reuses the
+   * `llm_path` context slot). Omit for Wan.
+   */
+  llm?: string
+  /** Absolute path to the video VAE (Wan VAE or LTX-2 video VAE). */
   vae?: string
   /**
    * Absolute path to `clip_vision_h.safetensors` (OpenCLIP ViT-H/14).
@@ -31,6 +42,16 @@ export interface VideoDiffusionFiles {
    * the `img_emb` projection without ViT-H/14).
    */
   clipVision?: string
+  /**
+   * LTX-2 only: absolute path to the audio VAE decoder. Required to produce
+   * the synchronized 48 kHz audio track; omit for silent / Wan generation.
+   */
+  audioVae?: string
+  /**
+   * LTX-2 only: absolute path to the text-embedding connector weights. Its
+   * presence is what marks the model as LTX-2 for validation purposes.
+   */
+  embeddingsConnectors?: string
   /**
    * Optional ESRGAN weights path for native ctx parity; video jobs do not apply
    * ESRGAN. Omit and the addon passes an empty string.
@@ -64,18 +85,18 @@ export interface VideoGenerationParams {
   negative_prompt?: string
 
   /**
-   * Video dimensions (multiples of 16). Default `480 x 832` portrait
-   * (phone-screen friendly). Wan 2.1 T2V 1.3B is trained on `832 x 480`
-   * landscape and handles both orientations equally well -- override
-   * either field to switch.
+   * Video dimensions. Wan: multiples of 16 (default `480 x 832` portrait;
+   * Wan 2.1 T2V 1.3B is trained on `832 x 480` landscape and handles both
+   * orientations). LTX-2: multiples of 32 (e.g. `768 x 512`). Override
+   * either field to switch orientation.
    */
   width?: number
   height?: number
 
   /**
-   * Total frame count. Must be of the form `(4 * k + 1)` with `k >= 1`
-   * (5, 9, 13, 17, 21, 25, 29, 33, ...). Default: 33 (~2 s at the default
-   * fps of 16; 33 / 16 ~= 2.06 s).
+   * Total frame count. Wan: `(4 * k + 1)` with `k >= 1` (5, 9, 13, 17, ...);
+   * default 33 (~2 s at fps 16). LTX-2: `(8 * k + 1)` with `k >= 1`, max 257
+   * (9, 17, 25, 33, ...).
    */
   video_frames?: number
 
@@ -126,6 +147,11 @@ export interface VideoGenerationParams {
   vae_tiling?: boolean
   vae_tile_size?: number | string
   vae_tile_overlap?: number
+  /**
+   * LTX-2 only: tile the video VAE decode along the time axis to cap peak
+   * VRAM for HD / long clips. No effect on Wan (spatial-only VAE).
+   */
+  temporal_tiling?: boolean
   cache_mode?: CacheMode
   cache_preset?: string
   cache_threshold?: number
@@ -157,6 +183,14 @@ export interface VideoRuntimeStats {
   videoFrames: number
   /** Frames-per-second of the most recent video. */
   fps: number
+  /**
+   * 1 if the most recent video carried an audio track (LTX-2 with an
+   * `audioVae`), 0 otherwise. Audio is muxed into the AVI as a second
+   * IEEE-float PCM stream.
+   */
+  hasAudio: number
+  /** Sample rate (Hz) of the muxed audio track; 0 when there is no audio. */
+  audioSampleRate: number
 }
 
 export default class VideoStableDiffusion {
@@ -172,7 +206,9 @@ export default class VideoStableDiffusion {
   /**
    * Generate a video. Returns a `QvacResponse` whose `onUpdate(data)`
    * stream carries one final `Uint8Array` (MJPG AVI buffer) and JSON
-   * progress-tick strings throughout denoising.
+   * progress-tick strings throughout denoising. For LTX-2 models loaded with
+   * an `audioVae`, the AVI also contains a second IEEE-float PCM audio stream
+   * (48 kHz) muxed alongside the video.
    */
   run (params: VideoGenerationParams): Promise<QvacResponse>
 
