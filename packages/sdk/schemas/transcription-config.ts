@@ -1,10 +1,10 @@
-import { z } from "zod";
-import { modelSrcInputSchema } from "./model-src-utils";
+import { z } from 'zod'
+import { modelSrcInputSchema } from './model-src-utils'
 
 // === Shared ===
 
-export const audioFormatSchema = z.enum(["f32le", "s16le"]);
-export type AudioFormat = z.infer<typeof audioFormatSchema>;
+export const audioFormatSchema = z.enum(['f32le', 's16le'])
+export type AudioFormat = z.infer<typeof audioFormatSchema>
 
 // === Whisper (whisper.cpp) engine config ===
 
@@ -15,27 +15,27 @@ const vadParamsSchema = z
     min_silence_duration_ms: z.number().optional(),
     max_speech_duration_s: z.number().optional(),
     speech_pad_ms: z.number().optional(),
-    samples_overlap: z.number().optional(),
+    samples_overlap: z.number().optional()
   })
-  .optional();
+  .optional()
 
 const contextParamsSchema = z
   .object({
     model: z.string().optional(),
     use_gpu: z.boolean().optional(),
     flash_attn: z.boolean().optional(),
-    gpu_device: z.number().optional(),
+    gpu_device: z.number().optional()
   })
-  .optional();
+  .optional()
 
 const miscConfigSchema = z
   .object({
-    caption_enabled: z.boolean().optional(),
+    caption_enabled: z.boolean().optional()
   })
-  .optional();
+  .optional()
 
 export const whisperConfigSchema = z.object({
-  strategy: z.enum(["greedy", "beam_search"]).optional(),
+  strategy: z.enum(['greedy', 'beam_search']).optional(),
   n_threads: z.number().int().optional(),
   n_max_text_ctx: z.number().int().optional(),
   offset_ms: z.number().int().optional(),
@@ -74,10 +74,10 @@ export const whisperConfigSchema = z.object({
   audio_format: audioFormatSchema.optional(),
   contextParams: contextParamsSchema,
   miscConfig: miscConfigSchema,
-  vadModelSrc: modelSrcInputSchema.optional(),
-});
+  vadModelSrc: modelSrcInputSchema.optional()
+})
 
-export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
+export type WhisperConfig = z.infer<typeof whisperConfigSchema>
 
 // === Parakeet (NVIDIA NeMo GGML) engine config ===
 //
@@ -127,16 +127,18 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingChunkLeftContextMs: z.number().int().nonnegative().optional(),
   streamingChunkRightContextMs: z.number().int().nonnegative().optional(),
   streamingSpkCacheUpdatePeriod: z.number().int().positive().optional(),
-});
+  backendsDir: z.string().optional(),
+  openclCacheDir: z.string().optional()
+})
 
 // Parakeet's load-time config currently has no fields beyond the
 // runtime knobs (single GGUF model is supplied via the top-level
 // `modelSrc` of `loadModel`). The alias is retained so consumers can
 // keep importing `ParakeetConfig` / `parakeetConfigSchema`.
-export const parakeetConfigSchema = parakeetRuntimeConfigSchema;
+export const parakeetConfigSchema = parakeetRuntimeConfigSchema
 
-export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;
-export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;
+export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>
+export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>
 
 // === Parakeet legacy ONNX modelConfig fields (deprecated) ===
 //
@@ -148,24 +150,23 @@ export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;
 // message) raised from the parakeet plugin's `resolveConfig`, rather
 // than a generic Zod `Unrecognized key` error.
 export const LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS = [
-  "parakeetEncoderSrc",
-  "parakeetDecoderSrc",
-  "parakeetVocabSrc",
-  "parakeetPreprocessorSrc",
-  "parakeetCtcModelSrc",
-  "parakeetTokenizerSrc",
-  "parakeetSortformerSrc",
-  "parakeetModelSrc",
-  "modelType",
-] as const;
+  'parakeetEncoderSrc',
+  'parakeetDecoderSrc',
+  'parakeetVocabSrc',
+  'parakeetPreprocessorSrc',
+  'parakeetCtcModelSrc',
+  'parakeetTokenizerSrc',
+  'parakeetSortformerSrc',
+  'parakeetModelSrc',
+  'modelType'
+] as const
 
-const legacyParakeetOnnxFieldsShape =
-  LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce<
-    Record<string, z.ZodOptional<z.ZodUnknown>>
-  >((acc, name) => {
-    acc[name] = z.unknown().optional();
-    return acc;
-  }, {});
+const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce<
+  Record<string, z.ZodOptional<z.ZodUnknown>>
+>((acc, name) => {
+  acc[name] = z.unknown().optional()
+  return acc
+}, {})
 
 // Strict schema used by `loadModel` and the parakeet plugin's
 // `loadConfigSchema`. Permits the deprecated ONNX field names so the
@@ -174,4 +175,4 @@ const legacyParakeetOnnxFieldsShape =
 // other unknown keys are still rejected by `.strict()`.
 export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
   .extend(legacyParakeetOnnxFieldsShape)
-  .strict();
+  .strict()

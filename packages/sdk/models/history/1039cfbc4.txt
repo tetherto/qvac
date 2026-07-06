@@ -1,0 +1,9 @@
+commit=1039cfbc46face9930e73ccae7c53ca284859f84
+timestamp=2026-06-23T12:53:53.188Z
+previous_count=776
+new_count=778
+
+[added]
+MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0
+MMPROJ_QWEN3_5_4B_MULTIMODAL_Q8_0
+

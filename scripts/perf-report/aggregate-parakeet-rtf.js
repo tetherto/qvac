@@ -5,10 +5,10 @@ const fs = require('fs')
 const path = require('path')
 
 // GGML (parakeet.cpp) GPU backend cascade: Vulkan (linux/win32/android),
-// Metal (darwin/ios), OpenCL (Adreno android). CUDA is ingestible via an
-// explicit hint / manual drop. Previously this was the ONNX EP set
-// (coreml/directml/nnapi/rocm), which never matched the GGML runtime.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
+// Metal (darwin/ios), OpenCL (Adreno android). CUDA is not supported on any
+// platform. Previously this was the ONNX EP set (coreml/directml/nnapi/rocm),
+// which never matched the GGML runtime.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 function parseArgs (argv) {
   const args = {
@@ -118,10 +118,11 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`).
+// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`,
+// `f32`).
 // Used as a fallback when a record predates the explicit `model.quant` field.
 function quantFromName (name) {
-  const match = String(name || '').match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  const match = String(name || '').match(/(?:\.|-)(q8_0|q4_0|f16|f32)(?:\.gguf|[-.]|$)/i)
   return match ? match[1].toLowerCase() : ''
 }
 
@@ -148,7 +149,10 @@ function normalizeDesktopRecord (report, sourceFile) {
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
 
   const quant = (report.model && report.model.quant) ||
-    quantFromName(report.model && report.model.dirName) || ''
+    quantFromName(report.model && report.model.dirName) ||
+    quantFromName(report.model && report.model.path) ||
+    quantFromName(sourceFile) ||
+    ''
 
   return {
     source: 'desktop-ci',
@@ -159,6 +163,12 @@ function normalizeDesktopRecord (report, sourceFile) {
     quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
+    // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
+    // to them — the probe stamps the GPU name onto every report regardless of
+    // whether that run used it (QVAC-21618).
+    gpuModel: useGPU
+      ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
+      : null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddev: Number(rtf.stddev),
@@ -186,6 +196,7 @@ function normalizeManualRecord (record, sourceFile) {
     quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
     stddev: Number(record.stddev),
@@ -233,12 +244,12 @@ function mobileModelType (result) {
 }
 
 // Quantisation token from the mobile test label (e.g. `[q4_0]`), stamped by
-// mobile-perf-runner.js. Falls back to '' when the label predates the quant
-// tag (older artifacts) so dedupe/sort still produce a single mobile row.
+// mobile-perf-runner.js. Older mobile artifacts predate that tag; those runs
+// only staged q4_0 models, so default them to q4_0 instead of rendering "-".
 function mobileQuant (result) {
   const testName = String(result.test || '').toLowerCase()
-  const match = testName.match(/\[(q8_0|q4_0|f16)\]/)
-  return match ? match[1] : ''
+  const match = testName.match(/\[(q8_0|q4_0|f16|f32)\]/)
+  return match ? match[1] : 'q4_0'
 }
 
 function normalizeMobileRecords (report, sourceFile) {
@@ -263,7 +274,18 @@ function normalizeMobileRecords (report, sourceFile) {
       })
     }
     const group = byModelAndProvider.get(key)
-    if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    // Mobile runs report real_time_factor as null (the mobile inference stats
+    // don't carry it), so the RTF/P50/P95 columns rendered empty and the
+    // Android/iOS rows looked unpopulated. Derive RTF from the wall time over
+    // the audio duration when the explicit value is missing (QVAC-21618).
+    const rtf = typeof metrics.real_time_factor === 'number'
+      ? metrics.real_time_factor
+      : (typeof metrics.wall_time_ms === 'number' &&
+         typeof metrics.audio_duration_ms === 'number' &&
+         metrics.audio_duration_ms > 0
+          ? metrics.wall_time_ms / metrics.audio_duration_ms
+          : null)
+    if (typeof rtf === 'number' && Number.isFinite(rtf)) group.rtf.push(rtf)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
   }
 
@@ -279,6 +301,7 @@ function normalizeMobileRecords (report, sourceFile) {
       quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
+      gpuModel: useGPU ? (device.gpu || null) : null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),
       stddev: stddev(values.rtf),
@@ -433,12 +456,12 @@ function renderMarkdown (records) {
 
   lines.push('## Parakeet Performance Findings')
   lines.push('')
-  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
-  lines.push('|--------|--------|----------|-------|-------|-----|---------|----------|----------|-----|-----|----------------|-------|')
+  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
+  lines.push('|--------|--------|----------|-------|-------|-----|---------|-----------|----------|----------|-----|-----|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
     )
   }
 
@@ -477,6 +500,7 @@ function renderHtml (records) {
       record.quant || '-',
       record.gpu,
       record.backend,
+      record.gpuModel || '-',
       formatNumber(record.meanRtf),
       formatNumber(record.stddev),
       formatNumber(record.p50),
@@ -529,6 +553,7 @@ function renderHtml (records) {
     '        <th>Quant</th>',
     '        <th>GPU</th>',
     '        <th>Backend</th>',
+    '        <th>GPU Model</th>',
     '        <th>Mean RTF</th>',
     '        <th>± Stddev</th>',
     '        <th>P50</th>',
@@ -613,4 +638,12 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeDesktopRecord,
+  normalizeManualRecord,
+  normalizeMobileRecords
+}

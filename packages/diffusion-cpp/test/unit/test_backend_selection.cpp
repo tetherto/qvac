@@ -110,3 +110,93 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendInvalidDeviceThrows) {
   EXPECT_THROW(
       expectedEsrganBackendDeviceForConfig("bogus"), qvac_errors::StatusError);
 }
+
+// -- main-gpu ---------------------------------------------------------------
+
+namespace {
+MainGpuSpec indexSpec(int i) { return MainGpuSpec{MainGpuKind::Index, i}; }
+const MainGpuSpec kDedicated{MainGpuKind::Dedicated, -1};
+const MainGpuSpec kIntegrated{MainGpuKind::Integrated, -1};
+} // namespace
+
+TEST_F(SdBackendSelectionTest, ParseMainGpuSupportedValues) {
+  const auto index = parseMainGpu("2");
+  ASSERT_TRUE(index.has_value());
+  EXPECT_EQ(index->kind, MainGpuKind::Index);
+  EXPECT_EQ(index->index, 2);
+
+  const auto integrated = parseMainGpu("Integrated");
+  ASSERT_TRUE(integrated.has_value());
+  EXPECT_EQ(integrated->kind, MainGpuKind::Integrated);
+
+  const auto dedicated = parseMainGpu("dedicated");
+  ASSERT_TRUE(dedicated.has_value());
+  EXPECT_EQ(dedicated->kind, MainGpuKind::Dedicated);
+}
+
+TEST_F(SdBackendSelectionTest, ParseMainGpuInvalidValuesThrow) {
+  EXPECT_FALSE(parseMainGpu("").has_value());
+  EXPECT_THROW(parseMainGpu("-1"), qvac_errors::StatusError);
+  EXPECT_THROW(parseMainGpu("3abc"), qvac_errors::StatusError);
+  EXPECT_THROW(parseMainGpu("bogus"), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, MainGpuFromMapReadsAliasesAndRejectsConflict) {
+  EXPECT_FALSE(mainGpuFromMap(configMap).has_value());
+
+  configMap["main-gpu"] = "dedicated";
+  ASSERT_TRUE(mainGpuFromMap(configMap).has_value());
+  EXPECT_EQ(mainGpuFromMap(configMap).value(), "dedicated");
+
+  configMap.clear();
+  configMap["main_gpu"] = "1";
+  ASSERT_TRUE(mainGpuFromMap(configMap).has_value());
+  EXPECT_EQ(mainGpuFromMap(configMap).value(), "1");
+
+  configMap["main-gpu"] = "integrated";
+  EXPECT_THROW(mainGpuFromMap(configMap), qvac_errors::StatusError);
+}
+
+TEST_F(SdBackendSelectionTest, SelectMainGpuByIndexAndType) {
+  const std::vector<GpuCandidate> devices{
+      {"CPU", GpuClass::Other, 0},
+      {"iGPU", GpuClass::Integrated, 0},
+      {"Vulkan0", GpuClass::Dedicated, 8000},
+      {"Vulkan1", GpuClass::Dedicated, 16000},
+  };
+
+  const auto byIndex = selectMainGpuName(devices, indexSpec(1));
+  ASSERT_TRUE(byIndex.has_value());
+  EXPECT_EQ(byIndex.value(), "Vulkan0");
+
+  const auto dedicated = selectMainGpuName(devices, kDedicated);
+  ASSERT_TRUE(dedicated.has_value());
+  EXPECT_EQ(dedicated.value(), "Vulkan1");
+
+  const auto integrated = selectMainGpuName(devices, kIntegrated);
+  ASSERT_TRUE(integrated.has_value());
+  EXPECT_EQ(integrated.value(), "iGPU");
+}
+
+TEST_F(SdBackendSelectionTest, SelectMainGpuIntegratedCanPickOpenClAdrenoGpu) {
+  const std::vector<GpuCandidate> devices{
+      {"CPU", GpuClass::Other, 0},
+      {"GPUOpenCL", GpuClass::Dedicated, 0, "QUALCOMM Adreno(TM) 840"},
+      {"Vulkan0", GpuClass::Dedicated, 8000},
+  };
+
+  const auto integrated = selectMainGpuName(devices, kIntegrated);
+  ASSERT_TRUE(integrated.has_value());
+  EXPECT_EQ(integrated.value(), "GPUOpenCL");
+
+  const auto dedicated = selectMainGpuName(devices, kDedicated);
+  ASSERT_TRUE(dedicated.has_value());
+  EXPECT_EQ(dedicated.value(), "Vulkan0");
+}
+
+TEST_F(SdBackendSelectionTest, SelectMainGpuNoMatchingClassIsNullopt) {
+  const std::vector<GpuCandidate> devices{{"CPU", GpuClass::Other, 0}};
+  EXPECT_FALSE(selectMainGpuName(devices, kDedicated).has_value());
+  EXPECT_FALSE(selectMainGpuName(devices, kIntegrated).has_value());
+  EXPECT_FALSE(selectMainGpuName(devices, indexSpec(1)).has_value());
+}

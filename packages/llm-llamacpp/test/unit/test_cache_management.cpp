@@ -1,5 +1,7 @@
 #include <any>
+#include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -925,6 +927,49 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
   EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
 }
 
+TEST_F(CacheManagementTest, CorruptCacheTokenMetadataThrowsAndCleansMemory) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt seedPrompt;
+  seedPrompt.prefill = true;
+  seedPrompt.input =
+      R"([{"role": "user", "content": "Seed full cache metadata."}])";
+  ASSERT_NO_THROW({ model->processPrompt(seedPrompt); });
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos nPast = llama_memory_seq_pos_max(mem, 0) + 1;
+  ASSERT_GT(nPast, 0);
+
+  llama_token badMetadata[4] = {
+      static_cast<llama_token>(nPast),
+      static_cast<llama_token>(1),
+      static_cast<llama_token>(nPast + 7),
+      static_cast<llama_token>(1)};
+  ASSERT_TRUE(llama_state_save_file(
+      model->getContext(), temp_session_path.c_str(), badMetadata, 4));
+
+  model->reset();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0), -1);
+
+  LlamaModel::Prompt loadPrompt;
+  loadPrompt.input =
+      R"([{"role": "user", "content": "This load should fail."}])";
+  loadPrompt.cacheKey = temp_session_path;
+
+  EXPECT_THROW({ model->processPrompt(loadPrompt); }, qvac_errors::StatusError);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1)
+      << "failed full-cache metadata validation left KV rows resident";
+  EXPECT_EQ(getStatValue(model->runtimeStats(), "CacheTokens"), 0.0);
+}
+
 TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
@@ -984,4 +1029,43 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
          "resident in seq 0 "
          "even though the batch scheduler occupied and wiped seq 0. "
          "processPrompt returned empty output.";
+}
+
+// GGSQ unification (sub-task 1): the single-prompt CacheManager path must write
+// the per-sequence state format (GGSQ), not the whole-session format (GGSN), so
+// the same on-disk cache can be read back by the batch per-sequence loader. A
+// freshly written single-prompt cache file therefore starts with the GGSQ magic
+// (0x67677371, 'ggsq'); today it starts with GGSN (0x6767736e) and this fails.
+TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  EXPECT_NO_THROW({
+    processPromptWithCacheOptions(
+        model,
+        R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
+        session1_path,
+        true);
+  });
+
+  ASSERT_TRUE(fs::exists(session1_path));
+
+  std::ifstream file(session1_path, std::ios::binary);
+  ASSERT_TRUE(file.is_open());
+  std::uint32_t magic = 0;
+  file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+  ASSERT_EQ(file.gcount(), static_cast<std::streamsize>(sizeof(magic)));
+
+  EXPECT_EQ(magic, static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC))
+      << "single-prompt cache wrote magic 0x" << std::hex << magic
+      << " (expected GGSQ 0x"
+      << static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC)
+      << "); CacheManager still uses the whole-session GGSN format instead of "
+         "the per-sequence GGSQ format shared with the batch path.";
 }

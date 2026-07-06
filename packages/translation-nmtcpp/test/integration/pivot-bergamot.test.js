@@ -49,7 +49,9 @@ const {
   isMobile,
   platform,
   discoverGpuDevices,
-  MAX_GPU_DEVICE_PROBES
+  MAX_GPU_DEVICE_PROBES,
+  TEST_TIMEOUT,
+  CANCEL_LONG_TEXT_ES
 } = require('./utils')
 
 const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
@@ -730,4 +732,179 @@ test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, a
       try { await model.unload() } catch (_) {}
     }
   }
+})
+
+// ---------------------------------------------------------------------------
+// Cancel mid-inference, then prove the model is still usable
+//
+// WHY: The existing pivot cancel test only checks no-crash but never drains
+// the cancelled response or proves a follow-up translation works. Pivot
+// manages two models per instance — a cancel that corrupts either model's
+// state would go undetected.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - cancel mid-inference leaves model reusable', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  let model
+  try {
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    await model.load()
+
+    const response = await model.run(CANCEL_LONG_TEXT_ES)
+    await response.cancel()
+    t.pass('cancel() during pivot translation did not crash')
+
+    try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
+
+    try {
+      const r2 = await model.run('Gracias')
+      let out2 = ''
+      await r2.onUpdate(data => { out2 += data }).await()
+      t.pass(`second run() after cancel completed (output: "${out2 || '<empty — sync cancel landed post-completion>'}")`)
+    } catch (e) {
+      t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
+    }
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Cancel then immediate destroy (race condition)
+//
+// WHY: Pivot manages two native models — the cancel-destroy race has double
+// the surface area for use-after-free bugs.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - cancel then immediate destroy does not crash', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  let model
+  try {
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    await model.load()
+
+    const response = await model.run(CANCEL_LONG_TEXT_ES)
+    response.cancel()
+    await model.destroy()
+
+    t.pass('cancel() then destroy() did not crash')
+    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+  } finally {
+    if (model && !model.getState().destroyed) {
+      try { await model.destroy() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// run() after destroy() must throw
+//
+// WHY: destroy() is permanent teardown. Apps must get a clear error.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - run after destroy throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  let model
+  try {
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    await model.load()
+    await model.destroy()
+
+    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+
+    try {
+      await model.run('Hola')
+      t.fail('Expected run() after destroy to throw')
+    } catch (e) {
+      t.ok(e instanceof Error, 'run() after destroy threw an Error instance')
+      t.comment('Error message: ' + e.message)
+    }
+  } finally {
+    if (model && !model.getState().destroyed) {
+      try { await model.destroy() } catch (_) {}
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// run() before load() must throw
+//
+// WHY: Pivot's two-model architecture exercises a distinct null-handle path
+// in run() before load(). Must surface a clear error, not segfault.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - run before load throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  const model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+
+  try {
+    await model.run('Hola')
+    t.fail('Expected run() before load to throw')
+  } catch (e) {
+    t.ok(e instanceof Error, 'run() before load threw an Error instance')
+    t.comment('Error message: ' + e.message)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Multi-cycle load/unload stress (two-model chain leak catcher)
+//
+// WHY: Pivot manages TWO models per instance (primary + pivot), doubling the
+// leak surface vs standalone backends. Bergamot and IndicTrans both have
+// 6-cycle stress tests; pivot has none. 4 cycles (rather than 6) keeps the
+// runtime manageable given the two-model overhead.
+// ---------------------------------------------------------------------------
+
+test('Pivot translation - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
+  const esEnDir = await ensureModelPair('es', 'en')
+  const enItDir = await ensureModelPair('en', 'it')
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
+
+  const CYCLES = 4
+
+  for (let i = 1; i <= CYCLES; i++) {
+    let model
+    const started = Date.now()
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+      await model.load()
+
+      const response = await model.run('Muchas gracias')
+      let output = ''
+      await response.onUpdate(data => { output += data }).await()
+      t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
+    } finally {
+      if (model) {
+        try { await model.unload() } catch (e) {
+          t.comment(`cycle ${i} unload error: ${e.message}`)
+        }
+      }
+    }
+    t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
+
+    if (isMobile) {
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+  }
+
+  t.pass(`Completed ${CYCLES} pivot load/unload cycles without failure`)
 })

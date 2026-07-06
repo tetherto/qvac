@@ -36,10 +36,4 @@ if(WIN32)
   )
 
   target_compile_options(${output_callback_lifetime} PRIVATE "/utf-8")
-
-  target_link_libraries(
-    ${output_callback_lifetime}
-    PRIVATE
-    msvcrt.lib
-  )
 endif()

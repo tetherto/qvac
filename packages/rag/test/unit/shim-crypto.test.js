@@ -4,7 +4,7 @@ const test = require('brittle')
 const cryptoShim = require('../../src/shims/crypto')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
-test('crypto shim: throws QvacErrorRAG when no crypto implementation is available', t => {
+test('crypto shim: throws QvacErrorRAG when no crypto implementation is available', (t) => {
   const original = globalThis.crypto
   // Force the shim's resolver to find no implementation.
   delete globalThis.crypto
@@ -21,7 +21,7 @@ test('crypto shim: throws QvacErrorRAG when no crypto implementation is availabl
   }
 })
 
-test('crypto shim: delegates property access to globalThis.crypto when available', t => {
+test('crypto shim: delegates property access to globalThis.crypto when available', (t) => {
   const original = globalThis.crypto
   const stub = {
     createHash: () => 'stub',
@@ -42,13 +42,15 @@ test('crypto shim: delegates property access to globalThis.crypto when available
   }
 })
 
-test('crypto shim: rejects self-referential global crypto', t => {
+test('crypto shim: rejects self-referential global crypto', (t) => {
   const original = globalThis.crypto
   globalThis.crypto = cryptoShim
 
   try {
     const probe = cryptoShim.createHash
-    t.fail(`Expected accessing a property on the self-referential shim to throw, got ${typeof probe}`)
+    t.fail(
+      `Expected accessing a property on the self-referential shim to throw, got ${typeof probe}`
+    )
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(err.code, ERR_CODES.DEPENDENCY_REQUIRED, 'Error code should be DEPENDENCY_REQUIRED')

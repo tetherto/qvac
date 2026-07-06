@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.1]
+
+Release Date: 2026-06-26
+
+### 🐛 Fixed
+
+- Registry model downloads now survive an app suspend/resume and a mid-download network drop: a stalled blob stream waits for the swarm to resume and a replication peer to return, then retries from the cached blocks instead of failing or re-downloading from scratch (#2864).
+- Reconnect waits are cancel-aware — a foreground cancel during the wait is honoured promptly instead of blocking until peers return (#2864).
+
 ## [0.6.0]
 
 Release Date: 2026-05-25

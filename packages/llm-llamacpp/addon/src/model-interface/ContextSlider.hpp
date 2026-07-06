@@ -33,10 +33,9 @@ struct ContextUsage {
 /// Outcome of a sliding-window operation on the KV cache.
 struct ContextSlideOutcome {
   enum class Kind {
-    NotNeeded, // Context had enough room; no slide performed
-    Slid,      // Successfully discarded tokens via partial slide
-    FullWipe,  // Fallback: wiped everything after firstMsgTokens (prefill only)
-    Overflow,  // Could not free enough space; caller should throw
+    NotNeeded,             // Context had enough room; no slide performed
+    Slid,                  // Successfully discarded tokens via partial slide
+    Overflow,              // Could not free enough space; caller should throw
     MemoryOperationFailed, // llama memory rejected the requested slide
   };
 
@@ -51,9 +50,9 @@ struct ContextSlideOutcome {
 /// context. It tries to discard tokens from the middle (after firstMsgTokens)
 /// while respecting the tools_compact anchor via ToolsCompactController.
 ///
-/// On success (Slid or FullWipe), the KV cache has been modified and newNPast
-/// reflects the new position. On NotNeeded, no action was taken. On Overflow,
-/// the caller should throw a context overflow error.
+/// On success (Slid), the KV cache has been modified and newNPast reflects the
+/// new position. On NotNeeded, no action was taken. On Overflow, the caller
+/// should throw a context overflow error.
 ///
 /// @param lctx           The llama context for KV cache operations
 /// @param seqId          The llama sequence to slide
@@ -85,8 +84,7 @@ ContextSlideOutcome trySlidePrefill(
 /// Attempts to slide the context window during generation phase.
 ///
 /// This handles the case where generating one more token would overflow the
-/// context. Unlike prefill, there is no FullWipe fallback during generation.
-/// If sliding cannot free space, returns NotNeeded with no action.
+/// context. If sliding cannot free space, returns NotNeeded with no action.
 ///
 /// @param lctx           The llama context for KV cache operations
 /// @param seqId          The llama sequence to slide
@@ -107,3 +105,25 @@ ContextSlideOutcome trySlideGeneration(
     ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps(),
     llama_pos effectiveCtx = -1, llama_pos nCacheTokens = -1);
+
+/// Outcome of an in-place KV-cache range compaction.
+struct CompactRangeOutcome {
+  enum class Kind {
+    NoOp,                  // Empty / inverted range; cache untouched
+    Compacted,             // Range removed and tail shifted
+    MemoryOperationFailed, // seqRm rejected the request
+  };
+
+  Kind kind = Kind::NoOp;
+  llama_pos newNPast = 0;
+  llama_pos discarded = 0;
+};
+
+/// Drops `[startPos, endPos)` from `seqId`'s KV cache and shifts the tail
+/// `[endPos, nPast)` down. Pure primitive; the caller owns policy
+/// (overflow checks, `firstMsgTokens` / tools_compact accounting).
+/// Returns NoOp for empty / out-of-range inputs without touching the cache.
+CompactRangeOutcome compactKvRange(
+    llama_context* lctx, llama_seq_id seqId, llama_pos startPos,
+    llama_pos endPos, llama_pos nPast,
+    const IContextSliderOps& ops = defaultContextSliderOps());

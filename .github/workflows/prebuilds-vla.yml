@@ -49,4 +49,7 @@ jobs:
       artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
+      # Cross-compile the ROCm/HIP backend (gfx1151) into the linux-x64 prebuild.
+      # No AMD GPU needed on the runner; fail-safe if ROCm install/feature is absent.
+      include-rocm: true
     secrets: inherit

@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.13.x (latest)
+title: API Summary — v0.14.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 47 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 48 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -456,7 +456,7 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "bci" | "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
@@ -583,27 +583,27 @@ function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<
 // Local file path - absolute path
 const localModelId = await loadModel({
   modelSrc: "/home/user/models/llama-7b.gguf",
-  modelType: "llm",
+  modelType: "llamacpp-completion",
   modelConfig: { ctx_size: 2048 }
 });
 
 // Local file path - relative path
 const relativeModelId = await loadModel({
   modelSrc: "./models/whisper-base.gguf",
-  modelType: "whisper"
+  modelType: "whispercpp-transcription"
 });
 
 // Hyperdrive URL with key and path
 const hyperdriveId = await loadModel({
   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
-  modelType: "llm",
+  modelType: "llamacpp-completion",
   modelConfig: { ctx_size: 2048 }
 });
 
 // Remote HTTP/HTTPS URL with progress tracking
 const remoteId = await loadModel({
   modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
-  modelType: "llm",
+  modelType: "llamacpp-completion",
   onProgress: (progress) => {
     console.log(`Downloaded: ${progress.percentage}%`);
   }
@@ -612,7 +612,7 @@ const remoteId = await loadModel({
 // Multimodal model with projection
 const multimodalId = await loadModel({
   modelSrc: "https://huggingface.co/.../main-model.gguf",
-  modelType: "llm",
+  modelType: "llamacpp-completion",
   modelConfig: {
     ctx_size: 512,
     projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
@@ -625,7 +625,7 @@ const multimodalId = await loadModel({
 // Whisper with VAD model
 const whisperId = await loadModel({
   modelSrc: "https://huggingface.co/.../whisper-model.gguf",
-  modelType: "whisper",
+  modelType: "whispercpp-transcription",
   modelConfig: {
     mode: "caption",
     output_format: "plaintext",
@@ -641,7 +641,7 @@ const logger = getLogger("my-app");
 
 const modelId = await loadModel({
   modelSrc: "/path/to/model.gguf",
-  modelType: "llm",
+  modelType: "llamacpp-completion",
   logger // Pass logger in options
 });
 ```
@@ -1194,6 +1194,36 @@ function stopQVACProvider(): Promise<{ error?: string; success: boolean; type: "
 
 ---
 
+### `subscribeServerLogs`
+
+Subscribes to every server-side log through a single stream: SDK server logs,
+per-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG
+logs — without having to open a loggingStream per id.
+
+Each delivered log keeps its origin in `log.id`: `SDK_LOG_ID` for SDK server
+logs, the model id for model logs, or the RAG workspace key. Use it to tell the
+sources apart.
+
+Internally this opens a loggingStream on the reserved `SDK_ALL_LOG_ID`
+stream that the worker fans every log into.
+
+**Signature**:
+
+```ts
+function subscribeServerLogs(handler: ServerLogHandler): () => void;
+```
+
+**Example**:
+```ts
+const unsubscribe = subscribeServerLogs((log) => {
+  console.log(`[${log.level}] ${log.id} ${log.namespace}: ${log.message}`);
+});
+// later
+unsubscribe();
+```
+
+---
+
 ### `suspend`
 
 Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore
@@ -1718,8 +1748,9 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
 | `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
 | `OCR_FAILED` | 50007 | OCR operation failed… |
-| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
 | `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
+| `REQUEST_VALIDATION_FAILED` | 50010 | Invalid request:\\n… |
 | `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
 | `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
@@ -1746,6 +1777,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `BARE_PACK_ERROR` | 50611 | bare-pack exited with code …\\n\\n Entry file: …\\n Output file: …\\n\\n Run bare-pack manually for more details. |
 | `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
 | `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
+| `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity must be at least … |
 
 ### Server errors

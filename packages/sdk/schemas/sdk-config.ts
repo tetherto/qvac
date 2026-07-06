@@ -1,28 +1,25 @@
-import { z } from "zod";
-import { logLevelSchema } from "./logging-stream";
-import { ModelType } from "./model-types";
-import { llmConfigBaseSchema, embedConfigBaseSchema } from "./llamacpp-config";
-import {
-  whisperConfigSchema,
-  parakeetConfigSchema,
-} from "./transcription-config";
-import { ocrConfigSchema } from "./ocr";
-import { sdcppConfigSchema } from "./sdcpp-config";
-import { vlaConfigSchema } from "./vla";
-import { runtimeContextSchema } from "./runtime-context";
+import { z } from 'zod'
+import { logLevelSchema } from './logging-stream'
+import { ModelType } from './model-types'
+import { llmConfigBaseSchema, embedConfigBaseSchema } from './llamacpp-config'
+import { whisperConfigSchema, parakeetConfigSchema } from './transcription-config'
+import { ocrConfigSchema } from './ocr'
+import { sdcppConfigSchema } from './sdcpp-config'
+import { vlaConfigSchema } from './vla'
+import { runtimeContextSchema } from './runtime-context'
 
 // Alias keys for user convenience (maps to canonical types)
 const AliasKeys = {
-  llm: "llm",
-  whisper: "whisper",
-  embeddings: "embeddings",
-  nmt: "nmt",
-  parakeet: "parakeet",
-  tts: "tts",
-  ocr: "ocr",
-  diffusion: "diffusion",
-  vla: "vla",
-} as const;
+  llm: 'llm',
+  whisper: 'whisper',
+  embeddings: 'embeddings',
+  nmt: 'nmt',
+  parakeet: 'parakeet',
+  tts: 'tts',
+  ocr: 'ocr',
+  diffusion: 'diffusion',
+  vla: 'vla'
+} as const
 
 /**
  * Device match criteria for device-specific config defaults.
@@ -36,10 +33,10 @@ export const deviceMatchSchema = z.object({
   /** Device model prefix to match (e.g., "Pixel 10" matches "Pixel 10 Pro") */
   deviceModelPrefix: z.string().optional(),
   /** Device model substring to match (e.g., "Galaxy" matches "Samsung Galaxy S25") */
-  deviceModelContains: z.string().optional(),
-});
+  deviceModelContains: z.string().optional()
+})
 
-export type DeviceMatch = z.infer<typeof deviceMatchSchema>;
+export type DeviceMatch = z.infer<typeof deviceMatchSchema>
 
 /**
  * Device-specific model config defaults.
@@ -51,15 +48,11 @@ export const deviceConfigDefaultsSchema = z
     // Canonical keys
     [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
-    [ModelType.whispercppTranscription]: whisperConfigSchema
-      .partial()
-      .optional(),
-    [ModelType.parakeetTranscription]: parakeetConfigSchema
-      .partial()
-      .optional(),
+    [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
+    [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.nmtcppTranslation]: z.record(z.string(), z.unknown()).optional(),
     [ModelType.ttsGgml]: z.record(z.string(), z.unknown()).optional(),
-    [ModelType.onnxOcr]: ocrConfigSchema.partial().optional(),
+    [ModelType.ggmlOcr]: ocrConfigSchema.partial().optional(),
     [ModelType.sdcppGeneration]: sdcppConfigSchema.partial().optional(),
     [ModelType.ggmlVla]: vlaConfigSchema.partial().optional(),
     // Alias keys (user-friendly)
@@ -71,11 +64,11 @@ export const deviceConfigDefaultsSchema = z
     [AliasKeys.tts]: z.record(z.string(), z.unknown()).optional(),
     [AliasKeys.ocr]: ocrConfigSchema.partial().optional(),
     [AliasKeys.diffusion]: sdcppConfigSchema.partial().optional(),
-    [AliasKeys.vla]: vlaConfigSchema.partial().optional(),
+    [AliasKeys.vla]: vlaConfigSchema.partial().optional()
   })
-  .partial();
+  .partial()
 
-export type DeviceConfigDefaults = z.infer<typeof deviceConfigDefaultsSchema>;
+export type DeviceConfigDefaults = z.infer<typeof deviceConfigDefaultsSchema>
 
 /**
  * A device pattern rule for applying config defaults.
@@ -86,12 +79,12 @@ export const devicePatternSchema = z.object({
   /** Match criteria - all specified fields must match */
   match: deviceMatchSchema,
   /** Config defaults to apply when matched */
-  defaults: deviceConfigDefaultsSchema,
-});
+  defaults: deviceConfigDefaultsSchema
+})
 
-export type DevicePattern = z.infer<typeof devicePatternSchema>;
+export type DevicePattern = z.infer<typeof devicePatternSchema>
 
-const directoryPath = z.string().transform((s) => s.replace(/\/+$/, ""));
+const directoryPath = z.string().transform((s) => s.replace(/\/+$/, ''))
 
 /**
  * QVAC SDK Configuration Schema
@@ -192,7 +185,7 @@ export const qvacConfigSchema = z.object({
    * Bare runtime version for native addon ABI verification during bundling.
    * When omitted, verify auto-detects from node_modules (bare-runtime, then bare).
    */
-  bareRuntimeVersion: z.string().optional(),
-});
+  bareRuntimeVersion: z.string().optional()
+})
 
-export type QvacConfig = z.infer<typeof qvacConfigSchema>;
+export type QvacConfig = z.infer<typeof qvacConfigSchema>

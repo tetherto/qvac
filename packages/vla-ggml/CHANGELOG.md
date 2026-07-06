@@ -1,5 +1,74 @@
 # Changelog
 
+## [0.8.2] - 2026-07-03
+
+### Changed
+
+- pi0.5 HIP warm-path inference optimized ~479 → 384 ms (**-18%**) on Strix Halo / gfx1151, accuracy-neutral (cos = 0.9994 vs PyTorch). Combines graph reuse across ODE steps, batched vision, flash-attention at the three attention sites (SigLIP, VLM prefill, expert block), batched AdaLN, a llama.cpp-style unified F16 KV cache, and a fused GeGLU + adaRMSNorm path. No public API change.
+
+### Added
+
+- Load-time validation on pi0.5 checkpoints: rejects non-MQA expert KV configs (`expert_n_kv_heads != 1` — the unified KV cache assumes a single K/V head so the VLM prefix is contiguous at offset 0) and validates adaRMSNorm modulation width (`3 × expert_hidden`), failing fast at load instead of silently corrupting the KV layout or reading out of bounds.
+
+## Pull Requests
+
+- [#2971](https://github.com/tetherto/qvac/pull/2971) - QVAC-21319 perf[vla]: pi05 HIP warm-path optimization (479->384ms, accuracy-neutral)
+
+## [0.8.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.8.0] - 2026-06-30
+
+### Added
+
+- ROCm/HIP GPU backend for AMD GPUs on Linux (Strix Halo / gfx1151), built as a `GGML_BACKEND_DL` module (`libqvac-ggml-hip.so`) alongside Vulkan. `BackendSelection` prefers the ROCm device at runtime with Vulkan/CPU fallback; an unloadable HIP module or non-AMD target is skipped by the DL loader. Opt-in via the `qvac-fabric[hip-backend]` feature (linux-x64 only) — other consumers are unaffected and gain no ROCm dependency.
+
+### Changed
+
+- `default-registry` baseline raised to consume the published `qvac-fabric` `hip-backend` feature and the new `hip` port directly from the registry ([qvac-registry-vcpkg #206](https://github.com/tetherto/qvac-registry-vcpkg/pull/206)); no in-tree overlay ports.
+
+## Pull Requests
+
+- [#2781](https://github.com/tetherto/qvac/pull/2781) - QVAC-19291 feat[api]: vla-ggml ROCm/HIP backend (gfx1151, Strix Halo)
+
+## [0.7.0] - 2026-06-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0` (Qwen3.5-VL multi-tile batching; no API change for this package).
+
+## Pull Requests
+
+- [#2840](https://github.com/tetherto/qvac/pull/2840) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (vla-ggml)
+
+## [0.6.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.6.0] - 2026-06-22
+
+### Changed
+
+- Updated the `qvac-fabric` vcpkg dependency to registry version `9341.0.0`, which enables `GGML_BACKEND_DL` dynamic backend loading on desktop Linux: the Vulkan GPU backend and runtime-dispatched CPU micro-architecture variants now load as standalone modules from `prebuilds`. No public API change.
+
+## Pull Requests
+
+- [#2733](https://github.com/tetherto/qvac/pull/2733) - QVAC-20827 feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
+
 ## [0.5.0] - 2026-06-18
 
 ### Changed

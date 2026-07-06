@@ -20,39 +20,39 @@ import {
   unloadModel,
   type ModelProgressUpdate,
   LLAMA_3_2_1B_INST_Q4_0,
-  TTS_EN_SUPERTONIC_Q8_0,
-} from "@qvac/sdk";
-import { createWav, playPcmInt16Chunk } from "./utils";
+  TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
+} from '@qvac/sdk'
+import { createWav, playPcmInt16Chunk } from './utils'
 
-const SUPERTONIC_SAMPLE_RATE = 44100;
+const SUPERTONIC_SAMPLE_RATE = 44100
 
 /**
  * Drop angle-bracket spans (e.g. `<think>…</think>`, `<|foo|>`) even when split across tokens,
  * and strip `*` (markdown emphasis) from text passed to TTS and the console.
  */
 function createAngleBracketAndStarFilter() {
-  let inAngle = false;
+  let inAngle = false
   return function filterChunk(chunk: string): string {
-    let out = "";
+    let out = ''
     for (let i = 0; i < chunk.length; i++) {
-      const c = chunk[i]!;
+      const c = chunk[i]!
       if (inAngle) {
-        if (c === ">") {
-          inAngle = false;
+        if (c === '>') {
+          inAngle = false
         }
-        continue;
+        continue
       }
-      if (c === "<") {
-        inAngle = true;
-        continue;
+      if (c === '<') {
+        inAngle = true
+        continue
       }
-      if (c === "*") {
-        continue;
+      if (c === '*') {
+        continue
       }
-      out += c;
+      out += c
     }
-    return out;
-  };
+    return out
+  }
 }
 
 /**
@@ -62,113 +62,113 @@ function createAngleBracketAndStarFilter() {
  * avoids allocating an intermediate rest array on the stack per call.
  */
 function appendPcmSamples(target: number[], chunk: number[]) {
-  const batch = 8192;
+  const batch = 8192
   for (let i = 0; i < chunk.length; i += batch) {
-    const end = Math.min(i + batch, chunk.length);
-    Array.prototype.push.apply(target, chunk.slice(i, end));
+    const end = Math.min(i + batch, chunk.length)
+    Array.prototype.push.apply(target, chunk.slice(i, end))
   }
 }
 
 try {
-  console.log(`▸ Loading LLM from registry: ${LLAMA_3_2_1B_INST_Q4_0.name}`);
+  console.log(`▸ Loading LLM from registry: ${LLAMA_3_2_1B_INST_Q4_0.name}`)
   const llmModelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      ctx_size: 2048,
+      ctx_size: 2048
     },
     onProgress: (p: ModelProgressUpdate) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
-  console.log(`▸ LLM ready: ${llmModelId}`);
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+  console.log(`▸ LLM ready: ${llmModelId}`)
 
-  console.log("▸ Loading Supertonic TTS (registry)…");
+  console.log('▸ Loading Supertonic TTS (registry)…')
   const ttsModelId = await loadModel({
-    modelSrc: TTS_EN_SUPERTONIC_Q8_0,
+    modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
     modelConfig: {
-      ttsEngine: "supertonic",
-      language: "en",
-      voice: "F1",
+      ttsEngine: 'supertonic',
+      language: 'en',
+      voice: 'F1',
       ttsSpeed: 1.05,
-      ttsNumInferenceSteps: 10,
+      ttsNumInferenceSteps: 10
     },
     onProgress: (p: ModelProgressUpdate) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
-  console.log(`▸ TTS ready: ${ttsModelId}`);
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+  console.log(`▸ TTS ready: ${ttsModelId}`)
 
-  const prompt = "What is a constellation?";
+  const prompt = 'What is a constellation?'
 
-  console.log(`▸ User: ${prompt}`);
-  console.log("▸ Assistant (streaming):");
+  console.log(`▸ User: ${prompt}`)
+  console.log('▸ Assistant (streaming):')
 
   const result = completion({
     modelId: llmModelId,
-    history: [{ role: "user", content: prompt }],
-    stream: true,
-  });
+    history: [{ role: 'user', content: prompt }],
+    stream: true
+  })
 
-  const combinedPcm: number[] = [];
+  const combinedPcm: number[] = []
 
   const ttsSession = await textToSpeechStream({
     modelId: ttsModelId,
-    inputType: "text",
-    accumulateSentences: true,
-  });
+    inputType: 'text',
+    accumulateSentences: true
+  })
 
-  let phraseIndex = 0;
-  const filterChunk = createAngleBracketAndStarFilter();
+  let phraseIndex = 0
+  const filterChunk = createAngleBracketAndStarFilter()
 
   const drainPcm = (async () => {
     for await (const m of ttsSession) {
       if (m.buffer.length > 0) {
-        appendPcmSamples(combinedPcm, m.buffer);
-        phraseIndex += 1;
+        appendPcmSamples(combinedPcm, m.buffer)
+        phraseIndex += 1
         const preview =
-          typeof m.sentenceChunk === "string"
-            ? m.sentenceChunk.replace(/\s+/g, " ").trim().slice(0, 72)
-            : "";
+          typeof m.sentenceChunk === 'string'
+            ? m.sentenceChunk.replace(/\s+/g, ' ').trim().slice(0, 72)
+            : ''
         console.log(
-          `\n▸ [TTS phrase ${phraseIndex}] ${m.buffer.length} samples${preview ? ` — "${preview}${preview.length >= 72 ? "..." : ""}"` : ""}`,
-        );
-        await playPcmInt16Chunk(m.buffer, SUPERTONIC_SAMPLE_RATE);
+          `\n▸ [TTS phrase ${phraseIndex}] ${m.buffer.length} samples${preview ? ` — "${preview}${preview.length >= 72 ? '...' : ''}"` : ''}`
+        )
+        await playPcmInt16Chunk(m.buffer, SUPERTONIC_SAMPLE_RATE)
       }
     }
-  })();
+  })()
 
   for await (const token of result.tokenStream) {
-    const cleaned = filterChunk(token);
+    const cleaned = filterChunk(token)
     if (cleaned.length > 0) {
-      process.stdout.write(cleaned);
-      ttsSession.write(cleaned);
+      process.stdout.write(cleaned)
+      ttsSession.write(cleaned)
     }
   }
-  ttsSession.end();
-  await drainPcm;
+  ttsSession.end()
+  await drainPcm
 
-  const stats = await result.stats;
+  const stats = await result.stats
   if (stats) {
-    console.log("\n▸ LLM stats:", stats);
+    console.log('\n▸ LLM stats:', stats)
   }
 
-  const outWav = "llm-to-tts-streaming-output.wav";
+  const outWav = 'llm-to-tts-streaming-output.wav'
   console.log(
-    `\n▸ Writing ${combinedPcm.length} samples to ${outWav} (full utterance; phrases were already played above).`,
-  );
-  createWav(combinedPcm, SUPERTONIC_SAMPLE_RATE, outWav);
+    `\n▸ Writing ${combinedPcm.length} samples to ${outWav} (full utterance; phrases were already played above).`
+  )
+  createWav(combinedPcm, SUPERTONIC_SAMPLE_RATE, outWav)
 
-  await unloadModel({ modelId: llmModelId, clearStorage: false });
-  await unloadModel({ modelId: ttsModelId, clearStorage: false });
-  console.log("▸ Models unloaded.");
-  process.exit(0);
+  await unloadModel({ modelId: llmModelId, clearStorage: false })
+  await unloadModel({ modelId: ttsModelId, clearStorage: false })
+  console.log('▸ Models unloaded.')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

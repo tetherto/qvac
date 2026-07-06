@@ -42,6 +42,20 @@ test('synthesizeServeConfig keys a catalog id by its friendly alias, model = con
   })
 })
 
+test('synthesizeServeConfig resolves larger catalog ids to SDK constants', () => {
+  const config = synthesizeServeConfig(['gpt-oss-20b', 'gemma4-31b'])
+
+  assert.deepEqual(config.serve.models['gpt-oss-20b'], {
+    model: 'GPT_OSS_20B_INST_Q4_K_M',
+    preload: true,
+    default: true
+  })
+  assert.deepEqual(config.serve.models['gemma4-31b'], {
+    model: 'GEMMA4_31B_MULTIMODAL_Q4_K_M',
+    preload: true
+  })
+})
+
 test('synthesizeServeConfig carries per-model config under a catalog-id alias', () => {
   const config = synthesizeServeConfig([
     { name: 'qwen3.5-9b', config: { ctx_size: 32768, reasoning_budget: -1 } }
@@ -106,10 +120,11 @@ test('synthesizeServeConfig rejects duplicate model names (string or spec)', () 
 
 test('synthesizeServeConfig rejects more than one explicit default', () => {
   assert.throws(
-    () => synthesizeServeConfig([
-      { name: KNOWN, default: true },
-      { name: 'QWEN3_1_7B_INST_Q4', default: true }
-    ]),
+    () =>
+      synthesizeServeConfig([
+        { name: KNOWN, default: true },
+        { name: 'QWEN3_1_7B_INST_Q4', default: true }
+      ]),
     (err: unknown) => {
       assert.ok(err instanceof MultipleDefaultManagedModelsError)
       assert.equal(err.code, 'MULTIPLE_DEFAULTS')
@@ -138,10 +153,7 @@ test('synthesizeServeConfig honors an explicit preload: false', () => {
 })
 
 test('synthesizeServeConfig honors an explicit default on a non-first model', () => {
-  const config = synthesizeServeConfig([
-    KNOWN,
-    { name: 'QWEN3_1_7B_INST_Q4', default: true }
-  ])
+  const config = synthesizeServeConfig([KNOWN, { name: 'QWEN3_1_7B_INST_Q4', default: true }])
   const entries = config.serve.models
 
   // The explicit default wins; the first model is NOT auto-defaulted.

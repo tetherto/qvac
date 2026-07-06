@@ -2,12 +2,15 @@
   "dependencies": [
     {
       "name": "qvac-fabric",
-      "version>=": "8828.1.2",
-      "default-features": false
+      "version>=": "9341.1.0",
+      "default-features": false,
+      "features": [
+        "gpu-backends"
+      ]
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.1"
+      "version>=": "1.2.2"
     },
     {
       "name": "qvac-lint-cpp",

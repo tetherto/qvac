@@ -3,11 +3,13 @@
   "version": "0.6.4",
   "main": "index.js",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/*.test.js",
-    "test": "npm run lint && npm run test:unit && npm run test:integration",
+    "test": "npm run lint && npm run format && npm run test:unit && npm run test:integration",
     "build:hyperdb-spec": "bare scripts/build-hyperdb-spec.js"
   },
   "license": "Apache-2.0",
@@ -18,7 +20,7 @@
     "directory": "packages/rag"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/rag#readme",
+  "homepage": "https://qvac.tether.io",
   "files": [
     "src",
     "index.js",
@@ -64,7 +66,9 @@
     "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
-    "standard": "^17.1.2",
+    "lunte": "^1.8.1",
+    "prettier": "^3.8.4",
+    "prettier-config-holepunch": "^2.0.0",
     "test-tmp": "^1.4.0"
   },
   "dependencies": {

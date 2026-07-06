@@ -5,7 +5,230 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-03
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+### Added
+
+- **Chatterbox MTL Chinese (`zh`) synthesis.** `config.language: 'zh'` is now
+  accepted for the multilingual Chatterbox model. Chinese flows through the
+  Cangjie (hanzi → code) tokenizer path, so it requires a `Cangjie5_TC` TSV
+  supplied via `files.cangjieTsvPath` — when it is missing, `tts-cpp` throws a
+  clear error at load instead of silently degrading. Bumps the `tts-cpp`
+  requirement to `2026-07-03#0`, the registry port that adds `zh` to
+  `mtl_tokenizer::supported_languages()` (qvac-ext-lib-whisper.cpp PR #77).
+  The multilingual integration suite replaces its previous `zh` rejection
+  assertion with a real Chinese synthesis test (mirroring the Japanese/MeCab
+  test), and `downloadModel.js` gains `ensureCangjieTsv()` to stage/convert the
+  Cangjie5_TC table. The s3gen model downloads now pull the published q4_0
+  GGUFs (`chatterbox-s3gen-q4_0.gguf` / `chatterbox-s3gen-mtl-q4_0.gguf`)
+  instead of f16.
+
+- **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
+  bandwidth-extends synthesized audio to **48 kHz** using the LavaSR Vocos
+  enhancer (ConvNeXt backbone + ISTFT spec head), converted to a single GGUF.
+  Enhancement is enabled simply by supplying the enhancer GGUF — there is no
+  separate on/off flag:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel, lavasrEnhancer: 'lavasr-enhancer.gguf' }
+  })
+  ```
+
+  The path may instead be given via an `enhancer: { type: 'lavasr', enhancerPath }`
+  block; an unknown `enhancer.type` is rejected so a typo can't silently disable
+  enhancement. When active, `TTSOutputChunk.sampleRate` is `48000` for both
+  engines. Convert the GGUF from the public LavaSRcpp ONNX release with
+  `scripts/convert-lavasr-enhancer-to-gguf.py` (f32 or f16). Examples:
+  `examples/supertonic-enhanced.js`, `examples/chatterbox-enhanced.js`.
+  Requires the `tts-cpp` pin that ships `tts_cpp::lavasr::Enhancer`
+  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is wired below.
+
+- **LavaSR denoiser wiring.** The addon now exposes the second LavaSR
+  stage — the UL-UNAS speech **denoiser**, which cleans the signal *before* the
+  enhancer bandwidth-extends it — via `files.lavasrDenoiser` (or a
+  `denoiser: { type: 'lavasr', denoiserPath }` block), mirroring the enhancer:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: {
+      supertonicModel,
+      lavasrDenoiser: 'lavasr-denoiser.gguf', // cleaned first…
+      lavasrEnhancer: 'lavasr-enhancer.gguf'  // …then bandwidth-extended
+    }
+  })
+  ```
+
+  The denoiser is rate-preserving and runs before the enhancer on the batch
+  path (both engines). The tts-cpp UL-UNAS forward is implemented in
+  qvac-ext-lib-whisper.cpp PR #78 (`tts_cpp::lavasr::Denoiser`, scalar CPU port
+  validated bit-close to the ONNX reference). With no denoiser path, output is
+  byte-identical (full backward compat). Denoiser + Chatterbox native chunk
+  streaming (`streamChunkTokens`) is rejected up front — a stateful streaming
+  denoiser is the follow-up. Active as of the `tts-cpp` pin bump to
+  `2026-07-03#1` (qvac-registry-vcpkg), which ships the PR #78 UL-UNAS forward.
+
+- **Selectable output sample rate.** `outputSampleRate` (8000–192000 Hz,
+  runtime config) now resamples the synthesized audio to the requested rate,
+  and `TTSOutputChunk.sampleRate` reports it. Without the enhancer the tts-cpp
+  engine resamples (batch once / streaming per-chunk, seam-free;
+  `EngineOptions::output_sample_rate`, qvac-ext-lib-whisper.cpp PR #69); with
+  the enhancer active the 48 kHz enhanced signal is resampled to the requested
+  rate afterwards. Omit it to keep the engine's native rate (default, zero
+  behaviour change).
+
+- **Enhancer + Chatterbox native chunk streaming.** The LavaSR enhancer now
+  works with `streamChunkTokens > 0` (previously rejected). The addon runs the
+  enhancer over a sliding window with look-ahead + crossfade, so each streamed
+  chunk is bandwidth-extended seam-free and tagged 48 kHz (or `outputSampleRate`)
+  — matching the batch result. It adds **~0.34 s of look-ahead latency**,
+  inherent to the enhancer's receptive field.
+
+### Notes
+
+- Enhancement works on the batch path, sentence-level streaming, and Chatterbox
+  native chunk streaming. Native-streaming enhancement adds ~0.34 s of
+  look-ahead latency.
+- When the enhancer is active it produces 48 kHz; if `outputSampleRate` is also
+  set, the enhanced audio is resampled to that rate afterwards.
+
+
+### Fixed
+
+- **Chatterbox MTL Japanese now builds with MeCab support from the published
+  registry ports.** Bumps the `tts-cpp` requirement to `2026-06-30`, links
+  `mecab::mecab` directly, and keeps the Windows `/FORCE:MULTIPLE` workaround
+  for the `mecab.lib` / `bare_delay_load.lib` `DllMain` conflict.
+- **Chatterbox MTL language coverage now includes Japanese and Italian in the
+  shared multilingual suite.** The standalone Japanese test has been folded into
+  `chatterbox-mtl.test.js`. (Chinese `zh` synthesis is now enabled — see the
+  Added section above.)
+- **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
+  GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
+  master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which
+  in turn requires `ggml-speech 2026-06-26` (`qvac-ext-ggml` speech `f5727c32`,
+  PR #30); the `default-registry` baseline advances to `162f8f7c` so the new pins
+  resolve.
+  - **GPU (ARM Mali / Vulkan — Google Tensor / Pixel):** the CFM estimator's f32
+    `ggml_flash_attn_ext` miscomputed on Mali, blowing the f0 predictor up to NaN
+    and collapsing the audio into a clean ~1.3 s followed by a buzzy "blank +
+    beeps" break. Chatterbox now runs on Mali via an `is_arm_mali`-gated unfused
+    CFM attention (`soft_max` + separate-V matmul, numerically equivalent and
+    still on the GPU). Zero change off ARM Mali; CPU output byte-identical.
+  - **CPU (ARM SVE — Google Tensor / Pixel):** the SVE leftover-tail of
+    `ggml_vec_dot_f32` dropped the main loop's partial sums on inactive lanes
+    (`svmad_f32_m` → `svmla_f32_m`), biasing the HiFT `conv_transpose_1d` inner
+    dot and producing a constant ~12 kHz Nyquist tone. NEON/x86/RISC-V and all
+    non-CPU backends are byte-identical.
+
+## [0.3.6] - 2026-06-25
+
+### Fixed
+
+- **Chatterbox Metal GPU crash on the multilingual model — default KV-cache
+  dtype changed from `q8_0` to `f16`.** With the `q8_0` KV cache (the default
+  since 0.3.2, QVAC-19557), running the **multilingual** Chatterbox model on a
+  **Metal GPU** hard-aborted mid-synthesis with
+  `GGML_ABORT("unsupported op 'CONT'")`. The multilingual step graph
+  (`eval_step_mtl`, B=2 cond+uncond batched path) issues a `CONT` on the KV
+  cache, and the ggml-speech Metal backend only implements a `q8_0`-source
+  `CONT` to `f32`/`f16` — not `q8_0`→`q8_0` — so the op fails
+  `ggml_metal_device_supports_op` and aborts. The EN **Turbo** model and the
+  **CPU** backend were unaffected (different graph / backend supports the op),
+  which is why ≤0.2.5 worked on GPU and 0.3.2+ regressed. `f16` (~50% of f32,
+  vs `q8_0`'s ~27%) is now the safe cross-backend default; `q8_0` remains
+  available opt-in via `kvCacheType: 'q8_0'` for memory-constrained CPU/CUDA
+  hosts that implement the op. A proper backend-aware fix (extend
+  `chatterbox_resolve_kv_type` to probe `CONT` support, not just flash-attn)
+  belongs in `qvac-ext-lib-whisper.cpp` and would let Metal keep `q8_0` storage.
+
+## [0.3.5] - 2026-06-24
+
+### Changed
+
+- **Bump the `tts-cpp` pin to `2026-06-24`** (`qvac-ext-lib-whisper.cpp` master
+  `46921668`, PR #65), consumed from `qvac-registry-vcpkg`. Brings QVAC-19557
+  **S3TokenizerV2 host-mirror elimination**: the Chatterbox voice-conditioning
+  bake no longer holds the ~458 MB S3Tokenizer encoder weights in a host
+  `std::vector` mirror *and* the backend (Metal) weight buffer simultaneously —
+  `build_encoder_ctx` now streams each encoder tensor straight from the GGUF
+  into its backend tensor (8 MiB chunks, no host mirror). This drops the
+  ~900 MB dual-residency that dominated the Chatterbox first-`synthesize()`
+  peak; on-device (iPhone 17 Pro Max) the first-test peak falls from ~3184 MB to
+  ~2772 MB (under the ~3 GB iOS jetsam budget), warm synthesis unchanged, and
+  the produced audio is bit-identical (same tensor names/shapes/dtypes). The
+  `default-registry` baseline advances to `1130cabb` so the new pin resolves.
+
+## [0.3.4] - 2026-06-23
+
+### Added
+
+- **Chatterbox speaking-rate control (`speed`) (QVAC-21119).** New optional
+  `speed` config for the Chatterbox engine — a duration multiplier mirroring
+  Supertonic's `speed` (`< 1` slower, `> 1` faster), bounded to `[0.25, 4.0]`.
+  Chatterbox's engine exposes no native rate knob (its S3 speech tokens run at
+  a fixed 25 Hz and the utterance duration is emergent from the autoregressive
+  T3), so the addon applies it as a pitch-preserving WSOLA time-stretch on the
+  24 kHz PCM — functionally equivalent to ffmpeg's `atempo`, not a pitch shift.
+  Opt-in and backward compatible: when unset (or `1.0`) the raw model output is
+  left unchanged — no default slowdown. Works in both batch and native
+  streaming (one stretcher threads the overlap-add state across chunks for
+  seam-free output, with `O(chunk + window)` memory). Plumbed through
+  `ChatterboxConfig::speed`, `JSAdapter`, and `_buildChatterboxParams`
+  (mirroring Supertonic). New `examples/chatterbox-adjust-speed.js` (+
+  `example:chatterbox-adjust-speed` npm script), C++ WSOLA unit tests, and a JS
+  integration test.
+
+### Fixed
+
+- **Chunk-streaming saturation/clipping and per-chunk loudness "wobble" on the
+  Chatterbox Multilingual engine (QVAC-21118).** A low `cfmSteps` /
+  `streamCfmSteps` (1–2) under-integrated the model's standard 10-step CFM in
+  the chunk-streaming path, producing near-full-scale output (~99%, RMS 4–9×
+  hotter than batch) with a collapsing tail. The engine now floors the
+  streaming CFM step count to the model's `n_timesteps` for standard-CFM
+  models; Turbo's meanflow 2-step sampler and the batch step count are
+  unaffected. Consumes `tts-cpp` `2026-06-22` (`qvac-ext-lib-whisper.cpp`
+  PR #62).
+
+## Pull Requests
+
+- [#2782](https://github.com/tetherto/qvac/pull/2782) - QVAC-21119: add Chatterbox speaking-rate (`speed`) control
+- [#2777](https://github.com/tetherto/qvac/pull/2777) - QVAC-21118: consume tts-cpp 2026-06-22 (chunk-streaming CFM-step floor)
+
+## [0.3.3] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.3.2] - 2026-06-19
+
+### Added
+
+- **Android GPU for Supertonic + Chatterbox (QVAC-20557).** Remove the `#ifdef __ANDROID__`
+  guards in `SupertonicModel`/`ChatterboxModel` that forced `useGPU=false`; `useGPU` now flows
+  to `tts-cpp` (bumped to registry `2026-06-18` = `b95ad447`), which picks the GPU backend per
+  its per-vendor allowlist — Supertonic on Adreno (OpenCL) / Xclipse + Mali (Vulkan); Chatterbox
+  on Adreno/Xclipse, with Mali declined by policy (`allow_arm_mali=false`) and surfaced via the
+  new `gpuUnsupported` runtime stat. The `default-registry` baseline advances to `6fe4e2b` so the
+  new version resolves. Android gpu-smoke skips dropped (Supertonic strict; Chatterbox accepts a
+  flagged Mali→CPU fallback).
 
 ### Fixed
 

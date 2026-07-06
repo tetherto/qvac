@@ -59,7 +59,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -79,35 +79,41 @@ jobs:
             runner: qvac-ubuntu2204-x64-gpu
             no_gpu: 'true'
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64-gpu
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"cuda"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"vulkan"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             no_gpu: 'true'
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"coreml"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"coreml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"coreml"}]
           - os: windows-2025
             platform: win32
             arch: x64
             runner: qvac-win25-x64-gpu
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"directml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"directml"}]
 
     steps:
       - name: Setup Node.js

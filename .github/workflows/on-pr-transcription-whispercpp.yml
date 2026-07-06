@@ -55,7 +55,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -79,6 +79,31 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -158,10 +183,11 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - context
+      - ci-router
       - label-gate
     runs-on: ubuntu-latest
     steps:
@@ -182,8 +208,9 @@ jobs:
     needs:
       - authorize
       - context
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -202,13 +229,67 @@ jobs:
     needs:
       - authorize
       - context
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-test-coverage-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/transcription-whispercpp
+
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - detect-native-changes
+      - context
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-transcription-whispercpp.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   prebuild:
     permissions:
@@ -219,13 +300,44 @@ jobs:
     needs:
       - authorize
       - context
+      - ci-router
+      - detect-native-changes
+      - prebuild-artifact-reuse
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: |
+      always() &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+
+  prebuild-artifact-save:
+    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
     permissions:
@@ -236,8 +348,10 @@ jobs:
       - authorize
       - context
       - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     secrets: inherit
     with:
@@ -255,8 +369,10 @@ jobs:
       - authorize
       - context
       - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     secrets: inherit
     with:
@@ -268,8 +384,9 @@ jobs:
       - context
       - run-integration-tests
       - run-mobile-integration-tests
+      - ci-router
       - label-gate
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.ci-router.outputs.run_desktop == 'true' || needs.ci-router.outputs.run_mobile == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -322,10 +439,10 @@ jobs:
           retention-days: 30
 
   merge-guard:
-    needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests, combine-unified-performance-report]
+    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, combine-unified-performance-report]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') && (needs.combine-unified-performance-report.result == 'success' || needs.combine-unified-performance-report.result == 'skipped') }}

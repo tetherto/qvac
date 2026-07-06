@@ -6,7 +6,7 @@ const Corestore = require('corestore')
 const HyperDBAdapter = require('../../src/adapters/database/HyperDBAdapter')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
-test('HyperDBAdapter - Config persistence on first save', async t => {
+test('HyperDBAdapter - Config persistence on first save', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
   const adapter = new HyperDBAdapter({
@@ -52,7 +52,7 @@ test('HyperDBAdapter - Config persistence on first save', async t => {
   await adapter.close()
 })
 
-test('HyperDBAdapter - Config validation with matching modelId and dimension', async t => {
+test('HyperDBAdapter - Config validation with matching modelId and dimension', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
 
@@ -108,7 +108,7 @@ test('HyperDBAdapter - Config validation with matching modelId and dimension', a
   await adapter2.close()
 })
 
-test('HyperDBAdapter - Config mismatch error with different modelId', async t => {
+test('HyperDBAdapter - Config mismatch error with different modelId', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
 
@@ -151,7 +151,11 @@ test('HyperDBAdapter - Config mismatch error with different modelId', async t =>
     t.fail('Should have thrown EMBEDDING_MODEL_MISMATCH')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(error.code, ERR_CODES.EMBEDDING_MODEL_MISMATCH, 'Error code should be EMBEDDING_MODEL_MISMATCH')
+    t.is(
+      error.code,
+      ERR_CODES.EMBEDDING_MODEL_MISMATCH,
+      'Error code should be EMBEDDING_MODEL_MISMATCH'
+    )
     t.ok(error.message.includes('model-abc123'), 'Error message should mention stored model')
     t.ok(error.message.includes('model-different'), 'Error message should mention provided model')
   }
@@ -159,7 +163,7 @@ test('HyperDBAdapter - Config mismatch error with different modelId', async t =>
   await adapter2.close()
 })
 
-test('HyperDBAdapter - Error when embeddingModelId missing from documents', async t => {
+test('HyperDBAdapter - Error when embeddingModelId missing from documents', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
   const adapter = new HyperDBAdapter({
@@ -184,13 +188,16 @@ test('HyperDBAdapter - Error when embeddingModelId missing from documents', asyn
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
-    t.ok(error.message.includes('embeddingModelId is required'), 'Error message should mention embeddingModelId is required')
+    t.ok(
+      error.message.includes('embeddingModelId is required'),
+      'Error message should mention embeddingModelId is required'
+    )
   }
 
   await adapter.close()
 })
 
-test('HyperDBAdapter - Error when documents have different embeddingModelIds', async t => {
+test('HyperDBAdapter - Error when documents have different embeddingModelIds', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
   const adapter = new HyperDBAdapter({
@@ -221,7 +228,10 @@ test('HyperDBAdapter - Error when documents have different embeddingModelIds', a
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
-    t.ok(error.message.includes('same embeddingModelId'), 'Error message should mention consistency requirement')
+    t.ok(
+      error.message.includes('same embeddingModelId'),
+      'Error message should mention consistency requirement'
+    )
     t.ok(error.message.includes('model-abc123'), 'Error message should list found model IDs')
     t.ok(error.message.includes('model-xyz789'), 'Error message should list found model IDs')
   }
@@ -229,7 +239,7 @@ test('HyperDBAdapter - Error when documents have different embeddingModelIds', a
   await adapter.close()
 })
 
-test('HyperDBAdapter - getConfig returns null for unconfigured workspace', async t => {
+test('HyperDBAdapter - getConfig returns null for unconfigured workspace', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
   const adapter = new HyperDBAdapter({
@@ -245,7 +255,7 @@ test('HyperDBAdapter - getConfig returns null for unconfigured workspace', async
   await adapter.close()
 })
 
-test('HyperDBAdapter - Config persists across adapter instances', async t => {
+test('HyperDBAdapter - Config persists across adapter instances', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
 
@@ -287,7 +297,7 @@ test('HyperDBAdapter - Config persists across adapter instances', async t => {
   await adapter2.close()
 })
 
-test('HyperDBAdapter - Config dimension mismatch error', async t => {
+test('HyperDBAdapter - Config dimension mismatch error', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(tmpDir)
 
@@ -330,7 +340,11 @@ test('HyperDBAdapter - Config dimension mismatch error', async t => {
     t.fail('Should have thrown EMBEDDING_DIMENSION_MISMATCH')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(error.code, ERR_CODES.EMBEDDING_DIMENSION_MISMATCH, 'Error code should be EMBEDDING_DIMENSION_MISMATCH')
+    t.is(
+      error.code,
+      ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+      'Error code should be EMBEDDING_DIMENSION_MISMATCH'
+    )
     t.ok(error.message.includes('384'), 'Error message should mention stored dimension')
     t.ok(error.message.includes('512'), 'Error message should mention provided dimension')
   }

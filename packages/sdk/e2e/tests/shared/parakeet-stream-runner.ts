@@ -8,87 +8,83 @@
 import {
   transcribeStream,
   type TranscribeStreamConversationSession,
-  type TranscribeStreamSession,
-} from "@qvac/sdk";
-import type { TestResult } from "@tetherto/qvac-test-suite";
-import { decodeWavToMonoF32 } from "./wav-pcm.js";
+  type TranscribeStreamSession
+} from '@qvac/sdk'
+import type { TestResult } from '@tetherto/qvac-test-suite'
+import { decodeWavToMonoF32 } from './wav-pcm.js'
 
 export interface ParakeetStreamParams {
-  chunkMs?: number;
-  emitPartials?: boolean;
-  trailingSilenceMs?: number;
+  chunkMs?: number
+  emitPartials?: boolean
+  trailingSilenceMs?: number
   /**
    * Bare-RN only: wait after `destroy()` before opening a follow-up
    * `transcribeStream` on the same modelId (JSI teardown is async).
    */
-  postTeardownSettleMs?: number;
+  postTeardownSettleMs?: number
   /** Bare-RN only: retry recovery when the first session yields zero events. */
-  recoveryMaxAttempts?: number;
+  recoveryMaxAttempts?: number
 }
 
 interface CollectedEvent {
-  type: string;
-  text?: string;
-  source?: "whisper" | "parakeet";
-  silenceDurationMs?: number;
+  type: string
+  text?: string
+  source?: 'whisper' | 'parakeet'
+  silenceDurationMs?: number
 }
 
-const EXPECTED_SAMPLE_RATE = 16000;
-const BYTES_PER_S16_SAMPLE = 2;
+const EXPECTED_SAMPLE_RATE = 16000
+const BYTES_PER_S16_SAMPLE = 2
 
 export async function runParakeetStreamHappy(
   modelId: string,
   audioBytes: Uint8Array,
-  params: ParakeetStreamParams,
+  params: ParakeetStreamParams
 ): Promise<TestResult> {
-  let session: TranscribeStreamConversationSession | null = null;
+  let session: TranscribeStreamConversationSession | null = null
   try {
-    const decoded = decodeWavToMonoF32(audioBytes);
+    const decoded = decodeWavToMonoF32(audioBytes)
     if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
       return {
         passed: false,
-        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
-      };
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`
+      }
     }
 
-    const trailingMs = params.trailingSilenceMs ?? 1500;
-    const chunkMs = params.chunkMs ?? 1000;
-    const trailingSamples = Math.floor(
-      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
-    );
+    const trailingMs = params.trailingSilenceMs ?? 1500
+    const chunkMs = params.chunkMs ?? 1000
+    const trailingSamples = Math.floor((trailingMs / 1000) * EXPECTED_SAMPLE_RATE)
 
-    const speech = f32ToS16LeBytes(decoded.samplesMono);
-    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
-    const chunkSize =
-      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
-      BYTES_PER_S16_SAMPLE;
+    const speech = f32ToS16LeBytes(decoded.samplesMono)
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE)
+    const chunkSize = Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
 
     session = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
         chunkMs,
         ...(params.emitPartials !== undefined && {
-          emitPartials: params.emitPartials,
-        }),
-      },
-    });
+          emitPartials: params.emitPartials
+        })
+      }
+    })
 
-    await writeInChunks(session, speech, chunkSize, chunkMs);
-    await writeInChunks(session, silence, chunkSize, chunkMs);
-    session.end();
+    await writeInChunks(session, speech, chunkSize, chunkMs)
+    await writeInChunks(session, silence, chunkSize, chunkMs)
+    session.end()
 
-    const events: CollectedEvent[] = [];
+    const events: CollectedEvent[] = []
     for await (const event of session) {
-      events.push(event as CollectedEvent);
+      events.push(event as CollectedEvent)
     }
 
-    return assertHappy(events);
+    return assertHappy(events)
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    return { passed: false, output: `parakeet stream failed: ${errorMsg}` };
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    return { passed: false, output: `parakeet stream failed: ${errorMsg}` }
   } finally {
     try {
-      session?.destroy();
+      session?.destroy()
     } catch {
       // Ignore destroy-after-iteration errors; the session may already be torn down.
     }
@@ -105,97 +101,91 @@ export async function runParakeetStreamHappy(
 export async function runParakeetStreamEou(
   modelId: string,
   audioBytes: Uint8Array,
-  params: ParakeetStreamParams,
+  params: ParakeetStreamParams
 ): Promise<TestResult> {
-  let session: TranscribeStreamConversationSession | null = null;
+  let session: TranscribeStreamConversationSession | null = null
   try {
-    const decoded = decodeWavToMonoF32(audioBytes);
+    const decoded = decodeWavToMonoF32(audioBytes)
     if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
       return {
         passed: false,
-        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
-      };
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`
+      }
     }
 
-    const trailingMs = params.trailingSilenceMs ?? 1500;
-    const chunkMs = params.chunkMs ?? 1000;
-    const trailingSamples = Math.floor(
-      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
-    );
+    const trailingMs = params.trailingSilenceMs ?? 1500
+    const chunkMs = params.chunkMs ?? 1000
+    const trailingSamples = Math.floor((trailingMs / 1000) * EXPECTED_SAMPLE_RATE)
 
-    const speech = f32ToS16LeBytes(decoded.samplesMono);
-    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
-    const chunkSize =
-      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
-      BYTES_PER_S16_SAMPLE;
+    const speech = f32ToS16LeBytes(decoded.samplesMono)
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE)
+    const chunkSize = Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
 
     session = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
         chunkMs,
         ...(params.emitPartials !== undefined && {
-          emitPartials: params.emitPartials,
-        }),
-      },
-    });
+          emitPartials: params.emitPartials
+        })
+      }
+    })
 
-    await writeInChunks(session, speech, chunkSize, chunkMs);
-    await writeInChunks(session, silence, chunkSize, chunkMs);
-    session.end();
+    await writeInChunks(session, speech, chunkSize, chunkMs)
+    await writeInChunks(session, silence, chunkSize, chunkMs)
+    session.end()
 
-    const events: CollectedEvent[] = [];
+    const events: CollectedEvent[] = []
     for await (const event of session) {
-      events.push(event as CollectedEvent);
+      events.push(event as CollectedEvent)
     }
 
-    return assertEou(events);
+    return assertEou(events)
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    return { passed: false, output: `parakeet eou stream failed: ${errorMsg}` };
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    return { passed: false, output: `parakeet eou stream failed: ${errorMsg}` }
   } finally {
     try {
-      session?.destroy();
+      session?.destroy()
     } catch {
       // Ignore destroy-after-iteration errors; the session may already be torn down.
     }
   }
 }
 
-export async function runParakeetStreamMetadataRejected(
-  modelId: string,
-): Promise<TestResult> {
-  let session: TranscribeStreamSession | null = null;
+export async function runParakeetStreamMetadataRejected(modelId: string): Promise<TestResult> {
+  let session: TranscribeStreamSession | null = null
   try {
     session = (await transcribeStream({
       modelId,
       metadata: true,
-      parakeetStreamingConfig: { chunkMs: 1000 },
-    } as never)) as unknown as TranscribeStreamSession;
-    session.end();
+      parakeetStreamingConfig: { chunkMs: 1000 }
+    } as never)) as unknown as TranscribeStreamSession
+    session.end()
 
-    let receivedAny = false;
+    let receivedAny = false
     for await (const _ of session) {
-      receivedAny = true;
-      break;
+      receivedAny = true
+      break
     }
     return {
       passed: false,
       output: receivedAny
-        ? "expected parakeet to reject metadata: true; received an event instead"
-        : "expected parakeet to reject metadata: true; iteration completed silently",
-    };
+        ? 'expected parakeet to reject metadata: true; received an event instead'
+        : 'expected parakeet to reject metadata: true; iteration completed silently'
+    }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = error instanceof Error ? error.message : String(error)
     if (/metadata/i.test(msg) && /parakeet/i.test(msg)) {
-      return { passed: true, output: msg };
+      return { passed: true, output: msg }
     }
     return {
       passed: false,
-      output: `unexpected error message: ${msg}`,
-    };
+      output: `unexpected error message: ${msg}`
+    }
   } finally {
     try {
-      session?.destroy();
+      session?.destroy()
     } catch {
       // Ignore destroy-after-iteration errors; the session may already be torn down.
     }
@@ -216,13 +206,13 @@ async function writeInChunks(
   session: { write(audioChunk: Uint8Array): void },
   bytes: Uint8Array,
   chunkSize: number,
-  delayMs: number,
+  delayMs: number
 ) {
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    const end = Math.min(offset + chunkSize, bytes.length);
-    session.write(bytes.subarray(offset, end));
+    const end = Math.min(offset + chunkSize, bytes.length)
+    session.write(bytes.subarray(offset, end))
     if (delayMs > 0 && end < bytes.length) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
   }
 }
@@ -244,79 +234,75 @@ async function writeInChunks(
 export async function runParakeetStreamDestroyMidUtterance(
   modelId: string,
   audioBytes: Uint8Array,
-  params: ParakeetStreamParams,
+  params: ParakeetStreamParams
 ): Promise<TestResult> {
-  let firstSession: TranscribeStreamConversationSession | null = null;
-  let secondSession: TranscribeStreamConversationSession | null = null;
+  let firstSession: TranscribeStreamConversationSession | null = null
+  let secondSession: TranscribeStreamConversationSession | null = null
   try {
-    const decoded = decodeWavToMonoF32(audioBytes);
+    const decoded = decodeWavToMonoF32(audioBytes)
     if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
       return {
         passed: false,
-        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
-      };
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`
+      }
     }
-    const chunkMs = params.chunkMs ?? 1000;
-    const speech = f32ToS16LeBytes(decoded.samplesMono);
-    const chunkSize =
-      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
-      BYTES_PER_S16_SAMPLE;
+    const chunkMs = params.chunkMs ?? 1000
+    const speech = f32ToS16LeBytes(decoded.samplesMono)
+    const chunkSize = Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
 
     firstSession = await transcribeStream({
       modelId,
-      parakeetStreamingConfig: { chunkMs },
-    });
+      parakeetStreamingConfig: { chunkMs }
+    })
 
     // Write exactly 2 chunks, then yank the session WITHOUT calling
     // `end()` — this exercises the mid-utterance teardown path.
-    const chunks = Math.min(2, Math.ceil(speech.length / chunkSize));
+    const chunks = Math.min(2, Math.ceil(speech.length / chunkSize))
     for (let i = 0; i < chunks; i++) {
-      const offset = i * chunkSize;
-      const end = Math.min(offset + chunkSize, speech.length);
-      firstSession.write(speech.subarray(offset, end));
+      const offset = i * chunkSize
+      const end = Math.min(offset + chunkSize, speech.length)
+      firstSession.write(speech.subarray(offset, end))
     }
-    firstSession.destroy();
-    firstSession = null;
+    firstSession.destroy()
+    firstSession = null
 
     // Recover with a fresh session — same modelId, full happy path.
-    const trailingMs = params.trailingSilenceMs ?? 1500;
-    const trailingSamples = Math.floor(
-      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
-    );
-    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
+    const trailingMs = params.trailingSilenceMs ?? 1500
+    const trailingSamples = Math.floor((trailingMs / 1000) * EXPECTED_SAMPLE_RATE)
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE)
 
     secondSession = await transcribeStream({
       modelId,
       parakeetStreamingConfig: {
         chunkMs,
         ...(params.emitPartials !== undefined && {
-          emitPartials: params.emitPartials,
-        }),
-      },
-    });
-    await writeInChunks(secondSession, speech, chunkSize, chunkMs);
-    await writeInChunks(secondSession, silence, chunkSize, chunkMs);
-    secondSession.end();
+          emitPartials: params.emitPartials
+        })
+      }
+    })
+    await writeInChunks(secondSession, speech, chunkSize, chunkMs)
+    await writeInChunks(secondSession, silence, chunkSize, chunkMs)
+    secondSession.end()
 
-    const events: CollectedEvent[] = [];
+    const events: CollectedEvent[] = []
     for await (const event of secondSession) {
-      events.push(event as CollectedEvent);
+      events.push(event as CollectedEvent)
     }
-    return assertHappy(events);
+    return assertHappy(events)
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorMsg = error instanceof Error ? error.message : String(error)
     return {
       passed: false,
-      output: `parakeet destroy-then-recover failed: ${errorMsg}`,
-    };
+      output: `parakeet destroy-then-recover failed: ${errorMsg}`
+    }
   } finally {
     try {
-      firstSession?.destroy();
+      firstSession?.destroy()
     } catch {
       // first session already destroyed in the success path
     }
     try {
-      secondSession?.destroy();
+      secondSession?.destroy()
     } catch {
       // already torn down by `for await` completion
     }
@@ -335,63 +321,59 @@ export async function runParakeetStreamDestroyMidUtterance(
 export async function runParakeetStreamIteratorThrow(
   modelId: string,
   audioBytes: Uint8Array,
-  params: ParakeetStreamParams,
+  params: ParakeetStreamParams
 ): Promise<TestResult> {
-  let throwingSession: TranscribeStreamConversationSession | null = null;
-  let recoverySession: TranscribeStreamConversationSession | null = null;
-  const sentinel = new Error("__test_consumer_threw__");
+  let throwingSession: TranscribeStreamConversationSession | null = null
+  let recoverySession: TranscribeStreamConversationSession | null = null
+  const sentinel = new Error('__test_consumer_threw__')
   try {
-    const decoded = decodeWavToMonoF32(audioBytes);
+    const decoded = decodeWavToMonoF32(audioBytes)
     if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
       return {
         passed: false,
-        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
-      };
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`
+      }
     }
-    const chunkMs = params.chunkMs ?? 1000;
-    const trailingMs = params.trailingSilenceMs ?? 1500;
-    const trailingSamples = Math.floor(
-      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
-    );
-    const speech = f32ToS16LeBytes(decoded.samplesMono);
-    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
-    const chunkSize =
-      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
-      BYTES_PER_S16_SAMPLE;
+    const chunkMs = params.chunkMs ?? 1000
+    const trailingMs = params.trailingSilenceMs ?? 1500
+    const trailingSamples = Math.floor((trailingMs / 1000) * EXPECTED_SAMPLE_RATE)
+    const speech = f32ToS16LeBytes(decoded.samplesMono)
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE)
+    const chunkSize = Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
 
     throwingSession = await transcribeStream({
       modelId,
-      parakeetStreamingConfig: { chunkMs },
-    });
-    await writeInChunks(throwingSession, speech, chunkSize, chunkMs);
-    await writeInChunks(throwingSession, silence, chunkSize, chunkMs);
-    throwingSession.end();
+      parakeetStreamingConfig: { chunkMs }
+    })
+    await writeInChunks(throwingSession, speech, chunkSize, chunkMs)
+    await writeInChunks(throwingSession, silence, chunkSize, chunkMs)
+    throwingSession.end()
 
-    let caughtSentinel = false;
+    let caughtSentinel = false
     try {
       for await (const _ of throwingSession) {
-        throw sentinel;
+        throw sentinel
       }
       return {
         passed: false,
-        output: "expected consumer throw, but iterator completed without yielding",
-      };
+        output: 'expected consumer throw, but iterator completed without yielding'
+      }
     } catch (err) {
       if (err !== sentinel) {
         return {
           passed: false,
           output: `consumer-side throw produced unexpected error: ${
             err instanceof Error ? err.message : String(err)
-          }`,
-        };
+          }`
+        }
       }
-      caughtSentinel = true;
+      caughtSentinel = true
     }
     if (!caughtSentinel) {
       return {
         passed: false,
-        output: "consumer-side sentinel error was not propagated",
-      };
+        output: 'consumer-side sentinel error was not propagated'
+      }
     }
     // The for-await sentinel throw is supposed to invoke the iterator's
     // async `return()`, which in turn tears down the native
@@ -407,16 +389,16 @@ export async function runParakeetStreamIteratorThrow(
     // exercises the recovery contract, not JSI return-propagation
     // timing.
     try {
-      throwingSession.destroy();
+      throwingSession.destroy()
     } catch {
       // session may already be torn down by the iterator unwind
     }
-    throwingSession = null;
+    throwingSession = null
 
-    const settleMs = params.postTeardownSettleMs ?? 0;
-    const maxAttempts = Math.max(1, params.recoveryMaxAttempts ?? 1);
+    const settleMs = params.postTeardownSettleMs ?? 0
+    const maxAttempts = Math.max(1, params.recoveryMaxAttempts ?? 1)
     if (settleMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, settleMs));
+      await new Promise((resolve) => setTimeout(resolve, settleMs))
     }
 
     // Recover: a brand new session against the same model must
@@ -424,18 +406,18 @@ export async function runParakeetStreamIteratorThrow(
     // consumer-side throw, this would hang or fail to load.
     let lastResult: TestResult = {
       passed: false,
-      output: "recovery session was not attempted",
-    };
+      output: 'recovery session was not attempted'
+    }
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
         try {
-          recoverySession?.destroy();
+          recoverySession?.destroy()
         } catch {
           // prior attempt may already be torn down
         }
-        recoverySession = null;
+        recoverySession = null
         if (settleMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, settleMs));
+          await new Promise((resolve) => setTimeout(resolve, settleMs))
         }
       }
 
@@ -444,41 +426,41 @@ export async function runParakeetStreamIteratorThrow(
         parakeetStreamingConfig: {
           chunkMs,
           ...(params.emitPartials !== undefined && {
-            emitPartials: params.emitPartials,
-          }),
-        },
-      });
-      await writeInChunks(recoverySession, speech, chunkSize, chunkMs);
-      await writeInChunks(recoverySession, silence, chunkSize, chunkMs);
-      recoverySession.end();
+            emitPartials: params.emitPartials
+          })
+        }
+      })
+      await writeInChunks(recoverySession, speech, chunkSize, chunkMs)
+      await writeInChunks(recoverySession, silence, chunkSize, chunkMs)
+      recoverySession.end()
 
-      const events: CollectedEvent[] = [];
+      const events: CollectedEvent[] = []
       for await (const event of recoverySession) {
-        events.push(event as CollectedEvent);
+        events.push(event as CollectedEvent)
       }
-      lastResult = assertHappy(events);
+      lastResult = assertHappy(events)
       if (lastResult.passed) {
-        return lastResult;
+        return lastResult
       }
     }
     return {
       passed: false,
-      output: `recovery failed after ${maxAttempts} attempt(s): ${lastResult.output}`,
-    };
+      output: `recovery failed after ${maxAttempts} attempt(s): ${lastResult.output}`
+    }
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorMsg = error instanceof Error ? error.message : String(error)
     return {
       passed: false,
-      output: `parakeet iterator-throw recovery failed: ${errorMsg}`,
-    };
+      output: `parakeet iterator-throw recovery failed: ${errorMsg}`
+    }
   } finally {
     try {
-      throwingSession?.destroy();
+      throwingSession?.destroy()
     } catch {
       // session already torn down by sentinel throw / consumer exit
     }
     try {
-      recoverySession?.destroy();
+      recoverySession?.destroy()
     } catch {
       // already torn down by `for await` completion
     }
@@ -486,83 +468,83 @@ export async function runParakeetStreamIteratorThrow(
 }
 
 function f32ToS16LeBytes(samples: Float32Array): Uint8Array {
-  const out = new Uint8Array(samples.length * BYTES_PER_S16_SAMPLE);
-  const view = new DataView(out.buffer);
+  const out = new Uint8Array(samples.length * BYTES_PER_S16_SAMPLE)
+  const view = new DataView(out.buffer)
   for (let i = 0; i < samples.length; i++) {
-    const clamped = Math.max(-1, Math.min(1, samples[i] ?? 0));
-    const int16 = Math.round(clamped * 32767);
-    view.setInt16(i * 2, int16, true);
+    const clamped = Math.max(-1, Math.min(1, samples[i] ?? 0))
+    const int16 = Math.round(clamped * 32767)
+    view.setInt16(i * 2, int16, true)
   }
-  return out;
+  return out
 }
 
 function assertHappy(events: CollectedEvent[]): TestResult {
-  const counts = countByType(events);
-  const summary = JSON.stringify(counts);
+  const counts = countByType(events)
+  const summary = JSON.stringify(counts)
 
-  if (!counts["text"]) {
+  if (!counts['text']) {
     return {
       passed: false,
-      output: `expected at least one text event, got: ${summary}`,
-    };
+      output: `expected at least one text event, got: ${summary}`
+    }
   }
-  if (counts["vad"]) {
+  if (counts['vad']) {
     return {
       passed: false,
-      output: `parakeet must not emit standalone vad events, got: ${summary}`,
-    };
+      output: `parakeet must not emit standalone vad events, got: ${summary}`
+    }
   }
-  return { passed: true, output: summary };
+  return { passed: true, output: summary }
 }
 
 function assertEou(events: CollectedEvent[]): TestResult {
-  const counts = countByType(events);
-  const summary = JSON.stringify(counts);
+  const counts = countByType(events)
+  const summary = JSON.stringify(counts)
 
-  if (!counts["text"]) {
+  if (!counts['text']) {
     return {
       passed: false,
-      output: `expected at least one text event, got: ${summary}`,
-    };
+      output: `expected at least one text event, got: ${summary}`
+    }
   }
-  if (!counts["endOfTurn"]) {
+  if (!counts['endOfTurn']) {
     return {
       passed: false,
-      output: `expected at least one endOfTurn event from EOU model, got: ${summary}`,
-    };
+      output: `expected at least one endOfTurn event from EOU model, got: ${summary}`
+    }
   }
-  if (counts["vad"]) {
+  if (counts['vad']) {
     return {
       passed: false,
-      output: `parakeet must not emit standalone vad events, got: ${summary}`,
-    };
+      output: `parakeet must not emit standalone vad events, got: ${summary}`
+    }
   }
   // Per-event sanity: parakeet's EOU is token-driven; every parakeet
   // `endOfTurn` event must carry `source: "parakeet"` and MUST NOT
   // surface a `silenceDurationMs` field (that's the whisper variant
   // of the discriminated union).
   for (const ev of events) {
-    if (ev.type !== "endOfTurn") continue;
-    if (ev.source !== "parakeet") {
+    if (ev.type !== 'endOfTurn') continue
+    if (ev.source !== 'parakeet') {
       return {
         passed: false,
-        output: `parakeet endOfTurn must declare source="parakeet", got: ${JSON.stringify(ev)}`,
-      };
+        output: `parakeet endOfTurn must declare source="parakeet", got: ${JSON.stringify(ev)}`
+      }
     }
     if (ev.silenceDurationMs !== undefined) {
       return {
         passed: false,
-        output: `parakeet endOfTurn must omit silenceDurationMs (whisper-only), got: ${JSON.stringify(ev)}`,
-      };
+        output: `parakeet endOfTurn must omit silenceDurationMs (whisper-only), got: ${JSON.stringify(ev)}`
+      }
     }
   }
-  return { passed: true, output: summary };
+  return { passed: true, output: summary }
 }
 
 function countByType(events: CollectedEvent[]): Record<string, number> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = {}
   for (const e of events) {
-    counts[e.type] = (counts[e.type] ?? 0) + 1;
+    counts[e.type] = (counts[e.type] ?? 0) + 1
   }
-  return counts;
+  return counts
 }
