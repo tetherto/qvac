@@ -168,7 +168,7 @@ class JobStatsTestModel final : public ConcurrentTestModel,
                                 public model::IModelJobStats {
   mutable std::mutex statsMtx_;
   mutable std::vector<JobId> consumedIds_;
-  std::unordered_set<JobId> knownIds_;
+  mutable std::unordered_set<JobId> knownIds_;
 
 public:
   using ConcurrentTestModel::ConcurrentTestModel;
@@ -179,10 +179,12 @@ public:
     knownIds_.insert(id);
   }
 
+  /// Take-once, mirroring the real contract (IModelJobStats::consumeJobStats):
+  /// a known id's entry is erased on the call that hands it over.
   RuntimeStats consumeJobStats(JobId id) const override {
     std::lock_guard lock(statsMtx_);
     consumedIds_.push_back(id);
-    if (knownIds_.count(id) == 0) {
+    if (knownIds_.erase(id) == 0) {
       return RuntimeStats{};
     }
     // The job's complete terminal snapshot: model-level entry plus the job's
@@ -193,6 +195,12 @@ public:
   std::vector<JobId> consumedIds() const {
     std::lock_guard lock(statsMtx_);
     return consumedIds_;
+  }
+
+  /// Whether @p id still has an unconsumed per-job stats entry.
+  bool hasJobStats(JobId id) const {
+    std::lock_guard lock(statsMtx_);
+    return knownIds_.count(id) != 0;
   }
 
   /// Global snapshot with an aggregate-only marker and a key the per-job
@@ -757,6 +765,23 @@ TEST_F(MultiJobSchedulerTest, TaggedJobEndedUsesPerJobStats) {
       << "the payload must be the job's own snapshot, not the generic one";
   EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{5})
       << "per-job stats must be consumed exactly once, under the job's id";
+}
+
+// Per-job stats reclaim on error: a tagged job that ends via the throw path
+// must not leave its per-job stats entry behind, or a later job reusing this
+// id would receive the stale snapshot instead of its own.
+TEST_F(MultiJobSchedulerTest, ThrownJobReclaimsPerJobStats) {
+  JobStatsTestModel* stats =
+      buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
+  stats->addJobStats(7);
+  stats->throwForId(7);
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 7));
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  outputQueue_->clear();
+
+  EXPECT_FALSE(stats->hasJobStats(7))
+      << "a job that ends in error must not leak its per-job stats entry";
 }
 
 // (m) Per-job stats unknown to the model: the tagged jobEnded falls back to
