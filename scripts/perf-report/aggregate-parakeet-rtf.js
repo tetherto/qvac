@@ -118,10 +118,11 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`).
+// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`,
+// `f32`).
 // Used as a fallback when a record predates the explicit `model.quant` field.
 function quantFromName (name) {
-  const match = String(name || '').match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  const match = String(name || '').match(/(?:\.|-)(q8_0|q4_0|f16|f32)(?:\.gguf|[-.]|$)/i)
   return match ? match[1].toLowerCase() : ''
 }
 
@@ -148,7 +149,10 @@ function normalizeDesktopRecord (report, sourceFile) {
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
 
   const quant = (report.model && report.model.quant) ||
-    quantFromName(report.model && report.model.dirName) || ''
+    quantFromName(report.model && report.model.dirName) ||
+    quantFromName(report.model && report.model.path) ||
+    quantFromName(sourceFile) ||
+    ''
 
   return {
     source: 'desktop-ci',
@@ -240,12 +244,12 @@ function mobileModelType (result) {
 }
 
 // Quantisation token from the mobile test label (e.g. `[q4_0]`), stamped by
-// mobile-perf-runner.js. Falls back to '' when the label predates the quant
-// tag (older artifacts) so dedupe/sort still produce a single mobile row.
+// mobile-perf-runner.js. Older mobile artifacts predate that tag; those runs
+// only staged q4_0 models, so default them to q4_0 instead of rendering "-".
 function mobileQuant (result) {
   const testName = String(result.test || '').toLowerCase()
-  const match = testName.match(/\[(q8_0|q4_0|f16)\]/)
-  return match ? match[1] : ''
+  const match = testName.match(/\[(q8_0|q4_0|f16|f32)\]/)
+  return match ? match[1] : 'q4_0'
 }
 
 function normalizeMobileRecords (report, sourceFile) {
