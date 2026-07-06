@@ -37,6 +37,22 @@ inputs:
       (e.g. Python venvs).
     required: false
     default: 'true'
+  warm:
+    description: |
+      When 'true' (default) and the package has a
+      `test/integration/models.manifest.json`, download every declared model
+      into `packages/<package>/test/model` right after the cache restore, so
+      the multi-GB fetch happens as an ordinary step (no per-test brittle
+      timeout) and the post-job save persists a complete set. No-op on a full
+      cache hit. Set 'false' for callers that provision models another way.
+    required: false
+    default: 'true'
+  hf-token:
+    description: |
+      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN for
+      gated model repositories.
+    required: false
+    default: ''
 
 outputs:
   cache-hit:
@@ -110,3 +126,23 @@ runs:
         restore-keys: |
           models-${{ inputs.package }}-${{ inputs.cache-version }}-
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
+
+    # Download any models NOT provided by the restore, as an ordinary step with
+    # no per-test (brittle) timeout. This is the fix for cold-cache runs where
+    # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
+    # inside a single test's timeout and fail. On a full cache hit every file is
+    # already present (and verified when sha256 is pinned), so this is a fast
+    # no-op. The trusted-context actions/cache@v4 post-step then saves the now
+    # complete dir so subsequent runs restore instead of re-downloading.
+    - name: Warm models (download any missing from manifest)
+      if: inputs.warm == 'true'
+      shell: bash
+      env:
+        PKG: ${{ inputs.package }}
+        HF_TOKEN_INPUT: ${{ inputs.hf-token }}
+      run: |
+        set -euo pipefail
+        # Only override an inherited job-level HF_TOKEN when a token was passed
+        # explicitly; otherwise let the ambient env (if any) pass through.
+        if [ -n "${HF_TOKEN_INPUT:-}" ]; then export HF_TOKEN="$HF_TOKEN_INPUT"; fi
+        node "$GITHUB_ACTION_PATH/warm-models.mjs" --package "$PKG"
