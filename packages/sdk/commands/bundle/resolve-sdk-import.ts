@@ -1,39 +1,30 @@
-import fs from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import fs from 'node:fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
-export type SdkExportEntry = string | { [condition: string]: SdkExportEntry };
+export type SdkExportEntry = string | { [condition: string]: SdkExportEntry }
 
-const SDK_EXPORT_CONDITIONS = [
-  "bare",
-  "import",
-  "module",
-  "default",
-  "node",
-  "require",
-];
+const SDK_EXPORT_CONDITIONS = ['bare', 'import', 'module', 'default', 'node', 'require']
 
-export function selectExportTarget(
-  entry: SdkExportEntry | undefined,
-): string | null {
-  if (entry == null) return null;
-  if (typeof entry === "string") return entry;
+export function selectExportTarget(entry: SdkExportEntry | undefined): string | null {
+  if (entry == null) return null
+  if (typeof entry === 'string') return entry
   for (const condition of SDK_EXPORT_CONDITIONS) {
-    const resolved = selectExportTarget(entry[condition]);
-    if (resolved) return resolved;
+    const resolved = selectExportTarget(entry[condition])
+    if (resolved) return resolved
   }
-  return null;
+  return null
 }
 
 function readSdkExports(sdkPath: string): Record<string, SdkExportEntry> {
   try {
-    const raw = fs.readFileSync(path.join(sdkPath, "package.json"), "utf8");
+    const raw = fs.readFileSync(path.join(sdkPath, 'package.json'), 'utf8')
     const pkg = JSON.parse(raw) as {
-      exports?: Record<string, SdkExportEntry>;
-    };
-    return pkg.exports ?? {};
+      exports?: Record<string, SdkExportEntry>
+    }
+    return pkg.exports ?? {}
   } catch {
-    return {};
+    return {}
   }
 }
 
@@ -46,21 +37,21 @@ function readSdkExports(sdkPath: string): Record<string, SdkExportEntry> {
 // resolution next to the bare-* deps instead.
 export function createSdkImportResolver(
   sdkPath: string,
-  sdkName: string,
+  sdkName: string
 ): (specifier: string) => string {
-  let resolvedSdkPath = sdkPath;
+  let resolvedSdkPath = sdkPath
   try {
-    resolvedSdkPath = fs.realpathSync(sdkPath);
+    resolvedSdkPath = fs.realpathSync(sdkPath)
   } catch {
     // Keep sdkPath as-is if it cannot be canonicalized.
   }
-  const exportsMap = readSdkExports(resolvedSdkPath);
-  const prefix = `${sdkName}/`;
+  const exportsMap = readSdkExports(resolvedSdkPath)
+  const prefix = `${sdkName}/`
   return (specifier) => {
-    if (!specifier.startsWith(prefix)) return specifier;
-    const subpath = `./${specifier.slice(prefix.length)}`;
-    const target = selectExportTarget(exportsMap[subpath]);
-    if (!target) return specifier;
-    return pathToFileURL(path.join(resolvedSdkPath, target)).href;
-  };
+    if (!specifier.startsWith(prefix)) return specifier
+    const subpath = `./${specifier.slice(prefix.length)}`
+    const target = selectExportTarget(exportsMap[subpath])
+    if (!target) return specifier
+    return pathToFileURL(path.join(resolvedSdkPath, target)).href
+  }
 }

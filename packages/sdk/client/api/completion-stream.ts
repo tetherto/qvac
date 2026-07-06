@@ -1,5 +1,5 @@
-import { stream as streamRpc } from "@/client/rpc/rpc-client";
-import { getClientLogger } from "@/logging";
+import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { getClientLogger } from '@/logging'
 import {
   completionStreamResponseSchema,
   type CompletionClientParams,
@@ -12,30 +12,23 @@ import {
   type Tool,
   type ToolCallEvent,
   type ToolCallWithCall,
-  type RPCOptions,
-} from "@/schemas";
-import {
-  CompletionFailedError,
-  InferenceCancelledError,
-} from "@/utils/errors-server";
-import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
-import {
-  validateTools,
-  type ToolHandlerMap,
-  type ToolInput,
-} from "@/utils/tool-helpers";
-import { buildFinalFromEvents } from "@/utils/aggregate-events";
-import { generateClientRequestId } from "@/client/api/client-request-id";
+  type RPCOptions
+} from '@/schemas'
+import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
+import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
+import { validateTools, type ToolHandlerMap, type ToolInput } from '@/utils/tool-helpers'
+import { buildFinalFromEvents } from '@/utils/aggregate-events'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
-type CompletionParams = Omit<CompletionClientParams, "tools"> & {
-  tools?: Tool[] | ToolInput[];
-  mcp?: McpClientInput[];
-  rpcOptions?: RPCOptions;
-  captureThinking?: boolean;
-  emitRawDeltas?: boolean;
-};
+type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
+  tools?: Tool[] | ToolInput[]
+  mcp?: McpClientInput[]
+  rpcOptions?: RPCOptions
+  captureThinking?: boolean
+  emitRawDeltas?: boolean
+}
 
 /**
  * Generates completion from a language model based on conversation history.
@@ -139,95 +132,90 @@ export function completion(params: CompletionParams): CompletionRun {
   // have a "stop" handler. Surfaced on the returned `CompletionRun`
   // (`run.requestId`) so callers can `cancel({ requestId })` at any
   // point during the stream.
-  const requestId = generateClientRequestId();
+  const requestId = generateClientRequestId()
 
-  let statsResolver: (value: CompletionStats | undefined) => void = () => {};
-  let statsRejecter: (error: unknown) => void = () => {};
-  const statsPromise = new Promise<CompletionStats | undefined>(
-    (resolve, reject) => {
-      statsResolver = resolve;
-      statsRejecter = reject;
-    },
-  );
+  let statsResolver: (value: CompletionStats | undefined) => void = () => {}
+  let statsRejecter: (error: unknown) => void = () => {}
+  const statsPromise = new Promise<CompletionStats | undefined>((resolve, reject) => {
+    statsResolver = resolve
+    statsRejecter = reject
+  })
 
-  statsPromise.catch(() => {});
+  statsPromise.catch(() => {})
 
-  let toolCallsResolver: (value: ToolCallWithCall[]) => void = () => {};
-  let toolCallsRejecter: (error: unknown) => void = () => {};
-  const toolCallsPromise = new Promise<ToolCallWithCall[]>(
-    (resolve, reject) => {
-      toolCallsResolver = resolve;
-      toolCallsRejecter = reject;
-    },
-  );
+  let toolCallsResolver: (value: ToolCallWithCall[]) => void = () => {}
+  let toolCallsRejecter: (error: unknown) => void = () => {}
+  const toolCallsPromise = new Promise<ToolCallWithCall[]>((resolve, reject) => {
+    toolCallsResolver = resolve
+    toolCallsRejecter = reject
+  })
 
-  toolCallsPromise.catch(() => {});
+  toolCallsPromise.catch(() => {})
 
-  let finalResolver: (value: CompletionFinal) => void = () => {};
-  let finalRejecter: (error: unknown) => void = () => {};
+  let finalResolver: (value: CompletionFinal) => void = () => {}
+  let finalRejecter: (error: unknown) => void = () => {}
   const finalPromise = new Promise<CompletionFinal>((resolve, reject) => {
-    finalResolver = resolve;
-    finalRejecter = reject;
-  });
+    finalResolver = resolve
+    finalRejecter = reject
+  })
 
-  finalPromise.catch(() => {});
+  finalPromise.catch(() => {})
 
-  const tokenQueue: string[] = [];
-  const toolEventQueue: ToolCallEvent[] = [];
-  const eventQueue: CompletionEvent[] = [];
-  let done = false;
-  let tokenResolve: (() => void) | null = null;
-  let toolResolve: (() => void) | null = null;
-  let eventResolve: (() => void) | null = null;
-  let streamError: Error | null = null;
+  const tokenQueue: string[] = []
+  const toolEventQueue: ToolCallEvent[] = []
+  const eventQueue: CompletionEvent[] = []
+  let done = false
+  let tokenResolve: (() => void) | null = null
+  let toolResolve: (() => void) | null = null
+  let eventResolve: (() => void) | null = null
+  let streamError: Error | null = null
 
-  const allEvents: CompletionEvent[] = [];
+  const allEvents: CompletionEvent[] = []
 
   function notifyWaiters() {
     if (tokenResolve) {
-      tokenResolve();
-      tokenResolve = null;
+      tokenResolve()
+      tokenResolve = null
     }
     if (toolResolve) {
-      toolResolve();
-      toolResolve = null;
+      toolResolve()
+      toolResolve = null
     }
     if (eventResolve) {
-      eventResolve();
-      eventResolve = null;
+      eventResolve()
+      eventResolve = null
     }
   }
 
   const processResponses = async () => {
     try {
-      let allTools: Tool[] = [];
-      const allHandlers: ToolHandlerMap = new Map();
+      let allTools: Tool[] = []
+      const allHandlers: ToolHandlerMap = new Map()
 
       if (params.tools) {
-        const { tools, handlers } = validateTools(params.tools);
-        allTools = tools;
+        const { tools, handlers } = validateTools(params.tools)
+        allTools = tools
         for (const [name, handler] of handlers) {
           if (allHandlers.has(name)) {
-            logger.warn(`Duplicate tool handler for "${name}", overwriting`);
+            logger.warn(`Duplicate tool handler for "${name}", overwriting`)
           }
-          allHandlers.set(name, handler);
+          allHandlers.set(name, handler)
         }
       }
 
       if (params.mcp && params.mcp.length > 0) {
-        const { tools: mcpTools, handlers: mcpHandlers } =
-          await getMcpToolsWithHandlers(params.mcp);
-        allTools = [...mcpTools, ...allTools];
+        const { tools: mcpTools, handlers: mcpHandlers } = await getMcpToolsWithHandlers(params.mcp)
+        allTools = [...mcpTools, ...allTools]
         for (const [name, handler] of mcpHandlers) {
           if (allHandlers.has(name)) {
-            logger.warn(`Duplicate tool handler for "${name}", overwriting`);
+            logger.warn(`Duplicate tool handler for "${name}", overwriting`)
           }
-          allHandlers.set(name, handler);
+          allHandlers.set(name, handler)
         }
       }
 
       const request: CompletionStreamRequest = {
-        type: "completionStream",
+        type: 'completionStream',
         modelId: params.modelId,
         history: params.history,
         kvCache: params.kvCache,
@@ -238,46 +226,40 @@ export function completion(params: CompletionParams): CompletionRun {
         emitRawDeltas: params.emitRawDeltas,
         toolDialect: params.toolDialect,
         responseFormat: params.responseFormat,
-        requestId,
-      };
+        requestId
+      }
 
-      const responses: AsyncGenerator<unknown> = streamRpc(
-        request,
-        params.rpcOptions,
-      );
+      const responses: AsyncGenerator<unknown> = streamRpc(request, params.rpcOptions)
 
       for await (const response of responses) {
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "completionStream"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'completionStream'
         ) {
-          const streamResponse = completionStreamResponseSchema.parse(response);
+          const streamResponse = completionStreamResponseSchema.parse(response)
 
           for (const event of streamResponse.events) {
-            allEvents.push(event);
-            eventQueue.push(event);
+            allEvents.push(event)
+            eventQueue.push(event)
 
-            if (event.type === "contentDelta") {
-              tokenQueue.push(event.text);
-            } else if (event.type === "toolCall") {
-              toolEventQueue.push(event);
+            if (event.type === 'contentDelta') {
+              tokenQueue.push(event.text)
+            } else if (event.type === 'toolCall') {
+              toolEventQueue.push(event)
             }
           }
 
-          notifyWaiters();
+          notifyWaiters()
 
           if (streamResponse.done) {
-            const { final, error, cancelled } = buildFinalFromEvents(
-              allEvents,
-              allHandlers,
-            );
+            const { final, error, cancelled } = buildFinalFromEvents(allEvents, allHandlers)
             if (error) {
-              const err = new CompletionFailedError(error.message, error);
-              finalRejecter(err);
-              statsRejecter(err);
-              toolCallsRejecter(err);
+              const err = new CompletionFailedError(error.message, error)
+              finalRejecter(err)
+              statsRejecter(err)
+              toolCallsRejecter(err)
             } else if (cancelled) {
               // The wire stream ended with `stopReason: "cancelled"` — the
               // run was aborted mid-flight. Cancellation contract: `events`
@@ -292,91 +274,91 @@ export function completion(params: CompletionParams): CompletionRun {
               const err = new InferenceCancelledError(requestId, {
                 text: final.contentText,
                 toolCalls: final.toolCalls,
-                ...(final.stats && { stats: final.stats }),
-              });
-              finalRejecter(err);
-              statsRejecter(err);
-              toolCallsRejecter(err);
+                ...(final.stats && { stats: final.stats })
+              })
+              finalRejecter(err)
+              statsRejecter(err)
+              toolCallsRejecter(err)
             } else {
-              finalResolver(final);
-              statsResolver(final.stats);
-              toolCallsResolver(final.toolCalls);
+              finalResolver(final)
+              statsResolver(final.stats)
+              toolCallsResolver(final.toolCalls)
             }
-            done = true;
-            notifyWaiters();
+            done = true
+            notifyWaiters()
           }
         }
       }
     } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error));
-      statsRejecter(error);
-      toolCallsRejecter(error);
-      finalRejecter(error);
-      done = true;
-      notifyWaiters();
+      streamError = error instanceof Error ? error : new Error(String(error))
+      statsRejecter(error)
+      toolCallsRejecter(error)
+      finalRejecter(error)
+      done = true
+      notifyWaiters()
     }
-  };
+  }
 
-  void processResponses();
+  void processResponses()
 
   const textPromise = (async () => {
-    const final = await finalPromise;
-    return final.contentText;
-  })();
+    const final = await finalPromise
+    return final.contentText
+  })()
 
-  textPromise.catch(() => {});
+  textPromise.catch(() => {})
 
   const eventStream = (async function* () {
     while (true) {
       if (eventQueue.length > 0) {
-        yield eventQueue.shift()!;
+        yield eventQueue.shift()!
       } else if (done) {
         if (streamError !== null) {
-          throw streamError as Error;
+          throw streamError as Error
         }
-        break;
+        break
       } else {
         await new Promise<void>((resolve) => {
-          eventResolve = resolve;
-        });
+          eventResolve = resolve
+        })
       }
     }
-  })();
+  })()
 
   if (params.stream) {
     const tokenStream = (async function* () {
       while (true) {
         if (tokenQueue.length > 0) {
-          yield tokenQueue.shift()!;
+          yield tokenQueue.shift()!
         } else if (done) {
           if (streamError !== null) {
-            throw streamError as Error;
+            throw streamError as Error
           }
-          break;
+          break
         } else {
           await new Promise<void>((resolve) => {
-            tokenResolve = resolve;
-          });
+            tokenResolve = resolve
+          })
         }
       }
-    })();
+    })()
 
     const toolCallStream = (async function* () {
       while (true) {
         if (toolEventQueue.length > 0) {
-          yield toolEventQueue.shift()!;
+          yield toolEventQueue.shift()!
         } else if (done) {
           if (streamError !== null) {
-            throw streamError as Error;
+            throw streamError as Error
           }
-          break;
+          break
         } else {
           await new Promise<void>((resolve) => {
-            toolResolve = resolve;
-          });
+            toolResolve = resolve
+          })
         }
       }
-    })();
+    })()
 
     return {
       requestId,
@@ -386,16 +368,16 @@ export function completion(params: CompletionParams): CompletionRun {
       toolCallStream,
       text: textPromise,
       stats: statsPromise,
-      toolCalls: toolCallsPromise,
-    };
+      toolCalls: toolCallsPromise
+    }
   } else {
     const tokenStream = (async function* () {
       //Empty generator for non-streaming mode
-    })();
+    })()
 
     const toolCallStream = (async function* () {
       //Empty generator for non-streaming mode
-    })() as AsyncGenerator<ToolCallEvent>;
+    })() as AsyncGenerator<ToolCallEvent>
 
     return {
       requestId,
@@ -405,8 +387,7 @@ export function completion(params: CompletionParams): CompletionRun {
       toolCallStream,
       text: textPromise,
       stats: statsPromise,
-      toolCalls: toolCallsPromise,
-    };
+      toolCalls: toolCallsPromise
+    }
   }
 }
-

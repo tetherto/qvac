@@ -57,12 +57,7 @@ test('local service launcher creates QVAC serve config and command args from Ope
 })
 
 test('local service launcher resolves GPT-OSS friendly id to SDK constant', () => {
-  const options = parseLocalServiceArgs([
-    '--model',
-    'gpt-oss-20b',
-    '--ctx-size',
-    '32768'
-  ])
+  const options = parseLocalServiceArgs(['--model', 'gpt-oss-20b', '--ctx-size', '32768'])
 
   const config = createLocalServiceServeConfig(options)
   assert.deepEqual(config.serve.models['gpt-oss-20b'], {

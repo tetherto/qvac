@@ -4,57 +4,57 @@ import {
   video,
   WAN2_1_T2V_1_3B_FP16,
   UMT5_XXL_FP16,
-  WAN_2_1_COMFYUI_REPACKAGED_VAE,
-} from "@qvac/sdk";
-import fs from "fs";
-import path from "path";
+  WAN_2_1_COMFYUI_REPACKAGED_VAE
+} from '@qvac/sdk'
+import fs from 'fs'
+import path from 'path'
 
 // Text-to-video with Wan 2.1 T2V 1.3B. Wan uses a split layout:
 // a diffusion model + a UMT5-XXL text encoder + a VAE.
 // This example needs powerful hardware: at least 16 GB of video memory or
 // 20 GB of unified memory.
-const diffusionModelSrc = process.argv[2] || WAN2_1_T2V_1_3B_FP16;
-const t5XxlModelSrc = process.argv[3] || UMT5_XXL_FP16;
-const vaeModelSrc = process.argv[4] || WAN_2_1_COMFYUI_REPACKAGED_VAE;
+const diffusionModelSrc = process.argv[2] || WAN2_1_T2V_1_3B_FP16
+const t5XxlModelSrc = process.argv[3] || UMT5_XXL_FP16
+const vaeModelSrc = process.argv[4] || WAN_2_1_COMFYUI_REPACKAGED_VAE
 
 // Prompt tip: Wan 1.3B is small and has weak temporal priors. Use motion-
 // explicit verbs and avoid static framing words like "standing", "still",
 // or "portrait" in the positive prompt.
-const prompt = process.argv[5] || "a colorful bird flapping its wings";
-const outputDir = process.argv[6] || ".";
+const prompt = process.argv[5] || 'a colorful bird flapping its wings'
+const outputDir = process.argv[6] || '.'
 
 try {
-  console.log("▸ Loading Wan 2.1 T2V model (diffusion + UMT5-XXL + VAE)...");
+  console.log('▸ Loading Wan 2.1 T2V model (diffusion + UMT5-XXL + VAE)...')
   const modelId = await loadModel({
     modelSrc: diffusionModelSrc,
-    modelType: "sdcpp-generation",
+    modelType: 'sdcpp-generation',
     modelConfig: {
-      mode: "video",
-      device: "gpu",
+      mode: 'video',
+      device: 'gpu',
       threads: 4,
       t5XxlModelSrc,
       vaeModelSrc,
       diffusion_fa: true,
       offload_to_cpu: true,
       vae_on_cpu: true,
-      vae_tiling: true,
+      vae_tiling: true
     },
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
-  console.log(`▸ Model loaded: ${modelId}`);
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
+  console.log(`▸ Model loaded: ${modelId}`)
 
-  console.log(`\n▸ Generating video for: "${prompt}"`);
+  console.log(`\n▸ Generating video for: "${prompt}"`)
 
   const { progressStream, outputs, stats } = video({
     modelId,
-    mode: "txt2vid",
+    mode: 'txt2vid',
     prompt,
-    negative_prompt: "blurry, low quality, static, jittery, watermark",
+    negative_prompt: 'blurry, low quality, static, jittery, watermark',
     width: 480,
     height: 832,
     // Frame count must satisfy (4*k + 1), k >= 1. Common values at 16 fps:
@@ -74,25 +74,25 @@ try {
     // make consecutive frames near-identical, which looks like a frozen video.
     flow_shift: 3.0,
     seed: 42,
-    vae_tiling: true,
-  });
+    vae_tiling: true
+  })
 
   for await (const { step, totalSteps } of progressStream) {
-    console.log(`▸ step ${step}/${totalSteps}`);
+    console.log(`▸ step ${step}/${totalSteps}`)
   }
 
-  const buffers = await outputs;
+  const buffers = await outputs
   for (let i = 0; i < buffers.length; i++) {
-    const outputPath = path.join(outputDir, `wan_t2v_${i}.avi`);
-    fs.writeFileSync(outputPath, buffers[i]!);
-    console.log(`▸ Saved ${outputPath}`);
+    const outputPath = path.join(outputDir, `wan_t2v_${i}.avi`)
+    fs.writeFileSync(outputPath, buffers[i]!)
+    console.log(`▸ Saved ${outputPath}`)
   }
 
-  console.log("\n▸ Stats:", await stats);
-  await unloadModel({ modelId, clearStorage: false });
-  console.log("▸ Done.");
-  process.exit(0);
+  console.log('\n▸ Stats:', await stats)
+  await unloadModel({ modelId, clearStorage: false })
+  console.log('▸ Done.')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

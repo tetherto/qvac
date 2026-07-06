@@ -1,4 +1,4 @@
-import test from "brittle";
+import test from 'brittle'
 import {
   ttsRequestSchema,
   ttsResponseSchema,
@@ -8,278 +8,324 @@ import {
   ttsSupertonicRuntimeConfigSchema,
   TTS_CHATTERBOX_LANGUAGES,
   TTS_SUPERTONIC_LANGUAGES,
-  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
-} from "@/schemas/text-to-speech";
+  LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
+} from '@/schemas/text-to-speech'
 
-test("ttsConfigSchema: accepts GGML chatterbox load config", (t) => {
+test('ttsConfigSchema: accepts GGML chatterbox load config', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "chatterbox",
-    language: "en",
-    s3genModelSrc: "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
-  });
-  t.is(r.success, true);
-});
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf'
+  })
+  t.is(r.success, true)
+})
 
-test("ttsConfigSchema: accepts Chatterbox native constructor options", (t) => {
+test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "chatterbox",
-    language: "en",
-    s3genModelSrc: "s3:///example/s3gen.gguf",
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     threads: 8,
     nGpuLayers: 99,
-    seed: 42,
-  });
-  t.is(r.success, true);
+    seed: 42
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.streamChunkTokens, 25);
-    t.is(r.data.streamFirstChunkTokens, 10);
-    t.is(r.data.cfmSteps, 1);
-    t.is(r.data.threads, 8);
-    t.is(r.data.nGpuLayers, 99);
-    t.is(r.data.seed, 42);
+    t.is(r.data.streamChunkTokens, 25)
+    t.is(r.data.streamFirstChunkTokens, 10)
+    t.is(r.data.cfmSteps, 1)
+    t.is(r.data.threads, 8)
+    t.is(r.data.nGpuLayers, 99)
+    t.is(r.data.seed, 42)
   }
-});
+})
 
-test("ttsConfigSchema: rejects invalid Chatterbox constructor option ranges", (t) => {
+test('ttsConfigSchema: rejects invalid Chatterbox constructor option ranges', (t) => {
   const invalidConfigs = [
     { streamChunkTokens: -1 },
     { streamFirstChunkTokens: -1 },
     { cfmSteps: -1 },
     { threads: 0 },
     { nGpuLayers: 1.5 },
-    { seed: 1.5 },
-  ];
+    { seed: 1.5 }
+  ]
 
   for (const invalidConfig of invalidConfigs) {
     const r = ttsConfigSchema.safeParse({
-      ttsEngine: "chatterbox",
-      language: "en",
-      s3genModelSrc: "s3:///example/s3gen.gguf",
-      ...invalidConfig,
-    });
-    t.is(r.success, false, JSON.stringify(invalidConfig));
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 's3:///example/s3gen.gguf',
+      ...invalidConfig
+    })
+    t.is(r.success, false, JSON.stringify(invalidConfig))
   }
-});
+})
 
-test("ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic", (t) => {
+test('ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "supertonic",
-    language: "en",
-    streamChunkTokens: 25,
-  });
-  t.is(r.success, false);
-});
+    ttsEngine: 'supertonic',
+    language: 'en',
+    streamChunkTokens: 25
+  })
+  t.is(r.success, false)
+})
 
-test("ttsConfigSchema: accepts GGML supertonic load config", (t) => {
+test('ttsConfigSchema: accepts GGML supertonic load config', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "supertonic",
-    language: "en",
-    voice: "F1",
-  });
-  t.is(r.success, true);
-});
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1'
+  })
+  t.is(r.success, true)
+})
 
-test("TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages", (t) => {
-  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22);
+test('TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages', (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22)
   const expected = [
-    "en", "es", "fr", "de", "it", "pt", "nl", "pl", "tr",
-    "sv", "da", "fi", "no", "el", "ms", "sw", "ar", "ko",
-    "he", "ru", "zh", "hi",
-  ];
-  t.alike([...TTS_CHATTERBOX_LANGUAGES], expected);
-});
+    'en',
+    'es',
+    'fr',
+    'de',
+    'it',
+    'pt',
+    'nl',
+    'pl',
+    'tr',
+    'sv',
+    'da',
+    'fi',
+    'no',
+    'el',
+    'ms',
+    'sw',
+    'ar',
+    'ko',
+    'he',
+    'ru',
+    'zh',
+    'hi'
+  ]
+  t.alike([...TTS_CHATTERBOX_LANGUAGES], expected)
+})
 
-test("ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages", (t) => {
+test('ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages', (t) => {
   for (const language of TTS_CHATTERBOX_LANGUAGES) {
     const r = ttsChatterboxRuntimeConfigSchema.safeParse({
-      ttsEngine: "chatterbox",
-      language,
-    });
-    t.is(r.success, true, `chatterbox should accept ${language}`);
+      ttsEngine: 'chatterbox',
+      language
+    })
+    t.is(r.success, true, `chatterbox should accept ${language}`)
   }
-});
+})
 
-test("ttsSupertonicRuntimeConfigSchema: accepts all 31 supertonic languages", (t) => {
-  t.is(TTS_SUPERTONIC_LANGUAGES.length, 31);
+test('ttsSupertonicRuntimeConfigSchema: accepts all 31 supertonic languages', (t) => {
+  t.is(TTS_SUPERTONIC_LANGUAGES.length, 31)
   t.alike(
     [...TTS_SUPERTONIC_LANGUAGES],
     [
-      "en", "ko", "ja", "ar", "bg", "cs", "da", "de",
-      "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
-      "id", "it", "lt", "lv", "nl", "pl", "pt", "ro",
-      "ru", "sk", "sl", "sv", "tr", "uk", "vi",
-    ],
-  );
+      'en',
+      'ko',
+      'ja',
+      'ar',
+      'bg',
+      'cs',
+      'da',
+      'de',
+      'el',
+      'es',
+      'et',
+      'fi',
+      'fr',
+      'hi',
+      'hr',
+      'hu',
+      'id',
+      'it',
+      'lt',
+      'lv',
+      'nl',
+      'pl',
+      'pt',
+      'ro',
+      'ru',
+      'sk',
+      'sl',
+      'sv',
+      'tr',
+      'uk',
+      'vi'
+    ]
+  )
   for (const language of TTS_SUPERTONIC_LANGUAGES) {
     const r = ttsSupertonicRuntimeConfigSchema.safeParse({
-      ttsEngine: "supertonic",
-      language,
-    });
-    t.is(r.success, true, `supertonic should accept ${language}`);
+      ttsEngine: 'supertonic',
+      language
+    })
+    t.is(r.success, true, `supertonic should accept ${language}`)
   }
-});
+})
 
-test("ttsSupertonicRuntimeConfigSchema: rejects chatterbox-only languages", (t) => {
+test('ttsSupertonicRuntimeConfigSchema: rejects chatterbox-only languages', (t) => {
   // 'no' (Norwegian) is supported by chatterbox but not supertonic.
   const r = ttsSupertonicRuntimeConfigSchema.safeParse({
-    ttsEngine: "supertonic",
-    language: "no",
-  });
-  t.is(r.success, false, "supertonic must reject 'no'");
-});
+    ttsEngine: 'supertonic',
+    language: 'no'
+  })
+  t.is(r.success, false, "supertonic must reject 'no'")
+})
 
-test("ttsConfigSchema: accepts a chatterbox-only language for chatterbox", (t) => {
+test('ttsConfigSchema: accepts a chatterbox-only language for chatterbox', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "chatterbox",
-    language: "he",
-    s3genModelSrc: "s3:///example/s3gen.gguf",
-  });
-  t.is(r.success, true, "chatterbox load config accepts 'he'");
-});
+    ttsEngine: 'chatterbox',
+    language: 'he',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  })
+  t.is(r.success, true, "chatterbox load config accepts 'he'")
+})
 
-test("ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual", (t) => {
+test('ttsSupertonicRuntimeConfigSchema: strips removed ttsSupertonicMultilingual', (t) => {
   const r = ttsSupertonicRuntimeConfigSchema.safeParse({
-    ttsEngine: "supertonic",
-    language: "es",
-    ttsSupertonicMultilingual: true,
-  });
-  t.is(r.success, true);
+    ttsEngine: 'supertonic',
+    language: 'es',
+    ttsSupertonicMultilingual: true
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is("ttsSupertonicMultilingual" in r.data, false);
+    t.is('ttsSupertonicMultilingual' in r.data, false)
   }
-});
+})
 
-test("ttsConfigSchema: accepts real legacy ONNX Chatterbox shape without s3genModelSrc", (t) => {
+test('ttsConfigSchema: accepts real legacy ONNX Chatterbox shape without s3genModelSrc', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "chatterbox",
-    language: "en",
-    ttsSpeechEncoderSrc: "s3:///legacy/speech_encoder.onnx",
-    ttsEmbedTokensSrc: "s3:///legacy/embed_tokens.onnx",
-    ttsConditionalDecoderSrc: "s3:///legacy/conditional_decoder.onnx",
-    ttsLanguageModelSrc: "s3:///legacy/language_model.onnx",
-  });
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    ttsSpeechEncoderSrc: 's3:///legacy/speech_encoder.onnx',
+    ttsEmbedTokensSrc: 's3:///legacy/embed_tokens.onnx',
+    ttsConditionalDecoderSrc: 's3:///legacy/conditional_decoder.onnx',
+    ttsLanguageModelSrc: 's3:///legacy/language_model.onnx'
+  })
   t.is(
     r.success,
     true,
-    "legacy ONNX Chatterbox config must pass schema (plugin rejects at resolveConfig)",
-  );
-});
+    'legacy ONNX Chatterbox config must pass schema (plugin rejects at resolveConfig)'
+  )
+})
 
-test("ttsConfigSchema: accepts legacy ONNX field names for migration errors", (t) => {
+test('ttsConfigSchema: accepts legacy ONNX field names for migration errors', (t) => {
   for (const name of LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS) {
     const r = ttsConfigSchema.safeParse({
-      ttsEngine: "chatterbox",
-      language: "en",
-      s3genModelSrc: "s3:///example/s3gen.gguf",
-      [name]: "legacy-value",
-    });
-    t.is(r.success, true, `${name} should parse (plugin rejects at resolveConfig)`);
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 's3:///example/s3gen.gguf',
+      [name]: 'legacy-value'
+    })
+    t.is(r.success, true, `${name} should parse (plugin rejects at resolveConfig)`)
   }
-});
+})
 
-test("ttsConfigSchema: rejects truly unknown fields under .strict()", (t) => {
+test('ttsConfigSchema: rejects truly unknown fields under .strict()', (t) => {
   const r = ttsConfigSchema.safeParse({
-    ttsEngine: "chatterbox",
-    language: "en",
-    s3genModelSrc: "s3:///example/s3gen.gguf",
-    notATtsField: "anything",
-  });
-  t.is(r.success, false, "non-legacy unknown fields remain strictly rejected");
-});
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    notATtsField: 'anything'
+  })
+  t.is(r.success, false, 'non-legacy unknown fields remain strictly rejected')
+})
 
-test("ttsRequestSchema: accepts sentenceStream options", (t) => {
+test('ttsRequestSchema: accepts sentenceStream options', (t) => {
   const r = ttsRequestSchema.safeParse({
-    type: "textToSpeech",
-    modelId: "m1",
-    text: "Hello. World.",
+    type: 'textToSpeech',
+    modelId: 'm1',
+    text: 'Hello. World.',
     stream: true,
     sentenceStream: true,
-    sentenceStreamLocale: "en-US",
-    sentenceStreamMaxChunkScalars: 200,
-  });
-  t.is(r.success, true);
+    sentenceStreamLocale: 'en-US',
+    sentenceStreamMaxChunkScalars: 200
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.sentenceStream, true);
-    t.is(r.data.sentenceStreamLocale, "en-US");
-    t.is(r.data.sentenceStreamMaxChunkScalars, 200);
+    t.is(r.data.sentenceStream, true)
+    t.is(r.data.sentenceStreamLocale, 'en-US')
+    t.is(r.data.sentenceStreamMaxChunkScalars, 200)
   }
-});
+})
 
-test("ttsResponseSchema: accepts optional chunk metadata", (t) => {
+test('ttsResponseSchema: accepts optional chunk metadata', (t) => {
   const r = ttsResponseSchema.safeParse({
-    type: "textToSpeech",
+    type: 'textToSpeech',
     buffer: [1, 2, 3],
     done: false,
     chunkIndex: 0,
-    sentenceChunk: "Hello.",
-  });
-  t.is(r.success, true);
+    sentenceChunk: 'Hello.'
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.chunkIndex, 0);
-    t.is(r.data.sentenceChunk, "Hello.");
+    t.is(r.data.chunkIndex, 0)
+    t.is(r.data.sentenceChunk, 'Hello.')
   }
-});
+})
 
 // =============================================================================
 // textToSpeechStreamResponseSchema
 // =============================================================================
 
-test("textToSpeechStreamResponseSchema: accepts minimal valid response", (t) => {
+test('textToSpeechStreamResponseSchema: accepts minimal valid response', (t) => {
   const r = textToSpeechStreamResponseSchema.safeParse({
-    type: "textToSpeechStream",
-    buffer: [1, 2, 3],
-  });
-  t.is(r.success, true);
+    type: 'textToSpeechStream',
+    buffer: [1, 2, 3]
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.type, "textToSpeechStream");
-    t.alike(r.data.buffer, [1, 2, 3]);
-    t.is(r.data.done, false, "done defaults to false");
+    t.is(r.data.type, 'textToSpeechStream')
+    t.alike(r.data.buffer, [1, 2, 3])
+    t.is(r.data.done, false, 'done defaults to false')
   }
-});
+})
 
-test("textToSpeechStreamResponseSchema: accepts done response with stats", (t) => {
+test('textToSpeechStreamResponseSchema: accepts done response with stats', (t) => {
   const r = textToSpeechStreamResponseSchema.safeParse({
-    type: "textToSpeechStream",
+    type: 'textToSpeechStream',
     buffer: [],
     done: true,
-    stats: { audioDuration: 1200, totalSamples: 48000 },
-  });
-  t.is(r.success, true);
+    stats: { audioDuration: 1200, totalSamples: 48000 }
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.done, true);
-    t.is(r.data.stats?.audioDuration, 1200);
-    t.is(r.data.stats?.totalSamples, 48000);
+    t.is(r.data.done, true)
+    t.is(r.data.stats?.audioDuration, 1200)
+    t.is(r.data.stats?.totalSamples, 48000)
   }
-});
+})
 
-test("textToSpeechStreamResponseSchema: accepts optional chunk metadata", (t) => {
+test('textToSpeechStreamResponseSchema: accepts optional chunk metadata', (t) => {
   const r = textToSpeechStreamResponseSchema.safeParse({
-    type: "textToSpeechStream",
+    type: 'textToSpeechStream',
     buffer: [10, 20],
     chunkIndex: 3,
-    sentenceChunk: "World.",
-  });
-  t.is(r.success, true);
+    sentenceChunk: 'World.'
+  })
+  t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.chunkIndex, 3);
-    t.is(r.data.sentenceChunk, "World.");
+    t.is(r.data.chunkIndex, 3)
+    t.is(r.data.sentenceChunk, 'World.')
   }
-});
+})
 
-test("textToSpeechStreamResponseSchema: rejects wrong type literal", (t) => {
+test('textToSpeechStreamResponseSchema: rejects wrong type literal', (t) => {
   const r = textToSpeechStreamResponseSchema.safeParse({
-    type: "textToSpeech",
-    buffer: [1, 2, 3],
-  });
-  t.is(r.success, false, "wrong type literal is rejected");
-});
+    type: 'textToSpeech',
+    buffer: [1, 2, 3]
+  })
+  t.is(r.success, false, 'wrong type literal is rejected')
+})
 
-test("textToSpeechStreamResponseSchema: rejects missing buffer", (t) => {
+test('textToSpeechStreamResponseSchema: rejects missing buffer', (t) => {
   const r = textToSpeechStreamResponseSchema.safeParse({
-    type: "textToSpeechStream",
-  });
-  t.is(r.success, false, "missing buffer is rejected");
-});
+    type: 'textToSpeechStream'
+  })
+  t.is(r.success, false, 'missing buffer is rejected')
+})

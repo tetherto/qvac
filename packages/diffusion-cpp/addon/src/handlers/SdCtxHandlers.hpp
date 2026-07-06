@@ -77,6 +77,10 @@ struct SdCtxConfig {
   bool offloadToCpu = false; // offload_params_to_cpu: keep weights in RAM, load
                              // per-layer to GPU
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
+  // Optional GPU pick when device == "gpu": a device index, "integrated", or
+  // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
+  // choose. Resolved to a concrete ggml device backend name in SdModel::load().
+  std::string mainGpu;
   bool keepClipOnCpu =
       false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
   bool keepVaeOnCpu =

@@ -9,8 +9,13 @@
 // asserts the AVI is structurally valid and carries an audio track.
 //
 // Because the LTX weight set is large (Q8_0 diffusion ~24 GB + Gemma-3-12b text
-// encoder ~7 GB + video/audio VAE + connectors), this test does NOT auto-download
+// encoder + video/audio VAE + connectors), this test does NOT auto-download
 // by default. It runs when the weights are already present and skips otherwise.
+//
+// The text encoder defaults to the smallest Gemma-3-12b quant (UD-Q2_K_XL,
+// ~4.9 GB). The heavier UD-Q4_K_XL expands to a ~10 GB single GPU offload that
+// OOMs constrained unified-memory runners (e.g. Metal M4); the smaller quant is
+// fine here since this asserts AVI structure, not generation quality.
 //
 // The run is load-bound, so to keep it fast the diffusion model and text encoder
 // auto-resolve to the SMALLEST matching quant present in the models dir (a Q2_K
@@ -89,9 +94,13 @@ const QUANT_COMPONENTS = [
     key: 'llm',
     envVar: 'LTX_LLM_FILE',
     glob: /^gemma-3-12b-it-.*\.gguf$/,
+    // Smallest Gemma-3-12b quant (~4.9 GB). The text encoder is only used to
+    // condition the prompt for a structural smoke test, so the lowest-bit quant
+    // is the right default: it roughly halves the single GPU offload vs
+    // UD-Q4_K_XL (~10 GB expanded), which OOMs low-memory Metal runners.
     default: {
-      name: 'gemma-3-12b-it-UD-Q4_K_XL.gguf',
-      url: `${HF}/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q4_K_XL.gguf`
+      name: 'gemma-3-12b-it-UD-Q2_K_XL.gguf',
+      url: `${HF}/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q2_K_XL.gguf`
     }
   }
 ]

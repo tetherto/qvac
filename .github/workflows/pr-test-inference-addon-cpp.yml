@@ -106,20 +106,6 @@ jobs:
         with:
           workdir: ${{ env.PKG_DIR }}
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Maximize build space
-        run: |
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' && matrix.arch == 'arm64' }}
-        name: Install tooling for cross compilation - ubuntu arm64
-        run: |
-          sudo apt update
-          sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
-
       - if: ${{ matrix.os == 'windows-2025' }}
         name: setup cmake windows
         run: |

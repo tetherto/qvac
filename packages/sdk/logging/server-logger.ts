@@ -1,19 +1,19 @@
-import { createStreamLogger } from "./stream-logger";
-import type { Logger, LoggerOptions } from "./types";
-import { SDK_LOG_ID, SDK_SERVER_NAMESPACE } from "./namespaces";
+import { createStreamLogger } from './stream-logger'
+import type { Logger, LoggerOptions } from './types'
+import { SDK_LOG_ID, SDK_SERVER_NAMESPACE } from './namespaces'
 
-let cachedLogger: Logger | null = null;
+let cachedLogger: Logger | null = null
 
 export function getServerLogger(options?: LoggerOptions): Logger {
   if (!options && cachedLogger) {
-    return cachedLogger;
+    return cachedLogger
   }
 
-  const logger = createStreamLogger(SDK_LOG_ID, SDK_SERVER_NAMESPACE, options);
+  const logger = createStreamLogger(SDK_LOG_ID, SDK_SERVER_NAMESPACE, options)
 
   if (!options) {
-    cachedLogger = logger;
+    cachedLogger = logger
   }
 
-  return logger;
+  return logger
 }
