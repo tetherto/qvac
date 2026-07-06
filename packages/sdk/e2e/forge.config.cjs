@@ -54,7 +54,10 @@ function restoreOnce() {
   restorePreviousWorker()
 }
 process.once('exit', restoreOnce)
-for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+for (const [signal, exitCode] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143]
+]) {
   process.once(signal, () => {
     restoreOnce()
     process.exit(exitCode)
@@ -73,7 +76,7 @@ module.exports = {
       /^\/reports\//, // test run reports
       /^\/\.env$/, // MQTT creds — read by the CLI orchestrator, not the packaged app
       /^\/\.env\.bak-/, // env backups
-      /^\/\.qvac-worker-backup\//, // desktop worker snapshot, restored in postPackage
+      /^\/\.qvac-worker-backup\// // desktop worker snapshot, restored in postPackage
     ]
   },
   rebuildConfig: {},

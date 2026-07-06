@@ -42,7 +42,10 @@ export class PluginExecutor extends AbstractModelExecutor<typeof pluginTests> {
     return this.resources.ensureLoaded('echo')
   }
 
-  async echoLoadModel(_params: Record<string, never>, expectation: Expectation): Promise<TestResult> {
+  async echoLoadModel(
+    _params: Record<string, never>,
+    expectation: Expectation
+  ): Promise<TestResult> {
     try {
       const modelId = await this.ensureEchoModel()
       return ValidationHelpers.validate(modelId, expectation)
