@@ -25,8 +25,12 @@ struct IJobScheduler {
   /// constructor, so a caller-supplied scheduler can be built queue-free.
   virtual void start(std::shared_ptr<OutputQueue> outputQueue) = 0;
 
-  /// Admit a job tagged with @p id (kNoJobId for untagged). Returns false when
-  /// at capacity; the caller must not queue any output for a rejected job.
+  /// Admit a job identified by @p id. Which ids are valid depends on the
+  /// implementation's path: the untagged path (SingleJobScheduler) accepts only
+  /// kNoJobId and rejects any tagged id; the tagged path (MultiJobScheduler)
+  /// rejects kNoJobId and any id already live (queued or in flight). Returns
+  /// false when at capacity or when @p id is not admissible; the caller must
+  /// not queue any output for a rejected job.
   virtual bool runJob(std::any input, JobId id) = 0;
 
   /// Admit an exclusive job: one that must run with the model to itself (e.g. a

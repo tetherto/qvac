@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -30,6 +31,11 @@ namespace qvac_lib_inference_addon_cpp {
 /// consumer never sees output for a job it was told was rejected. A queueCapacity
 /// of 0 means reject-at-pool (no waiting room). Per-job state lives only inside
 /// the worker stack, so one job's throw can never tear another's slot.
+///
+/// This is the tagged path: every job must carry a unique, non-sentinel id.
+/// runJob/runExclusiveJob reject kNoJobId and any id already live (queued or in
+/// flight), so outputs stay correlatable and cancel(id) always targets the one
+/// job that owns the id. An id becomes reusable once its job ends.
 ///
 /// Cancelling a job still waiting in the queue is the scheduler's concern (the
 /// model cannot know ids it never received): the job is unlinked in O(1) via
@@ -65,9 +71,14 @@ class MultiJobScheduler final : public IJobScheduler {
   mutable std::mutex mtx_;
   mutable std::condition_variable workCv_;
   std::list<PendingJob> queued_;
-  /// id -> queued_ node (first occurrence), so cancelling a not-yet-started
-  /// job unlinks it in O(1) instead of scanning the queue.
+  /// id -> queued_ node, so cancelling a not-yet-started job unlinks it in O(1)
+  /// instead of scanning the queue. Ids are unique across the scheduler, so
+  /// every queued job has exactly one entry here.
   std::map<JobId, std::list<PendingJob>::iterator> queuedIndex_;
+  /// Ids currently being processed by a worker (dequeued but not yet finished).
+  /// Together with queuedIndex_ (queued ids) it is the set of live ids, against
+  /// which admission enforces uniqueness.
+  std::set<JobId> inFlight_;
   /// Admitted (queued + in-flight) job count; the figure admission is capped
   /// against. Decremented when a job finishes.
   std::size_t admittedCount_{0};
@@ -120,11 +131,10 @@ class MultiJobScheduler final : public IJobScheduler {
 
       const std::list<PendingJob>::iterator front = queued_.begin();
       PendingJob job = std::move(*front);
-      const auto indexed = queuedIndex_.find(job.id);
-      if (indexed != queuedIndex_.end() && indexed->second == front) {
-        queuedIndex_.erase(indexed);
-      }
+      // Ids are unique, so the queuedIndex_ entry for this id can only be front.
+      queuedIndex_.erase(job.id);
       queued_.erase(front);
+      inFlight_.insert(job.id);
       lock.unlock();
 
       try {
@@ -140,6 +150,7 @@ class MultiJobScheduler final : public IJobScheduler {
       {
         std::lock_guard relock(mtx_);
         --admittedCount_;
+        inFlight_.erase(job.id);
         // Release exclusivity here, after process() has fully returned or
         // thrown, so a stuck flag can never wedge admission if an exclusive job
         // (finetune) fails.
@@ -212,6 +223,14 @@ public:
 
   bool runJob(std::any input, JobId id) override {
     std::unique_lock lock(mtx_);
+    // The multi-job path is the tagged path: an untagged sentinel carries no
+    // identity to correlate or cancel by, and a live-duplicate id would make
+    // its outputs indistinguishable and un-cancellable via the queued fast
+    // path. Reject either (false, the "false = rejected" idiom).
+    if (id == kNoJobId || queuedIndex_.count(id) != 0 ||
+        inFlight_.count(id) != 0) {
+      return false;
+    }
     // Widen before adding so the cap cannot wrap for extreme ctor arguments.
     if (exclusiveActive_ ||
         admittedCount_ >= std::size_t{maxConcurrency_} + queueCapacity_) {
@@ -229,6 +248,10 @@ public:
 
   bool runExclusiveJob(std::any input, JobId id) override {
     std::unique_lock lock(mtx_);
+    if (id == kNoJobId) {
+      // Tagged path: the untagged sentinel is not a valid job identity.
+      return false;
+    }
     if (exclusiveActive_ || admittedCount_ > 0) {
       // An exclusive job must run with the model to itself: refuse while
       // anything is queued or in flight (peer jobs, or another exclusive job).
