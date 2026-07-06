@@ -34,10 +34,36 @@ is unaffected. Regenerate the mobile shim after adding/renaming a test:
 ## CI
 
 `.github/workflows/integration-mobile-test-inference-addon-cpp.yml` — reusable
-(`workflow_call`) + `workflow_dispatch`. Matrixes {Android, iOS} × the three
-test addons and drives the shared `.github/actions/run-mobile-integration-tests/*`
-composites (setup → build-mobile-app → upload-to-devicefarm → schedule
-[single-pool] → monitor). One Device Farm app + run per addon per platform (6).
+(`workflow_call`) + `workflow_dispatch`. Two stages in one run:
+
+1. **`prebuild` job** → `prebuilds-inference-addon-cpp.yml` (see below) produces
+   the mobile `.bare` binaries.
+2. **`build-and-test` job** (`needs: prebuild`) matrixes {Android, iOS} × the
+   three test addons and drives the shared
+   `.github/actions/run-mobile-integration-tests/*` composites (setup →
+   build-mobile-app → upload-to-devicefarm → schedule [single-pool] → monitor).
+   One Device Farm app + run per addon per platform (6).
+
+### Prebuilds
+
+The mobile harness does **not** cross-compile on the device runner — its
+`build-mobile-app` step only *bundles* an existing `prebuilds/` dir. On desktop
+the addon is compiled in place (host == target); on mobile the build host ≠ the
+device, so each addon's native `.bare` must be cross-compiled ahead of time and
+shipped into the app.
+
+`.github/workflows/prebuilds-inference-addon-cpp.yml` does exactly that, scoped
+to the **two mobile device targets only** (android-arm64 + ios-arm64) for the
+three test addons — 6 jobs. It mirrors `reusable-prebuilds.yml`'s setup sequence
+(`setup-build-host` / `setup-bare-tooling` / `bare-make generate|build|install`)
+but drops vcpkg/AWS/Vulkan/Rust: these addons are dependency-free (`cmake-bare` +
+`add_bare_module` + the base lib's `../../../src` headers), as the desktop
+`pr-test-inference-addon-cpp-js.yml` build already proves. It is **not** routed
+through `reusable-prebuilds.yml` on purpose — that would run its full 9-platform
+release matrix × 3 addons = 27 jobs, 21 of them unused by (and extra failure
+surface for) the mobile test. Each job uploads a per-addon, per-platform
+artifact (`<prefix>android-arm64` / `<prefix>ios-arm64`) that the
+`build-and-test` setup phase downloads by the matching `prebuild-artifact-prefix`.
 
 ### Device Farm secrets (no new infra required)
 
@@ -55,27 +81,22 @@ signing set are reused as-is. No infra ticket needed.
 
 ## ⛔ Remaining before this can go green
 
-1. **Mobile build of the test addons.** These addons have no prebuild pipeline,
-   so the workflow sets `skip-prebuilds: true` to build from source for the
-   device target. Confirm the harness cross-compiles a bare addon (with
-   `add_bare_module` + the `../../../src` include of inference-addon-cpp) for
-   android-arm64 / ios-arm64 during app build; if not, add a prebuilds workflow
-   for each test addon and drop `skip-prebuilds`.
-2. **npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
+1. **npm names are unscoped** (`test-logger`, `test-js-create-double-first-call`,
    `output-callback-lifetime`). The harness/`build-mobile-app` was written for
    `@qvac/*` packages; verify packing/app-build works for unscoped names (or
    scope them).
-3. **PR trigger wiring.** This workflow is currently `workflow_dispatch` +
+2. **PR trigger wiring.** This workflow is currently `workflow_dispatch` +
    `workflow_call` only. To run on PRs like the other addons it needs a
    `pull_request_target` `on-pr-inference-addon-cpp.yml` with the
    label-gate / authorize / verified gates (those provide the secret + OIDC
-   access forks can't get from `pull_request`). Wire the mobile job there,
-   `needs`-gated on the existing build.
+   access forks can't get from `pull_request`). Wire the mobile job there.
 
 ## Not validated locally
 
-The addon-side scaffolding follows the embed-llamacpp reference exactly, but the
-Device Farm run, the on-device app build, and the cross-compile path could not
-be exercised without the private `tetherto/qvac-test-addon-mobile` framework and
-a device. Treat the workflow as a starting point to iterate on; the open
-question is the cross-compile path in item (1) above.
+The addon-side scaffolding follows the embed-llamacpp reference exactly, and the
+prebuild workflow mirrors the proven `reusable-prebuilds.yml` sequence, but the
+Device Farm run, the on-device app build, and the android/ios cross-compile of
+these specific addons could not be exercised locally (they need the private
+`tetherto/qvac-test-addon-mobile` framework, the CI toolchain, and a device).
+First CI run of the prebuild + mobile pipeline is the validation step; iterate
+from its logs.

@@ -9,6 +9,12 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # run-mobile-integration-tests composite over each test addon (one Device Farm
 # app + single-pool run per addon per platform).
 #
+# Pipeline: the `prebuild` job cross-compiles each test addon's native .bare for
+# the mobile device targets (android-arm64 + ios-arm64) via
+# prebuilds-inference-addon-cpp.yml; `build-and-test` then downloads those
+# artifacts by per-addon prefix and drives the Device Farm run. Both run in the
+# same workflow run so the artifacts are in scope.
+#
 # Device Farm secrets: these are trivial functional test addons (no model
 # inference, no device-specific requirement), so they reuse the shared LLM
 # Device Farm project + pools (LLM_AWS_DEVICE_FARM_PROJECT_ARN /
@@ -16,11 +22,10 @@ name: Mobile Integration Tests (inference-addon-cpp)
 # classification-ggml and diffusion-cpp already piggyback on. No new infra
 # secrets required.
 #
-# ⚠️ DRAFT — remaining open item (see
-# packages/inference-addon-cpp/docs/mobile-integration-tests.md):
-#   - a mobile prebuild source for each test addon (skip-prebuilds builds from
-#     source; confirm the harness cross-compiles these bare addons on device
-#     targets)
+# NOTE: to run on PRs like the other addons this still needs a
+# pull_request_target on-pr-inference-addon-cpp.yml (label-gate / authorize /
+# verified gates) to call this workflow — it is workflow_call + workflow_dispatch
+# only today. See packages/inference-addon-cpp/docs/mobile-integration-tests.md.
 
 on:
   workflow_call:
@@ -47,7 +52,23 @@ on:
         default: main
 
 jobs:
+  # Cross-compile each test addon's native .bare for the two mobile device
+  # targets (android-arm64 + ios-arm64). inference-addon-cpp has no release
+  # prebuild pipeline to borrow binaries from, so we produce them here. Runs in
+  # the same workflow run so the uploaded artifacts are in scope for the
+  # build-and-test setup phase to download by prefix.
+  prebuild:
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/prebuilds-inference-addon-cpp.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      repository: ${{ inputs.repository || github.repository }}
+
   build-and-test:
+    needs: prebuild
     name: ${{ matrix.addon.dir }} · ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.runner }}
     environment: release
@@ -69,10 +90,13 @@ jobs:
         addon:
           - dir: logger
             npm: test-logger
+            prebuild_prefix: test-logger-
           - dir: js-create-double-first-call
             npm: test-js-create-double-first-call
+            prebuild_prefix: test-js-create-double-first-call-
           - dir: output-callback-lifetime
             npm: output-callback-lifetime
+            prebuild_prefix: output-callback-lifetime-
 
     steps:
       - name: Checkout composite action source
@@ -101,9 +125,10 @@ jobs:
           platform: ${{ matrix.platform.name }}
           addon-workdir: 'packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}'
           addon-npm-name: ${{ matrix.addon.npm }}
-          # These test addons have no dedicated prebuild pipeline; build from
-          # source for the mobile target instead of downloading CI artifacts.
-          skip-prebuilds: 'true'
+          # Download the android/ios .bare produced by the prebuild job above
+          # (prebuilds-inference-addon-cpp.yml). Per-addon prefix so setup pulls
+          # this addon's binaries, not another test addon's.
+          prebuild-artifact-prefix: ${{ matrix.addon.prebuild_prefix }}
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       - name: Build mobile app

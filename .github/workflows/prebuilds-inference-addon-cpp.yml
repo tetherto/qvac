@@ -1,0 +1,163 @@
+# Mobile prebuilds for the inference-addon-cpp JS integration test addons (QVAC-21737).
+#
+# inference-addon-cpp is a base C++ library with no shippable npm package; its JS
+# integration tests are three self-contained bare addons under
+# tests/integration_js/ (logger, js-create-double-first-call,
+# output-callback-lifetime). A mobile Device Farm run needs a cross-compiled
+# .bare for each addon, but — unlike every leaf addon — there is no release
+# prebuild pipeline to borrow binaries from. This workflow cross-compiles each
+# test addon for the two mobile DEVICE targets only (android-arm64 + ios-arm64)
+# and uploads one per-addon, per-platform artifact that
+# integration-mobile-test-inference-addon-cpp.yml downloads by prefix.
+#
+# Why not route through reusable-prebuilds.yml: these throwaway addons are
+# dependency-free (cmake-bare + add_bare_module + the base lib's headers — no
+# vcpkg / Vulkan / Rust; see the desktop pr-test-inference-addon-cpp-js.yml,
+# which builds them with just Node + bare-make). Reusing the release pipeline
+# would run its full 9-platform matrix x 3 addons = 27 jobs, of which only 6 are
+# ever consumed here — wasted build time plus failure surface on platforms the
+# mobile test never touches. This is the same setup sequence, scoped down.
+name: Prebuilds (inference-addon-cpp mobile test addons)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+        default: "tetherto/qvac"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to build"
+        type: string
+        required: false
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - dir: logger
+            prefix: test-logger-
+          - dir: js-create-double-first-call
+            prefix: test-js-create-double-first-call-
+          - dir: output-callback-lifetime
+            prefix: output-callback-lifetime-
+        target:
+          - platform: android
+            arch: arm64
+            os: ubuntu-24.04
+          - platform: ios
+            arch: arm64
+            os: macos-15
+    runs-on: ${{ matrix.target.os }}
+    environment: release
+    name: ${{ matrix.addon.dir }} · ${{ matrix.target.platform }}-${{ matrix.target.arch }}
+    env:
+      WORKDIR: packages/inference-addon-cpp/tests/integration_js/${{ matrix.addon.dir }}
+
+    steps:
+      # NDK env + cross toolchain (android) and disk headroom. Same composite the
+      # release prebuild pipeline uses, so the mobile targets are provisioned
+      # identically here.
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        with:
+          platform: ${{ matrix.target.platform }}
+          arch: ${{ matrix.target.arch }}
+
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        with:
+          shell_type: bash
+
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm install
+
+      - name: Compute cmake defines
+        shell: bash
+        env:
+          MATRIX_PLATFORM: ${{ matrix.target.platform }}
+        run: |
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "$MATRIX_PLATFORM" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
+
+      - name: Run bare-make generate
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make generate --platform ${{ matrix.target.platform }} --arch ${{ matrix.target.arch }} $DEFINES
+
+      - name: Run bare-make build
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make build
+
+      - name: Run bare-make install
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make install
+
+      - name: Strip static libraries (.a) from prebuilds
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          if [ ! -d prebuilds ]; then
+            echo "prebuilds/ does not exist; nothing to strip"
+            exit 0
+          fi
+          MATCHES=$(find prebuilds -type f -name '*.a')
+          if [ -z "$MATCHES" ]; then
+            echo "No .a files found under prebuilds/"
+            exit 0
+          fi
+          echo "Removing the following .a files:"
+          echo "$MATCHES"
+          find prebuilds -type f -name '*.a' -delete
+
+      - name: Strip debug symbols
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@6e8d3c306a462a58589396cda428d65e015f0d8b
+        with:
+          platform: ${{ matrix.target.platform }}
+          workdir: ${{ env.WORKDIR }}
+
+      # Per-addon, per-platform artifact. The mobile workflow's setup phase
+      # downloads these by glob (`<prefix>android-*` / `<prefix>ios-*`), so the
+      # name must be `<addon prefix><platform>-<arch>` and the uploaded content
+      # must be the prebuilds/ dir (containing android-arm64/ or ios-arm64/).
+      - name: Upload prebuild artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ matrix.addon.prefix }}${{ matrix.target.platform }}-${{ matrix.target.arch }}
+          path: ${{ env.WORKDIR }}/prebuilds
