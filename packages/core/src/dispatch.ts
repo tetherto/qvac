@@ -20,7 +20,7 @@ import { setSDKConfig } from './engine/state/config-registry'
 import { setRuntimeContext } from './engine/state/runtime-context-registry'
 import { initialize, close as closeEngine } from './engine/lifecycle'
 import { getAllPlugins } from './plugins'
-import { resolveConfig } from './config/resolve-config.bare'
+import { resolveConfig } from './config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getClientLogger } from './logging'
 import { RPCNoHandlerError, WorkerPluginsNotRegisteredError } from './utils/errors-client'
 
