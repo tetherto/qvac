@@ -7,22 +7,22 @@ import {
   ragDeleteEmbeddings,
   ragListWorkspaces,
   ragCloseWorkspace,
-  ragReindex,
-} from "@qvac/sdk";
+  ragReindex
+} from '@qvac/sdk'
 
 try {
-  console.log("▸ RAG Workspaces with Chunking Example");
+  console.log('▸ RAG Workspaces with Chunking Example')
 
   // Load model
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
 
   // Medical articles (will be chunked)
   const medicalArticles = [
@@ -80,138 +80,132 @@ try {
     stress management techniques are crucial components of recovery.
     
     Early intervention improves outcomes significantly. Reducing stigma around mental health 
-    encourages people to seek help when needed.`,
-  ];
+    encourages people to seek help when needed.`
+  ]
 
   // Tech documents (shorter, won't be chunked)
   const techDocs = [
-    "Artificial intelligence is transforming industries through automation and advanced data analysis capabilities.",
-    "Deep learning neural networks enable breakthroughs in computer vision and natural language processing.",
-  ];
+    'Artificial intelligence is transforming industries through automation and advanced data analysis capabilities.',
+    'Deep learning neural networks enable breakthroughs in computer vision and natural language processing.'
+  ]
 
   // Ingest medical articles with chunking
-  console.log("▸ Ingesting medical articles with chunking...");
+  console.log('▸ Ingesting medical articles with chunking...')
   const medicalResult = await ragIngest({
     modelId,
-    workspace: "medical",
+    workspace: 'medical',
     documents: medicalArticles,
     chunk: true,
     chunkOpts: {
       chunkSize: 50,
       chunkOverlap: 10,
-      chunkStrategy: "paragraph",
-      splitStrategy: "token",
-    },
-  });
-  console.log(
-    `▸ Created ${medicalResult.processed.length} chunks from medical articles`,
-  );
+      chunkStrategy: 'paragraph',
+      splitStrategy: 'token'
+    }
+  })
+  console.log(`▸ Created ${medicalResult.processed.length} chunks from medical articles`)
 
   // Ingest tech docs without chunking
-  console.log("\n▸ Ingesting tech documents...");
+  console.log('\n▸ Ingesting tech documents...')
   const techResult = await ragIngest({
     modelId,
-    workspace: "technology",
+    workspace: 'technology',
     documents: techDocs,
-    chunk: false,
-  });
-  console.log(`▸ Ingested ${techResult.processed.length} tech documents`);
+    chunk: false
+  })
+  console.log(`▸ Ingested ${techResult.processed.length} tech documents`)
 
   // Test searches
   const searches = [
-    { workspace: "medical", query: "COVID symptoms fever", label: "Medical" },
-    { workspace: "medical", query: "vaccine technology", label: "Medical" },
-    { workspace: "technology", query: "neural networks", label: "Tech" },
-    { workspace: "technology", query: "COVID", label: "Tech (isolation test)" },
-  ];
+    { workspace: 'medical', query: 'COVID symptoms fever', label: 'Medical' },
+    { workspace: 'medical', query: 'vaccine technology', label: 'Medical' },
+    { workspace: 'technology', query: 'neural networks', label: 'Tech' },
+    { workspace: 'technology', query: 'COVID', label: 'Tech (isolation test)' }
+  ]
 
-  console.log("\n▸ Running searches:");
+  console.log('\n▸ Running searches:')
   for (const { workspace, query, label } of searches) {
-    const results = await ragSearch({ modelId, workspace, query, topK: 1 });
-    console.log(`\n${label}: "${query}"`);
+    const results = await ragSearch({ modelId, workspace, query, topK: 1 })
+    console.log(`\n${label}: "${query}"`)
     if (results.length > 0 && results[0]) {
-      console.log(`  Score: ${results[0].score.toFixed(3)}`);
-      console.log(`  Match: ${results[0].content.substring(0, 80)}...`);
+      console.log(`  Score: ${results[0].score.toFixed(3)}`)
+      console.log(`  Match: ${results[0].content.substring(0, 80)}...`)
     } else {
-      console.log(`  ▸ No results (workspace isolation working correctly)`);
+      console.log(`  ▸ No results (workspace isolation working correctly)`)
     }
   }
 
   // Test a third workspace
-  console.log("\n▸ Testing 'general' workspace...");
+  console.log("\n▸ Testing 'general' workspace...")
   await ragIngest({
     modelId,
-    workspace: "general",
-    documents: ["General workspace content for testing"],
-    chunk: false,
-  });
+    workspace: 'general',
+    documents: ['General workspace content for testing'],
+    chunk: false
+  })
 
   const generalSearch = await ragSearch({
     modelId,
-    workspace: "general",
-    query: "general workspace",
-  });
+    workspace: 'general',
+    query: 'general workspace'
+  })
   console.log(
-    `▸ General workspace: ${generalSearch?.[0]?.content === "General workspace content for testing" ? "Working" : "Failed"}`,
-  );
+    `▸ General workspace: ${generalSearch?.[0]?.content === 'General workspace content for testing' ? 'Working' : 'Failed'}`
+  )
 
   // Reindexing - regenerate embeddings for an existing workspace
-  console.log("\n▸ Reindexing medical workspace...");
+  console.log('\n▸ Reindexing medical workspace...')
   const reindexResult = await ragReindex({
-    workspace: "medical",
+    workspace: 'medical',
     modelId,
     onProgress: (stage, current, total) => {
-      console.log(`▸ ${stage} ${current}/${total}`);
-    },
-  });
+      console.log(`▸ ${stage} ${current}/${total}`)
+    }
+  })
   console.log(
-    `▸ ${reindexResult.reindexed ? "Reindex completed" : "Reindex returned false"} for medical workspace`,
-  );
+    `▸ ${reindexResult.reindexed ? 'Reindex completed' : 'Reindex returned false'} for medical workspace`
+  )
   if (reindexResult.details) {
-    console.log("▸ Details:", reindexResult.details);
+    console.log('▸ Details:', reindexResult.details)
   }
 
   // Verify reindexed data still works
   const reindexVerify = await ragSearch({
     modelId,
-    workspace: "medical",
-    query: "COVID symptoms",
-    topK: 1,
-  });
-  console.log(
-    `▸ Verification search: ${reindexVerify.length > 0 ? "Working" : "Failed"}`,
-  );
+    workspace: 'medical',
+    query: 'COVID symptoms',
+    topK: 1
+  })
+  console.log(`▸ Verification search: ${reindexVerify.length > 0 ? 'Working' : 'Failed'}`)
 
   // Cleanup example
-  const firstChunk = medicalResult.processed.find(
-    (p) => p.status === "fulfilled" && p.id,
-  );
+  const firstChunk = medicalResult.processed.find((p) => p.status === 'fulfilled' && p.id)
   if (firstChunk?.id) {
     await ragDeleteEmbeddings({
-      workspace: "medical",
-      ids: [firstChunk.id],
-    });
-    console.log("\n▸ Deleted one medical chunk");
+      workspace: 'medical',
+      ids: [firstChunk.id]
+    })
+    console.log('\n▸ Deleted one medical chunk')
   }
 
   // List all workspaces
-  console.log("\n▸ Listing workspaces...");
-  const workspaces = await ragListWorkspaces();
+  console.log('\n▸ Listing workspaces...')
+  const workspaces = await ragListWorkspaces()
   workspaces.forEach((ws) => {
-    console.log(`▸ ${ws.name} (${ws.open ? "open" : "closed"})`);
-  });
+    console.log(`▸ ${ws.name} (${ws.open ? 'open' : 'closed'})`)
+  })
 
   // Close and delete all workspaces created in this example
-  console.log("\n▸ Closing and deleting workspaces...");
-  await ragCloseWorkspace({ workspace: "medical", deleteOnClose: true });
-  console.log("▸ Deleted 'medical' workspace");
-  await ragCloseWorkspace({ workspace: "technology", deleteOnClose: true });
-  console.log("▸ Deleted 'technology' workspace");
-  await ragCloseWorkspace({ workspace: "general", deleteOnClose: true });
-  console.log("▸ Deleted 'general' workspace");
+  console.log('\n▸ Closing and deleting workspaces...')
+  await ragCloseWorkspace({ workspace: 'medical', deleteOnClose: true })
+  console.log("▸ Deleted 'medical' workspace")
+  await ragCloseWorkspace({ workspace: 'technology', deleteOnClose: true })
+  console.log("▸ Deleted 'technology' workspace")
+  await ragCloseWorkspace({ workspace: 'general', deleteOnClose: true })
+  console.log("▸ Deleted 'general' workspace")
 
-  await unloadModel({ modelId });
+  await unloadModel({ modelId })
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

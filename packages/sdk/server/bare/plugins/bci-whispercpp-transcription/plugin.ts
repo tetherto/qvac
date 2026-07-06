@@ -1,7 +1,5 @@
-import bciAddonLogging from "@qvac/bci-whispercpp/addonLogging";
-import BCIWhispercpp, {
-  type BCIWhispercppConfig,
-} from "@qvac/bci-whispercpp";
+import bciAddonLogging from '@qvac/bci-whispercpp/addonLogging'
+import BCIWhispercpp, { type BCIWhispercppConfig } from '@qvac/bci-whispercpp'
 import {
   definePlugin,
   defineHandler,
@@ -16,58 +14,49 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type BciConfig,
-  type TranscribeSegment,
-} from "@/schemas";
-import { createStreamLogger, registerAddonLogger } from "@/logging";
-import {
-  bciTranscribe,
-  bciTranscribeStream,
-} from "@/server/bare/ops/bci-transcribe";
-import { attachModelExecutionMs } from "@/profiling/model-execution";
-import { buildBciWhispercppArgs } from "@/server/bare/plugins/bci-whispercpp-transcription/args";
-import { resolveBciConfig } from "@/server/bare/plugins/bci-whispercpp-transcription/resolve-config";
+  type TranscribeSegment
+} from '@/schemas'
+import { createStreamLogger, registerAddonLogger } from '@/logging'
+import { bciTranscribe, bciTranscribeStream } from '@/server/bare/ops/bci-transcribe'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { buildBciWhispercppArgs } from '@/server/bare/plugins/bci-whispercpp-transcription/args'
+import { resolveBciConfig } from '@/server/bare/plugins/bci-whispercpp-transcription/resolve-config'
 
 function createBciModel(
   modelId: string,
   modelPath: string,
   bciConfig: BciConfig,
-  embedderPath: string,
+  embedderPath: string
 ) {
-  const logger = createStreamLogger(
-    modelId,
-    ModelType.bciWhispercppTranscription,
-  );
-  registerAddonLogger(modelId, ModelType.bciWhispercppTranscription, logger);
+  const logger = createStreamLogger(modelId, ModelType.bciWhispercppTranscription)
+  registerAddonLogger(modelId, ModelType.bciWhispercppTranscription, logger)
 
-  const args = buildBciWhispercppArgs(modelPath, embedderPath, logger);
+  const args = buildBciWhispercppArgs(modelPath, embedderPath, logger)
 
-  const model = new BCIWhispercpp(
-    args,
-    bciConfig as unknown as BCIWhispercppConfig,
-  );
+  const model = new BCIWhispercpp(args, bciConfig as unknown as BCIWhispercppConfig)
 
-  return { model };
+  return { model }
 }
 
 export const bciPlugin = definePlugin({
   modelType: ModelType.bciWhispercppTranscription,
-  displayName: "BCI (whisper.cpp)",
+  displayName: 'BCI (whisper.cpp)',
   addonPackage: ADDON_BCI,
   loadConfigSchema: bciConfigSchema,
 
   resolveConfig: resolveBciConfig,
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const bciConfig = (params.modelConfig ?? {}) as BciConfig;
+    const bciConfig = (params.modelConfig ?? {}) as BciConfig
 
     const { model } = createBciModel(
       params.modelId,
       params.modelPath,
       bciConfig,
-      params.artifacts?.["embedderPath"] ?? "",
-    );
+      params.artifacts?.['embedderPath'] ?? ''
+    )
 
-    return { model };
+    return { model }
   },
 
   handlers: {
@@ -77,56 +66,56 @@ export const bciPlugin = definePlugin({
       streaming: true,
       // The BCI addon exposes a model-wide hard cancel — the running
       // neural-signal job is interrupted on `cancel()`.
-      cancel: { scope: "model", hard: true },
+      cancel: { scope: 'model', hard: true },
 
       handler: async function* (request) {
-        const metadata = request.metadata === true;
+        const metadata = request.metadata === true
         const stream = metadata
           ? bciTranscribe(
               {
                 modelId: request.modelId,
                 neuralData: request.neuralData,
-                metadata: true,
+                metadata: true
               },
-              request.requestId,
+              request.requestId
             )
           : bciTranscribe(
               {
                 modelId: request.modelId,
-                neuralData: request.neuralData,
+                neuralData: request.neuralData
               },
-              request.requestId,
-            );
+              request.requestId
+            )
 
         try {
-          let result = await stream.next();
+          let result = await stream.next()
           while (!result.done) {
             yield metadata
               ? {
-                  type: "bciTranscribe" as const,
-                  segment: result.value as TranscribeSegment,
+                  type: 'bciTranscribe' as const,
+                  segment: result.value as TranscribeSegment
                 }
               : {
-                  type: "bciTranscribe" as const,
-                  text: result.value as string,
-                };
-            result = await stream.next();
+                  type: 'bciTranscribe' as const,
+                  text: result.value as string
+                }
+            result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value;
+          const { modelExecutionMs, stats } = result.value
           yield attachModelExecutionMs(
             {
-              type: "bciTranscribe" as const,
-              text: "",
+              type: 'bciTranscribe' as const,
+              text: '',
               done: true,
-              ...(stats && { stats }),
+              ...(stats && { stats })
             },
-            modelExecutionMs,
-          );
+            modelExecutionMs
+          )
         } finally {
-          await stream.return?.(undefined as never);
+          await stream.return?.(undefined as never)
         }
-      },
+      }
     }),
 
     bciTranscribeStream: defineDuplexHandler({
@@ -137,49 +126,49 @@ export const bciPlugin = definePlugin({
       // Same model-wide hard cancel surface as `bciTranscribe` — the BCI
       // addon's `cancel()` tears down the active stream and interrupts the
       // running window job.
-      cancel: { scope: "model", hard: true },
+      cancel: { scope: 'model', hard: true },
 
       handler: async function* (request, inputStream) {
-        const metadata = request.metadata === true;
+        const metadata = request.metadata === true
         const iterator = metadata
           ? bciTranscribeStream(
               request.modelId,
               inputStream,
               true,
               request.streamOpts,
-              request.requestId,
+              request.requestId
             )
           : bciTranscribeStream(
               request.modelId,
               inputStream,
               false,
               request.streamOpts,
-              request.requestId,
-            );
+              request.requestId
+            )
 
         for await (const value of iterator) {
           yield metadata
             ? {
-                type: "bciTranscribeStream" as const,
-                segment: value as TranscribeSegment,
+                type: 'bciTranscribeStream' as const,
+                segment: value as TranscribeSegment
               }
             : {
-                type: "bciTranscribeStream" as const,
-                text: value as string,
-              };
+                type: 'bciTranscribeStream' as const,
+                text: value as string
+              }
         }
 
         yield {
-          type: "bciTranscribeStream" as const,
-          text: "",
-          done: true,
-        };
-      },
-    }),
+          type: 'bciTranscribeStream' as const,
+          text: '',
+          done: true
+        }
+      }
+    })
   },
 
   logging: {
     module: bciAddonLogging,
-    namespace: ModelType.bciWhispercppTranscription,
-  },
-});
+    namespace: ModelType.bciWhispercppTranscription
+  }
+})

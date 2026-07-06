@@ -1,22 +1,22 @@
-import { z } from "zod";
-import { definePlugin, defineHandler } from "@qvac/sdk";
+import { z } from 'zod'
+import { definePlugin, defineHandler } from '@qvac/sdk'
 
 const echoRequestSchema = z.object({
-  message: z.string(),
-});
+  message: z.string()
+})
 
 const echoResponseSchema = z.object({
-  message: z.string(),
-});
+  message: z.string()
+})
 
 const echoStreamChunkSchema = z.object({
-  chunk: z.string(),
-});
+  chunk: z.string()
+})
 
 const echoPlugin = definePlugin({
-  modelType: "echo",
-  displayName: "Echo Plugin (e2e)",
-  addonPackage: "custom-echo-plugin",
+  modelType: 'echo',
+  displayName: 'Echo Plugin (e2e)',
+  addonPackage: 'custom-echo-plugin',
   skipPrimaryModelPathValidation: true,
   loadConfigSchema: z.object({}).passthrough(),
 
@@ -24,9 +24,9 @@ const echoPlugin = definePlugin({
     return {
       model: {
         async load() {},
-        unload() {},
-      },
-    };
+        unload() {}
+      }
+    }
   },
 
   handlers: {
@@ -35,8 +35,8 @@ const echoPlugin = definePlugin({
       responseSchema: echoResponseSchema,
       streaming: false,
       async handler(request) {
-        return { message: request.message };
-      },
+        return { message: request.message }
+      }
     }),
 
     echoStream: defineHandler({
@@ -44,13 +44,13 @@ const echoPlugin = definePlugin({
       responseSchema: echoStreamChunkSchema,
       streaming: true,
       async *handler(request) {
-        const words = request.message.split(" ");
+        const words = request.message.split(' ')
         for (const word of words) {
-          yield { chunk: word };
+          yield { chunk: word }
         }
-      },
-    }),
-  },
-});
+      }
+    })
+  }
+})
 
-export default echoPlugin;
+export default echoPlugin

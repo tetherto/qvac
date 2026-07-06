@@ -249,6 +249,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.vaeTileOverlap = overlap;
      }},
 
+    // temporal_tiling -- LTX-2 video VAE only. Tiles the decode along the
+    // time axis to cap peak VRAM for HD / long clips. Ignored by Wan.
+    {"temporal_tiling",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.vaeTemporalTiling = requireBool(v, "temporal_tiling");
+     }},
+
     // -- Step-caching --------------------------------------------------------
 
     {"cache_mode",

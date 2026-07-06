@@ -11,95 +11,87 @@
  *
  */
 
-import type { LogLevel } from "@qvac/logging";
-import { SDK_ALL_LOG_ID } from "@/logging/namespaces";
+import type { LogLevel } from '@qvac/logging'
+import { SDK_ALL_LOG_ID } from '@/logging/namespaces'
 
 // `sourceId` is the id the log was emitted under (a model id, SDK_LOG_ID, a RAG
 // workspace key, …). It usually equals the subscription id, but for the global
 // SDK_ALL_LOG_ID stream it carries the real origin so subscribers can tell which
 // model/SDK/RAG source produced each line instead of always seeing "__all__".
-type StreamHandler = (
-  level: LogLevel,
-  namespace: string,
-  message: string,
-  sourceId: string,
-) => void;
+type StreamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => void
 
-const loggingStreams = new Map<string, Set<StreamHandler>>();
+const loggingStreams = new Map<string, Set<StreamHandler>>()
 
 // Buffering for logs emitted during model loading (before client subscribes)
-const MAX_BUFFERED_LOGS_PER_MODEL = 100;
-const BUFFER_EXPIRY_MS = 30_000;
-const BUFFERING_TIMEOUT_MS = 5_000;
+const MAX_BUFFERED_LOGS_PER_MODEL = 100
+const BUFFER_EXPIRY_MS = 30_000
+const BUFFERING_TIMEOUT_MS = 5_000
 
 interface BufferedLog {
-  level: LogLevel;
-  namespace: string;
-  message: string;
-  sourceId: string;
-  timestamp: number;
+  level: LogLevel
+  namespace: string
+  message: string
+  sourceId: string
+  timestamp: number
 }
 
-const logBuffer = new Map<string, BufferedLog[]>();
-const modelsWithBuffering = new Set<string>();
-const bufferingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const logBuffer = new Map<string, BufferedLog[]>()
+const modelsWithBuffering = new Set<string>()
+const bufferingTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
 function clearBufferingTimeout(id: string) {
-  const timeout = bufferingTimeouts.get(id);
+  const timeout = bufferingTimeouts.get(id)
   if (timeout) {
-    clearTimeout(timeout);
-    bufferingTimeouts.delete(id);
+    clearTimeout(timeout)
+    bufferingTimeouts.delete(id)
   }
 }
 
 export function startLogBuffering(id: string) {
-  modelsWithBuffering.add(id);
+  modelsWithBuffering.add(id)
 }
 
 export function stopLogBufferingWithTimeout(id: string) {
-  clearBufferingTimeout(id);
+  clearBufferingTimeout(id)
   const timeout = setTimeout(() => {
     if (modelsWithBuffering.has(id)) {
-      modelsWithBuffering.delete(id);
-      logBuffer.delete(id);
+      modelsWithBuffering.delete(id)
+      logBuffer.delete(id)
     }
-    bufferingTimeouts.delete(id);
-  }, BUFFERING_TIMEOUT_MS);
+    bufferingTimeouts.delete(id)
+  }, BUFFERING_TIMEOUT_MS)
 
-  bufferingTimeouts.set(id, timeout);
+  bufferingTimeouts.set(id, timeout)
 }
 
 export function registerLoggingStream(id: string, streamHandler: StreamHandler) {
   if (!loggingStreams.has(id)) {
-    loggingStreams.set(id, new Set());
+    loggingStreams.set(id, new Set())
   }
-  loggingStreams.get(id)!.add(streamHandler);
+  loggingStreams.get(id)!.add(streamHandler)
 
-  const buffered = logBuffer.get(id);
+  const buffered = logBuffer.get(id)
   if (buffered && buffered.length > 0) {
     for (const log of buffered) {
       try {
-        streamHandler(log.level, log.namespace, log.message, log.sourceId);
+        streamHandler(log.level, log.namespace, log.message, log.sourceId)
       } catch (error) {
-        console.error(`Error flushing buffered log for ID ${id}:`, error); // fallback (avoid recursion)
+        console.error(`Error flushing buffered log for ID ${id}:`, error) // fallback (avoid recursion)
       }
     }
-    logBuffer.delete(id);
+    logBuffer.delete(id)
   }
 
-  modelsWithBuffering.delete(id);
-  clearBufferingTimeout(id);
+  modelsWithBuffering.delete(id)
+  clearBufferingTimeout(id)
 }
 
-export function unregisterLoggingStream(
-  id: string,
-  streamHandler: StreamHandler,
-) {
-  const streams = loggingStreams.get(id);
+export function unregisterLoggingStream(id: string, streamHandler: StreamHandler) {
+  const streams = loggingStreams.get(id)
   if (streams) {
-    streams.delete(streamHandler);
+    streams.delete(streamHandler)
     if (streams.size === 0) {
-      loggingStreams.delete(id);
+      loggingStreams.delete(id)
     }
   }
 }
@@ -107,23 +99,18 @@ export function unregisterLoggingStream(
 export function unregisterAllLoggingStreams(id: string) {
   // Simply remove all logging handlers
   // Active streams will naturally terminate when no more logs flow
-  loggingStreams.delete(id);
-  logBuffer.delete(id);
-  modelsWithBuffering.delete(id);
-  clearBufferingTimeout(id);
+  loggingStreams.delete(id)
+  logBuffer.delete(id)
+  modelsWithBuffering.delete(id)
+  clearBufferingTimeout(id)
 }
 
-export function sendLogToStreams(
-  id: string,
-  level: LogLevel,
-  namespace: string,
-  message: string,
-) {
+export function sendLogToStreams(id: string, level: LogLevel, namespace: string, message: string) {
   // The originating id is preserved as `sourceId` so the global stream keeps the
   // real origin of each log instead of reporting the subscription id.
-  deliverToStream(id, level, namespace, message, id);
+  deliverToStream(id, level, namespace, message, id)
   if (id !== SDK_ALL_LOG_ID) {
-    deliverToStream(SDK_ALL_LOG_ID, level, namespace, message, id);
+    deliverToStream(SDK_ALL_LOG_ID, level, namespace, message, id)
   }
 }
 
@@ -132,43 +119,41 @@ function deliverToStream(
   level: LogLevel,
   namespace: string,
   message: string,
-  sourceId: string,
+  sourceId: string
 ) {
-  const streams = loggingStreams.get(id);
-  const isBuffering = modelsWithBuffering.has(id);
+  const streams = loggingStreams.get(id)
+  const isBuffering = modelsWithBuffering.has(id)
 
   if (streams && streams.size > 0) {
     for (const streamHandler of streams) {
       try {
-        streamHandler(level, namespace, message, sourceId);
+        streamHandler(level, namespace, message, sourceId)
       } catch (error) {
-        console.error(`Error sending log to stream for ID ${id}:`, error); // fallback (avoid recursion)
+        console.error(`Error sending log to stream for ID ${id}:`, error) // fallback (avoid recursion)
       }
     }
   } else if (isBuffering) {
     if (!logBuffer.has(id)) {
-      logBuffer.set(id, []);
+      logBuffer.set(id, [])
     }
 
-    const buffer = logBuffer.get(id)!;
-    const now = Date.now();
+    const buffer = logBuffer.get(id)!
+    const now = Date.now()
 
-    const validLogs = buffer.filter(
-      (log) => now - log.timestamp < BUFFER_EXPIRY_MS,
-    );
+    const validLogs = buffer.filter((log) => now - log.timestamp < BUFFER_EXPIRY_MS)
 
     if (validLogs.length >= MAX_BUFFERED_LOGS_PER_MODEL) {
-      validLogs.shift();
+      validLogs.shift()
     }
 
-    validLogs.push({ level, namespace, message, sourceId, timestamp: now });
-    logBuffer.set(id, validLogs);
+    validLogs.push({ level, namespace, message, sourceId, timestamp: now })
+    logBuffer.set(id, validLogs)
   }
 }
 
 export function hasLoggingStreams(id: string) {
-  const streams = loggingStreams.get(id);
-  return streams && streams.size > 0;
+  const streams = loggingStreams.get(id)
+  return streams && streams.size > 0
 }
 
 export function getLoggingStreamStats() {
@@ -177,21 +162,21 @@ export function getLoggingStreamStats() {
     ids: Array.from(loggingStreams.keys()),
     totalStreams: Array.from(loggingStreams.values()).reduce(
       (sum, streams) => sum + streams.size,
-      0,
+      0
     ),
     bufferedIds: logBuffer.size,
     idsWithBuffering: modelsWithBuffering.size,
-    activeTimeouts: bufferingTimeouts.size,
-  };
+    activeTimeouts: bufferingTimeouts.size
+  }
 }
 
 export function clearAllLoggingStreams() {
   for (const timeout of bufferingTimeouts.values()) {
-    clearTimeout(timeout);
+    clearTimeout(timeout)
   }
 
-  loggingStreams.clear();
-  logBuffer.clear();
-  modelsWithBuffering.clear();
-  bufferingTimeouts.clear();
+  loggingStreams.clear()
+  logBuffer.clear()
+  modelsWithBuffering.clear()
+  bufferingTimeouts.clear()
 }

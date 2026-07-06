@@ -1,87 +1,87 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 export const pluginEchoLoadModel: TestDefinition = {
-  testId: "plugin-echo-load-model",
+  testId: 'plugin-echo-load-model',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
-    category: "plugin",
-    dependency: "echo",
-    estimatedDurationMs: 10000,
-  },
-};
+    category: 'plugin',
+    dependency: 'echo',
+    estimatedDurationMs: 10000
+  }
+}
 
 export const pluginEchoInvoke: TestDefinition = {
-  testId: "plugin-echo-invoke",
-  params: { message: "hello from e2e" },
+  testId: 'plugin-echo-invoke',
+  params: { message: 'hello from e2e' },
   expectation: {
-    validation: "contains-all",
-    contains: ["hello from e2e"],
+    validation: 'contains-all',
+    contains: ['hello from e2e']
   },
-  suites: ["smoke"],
+  suites: ['smoke'],
   metadata: {
-    category: "plugin",
-    dependency: "echo",
-    estimatedDurationMs: 10000,
-  },
-};
+    category: 'plugin',
+    dependency: 'echo',
+    estimatedDurationMs: 10000
+  }
+}
 
 export const pluginEchoInvokeStream: TestDefinition = {
-  testId: "plugin-echo-invoke-stream",
-  params: { message: "streaming chunks test" },
+  testId: 'plugin-echo-invoke-stream',
+  params: { message: 'streaming chunks test' },
   expectation: {
-    validation: "contains-all",
-    contains: ["streaming", "chunks", "test"],
+    validation: 'contains-all',
+    contains: ['streaming', 'chunks', 'test']
   },
   metadata: {
-    category: "plugin",
-    dependency: "echo",
-    estimatedDurationMs: 10000,
-  },
-};
+    category: 'plugin',
+    dependency: 'echo',
+    estimatedDurationMs: 10000
+  }
+}
 
 export const pluginEchoValidationError: TestDefinition = {
-  testId: "plugin-echo-validation-error",
+  testId: 'plugin-echo-validation-error',
   params: { invalidPayload: true },
   expectation: {
-    validation: "throws-error",
-    errorContains: "Request validation failed",
+    validation: 'throws-error',
+    errorContains: 'Request validation failed'
   },
   metadata: {
-    category: "plugin",
-    dependency: "echo",
-    estimatedDurationMs: 5000,
-  },
-};
+    category: 'plugin',
+    dependency: 'echo',
+    estimatedDurationMs: 5000
+  }
+}
 
 export const pluginInvokeUnknownHandler: TestDefinition = {
-  testId: "plugin-invoke-unknown-handler",
-  params: { message: "test" },
+  testId: 'plugin-invoke-unknown-handler',
+  params: { message: 'test' },
   expectation: {
-    validation: "throws-error",
-    errorContains: 'Handler "nonExistentHandler" not found',
+    validation: 'throws-error',
+    errorContains: 'Handler "nonExistentHandler" not found'
   },
   metadata: {
-    category: "plugin",
-    dependency: "echo",
-    estimatedDurationMs: 5000,
-  },
-};
+    category: 'plugin',
+    dependency: 'echo',
+    estimatedDurationMs: 5000
+  }
+}
 
 export const pluginLoadUnknownType: TestDefinition = {
-  testId: "plugin-load-unknown-type",
-  params: { modelType: "nonexistent-plugin-type-xyz" },
+  testId: 'plugin-load-unknown-type',
+  params: { modelType: 'nonexistent-plugin-type-xyz' },
   expectation: {
-    validation: "throws-error",
-    errorContains: "Plugin not found for model type",
+    validation: 'throws-error',
+    errorContains: 'Plugin not found for model type'
   },
   metadata: {
-    category: "plugin",
-    dependency: "none",
-    estimatedDurationMs: 5000,
-  },
-};
+    category: 'plugin',
+    dependency: 'none',
+    estimatedDurationMs: 5000
+  }
+}
 
 export const pluginTests: TestDefinition[] = [
   pluginEchoLoadModel,
@@ -89,5 +89,5 @@ export const pluginTests: TestDefinition[] = [
   pluginEchoInvokeStream,
   pluginEchoValidationError,
   pluginInvokeUnknownHandler,
-  pluginLoadUnknownType,
-];
+  pluginLoadUnknownType
+]

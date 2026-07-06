@@ -1,72 +1,69 @@
-import type {
-  CompletionStreamRequest,
-  CompletionStreamResponse,
-} from "@/schemas";
-import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
-import { getModelEntry } from "@/server/bare/registry/model-registry";
-import { getRPC } from "@/server/bare/delegate-rpc-client";
-import { stream, type DelegateOptions } from "@/server/rpc/delegate-transport";
-import { ModelIsDelegatedError } from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
+import type { CompletionStreamRequest, CompletionStreamResponse } from '@/schemas'
+import type { DelegatedHandlerOptions } from '@/server/rpc/profiling'
+import { getModelEntry } from '@/server/bare/registry/model-registry'
+import { getRPC } from '@/server/bare/delegate-rpc-client'
+import { stream, type DelegateOptions } from '@/server/rpc/delegate-transport'
+import { ModelIsDelegatedError } from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
-export type HandleCompletionStreamDelegatedOptions = DelegatedHandlerOptions;
+export type HandleCompletionStreamDelegatedOptions = DelegatedHandlerOptions
 
 export async function* handleCompletionStreamDelegated(
   request: CompletionStreamRequest,
-  options?: HandleCompletionStreamDelegatedOptions,
+  options?: HandleCompletionStreamDelegatedOptions
 ): AsyncGenerator<CompletionStreamResponse> {
-  const { profilingMeta } = options ?? {};
+  const { profilingMeta } = options ?? {}
 
   // Get delegation info from model registry
-  const entry = getModelEntry(request.modelId);
+  const entry = getModelEntry(request.modelId)
 
   if (!entry?.isDelegated) {
-    throw new ModelIsDelegatedError(request.modelId);
+    throw new ModelIsDelegatedError(request.modelId)
   }
 
-  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
+  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated
 
   try {
     logger.debug(
-      `📤 Sending delegated completionStream request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
-    );
+      `📤 Sending delegated completionStream request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ''}`
+    )
 
-    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout });
+    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout })
 
     // Build delegate options with profiling metadata
-    const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };
+    const delegateOpts: DelegateOptions = { peerKey: providerPublicKey }
     if (profilingMeta) {
-      delegateOpts.profilingMeta = profilingMeta;
+      delegateOpts.profilingMeta = profilingMeta
     }
     if (timeout) {
-      delegateOpts.timeout = timeout;
+      delegateOpts.timeout = timeout
     }
 
     // Use the regular stream function with the HyperSwarm RPC instance
-    const responseStream = stream(request, rpc, delegateOpts);
+    const responseStream = stream(request, rpc, delegateOpts)
 
     // Yield each response from the stream
     for await (const response of responseStream) {
-      yield response as CompletionStreamResponse;
+      yield response as CompletionStreamResponse
     }
   } catch (error) {
-    logger.error("Error in delegated completion stream:", error);
-    const message = error instanceof Error ? error.message : String(error);
+    logger.error('Error in delegated completion stream:', error)
+    const message = error instanceof Error ? error.message : String(error)
     yield {
-      type: "completionStream",
+      type: 'completionStream',
       done: true,
       events: [
         {
-          type: "completionDone" as const,
+          type: 'completionDone' as const,
           seq: 0,
-          stopReason: "error" as const,
+          stopReason: 'error' as const,
           error: {
-            message: `Error communicating with provider: ${message}`,
-          },
-        },
-      ],
-    };
+            message: `Error communicating with provider: ${message}`
+          }
+        }
+      ]
+    }
   }
 }

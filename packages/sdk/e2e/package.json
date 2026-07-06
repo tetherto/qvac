@@ -21,7 +21,7 @@
   "dependencies": {
     "@qvac/sdk": "file:..",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
-    "@tetherto/qvac-test-suite": "0.7.1-tmp.pr-82.runid-28594807418",
+    "@tetherto/qvac-test-suite": "^0.8.1",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",
     "react-native-bare-kit": "^0.14.0"

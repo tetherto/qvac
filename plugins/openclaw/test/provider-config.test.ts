@@ -25,8 +25,13 @@ interface RegisteredProvider {
   readonly label: string
   readonly docsPath: string
   readonly auth: RegisteredAuthMethod[]
-  resolveSyntheticAuth?(context: { readonly provider: string, readonly providerConfig?: unknown }): unknown
-  shouldDeferSyntheticProfileAuth?(context: { readonly resolvedApiKey?: string }): boolean | undefined
+  resolveSyntheticAuth?(context: {
+    readonly provider: string
+    readonly providerConfig?: unknown
+  }): unknown
+  shouldDeferSyntheticProfileAuth?(context: {
+    readonly resolvedApiKey?: string
+  }): boolean | undefined
   readonly catalog: {
     readonly order: string
     run(): Promise<{ provider: unknown }>
@@ -63,6 +68,7 @@ test('resolveOptions returns OpenClaw-safe defaults', () => {
 
 test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () => {
   const model = openClawModels.find((entry) => entry.id === 'qwen3.5-9b')
+  const gptOss = openClawModels.find((entry) => entry.id === 'gpt-oss-20b')
 
   assert.ok(model)
   assert.equal(model.name, 'Qwen3.5 9B')
@@ -72,26 +78,35 @@ test('openClawModels maps the shared QVAC catalog into OpenClaw model rows', () 
   assert.equal(model.maxTokens, 8192)
   assert.deepEqual(model.compat, { requiresStringContent: true })
   assert.deepEqual(model.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
+
+  assert.ok(gptOss)
+  assert.equal(gptOss.name, 'GPT-OSS 20B')
+  assert.deepEqual(gptOss.input, ['text'])
+  assert.equal(gptOss.reasoning, true)
 })
 
 test('createOpenClawModels advertises the configured context window', () => {
-  const model = createOpenClawModels(resolveOptions({ ctxSize: 65536 })).find((entry) => entry.id === 'qwen3.5-9b')
+  const model = createOpenClawModels(resolveOptions({ ctxSize: 65536 })).find(
+    (entry) => entry.id === 'qwen3.5-9b'
+  )
 
   assert.ok(model)
   assert.equal(model.contextWindow, 65536)
 })
 
 test('createOpenClawProvider builds a localService-backed OpenAI-compatible provider', () => {
-  const provider = createOpenClawProvider(resolveOptions({
-    port: 11500,
-    qvacCommand: '/usr/local/bin/qvac',
-    serviceRuntime: '/usr/local/bin/node',
-    serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
-    cwd: '/tmp/project',
-    ctxSize: 65536,
-    readyTimeoutMs: 123000,
-    idleStopMs: 45000
-  }))
+  const provider = createOpenClawProvider(
+    resolveOptions({
+      port: 11500,
+      qvacCommand: '/usr/local/bin/qvac',
+      serviceRuntime: '/usr/local/bin/node',
+      serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
+      cwd: '/tmp/project',
+      ctxSize: 65536,
+      readyTimeoutMs: 123000,
+      idleStopMs: 45000
+    })
+  )
 
   assert.equal(provider.baseUrl, 'http://127.0.0.1:11500/v1')
   assert.equal(provider.apiKey, 'custom-local')
@@ -131,13 +146,16 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
     apiKey: 'OPENAI_API_KEY',
     models: []
   }
-  const result = createQvacSetupResult({
-    agents: { defaults: { models: { 'openai/gpt-4.1': {} } } },
-    models: { mode: 'merge', providers: { openai: openAiProvider } }
-  }, {
-    port: 11500,
-    qvacCommand: '/usr/local/bin/qvac'
-  })
+  const result = createQvacSetupResult(
+    {
+      agents: { defaults: { models: { 'openai/gpt-4.1': {} } } },
+      models: { mode: 'merge', providers: { openai: openAiProvider } }
+    },
+    {
+      port: 11500,
+      qvacCommand: '/usr/local/bin/qvac'
+    }
+  )
 
   assert.equal(result.defaultModel, 'qvac/qwen3.5-9b')
   assert.deepEqual(result.profiles, [])
@@ -149,10 +167,15 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   assert.deepEqual(result.configPatch.agents.defaults.experimental, { localModelLean: true })
   assert.equal(result.configPatch.models.mode, 'merge')
   assert.deepEqual(Object.keys(result.configPatch.models.providers).sort(), ['openai', 'qvac'])
-  assert.deepEqual(result.configPatch.models.providers['qvac'], createOpenClawProvider(resolveOptions({
-    port: 11500,
-    qvacCommand: '/usr/local/bin/qvac'
-  })))
+  assert.deepEqual(
+    result.configPatch.models.providers['qvac'],
+    createOpenClawProvider(
+      resolveOptions({
+        port: 11500,
+        qvacCommand: '/usr/local/bin/qvac'
+      })
+    )
+  )
 })
 
 test('applyQvacSetupConfig returns a complete OpenClaw config for non-interactive auth', () => {
@@ -161,18 +184,24 @@ test('applyQvacSetupConfig returns a complete OpenClaw config for non-interactiv
   assert.deepEqual(config.agents?.defaults?.models, { 'qvac/qwen3.5-4b': {} })
   assert.deepEqual(config.agents?.defaults?.experimental, { localModelLean: true })
   assert.equal(config.models?.mode, 'merge')
-  assert.deepEqual(config.models?.providers?.['qvac'], createOpenClawProvider(resolveOptions({ model: 'qwen3.5-4b' })))
+  assert.deepEqual(
+    config.models?.providers?.['qvac'],
+    createOpenClawProvider(resolveOptions({ model: 'qwen3.5-4b' }))
+  )
 })
 
 test('createQvacServeModels carries serve model guardrails for qvac.config.json generation', () => {
-  const models = createQvacServeModels(resolveOptions({
-    ctxSize: 65536,
-    reasoningBudget: 0,
-    tools: false
-  }))
+  const models = createQvacServeModels(
+    resolveOptions({
+      model: 'gpt-oss-20b',
+      ctxSize: 65536,
+      reasoningBudget: 0,
+      tools: false
+    })
+  )
 
-  assert.deepEqual(models['qwen3.5-9b'], {
-    model: 'QWEN3_5_9B_MULTIMODAL_Q4_K_M',
+  assert.deepEqual(models['gpt-oss-20b'], {
+    model: 'GPT_OSS_20B_INST_Q4_K_M',
     preload: true,
     default: true,
     config: {
@@ -181,13 +210,14 @@ test('createQvacServeModels carries serve model guardrails for qvac.config.json 
       tools: false
     }
   })
+  assert.equal(models['qwen3.5-9b']?.default, undefined)
 })
 
 test('registerQvacProvider registers a catalog provider for OpenClaw', async () => {
   const registered: RegisteredProvider[] = []
 
   registerQvacProvider({
-    registerProvider (provider: RegisteredProvider) {
+    registerProvider(provider: RegisteredProvider) {
       registered.push(provider)
     }
   })
@@ -204,7 +234,10 @@ test('registerQvacProvider registers a catalog provider for OpenClaw', async () 
     source: 'qvac plugin (synthetic local key)',
     mode: 'api-key'
   })
-  assert.equal(registered[0]?.shouldDeferSyntheticProfileAuth?.({ resolvedApiKey: 'custom-local' }), true)
+  assert.equal(
+    registered[0]?.shouldDeferSyntheticProfileAuth?.({ resolvedApiKey: 'custom-local' }),
+    true
+  )
 
   const catalog = await registered[0]?.catalog.run()
   assert.ok(catalog)
@@ -216,7 +249,10 @@ test('registerQvacProvider registers a catalog provider for OpenClaw', async () 
 
   const setup = await registered[0]?.auth[0]?.run({ config: {} })
   assert.ok(setup)
-  assert.deepEqual(setup.configPatch.models.providers['qvac'], createOpenClawProvider(DEFAULT_OPTIONS))
+  assert.deepEqual(
+    setup.configPatch.models.providers['qvac'],
+    createOpenClawProvider(DEFAULT_OPTIONS)
+  )
   assert.deepEqual(setup.configPatch.agents.defaults.models, { 'qvac/qwen3.5-9b': {} })
 })
 
@@ -224,7 +260,7 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
   const registered: RegisteredProvider[] = []
   const api: RegistrationApi = {
     pluginConfig: { model: 'qwen3.5-4b', port: 11500 },
-    registerProvider (provider: RegisteredProvider) {
+    registerProvider(provider: RegisteredProvider) {
       registered.push(provider)
     }
   }
@@ -233,17 +269,23 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
 
   const catalog = await registered[0]?.catalog.run()
   assert.ok(catalog)
-  assert.equal((catalog.provider as ReturnType<typeof createOpenClawProvider>).baseUrl, 'http://127.0.0.1:11500/v1')
+  assert.equal(
+    (catalog.provider as ReturnType<typeof createOpenClawProvider>).baseUrl,
+    'http://127.0.0.1:11500/v1'
+  )
   const args = (catalog.provider as ReturnType<typeof createOpenClawProvider>).localService.args
-  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', 'qwen3.5-4b'])
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), [
+    '--model',
+    'qwen3.5-4b'
+  ])
 })
 
 test('registerQvacProvider registers static model catalog rows for OpenClaw model listing', () => {
   const registered: RegisteredModelCatalogProvider[] = []
 
   registerQvacProvider({
-    registerProvider () {},
-    registerModelCatalogProvider (provider: RegisteredModelCatalogProvider) {
+    registerProvider() {},
+    registerModelCatalogProvider(provider: RegisteredModelCatalogProvider) {
       registered.push(provider)
     }
   })
@@ -252,9 +294,37 @@ test('registerQvacProvider registers static model catalog rows for OpenClaw mode
   assert.equal(registered[0]?.provider, 'qvac')
   assert.deepEqual(registered[0]?.kinds, ['text'])
   assert.deepEqual(registered[0]?.staticCatalog(), [
-    { kind: 'text', provider: 'qvac', model: 'qwen3.5-0.8b', label: 'Qwen3.5 0.8B', source: 'static' },
+    {
+      kind: 'text',
+      provider: 'qvac',
+      model: 'qwen3.5-0.8b',
+      label: 'Qwen3.5 0.8B',
+      source: 'static'
+    },
     { kind: 'text', provider: 'qvac', model: 'qwen3.5-2b', label: 'Qwen3.5 2B', source: 'static' },
     { kind: 'text', provider: 'qvac', model: 'qwen3.5-4b', label: 'Qwen3.5 4B', source: 'static' },
-    { kind: 'text', provider: 'qvac', model: 'qwen3.5-9b', label: 'Qwen3.5 9B', source: 'static' }
+    { kind: 'text', provider: 'qvac', model: 'qwen3.5-9b', label: 'Qwen3.5 9B', source: 'static' },
+    {
+      kind: 'text',
+      provider: 'qvac',
+      model: 'qwen3.6-27b',
+      label: 'Qwen3.6 27B',
+      source: 'static'
+    },
+    {
+      kind: 'text',
+      provider: 'qvac',
+      model: 'qwen3.6-35b-a3b',
+      label: 'Qwen3.6 35B A3B',
+      source: 'static'
+    },
+    {
+      kind: 'text',
+      provider: 'qvac',
+      model: 'gpt-oss-20b',
+      label: 'GPT-OSS 20B',
+      source: 'static'
+    },
+    { kind: 'text', provider: 'qvac', model: 'gemma4-31b', label: 'Gemma4 31B', source: 'static' }
   ])
 })
