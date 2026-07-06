@@ -356,4 +356,57 @@ TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
   }
 }
 
+/// Minimal custom IJobScheduler implementation (neither of the two built-in
+/// types) used to prove AddonCpp verifies model binding for ANY scheduler, not
+/// just the built-ins. It records the model instance it was constructed
+/// against so binding can be checked.
+class CustomScheduler : public IJobScheduler {
+  const model::IModel* boundModel_;
+
+public:
+  explicit CustomScheduler(const model::IModel* boundModel)
+      : boundModel_(boundModel) {}
+
+  void start(std::shared_ptr<OutputQueue> /*outputQueue*/) override {}
+  bool runJob(std::any /*input*/, JobId /*id*/) override { return true; }
+  bool runExclusiveJob(std::any /*input*/, JobId /*id*/) override {
+    return true;
+  }
+  void cancel(JobId /*id*/) override {}
+  void cancelAll() override {}
+  [[nodiscard]] std::size_t activeJobs() const override { return 0; }
+};
+
+std::unique_ptr<OutputCallBackCpp> makeEmptyOutputCallback() {
+  auto handler = std::make_shared<
+      out_handl::CppContainerOutputHandler<std::set<std::string>>>();
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>>
+      outputHandlers;
+  outputHandlers.add(handler);
+  return std::make_unique<OutputCallBackCpp>(std::move(outputHandlers));
+}
+
+TEST(SimpleAddonTest, CustomSchedulerBoundToModel_ConstructionSucceeds) {
+  auto model = std::make_unique<BlockingTestModel>();
+  auto scheduler = std::make_unique<CustomScheduler>(model.get());
+
+  EXPECT_NO_THROW(AddonCpp(
+      makeEmptyOutputCallback(), std::move(model), std::move(scheduler)));
+}
+
+TEST(
+    SimpleAddonTest,
+    CustomSchedulerBoundToDifferentModel_ThrowsInvalidArgument) {
+  auto boundModel = std::make_unique<BlockingTestModel>();
+  auto scheduler = std::make_unique<CustomScheduler>(boundModel.get());
+
+  auto ownedModel = std::make_unique<BlockingTestModel>();
+
+  EXPECT_THROW(
+      AddonCpp(
+          makeEmptyOutputCallback(), std::move(ownedModel),
+          std::move(scheduler)),
+      std::invalid_argument);
+}
+
 } // namespace qvac_lib_inference_addon_cpp
