@@ -4,11 +4,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import {
-  selectExportTarget,
-  createSdkImportResolver
-} from "@/commands/bundle/resolve-sdk-import";
-import { generateWorkerEntry } from "@/commands/bundle/entry-gen";
+import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
+import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 
 describe('selectExportTarget', () => {
   it('returns a plain string target', () => {
@@ -27,10 +24,7 @@ describe('selectExportTarget', () => {
   })
 
   it('descends into nested conditions', () => {
-    assert.equal(
-      selectExportTarget({ node: { import: './dist/node.js' } }),
-      './dist/node.js'
-    )
+    assert.equal(selectExportTarget({ node: { import: './dist/node.js' } }), './dist/node.js')
   })
 
   it('returns null for missing or unknown-only conditions', () => {
@@ -106,10 +100,7 @@ describe('generateWorkerEntry', () => {
       '@qvac/sdk',
       tag
     )
-    assert.match(
-      entry,
-      /from "RESOLVED:@qvac\/sdk\/llamacpp-completion\/plugin"/
-    )
+    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/llamacpp-completion\/plugin"/)
     assert.match(entry, /from "my-pkg\/plugin"/)
   })
 

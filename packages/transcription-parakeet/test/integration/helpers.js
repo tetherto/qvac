@@ -23,7 +23,7 @@ let _mobileModelManifest = null
 // chunks JSON into [PERF_REPORT_START]/[PERF_CHUNK] markers — the exact
 // format scripts/perf-report/extract-from-log.js already understands.
 // ---------------------------------------------------------------------------
-// QVAC-20499: inject bare-subprocess so performance-reporter.js's _detectGpu()
+// inject bare-subprocess so performance-reporter.js's _detectGpu()
 // can shell out to nvidia-smi / vulkaninfo / system_profiler on desktop runners
 // and populate device.gpu (the hardware model name). Resolving from this caller
 // file works (it lives next to transcription-parakeet/node_modules); resolving
