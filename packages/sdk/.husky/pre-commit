@@ -12,6 +12,12 @@ if ! bun run format; then
   exit 1
 fi
 
+echo "🔎 Type-checking..."
+if ! bun run typecheck; then
+  echo "❌ Type check failed!"
+  exit 1
+fi
+
 echo "📦 Checking model registry..."
 npm run check-models:hook --silent 2>/dev/null
 
