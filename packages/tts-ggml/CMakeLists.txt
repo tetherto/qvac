@@ -17,6 +17,16 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+# TEMPORARY CI OVERLAY (do not merge): build tts-cpp from the PR #81 head commit
+# (sched_dispatch convergence + Supertonic rebuild-per-sched-pass fix) instead of
+# the registry port. Drop this line + vcpkg-overlay-ports/ once PR #81 merges and
+# the registry port lands.
+# NOTE: unquoted trailing expansion — a quoted "...;${VCPKG_OVERLAY_PORTS}"
+# with the var empty leaves a trailing empty list element, which vcpkg
+# resolves to the CWD and then rejects this package's own vcpkg.json as a
+# malformed PORT manifest ("missing required field 'name'").
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports" ${VCPKG_OVERLAY_PORTS})
+
 project(tts-ggml CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

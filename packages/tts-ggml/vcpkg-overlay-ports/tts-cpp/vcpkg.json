@@ -1,0 +1,83 @@
+{
+  "name": "tts-cpp",
+  "version-date": "2026-07-06",
+  "port-version": 1,
+  "description": "Text-to-speech inference in pure C++/ggml. Ships Resemble Chatterbox (Turbo + Multilingual variants) and Supertonic engines under a unified Engine API. Sourced from tetherto/qvac-ext-lib-whisper.cpp's tts-cpp/ subfolder. TEMPORARY CI overlay: pins the tts-cpp/ subfolder at the PR #81 head commit a723e25a (rebased onto master 1d9ca83b) for device-farm validation ahead of merge. The pin converges T3 / S3Gen / Supertonic onto the shared sched_dispatch helper (per-op GPU->CPU fallback, ggml_status propagation instead of silently consuming half-written output) and rebuilds Supertonic's dual-path graphs per scheduler pass (sched graphs are single-use for allocation; the previous cached-graph reuse through the scheduler deterministically corrupted natural-sched output on Adreno after the first use per site -- Adreno output deliberately changes/gets fixed). Adds a TTS_CPP_FORCE_SCHED escape hatch honored by all three engines with bit-exactness equivalence tests on CPU and Metal. Consumes the ggml-speech and mecab ports (mecab resolves via the microsoft/vcpkg registry routing in the addon's vcpkg-configuration.json).",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-07-03"
+    },
+    "mecab",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "cuda"
+          ]
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "metal"
+          ]
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "opencl"
+          ]
+        }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "ggml-speech",
+          "features": [
+            "vulkan"
+          ]
+        }
+      ]
+    }
+  }
+}
