@@ -78,6 +78,226 @@ function assertNoRefs(value: unknown, defName: string): void {
   }
 }
 
+function mergeObjectSchemaParts(parts: JsonSchema[], defName: string): JsonSchema {
+  const properties: JsonSchema = {}
+  const required: string[] = []
+  for (const part of parts) {
+    if (part['type'] !== undefined && part['type'] !== 'object') {
+      throw new Error(`Cannot merge a non-object schema member while flattening "${defName}"`)
+    }
+    for (const [key, value] of Object.entries((part['properties'] as JsonSchema) ?? {})) {
+      if (key in properties && JSON.stringify(properties[key]) !== JSON.stringify(value)) {
+        throw new Error(
+          `Conflicting definitions for property "${key}" while flattening "${defName}"`
+        )
+      }
+      properties[key] = value
+    }
+    for (const name of (part['required'] as string[] | undefined) ?? []) {
+      if (!required.includes(name)) required.push(name)
+    }
+  }
+  return { type: 'object', properties, required }
+}
+
+/**
+ * Flattens `allOf: [commonFields, { oneOf/anyOf: [...variants] }]` (Zod's
+ * `.and()` of an object with a discriminated union) into a plain
+ * `oneOf`/`anyOf` with `commonFields` merged into every variant.
+ *
+ * Needed because JSON-Schema-consuming codegen (verified against
+ * datamodel-code-generator, the standard JSON-Schema -> pydantic tool) does
+ * not merge `allOf` branches when one of them is itself a union: it silently
+ * keeps only the first branch under the schema's title, dropping every
+ * variant-specific field. `allOf`-of-a-union is valid JSON Schema, but this
+ * is a known rough edge across JSON-Schema tooling generally, so flattening
+ * it here makes the contract more robust for every consumer, not a
+ * Python-specific workaround.
+ *
+ * Scoped to the one shape currently in use (exactly one `allOf` branch is a
+ * union, the rest are plain object schemas): anything else throws instead of
+ * silently emitting a schema some consumer will mis-generate from.
+ */
+function flattenAllOfWithUnion(json: JsonSchema, defName: string): JsonSchema {
+  const allOf = json['allOf']
+  if (!Array.isArray(allOf)) return json
+
+  const isUnionMember = function (member: unknown): member is JsonSchema {
+    return (
+      member !== null &&
+      typeof member === 'object' &&
+      (Array.isArray((member as JsonSchema)['oneOf']) ||
+        Array.isArray((member as JsonSchema)['anyOf']))
+    )
+  }
+  const unionMembers = (allOf as JsonSchema[]).filter(isUnionMember)
+  const plainMembers = (allOf as JsonSchema[]).filter(function (member) {
+    return !isUnionMember(member)
+  })
+
+  if (unionMembers.length !== 1) {
+    throw new Error(
+      `Schema for "${defName}" uses allOf with ${unionMembers.length} union branches; ` +
+        'only the single-union-branch shape is handled. Extend flattenAllOfWithUnion in build-contract.ts.'
+    )
+  }
+  const unionMember = unionMembers[0] as JsonSchema
+  const unionKey = Array.isArray(unionMember['oneOf']) ? 'oneOf' : 'anyOf'
+  const arms = unionMember[unionKey] as JsonSchema[]
+
+  const flattened: JsonSchema = { ...json }
+  delete flattened['allOf']
+  flattened[unionKey] = arms.map(function (arm) {
+    return mergeObjectSchemaParts([...plainMembers, arm], defName)
+  })
+  return flattened
+}
+
+function isSchemaObject(node: unknown): node is JsonSchema {
+  return node !== null && typeof node === 'object' && !Array.isArray(node)
+}
+
+function unionArmsOf(node: JsonSchema): JsonSchema[] | undefined {
+  if (Array.isArray(node['oneOf'])) return node['oneOf'] as JsonSchema[]
+  if (Array.isArray(node['anyOf'])) return node['anyOf'] as JsonSchema[]
+  return undefined
+}
+
+/**
+ * Property key that discriminates a set of sibling union arms: a `const`
+ * string that, wherever present across the arms, never repeats. Doesn't
+ * require every arm to carry it — e.g. `loadModel`'s custom-plugin catch-all
+ * arm has no `modelType` const, but the other 11 arms' distinct `modelType`
+ * values are still worth using for those 11.
+ *
+ * Deliberately not a fixed guess-list of names (`type`/`operation`/...): the
+ * wire method discriminator (`type`) is IDENTICAL across every arm of a
+ * single method's own operation union (e.g. every `rag` arm has
+ * `type: 'rag'`), so guessing by name picked the one field that never
+ * discriminates anything and produced `RagRequestRag`, `RagRequestRag2`, ...
+ * Scanning for whichever key is actually unique per arm works regardless of
+ * what the schema author named it (`operation`, `modelType`, `ttsEngine`, ...).
+ */
+function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
+  const candidateKeys = new Set<string>()
+  for (const arm of arms) {
+    const properties = arm['properties']
+    if (isSchemaObject(properties)) {
+      for (const key of Object.keys(properties)) candidateKeys.add(key)
+    }
+  }
+  for (const key of candidateKeys) {
+    const values: string[] = []
+    for (const arm of arms) {
+      const properties = arm['properties']
+      const field = isSchemaObject(properties) ? properties[key] : undefined
+      if (isSchemaObject(field) && typeof field['const'] === 'string') {
+        values.push(field['const'])
+      }
+    }
+    if (values.length > 0 && new Set(values).size === values.length) {
+      return key
+    }
+  }
+  return undefined
+}
+
+function ensureUniqueTitle(base: string, seenTitles: Set<string>): string {
+  if (!seenTitles.has(base)) {
+    seenTitles.add(base)
+    return base
+  }
+  let suffix = 2
+  while (seenTitles.has(`${base}${suffix}`)) suffix++
+  const unique = `${base}${suffix}`
+  seenTitles.add(unique)
+  return unique
+}
+
+/** Names each arm of a union: by the shared discriminator's value when the
+ * arms have one in common, else positionally (1-based, index 0 unsuffixed). */
+function nameUnionArms(arms: JsonSchema[], namePrefix: string): string[] {
+  const key = pickDiscriminatorKey(arms)
+  return arms.map(function (arm, index) {
+    const properties = isSchemaObject(arm) ? arm['properties'] : undefined
+    const field = key && isSchemaObject(properties) ? properties[key] : undefined
+    const discriminator = isSchemaObject(field) ? (field['const'] as string | undefined) : undefined
+    return discriminator
+      ? `${namePrefix}${toPascalCase(discriminator)}`
+      : `${namePrefix}${index + 1}`
+  })
+}
+
+/**
+ * Assigns a `title` to `node` (unless it already has one) and recurses into
+ * its properties/items/union arms, naming each by its property key or (for
+ * discriminated union arms) the arm's discriminator value — e.g.
+ * `completionStream.response`'s event union gets
+ * `CompletionStreamResponseEventsItemContentDelta` instead of a bare `Events3`.
+ *
+ * Without this, nested/inline Zod schemas reach Python codegen (verified
+ * against datamodel-code-generator) as positionally-numbered classes
+ * (`Stats13`, `Events7`) with no indication of what they represent.
+ */
+function titleSchemaNode(node: unknown, namePrefix: string, seenTitles: Set<string>): void {
+  if (!isSchemaObject(node)) return
+
+  const arms = unionArmsOf(node)
+  if (arms) {
+    const armNames = nameUnionArms(arms, namePrefix)
+    arms.forEach(function (arm, index) {
+      titleSchemaNode(arm, armNames[index] as string, seenTitles)
+    })
+    return
+  }
+
+  const isEnum = Array.isArray(node['enum'])
+  const isObject = node['type'] === 'object' || isSchemaObject(node['properties'])
+  const hasConst = node['const'] !== undefined
+  if ((isEnum || isObject) && !hasConst && typeof node['title'] !== 'string') {
+    node['title'] = ensureUniqueTitle(namePrefix, seenTitles)
+  }
+
+  const properties = node['properties']
+  if (isSchemaObject(properties)) {
+    for (const [key, propSchema] of Object.entries(properties)) {
+      titleSchemaNode(propSchema, `${namePrefix}${toPascalCase(key)}`, seenTitles)
+    }
+  }
+  if (node['items'] !== undefined) {
+    titleSchemaNode(node['items'], `${namePrefix}Item`, seenTitles)
+  }
+  if (isSchemaObject(node['additionalProperties'])) {
+    titleSchemaNode(node['additionalProperties'], `${namePrefix}Value`, seenTitles)
+  }
+}
+
+/** Entry point for a def's root: the root already has `rootTitle` (assigned
+ * by the caller), so only its children need naming — recursing straight into
+ * `titleSchemaNode` would treat the root itself as untitled. */
+function titleNestedSchemas(root: JsonSchema, rootTitle: string, seenTitles: Set<string>): void {
+  const arms = unionArmsOf(root)
+  if (arms) {
+    const armNames = nameUnionArms(arms, rootTitle)
+    arms.forEach(function (arm, index) {
+      titleSchemaNode(arm, armNames[index] as string, seenTitles)
+    })
+    return
+  }
+  const properties = root['properties']
+  if (isSchemaObject(properties)) {
+    for (const [key, propSchema] of Object.entries(properties)) {
+      titleSchemaNode(propSchema, `${rootTitle}${toPascalCase(key)}`, seenTitles)
+    }
+  }
+  if (root['items'] !== undefined) {
+    titleSchemaNode(root['items'], `${rootTitle}Item`, seenTitles)
+  }
+  if (isSchemaObject(root['additionalProperties'])) {
+    titleSchemaNode(root['additionalProperties'], `${rootTitle}Value`, seenTitles)
+  }
+}
+
 function toWireJsonSchema(schema: z.ZodType, io: 'input' | 'output', defName: string): JsonSchema {
   const json = z.toJSONSchema(schema, {
     target: 'draft-2020-12',
@@ -85,8 +305,9 @@ function toWireJsonSchema(schema: z.ZodType, io: 'input' | 'output', defName: st
     unrepresentable: 'any'
   }) as JsonSchema
   delete json['$schema']
-  assertNoRefs(json, defName)
-  return json
+  const flattened = flattenAllOfWithUnion(json, defName)
+  assertNoRefs(flattened, defName)
+  return flattened
 }
 
 function collectByWireType(
@@ -178,8 +399,20 @@ export function buildContract() {
   defEntries.sort(function (a, b) {
     return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
   })
+
+  // Seed with every top-level title up front so nested-schema titles (assigned
+  // below, per def) can never collide with a top-level def title regardless
+  // of iteration order.
+  const seenTitles = new Set<string>([
+    'AnyRequest',
+    'AnyResponse',
+    ...defEntries.map((entry) => entry[3])
+  ])
+
   for (const [defName, schema, io, title] of defEntries) {
-    defs[defName] = { title, ...toWireJsonSchema(schema, io, defName) }
+    const wireSchema = toWireJsonSchema(schema, io, defName)
+    titleNestedSchemas(wireSchema, title, seenTitles)
+    defs[defName] = { title, ...wireSchema }
   }
 
   const manifest = {
