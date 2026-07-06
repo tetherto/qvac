@@ -1288,7 +1288,7 @@ TEST_F(WhisperModelTest, PreprocessAudioDataUnsupportedFormatThrows) {
   }
 }
 
-// ── whisper.cpp / ggml log forwarding (QVAC-19783) ─────────────────────────
+// ── whisper.cpp / ggml log forwarding ─────────────────────────
 // Helper: run forwardGgmlLog while capturing std::cout (QLOG routes there in
 // this no-JS test build, where JS_LOGGER is undefined).
 namespace {
