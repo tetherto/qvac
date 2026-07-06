@@ -30,30 +30,18 @@ public:
 private:
   std::unique_ptr<IJobScheduler> jobScheduler_;
 
-  /// Adopt the caller-supplied scheduler after verifying (through friend
-  /// access to the known implementations) that it was built against @p model —
-  /// a scheduler holds raw pointers into its model, so a mismatch would be
-  /// silent undefined behaviour — or build the default single-job scheduler
-  /// when none was supplied.
+  /// Adopt the caller-supplied scheduler after verifying (through the
+  /// IJobScheduler::isBoundTo contract) that it was built against @p model — a
+  /// scheduler holds raw pointers into its model, so a mismatch would be silent
+  /// undefined behaviour — or build the default single-job scheduler when none
+  /// was supplied.
   static std::unique_ptr<IJobScheduler> adoptScheduler(
       std::unique_ptr<IJobScheduler> scheduler, model::IModel* model) {
     if (scheduler == nullptr) {
       return std::make_unique<SingleJobScheduler>(
           model, dynamic_cast<model::IModelCancel*>(model));
     }
-    const bool mismatch = [&] {
-      if (const auto* multi =
-              dynamic_cast<const MultiJobScheduler*>(scheduler.get())) {
-        return multi->multiprocessor_ !=
-            dynamic_cast<model::IModelMultiprocessor*>(model);
-      }
-      if (const auto* single =
-              dynamic_cast<const SingleJobScheduler*>(scheduler.get())) {
-        return single->model_ != model;
-      }
-      return false; // unknown implementation: nothing to verify against
-    }();
-    if (mismatch) {
+    if (!scheduler->isBoundTo(*model)) {
       throw std::invalid_argument(
           "scheduler must be built against the model passed to AddonCpp");
     }
@@ -69,9 +57,10 @@ public:
    *        single-job scheduler is built by default. A caller wanting
    *        multi-job admission constructs that scheduler itself (choosing the
    *        concurrency level) and passes it here. It must be built against the
-   *        exact instance passed as @p model — verified at construction, which
-   *        throws std::invalid_argument on a mismatch. AddonCpp guarantees the
-   *        model outlives the scheduler.
+   *        exact instance passed as @p model — verified at construction via
+   *        IJobScheduler::isBoundTo (so any implementation participates),
+   *        throwing std::invalid_argument on a mismatch. AddonCpp guarantees
+   *        the model outlives the scheduler.
    */
   AddonCpp(
       std::unique_ptr<OutputCallBackInterface>&& outputCallback,

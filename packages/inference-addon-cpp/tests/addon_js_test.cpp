@@ -61,6 +61,11 @@ public:
     called_.set_value();
   }
   [[nodiscard]] std::size_t activeJobs() const override { return 0; }
+
+  /// A stub not built against a real model; report bound so AddonCpp adopts it.
+  [[nodiscard]] bool isBoundTo(const model::IModel& /*model*/) const override {
+    return true;
+  }
 };
 
 AddonJs createTestAddonJs() {

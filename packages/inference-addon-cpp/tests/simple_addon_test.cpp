@@ -375,6 +375,10 @@ public:
   void cancel(JobId /*id*/) override {}
   void cancelAll() override {}
   [[nodiscard]] std::size_t activeJobs() const override { return 0; }
+
+  [[nodiscard]] bool isBoundTo(const model::IModel& model) const override {
+    return boundModel_ == &model;
+  }
 };
 
 std::unique_ptr<OutputCallBackCpp> makeEmptyOutputCallback() {

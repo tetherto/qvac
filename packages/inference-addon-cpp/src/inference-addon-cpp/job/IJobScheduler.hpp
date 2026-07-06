@@ -10,6 +10,10 @@ namespace qvac_lib_inference_addon_cpp {
 
 class OutputQueue;
 
+namespace model {
+struct IModel;
+}
+
 /// Admission strategy for jobs handed to a model's process(). AddonCpp builds a
 /// single-job scheduler by default; a caller wanting multi-job admission
 /// constructs that scheduler itself and passes it to AddonCpp.
@@ -47,6 +51,13 @@ struct IJobScheduler {
   /// Number of active jobs (in-flight + queued). The authoritative admission
   /// count consumers can read instead of tracking their own.
   [[nodiscard]] virtual std::size_t activeJobs() const = 0;
+
+  /// True iff this scheduler was constructed against exactly this @p model
+  /// instance. A scheduler holds raw pointers into its model, so AddonCpp calls
+  /// this before adopting a caller-supplied scheduler and rejects one built
+  /// against a different model — a mismatch would be silent undefined
+  /// behaviour.
+  [[nodiscard]] virtual bool isBoundTo(const model::IModel& model) const = 0;
 };
 
 } // namespace qvac_lib_inference_addon_cpp

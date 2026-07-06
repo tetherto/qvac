@@ -42,10 +42,6 @@ private:
 };
 
 class SingleJobScheduler final : public IJobScheduler {
-  /// AddonCpp verifies (via model_) that a caller-supplied scheduler was built
-  /// against the very model instance it owns.
-  friend class AddonCpp;
-
   std::shared_ptr<OutputQueue> outputQueue_;
   model::IModel* const model_;
   model::IModelCancel* const modelCancel_;
@@ -202,6 +198,10 @@ public:
   [[nodiscard]] std::size_t activeJobs() const override {
     std::scoped_lock lock(mtx_);
     return job_.has_value() ? 1U : 0U;
+  }
+
+  [[nodiscard]] bool isBoundTo(const model::IModel& model) const override {
+    return model_ == &model;
   }
 };
 

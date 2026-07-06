@@ -49,10 +49,6 @@ namespace qvac_lib_inference_addon_cpp {
 /// while it runs every runJob admission is refused. This is where the
 /// finetune<->inference mutual exclusion is enforced.
 class MultiJobScheduler final : public IJobScheduler {
-  /// AddonCpp verifies (via multiprocessor_) that a caller-supplied scheduler
-  /// was built against the very model instance it owns.
-  friend class AddonCpp;
-
   struct PendingJob {
     std::any input;
     JobId id;
@@ -310,6 +306,11 @@ public:
   [[nodiscard]] std::size_t activeJobs() const override {
     std::lock_guard lock(mtx_);
     return admittedCount_;
+  }
+
+  [[nodiscard]] bool isBoundTo(const model::IModel& model) const override {
+    return multiprocessor_ ==
+        dynamic_cast<const model::IModelMultiprocessor*>(&model);
   }
 };
 
