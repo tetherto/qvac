@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -230,7 +230,7 @@ jobs:
             github.event_name == 'schedule' ||
             (github.event_name == 'workflow_dispatch' && inputs.addon == 'nmtcpp')
           )
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # 6.3.0
         with:
           python-version: '3.11'
           # `cache: pip` caches ~/.cache/pip keyed on the hash of the
@@ -248,7 +248,7 @@ jobs:
             github.event_name == 'schedule' ||
             (github.event_name == 'workflow_dispatch' && inputs.addon == 'nmtcpp')
           )
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ~/.cache/huggingface/hub
           key: comet-model-v1-wmt22-comet-da
@@ -313,7 +313,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-reports-${{ github.run_number }}
           path: reports/
