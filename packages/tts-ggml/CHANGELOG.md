@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Chatterbox no longer crashes at load on Samsung S25 / Adreno GPU.** The
+  multilingual model's quantized weights were uploaded to the OpenCL backend in
+  partial pieces, which the backend read past and faulted on at model load.
+  Quantized weights are now uploaded whole. Bumps the `tts-cpp` requirement to
+  `2026-07-06`.
+
 ## [0.4.0] - 2026-07-03
 
 ### Changed
