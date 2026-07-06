@@ -64,19 +64,27 @@ test("ttsConfigSchema: rejects invalid Chatterbox constructor option ranges", (t
   }
 });
 
-test("ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (chatterbox)", (t) => {
+test("ttsConfigSchema: accepts LavaSR enhancer/denoiser (chatterbox)", (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: "chatterbox",
     language: "en",
     s3genModelSrc: "s3:///example/s3gen.gguf",
     lavasrEnhancerModelSrc: "registry://s3/lavasr/enhancer.gguf",
     lavasrDenoiserModelSrc: "registry://s3/lavasr/denoiser.gguf",
-    outputSampleRate: 48000,
   });
   t.is(r.success, true);
-  if (r.success) {
-    t.is(r.data.outputSampleRate, 48000);
-  }
+});
+
+test("ttsConfigSchema: rejects outputSampleRate for chatterbox (supertonic-only)", (t) => {
+  // Chatterbox does not resample its output yet, so the field is not part of
+  // its schema and .strict() must reject it.
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///example/s3gen.gguf",
+    outputSampleRate: 48000,
+  });
+  t.is(r.success, false, "chatterbox must reject outputSampleRate");
 });
 
 test("ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supertonic)", (t) => {
@@ -101,6 +109,20 @@ test("ttsConfigSchema: rejects outputSampleRate outside 8000-192000", (t) => {
       outputSampleRate,
     });
     t.is(r.success, false, `outputSampleRate ${outputSampleRate} must be rejected`);
+  }
+});
+
+test("ttsConfigSchema: accepts inclusive outputSampleRate boundaries", (t) => {
+  for (const outputSampleRate of [8000, 192000]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: "supertonic",
+      language: "en",
+      outputSampleRate,
+    });
+    t.is(r.success, true, `outputSampleRate ${outputSampleRate} must be accepted`);
+    if (r.success) {
+      t.is(r.data.outputSampleRate, outputSampleRate);
+    }
   }
 });
 

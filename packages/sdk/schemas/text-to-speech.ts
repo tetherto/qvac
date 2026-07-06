@@ -99,7 +99,8 @@ const ttsPositiveIntegerSchema = ttsIntegerSchema.positive();
 
 // Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
 // accepted range; omit to keep the engine's native rate (or 48 kHz when the
-// LavaSR enhancer is active).
+// LavaSR enhancer is active). Supertonic-only: the Chatterbox engine does not
+// yet resample its output, so the field is not exposed on that config.
 const ttsOutputSampleRateSchema = ttsIntegerSchema.min(8000).max(192000);
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
@@ -114,7 +115,6 @@ export const ttsChatterboxRuntimeConfigSchema = z.object({
   threads: ttsPositiveIntegerSchema.optional(),
   nGpuLayers: ttsIntegerSchema.optional(),
   seed: ttsIntegerSchema.optional(),
-  outputSampleRate: ttsOutputSampleRateSchema.optional(),
 });
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({

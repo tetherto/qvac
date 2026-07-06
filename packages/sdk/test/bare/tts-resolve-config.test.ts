@@ -116,6 +116,38 @@ test(
 );
 
 test(
+  "ttsPlugin resolveConfig: resolves Chatterbox LavaSR artifacts and strips *Src",
+  async (t) => {
+    const { ttsPlugin } = await import("@/server/bare/plugins/tts-ggml/plugin");
+
+    const resolved = await ttsPlugin.resolveConfig!(
+      {
+        ttsEngine: "chatterbox",
+        language: "en",
+        s3genModelSrc: "registry://s3/chatterbox/s3gen.gguf",
+        lavasrEnhancerModelSrc: "registry://s3/lavasr/enhancer.gguf",
+        lavasrDenoiserModelSrc: "registry://s3/lavasr/denoiser.gguf",
+      },
+      {
+        resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
+        modelSrc: "registry://s3/chatterbox/t3.gguf",
+        modelType: "tts-ggml",
+      },
+    );
+
+    t.alike(resolved.artifacts, {
+      s3genPath: "/cache/registry://s3/chatterbox/s3gen.gguf",
+      lavasrEnhancerPath: "/cache/registry://s3/lavasr/enhancer.gguf",
+      lavasrDenoiserPath: "/cache/registry://s3/lavasr/denoiser.gguf",
+    });
+    // *Src fields must not leak into the runtime config.
+    t.is("s3genModelSrc" in resolved.config, false);
+    t.is("lavasrEnhancerModelSrc" in resolved.config, false);
+    t.is("lavasrDenoiserModelSrc" in resolved.config, false);
+  },
+);
+
+test(
   "ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertonic)",
   async (t) => {
     const { ttsPlugin } = await import("@/server/bare/plugins/tts-ggml/plugin");
@@ -143,7 +175,7 @@ test(
 );
 
 test(
-  "ttsPlugin createModel: forwards LavaSR enhancer + outputSampleRate (chatterbox)",
+  "ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)",
   async (t) => {
     const { ttsPlugin } = await import("@/server/bare/plugins/tts-ggml/plugin");
 
@@ -157,14 +189,13 @@ test(
       modelConfig: {
         ttsEngine: "chatterbox",
         language: "en",
-        outputSampleRate: 32000,
       },
     });
 
     const model = result.model as TtsGgmlDebugModel;
     t.is(model._enhancerGgufPath, "/tmp/lavasr-enhancer.gguf");
     t.is(model._denoiserGgufPath, undefined);
-    t.is(model._outputSampleRate, 32000);
-    t.is(model._config?.outputSampleRate, 32000);
+    // Chatterbox does not resample; outputSampleRate is never forwarded.
+    t.is(model._outputSampleRate ?? null, null);
   },
 );

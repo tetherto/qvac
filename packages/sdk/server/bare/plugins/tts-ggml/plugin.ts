@@ -160,9 +160,6 @@ function createChatterboxModel(
     config: {
       language: config.language ?? "en",
       ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
-      ...(config.outputSampleRate !== undefined
-        ? { outputSampleRate: config.outputSampleRate }
-        : {}),
     },
     logger,
     opts: { stats: true },
