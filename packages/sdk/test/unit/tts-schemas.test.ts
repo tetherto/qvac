@@ -64,6 +64,46 @@ test("ttsConfigSchema: rejects invalid Chatterbox constructor option ranges", (t
   }
 });
 
+test("ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (chatterbox)", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "chatterbox",
+    language: "en",
+    s3genModelSrc: "s3:///example/s3gen.gguf",
+    lavasrEnhancerModelSrc: "registry://s3/lavasr/enhancer.gguf",
+    lavasrDenoiserModelSrc: "registry://s3/lavasr/denoiser.gguf",
+    outputSampleRate: 48000,
+  });
+  t.is(r.success, true);
+  if (r.success) {
+    t.is(r.data.outputSampleRate, 48000);
+  }
+});
+
+test("ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supertonic)", (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: "supertonic",
+    language: "en",
+    lavasrEnhancerModelSrc: "registry://s3/lavasr/enhancer.gguf",
+    lavasrDenoiserModelSrc: "registry://s3/lavasr/denoiser.gguf",
+    outputSampleRate: 24000,
+  });
+  t.is(r.success, true);
+  if (r.success) {
+    t.is(r.data.outputSampleRate, 24000);
+  }
+});
+
+test("ttsConfigSchema: rejects outputSampleRate outside 8000-192000", (t) => {
+  for (const outputSampleRate of [7999, 192001, 44100.5]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: "supertonic",
+      language: "en",
+      outputSampleRate,
+    });
+    t.is(r.success, false, `outputSampleRate ${outputSampleRate} must be rejected`);
+  }
+});
+
 test("ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic", (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: "supertonic",
