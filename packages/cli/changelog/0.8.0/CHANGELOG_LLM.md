@@ -36,9 +36,7 @@ Reasoning models can now discard a turn's thinking block from the KV cache after
 // POST /v1/chat/completions
 {
   "model": "qwen3...",
-  "messages": [
-    /* ... */
-  ],
+  "messages": [/* ... */],
   "remove_thinking_from_context": true
 }
 ```
