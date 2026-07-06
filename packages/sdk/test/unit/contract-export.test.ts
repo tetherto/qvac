@@ -41,6 +41,30 @@ test('schema document has request and response defs for every method', (t) => {
   )
 })
 
+test('schema defs carry unique titles for Python codegen class names', (t) => {
+  // Without a `title`, JSON Schema -> Python codegen (e.g.
+  // datamodel-code-generator) falls back to positional names like
+  // `Request1Model11` for nested unions instead of `LoadModelRequest` —
+  // verified against the actual generator, not assumed.
+  const { schemaDocument, manifest } = buildContract()
+  const defs = schemaDocument.$defs as Record<string, { title?: string }>
+
+  const titles = new Set<string>()
+  for (const [defName, def] of Object.entries(defs)) {
+    t.ok(def.title, `${defName} has a title`)
+    if (def.title) {
+      t.ok(!titles.has(def.title), `${def.title} is unique (from ${defName})`)
+      titles.add(def.title)
+    }
+  }
+
+  for (const method of manifest.methods) {
+    const pascalName = method.name.charAt(0).toUpperCase() + method.name.slice(1)
+    t.is(defs[`${method.name}.request`]?.title, `${pascalName}Request`)
+    t.is(defs[`${method.name}.response`]?.title, `${pascalName}Response`)
+  }
+})
+
 test('export is deterministic across runs', async (t) => {
   const first = await renderContractFiles()
   const second = await renderContractFiles()

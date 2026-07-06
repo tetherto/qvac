@@ -109,6 +109,26 @@ function refTo(defName: string): JsonSchema {
   return { $ref: `#/$defs/${defName}` }
 }
 
+/**
+ * PascalCase class name for a wire type, e.g. `loadModel` -> `LoadModel`,
+ * `finetune:progress` -> `FinetuneProgress`. Without a `title`, JSON Schema
+ * -> Python codegen (e.g. datamodel-code-generator) falls back to
+ * positional names like `Request1Model11` for nested unions — verified
+ * empirically against the actual generator, not assumed.
+ */
+function toPascalCase(name: string): string {
+  return name
+    .split(/[:\-_]/)
+    .map(function (part) {
+      return part.length > 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part
+    })
+    .join('')
+}
+
+function classTitleFor(name: string, suffix: 'Request' | 'Response'): string {
+  return `${toPascalCase(name)}${suffix}`
+}
+
 export function buildContract() {
   const methodNames = (Object.keys(methodShapes) as MethodName[]).sort()
   const requestByType = collectByWireType(requestSchema.options, 'request')
@@ -132,12 +152,14 @@ export function buildContract() {
 
   const defs: Record<string, JsonSchema> = {
     request: {
+      title: 'AnyRequest',
       description: 'Any request accepted by the server, in wire (pre-parse) shape.',
       anyOf: methodNames.map(function (name) {
         return refTo(`${name}.request`)
       })
     },
     response: {
+      title: 'AnyResponse',
       description:
         'Any response emitted by the server, including progress updates and error envelopes.',
       anyOf: responseTypes.map(function (type) {
@@ -146,18 +168,18 @@ export function buildContract() {
     }
   }
 
-  const defEntries: Array<[string, z.ZodType, 'input' | 'output']> = []
+  const defEntries: Array<[string, z.ZodType, 'input' | 'output', string]> = []
   for (const [type, schema] of requestByType) {
-    defEntries.push([`${type}.request`, schema, 'input'])
+    defEntries.push([`${type}.request`, schema, 'input', classTitleFor(type, 'Request')])
   }
   for (const [type, schema] of responseByType) {
-    defEntries.push([`${type}.response`, schema, 'output'])
+    defEntries.push([`${type}.response`, schema, 'output', classTitleFor(type, 'Response')])
   }
   defEntries.sort(function (a, b) {
     return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
   })
-  for (const [defName, schema, io] of defEntries) {
-    defs[defName] = toWireJsonSchema(schema, io, defName)
+  for (const [defName, schema, io, title] of defEntries) {
+    defs[defName] = { title, ...toWireJsonSchema(schema, io, defName) }
   }
 
   const manifest = {

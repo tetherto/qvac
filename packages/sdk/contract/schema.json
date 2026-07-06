@@ -4,6 +4,7 @@
   "description": "Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
   "$defs": {
     "request": {
+      "title": "AnyRequest",
       "description": "Any request accepted by the server, in wire (pre-parse) shape.",
       "anyOf": [
         {
@@ -114,6 +115,7 @@
       ]
     },
     "response": {
+      "title": "AnyResponse",
       "description": "Any response emitted by the server, including progress updates and error envelopes.",
       "anyOf": [
         {
@@ -236,6 +238,7 @@
       ]
     },
     "bciTranscribe.request": {
+      "title": "BciTranscribeRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -294,6 +297,7 @@
       "required": ["modelId", "neuralData", "type"]
     },
     "bciTranscribe.response": {
+      "title": "BciTranscribeResponse",
       "type": "object",
       "properties": {
         "text": {
@@ -387,6 +391,7 @@
       "additionalProperties": false
     },
     "bciTranscribeStream.request": {
+      "title": "BciTranscribeStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -432,6 +437,7 @@
       "required": ["modelId", "type"]
     },
     "bciTranscribeStream.response": {
+      "title": "BciTranscribeStreamResponse",
       "type": "object",
       "properties": {
         "text": {
@@ -525,6 +531,7 @@
       "additionalProperties": false
     },
     "cancel.request": {
+      "title": "CancelRequest",
       "allOf": [
         {
           "type": "object",
@@ -596,6 +603,7 @@
       ]
     },
     "cancel.response": {
+      "title": "CancelResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -618,6 +626,7 @@
       "additionalProperties": false
     },
     "classify.request": {
+      "title": "ClassifyRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -653,6 +662,7 @@
       "required": ["modelId", "image", "type"]
     },
     "classify.response": {
+      "title": "ClassifyResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -683,6 +693,7 @@
       "additionalProperties": false
     },
     "completionStream.request": {
+      "title": "CompletionStreamRequest",
       "type": "object",
       "properties": {
         "history": {
@@ -938,6 +949,7 @@
       "required": ["history", "modelId", "stream", "type"]
     },
     "completionStream.response": {
+      "title": "CompletionStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1199,6 +1211,7 @@
       "additionalProperties": false
     },
     "deleteCache.request": {
+      "title": "DeleteCacheRequest",
       "anyOf": [
         {
           "type": "object",
@@ -1233,6 +1246,7 @@
       ]
     },
     "deleteCache.response": {
+      "title": "DeleteCacheResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1250,6 +1264,7 @@
       "additionalProperties": false
     },
     "diffusionStream.request": {
+      "title": "DiffusionStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -1417,6 +1432,7 @@
       "required": ["modelId", "prompt", "type"]
     },
     "diffusionStream.response": {
+      "title": "DiffusionStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1496,6 +1512,7 @@
       "additionalProperties": false
     },
     "downloadAsset.request": {
+      "title": "DownloadAssetRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -1520,6 +1537,7 @@
       "required": ["type", "assetSrc"]
     },
     "downloadAsset.response": {
+      "title": "DownloadAssetResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1540,6 +1558,7 @@
       "additionalProperties": false
     },
     "embed.request": {
+      "title": "EmbedRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -1576,6 +1595,7 @@
       "required": ["modelId", "text", "type"]
     },
     "embed.response": {
+      "title": "EmbedResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1642,6 +1662,7 @@
       "additionalProperties": false
     },
     "error.response": {
+      "title": "ErrorResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -1676,6 +1697,7 @@
       "additionalProperties": false
     },
     "finetune.request": {
+      "title": "FinetuneRequest",
       "anyOf": [
         {
           "type": "object",
@@ -2044,6 +2066,7 @@
       ]
     },
     "finetune.response": {
+      "title": "FinetuneResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -2151,6 +2174,7 @@
       "additionalProperties": false
     },
     "finetune:progress.response": {
+      "title": "FinetuneProgressResponse",
       "type": "object",
       "properties": {
         "is_train": {
@@ -2270,6 +2294,7 @@
       "additionalProperties": false
     },
     "getLoadedModelInfo.request": {
+      "title": "GetLoadedModelInfoRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -2283,6 +2308,7 @@
       "required": ["modelId", "type"]
     },
     "getLoadedModelInfo.response": {
+      "title": "GetLoadedModelInfoResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -2364,6 +2390,7 @@
       "additionalProperties": false
     },
     "getModelInfo.request": {
+      "title": "GetModelInfoRequest",
       "type": "object",
       "properties": {
         "name": {
@@ -2378,6 +2405,7 @@
       "required": ["name", "type"]
     },
     "getModelInfo.response": {
+      "title": "GetModelInfoResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -2550,6 +2578,7 @@
       "additionalProperties": false
     },
     "heartbeat.request": {
+      "title": "HeartbeatRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -2581,6 +2610,7 @@
       "required": ["type"]
     },
     "heartbeat.response": {
+      "title": "HeartbeatResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -2595,6 +2625,7 @@
       "additionalProperties": false
     },
     "loadModel.request": {
+      "title": "LoadModelRequest",
       "anyOf": [
         {
           "anyOf": [
@@ -6445,6 +6476,7 @@
       ]
     },
     "loadModel.response": {
+      "title": "LoadModelResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -6465,6 +6497,7 @@
       "additionalProperties": false
     },
     "loggingStream.request": {
+      "title": "LoggingStreamRequest",
       "type": "object",
       "properties": {
         "id": {
@@ -6478,6 +6511,7 @@
       "required": ["id", "type"]
     },
     "loggingStream.response": {
+      "title": "LoggingStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -6505,6 +6539,7 @@
       "additionalProperties": false
     },
     "modelProgress.response": {
+      "title": "ModelProgressResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -6596,6 +6631,7 @@
       "additionalProperties": false
     },
     "modelRegistryGetModel.request": {
+      "title": "ModelRegistryGetModelRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -6612,6 +6648,7 @@
       "required": ["type", "registryPath", "registrySource"]
     },
     "modelRegistryGetModel.response": {
+      "title": "ModelRegistryGetModelResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -6737,6 +6774,7 @@
       "additionalProperties": false
     },
     "modelRegistryList.request": {
+      "title": "ModelRegistryListRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -6747,6 +6785,7 @@
       "required": ["type"]
     },
     "modelRegistryList.response": {
+      "title": "ModelRegistryListResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -6875,6 +6914,7 @@
       "additionalProperties": false
     },
     "modelRegistrySearch.request": {
+      "title": "ModelRegistrySearchRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -6912,6 +6952,7 @@
       "required": ["type"]
     },
     "modelRegistrySearch.response": {
+      "title": "ModelRegistrySearchResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7040,6 +7081,7 @@
       "additionalProperties": false
     },
     "ocrStream.request": {
+      "title": "OcrStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -7091,6 +7133,7 @@
       "required": ["modelId", "image", "type"]
     },
     "ocrStream.response": {
+      "title": "OcrStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7156,6 +7199,7 @@
       "additionalProperties": false
     },
     "pluginInvoke.request": {
+      "title": "PluginInvokeRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -7173,6 +7217,7 @@
       "required": ["type", "modelId", "handler", "params"]
     },
     "pluginInvoke.response": {
+      "title": "PluginInvokeResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7185,6 +7230,7 @@
       "additionalProperties": false
     },
     "pluginInvokeStream.request": {
+      "title": "PluginInvokeStreamRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -7202,6 +7248,7 @@
       "required": ["type", "modelId", "handler", "params"]
     },
     "pluginInvokeStream.response": {
+      "title": "PluginInvokeStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7217,6 +7264,7 @@
       "additionalProperties": false
     },
     "provide.request": {
+      "title": "ProvideRequest",
       "type": "object",
       "properties": {
         "firewall": {
@@ -7245,6 +7293,7 @@
       "additionalProperties": false
     },
     "provide.response": {
+      "title": "ProvideResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7265,6 +7314,7 @@
       "additionalProperties": false
     },
     "rag.request": {
+      "title": "RagRequest",
       "oneOf": [
         {
           "type": "object",
@@ -7611,6 +7661,7 @@
       ]
     },
     "rag.response": {
+      "title": "RagResponse",
       "oneOf": [
         {
           "type": "object",
@@ -7918,6 +7969,7 @@
       ]
     },
     "rag:progress.response": {
+      "title": "RagProgressResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7948,6 +8000,7 @@
       "additionalProperties": false
     },
     "resume.request": {
+      "title": "ResumeRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -7958,6 +8011,7 @@
       "required": ["type"]
     },
     "resume.response": {
+      "title": "ResumeResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7969,6 +8023,7 @@
       "additionalProperties": false
     },
     "state.request": {
+      "title": "StateRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -7979,6 +8034,7 @@
       "required": ["type"]
     },
     "state.response": {
+      "title": "StateResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -7994,6 +8050,7 @@
       "additionalProperties": false
     },
     "stopProvide.request": {
+      "title": "StopProvideRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -8005,6 +8062,7 @@
       "additionalProperties": false
     },
     "stopProvide.response": {
+      "title": "StopProvideResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8022,6 +8080,7 @@
       "additionalProperties": false
     },
     "suspend.request": {
+      "title": "SuspendRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -8032,6 +8091,7 @@
       "required": ["type"]
     },
     "suspend.response": {
+      "title": "SuspendResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8043,6 +8103,7 @@
       "additionalProperties": false
     },
     "textToSpeech.request": {
+      "title": "TextToSpeechRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -8079,6 +8140,7 @@
       "required": ["modelId", "text", "type"]
     },
     "textToSpeech.response": {
+      "title": "TextToSpeechResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8120,6 +8182,7 @@
       "additionalProperties": false
     },
     "textToSpeechStream.request": {
+      "title": "TextToSpeechStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -8152,6 +8215,7 @@
       "required": ["modelId", "type"]
     },
     "textToSpeechStream.response": {
+      "title": "TextToSpeechStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8193,6 +8257,7 @@
       "additionalProperties": false
     },
     "transcribe.request": {
+      "title": "TranscribeRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -8247,6 +8312,7 @@
       "required": ["modelId", "audioChunk", "type"]
     },
     "transcribe.response": {
+      "title": "TranscribeResponse",
       "type": "object",
       "properties": {
         "text": {
@@ -8382,6 +8448,7 @@
       "additionalProperties": false
     },
     "transcribeStream.request": {
+      "title": "TranscribeStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -8479,6 +8546,7 @@
       "required": ["modelId", "type"]
     },
     "transcribeStream.response": {
+      "title": "TranscribeStreamResponse",
       "type": "object",
       "properties": {
         "text": {
@@ -8614,6 +8682,7 @@
       "additionalProperties": false
     },
     "translate.request": {
+      "title": "TranslateRequest",
       "oneOf": [
         {
           "type": "object",
@@ -8708,6 +8777,7 @@
       ]
     },
     "translate.response": {
+      "title": "TranslateResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8762,6 +8832,7 @@
       "additionalProperties": false
     },
     "unloadModel.request": {
+      "title": "UnloadModelRequest",
       "type": "object",
       "properties": {
         "type": {
@@ -8779,6 +8850,7 @@
       "required": ["type", "modelId"]
     },
     "unloadModel.response": {
+      "title": "UnloadModelResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8802,6 +8874,7 @@
       "additionalProperties": false
     },
     "upscaleStream.request": {
+      "title": "UpscaleStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -8828,6 +8901,7 @@
       "required": ["modelId", "image", "type"]
     },
     "upscaleStream.response": {
+      "title": "UpscaleStreamResponse",
       "type": "object",
       "properties": {
         "type": {
@@ -8899,6 +8973,7 @@
       "additionalProperties": false
     },
     "videoStream.request": {
+      "title": "VideoStreamRequest",
       "type": "object",
       "properties": {
         "modelId": {
@@ -9133,6 +9208,7 @@
       "required": ["modelId", "prompt", "mode", "type"]
     },
     "videoStream.response": {
+      "title": "VideoStreamResponse",
       "type": "object",
       "properties": {
         "type": {
