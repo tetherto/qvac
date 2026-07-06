@@ -1,14 +1,12 @@
-import type {
-  CompletionStreamRequest,
-  CompletionStreamResponse,
-} from "@/schemas";
-import { dispatchPluginStream } from "@/server/rpc/handlers/plugin-dispatch";
+import type { CompletionStreamRequest, CompletionStreamResponse } from '@/schemas'
+import { dispatchPluginStream } from '@/server/rpc/handlers/plugin-dispatch'
 
 export async function* handleCompletionStream(
-  request: CompletionStreamRequest,
+  request: CompletionStreamRequest
 ): AsyncGenerator<CompletionStreamResponse> {
-  yield* dispatchPluginStream<
-    CompletionStreamRequest,
-    CompletionStreamResponse
-  >(request.modelId, "completionStream", request);
+  yield* dispatchPluginStream<CompletionStreamRequest, CompletionStreamResponse>(
+    request.modelId,
+    'completionStream',
+    request
+  )
 }

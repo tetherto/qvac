@@ -1,10 +1,10 @@
-import { stream } from "@/client/rpc/rpc-client";
+import { stream } from '@/client/rpc/rpc-client'
 import type {
   LoggingStreamResponse,
   LoggingStreamRequest,
-  LoggingParams,
-} from "@/schemas/logging-stream";
-import { InvalidResponseError } from "@/utils/errors-client";
+  LoggingParams
+} from '@/schemas/logging-stream'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 /**
  * Opens a logging stream to receive real-time logs.
@@ -27,21 +27,19 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * }
  * ```
  */
-export async function* loggingStream(
-  params: LoggingParams,
-): AsyncGenerator<LoggingStreamResponse> {
+export async function* loggingStream(params: LoggingParams): AsyncGenerator<LoggingStreamResponse> {
   const request: LoggingStreamRequest = {
-    type: "loggingStream",
-    ...params,
-  };
+    type: 'loggingStream',
+    ...params
+  }
 
-  const responseStream = stream(request);
+  const responseStream = stream(request)
 
   for await (const response of responseStream) {
-    if (response.type !== "loggingStream") {
-      throw new InvalidResponseError("loggingStream");
+    if (response.type !== 'loggingStream') {
+      throw new InvalidResponseError('loggingStream')
     }
 
-    yield response;
+    yield response
   }
 }

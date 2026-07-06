@@ -1,2 +1,2 @@
-export { detectToolDialectFromName } from "./dialect";
-export { parseToolCalls } from "./parser";
+export { detectToolDialectFromName } from './dialect'
+export { parseToolCalls } from './parser'

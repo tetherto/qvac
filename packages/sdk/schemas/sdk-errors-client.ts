@@ -1,4 +1,4 @@
-import { addCodes, type ErrorCodesMap } from "@qvac/error";
+import { addCodes, type ErrorCodesMap } from '@qvac/error'
 
 // Client-side error codes (50,001-52,000 range for this SDK)
 export const SDK_CLIENT_ERROR_CODES = {
@@ -49,199 +49,192 @@ export const SDK_CLIENT_ERROR_CODES = {
   BARE_RUNTIME_BINARY_NOT_FOUND: 50614,
 
   // Profiler Errors (50,800-50,899)
-  PROFILER_INVALID_CAPACITY: 50800,
-} as const;
+  PROFILER_INVALID_CAPACITY: 50800
+} as const
 
 const clientErrorDefinitions: ErrorCodesMap = {
   // Response Validation Errors (50,001-50,199)
   [SDK_CLIENT_ERROR_CODES.INVALID_RESPONSE_TYPE]: {
-    name: "INVALID_RESPONSE_TYPE",
-    message: (expected: string) =>
-      `Invalid response type received, expected: ${expected}`,
+    name: 'INVALID_RESPONSE_TYPE',
+    message: (expected: string) => `Invalid response type received, expected: ${expected}`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_OPERATION_IN_RESPONSE]: {
-    name: "INVALID_OPERATION_IN_RESPONSE",
-    message: "Invalid operation type in response",
+    name: 'INVALID_OPERATION_IN_RESPONSE',
+    message: 'Invalid operation type in response'
   },
   [SDK_CLIENT_ERROR_CODES.STREAM_ENDED_WITHOUT_RESPONSE]: {
-    name: "STREAM_ENDED_WITHOUT_RESPONSE",
-    message: "Stream ended without receiving final response",
+    name: 'STREAM_ENDED_WITHOUT_RESPONSE',
+    message: 'Stream ended without receiving final response'
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE]: {
-    name: "INVALID_AUDIO_CHUNK_TYPE",
-    message: "Invalid audio chunk type received",
+    name: 'INVALID_AUDIO_CHUNK_TYPE',
+    message: 'Invalid audio chunk type received'
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_TOOLS_ARRAY]: {
-    name: "INVALID_TOOLS_ARRAY",
-    message: "Invalid tools array provided",
+    name: 'INVALID_TOOLS_ARRAY',
+    message: 'Invalid tools array provided'
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_TOOL_SCHEMA]: {
-    name: "INVALID_TOOL_SCHEMA",
-    message: (details: string) => `Invalid tool schema: ${details}`,
+    name: 'INVALID_TOOL_SCHEMA',
+    message: (details: string) => `Invalid tool schema: ${details}`
   },
   [SDK_CLIENT_ERROR_CODES.OCR_FAILED]: {
-    name: "OCR_FAILED",
-    message: (details?: string) =>
-      `OCR operation failed${details ? `: ${details}` : ""}`,
+    name: 'OCR_FAILED',
+    message: (details?: string) => `OCR operation failed${details ? `: ${details}` : ''}`
   },
   [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
-    name: "MODEL_TYPE_REQUIRED",
+    name: 'MODEL_TYPE_REQUIRED',
     message:
-      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "tts-ggml", "ggml-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.'
   },
   [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
-    name: "MODEL_SRC_TYPE_MISMATCH",
+    name: 'MODEL_SRC_TYPE_MISMATCH',
     message: (inferred: string, resolved: string) =>
-      `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`,
+      `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`
   },
   [SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED]: {
-    name: "REQUEST_VALIDATION_FAILED",
-    message: (errors: string) => `Invalid request:\n${errors}`,
+    name: 'REQUEST_VALIDATION_FAILED',
+    message: (errors: string) => `Invalid request:\n${errors}`
   },
 
   // RPC Communication Errors (50,200-50,399)
   [SDK_CLIENT_ERROR_CODES.RPC_NO_HANDLER]: {
-    name: "RPC_NO_HANDLER",
+    name: 'RPC_NO_HANDLER',
     message: (requestType: string) =>
-      `No handler function registered for request type: ${requestType}`,
+      `No handler function registered for request type: ${requestType}`
   },
   [SDK_CLIENT_ERROR_CODES.RPC_REQUEST_NOT_SENT]: {
-    name: "RPC_REQUEST_NOT_SENT",
-    message: "Cannot perform operation - request has not been sent yet",
+    name: 'RPC_REQUEST_NOT_SENT',
+    message: 'Cannot perform operation - request has not been sent yet'
   },
   [SDK_CLIENT_ERROR_CODES.RPC_RESPONSE_STREAM_NOT_CREATED]: {
-    name: "RPC_RESPONSE_STREAM_NOT_CREATED",
-    message: "Cannot perform operation - response stream not created",
+    name: 'RPC_RESPONSE_STREAM_NOT_CREATED',
+    message: 'Cannot perform operation - response stream not created'
   },
   [SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED]: {
-    name: "RPC_CONNECTION_FAILED",
-    message: (details: string) => `RPC connection failed: ${details}`,
+    name: 'RPC_CONNECTION_FAILED',
+    message: (details: string) => `RPC connection failed: ${details}`
   },
   [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
-    name: "RPC_INIT_TIMEOUT",
+    name: 'RPC_INIT_TIMEOUT',
     message: (timeoutMs: number) =>
-      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`,
+      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_CRASHED]: {
-    name: "WORKER_CRASHED",
+    name: 'WORKER_CRASHED',
     message: (code: string, signal: string) =>
-      `Bare worker exited mid-request (code=${code}, signal=${signal}) — in-flight calls were aborted`,
+      `Bare worker exited mid-request (code=${code}, signal=${signal}) — in-flight calls were aborted`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
-    name: "WORKER_SHUTDOWN",
-    message: () =>
-      `SDK is shutting down — in-flight RPC call aborted`,
+    name: 'WORKER_SHUTDOWN',
+    message: () => `SDK is shutting down — in-flight RPC call aborted`
   },
 
   // Provider/Delegation Errors (50,400-50,599)
   [SDK_CLIENT_ERROR_CODES.PROVIDER_START_FAILED]: {
-    name: "PROVIDER_START_FAILED",
-    message: (details?: string) =>
-      `Failed to start provider${details ? `: ${details}` : ""}`,
+    name: 'PROVIDER_START_FAILED',
+    message: (details?: string) => `Failed to start provider${details ? `: ${details}` : ''}`
   },
   [SDK_CLIENT_ERROR_CODES.PROVIDER_STOP_FAILED]: {
-    name: "PROVIDER_STOP_FAILED",
-    message: (details?: string) =>
-      `Failed to stop provider${details ? `: ${details}` : ""}`,
+    name: 'PROVIDER_STOP_FAILED',
+    message: (details?: string) => `Failed to stop provider${details ? `: ${details}` : ''}`
   },
   [SDK_CLIENT_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE]: {
-    name: "DELEGATE_NO_FINAL_RESPONSE",
-    message: "No final response received from delegated provider",
+    name: 'DELEGATE_NO_FINAL_RESPONSE',
+    message: 'No final response received from delegated provider'
   },
   [SDK_CLIENT_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
-    name: "DELEGATE_PROVIDER_ERROR",
-    message: (details: string) => `Delegated provider error: ${details}`,
+    name: 'DELEGATE_PROVIDER_ERROR',
+    message: (details: string) => `Delegated provider error: ${details}`
   },
   [SDK_CLIENT_ERROR_CODES.DELEGATE_CONNECTION_FAILED]: {
-    name: "DELEGATE_CONNECTION_FAILED",
-    message: (details: string) =>
-      `Failed to connect to delegated provider: ${details}`,
+    name: 'DELEGATE_CONNECTION_FAILED',
+    message: (details: string) => `Failed to connect to delegated provider: ${details}`
   },
 
   // Build/Bundle Errors (50,600-50,799)
   [SDK_CLIENT_ERROR_CODES.SDK_NOT_FOUND_IN_NODE_MODULES]: {
-    name: "SDK_NOT_FOUND_IN_NODE_MODULES",
+    name: 'SDK_NOT_FOUND_IN_NODE_MODULES',
     message:
-      "QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev",
+      'QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev'
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND]: {
-    name: "WORKER_FILE_NOT_FOUND",
-    message: (workerPath: string) => `Worker file not found at ${workerPath}`,
+    name: 'WORKER_FILE_NOT_FOUND',
+    message: (workerPath: string) => `Worker file not found at ${workerPath}`
   },
 
   [SDK_CLIENT_ERROR_CODES.CONFIG_FILE_NOT_FOUND]: {
-    name: "CONFIG_FILE_NOT_FOUND",
+    name: 'CONFIG_FILE_NOT_FOUND',
     message: (searchPaths: string) =>
-      `Config file not found. Searched: ${searchPaths}. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root.`,
+      `Config file not found. Searched: ${searchPaths}. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root.`
   },
   [SDK_CLIENT_ERROR_CODES.CONFIG_FILE_INVALID]: {
-    name: "CONFIG_FILE_INVALID",
+    name: 'CONFIG_FILE_INVALID',
     message: (filePath: string, reason: string) =>
-      `Config file at ${filePath} is invalid: ${reason}`,
+      `Config file at ${filePath} is invalid: ${reason}`
   },
   [SDK_CLIENT_ERROR_CODES.CONFIG_FILE_PARSE_FAILED]: {
-    name: "CONFIG_FILE_PARSE_FAILED",
+    name: 'CONFIG_FILE_PARSE_FAILED',
     message: (filePath: string, error: string) =>
-      `Failed to parse config file at ${filePath}: ${error}`,
+      `Failed to parse config file at ${filePath}: ${error}`
   },
   [SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED]: {
-    name: "CONFIG_VALIDATION_FAILED",
-    message: (errors: string) => `Config validation failed: ${errors}`,
+    name: 'CONFIG_VALIDATION_FAILED',
+    message: (errors: string) => `Config validation failed: ${errors}`
   },
   [SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS]: {
-    name: "MULTIPLE_SDK_INSTALLATIONS",
+    name: 'MULTIPLE_SDK_INSTALLATIONS',
     message: (packages: string) =>
-      `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`,
+      `Multiple QVAC SDK installations found: ${packages}. Remove all but one to avoid conflicts.`
   },
   [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
-    name: "PEAR_WORKER_ENTRY_REQUIRED",
+    name: 'PEAR_WORKER_ENTRY_REQUIRED',
     message: (workerEntry: string) =>
-      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
+      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
-    name: "WORKER_PLUGINS_NOT_REGISTERED",
+    name: 'WORKER_PLUGINS_NOT_REGISTERED',
     message: () =>
-      "No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For direct Bare usage we recommend the dedicated `@qvac/bare-sdk` package. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare",
+      'No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For direct Bare usage we recommend the dedicated `@qvac/bare-sdk` package. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare'
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
-    name: "BUNDLE_VERIFICATION_FAILED",
+    name: 'BUNDLE_VERIFICATION_FAILED',
     message: (bundlePath: string) =>
-      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`,
+      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`
   },
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED]: {
-    name: "BARE_PACK_NOT_INSTALLED",
+    name: 'BARE_PACK_NOT_INSTALLED',
     message:
-      "bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack",
+      'bare-pack binary not found. Install bare-pack as a peer dependency: npm install bare-pack'
   },
   [SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR]: {
-    name: "BARE_PACK_ERROR",
+    name: 'BARE_PACK_ERROR',
     message: (exitCode: number, entryPath: string, outputPath: string) =>
-      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`,
+      `bare-pack exited with code ${exitCode}\n\n  Entry file: ${entryPath}\n  Output file: ${outputPath}\n\n  Run bare-pack manually for more details.`
   },
   [SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER]: {
-    name: "INVALID_PLUGIN_SPECIFIER",
+    name: 'INVALID_PLUGIN_SPECIFIER',
     message: (specifiers: string) =>
-      `Invalid plugin specifiers (must end with /plugin):\n${specifiers}`,
+      `Invalid plugin specifiers (must end with /plugin):\n${specifiers}`
   },
   [SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND]: {
-    name: "BARE_IMPORTS_MAP_NOT_FOUND",
+    name: 'BARE_IMPORTS_MAP_NOT_FOUND',
     message: (sdkName: string, expectedPath: string) =>
-      `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`,
+      `bare-imports.json not found.\n\n  Expected at: ${expectedPath}\n\n  Make sure ${sdkName} is installed in your project.`
   },
   [SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND]: {
-    name: "BARE_RUNTIME_BINARY_NOT_FOUND",
+    name: 'BARE_RUNTIME_BINARY_NOT_FOUND',
     message: (platform: string, arch: string) =>
-      `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`,
+      `Could not load the Bare runtime binary for ${platform}-${arch}. The platform package "bare-runtime-${platform}-${arch}" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \`pnpm add bare-runtime-${platform}-${arch}\`) or by installing with npm or bun. See https://github.com/tetherto/qvac/issues/1492`
   },
 
   // Profiler Errors (50,800-50,899)
   [SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY]: {
-    name: "PROFILER_INVALID_CAPACITY",
-    message: (minCapacity: number) =>
-      `Ring buffer capacity must be at least ${minCapacity}`,
-  },
-};
+    name: 'PROFILER_INVALID_CAPACITY',
+    message: (minCapacity: number) => `Ring buffer capacity must be at least ${minCapacity}`
+  }
+}
 
-addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.2.0" });
+addCodes(clientErrorDefinitions, { name: 'qvac-sdk-client', version: '1.2.0' })
 
-export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS };
+export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS }

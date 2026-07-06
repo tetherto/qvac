@@ -1,11 +1,11 @@
-import { getRequestRegistry } from "@/server/bare/runtime";
+import { getRequestRegistry } from '@/server/bare/runtime'
 
 // Sentinel for "no workspace specified". Mirrors the value re-exported
 // from `rag-workspace-manager.ts`; redeclared locally so this module is
 // safely importable in environments that don't have the Bare runtime
 // (unit tests, doc generators) — `rag-workspace-manager` pulls in
 // `bare-fs` / `bare-path` at module load.
-const DEFAULT_WORKSPACE = "default";
+const DEFAULT_WORKSPACE = 'default'
 
 /**
  * RAG operation tracking — workspace-level admission bookkeeping.
@@ -29,10 +29,10 @@ const DEFAULT_WORKSPACE = "default";
  */
 
 // workspace key → requestId of the in-flight RAG operation on that workspace.
-const activeRagRequestByWorkspace = new Map<string, string>();
+const activeRagRequestByWorkspace = new Map<string, string>()
 
 export function getWorkspaceKey(workspace?: string): string {
-  return workspace ?? DEFAULT_WORKSPACE;
+  return workspace ?? DEFAULT_WORKSPACE
 }
 
 /**
@@ -41,7 +41,7 @@ export function getWorkspaceKey(workspace?: string): string {
  * pre-empt before calling `registry.begin(...)`.
  */
 export function getActiveRagRequest(workspace?: string): string | undefined {
-  return activeRagRequestByWorkspace.get(getWorkspaceKey(workspace));
+  return activeRagRequestByWorkspace.get(getWorkspaceKey(workspace))
 }
 
 /**
@@ -50,11 +50,8 @@ export function getActiveRagRequest(workspace?: string): string | undefined {
  * `clearActiveRagRequest` via the request scope's deferred cleanup so the
  * map never outlives the request.
  */
-export function setActiveRagRequest(
-  workspace: string | undefined,
-  requestId: string,
-): void {
-  activeRagRequestByWorkspace.set(getWorkspaceKey(workspace), requestId);
+export function setActiveRagRequest(workspace: string | undefined, requestId: string): void {
+  activeRagRequestByWorkspace.set(getWorkspaceKey(workspace), requestId)
 }
 
 /**
@@ -63,13 +60,10 @@ export function setActiveRagRequest(
  * the same workspace: the older context's scope unwind must not stomp the
  * newer context's mapping installed by the pre-emption sequence.
  */
-export function clearActiveRagRequest(
-  workspace: string | undefined,
-  requestId: string,
-): void {
-  const key = getWorkspaceKey(workspace);
+export function clearActiveRagRequest(workspace: string | undefined, requestId: string): void {
+  const key = getWorkspaceKey(workspace)
   if (activeRagRequestByWorkspace.get(key) === requestId) {
-    activeRagRequestByWorkspace.delete(key);
+    activeRagRequestByWorkspace.delete(key)
   }
 }
 
@@ -80,10 +74,10 @@ export function clearActiveRagRequest(
  * racing with `close-all`) get a no-op on the second pass.
  */
 export function cancelAllRagOperations(): void {
-  if (activeRagRequestByWorkspace.size === 0) return;
-  const registry = getRequestRegistry();
+  if (activeRagRequestByWorkspace.size === 0) return
+  const registry = getRequestRegistry()
   for (const [key, requestId] of activeRagRequestByWorkspace) {
-    registry.cancel({ requestId, reason: "rag-shutdown" });
-    activeRagRequestByWorkspace.delete(key);
+    registry.cancel({ requestId, reason: 'rag-shutdown' })
+    activeRagRequestByWorkspace.delete(key)
   }
 }
