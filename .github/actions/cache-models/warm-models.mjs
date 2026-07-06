@@ -30,7 +30,7 @@
 //   HF_TOKEN   optional; sent as Bearer for huggingface.co URLs (gated repos).
 
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -120,9 +120,16 @@ async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
   throw new Error(`failed to download after ${retries + 1} attempts: ${lastErr && lastErr.message}`)
 }
 
-async function sha256File (filePath) {
-  const buf = await readFile(filePath)
-  return createHash('sha256').update(buf).digest('hex')
+// Streamed so multi-GB models hash correctly: fs.readFile is hard-capped at
+// 2 GiB (kIoMaxLength), which most of these model files exceed.
+function sha256File (filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = createReadStream(filePath)
+    stream.on('error', reject)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('end', () => resolve(hash.digest('hex')))
+  })
 }
 
 // Returns { ok, reason } — mirrors runtime ensureModel verification ordering

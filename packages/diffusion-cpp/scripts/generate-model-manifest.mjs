@@ -17,7 +17,7 @@
 //   --force         Recompute even entries that already have a sha256.
 
 import { createHash } from 'node:crypto'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -64,9 +64,20 @@ function download (url, dest, redirectsLeft = 10) {
   })
 }
 
+// Hash is streamed because fs.readFile is hard-capped at 2 GiB
+// (kIoMaxLength) and most of these model files are larger than that.
+function sha256Stream (filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = createReadStream(filePath)
+    stream.on('error', reject)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('end', () => resolve(hash.digest('hex')))
+  })
+}
+
 async function sha256AndSize (filePath) {
-  const buf = await readFile(filePath)
-  const sha256 = createHash('sha256').update(buf).digest('hex')
+  const sha256 = await sha256Stream(filePath)
   const { size } = await stat(filePath)
   return { sha256, bytes: size }
 }
