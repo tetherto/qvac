@@ -30,7 +30,7 @@ const SEVER_AT_BYTES = Math.floor(PAYLOAD_BYTES / 3)
 const TRICKLE_CHUNK = Math.max(64 * 1024, Math.floor(SEVER_AT_BYTES / 8))
 const TRICKLE_INTERVAL_MS = 40
 
-function buildPayload (size) {
+function buildPayload(size) {
   const buf = Buffer.allocUnsafe(size)
   for (let i = 0; i < size; i++) buf[i] = i & 0xff
   return buf
@@ -38,7 +38,7 @@ function buildPayload (size) {
 
 const PAYLOAD = buildPayload(PAYLOAD_BYTES)
 
-function parseRangeStart (header) {
+function parseRangeStart(header) {
   if (!header) return 0
   const m = /bytes=(\d+)-/.exec(header)
   return m && m[1] ? parseInt(m[1], 10) : 0
@@ -47,7 +47,7 @@ function parseRangeStart (header) {
 // key (request path) -> one-shot sever flag + the response currently streaming
 const state = new Map()
 
-function keyState (key) {
+function keyState(key) {
   let s = state.get(key)
   if (!s) {
     s = { severedOnce: false, activeRes: null }
@@ -157,5 +157,7 @@ server.on('error', (err) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`flaky-lan-server listening on 0.0.0.0:${PORT}`)
   console.log(`  netdrop: http://<broker-host>:${PORT}/netdrop/<nonce>`)
-  console.log(`  suspend: http://<broker-host>:${PORT}/suspend/<nonce>  (+ /__control/sever?key=/suspend/<nonce>)`)
+  console.log(
+    `  suspend: http://<broker-host>:${PORT}/suspend/<nonce>  (+ /__control/sever?key=/suspend/<nonce>)`
+  )
 })

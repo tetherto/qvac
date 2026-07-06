@@ -51,7 +51,7 @@ function getSpawnOptions (pkgDir, env) {
     // Watchdog: kill the child after this much wall-clock time. Surfaces hung
     // entries as ETIMEDOUT / SIGTERM so the matrix loop can continue with
     // the next entry instead of blocking forever (observed on macOS-q4 in
-    // the QVAC-17092 dispatch — chatterbox-en q4 cpu hung at the start of
+    // the dispatch — chatterbox-en q4 cpu hung at the start of
     // the matrix and entries 2-9 never got to run).
     timeout: getEntryTimeoutMs(),
     killSignal: 'SIGTERM'

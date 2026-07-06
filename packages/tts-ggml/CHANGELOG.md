@@ -5,10 +5,110 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-03
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+### Added
+
+- **Chatterbox MTL Chinese (`zh`) synthesis.** `config.language: 'zh'` is now
+  accepted for the multilingual Chatterbox model. Chinese flows through the
+  Cangjie (hanzi → code) tokenizer path, so it requires a `Cangjie5_TC` TSV
+  supplied via `files.cangjieTsvPath` — when it is missing, `tts-cpp` throws a
+  clear error at load instead of silently degrading. Bumps the `tts-cpp`
+  requirement to `2026-07-03#0`, the registry port that adds `zh` to
+  `mtl_tokenizer::supported_languages()` (qvac-ext-lib-whisper.cpp PR #77).
+  The multilingual integration suite replaces its previous `zh` rejection
+  assertion with a real Chinese synthesis test (mirroring the Japanese/MeCab
+  test), and `downloadModel.js` gains `ensureCangjieTsv()` to stage/convert the
+  Cangjie5_TC table. The s3gen model downloads now pull the published q4_0
+  GGUFs (`chatterbox-s3gen-q4_0.gguf` / `chatterbox-s3gen-mtl-q4_0.gguf`)
+  instead of f16.
+
+- **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
+  bandwidth-extends synthesized audio to **48 kHz** using the LavaSR Vocos
+  enhancer (ConvNeXt backbone + ISTFT spec head), converted to a single GGUF.
+  Enhancement is enabled simply by supplying the enhancer GGUF — there is no
+  separate on/off flag:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel, lavasrEnhancer: 'lavasr-enhancer.gguf' }
+  })
+  ```
+
+  The path may instead be given via an `enhancer: { type: 'lavasr', enhancerPath }`
+  block; an unknown `enhancer.type` is rejected so a typo can't silently disable
+  enhancement. When active, `TTSOutputChunk.sampleRate` is `48000` for both
+  engines. Convert the GGUF from the public LavaSRcpp ONNX release with
+  `scripts/convert-lavasr-enhancer-to-gguf.py` (f32 or f16). Examples:
+  `examples/supertonic-enhanced.js`, `examples/chatterbox-enhanced.js`.
+  Requires the `tts-cpp` pin that ships `tts_cpp::lavasr::Enhancer`
+  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is wired below.
+
+- **LavaSR denoiser wiring.** The addon now exposes the second LavaSR
+  stage — the UL-UNAS speech **denoiser**, which cleans the signal *before* the
+  enhancer bandwidth-extends it — via `files.lavasrDenoiser` (or a
+  `denoiser: { type: 'lavasr', denoiserPath }` block), mirroring the enhancer:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: {
+      supertonicModel,
+      lavasrDenoiser: 'lavasr-denoiser.gguf', // cleaned first…
+      lavasrEnhancer: 'lavasr-enhancer.gguf'  // …then bandwidth-extended
+    }
+  })
+  ```
+
+  The denoiser is rate-preserving and runs before the enhancer on the batch
+  path (both engines). The tts-cpp UL-UNAS forward is implemented in
+  qvac-ext-lib-whisper.cpp PR #78 (`tts_cpp::lavasr::Denoiser`, scalar CPU port
+  validated bit-close to the ONNX reference). With no denoiser path, output is
+  byte-identical (full backward compat). Denoiser + Chatterbox native chunk
+  streaming (`streamChunkTokens`) is rejected up front — a stateful streaming
+  denoiser is the follow-up. Active as of the `tts-cpp` pin bump to
+  `2026-07-03#1` (qvac-registry-vcpkg), which ships the PR #78 UL-UNAS forward.
+
+- **Selectable output sample rate.** `outputSampleRate` (8000–192000 Hz,
+  runtime config) now resamples the synthesized audio to the requested rate,
+  and `TTSOutputChunk.sampleRate` reports it. Without the enhancer the tts-cpp
+  engine resamples (batch once / streaming per-chunk, seam-free;
+  `EngineOptions::output_sample_rate`, qvac-ext-lib-whisper.cpp PR #69); with
+  the enhancer active the 48 kHz enhanced signal is resampled to the requested
+  rate afterwards. Omit it to keep the engine's native rate (default, zero
+  behaviour change).
+
+- **Enhancer + Chatterbox native chunk streaming.** The LavaSR enhancer now
+  works with `streamChunkTokens > 0` (previously rejected). The addon runs the
+  enhancer over a sliding window with look-ahead + crossfade, so each streamed
+  chunk is bandwidth-extended seam-free and tagged 48 kHz (or `outputSampleRate`)
+  — matching the batch result. It adds **~0.34 s of look-ahead latency**,
+  inherent to the enhancer's receptive field.
+
+### Notes
+
+- Enhancement works on the batch path, sentence-level streaming, and Chatterbox
+  native chunk streaming. Native-streaming enhancement adds ~0.34 s of
+  look-ahead latency.
+- When the enhancer is active it produces 48 kHz; if `outputSampleRate` is also
+  set, the enhanced audio is resampled to that rate afterwards.
+
 
 ### Fixed
 
+- **Chatterbox MTL Japanese now builds with MeCab support from the published
+  registry ports.** Bumps the `tts-cpp` requirement to `2026-06-30`, links
+  `mecab::mecab` directly, and keeps the Windows `/FORCE:MULTIPLE` workaround
+  for the `mecab.lib` / `bare_delay_load.lib` `DllMain` conflict.
+- **Chatterbox MTL language coverage now includes Japanese and Italian in the
+  shared multilingual suite.** The standalone Japanese test has been folded into
+  `chatterbox-mtl.test.js`. (Chinese `zh` synthesis is now enabled — see the
+  Added section above.)
 - **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
   GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
   master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which

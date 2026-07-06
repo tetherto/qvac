@@ -119,6 +119,11 @@ class SdInterface {
   constructor (binding, configurationParams, outputCb) {
     this._binding = binding
 
+    // LTX-2 (LTXAV) is keyed on the embeddings-connectors input (matches the
+    // native SdModel detection). LTX needs dimensions aligned to 32 (32x spatial
+    // VAE compression); every other supported model aligns to 16.
+    this._spatialAlign = configurationParams.embeddingsConnectorsPath ? 32 : 16
+
     if (!configurationParams.config) {
       configurationParams.config = {}
     }
@@ -260,14 +265,17 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
-    // Use 16 as the snap multiple: Wan video requires spatial_multiple=16
-    // (vae_scale_factor 8 × diffusion_down_factor 2). This is also safe for
-    // all other supported models (any multiple of 16 is a multiple of 8).
+    // Snap to the model's spatial multiple: 16 for Wan/image models
+    // (vae_scale_factor 8 × diffusion_down_factor 2; also a multiple of 8, safe
+    // for all other models) and 32 for LTX-2 (32x spatial VAE compression).
+    // Filling to 16 for LTX could yield a multiple of 16 that is not a multiple
+    // of 32, which the native LTX dimension check then rejects.
+    const align = this._spatialAlign
     if (!params.width) {
-      params.width = Math.ceil(dims.width / 16) * 16
+      params.width = Math.ceil(dims.width / align) * align
     }
     if (!params.height) {
-      params.height = Math.ceil(dims.height / 16) * 16
+      params.height = Math.ceil(dims.height / align) * align
     }
   }
 

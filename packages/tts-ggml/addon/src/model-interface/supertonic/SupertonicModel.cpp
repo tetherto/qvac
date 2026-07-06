@@ -10,11 +10,14 @@
 #include <string>
 #include <vector>
 
+#include <tts-cpp/lavasr/denoiser.h>
+#include <tts-cpp/lavasr/enhancer.h>
 #include <tts-cpp/supertonic/engine.h>
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/OutputResampler.hpp"
 
 namespace qvac::ttsggml::supertonic {
 
@@ -40,6 +43,17 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
     opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
+
+  // Output-frequency selection. Forward the requested rate to the engine
+  // (EngineOptions::output_sample_rate; 0 = native), which resamples with its
+  // in-tree sinc. When the LavaSR enhancer is active it must receive the
+  // engine's native rate and forces 48 kHz, so the addon resamples to the
+  // requested rate AFTER enhancement (see synthesize()) — pass 0 here.
+  {
+    const bool enhancerActive = !cfg.enhancerGgufPath.empty();
+    opts.output_sample_rate =
+        enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
+  }
 
   // Mirrors ChatterboxModel::toEngineOptions; see that file for the
   // detailed rationale. Compose `cfg.backendsDir / BACKENDS_SUBDIR`
@@ -104,6 +118,18 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound,
                          "noise npy not found: " + cfg.noiseNpyPath);
   }
+  if (!cfg.enhancerGgufPath.empty() &&
+      !std::filesystem::exists(cfg.enhancerGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr enhancer GGUF not found: " + cfg.enhancerGgufPath);
+  }
+  if (!cfg.denoiserGgufPath.empty() &&
+      !std::filesystem::exists(cfg.denoiserGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
+  }
   // Defense-in-depth: the JS layer (index.js::_validateConfig) runs the
   // same conflict check before this method is reached, so direct C++
   // callers are the only ones who can actually trip this branch.
@@ -163,10 +189,44 @@ void SupertonicModel::loadLocked() {
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
   gpuUnsupported_ = engine_->gpu_unsupported();
+
+  // LavaSR enhancer: load when a GGUF path is set (the path is the on switch).
+  // CPU-only neural post-process; empty path = disabled.
+  if (!cfg_.enhancerGgufPath.empty()) {
+    try {
+      enhancer_ = tts_cpp::lavasr::Enhancer::load(cfg_.enhancerGgufPath);
+    } catch (const std::exception& e) {
+      enhancer_.reset();
+      throw createTTSError(
+          TTSErrorCode::InitializationFailed,
+          std::string("SupertonicModel::load: lavasr enhancer: ") + e.what());
+    }
+  } else {
+    enhancer_.reset();
+  }
+
+  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
+  // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
+  // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
+  // clean InitializationFailed error.
+  if (!cfg_.denoiserGgufPath.empty()) {
+    try {
+      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
+    } catch (const std::exception& e) {
+      denoiser_.reset();
+      throw createTTSError(
+          TTSErrorCode::InitializationFailed,
+          std::string("SupertonicModel::load: lavasr denoiser: ") + e.what());
+    }
+  } else {
+    denoiser_.reset();
+  }
 }
 
 void SupertonicModel::unloadLocked() {
   engine_.reset();
+  enhancer_.reset();
+  denoiser_.reset();
 }
 
 void SupertonicModel::cancel() const {
@@ -181,9 +241,13 @@ void SupertonicModel::cancel() const {
 
 SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
   std::shared_ptr<tts_cpp::supertonic::Engine> engine;
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
+    enhancer = enhancer_;
+    denoiser = denoiser_;
   }
   if (!engine) {
     throw createTTSError(TTSErrorCode::InitializationFailed,
@@ -204,6 +268,43 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
     throw createTTSError(TTSErrorCode::SynthesisFailed,
                          std::string("supertonic.synthesize: ") + e.what());
   }
+
+  // LavaSR neural denoiser (opt-in). Runs BEFORE the enhancer and preserves the
+  // sample rate (cleans the signal, no rate change). The UL-UNAS forward is
+  // implemented in qvac-ext-lib-whisper.cpp PR #78; this runs whenever a
+  // denoiser was loaded (i.e. the pinned tts-cpp includes #78).
+  if (denoiser) {
+    try {
+      result.pcm = denoiser->denoise(result.pcm, result.sample_rate);
+    } catch (const std::exception& e) {
+      throw createTTSError(
+          TTSErrorCode::SynthesisFailed,
+          std::string("supertonic.lavasr-denoiser: ") + e.what());
+    }
+  }
+
+  // LavaSR neural bandwidth extension (opt-in). Runs on the full utterance
+  // (batch path) and upsamples to 48 kHz; timed as part of synthesis so the
+  // reported RTF reflects the enhanced output.
+  if (enhancer) {
+    try {
+      result.pcm = enhancer->enhance(result.pcm, result.sample_rate);
+      result.sample_rate = enhancer->output_sample_rate();
+    } catch (const std::exception& e) {
+      throw createTTSError(
+          TTSErrorCode::SynthesisFailed,
+          std::string("supertonic.lavasr: ") + e.what());
+    }
+    // Honor outputSampleRate after enhancement (the enhancer emits 48 kHz; the
+    // engine's output_sample_rate was bypassed while enhancing).
+    if (cfg_.outputSampleRate.has_value() && *cfg_.outputSampleRate > 0 &&
+        *cfg_.outputSampleRate != result.sample_rate) {
+      result.pcm = OutputResampler::resample(
+          result.pcm, result.sample_rate, *cfg_.outputSampleRate);
+      result.sample_rate = *cfg_.outputSampleRate;
+    }
+  }
+
   const auto t1 = std::chrono::steady_clock::now();
 
   sampleRate_ = result.sample_rate;

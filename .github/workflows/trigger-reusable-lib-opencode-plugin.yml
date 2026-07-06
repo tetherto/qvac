@@ -112,49 +112,9 @@ jobs:
       publish_feature: ${{ steps.logic.outputs.publish_feature }}
       publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
-      npm_tag: ${{ steps.logic.outputs.npm_tag }}
     steps:
       - id: logic
-        shell: bash
-        env:
-          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-
-          publish_main="false"
-          publish_release="false"
-          publish_feature="false"
-          publish_tmp="false"
-
-          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-            if [ "$ref_name" = "main" ]; then
-              publish_main="true"
-            elif [[ "$ref_name" == release-* ]]; then
-              publish_release="true"
-            elif [[ "$ref_name" == feature-* ]]; then
-              publish_feature="true"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              publish_tmp="true"
-            fi
-          fi
-
-          gpr_tag="dev"
-          if [ "$ref_name" = "main" ]; then
-            gpr_tag="dev"
-          elif [[ "$ref_name" == feature-* ]]; then
-            gpr_tag="feature"
-          elif [[ "$ref_name" == tmp-* ]]; then
-            gpr_tag="temp"
-          fi
-
-          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
-          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
-          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
-          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
-          echo "npm_tag=${NPM_TAG_INPUT}" >> "$GITHUB_OUTPUT"
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
   build:
     name: Build package
@@ -247,11 +207,18 @@ jobs:
           name: opencode-plugin-dist
           path: plugins/opencode/dist
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: plugins/opencode
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM
         id: publish-npm
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ needs.publish-logic.outputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: plugins/opencode
 
   publish-release:

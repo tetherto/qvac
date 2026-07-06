@@ -4,11 +4,11 @@ The SDK test suite is split into three clearly separated buckets. Each bucket ha
 
 ## Buckets
 
-| Bucket | Runtime | Framework | Location | Command |
-|--------|---------|-----------|----------|---------|
-| **Unit** | Bun / Node | brittle | `test/unit/` | `bun run test:unit` |
-| **Server (Bare)** | Bare | brittle | `test/bare/` | `bun run test:bare` |
-| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @tetherto/qvac-test-suite | `e2e/` | See [below](#e2e--clientconsumer-e2e-tests) |
+| Bucket                | Runtime                                 | Framework                 | Location     | Command                                     |
+| --------------------- | --------------------------------------- | ------------------------- | ------------ | ------------------------------------------- |
+| **Unit**              | Bun / Node                              | brittle                   | `test/unit/` | `bun run test:unit`                         |
+| **Server (Bare)**     | Bare                                    | brittle                   | `test/bare/` | `bun run test:bare`                         |
+| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @tetherto/qvac-test-suite | `e2e/`       | See [below](#e2e--clientconsumer-e2e-tests) |
 
 ## Where new tests must land
 

@@ -20,9 +20,6 @@ on:
       published_version:
         description: "The version published to npm (empty if skipped)"
         value: ${{ jobs.push-event.outputs.npm_published_version }}
-      publish_skipped:
-        description: "true if publish was skipped, else false"
-        value: ${{ jobs.push-event.outputs.npm_publish_skipped }}
 
 jobs:
   pull-request-event:
@@ -43,7 +40,7 @@ jobs:
           echo "ref: ${{ github.event.pull_request.head.ref }}"
           echo "workdir: ${{ inputs.workdir }}"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           token: ${{ secrets.PAT_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -107,7 +104,7 @@ jobs:
           exit 1
 
       - name: Call Publish NPM Action
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
           tag: "dev"
           workdir: ${{ inputs.workdir }}
@@ -118,13 +115,18 @@ jobs:
     if: github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode
     outputs:
       npm_published_version: ${{ steps.publish-npm.outputs.npm_published_version }}
-      npm_publish_skipped: ${{ steps.publish-npm.outputs.npm_publish_skipped }}
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ inputs.workdir }}
 
       - name: Enable Socket Firewall Guard
         uses: ./.github/actions/sfw-guard
@@ -134,8 +136,9 @@ jobs:
           managers: npm,pip,pip3,uv,cargo
           workdir: ${{ inputs.workdir }}
 
-      - name: Publish to NPM
+      - name: Publish to npm
         id: publish-npm
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
           workdir: ${{ inputs.workdir }}
+          tag: ${{ steps.dist-tag.outputs.tag }}

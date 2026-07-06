@@ -50,8 +50,11 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "tsc -p tsconfig.test.json",
     "test": "tsx --test test/*.test.ts",
     "test:unit": "tsx --test test/*.test.ts",
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
@@ -62,7 +65,10 @@
   },
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "lunte": "^1.8.3",
     "openclaw": "^2026.6.8",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },

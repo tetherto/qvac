@@ -1034,6 +1034,19 @@ async function _probeGpuBackends () {
 // Module Exports
 // ============================================================================
 
+// ============================================================================
+// Shared cancel test inputs
+// ============================================================================
+
+const CANCEL_LONG_TEXT_EN = 'This is a deliberately long sentence intended to give the ' +
+  'translation process enough work to still be running when we cancel it, ' +
+  'so that the cancel path is exercised mid-inference rather than after ' +
+  'the job has already completed on its own.'
+
+const CANCEL_LONG_TEXT_ES = 'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
+  'Queremos asegurarnos de que la cancelación funcione correctamente durante la traducción pivote. ' +
+  'El texto sigue y sigue para dar tiempo al proceso de ser cancelado antes de terminar.'
+
 module.exports = {
   // Platform detection
   platform,
@@ -1056,5 +1069,9 @@ module.exports = {
   discoverGpuBackends,
   MAX_GPU_DEVICE_PROBES,
   CPU_SENTINEL_BACKENDS,
-  resolveExecutionProvider
+  resolveExecutionProvider,
+
+  // Shared test inputs
+  CANCEL_LONG_TEXT_EN,
+  CANCEL_LONG_TEXT_ES
 }

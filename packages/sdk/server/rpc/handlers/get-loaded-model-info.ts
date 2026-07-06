@@ -1,23 +1,23 @@
 import type {
   GetLoadedModelInfoRequest,
   GetLoadedModelInfoResponse,
-  LoadedModelInfo,
-} from "@/schemas";
-import { getModelEntry } from "@/server/bare/registry/model-registry";
-import { getPlugin } from "@/server/plugins/registry";
-import { ModelNotFoundError } from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
+  LoadedModelInfo
+} from '@/schemas'
+import { getModelEntry } from '@/server/bare/registry/model-registry'
+import { getPlugin } from '@/server/plugins/registry'
+import { ModelNotFoundError } from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 export function handleGetLoadedModelInfo(
-  request: GetLoadedModelInfoRequest,
+  request: GetLoadedModelInfoRequest
 ): GetLoadedModelInfoResponse {
-  const { modelId } = request;
+  const { modelId } = request
 
-  const entry = getModelEntry(modelId);
+  const entry = getModelEntry(modelId)
   if (!entry) {
-    throw new ModelNotFoundError(modelId);
+    throw new ModelNotFoundError(modelId)
   }
 
   if (entry.isDelegated) {
@@ -26,17 +26,17 @@ export function handleGetLoadedModelInfo(
       isDelegated: true,
       handlers: [],
       providerInfo: {
-        providerPublicKey: entry.delegated.providerPublicKey,
-      },
-    };
-    return { type: "getLoadedModelInfo", info };
+        providerPublicKey: entry.delegated.providerPublicKey
+      }
+    }
+    return { type: 'getLoadedModelInfo', info }
   }
 
-  const plugin = getPlugin(entry.local.modelType);
+  const plugin = getPlugin(entry.local.modelType)
   if (!plugin) {
     logger.warn(
-      `getLoadedModelInfo: no plugin registered for modelType "${entry.local.modelType}" on loaded model "${modelId}"`,
-    );
+      `getLoadedModelInfo: no plugin registered for modelType "${entry.local.modelType}" on loaded model "${modelId}"`
+    )
   }
 
   const info: LoadedModelInfo = {
@@ -48,8 +48,8 @@ export function handleGetLoadedModelInfo(
     ...(plugin && { displayName: plugin.displayName }),
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),
-    ...(entry.local.path && { path: entry.local.path }),
-  };
+    ...(entry.local.path && { path: entry.local.path })
+  }
 
-  return { type: "getLoadedModelInfo", info };
+  return { type: 'getLoadedModelInfo', info }
 }

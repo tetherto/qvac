@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * Chatterbox speaking-rate (`speed`) demo for @qvac/tts-ggml (QVAC-21119).
+ * Chatterbox speaking-rate (`speed`) demo for @qvac/tts-ggml.
  *
  * Chatterbox has no native rate control, so the addon exposes a `speed`
  * multiplier applied as a pitch-preserving post-synthesis time-stretch
