@@ -53,26 +53,50 @@ function authHeaders (url) {
   return headers
 }
 
-function downloadOnce (url, dest, redirectsLeft = 10) {
+// Abort a stalled connection: if no bytes arrive for IDLE_TIMEOUT_MS the
+// socket is destroyed and the attempt fails (so downloadWithRetries can retry
+// / fall back to a mirror) instead of hanging until the job timeout.
+const IDLE_TIMEOUT_MS = Number(process.env.WARM_IDLE_TIMEOUT_MS || 120000)
+const PROGRESS_INTERVAL_MS = 30000
+
+function downloadOnce (url, dest, name, redirectsLeft = 10) {
   return new Promise((resolvePromise, reject) => {
     const req = https.get(url, { headers: authHeaders(url) }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
         if (redirectsLeft <= 0) return reject(new Error(`too many redirects: ${url}`))
         res.resume()
         const next = new URL(res.headers.location, url).href
-        return resolvePromise(downloadOnce(next, dest, redirectsLeft - 1))
+        return resolvePromise(downloadOnce(next, dest, name, redirectsLeft - 1))
       }
       if (res.statusCode !== 200) {
         res.resume()
         return reject(new Error(`HTTP ${res.statusCode} for ${url}`))
       }
-      pipeline(res, createWriteStream(dest)).then(resolvePromise).catch(reject)
+
+      const total = Number(res.headers['content-length'] || 0)
+      let received = 0
+      const started = Date.now()
+      const progress = setInterval(() => {
+        const mb = (received / 1024 / 1024).toFixed(0)
+        const pct = total ? ` (${(received / total * 100).toFixed(0)}% of ${(total / 1024 / 1024).toFixed(0)}MB)` : ''
+        const rate = (received / 1024 / 1024 / Math.max(1, (Date.now() - started) / 1000)).toFixed(1)
+        console.log(`  [warm] ${name}: ${mb}MB${pct} @ ${rate}MB/s`)
+      }, PROGRESS_INTERVAL_MS)
+      res.on('data', (chunk) => { received += chunk.length })
+
+      const done = (fn, arg) => { clearInterval(progress); fn(arg) }
+      pipeline(res, createWriteStream(dest))
+        .then(() => done(resolvePromise))
+        .catch((err) => done(reject, err))
+    })
+    req.setTimeout(IDLE_TIMEOUT_MS, () => {
+      req.destroy(new Error(`idle timeout after ${IDLE_TIMEOUT_MS}ms`))
     })
     req.on('error', reject)
   })
 }
 
-async function downloadWithRetries (urls, dest, { retries = 3 } = {}) {
+async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
   const partPath = dest + '.part'
   let lastErr = null
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -82,7 +106,7 @@ async function downloadWithRetries (urls, dest, { retries = 3 } = {}) {
     }
     const url = urls[attempt % urls.length]
     try {
-      await downloadOnce(url, partPath)
+      await downloadOnce(url, partPath, name)
       const { size } = await stat(partPath)
       if (size < 1) throw new Error(`downloaded file is empty from ${new URL(url).host}`)
       await rename(partPath, dest)
@@ -168,7 +192,7 @@ async function main () {
     if (!urls.length) throw new Error(`[warm] ${name}: no urls in manifest`)
 
     console.log(`[warm] ${name}: downloading (${urls.length} source(s))...`)
-    await downloadWithRetries(urls, dest)
+    await downloadWithRetries(urls, dest, name)
 
     if (hasIntegrity) {
       const res = await verify(dest, entry)
