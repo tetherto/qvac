@@ -274,6 +274,19 @@ runs:
               }
             }
 
+            const retriedTests = tests.filter((t) => t.retried);
+            if (retriedTests.length > 0) {
+              lines.push('');
+              lines.push('**Rerun failed tests**');
+              for (const t of retriedTests) {
+                if (t.retryPassed) {
+                  lines.push(`- \`${t.testId}\`: ✅`);
+                } else {
+                  lines.push(`- \`${t.testId}\`: ${truncate(t.retryOutput || t.error, 200) || 'no error message'}`);
+                }
+              }
+            }
+
             return lines.join('\n');
           }
 
