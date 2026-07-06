@@ -572,16 +572,25 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   // Sources legend — what each compared source resolves to (e.g. addon@candidate =
   // git:<sha>, addon@baseline = npm:0.24.0), so a reader knows exactly which builds the
   // columns above represent. Keyed by the report's comparison cell; shown only when the
-  // markers carry a resolved version.
+  // markers carry a resolved version. opts.launch carries the launch-level source facts
+  // (addon/git/engine lines) that combine.cjs hoisted out of the per-platform Provenance
+  // blocks — identical for every platform in one run, so they are stated ONCE here.
   const refByCell = {}
   for (const r of rows) if (r.source_ref && !refByCell[r.cell]) refByCell[r.cell] = r.source_ref
   const refCells = Object.keys(refByCell).sort()
-  if (refCells.length) {
+  const launch = Array.isArray(opts.launch) ? opts.launch : []
+  if (refCells.length || launch.length) {
     L.push('### Sources — resolved versions\n')
-    L.push('| Source | Resolved version |')
-    L.push('|---|---|')
-    for (const c of refCells) L.push(`| \`${c}\` | \`${refByCell[c]}\` |`)
-    L.push('')
+    if (refCells.length) {
+      L.push('| Source | Resolved version |')
+      L.push('|---|---|')
+      for (const c of refCells) L.push(`| \`${c}\` | \`${refByCell[c]}\` |`)
+      L.push('')
+    }
+    if (launch.length) {
+      for (const l of launch) L.push(`- ${l}`)
+      L.push('')
+    }
   }
   if (Object.keys(meta).length) {
     L.push('### Models & origins (Source = Registry / HF / S3 / URL · pinned commits)\n')

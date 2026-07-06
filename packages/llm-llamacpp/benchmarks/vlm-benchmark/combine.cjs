@@ -77,9 +77,36 @@ function main () {
     if (h) inputs.push({ label: h, file: f })
   }
 
-  // ── provenance: desktop prov-*.md as-is + synthesized mobile blocks ─────
+  // ── provenance: desktop prov-*.md + synthesized mobile blocks ─────
+  // Launch-level source facts (addon/git/engine lines) are identical for every
+  // platform in one run, so they are hoisted OUT of the per-platform blocks
+  // into `launch` and rendered once under the report's Sources section.
   const prov = []
-  for (const f of files) if (/^prov-.*\.md$/.test(path.basename(f))) prov.push(fs.readFileSync(f, 'utf8'))
+  const launch = new Set()
+  const LAUNCH_LINE = /^- (addon|git|engine): /
+  for (const f of files) {
+    if (!/^prov-.*\.md$/.test(path.basename(f))) continue
+    const kept = []
+    for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+      if (LAUNCH_LINE.test(line)) launch.add(line.replace(/^- /, ''))
+      else kept.push(line)
+    }
+    prov.push(kept.join('\n'))
+  }
+  // GPU model from the device driver's own logcat lines: concrete model when the
+  // driver printed one (Qualcomm "Adreno (TM) 840", ARM "Mali-G715"), family from
+  // the Vulkan HAL library name as fallback. Matching is deliberately narrow —
+  // a bare /mali/i would hit unrelated words (e.g. "maliciousFiles" in app logs).
+  const gpuOf = (txt) => {
+    const adreno = txt.match(/Adreno\s*\(TM\)\s*(\d{3})/i)
+    if (adreno) return `Adreno ${adreno[1]} (Vulkan)`
+    const mali = txt.match(/Mali-G(\d+)/i)
+    if (mali) return `Mali-G${mali[1]} (Vulkan)`
+    if (/AdrenoVK|vulkan\.adreno/i.test(txt)) return 'Adreno (Vulkan)'
+    if (/vulkan\.mali/i.test(txt)) return 'Mali (Vulkan)'
+    return '?'
+  }
+  const MOBILE_ENGINE = 'engine: `@qvac/llm-llamacpp` addon (published prebuild)'
   const seen = new Set()
   for (const f of files) {
     if (!lc(f).includes('logcat_full')) continue
@@ -91,11 +118,11 @@ function main () {
     const devName = (path.basename(f).match(/(Samsung|Google)_[A-Za-z0-9_]*/) || [''])[0]
       .replace(/_logcat_full.*/, '').replace(/_/g, ' ')
     const ramB = parseInt(pick(/totalMemory: (\d+)/) || '0', 10)
+    launch.add(MOBILE_ENGINE)
     prov.push([
       `**${h}** — ${devName || 'Android device'} (AWS Device Farm)`,
       `- device: ${pick(/model=([A-Za-z0-9-]+)/) || '?'} · Android ${pick(/platformVersionRelease=(\d+)/) || '?'} · ${pick(/supportedAbis=([a-z0-9-]+)/) || 'arm64-v8a'}`,
-      `- ram: ${ramB ? (ramB / 1073741824).toFixed(1) + ' GB' : '?'} · gpu: ${/AdrenoVK|vulkan\.adreno/i.test(txt) ? 'Adreno (Vulkan)' : '?'}`,
-      '- engine: `@qvac/llm-llamacpp` addon (published prebuild)'
+      `- ram: ${ramB ? (ramB / 1073741824).toFixed(1) + ' GB' : '?'} · gpu: ${gpuOf(txt)}`
     ].join('\n'))
   }
   for (const f of files) {
@@ -105,9 +132,9 @@ function main () {
     seen.add(h)
     const dev = (path.basename(f).match(/Apple_[A-Za-z0-9_]*/) || [''])[0]
       .replace(/_bare_console.*/, '').replace(/_/g, ' ')
+    launch.add(MOBILE_ENGINE)
     prov.push([
-      `**${h}** — ${dev || 'Apple iPhone'} (AWS Device Farm)`,
-      '- engine: `@qvac/llm-llamacpp` addon (published prebuild)'
+      `**${h}** — ${dev || 'Apple iPhone'} (AWS Device Farm)`
     ].join('\n'))
   }
 
@@ -138,7 +165,7 @@ function main () {
     let versions = null
     try { if (args.versionsB64) versions = JSON.parse(Buffer.from(args.versionsB64, 'base64').toString('utf8')) } catch (_) {}
     md = build(rows, vision, meta, prov.join('\n\n'), args.title,
-      { mode: args.mode, engine: args.engine, preset: args.preset, base, candidate, versions })
+      { mode: args.mode, engine: args.engine, preset: args.preset, base, candidate, versions, launch: [...launch] })
   }
   process.stdout.write(md + '\n')
   if (args.out) {
