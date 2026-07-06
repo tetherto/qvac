@@ -1,0 +1,106 @@
+{
+  "cacheEpoch": 1,
+  "_comment": "Single source of truth for diffusion-cpp integration test models. Consumed by test/integration/utils.js (ensureModel) for URL resolution + sha256 integrity, and by .github/actions/cache-models for the cache key. sha256/bytes are pinned integrity values: populate them with `node scripts/generate-model-manifest.mjs` (downloads each pinned URL fresh and fills them in). While a value is null, ensureModel logs a loud warning and skips verification for that entry. Bump cacheEpoch to force a hard cache eviction.",
+  "models": {
+    "stable-diffusion-v2-1-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "stable-diffusion-v2-1-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "sd3_medium_incl_clips.safetensors": {
+      "urls": [
+        "https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "flux-2-klein-4b-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "Qwen3-4B-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "flux2-vae.safetensors": {
+      "urls": [
+        "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors",
+        "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null,
+      "_note": "Two historical sources for the same local filename. black-forest-labs is primary; Comfy-Org is a mirror. If the sha-generation step finds their bytes differ, reconcile to a single source before pinning sha256."
+    },
+    "wan2.1_t2v_1.3B_fp16.safetensors": {
+      "urls": [
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "wan2.1-i2v-14b-480p-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "wan_2.1_vae.safetensors": {
+      "urls": [
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "umt5_xxl_fp16.safetensors": {
+      "urls": [
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "clip_vision_h.safetensors": {
+      "urls": [
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "RealESRGAN_x4plus_anime_6B.pth": {
+      "urls": [
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+      ],
+      "sha256": null,
+      "bytes": null
+    },
+    "pytorch_lora_weights-sd21-comfyui.safetensors": {
+      "urls": [
+        "https://huggingface.co/radames/sd-21-DPO-LoRA/resolve/main/pytorch_lora_weights-sd21-comfyui.safetensors"
+      ],
+      "sha256": null,
+      "bytes": null
+    }
+  }
+}

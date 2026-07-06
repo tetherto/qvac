@@ -1,0 +1,13 @@
+{
+  "cacheEpoch": 1,
+  "_comment": "Single source of truth for llm-llamacpp integration test models downloaded via ensureModel. Consumed by test/integration/utils.js for URL resolution + sha256 integrity, and by .github/actions/cache-models for the cache key. Populate sha256/bytes from a fresh clean download of each pinned URL. While a value is null, ensureModel logs a warning and skips verification. Keyed by the modelName passed to ensureModel (default small-test-model.gguf; an env override falls back to the passed downloadUrl with no integrity). Bump cacheEpoch to force a hard cache eviction.",
+  "models": {
+    "small-test-model.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf"
+      ],
+      "sha256": null,
+      "bytes": null
+    }
+  }
+}

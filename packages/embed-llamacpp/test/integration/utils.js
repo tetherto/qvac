@@ -167,8 +167,74 @@ function getModelConfig (modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
+const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+let _manifestCache
+
+function loadManifest () {
+  if (_manifestCache !== undefined) return _manifestCache
+  try {
+    _manifestCache = JSON.parse(fs.readFileSync(DEFAULT_MANIFEST_PATH, 'utf8'))
+  } catch (_) {
+    _manifestCache = null
+  }
+  return _manifestCache
+}
+
+function manifestEntry (modelName) {
+  const m = loadManifest()
+  if (!m || !m.models) return null
+  return m.models[modelName] || null
+}
+
+async function sha256File (filePath) {
+  let crypto
+  try { crypto = require('bare-crypto') } catch (_) { return null }
+  return await new Promise((resolve, reject) => {
+    let hash
+    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verifies a cached/downloaded model against pinned sha256/bytes. Byte length
+// is checked first (cheap) so a truncated file fails fast before hashing.
+async function verifyModelFile (filePath, entry) {
+  let stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+  if (stats.size === 0) return { ok: false, reason: 'zero-byte file' }
+  if (entry && Number.isInteger(entry.bytes) && stats.size !== entry.bytes) {
+    return { ok: false, reason: `size ${stats.size} != expected ${entry.bytes}` }
+  }
+  const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  if (hasSha) {
+    const got = await sha256File(filePath)
+    if (got === null) {
+      console.log('[download] WARNING: sha256 pinned but bare-crypto unavailable — integrity NOT verified')
+      return { ok: true, unverified: true }
+    }
+    if (got !== entry.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
+    }
+  }
+  return { ok: true }
+}
+
+function entryHasIntegrity (entry) {
+  if (!entry) return false
+  return (typeof entry.sha256 === 'string' && entry.sha256.length === 64) || Number.isInteger(entry.bytes)
+}
+
 /**
- * Ensures the model file exists, downloading it if necessary
+ * Ensures the model file exists, downloading it if necessary. Model URL +
+ * sha256/bytes integrity come from models.manifest.json (single source of
+ * truth); MODEL_CONFIGS.downloadUrl is honoured as a fallback.
  * @param {string} modelName - The model name to ensure
  * @returns {Promise<[string, string]>} Returns [modelName, modelDir]
  */
@@ -181,20 +247,42 @@ async function ensureModel (modelName) {
   }
 
   const modelPath = path.join(modelDir, modelName)
+  const entry = manifestEntry(modelName)
+  const urls = entry && Array.isArray(entry.urls) && entry.urls.length ? entry.urls : modelConfig.downloadUrl
+  const hasIntegrity = entryHasIntegrity(entry)
 
   if (fs.existsSync(modelPath)) {
-    const stat = fs.statSync(modelPath)
-    if (stat.size > 0) {
-      return [modelName, modelDir]
+    if (hasIntegrity) {
+      const res = await verifyModelFile(modelPath, entry)
+      if (res.ok) {
+        console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+        return [modelName, modelDir]
+      }
+      console.log(`[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`)
+      try { fs.unlinkSync(modelPath) } catch (_) {}
+    } else {
+      const stat = fs.statSync(modelPath)
+      if (stat.size > 0) {
+        if (entry) console.log(`[download] ${modelName}: no sha256/bytes pinned in manifest — integrity check SKIPPED`)
+        return [modelName, modelDir]
+      }
+      console.log(`[download] Removing zero-byte cached file: ${modelName}`)
+      fs.unlinkSync(modelPath)
     }
-    console.log(`[download] Removing zero-byte cached file: ${modelName}`)
-    fs.unlinkSync(modelPath)
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
   console.log(`[download] Downloading test model: ${modelName}...`)
 
-  await downloadFileWithRetries(modelConfig.downloadUrl, modelPath)
+  await downloadFileWithRetries(urls, modelPath)
+
+  if (hasIntegrity) {
+    const res = await verifyModelFile(modelPath, entry)
+    if (!res.ok) {
+      try { fs.unlinkSync(modelPath) } catch (_) {}
+      throw new Error(`[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`)
+    }
+  }
 
   const stat = fs.statSync(modelPath)
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(1)}MB`)
