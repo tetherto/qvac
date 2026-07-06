@@ -38,7 +38,7 @@ struct ChatterboxConfig {
    *
    * The T3 KV cache is allocated UP-FRONT at n_ctx, in F32: the Turbo
    * GGUF ships n_ctx=8196 which costs ~1.6 GB of KV for synthesis that
-   * rarely needs more than a few hundred tokens (QVAC-19557 iOS OOM).
+   * rarely needs more than a few hundred tokens (iOS OOM).
    * When unset, {@link ChatterboxModel} applies kDefaultNCtx (2048,
    * ~400 MB KV on Turbo, ≈80 s of audio per synthesize() call).
    *
