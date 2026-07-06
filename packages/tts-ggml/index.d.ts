@@ -26,6 +26,24 @@ declare interface TTSGgmlFiles {
   supertonicModel?: string
   supertonicModelPath?: string
   supertonic?: string
+  /**
+   * LavaSR enhancer GGUF: single-file Vocos bandwidth extension produced by
+   * tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. When supplied, output
+   * is neurally upsampled to 48 kHz (the canonical way to enable enhancement;
+   * `enhancer.enhancerPath` is the only alternative).
+   */
+  lavasrEnhancer?: string
+  /**
+   * LavaSR denoiser GGUF: UL-UNAS speech denoiser produced by
+   * tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. Runs BEFORE the
+   * enhancer and is rate-preserving (the canonical way to enable denoising;
+   * `denoiser.denoiserPath` is the only alternative).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (scalar CPU port, validated bit-close to the ONNX reference); it
+   * activates at runtime once the pinned tts-cpp version includes #78.
+   */
+  lavasrDenoiser?: string
   /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
   /**
@@ -51,8 +69,43 @@ declare interface TTSGgmlRuntimeConfig {
   language?: string
   /** Route inference through a GPU backend (Metal / Vulkan / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
   useGPU?: boolean
-  /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
+  /**
+   * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
+   * native rate. Resamples the native output (24 kHz Chatterbox, 44.1 kHz
+   * Supertonic) — or, when the LavaSR enhancer is active, the 48 kHz enhanced
+   * signal — to this rate before emitting. `TTSOutputChunk.sampleRate` reports
+   * the resulting rate.
+   */
   outputSampleRate?: number
+}
+
+/**
+ * LavaSR enhancer config. The discriminated `type` leaves room for future
+ * enhancer kinds; v1 ships `lavasr`. Enhancement is enabled by providing a
+ * GGUF path (here as `enhancerPath`, or via `files.lavasrEnhancer`) — there is
+ * no separate on/off flag.
+ */
+declare interface LavaSREnhancerOptions {
+  type: 'lavasr'
+  /** Enhancer GGUF path (alternative to `files.lavasrEnhancer`). */
+  enhancerPath?: string
+}
+
+/**
+ * LavaSR denoiser config. The discriminated `type` mirrors the enhancer; v1
+ * ships `lavasr` (the UL-UNAS denoiser). Denoising is enabled by providing a
+ * GGUF path (here as `denoiserPath`, or via `files.lavasrDenoiser`) — there is
+ * no separate on/off flag. The denoiser runs BEFORE the enhancer and preserves
+ * the sample rate.
+ *
+ * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78
+ * (activates once the pinned tts-cpp includes it). Not supported with Chatterbox
+ * native chunk streaming (a stateful streaming denoiser is the follow-up).
+ */
+declare interface LavaSRDenoiserOptions {
+  type: 'lavasr'
+  /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
+  denoiserPath?: string
 }
 
 declare interface TTSGgmlOptions {
@@ -102,6 +155,27 @@ declare interface TTSGgmlOptions {
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string
+  /**
+   * LavaSR neural speech enhancement. Opt-in CPU/GGML bandwidth extension to
+   * 48 kHz applied after synthesis; enabled by providing a GGUF path (here via
+   * `enhancerPath` or through `files.lavasrEnhancer`). Works for Supertonic and
+   * Chatterbox, including Chatterbox native chunk streaming
+   * (`streamChunkTokens`), where it enhances each chunk seam-free at the cost
+   * of ~0.34 s of look-ahead latency.
+   */
+  enhancer?: LavaSREnhancerOptions
+  /**
+   * LavaSR neural speech denoiser (UL-UNAS). Opt-in CPU/GGML pre-processing
+   * that runs BEFORE the enhancer and preserves the sample rate; enabled by
+   * providing a GGUF path (here via `denoiserPath` or through
+   * `files.lavasrDenoiser`).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (validated bit-close to the ONNX reference); it activates at runtime
+   * once the pinned tts-cpp version includes #78. It is rejected with Chatterbox
+   * native chunk streaming (a stateful streaming denoiser is the follow-up).
+   */
+  denoiser?: LavaSRDenoiserOptions
   /** Directory the addon scans for dynamically-loaded ggml backends */
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
@@ -190,7 +264,11 @@ declare namespace TTSGgml {
 
   export interface TTSOutputChunk {
     outputArray: ArrayBuffer
-    /** Native engine sample rate (24000 for Chatterbox, 44100 for Supertonic). */
+    /**
+     * Output sample rate. The native engine rate (24000 for Chatterbox,
+     * 44100 for Supertonic) — or 48000 when the LavaSR enhancer is active,
+     * which neurally upsamples the output regardless of engine.
+     */
     sampleRate?: number
   }
 
@@ -236,6 +314,8 @@ declare namespace TTSGgml {
     TTSGgml as default,
     TTSGgmlFiles,
     TTSGgmlOptions,
+    LavaSREnhancerOptions,
+    LavaSRDenoiserOptions,
     TTSGgmlRuntimeConfig,
     RuntimeStats,
     SentenceStreamChunkMeta,

@@ -14,7 +14,17 @@ async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
 
+async function runMobilePerfCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-cpu.test.js', options)
+}
+
+async function runMobilePerfGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-gpu.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
-  runGpuSmokeTest
+  runGpuSmokeTest,
+  runMobilePerfCpuTest,
+  runMobilePerfGpuTest
 }

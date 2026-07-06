@@ -69,11 +69,13 @@ interface ChatCompletionChunk {
   usage?: ChatCompletionUsage
 }
 
-export function chatCompletionResponse (params: ChatCompletionResponseParams): ChatCompletionResponse {
+export function chatCompletionResponse(
+  params: ChatCompletionResponseParams
+): ChatCompletionResponse {
   const hasToolCalls = params.toolCalls.length > 0
   const message: ChatCompletionMessage = {
     role: 'assistant',
-    content: hasToolCalls ? null : (params.text || null)
+    content: hasToolCalls ? null : params.text || null
   }
 
   if (hasToolCalls) {
@@ -94,7 +96,7 @@ export function chatCompletionResponse (params: ChatCompletionResponseParams): C
   }
 }
 
-export function chatCompletionChunk (params: ChatCompletionChunkParams): ChatCompletionChunk {
+export function chatCompletionChunk(params: ChatCompletionChunkParams): ChatCompletionChunk {
   return {
     id: params.id,
     object: 'chat.completion.chunk',

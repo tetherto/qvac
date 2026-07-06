@@ -12,43 +12,34 @@
  * Set SAMPLE_FILE to a custom WAV, or download the default audio into examples/audio/:
  *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav
  */
-import {
-  loadModel,
-  unloadModel,
-  transcribeStream,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-} from "@qvac/sdk";
-import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
+import { loadModel, unloadModel, transcribeStream, WHISPER_TINY, VAD_SILERO_5_1_2 } from '@qvac/sdk'
+import { spawn } from 'child_process'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-const SAMPLE_FILE = path.resolve(
-  __dirname,
-  "../audio/diarization-sample-16k.wav",
-);
+const SAMPLE_FILE = path.resolve(__dirname, '../audio/diarization-sample-16k.wav')
 
-const SAMPLE_RATE = 16000;
-const BYTES_PER_SAMPLE = 4; // f32le
-const CHUNK_SIZE = Math.floor(0.1 * SAMPLE_RATE) * BYTES_PER_SAMPLE; // 100ms chunks
+const SAMPLE_RATE = 16000
+const BYTES_PER_SAMPLE = 4 // f32le
+const CHUNK_SIZE = Math.floor(0.1 * SAMPLE_RATE) * BYTES_PER_SAMPLE // 100ms chunks
 
 try {
-  console.log("▸ transcribeStream file test");
-  console.log(`▸ File: ${SAMPLE_FILE}`);
-  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes (100ms)`);
+  console.log('▸ transcribeStream file test')
+  console.log(`▸ File: ${SAMPLE_FILE}`)
+  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes (100ms)`)
 
-  console.log("▸ Loading model...");
+  console.log('▸ Loading model...')
   const modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
       vadModelSrc: VAD_SILERO_5_1_2,
-      audio_format: "f32le",
-      strategy: "greedy",
+      audio_format: 'f32le',
+      strategy: 'greedy',
       n_threads: 4,
-      language: "en",
+      language: 'en',
       no_timestamps: true,
       suppress_blank: true,
       suppress_nst: true,
@@ -58,75 +49,73 @@ try {
         min_speech_duration_ms: 250,
         min_silence_duration_ms: 500,
         max_speech_duration_s: 15.0,
-        speech_pad_ms: 200,
-      },
-    },
-  });
-  console.log(`▸ Model loaded: ${modelId}`);
+        speech_pad_ms: 200
+      }
+    }
+  })
+  console.log(`▸ Model loaded: ${modelId}`)
 
-  console.log("▸ Opening live session...");
-  const session = await transcribeStream({ modelId, metadata: true });
-  console.log("▸ Session open. Streaming audio...");
+  console.log('▸ Opening live session...')
+  const session = await transcribeStream({ modelId, metadata: true })
+  console.log('▸ Session open. Streaming audio...')
 
   const ffmpeg = spawn(
-    "ffmpeg",
+    'ffmpeg',
     [
-      "-i",
+      '-i',
       SAMPLE_FILE,
-      "-ar",
+      '-ar',
       String(SAMPLE_RATE),
-      "-ac",
-      "1",
-      "-sample_fmt",
-      "flt",
-      "-f",
-      "f32le",
-      "pipe:1",
+      '-ac',
+      '1',
+      '-sample_fmt',
+      'flt',
+      '-f',
+      'f32le',
+      'pipe:1'
     ],
-    { stdio: ["ignore", "pipe", "ignore"] },
-  );
+    { stdio: ['ignore', 'pipe', 'ignore'] }
+  )
 
-  let totalBytes = 0;
+  let totalBytes = 0
 
-  ffmpeg.stdout.on("data", (raw: Buffer) => {
+  ffmpeg.stdout.on('data', (raw: Buffer) => {
     for (let offset = 0; offset < raw.length; offset += CHUNK_SIZE) {
-      const chunk = raw.subarray(offset, offset + CHUNK_SIZE);
-      session.write(chunk);
-      totalBytes += chunk.length;
+      const chunk = raw.subarray(offset, offset + CHUNK_SIZE)
+      session.write(chunk)
+      totalBytes += chunk.length
     }
-  });
+  })
 
-  ffmpeg.on("close", () => {
-    const durationSec = totalBytes / (SAMPLE_RATE * BYTES_PER_SAMPLE);
-    console.log(
-      `▸ Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`,
-    );
-    console.log("▸ Waiting for transcription...");
-    session.end();
-  });
+  ffmpeg.on('close', () => {
+    const durationSec = totalBytes / (SAMPLE_RATE * BYTES_PER_SAMPLE)
+    console.log(`▸ Audio streamed: ${totalBytes} bytes (~${durationSec.toFixed(1)}s)`)
+    console.log('▸ Waiting for transcription...')
+    session.end()
+  })
 
-  const segments: { text: string; startMs: number; endMs: number }[] = [];
+  const segments: { text: string; startMs: number; endMs: number }[] = []
   for await (const segment of session) {
-    segments.push(segment);
-    const start = (segment.startMs / 1000).toFixed(2);
-    const end = (segment.endMs / 1000).toFixed(2);
+    segments.push(segment)
+    const start = (segment.startMs / 1000).toFixed(2)
+    const end = (segment.endMs / 1000).toFixed(2)
     console.log(
-      `▸ [${segments.length}] [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text.trim()}`,
-    );
+      `▸ [${segments.length}] [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text.trim()}`
+    )
   }
 
-  console.log(`\n▸ Segments: ${segments.length}`);
+  console.log(`\n▸ Segments: ${segments.length}`)
   if (segments.length > 0) {
-    console.log(segments.map((s) => s.text.trim()).join(" "));
+    console.log(segments.map((s) => s.text.trim()).join(' '))
   } else {
-    console.log("▸ No transcription segments received!");
+    console.log('▸ No transcription segments received!')
   }
 
-  console.log("▸ Unloading model...");
-  await unloadModel({ modelId });
-  console.log("▸ Done.");
-  process.exit(0);
+  console.log('▸ Unloading model...')
+  await unloadModel({ modelId })
+  console.log('▸ Done.')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

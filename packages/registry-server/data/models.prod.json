@@ -4989,6 +4989,38 @@
     "link": "https://huggingface.co/spaces/YatharthS/LavaSR "
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "lavasr",
+      "denoiser",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "lavasr",
+      "denoiser",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",
@@ -6193,6 +6225,92 @@
       "en"
     ],
     "notes": "Q4_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+    "description": "Parakeet EOU 120M v1 GGUF",
+    "quantization": "f16",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet TDT 0.6B v3 GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "tdt",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "description": "Parakeet Sortformer 4SPK v1 GGUF",
+    "quantization": "f16",
+    "params": "123M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",

@@ -1,8 +1,8 @@
-import type { StopProvideResponse } from "@/schemas/stop-provide";
-import { unregisterProvider } from "@/server/bare/hyperswarm";
-import { getServerLogger } from "@/logging";
+import type { StopProvideResponse } from '@/schemas/stop-provide'
+import { unregisterProvider } from '@/server/bare/hyperswarm'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 // Decrements the active-provider counter. The shared connection listener
 // (set up once in `provideHandler` per process) checks `hasActiveProviders()`
@@ -15,18 +15,18 @@ const logger = getServerLogger();
 // kill outgoing delegation connections.
 export function stopProvideHandler(): StopProvideResponse {
   try {
-    unregisterProvider();
+    unregisterProvider()
 
     return {
-      type: "stopProvide" as const,
-      success: true,
-    };
+      type: 'stopProvide' as const,
+      success: true
+    }
   } catch (error) {
-    logger.error("❌ Error in stop provide handler:", error);
+    logger.error('❌ Error in stop provide handler:', error)
     return {
-      type: "stopProvide" as const,
+      type: 'stopProvide' as const,
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }

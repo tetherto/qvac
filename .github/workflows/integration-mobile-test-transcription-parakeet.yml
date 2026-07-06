@@ -104,45 +104,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Cache Parakeet q4 GGUFs (registry + staged copies)
-        id: cache-parakeet-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-        with:
-          path: |
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/parakeet-eou-120m-v1.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/sortformer-4spk-v1.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-tdt-0.6b-v3.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/parakeet-eou-120m-v1.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/sortformer-4spk-v1.q4_0.gguf
-            addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}/test/mobile/testAssets/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf
-          key: parakeet-mobile-q4-registry-v1-${{ hashFiles(format('{0}/scripts/provision-mobile-models.sh', format('addon/{0}', inputs.workdir || 'packages/transcription-parakeet'))) }}
-          restore-keys: |
-            parakeet-mobile-q4-registry-v1-
-
-      - name: Provision Parakeet q4 GGUFs from registry (cache miss)
-        if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
+      - name: Generate Parakeet mobile model manifest
         working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}
         shell: bash
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
-          chmod +x scripts/provision-mobile-models.sh
-          scripts/provision-mobile-models.sh
-
-      - name: Stage q4 GGUFs into test/mobile/testAssets/ (cache hit)
-        if: steps.cache-parakeet-models.outputs.cache-hit == 'true'
-        working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p test/mobile/testAssets
-          cp models/parakeet-tdt-0.6b-v3.q4_0.gguf \
-             models/parakeet-eou-120m-v1.q4_0.gguf \
-             models/sortformer-4spk-v1.q4_0.gguf \
-             models/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf \
-             test/mobile/testAssets/
+          node scripts/generate-mobile-model-manifest.js
           ls -lh test/mobile/testAssets/
 
       - name: Build mobile app
@@ -158,6 +126,22 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Android mirrors the LLM mobile pattern: Device Farm's host downloads the
+      # models from presigned URLs and adb-pushes them to /data/local/tmp, so
+      # the phone does not rely on flaky large downloads and Metro never bundles
+      # the GGUFs into the app.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/${{ inputs.workdir || 'packages/transcription-parakeet' }}
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -172,6 +156,7 @@ jobs:
           enables-perf: 'true'
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
