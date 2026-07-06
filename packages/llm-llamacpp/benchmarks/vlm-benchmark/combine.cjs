@@ -115,8 +115,13 @@ function main () {
     seen.add(h)
     const txt = fs.readFileSync(f, 'utf8')
     const pick = (re) => { const m = txt.match(re); return m ? m[1] : null }
-    const devName = (path.basename(f).match(/(Samsung|Google)_[A-Za-z0-9_]*/) || [''])[0]
-      .replace(/_logcat_full.*/, '').replace(/_/g, ' ')
+    // Device name = the LAST manufacturer-prefixed segment of the filename
+    // (<df-run-name>_<device-name>_logcat_full…). The DF run name embeds the
+    // exact model too (EQUALS tokens), so a greedy first-match would render the
+    // name twice ("Google Pixel 9 Google Pixel 9").
+    const stem = path.basename(f).replace(/_logcat_full.*/, '')
+    const di = Math.max(stem.lastIndexOf('Samsung_'), stem.lastIndexOf('Google_'))
+    const devName = di >= 0 ? stem.slice(di).replace(/_/g, ' ') : ''
     const ramB = parseInt(pick(/totalMemory: (\d+)/) || '0', 10)
     launch.add(MOBILE_ENGINE)
     prov.push([
@@ -130,8 +135,11 @@ function main () {
     const h = hostOf(f)
     if (!h || seen.has(h)) continue
     seen.add(h)
-    const dev = (path.basename(f).match(/Apple_[A-Za-z0-9_]*/) || [''])[0]
-      .replace(/_bare_console.*/, '').replace(/_/g, ' ')
+    // Same last-occurrence rule as the Android block: the DF run name embeds
+    // the exact model, so the filename carries "Apple_iPhone…" twice.
+    const iosStem = path.basename(f).replace(/_bare_console.*/, '')
+    const ai = iosStem.lastIndexOf('Apple_')
+    const dev = ai >= 0 ? iosStem.slice(ai).replace(/_/g, ' ') : ''
     launch.add(MOBILE_ENGINE)
     prov.push([
       `**${h}** — ${dev || 'Apple iPhone'} (AWS Device Farm)`
