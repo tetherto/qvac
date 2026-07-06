@@ -1,5 +1,5 @@
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs'
+import * as path from 'path'
 
 /**
  * Walks from `startDir` up to the filesystem root, returning the first
@@ -13,13 +13,13 @@ import * as path from "path";
  * shadowed-copy warnings on top of this.
  */
 function findInAncestorNodeModules(startDir: string, name: string) {
-  let dir = startDir;
-  let parent = path.dirname(dir);
+  let dir = startDir
+  let parent = path.dirname(dir)
   for (; dir !== parent; dir = parent, parent = path.dirname(dir)) {
-    const candidate = path.join(dir, "node_modules", name);
-    if (fs.existsSync(candidate)) return candidate;
+    const candidate = path.join(dir, 'node_modules', name)
+    if (fs.existsSync(candidate)) return candidate
   }
-  return null;
+  return null
 }
 
-export { findInAncestorNodeModules };
+export { findInAncestorNodeModules }

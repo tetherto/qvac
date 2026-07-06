@@ -7,6 +7,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
         required: false
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF/throughput benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -23,6 +37,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
         required: false
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF/throughput benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
       workdir:
         description: "Relative path to package directory in monorepo"
         required: false
@@ -35,7 +63,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '' || '-gpu' }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -58,27 +86,51 @@ jobs:
         include:
           # Linux x64 on a GPU runner: exercises the Vulkan desktop build
           # (no_gpu unset -> NO_GPU=false -> gpu-smoke runs + asserts GPU).
+          # BCI ships a single registry model, so the benchmark sweeps
+          # platform × CPU/GPU backend (no quant dimension).
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: qvac-ubuntu2204-x64-gpu
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
             no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
             no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
           - os: windows-2025
             platform: win32
             arch: x64
             runner: qvac-win25-x64
             no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
 
     steps:
       - name: Setup Node.js
@@ -113,13 +165,28 @@ jobs:
           path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
 
-      - name: Move prebuilds from staging to workspace
-        if: ${{ !inputs.prebuild_package }}
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
         run: |
           mkdir -p ${{ inputs.workdir }}/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/
           echo "Prebuilds moved from staging area"
-        shell: bash
+          ls -la ${{ inputs.workdir }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the source
+      # path becomes invalid and the copy silently no-ops (leaving no prebuild
+      # -> ADDON_NOT_FOUND). Use PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ inputs.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -172,7 +239,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run integration test (Unix)
-        if: ${{ matrix.platform != 'win32' }}
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: npm run test:integration
@@ -180,12 +247,51 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run integration test (Windows)
-        if: ${{ matrix.platform == 'win32' }}
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      # RTF/throughput benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-bci-whispercpp.yml). Runs the matrix runner once
+      # per (useGPU) combo with the single BCI model and writes per-config JSON
+      # under benchmarks/results/, uploaded as rtf-results-* for the
+      # orchestrator's summarize job. Skipped on normal integration runs.
+      - name: Run RTF benchmark (Unix)
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Run RTF benchmark (Windows)
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Upload RTF benchmark results
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-${{ matrix.runner || matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}

@@ -111,6 +111,17 @@ function normalizeGgmlFiles (files) {
       f.supertonic
     ),
     voicesDir: firstNonEmpty(f.voicesDir),
+    // LavaSR enhancer GGUF: single-file Vocos bandwidth extension, produced by
+    // tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. One canonical key
+    // (the alternative is enhancer.enhancerPath on the options object).
+    lavasrEnhancer: firstNonEmpty(f.lavasrEnhancer),
+    // LavaSR denoiser GGUF: UL-UNAS speech denoiser that runs BEFORE the
+    // enhancer (rate-preserving), produced by
+    // tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. One canonical key
+    // (the alternative is denoiser.denoiserPath on the options object).
+    // The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+    // PR #78; a provided path activates once the pinned tts-cpp includes it.
+    lavasrDenoiser: firstNonEmpty(f.lavasrDenoiser),
     // Directory of the compiled MeCab/IPAdic dictionary (Japanese) and
     // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
     // from the QVAC model registry) and passes the local paths; the
@@ -263,6 +274,8 @@ class TTSGgml {
       numInferenceSteps,
       speed,
       noiseNpyPath,
+      enhancer,
+      denoiser,
       backendsDir,
       openclCacheDir,
       mecabDictDir,
@@ -368,6 +381,40 @@ class TTSGgml {
     this._speed = speed
     this._noiseNpyPath = noiseNpyPath
 
+    // LavaSR enhancer (opt-in). Enhancement is ON iff a GGUF path is provided
+    // — via files.lavasrEnhancer or enhancer.enhancerPath — so there is no
+    // separate on/off flag to keep in sync (a future SDK layer can gate at
+    // runtime by choosing whether to pass the path). A provided `enhancer`
+    // block must use the supported type so a typo can't silently disable it.
+    if (enhancer != null && enhancer.type !== 'lavasr') {
+      throw new Error(
+        `tts-ggml: unknown enhancer.type '${enhancer.type}', expected 'lavasr'.`
+      )
+    }
+    this._enhancerGgufPath = firstNonEmpty(
+      normalizedFiles.lavasrEnhancer,
+      enhancer ? enhancer.enhancerPath : undefined
+    )
+
+    // LavaSR denoiser (opt-in, mirrors the enhancer). The denoiser runs BEFORE
+    // the enhancer and is rate-preserving; it is enabled purely by supplying a
+    // GGUF path — via files.lavasrDenoiser or denoiser.denoiserPath — so there
+    // is no separate on/off flag. A provided `denoiser` block must use the
+    // supported type so a typo can't silently disable it.
+    // The tts-cpp UL-UNAS denoiser forward is implemented in
+    // qvac-ext-lib-whisper.cpp PR #78 (scalar CPU port, validated bit-close to
+    // the ONNX reference); a supplied denoiser path activates at runtime once
+    // the pinned tts-cpp version includes #78.
+    if (denoiser != null && denoiser.type !== 'lavasr') {
+      throw new Error(
+        `tts-ggml: unknown denoiser.type '${denoiser.type}', expected 'lavasr'.`
+      )
+    }
+    this._denoiserGgufPath = firstNonEmpty(
+      normalizedFiles.lavasrDenoiser,
+      denoiser ? denoiser.denoiserPath : undefined
+    )
+
     // Per-platform fallback for `backendsDir` when the host didn't
     // pass one. Mirrors the qvac/packages/llm-llamacpp +
     // transcription-parakeet resolution shape
@@ -414,6 +461,33 @@ class TTSGgml {
         )
       }
     }
+
+    // LavaSR enhancement + Chatterbox native chunk streaming is supported: the
+    // addon runs the enhancer over a sliding window with look-ahead + crossfade
+    // so each emitted chunk is bandwidth-extended seam-free (the StreamingEnhancer
+    // in ChatterboxModel). This adds ~0.34 s of look-ahead latency — inherent to
+    // the enhancer's receptive field — so the first audio arrives a little later
+    // than un-enhanced streaming.
+
+    // LavaSR denoise + native chunk streaming is NOT supported yet. The UL-UNAS
+    // denoiser is causal (streaming-friendly in principle), but tts-cpp only
+    // exposes a one-shot denoise() today — a stateful streaming denoiser (GRU
+    // hidden-state carry across chunks, à la StreamingEnhancer) is the
+    // follow-up. Reject the combo up front so it can't silently drop denoising
+    // on the streaming path; batch synthesis (run/runStream/runStreaming without
+    // streamChunkTokens) applies the denoiser normally.
+    if (
+      this._denoiserGgufPath &&
+      (this._streamChunkTokens != null || this._streamFirstChunkTokens != null)
+    ) {
+      throw new Error(
+        'tts-ggml: the LavaSR denoiser is not yet supported with Chatterbox ' +
+        'native chunk streaming (streamChunkTokens / streamFirstChunkTokens). ' +
+        'Use batch synthesis, or drop the denoiser for streaming. Streaming ' +
+        'denoise is a planned follow-up (needs a stateful streaming denoiser).'
+      )
+    }
+
     // Default GPU off only when neither knob is set, for every engine. A
     // caller passing nGpuLayers alone keeps it (no silent conflict with the
     // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
@@ -779,8 +853,15 @@ class TTSGgml {
 
     const ttsParams = this._buildTtsParams()
 
-    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-    await this.addon.activate()
+    const addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
+    this.addon = addon
+    try {
+      await addon.activate()
+    } catch (err) {
+      try { await addon.destroyInstance() } catch (_e) {}
+      if (this.addon === addon) this.addon = null
+      throw err
+    }
   }
 
   _buildTtsParams () {
@@ -813,6 +894,12 @@ class TTSGgml {
       params.streamFirstChunkTokens = this._streamFirstChunkTokens | 0
     }
     if (this._cfmSteps != null) params.cfmSteps = this._cfmSteps | 0
+    if (this._enhancerGgufPath) {
+      params.lavasrEnhancerPath = this._enhancerGgufPath
+    }
+    if (this._denoiserGgufPath) {
+      params.lavasrDenoiserPath = this._denoiserGgufPath
+    }
     // Speaking-rate multiplier (1.0 = unchanged, < 1 slower, > 1 faster).
     // Chatterbox has no native rate control, so the addon applies a
     // pitch-preserving WSOLA time-stretch post-synthesis; see
@@ -850,6 +937,12 @@ class TTSGgml {
       params.useGPU = !!this._config.useGPU
     }
     if (this._noiseNpyPath) params.noiseNpyPath = this._noiseNpyPath
+    if (this._enhancerGgufPath) {
+      params.lavasrEnhancerPath = this._enhancerGgufPath
+    }
+    if (this._denoiserGgufPath) {
+      params.lavasrDenoiserPath = this._denoiserGgufPath
+    }
     if (this._backendsDir) params.backendsDir = this._backendsDir
     if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
     return params
