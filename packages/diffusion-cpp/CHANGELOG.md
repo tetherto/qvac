@@ -13,7 +13,7 @@ This release restores the diffusion-cpp npm publish path after the LTX dependenc
 
 #### Keep LTX prebuilds under the npm package size limit
 
-The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets or desktop Adreno/TBQ/PQ/TQ1/TQ2/MXFP4/NVFP4 Vulkan shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
+The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets, desktop Adreno/TBQ/PQ/TQ1/TQ2/MXFP4/NVFP4 Vulkan shader payloads, or Vulkan training/backward/loss shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
 
 #### Reduce LTX smoke-test memory pressure
 
