@@ -347,16 +347,18 @@ void LlamaModel::tuneConfigMap(
         }
         // Any other quantized type on OpenCL: the requantize copy on a KV-cache
         // shift has no ggml-opencl kernel and aborts in llama_kv_cache::update.
+        // The wording covers both sides — this check runs for K and V alike.
         throw qvac_errors::StatusError(
             qvac_errors::general_error::InvalidArgument,
             string_format(
                 "[LlamaModel] cache-type-%s=%s: quantized KV-cache is not "
-                "supported on the OpenCL (Adreno) backend. A quantized K cache "
-                "aborts in llama_kv_cache::update on KV-cache shifts (sliding "
-                "context / context management) — ggml-opencl has no "
-                "F32->quantized copy kernel for the RoPE requantize step (true "
-                "for q8_0 and q4_0 alike). Use cache-type-%s f32/f16/bf16, or "
-                "switch device to a Vulkan GPU or CPU.\n",
+                "supported on the OpenCL (Adreno) backend. A quantized K or V "
+                "cache aborts in llama_kv_cache::update on KV-cache shifts / "
+                "cache management (sliding context, state restore) — "
+                "ggml-opencl has no F32->quantized copy kernel for the "
+                "requantize step (true for q8_0 and q4_0 alike). Use "
+                "cache-type-%s f32/f16/bf16, or switch device to a Vulkan GPU "
+                "or CPU.\n",
                 side,
                 it->second.c_str(),
                 side));

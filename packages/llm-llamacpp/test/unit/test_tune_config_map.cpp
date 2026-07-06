@@ -235,7 +235,7 @@ TEST_F(TuneConfigMapTest, NotOpenCl_NonBitnet_FlashAttnDefaultsOn) {
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }
 
-// ---- Tier 2: OpenCL allows q4_0/q8_0 (fabric FA kernels), rejects the rest --
+// ---- OpenCL rejects ALL quantized KV types; only f32/f16/bf16 are safe ----
 
 TEST_F(TuneConfigMapTest, OpenCl_RejectsQ8_0KCache) {
   MockModelMetaData meta(false, "llama");
@@ -911,7 +911,8 @@ TEST_F(TuneConfigMapTest, AutoDefault_OpenClGpu_StaysF16) {
   MockModelMetaData meta(false, "llama");
 
   // OpenCL is excluded from the q8_0 auto-default: quantized KV-cache shifts
-  // abort on Adreno, so f16 stays the default (q8_0 only via explicit opt-in).
+  // abort on Adreno, so f16 stays the default (an explicit quantized type is
+  // rejected too — see OpenCl_RejectsQ8_0KCache).
   LlamaModel::tuneConfigMap(
       configFilemap_,
       meta,
@@ -1050,7 +1051,8 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
   MockModelMetaData meta(false, "llama");
 
   // Adreno (OpenCL) keeps the f16 default — quantized KV-cache shifts abort
-  // there. q8_0 is still available as an explicit opt-in (Tier 2 guard).
+  // there, and an explicit quantized type is rejected as well (see
+  // AdrenoOpenCl_QuantizedKCache_Rejected).
   LlamaModel::tuneConfigMap(
       configFilemap_,
       meta,
