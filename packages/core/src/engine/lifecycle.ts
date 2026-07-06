@@ -9,7 +9,7 @@ import {
   startLogBuffering,
   stopLogBufferingWithTimeout
 } from './state/logging-stream-registry'
-import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from '../logging'
+import { clearAllAddonLoggers, getServerLogger, CORE_LOG_ID, CORE_ALL_LOG_ID } from '../logging'
 import { clearPlugins } from '../plugins'
 import { acquireWorkerLock, releaseWorkerLock } from './utils/worker-lock'
 
@@ -31,8 +31,8 @@ const logger = getServerLogger()
 export function initialize(): void {
   if (initialized) return
 
-  startLogBuffering(SDK_LOG_ID)
-  startLogBuffering(SDK_ALL_LOG_ID)
+  startLogBuffering(CORE_LOG_ID)
+  startLogBuffering(CORE_ALL_LOG_ID)
 
   initEnv()
   acquireWorkerLock()
@@ -42,7 +42,7 @@ export function initialize(): void {
   // model-load buffering is bounded: if nothing subscribes within the grace
   // window, stop buffering so every server log doesn't keep churning it. A
   // subscriber that connects in time cancels the timeout and flushes the buffer.
-  stopLogBufferingWithTimeout(SDK_ALL_LOG_ID)
+  stopLogBufferingWithTimeout(CORE_ALL_LOG_ID)
 
   initialized = true
   logger.debug('Engine initialized')

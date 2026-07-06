@@ -1,4 +1,4 @@
-import { getClientLogger, SDK_ALL_LOG_ID } from '../logging'
+import { getClientLogger, CORE_ALL_LOG_ID } from '../logging'
 import { loggingStream } from './logging-stream'
 import type { LoggingStreamResponse } from '../schemas/logging-stream'
 
@@ -7,16 +7,16 @@ const logger = getClientLogger()
 export type ServerLogHandler = (log: LoggingStreamResponse) => void
 
 /**
- * Subscribes to every server-side log through a single stream: SDK server logs,
- * per-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG
- * logs — without having to open a {@link loggingStream} per id.
+ * Subscribes to every log through a single stream: core's own logs, per-model
+ * addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG logs —
+ * without having to open a {@link loggingStream} per id.
  *
- * Each delivered log keeps its origin in `log.id`: `SDK_LOG_ID` for SDK server
+ * Each delivered log keeps its origin in `log.id`: `CORE_LOG_ID` for core's own
  * logs, the model id for model logs, or the RAG workspace key. Use it to tell the
  * sources apart.
  *
- * Internally this opens a {@link loggingStream} on the reserved `SDK_ALL_LOG_ID`
- * stream that the worker fans every log into.
+ * Internally this opens a {@link loggingStream} on the reserved `CORE_ALL_LOG_ID`
+ * stream that the engine fans every log into.
  *
  * @param handler - called once per log line.
  * @returns a function that stops the subscription.
@@ -31,7 +31,7 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void
  * ```
  */
 export function subscribeServerLogs(handler: ServerLogHandler) {
-  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID })
+  const streamIterator = loggingStream({ id: CORE_ALL_LOG_ID })
 
   void (async () => {
     try {

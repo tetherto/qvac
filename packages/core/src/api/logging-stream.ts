@@ -19,8 +19,8 @@ import { InvalidResponseError } from '../utils/errors-client'
  * // Open a logging stream for a model
  * const logStream = loggingStream({ id: 'my-model-id' });
  *
- * // Or stream SDK server logs
- * const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+ * // Or stream core's own logs
+ * const coreLogs = loggingStream({ id: CORE_LOG_ID });
  *
  * for await (const logMessage of logStream) {
  *   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);

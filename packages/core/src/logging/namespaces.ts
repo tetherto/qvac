@@ -4,11 +4,13 @@ export const RAG_NAMESPACE = 'rag:hyperdb' as const
 
 export type AddonNamespace = CanonicalModelType | typeof RAG_NAMESPACE
 
-// Reserved ID for SDK server logs
-export const SDK_LOG_ID = '__sdk__'
+// Reserved ID for core's own (engine) logs
+export const CORE_LOG_ID = '__core__'
 
-// Reserved ID for the stream that receives all server-side logs
-export const SDK_ALL_LOG_ID = '__all__'
+// Reserved ID for the stream that receives every log
+export const CORE_ALL_LOG_ID = '__all__'
 
-// Namespace for all SDK server logs
-export const SDK_SERVER_NAMESPACE = 'sdk:server'
+// Namespace stamped on core's own logs. Core has no client/server split, so it
+// is just "core" (not "sdk:server"). A consumer that wraps core — e.g. the SDK —
+// can relabel this at its own forwarding boundary.
+export const CORE_NAMESPACE = 'core'

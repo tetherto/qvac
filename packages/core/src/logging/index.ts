@@ -11,9 +11,9 @@ export { getClientLogger } from './client-logger'
 export type { Logger, LoggerOptions, LogTransport } from './types'
 export {
   RAG_NAMESPACE,
-  SDK_LOG_ID,
-  SDK_ALL_LOG_ID,
-  SDK_SERVER_NAMESPACE,
+  CORE_LOG_ID,
+  CORE_ALL_LOG_ID,
+  CORE_NAMESPACE,
   type AddonNamespace
 } from './namespaces'
 export {
