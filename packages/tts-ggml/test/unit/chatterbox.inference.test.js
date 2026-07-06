@@ -215,7 +215,7 @@ test('Chatterbox: cancel propagates as job failure', async (t) => {
   await model.unload()
 })
 
-test('Chatterbox: nCtx forwards to ttsParams; omitted when unset (QVAC-19557)', (t) => {
+test('Chatterbox: nCtx forwards to ttsParams; omitted when unset', (t) => {
   const files = {
     t3Model: './models/chatterbox-t3-turbo.gguf',
     s3genModel: './models/chatterbox-s3gen.gguf'
@@ -231,7 +231,7 @@ test('Chatterbox: nCtx forwards to ttsParams; omitted when unset (QVAC-19557)', 
   t.absent(defaulted._buildTtsParams().nCtx, 'nCtx omitted when unset so the addon applies its 2048 default')
 })
 
-test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset (QVAC-19557)', (t) => {
+test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset', (t) => {
   const files = {
     t3Model: './models/chatterbox-t3-turbo.gguf',
     s3genModel: './models/chatterbox-s3gen.gguf'

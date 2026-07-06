@@ -244,7 +244,7 @@ test('Chatterbox MTL GPU smoke - multilingual model on GPU with the default (f16
 
 test('Supertonic GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
   // Supertonic GPU: Metal on Apple, Vulkan/CUDA on desktop, Vulkan/OpenCL on
-  // Android (Adreno/Xclipse/Mali, validated under QVAC-20557 / tts-cpp 2026-06-18).
+  // Android (Adreno/Xclipse/Mali, validated under tts-cpp 2026-06-18).
   // The strict assertion runs on every GPU-capable platform including Android.
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
