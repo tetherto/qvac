@@ -16,4 +16,9 @@ export abstract class AbstractModelExecutor<
   async teardown(testId: string, context: unknown) {
     await modelTeardown(this.resources)
   }
+
+  async reload(testId: string, context: unknown) {
+    await this.resources.evictAll();
+    await this.setup(testId, context);
+  }
 }
