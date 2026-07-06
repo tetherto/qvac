@@ -52,13 +52,24 @@ class GeneratedImageSaver {
 
 const TRANSIENT_ERROR_CODES = new Set([
   'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE',
+  // bare-https surfaces dropped connections with these names/codes instead of
+  // the classic errno codes above; without them a recoverable socket drop
+  // (e.g. "CONNECTION_LOST: Socket hung up") is treated as fatal and not retried.
+  'CONNECTION_LOST', 'ECONNREFUSED', 'ECONNCLOSED'
 ])
 
+// Fallback for transports (e.g. bare-https) that don't always set err.code:
+// match on the human-readable message so connection resets / DNS blips retry.
+const TRANSIENT_ERROR_MESSAGE = /socket hung up|connection (lost|abort|reset|closed|refused)|hung up|no address|network|timed? ?out|EAI_|ENOTFOUND|ECONNRESET|ECONNABORTED/i
+
 function isTransientError (err) {
+  if (!err) return false
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
+  if (err.name && TRANSIENT_ERROR_CODES.has(err.name)) return true
   if (err.statusCode === 408 || err.statusCode === 429) return true
   if (err.statusCode >= 500) return true
+  if (err.message && TRANSIENT_ERROR_MESSAGE.test(err.message)) return true
   return false
 }
 
@@ -215,7 +226,10 @@ async function ensureModel ({ modelName, downloadUrl }) {
   fs.mkdirSync(modelDir, { recursive: true })
   console.log(`[download] Downloading test model ${modelName}...`)
 
-  await downloadFileWithRetries(downloadUrl, modelPath)
+  // Multi-GB model downloads on device-farm runners hit flaky CDN/network
+  // (connection resets, DNS blips); give them extra retries so a single drop
+  // doesn't fail the whole test.
+  await downloadFileWithRetries(downloadUrl, modelPath, { retries: 6 })
 
   const stats = fs.statSync(modelPath)
   console.log(`[download] Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)

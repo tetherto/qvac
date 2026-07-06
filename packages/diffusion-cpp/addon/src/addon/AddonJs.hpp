@@ -323,7 +323,7 @@ JSCATCH
 
 /**
  * Query expected ESRGAN RuntimeStats.backendDevice for a config.device value,
- * using the same Adreno/OpenCL policy as native load. Args: [device] or
+ * using the same backend policy as native load. Args: [device] or
  * [device, backendsDir].
  */
 inline js_value_t*
