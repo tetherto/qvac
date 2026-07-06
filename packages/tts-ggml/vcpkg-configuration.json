@@ -20,7 +20,7 @@
     {
       "kind": "git",
       "reference": "QVAC-21839/mecab-port-windows-ninja",
-      "baseline": "bc4e8f3b575eaf741777e68a28f39862e6ecc747",
+      "baseline": "050e7a55fcb813b4918bc60105906d4246945bee",
       "repository": "https://github.com/freddy311082/qvac-registry-vcpkg.git",
       "packages": [
         "mecab"
