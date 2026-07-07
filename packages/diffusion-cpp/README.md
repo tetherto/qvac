@@ -12,6 +12,30 @@ The package exposes three JS entry points:
 | `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video |
 | `EsrganUpscaler` | named export from `@qvac/diffusion-cpp` | Standalone PNG/JPEG upscaling |
 
+## Table of Contents
+
+- [Supported Models](#supported-models)
+- [Supported Platforms](#supported-platforms)
+- [Building From Source](#building-from-source)
+- [Downloading Models](#downloading-models)
+- [Examples](#examples)
+- [Image API](#image-api)
+  - [Constructor Files](#constructor-files)
+  - [Image Config](#image-config)
+  - [Image Generation Parameters](#image-generation-parameters)
+- [Image-to-Image and FLUX.2 Fusion](#image-to-image-and-flux2-fusion)
+- [Video API](#video-api)
+  - [Video Files](#video-files)
+  - [Video Parameters](#video-parameters)
+- [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
+- [ESRGAN Upscaler](#esrgan-upscaler)
+- [Response Streams and Stats](#response-streams-and-stats)
+- [Cancellation and Unload](#cancellation-and-unload)
+- [Operational Notes](#operational-notes)
+- [Credits](#credits)
+  - [Test Images](#test-images)
+- [License](#license)
+
 ## Supported Models
 
 | Family | Mode | Notes |
