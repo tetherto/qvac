@@ -92,13 +92,13 @@ the same way a real app would add a third-party or in-repo custom plugin. `Plugi
 own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
 use a custom plugin rather than calling `invokePlugin` directly.
 
-Both `qvac.config.*` files list every built-in plugin explicitly, not just `custom-echo-plugin/plugin`: an empty
+Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
 plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
-would silently drop LLM/whisper/OCR/etc. plugin registration from the desktop and Electron workers.
+would silently drop LLM/whisper/OCR/etc. plugin registration from the workers. The Electron config intentionally
+omits `sdcpp-generation` and `ggml-vla` (these addons are skipped when running on Electron).
 
-Each platform bundles the worker with the plugin included through its own normal build path — there is no
-plugin-specific CI step:
+Each platform bundles the worker with the plugin included through its normal build path:
 
 - **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
   (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes

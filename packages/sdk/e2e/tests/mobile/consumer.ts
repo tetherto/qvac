@@ -155,10 +155,10 @@ resources.define('classification', {
   })
 })
 
-// Custom plugin fixture (custom-echo-plugin) — no model file to download.
 resources.define('echo', {
   type: 'echo',
-  modelSrc: ''
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {

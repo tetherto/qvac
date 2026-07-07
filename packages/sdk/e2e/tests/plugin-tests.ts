@@ -43,7 +43,7 @@ export const pluginEchoInvokeStream: TestDefinition = {
 
 export const pluginEchoValidationError: TestDefinition = {
   testId: 'plugin-echo-validation-error',
-  params: { invalidPayload: true },
+  params: {},
   expectation: {
     validation: 'throws-error',
     errorContains: 'Request validation failed'
