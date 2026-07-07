@@ -42,6 +42,14 @@ struct SupertonicConfig {
   std::string backendsDir;
   std::string openclCacheDir;
 
+  // Directory for the persistent Vulkan pipeline cache
+  // (forwarded to GGML_VK_PIPELINE_CACHE_DIR via EngineOptions::
+  // vulkan_env_overrides). The Vulkan backend compiles all compute
+  // pipelines on the first GPU dispatch (seconds on Mali); persisting
+  // them to disk turns that cold-start into a one-off per install
+  // instead of once per process. Empty -> no cross-process cache.
+  std::string vulkanCacheDir;
+
   // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
   // single switch: when set, the model loads the enhancer GGUF and
   // bandwidth-extends the synthesized PCM to 48 kHz before returning it; empty
