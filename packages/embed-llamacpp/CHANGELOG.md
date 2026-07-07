@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.25.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite; no API change for this package).
+
 ## [0.24.0] - 2026-07-06
 
 ### Changed
