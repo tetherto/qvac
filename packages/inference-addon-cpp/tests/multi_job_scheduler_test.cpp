@@ -903,4 +903,63 @@ TEST_F(MultiJobSchedulerTest, IdReusableAfterCompletion) {
   scheduler_->cancelAll();
 }
 
+// (s) The ctor contract: a null multiprocessor or zero concurrency is refused
+// up front (std::invalid_argument) rather than surfacing as a wedged scheduler
+// later. Plain TEST: no started scheduler is needed.
+TEST(MultiJobSchedulerCtorTest, RejectsBadArguments) {
+  ConcurrentTestModel model{std::chrono::milliseconds{0}};
+  EXPECT_THROW(
+      MultiJobScheduler(nullptr, 2, &model, &model, 0),
+      std::invalid_argument);
+  EXPECT_THROW(
+      MultiJobScheduler(&model, 0, &model, &model, 0),
+      std::invalid_argument);
+}
+
+// (t) Cancelling a MIDDLE queued job while several wait: the queued_/
+// queuedIndex_ erase must drop exactly that job (slot released, one terminal
+// error, process() never entered) while its queued peers still run, in FIFO
+// order. The queueCapacity=1 cancel test never erases from the middle.
+TEST_F(MultiJobSchedulerTest, CancelMiddleQueuedJobKeepsPeers) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 3, std::chrono::milliseconds{400});
+
+  // Job 1 occupies the single worker long enough to queue three peers and
+  // cancel the middle one, then completes on its own so the queue drains.
+  EXPECT_TRUE(scheduler_->runJob(std::string("inflight"), 1));
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 3));
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 4));
+  ASSERT_EQ(scheduler_->activeJobs(), 4u);
+
+  scheduler_->cancel(3);
+  EXPECT_EQ(scheduler_->activeJobs(), 3u)
+      << "cancelling a queued job must release its admission slot immediately";
+
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  EXPECT_FALSE(tracking->started(3))
+      << "a cancelled queued job must never reach process()";
+  EXPECT_TRUE(tracking->started(2));
+  EXPECT_TRUE(tracking->started(4))
+      << "queued peers of a cancelled middle job must still run";
+
+  const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
+  int terminalForCancelled = 0;
+  for (const std::pair<JobId, std::any>& entry : outputs) {
+    if (entry.first == 3) {
+      EXPECT_EQ(entry.second.type(), typeid(Output::Error))
+          << "no result/jobEnded may be emitted for a cancelled queued job";
+      ++terminalForCancelled;
+    }
+  }
+  EXPECT_EQ(terminalForCancelled, 1)
+      << "a cancelled queued job must surface exactly one terminal error";
+
+  EXPECT_EQ(tracking->startOrder(), (std::vector<JobId>{1, 2, 4}))
+      << "survivors must keep FIFO (submission) order after the middle erase";
+}
+
 } // namespace qvac_lib_inference_addon_cpp
