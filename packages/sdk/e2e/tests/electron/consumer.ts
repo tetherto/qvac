@@ -32,6 +32,8 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  TTS_ENHANCER_LAVASR_FP16,
+  TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -274,6 +276,36 @@ resources.define('tts-supertonic-multilingual', {
     language: 'es',
     voice: 'F1',
     useGPU: true
+  }
+})
+
+// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
+// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
+resources.define('tts-supertonic-8k', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    outputSampleRate: 8000
+  }
+})
+
+// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
+// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
+// resource manager's config walk pre-downloads them automatically.
+resources.define('tts-supertonic-enhanced', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
+    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
   }
 })
 
