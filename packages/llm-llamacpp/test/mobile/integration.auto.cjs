@@ -436,6 +436,11 @@ async function runImageHighResAuroraTest (options = {}) { // eslint-disable-line
   return runIntegrationModule('../integration/image-high-res-aurora.test.js', options)
 }
 
+async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheTypeDefaultsTest')) return __FILTERED
+  return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)

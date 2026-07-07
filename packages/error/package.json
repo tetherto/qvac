@@ -4,8 +4,10 @@
   "description": "Base error handling library for QVAC",
   "main": "index.js",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "build:types": "tsc",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
     "test:dts": "tsc index.d.ts --noEmit",
@@ -24,7 +26,9 @@
   "devDependencies": {
     "brittle": "^3.10.1",
     "husky": "^9.1.7",
-    "standard": "17.1.0",
+    "lunte": "^1.8.3",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "repository": {

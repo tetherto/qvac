@@ -39,11 +39,11 @@ full list.
 
 Which rebuild command you run depends on what changed.
 
-| You changed                              | Command                         | Rebuild packaged apps?                    |
-| ---------------------------------------- | ------------------------------- | ----------------------------------------- |
-| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full`    | Yes — `--skip-build` will miss the change |
-| Test code or assets in `e2e/`            | `npm run install:build`         | Yes for mobile and Electron               |
-| Only the producer side (filter, suite)   | none                            | No — use `--skip-build`                   |
+| You changed                              | Command                      | Rebuild packaged apps?                    |
+| ---------------------------------------- | ---------------------------- | ----------------------------------------- |
+| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
+| Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
+| Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
 - `install:build:full` = `prepare:sdk` (bun install + bun run build in `packages/sdk/`) + `install:build`.
@@ -100,8 +100,8 @@ and submit the form.
 Non-obvious inputs:
 
 - **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
-  picks the branch that supplies the *workflow YAML*; `test-version` is the git ref that gets checked out for
-  the *code under test* (and the e2e package). Leave `test-version` blank to test the same branch the
+  picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
+  the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms` — JSON array of runner labels; defaults to all three GPU runners. Narrow to one during
@@ -152,14 +152,14 @@ the form.
 - **Manual iOS build fallback** — when the automated flow fails, build from the generated Xcode workspace
   manually:
 
-    ```bash
-    npx qvac-test build:consumer:ios --runId <run-id> --config .
-    cd build/consumers/ios/ios
-    xcodebuild \
-      -workspace QVACTestConsumer.xcworkspace \
-      -scheme QVACTestConsumer \
-      -configuration Release \
-      -destination 'id=<device-udid>'
-    ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
-    npx qvac-test run:producer --runId <run-id> --config .
-    ```
+  ```bash
+  npx qvac-test build:consumer:ios --runId <run-id> --config .
+  cd build/consumers/ios/ios
+  xcodebuild \
+    -workspace QVACTestConsumer.xcworkspace \
+    -scheme QVACTestConsumer \
+    -configuration Release \
+    -destination 'id=<device-udid>'
+  ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
+  npx qvac-test run:producer --runId <run-id> --config .
+  ```

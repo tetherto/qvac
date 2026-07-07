@@ -11,14 +11,14 @@
  * hint to parakeet-cpp's segmentation. Whisper is the only engine
  * that surfaces `vad` events.
  */
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 // The duplex runner feeds raw PCM directly into the parakeet session
 // (no FFmpegDecoder hop, unlike `transcribe()`), so the fixture itself
 // must already be 16 kHz mono — parakeet's expected sample rate. The
 // `transcription-short-wav.wav` fixture is 48 kHz stereo and would be
 // rejected by the runner's `sampleRate !== 16000` precondition.
-const AUDIO_FIXTURE = "diarization-sample-16k.wav";
+const AUDIO_FIXTURE = 'diarization-sample-16k.wav'
 
 // The EOU detector fires `<EOU>` based on sentence-final / turn-boundary
 // linguistic patterns from its small ASR head (see the addon's own
@@ -28,37 +28,37 @@ const AUDIO_FIXTURE = "diarization-sample-16k.wav";
 // against it. `two-speakers-16k.wav` is the same format (16 kHz mono) but
 // is alternating two-speaker conversation — exactly the stimulus the EOU
 // head is trained on — so at least one boundary surfaces reliably.
-const EOU_AUDIO_FIXTURE = "two-speakers-16k.wav";
+const EOU_AUDIO_FIXTURE = 'two-speakers-16k.wav'
 
 export const parakeetStreamHappy: TestDefinition = {
-  testId: "parakeet-stream-happy",
+  testId: 'parakeet-stream-happy',
   params: {
     audioFileName: AUDIO_FIXTURE,
     chunkMs: 1000,
     emitPartials: true,
-    trailingSilenceMs: 1500,
+    trailingSilenceMs: 1500
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "parakeet",
-    dependency: "parakeet-tdt",
-    estimatedDurationMs: 120000,
-  },
-};
+    category: 'parakeet',
+    dependency: 'parakeet-tdt',
+    estimatedDurationMs: 120000
+  }
+}
 
 export const parakeetStreamMetadataRejected: TestDefinition = {
-  testId: "parakeet-stream-metadata-rejected",
+  testId: 'parakeet-stream-metadata-rejected',
   params: {
     audioFileName: AUDIO_FIXTURE,
-    chunkMs: 1000,
+    chunkMs: 1000
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "parakeet",
-    dependency: "parakeet-tdt",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'parakeet',
+    dependency: 'parakeet-tdt',
+    estimatedDurationMs: 60000
+  }
+}
 
 /**
  * EOU model end-to-end coverage: drives the duplex stream against the
@@ -69,20 +69,20 @@ export const parakeetStreamMetadataRejected: TestDefinition = {
  * handler, and the client `processLineConversation` decoder.
  */
 export const parakeetStreamEou: TestDefinition = {
-  testId: "parakeet-stream-eou",
+  testId: 'parakeet-stream-eou',
   params: {
     audioFileName: EOU_AUDIO_FIXTURE,
     chunkMs: 1000,
     emitPartials: true,
-    trailingSilenceMs: 1500,
+    trailingSilenceMs: 1500
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "parakeet",
-    dependency: "parakeet-eou",
-    estimatedDurationMs: 120000,
-  },
-};
+    category: 'parakeet',
+    dependency: 'parakeet-eou',
+    estimatedDurationMs: 120000
+  }
+}
 
 /**
  * Mid-utterance teardown: opens a session, writes 2 chunks, calls
@@ -94,20 +94,20 @@ export const parakeetStreamEou: TestDefinition = {
  * wedged state.
  */
 export const parakeetStreamDestroyMidUtterance: TestDefinition = {
-  testId: "parakeet-stream-destroy-mid-utterance",
+  testId: 'parakeet-stream-destroy-mid-utterance',
   params: {
     audioFileName: AUDIO_FIXTURE,
     chunkMs: 1000,
     emitPartials: true,
-    trailingSilenceMs: 1500,
+    trailingSilenceMs: 1500
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "parakeet",
-    dependency: "parakeet-tdt",
-    estimatedDurationMs: 180000,
-  },
-};
+    category: 'parakeet',
+    dependency: 'parakeet-tdt',
+    estimatedDurationMs: 180000
+  }
+}
 
 /**
  * Consumer-side iterator throw: the `for await` body throws after
@@ -117,25 +117,25 @@ export const parakeetStreamDestroyMidUtterance: TestDefinition = {
  * disconnect / error path" referenced in PR review #4280580987.
  */
 export const parakeetStreamIteratorThrow: TestDefinition = {
-  testId: "parakeet-stream-iterator-throw",
+  testId: 'parakeet-stream-iterator-throw',
   params: {
     audioFileName: AUDIO_FIXTURE,
     chunkMs: 1000,
     emitPartials: true,
-    trailingSilenceMs: 1500,
+    trailingSilenceMs: 1500
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: 'function', fn: () => true },
   metadata: {
-    category: "parakeet",
-    dependency: "parakeet-tdt",
-    estimatedDurationMs: 180000,
-  },
-};
+    category: 'parakeet',
+    dependency: 'parakeet-tdt',
+    estimatedDurationMs: 180000
+  }
+}
 
 export const parakeetStreamTests = [
   parakeetStreamHappy,
   parakeetStreamMetadataRejected,
   parakeetStreamEou,
   parakeetStreamDestroyMidUtterance,
-  parakeetStreamIteratorThrow,
-];
+  parakeetStreamIteratorThrow
+]

@@ -1,50 +1,50 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 export const modelInfoGet: TestDefinition = {
-  testId: "model-info-get",
-  params: { modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
-  metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
-};
+  testId: 'model-info-get',
+  params: { modelConstant: 'LLAMA_3_2_1B_INST_Q4_0' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: { category: 'model-info', dependency: 'llm', estimatedDurationMs: 5000 }
+}
 
 export const modelInfoVerifyFiles: TestDefinition = {
-  testId: "model-info-verify-files",
-  params: { modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
-};
+  testId: 'model-info-verify-files',
+  params: { modelConstant: 'LLAMA_3_2_1B_INST_Q4_0' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'model-info', dependency: 'llm', estimatedDurationMs: 5000 }
+}
 
 export const modelInfoMultipleModels: TestDefinition = {
-  testId: "model-info-multiple-models",
-  params: { models: ["LLAMA_3_2_1B_INST_Q4_0", "GTE_LARGE_FP16"] },
-  expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "model-info", dependency: "llm+embeddings", estimatedDurationMs: 10000 },
-};
+  testId: 'model-info-multiple-models',
+  params: { models: ['LLAMA_3_2_1B_INST_Q4_0', 'GTE_LARGE_FP16'] },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'model-info', dependency: 'llm+embeddings', estimatedDurationMs: 10000 }
+}
 
 export const modelInfoPersistsAfterUnload: TestDefinition = {
-  testId: "model-info-persists-after-unload",
-  params: { modelConstant: "LLAMA_3_2_1B_INST_Q4_0" },
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
-  metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
-};
+  testId: 'model-info-persists-after-unload',
+  params: { modelConstant: 'LLAMA_3_2_1B_INST_Q4_0' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: { category: 'model-info', dependency: 'llm', estimatedDurationMs: 5000 }
+}
 
 export const modelInfoLoadedGet: TestDefinition = {
-  testId: "model-info-loaded-get",
+  testId: 'model-info-loaded-get',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
-  metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
-};
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: { category: 'model-info', dependency: 'llm', estimatedDurationMs: 5000 }
+}
 
 export const modelInfoLoadedNotFound: TestDefinition = {
-  testId: "model-info-loaded-not-found",
-  params: { modelId: "nonexistent-model-id-deadbeef" },
-  expectation: { validation: "throws-error", errorContains: "not found" },
-  suites: ["smoke"],
-  metadata: { category: "model-info", dependency: "none", estimatedDurationMs: 2000 },
-};
+  testId: 'model-info-loaded-not-found',
+  params: { modelId: 'nonexistent-model-id-deadbeef' },
+  expectation: { validation: 'throws-error', errorContains: 'not found' },
+  suites: ['smoke'],
+  metadata: { category: 'model-info', dependency: 'none', estimatedDurationMs: 2000 }
+}
 
 export const modelInfoTests = [
   modelInfoGet,
@@ -52,5 +52,5 @@ export const modelInfoTests = [
   modelInfoMultipleModels,
   modelInfoPersistsAfterUnload,
   modelInfoLoadedGet,
-  modelInfoLoadedNotFound,
-];
+  modelInfoLoadedNotFound
+]

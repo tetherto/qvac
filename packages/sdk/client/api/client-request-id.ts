@@ -16,15 +16,15 @@
 export function generateClientRequestId(): string {
   const c = (
     globalThis as {
-      crypto?: { randomUUID?: () => string };
+      crypto?: { randomUUID?: () => string }
     }
-  ).crypto;
-  if (c?.randomUUID) return c.randomUUID();
+  ).crypto
+  if (c?.randomUUID) return c.randomUUID()
   // Fallback: 128 random bits encoded as a hex string. Distinct enough
   // for in-flight cancel targeting; not a wire-spec UUID.
-  const bytes = new Uint8Array(16);
+  const bytes = new Uint8Array(16)
   for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = Math.floor(Math.random() * 256);
+    bytes[i] = Math.floor(Math.random() * 256)
   }
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }

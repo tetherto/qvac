@@ -1,0 +1,90 @@
+name: 'CI Router (label detection)'
+description: >
+  Shared label -> CI-stage routing for the label-gated addon PR workflows.
+  `verified` is the trust gate and ONLY the trust gate (authorise-only); the
+  granular labels run-cpp-addon-tests / run-desktop-addon-tests /
+  run-mobile-addon-tests / prebuilds each select a stage, and only take effect
+  when `verified` is also present. Trusted events (push / workflow_dispatch /
+  workflow_call / schedule) enable every stage. This is addon-agnostic: it
+  emits all five flags and each addon wires only the stages it has. Single
+  source of truth — do NOT inline this logic per workflow.
+
+outputs:
+  run_verified_checks:
+    description: 'Baseline verified checks (verified label present / trusted event)'
+    value: ${{ steps.route.outputs.run_verified_checks }}
+  run_prebuilds:
+    description: 'Build prebuilds (prebuilds/desktop/mobile label, or trusted event)'
+    value: ${{ steps.route.outputs.run_prebuilds }}
+  run_cpp_tests:
+    description: 'Run C++ unit tests (run-cpp-addon-tests label)'
+    value: ${{ steps.route.outputs.run_cpp_tests }}
+  run_desktop:
+    description: 'Run desktop integration tests (run-desktop-addon-tests label)'
+    value: ${{ steps.route.outputs.run_desktop }}
+  run_mobile:
+    description: 'Run mobile integration tests (run-mobile-addon-tests label)'
+    value: ${{ steps.route.outputs.run_mobile }}
+
+runs:
+  using: composite
+  steps:
+    - name: Route CI stages
+      id: route
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: |
+        if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+           [ "$EVENT_NAME" = "workflow_call" ] || \
+           [ "$EVENT_NAME" = "push" ] || \
+           [ "$EVENT_NAME" = "schedule" ]; then
+          echo "Trusted event ($EVENT_NAME) — enabling all CI stages"
+          for out in run_verified_checks run_prebuilds run_cpp_tests run_desktop run_mobile; do
+            echo "$out=true" >> "$GITHUB_OUTPUT"
+          done
+          exit 0
+        fi
+        # First pass: detect which labels are present (order-independent).
+        HAS_VERIFIED=false
+        HAS_PREBUILDS=false
+        HAS_CPP=false
+        HAS_DESKTOP=false
+        HAS_MOBILE=false
+        if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
+          for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
+            case "$label" in
+              verified)                 HAS_VERIFIED=true ;;
+              prebuilds)                HAS_PREBUILDS=true ;;
+              run-cpp-addon-tests)      HAS_CPP=true ;;
+              run-desktop-addon-tests)  HAS_DESKTOP=true ;;
+              run-mobile-addon-tests)   HAS_MOBILE=true ;;
+            esac
+          done
+        fi
+
+        VERIFIED=false
+        PREBUILDS=false
+        CPP_TESTS=false
+        DESKTOP=false
+        MOBILE=false
+
+        # `verified` authorises but selects no stage on its own. Each heavy stage
+        # runs only when its granular label is present AND `verified` authorises
+        # it — so a granular label without `verified` triggers nothing (security
+        # invariant). cpp-tests builds the addon itself (no prebuilds); desktop +
+        # mobile DO need prebuilds.
+        if [ "$HAS_VERIFIED" = "true" ]; then
+          VERIFIED=true
+          [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
+          [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
+          [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
+          [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
+        fi
+        echo "CI Router: verified=$VERIFIED prebuilds=$PREBUILDS cpp=$CPP_TESTS desktop=$DESKTOP mobile=$MOBILE"
+        echo "run_verified_checks=$VERIFIED" >> "$GITHUB_OUTPUT"
+        echo "run_prebuilds=$PREBUILDS" >> "$GITHUB_OUTPUT"
+        echo "run_cpp_tests=$CPP_TESTS" >> "$GITHUB_OUTPUT"
+        echo "run_desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
+        echo "run_mobile=$MOBILE" >> "$GITHUB_OUTPUT"
