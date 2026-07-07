@@ -1490,13 +1490,34 @@ void LlamaModel::commonParamsParse(
         &outAdrenoVersion,
         pendingFinetuneOverrides_.active);
 
+    // QVAC-21257: optional runtime override for the multimodal projector
+    // (mmproj / vision encoder) backend. The default preserves the historical
+    // per-platform behaviour (Android -> CPU, desktop / iOS -> GPU); the key
+    // lets callers run the projector on the mobile GPU without recompiling.
+    // Accepts true/on/1 and false/off/0. Erased from configFilemap so it is
+    // never forwarded to llama.cpp's argument parser by the passthrough loop.
+    std::optional<bool> mmprojUseGpuOverride;
+    for (const char* key : {"mmproj-use-gpu", "mmproj_use_gpu"}) {
+      auto it = configFilemap.find(key);
+      if (it != configFilemap.end()) {
+        const std::string& value = it->second;
+        mmprojUseGpuOverride =
+            value == "true" || value == "on" || value == "1";
+        configFilemap.erase(it);
+      }
+    }
+
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
 #ifdef __ANDROID__
-      params.mmproj_use_gpu = false;
+      bool mmprojUseGpu = false;
 #else
-      params.mmproj_use_gpu = true;
+      bool mmprojUseGpu = true;
 #endif
+      if (mmprojUseGpuOverride.has_value()) {
+        mmprojUseGpu = mmprojUseGpuOverride.value();
+      }
+      params.mmproj_use_gpu = mmprojUseGpu;
       params.split_mode = splitMode;
       runtimeBackendDevice_ = 1;
 
@@ -1513,6 +1534,12 @@ void LlamaModel::commonParamsParse(
       }
     } else if (chosenBackend.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;
+      if (mmprojUseGpuOverride.value_or(false)) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
+            "running the multimodal projector on CPU\n");
+      }
       runtimeBackendDevice_ = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
