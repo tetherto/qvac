@@ -85,7 +85,13 @@ public:
     }
   }
 
-  ~AddonCpp() { outputCallback_->stop(); }
+  // The scheduler queues terminal events for still-admitted jobs on
+  // destruction; it must go before stop() makes the callback's notify() a
+  // no-op.
+  ~AddonCpp() {
+    jobScheduler_.reset();
+    outputCallback_->stop();
+  }
 
   /// @returns False if the job cannot be run (e.g. at capacity or a job is
   /// already being processed)
