@@ -59,33 +59,47 @@ function authHeaders (url) {
 const IDLE_TIMEOUT_MS = Number(process.env.WARM_IDLE_TIMEOUT_MS || 120000)
 const PROGRESS_INTERVAL_MS = 30000
 
-function downloadOnce (url, dest, name, redirectsLeft = 10) {
+// Downloads to `dest`. When startByte > 0 it sends a Range header and appends
+// to the existing partial (resume). If the server ignores the range and sends
+// the whole body (200), we overwrite from scratch so bytes never get spliced.
+function downloadOnce (url, dest, name, { redirectsLeft = 10, startByte = 0 } = {}) {
   return new Promise((resolvePromise, reject) => {
-    const req = https.get(url, { headers: authHeaders(url) }, (res) => {
-      if ([301, 302, 307, 308].includes(res.statusCode)) {
+    const headers = authHeaders(url)
+    if (startByte > 0) headers.range = `bytes=${startByte}-`
+    const req = https.get(url, { headers }, (res) => {
+      const status = res.statusCode
+      if ([301, 302, 307, 308].includes(status)) {
         if (redirectsLeft <= 0) return reject(new Error(`too many redirects: ${url}`))
         res.resume()
         const next = new URL(res.headers.location, url).href
-        return resolvePromise(downloadOnce(next, dest, name, redirectsLeft - 1))
+        return resolvePromise(downloadOnce(next, dest, name, { redirectsLeft: redirectsLeft - 1, startByte }))
       }
-      if (res.statusCode !== 200) {
+      // Requested range is past the file end — drop the partial and restart.
+      if (status === 416) {
         res.resume()
-        return reject(new Error(`HTTP ${res.statusCode} for ${url}`))
+        return reject(Object.assign(new Error(`range not satisfiable for ${url}`), { resetPart: true }))
+      }
+      if (status !== 200 && status !== 206) {
+        res.resume()
+        return reject(new Error(`HTTP ${status} for ${url}`))
       }
 
-      const total = Number(res.headers['content-length'] || 0)
-      let received = 0
+      const append = status === 206
+      const startAt = append ? startByte : 0
+      const remaining = Number(res.headers['content-length'] || 0)
+      const total = append ? startAt + remaining : remaining
+      let received = startAt
       const started = Date.now()
       const progress = setInterval(() => {
         const mb = (received / 1024 / 1024).toFixed(0)
         const pct = total ? ` (${(received / total * 100).toFixed(0)}% of ${(total / 1024 / 1024).toFixed(0)}MB)` : ''
-        const rate = (received / 1024 / 1024 / Math.max(1, (Date.now() - started) / 1000)).toFixed(1)
+        const rate = ((received - startAt) / 1024 / 1024 / Math.max(1, (Date.now() - started) / 1000)).toFixed(1)
         console.log(`  [warm] ${name}: ${mb}MB${pct} @ ${rate}MB/s`)
       }, PROGRESS_INTERVAL_MS)
       res.on('data', (chunk) => { received += chunk.length })
 
       const done = (fn, arg) => { clearInterval(progress); fn(arg) }
-      pipeline(res, createWriteStream(dest))
+      pipeline(res, createWriteStream(dest, { flags: append ? 'a' : 'w' }))
         .then(() => done(resolvePromise))
         .catch((err) => done(reject, err))
     })
@@ -99,24 +113,38 @@ function downloadOnce (url, dest, name, redirectsLeft = 10) {
 async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
   const partPath = dest + '.part'
   let lastErr = null
+  // Which URL produced the current .part bytes; we only resume against the same
+  // source (a different mirror could serve different bytes).
+  let partUrl = null
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) {
       const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30000)
       await new Promise((r) => setTimeout(r, delay))
     }
     const url = urls[attempt % urls.length]
+    let startByte = 0
+    if (partUrl === url) startByte = await stat(partPath).then((s) => s.size, () => 0)
+    else await rm(partPath, { force: true }).catch(() => {})
     try {
-      await downloadOnce(url, partPath, name)
+      if (startByte > 0) console.log(`  [warm] ${name}: resuming from ${(startByte / 1024 / 1024).toFixed(0)}MB`)
+      await downloadOnce(url, partPath, name, { startByte })
       const { size } = await stat(partPath)
       if (size < 1) throw new Error(`downloaded file is empty from ${new URL(url).host}`)
       await rename(partPath, dest)
       return
     } catch (err) {
       lastErr = err
-      await rm(partPath, { force: true }).catch(() => {})
+      if (err && err.resetPart) {
+        await rm(partPath, { force: true }).catch(() => {})
+        partUrl = null
+      } else {
+        // Keep the partial so the next same-URL attempt resumes from it.
+        partUrl = url
+      }
       console.log(`  ! attempt ${attempt + 1} failed: ${err.message}`)
     }
   }
+  await rm(partPath, { force: true }).catch(() => {})
   throw new Error(`failed to download after ${retries + 1} attempts: ${lastErr && lastErr.message}`)
 }
 
