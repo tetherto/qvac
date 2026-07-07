@@ -15,6 +15,14 @@
 
 namespace qvac_lib_inference_addon_cpp {
 
+/**
+ * @brief Pure C++ output callback that dispatches queued events to the stock
+ * output handlers. This path is effectively single-job: JobIds are dropped at
+ * dispatch, so interleaved outputs from concurrent jobs cannot be correlated.
+ * Multi-job C++ consumers should supply a custom OutputCallBackInterface and
+ * read tagged events via OutputQueue::clear(), which returns (JobId, event)
+ * pairs.
+ */
 class OutputCallBackCpp : public OutputCallBackInterface {
 
   std::mutex mtx_;
