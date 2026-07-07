@@ -88,7 +88,7 @@ runs:
         echo "glob=${glob}" >> "$GITHUB_OUTPUT"
 
     # Restore + automatic post-job save on trusted contexts (same-repo head,
-    # push, workflow_dispatch, merge_group). The combined actions/cache@v4
+    # push, workflow_dispatch, merge_group). The combined cache action
     # registers a post-step that saves models downloaded LATER in the job.
     #
     # Cache writes from fork-PR code are the poisoning risk the devops rule
@@ -103,7 +103,7 @@ runs:
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
         github.event.pull_request.head.repo.full_name == github.repository
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
@@ -119,7 +119,7 @@ runs:
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
         github.event.pull_request.head.repo.full_name != github.repository
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
@@ -132,7 +132,7 @@ runs:
     # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
     # inside a single test's timeout and fail. On a full cache hit every file is
     # already present (and verified when integrity is pinned), so this is a fast
-    # no-op. The trusted-context actions/cache@v4 post-step then saves the now
+    # no-op. The trusted-context cache post-step then saves the now
     # complete dir so subsequent runs restore instead of re-downloading.
     - name: Warm models (download any missing from manifest)
       if: ${{ inputs.warm == 'true' }}
