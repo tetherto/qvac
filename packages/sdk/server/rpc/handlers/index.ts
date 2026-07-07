@@ -1,3 +1,4 @@
+import { handleBatchCompletionStream } from './batch-completion-stream'
 import { handleCompletionStream } from './completion-stream'
 import { handleDownloadAsset } from './download-asset'
 import { handleLoadModel } from './load-model'
@@ -36,6 +37,7 @@ import { handleState } from './state'
 
 export const handlers = {
   heartbeat: handleHeartbeat,
+  batchCompletionStream: handleBatchCompletionStream,
   completionStream: handleCompletionStream,
   downloadAsset: handleDownloadAsset,
   deleteCache: handleDeleteCache,

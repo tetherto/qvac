@@ -56,3 +56,9 @@ test('transformLlmConfig: numeric fields are stringified', (t) => {
   t.is(result['gpu_layers'], '99')
   t.is(result['temp'], '0.7')
 })
+
+test('transformLlmConfig: parallel is forwarded as a string', (t) => {
+  const config = makeConfig({ parallel: 4 })
+  const result = transformLlmConfig(config)
+  t.is(result['parallel'], '4')
+})
