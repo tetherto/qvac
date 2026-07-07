@@ -10,12 +10,7 @@ import {
 } from '@/utils/errors-server'
 
 test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
-  const err = new RequestRejectedByPolicyError(
-    'rid-1',
-    'completion',
-    'model-1',
-    'oneAtATimePerModel'
-  )
+  const err = new RequestRejectedByPolicyError('rid-1', 'completion', 'model-1', 'queue full')
   const response = createErrorResponse(err)
 
   t.is(response.type, 'error')
@@ -28,7 +23,7 @@ test('createErrorResponse: RequestRejectedByPolicyError carries its named fields
     requestId: 'rid-1',
     kind: 'completion',
     modelId: 'model-1',
-    reason: 'oneAtATimePerModel'
+    reason: 'queue full'
   })
 })
 

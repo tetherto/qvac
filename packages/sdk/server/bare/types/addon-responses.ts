@@ -4,6 +4,7 @@ export interface LlmStats {
   CacheTokens?: number
   promptTokens?: number
   generatedTokens?: number
+  avgConcurrentSeq?: number
   backendDevice?: 'cpu' | 'gpu'
 }
 

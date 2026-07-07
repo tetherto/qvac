@@ -1,5 +1,6 @@
 // Real SDK tests
 import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
@@ -210,6 +211,7 @@ export const tests = [
 
   // Completion tests
   ...completionTests,
+  ...batchCompletionTests,
 
   // Transcription tests
   ...transcriptionTests,

@@ -48,9 +48,9 @@ export type CancelTarget = CancelByRequestId | CancelByModelId
  * admission control (every `begin(...)` is accepted as long as the
  * request id is unique).
  *
- * The policy turns admission into a per-`(kind, modelId)` FIFO queue with
+ * The policy turns admission into a per-`(lane, modelId)` FIFO queue with
  * a configurable concurrency limit. A second concurrent request to the
- * same `(kind, modelId)` *waits its turn* (default) rather than colliding
+ * same `(lane, modelId)` *waits its turn* (default) rather than colliding
  * on the single native llama.cpp context. The limit is forward-compatible
  * with addon-side continuous batching: bump `maxConcurrentPerModel` to the
  * addon's slot count to flip serial execution to N-way concurrent without
@@ -62,21 +62,21 @@ export type CancelTarget = CancelByRequestId | CancelByModelId
 export interface ConcurrencyPolicy {
   kind: RequestKind
   /**
-   * Max simultaneously in-flight requests per `(kind, modelId)`.
+   * Max simultaneously in-flight requests per `(lane, modelId)`.
    * Default: `Infinity` (no admission limit). Set `1` to serialize, or
    * `N` for N-way concurrency (the future continuous-batching slot
    * count). Non-finite values disable gating entirely.
    */
   maxConcurrentPerModel?: number
   /**
-   * What a `begin(...)` does when the `(kind, modelId)` is at capacity:
+   * What a `begin(...)` does when the `(lane, modelId)` is at capacity:
    *  - `"queue"` (default): wait FIFO for a slot to free.
    *  - `"reject"`: throw `RequestRejectedByPolicyError` immediately
    *    (the legacy `oneAtATimePerModel` behavior).
    */
   onOverflow?: 'queue' | 'reject'
   /**
-   * Max waiters allowed to queue per `(kind, modelId)` before further
+   * Max waiters allowed to queue per `(lane, modelId)` before further
    * begins reject with `RequestRejectedByPolicyError`. Bounds memory so a
    * runaway client can't grow the queue without limit. Default: `64`.
    * Only consulted when `onOverflow` is `"queue"`.
@@ -95,6 +95,21 @@ export interface ConcurrencyPolicy {
    * `maxConcurrentPerModel` is set explicitly.
    */
   oneAtATimePerModel?: boolean
+  /**
+   * Opt several kinds into one shared admission lane per model. When set,
+   * the slot is keyed on `(sharedSlotGroup, modelId)` instead of
+   * `(kind, modelId)`, so requests of *different* kinds that target the
+   * same model contend for the same slot pool.
+   *
+   * This exists to mirror an addon that serializes unrelated request
+   * kinds on a single native context — e.g. `@qvac/llm-llamacpp` funnels
+   * single-prompt `completion` and `batchCompletion` through one
+   * per-instance run queue, so the two can't actually run at once on the
+   * same model. Sharing a lane makes the SDK's admission queue the
+   * authoritative serialization point rather than relying on the addon's
+   * internal queue.
+   */
+  sharedSlotGroup?: string
 }
 
 /**
@@ -115,7 +130,7 @@ export interface ManagedRequestContext extends RequestContext {
 export interface RequestRegistry {
   /**
    * Open a new request. Returns a promise because admission may *queue*:
-   * when a concurrency policy caps the `(kind, modelId)` and it's at
+   * when a concurrency policy caps the `(lane, modelId)` and it's at
    * capacity with `onOverflow: "queue"`, the promise resolves once a slot
    * frees (FIFO). Callers write `await using ctx = await registry.begin(...)`.
    *
@@ -196,7 +211,7 @@ interface RegistryEntry {
   /** `Date.now()` at `begin(...)` — used for `durationMs` on the end emit. */
   startedAt: number
   /**
-   * Admission-slot key (`<kind>\0<modelId>`) this request holds, or
+   * Admission-slot key (`<lane>\0<modelId>`) this request holds, or
    * `undefined` when the request was admitted without gating (no policy,
    * no `modelId`, or an unbounded `maxConcurrentPerModel`). The slot is
    * handed back in `disposeEntry` once the scope has fully unwound.
@@ -223,11 +238,16 @@ interface CancelBeforeBeginEntry {
  * `oneAtATimePerModel` alias on every call.
  */
 interface NormalizedPolicy {
-  /** Effective slots per `(kind, modelId)`. `Infinity` ⇒ no gating. */
+  /** Effective slots per `(lane, modelId)`. `Infinity` ⇒ no gating. */
   maxConcurrent: number
   onOverflow: 'queue' | 'reject'
   maxQueueDepth: number
   queueTimeoutMs: number | undefined
+  /**
+   * Lane label used in place of `kind` when keying the admission slot.
+   * `undefined` ⇒ slot is keyed on the request's own `kind`.
+   */
+  slotGroup: string | undefined
 }
 
 /**
@@ -283,7 +303,7 @@ const CANCEL_BEFORE_BEGIN_MAX_ENTRIES = 128
 const CANCEL_BEFORE_BEGIN_TTL_MS = 30_000
 
 /**
- * Default cap on waiters queued per `(kind, modelId)` when a policy uses
+ * Default cap on waiters queued per `(lane, modelId)` when a policy uses
  * `onOverflow: "queue"` without an explicit `maxQueueDepthPerModel`.
  * Bounds memory so a misbehaving client firing a flood of same-model
  * requests can't grow the queue without limit — the (depth + 1)th begin
@@ -387,10 +407,11 @@ export function createRequestRegistry(options?: {
     return entry
   }
 
-  function slotKey(kind: RequestKind, modelId: string): string {
-    // NUL separator can't appear in a kind (closed union) or a modelId
-    // (sdkModelId is a generated handle), so the join is unambiguous.
-    return `${kind}\u0000${modelId}`
+  function slotKey(lane: string, modelId: string): string {
+    // NUL separator can't appear in a lane (a closed-union kind or an
+    // SDK-controlled `sharedSlotGroup` label) or a modelId (sdkModelId is a
+    // generated handle), so the join is unambiguous.
+    return `${lane}\u0000${modelId}`
   }
 
   /**
@@ -439,7 +460,10 @@ export function createRequestRegistry(options?: {
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
 
     const modelId = opts.modelId
-    const key = slotKey(opts.kind, modelId)
+    // A shared lane lets unrelated kinds (e.g. completion + batchCompletion)
+    // contend for one slot pool per model, matching an addon that serializes
+    // them on a single native context.
+    const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
       st = { active: 0, waiters: [] }
@@ -820,7 +844,8 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     maxConcurrent,
     onOverflow,
     maxQueueDepth: opts.maxQueueDepthPerModel ?? DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL,
-    queueTimeoutMs: opts.queueTimeoutMs
+    queueTimeoutMs: opts.queueTimeoutMs,
+    slotGroup: opts.sharedSlotGroup
   }
 }
 

@@ -6,6 +6,10 @@ import {
 } from '@tetherto/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
+import {
+  makeEnhancedTtsHandler,
+  makeOutputSampleRateComparisonHandler
+} from '../../shared/utils/tts-lavasr-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -18,6 +22,12 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
     ttsTests.map((test) => {
       const params = test.params as TtsParams
       const dep = test.metadata?.dependency || 'tts-chatterbox'
+      if (test.testId === 'tts-supertonic-output-sample-rate') {
+        return [test.testId, this.makeOutputSampleRateComparison()]
+      }
+      if (test.testId === 'tts-supertonic-enhanced') {
+        return [test.testId, this.makeEnhanced(dep)]
+      }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
       }
@@ -32,6 +42,21 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
 
   constructor(resources: ResourceManager) {
     super(resources)
+  }
+
+  private makeEnhanced(dep: string) {
+    return makeEnhancedTtsHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: ValidationHelpers.validate
+    })
+  }
+
+  private makeOutputSampleRateComparison() {
+    return makeOutputSampleRateComparisonHandler<Expectation, TestResult>({
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: ValidationHelpers.validate
+    })
   }
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
