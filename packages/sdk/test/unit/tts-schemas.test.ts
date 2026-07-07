@@ -38,6 +38,40 @@ test('ttsConfigSchema: accepts Chatterbox multilingual tokenizer assets', (t) =>
   t.is(r.success, true)
 })
 
+test('ttsConfigSchema: requires MeCab dictionary for Chatterbox Japanese', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'ja',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  })
+
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'mecabDictSrc')
+    t.is(
+      r.error.issues[0]?.message,
+      'mecabDictSrc is required when Chatterbox language is "ja".'
+    )
+  }
+})
+
+test('ttsConfigSchema: requires Cangjie TSV for Chatterbox Chinese', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'zh',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  })
+
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'cangjieTsvSrc')
+    t.is(
+      r.error.issues[0]?.message,
+      'cangjieTsvSrc is required when Chatterbox language is "zh".'
+    )
+  }
+})
+
 test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'chatterbox',
