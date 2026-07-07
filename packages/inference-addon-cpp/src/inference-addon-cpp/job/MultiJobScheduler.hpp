@@ -196,11 +196,20 @@ public:
   }
 
   ~MultiJobScheduler() override {
+    bool jobsInFlight = false;
     {
       std::lock_guard lock(mtx_);
       running_.store(false);
+      jobsInFlight = !inFlight_.empty();
     }
     workCv_.notify_all();
+    // Unblock a worker stuck inside model process(): teardown must not wait
+    // for the model to finish on its own. Only reach into the model while a
+    // job is in flight — with nothing running the model may already be gone
+    // (callers may tear it down first once the scheduler is idle).
+    if (jobsInFlight && cancel_ != nullptr) {
+      cancel_->cancel();
+    }
     for (std::thread& worker : workers_) {
       if (worker.joinable()) {
         worker.join();

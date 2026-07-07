@@ -140,11 +140,20 @@ public:
   ~SingleJobScheduler() override {
     if (running_) {
       QLOG_DEBUG("Stopping job");
+      bool jobInFlight = false;
       {
         std::lock_guard lock(mtx_);
         running_ = false;
+        jobInFlight = job_.has_value() && !ready_.load();
       }
       processCv_.notify_one();
+      // Unblock a worker stuck inside model process(): teardown must not wait
+      // for the model to finish on its own. Only reach into the model while a
+      // job is in flight — with nothing running the model may already be gone
+      // (callers may tear it down first once the scheduler is idle).
+      if (jobInFlight && modelCancel_ != nullptr) {
+        modelCancel_->cancel();
+      }
       if (processingThread_.joinable()) {
         processingThread_.join();
       }
