@@ -118,6 +118,20 @@ function main () {
     seen.add(h)
     const txt = fs.readFileSync(f, 'utf8')
     const pick = (re) => { const m = txt.match(re); return m ? m[1] : null }
+    // The capability lines (model=…, platformVersionRelease=…) are not reliably
+    // present in logcat — some sessions never echo them there. The per-device
+    // appium log always carries the session's device JSON
+    // ("model":"SM-S942U1" … "platformVersion":"16"); fall back to it for any
+    // field the logcat pick missed.
+    const appiumFile = files.find(x => hostOf(x) === h && /appium/i.test(path.basename(x)))
+    const appium = appiumFile ? fs.readFileSync(appiumFile, 'utf8') : ''
+    const pickA = (re) => { const m = appium.match(re); return m ? m[1] : null }
+    // Appium first: its JSON field is the full ro.product.model ("Pixel 9",
+    // "SM-S942U1"); logcat's space-delimited `model=` capability truncates
+    // multi-word models ("Pixel 9" -> "Pixel") and is missing entirely in
+    // some sessions.
+    const devModel = pickA(/"model":"([A-Za-z0-9 ._-]+)"/) || pick(/model=([A-Za-z0-9-]+)/)
+    const androidVer = pickA(/"platformVersion":"([0-9.]+)"/) || pick(/platformVersionRelease=(\d+)/)
     // Device name = the LAST manufacturer-prefixed segment of the filename
     // (<df-run-name>_<device-name>_logcat_full…). The DF run name embeds the
     // exact model too (EQUALS tokens), so a greedy first-match would render the
@@ -129,7 +143,7 @@ function main () {
     launch.add(MOBILE_ENGINE)
     prov.push([
       `**${h}** — ${devName || 'Android device'} (AWS Device Farm)`,
-      `- device: ${pick(/model=([A-Za-z0-9-]+)/) || '?'} · Android ${pick(/platformVersionRelease=(\d+)/) || '?'} · ${pick(/supportedAbis=([a-z0-9-]+)/) || 'arm64-v8a'}`,
+      `- device: ${devModel || '?'} · Android ${androidVer || '?'} · ${pick(/supportedAbis=([a-z0-9-]+)/) || 'arm64-v8a'}`,
       `- ram: ${ramB ? (ramB / 1073741824).toFixed(1) + ' GB' : '?'} · gpu: ${gpuOf(txt)}`
     ].join('\n'))
   }
