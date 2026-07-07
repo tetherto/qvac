@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -330,6 +331,13 @@ protected:
     double underlying{};
     auto ret = js_get_value_double(env, value, &underlying);
     if (ret == 0) {
+      if (!std::isfinite(underlying) || underlying < 0 ||
+          underlying > 9007199254740991.0 /* 2^53 - 1 */ ||
+          std::trunc(underlying) != underlying) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "expected a non-negative integer");
+      }
       *result = static_cast<uint64_t>(underlying);
     }
     return ret;
