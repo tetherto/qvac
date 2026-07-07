@@ -711,7 +711,7 @@ jobs:
           {
             echo "**${{ matrix.host }} · ${{ matrix.backend }}** (runner \`${{ matrix.runner }}\`)"
             echo "- addon: \`@qvac/llm-llamacpp@${ADDON_VERSION:-?}\` (published prebuild)"
-            echo "- git: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
+            echo "- benchmark code: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
             echo "- node: $(node -v 2>/dev/null) · bare: $(bare --version 2>/dev/null || echo n/a)"
             if [ "${{ matrix.host }}" = "macos" ] || [ "${{ matrix.host }}" = "macmini" ]; then
               echo "- os: $(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null) $(uname -m)"

@@ -83,7 +83,10 @@ function main () {
   // into `launch` and rendered once under the report's Sources section.
   const prov = []
   const launch = new Set()
-  const LAUNCH_LINE = /^- (addon|git|engine): /
+  // 'git' kept for prov files from older benchmark-code checkouts (renamed to
+  // 'benchmark code' to disambiguate from the Sources table's git:<sha>, which is
+  // an addon@candidate BUILD source — this line is the benchmark-code checkout).
+  const LAUNCH_LINE = /^- (addon|git|benchmark code|engine): /
   for (const f of files) {
     if (!/^prov-.*\.md$/.test(path.basename(f))) continue
     const kept = []
