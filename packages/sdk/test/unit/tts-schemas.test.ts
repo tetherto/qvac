@@ -20,6 +20,21 @@ test('ttsConfigSchema: accepts GGML chatterbox load config', (t) => {
   t.is(r.success, true)
 })
 
+test('ttsConfigSchema: accepts Chatterbox multilingual tokenizer assets', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'ja',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    mecabDictSrc: {
+      src: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+      name: 'TTS_MECAB_IPADIC_CHATTERBOX'
+    },
+    cangjieTsvSrc: 'registry://http/raw.githubusercontent.com/Jackchows/Cangjie5/Cangjie5_TC.txt'
+  })
+
+  t.is(r.success, true)
+})
+
 test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'chatterbox',
@@ -82,14 +97,15 @@ test('ttsConfigSchema: accepts GGML supertonic load config', (t) => {
   t.is(r.success, true)
 })
 
-test('TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages', (t) => {
-  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22)
+test('TTS_CHATTERBOX_LANGUAGES: exposes all 23 supported languages', (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 23)
   const expected = [
     'en',
     'es',
     'fr',
     'de',
     'it',
+    'ja',
     'pt',
     'nl',
     'pl',
@@ -111,7 +127,7 @@ test('TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages', (t) => {
   t.alike([...TTS_CHATTERBOX_LANGUAGES], expected)
 })
 
-test('ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages', (t) => {
+test('ttsChatterboxRuntimeConfigSchema: accepts all 23 chatterbox languages', (t) => {
   for (const language of TTS_CHATTERBOX_LANGUAGES) {
     const r = ttsChatterboxRuntimeConfigSchema.safeParse({
       ttsEngine: 'chatterbox',

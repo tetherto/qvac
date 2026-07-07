@@ -9,6 +9,8 @@ type TtsGgmlDebugModel = {
   _threads?: number
   _nGpuLayers?: number
   _seed?: number
+  _mecabDictPath?: string
+  _cangjieTsvPath?: string
   _config?: {
     language?: string
     useGPU?: boolean
@@ -72,4 +74,68 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
   t.is(model._nGpuLayers, 99)
   t.is(model._seed, 42)
   t.alike(model._config, { language: 'en', useGPU: true })
+})
+
+test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const resolved: string[] = []
+
+  const result = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'chatterbox',
+      language: 'ja',
+      s3genModelSrc: 'registry://s3/s3gen.gguf',
+      mecabDictSrc: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+      cangjieTsvSrc: 'registry://http/Cangjie5_TC.txt'
+    },
+    {
+      resolveModelPath: async (src) => {
+        const value = typeof src === 'string' ? src : src.src
+        resolved.push(value)
+        if (value.includes('mecab-ipadic')) {
+          return '/tmp/qvac/sets/mecab-ipadic/char.bin'
+        }
+        if (value.includes('Cangjie5_TC')) {
+          return '/tmp/qvac/Cangjie5_TC.txt'
+        }
+        return '/tmp/qvac/s3gen.gguf'
+      },
+      modelSrc: 'registry://s3/t3.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved, [
+    'registry://s3/s3gen.gguf',
+    'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+    'registry://http/Cangjie5_TC.txt'
+  ])
+  t.alike(result.config, { ttsEngine: 'chatterbox', language: 'ja' })
+  t.alike(result.artifacts, {
+    s3genPath: '/tmp/qvac/s3gen.gguf',
+    mecabDictPath: '/tmp/qvac/sets/mecab-ipadic',
+    cangjieTsvPath: '/tmp/qvac/Cangjie5_TC.txt'
+  })
+})
+
+test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-chatterbox-mtl-test',
+    modelPath: '/tmp/chatterbox-t3-mtl.gguf',
+    artifacts: {
+      s3genPath: '/tmp/chatterbox-s3gen-mtl.gguf',
+      mecabDictPath: '/tmp/mecab-ipadic',
+      cangjieTsvPath: '/tmp/Cangjie5_TC.txt'
+    },
+    modelConfig: {
+      ttsEngine: 'chatterbox',
+      language: 'ja'
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model._mecabDictPath, '/tmp/mecab-ipadic')
+  t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.txt')
 })

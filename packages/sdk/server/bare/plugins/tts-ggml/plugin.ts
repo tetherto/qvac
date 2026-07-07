@@ -38,28 +38,39 @@ function rejectLegacyOnnxFields(cfg: object) {
   }
 }
 
+function dirname(path: string) {
+  const normalized = path.replace(/\\/g, '/')
+  const index = normalized.lastIndexOf('/')
+  if (index <= 0) return index === 0 ? '/' : '.'
+  return path.slice(0, index)
+}
+
 async function resolveChatterboxConfig(
   config: TtsChatterboxLoadConfig,
   ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
   rejectLegacyOnnxFields(config)
 
-  const { s3genModelSrc, referenceAudioSrc, ...runtime } = config
+  const { s3genModelSrc, referenceAudioSrc, mecabDictSrc, cangjieTsvSrc, ...runtime } = config
   if (!s3genModelSrc) {
     throw new TtsArtifactsRequiredError()
   }
 
   const resolve = ctx.resolveModelPath
-  const [s3genPath, referenceAudioPath] = await Promise.all([
+  const [s3genPath, referenceAudioPath, mecabDictFilePath, cangjieTsvPath] = await Promise.all([
     resolve(s3genModelSrc),
-    referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined)
+    referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
+    mecabDictSrc ? resolve(mecabDictSrc) : Promise.resolve(undefined),
+    cangjieTsvSrc ? resolve(cangjieTsvSrc) : Promise.resolve(undefined)
   ])
 
   return {
     config: runtime,
     artifacts: {
       s3genPath,
-      ...(referenceAudioPath ? { referenceAudioPath } : {})
+      ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...(mecabDictFilePath ? { mecabDictPath: dirname(mecabDictFilePath) } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {})
     }
   }
 }
@@ -80,6 +91,8 @@ function createChatterboxModel(
   const t3Model = params.modelPath
   const s3genModel = artifacts['s3genPath']
   const referenceAudioPath = artifacts['referenceAudioPath']
+  const mecabDictPath = artifacts['mecabDictPath']
+  const cangjieTsvPath = artifacts['cangjieTsvPath']
 
   if (!t3Model || !s3genModel) {
     throw new TtsArtifactsRequiredError()
@@ -90,7 +103,12 @@ function createChatterboxModel(
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_CHATTERBOX,
-    files: { t3Model, s3genModel },
+    files: {
+      t3Model,
+      s3genModel,
+      ...(mecabDictPath ? { mecabDictPath } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {})
+    },
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }
