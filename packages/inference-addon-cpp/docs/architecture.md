@@ -307,7 +307,7 @@ classDiagram
 
 5. **IJobScheduler** (Internal Interface - Job Admission Strategy)
    - Admission strategy AddonCpp delegates job execution to; a caller may supply one, otherwise AddonCpp builds a default
-   - **SingleJobScheduler** (formerly `JobRunner`) - one job at a time on a dedicated thread, cancellation via `IModelCancel`; this is the default
+   - **SingleJobScheduler** - one job at a time on a dedicated thread, cancellation via `IModelCancel`; this is the default
    - **MultiJobScheduler** - fixed worker pool + bounded waiting queue, jobs tagged with a `JobId` so outputs can be correlated, opt-in per-job cancellation via `IModelCancelById`, and exclusive-job admission for e.g. finetune/inference mutual exclusion
 
 **Usage Pattern:**
@@ -439,7 +439,7 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 
 **job/SingleJobScheduler.hpp - Single Job Execution (default)**
 
-**Responsibility:** Executes a single job at a time on a dedicated thread with cancellation support. Renamed from `JobRunner` (root-level `JobRunner.hpp`, since removed) in 1.3.0.
+**Responsibility:** Executes a single job at a time on a dedicated thread with cancellation support.
 
 **Key Features:**
 - Single job execution (not a queue); a tagged (non-`kNoJobId`) job is rejected, since a single slot cannot correlate outputs to it
@@ -487,6 +487,16 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 **Key Design:**
 - Keeps addon bindings consistent across packages while leaving model-specific parsing in each addon
 - Centralizes handle safety and lifecycle conventions around `AddonJs`
+- Numeric job ids received from JavaScript are validated (finite, non-negative, integral, at most 2^53 − 1) before use as a `JobId`; anything else is rejected with an `InvalidArgument` error
+
+#### Lifecycle and Teardown
+
+`AddonCpp` owns the model, the scheduler, and the output callback. Construction wires them together and starts the scheduler's thread(s); `activate()` additionally waits for asynchronous weight loading when the model supports it.
+
+Destruction upholds two guarantees:
+
+- **Every admitted job ends with exactly one terminal event.** `~AddonCpp` destroys the scheduler before stopping the output callback, so the terminal errors the scheduler queues for still-admitted jobs ("Job cancelled: scheduler destroyed") are notified while the callback can still deliver them.
+- **Teardown is bounded by cancel latency, not job duration.** A scheduler destructor fires the model's cancel hook before joining its workers, so a worker inside a long `process()` call returns promptly. The cancel only fires while a job is actually in flight; an idle scheduler never touches the model.
 
 ### Bare Runtime Integration
 
@@ -595,18 +605,18 @@ Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with chunke
 
 **Context**
 
-The original design (through 1.2.x) hard-wired a single job runner (`JobRunner`) into `AddonCpp`: exactly one job in flight, every other `runJob()` call rejected until it finished. This was simple and matched most addons, but a model capable of decoding multiple requests together (cross-request continuous batching) had no way to expose that: `AddonCpp` gave it one job at a time regardless.
+Most addons serve one request at a time, and a single-slot scheduler matches that. A model that can decode several requests together (cross-request continuous batching, e.g. llama.cpp) instead needs the framework to admit several jobs at once and to correlate their interleaved outputs.
 
 **Decision**
 
-Extract job admission behind an `IJobScheduler` interface (`start`, `runJob`, `runExclusiveJob`, `cancel`, `cancelAll`, `activeJobs`). `AddonCpp` builds a `SingleJobScheduler` — the renamed former `JobRunner`, unchanged behavior — when the caller supplies none, preserving the old default exactly. A caller wanting concurrency instead constructs a `MultiJobScheduler` (sized to a worker count, with a bounded waiting-room queue and FIFO admission) and passes it to the `AddonCpp` constructor; jobs are tagged with a `JobId` so concurrent outputs can be correlated back to their request, and `runExclusiveJob` still lets an addon reserve the model for one job at a time (e.g. a finetune) regardless of which scheduler is active.
+Job admission sits behind an `IJobScheduler` interface (`start`, `runJob`, `runExclusiveJob`, `cancel`, `cancelAll`, `activeJobs`). `AddonCpp` builds a `SingleJobScheduler` when the caller supplies none. A caller wanting concurrency constructs a `MultiJobScheduler` (sized to a worker count, with a bounded waiting-room queue and FIFO admission) and passes it to the `AddonCpp` constructor; jobs are tagged with a `JobId` so concurrent outputs can be correlated back to their request, and `runExclusiveJob` lets an addon reserve the model for one job at a time (e.g. a finetune) regardless of which scheduler is active.
 
 **Rationale**
-- **Backward compatible by default:** Addons that never opt in see no behavior change — same single-job semantics, same rejection behavior, just renamed internals.
+- **Simple by default:** An addon that supplies no scheduler gets single-job semantics: one job in flight, every other `runJob()` call rejected until it finishes.
 - **Capability-gated:** Multi-job admission requires the model to implement `IModelMultiprocessor`; a model that can't run concurrently is never handed more than one job, regardless of which scheduler wraps it.
 - **Correlated output:** Every event (result, error, jobEnded) carries the admitting job's `JobId`, so a multi-job consumer's output callback can route interleaved events without inventing its own correlation.
-- **Job-id support returns soundly this time:** Native job ids shipped once before (1.1.3) and were reverted (1.1.4) because they were layered on top of a scheduler that could only ever run one job — the id had nothing structural to route against, and the accounting was error-prone. Here, id routing is the scheduler's own responsibility (`queuedIndex_` in `MultiJobScheduler`) and every admitted job — including one dropped from the queue by cancellation or teardown — is guaranteed exactly one terminal event, so the same feature that failed once now has a scheduler underneath it that can actually keep the promise.
-- **Reliability:** Recent 1.1.x/1.2.x fixes on cancellation, async cancel behavior, and callback lifetime apply to `SingleJobScheduler`'s unchanged code path; consult `CHANGELOG.md` when changing it.
+- **Exactly one terminal event per admitted job:** Id routing is the scheduler's own responsibility (`queuedIndex_` in `MultiJobScheduler`), and every admitted job — including one dropped from the queue by cancellation or teardown — receives exactly one terminal event, so a consumer can reconcile every admission against a completion.
+- **Bounded teardown:** A scheduler destructor fires the model's cancel hook (when the model supports one, and only while a job is actually in flight) before joining its workers, so teardown latency is bounded by the model's cancel latency rather than the remaining job duration.
 
 **Trade-offs**
 
@@ -800,5 +810,5 @@ Implement a pluggable output handler system:
 
 ---
 
-**Last Updated:** 2026-07-06
+**Last Updated:** 2026-07-07
 **Maintainer:** QVAC Team
