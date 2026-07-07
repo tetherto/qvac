@@ -43,7 +43,11 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: ${{ matrix.timeout || 360 }}
+    # Desktop integration runs finish well under this; observed successful
+    # p100 ~90m (darwin-arm64) / ~70m (win32). Cap bounds a wedged/hung test
+    # so it self-terminates and releases the concurrency group instead of
+    # blocking the next push for hours. Mobile suites are timed separately.
+    timeout-minutes: 150
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -101,7 +105,6 @@ jobs:
             platform: win32
             arch: x64
             runner: qvac-win25-x64-gpu
-            timeout: 1800
 
     steps:
       - name: Setup Node.js

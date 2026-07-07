@@ -22,6 +22,10 @@ on:
 
 jobs:
   run-integration-tests:
+    # Observed successful p100 ~9m; without this the job inherits GitHub's
+    # 360-min default, so a wedged/hung test would block the next push for
+    # hours. Cap leaves ample headroom while bounding a hang.
+    timeout-minutes: 45
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
