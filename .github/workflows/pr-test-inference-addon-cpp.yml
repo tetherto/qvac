@@ -195,5 +195,6 @@ jobs:
 
       - name: Debug build
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: cmake --preset default -D BUILD_TESTING=ON -D CMAKE_BUILD_TYPE=Debug -S . -B build && cmake --build build
 
