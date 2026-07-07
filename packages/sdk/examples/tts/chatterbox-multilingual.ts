@@ -12,7 +12,7 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 // Chatterbox multilingual TTS (GGML): Japanese synthesis with MeCab/IPAdic.
 // Uses registry model constants — downloads automatically from QVAC Registry.
 const CHATTERBOX_SAMPLE_RATE = 24000
-const OUTPUT_FILE = 'chatterbox-japanese-output.wav'
+const OUTPUT_FILE = 'chatterbox-multilingual-output.wav'
 
 try {
   const modelId = await loadModel({

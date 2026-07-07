@@ -29,7 +29,10 @@ test('ttsConfigSchema: accepts Chatterbox multilingual tokenizer assets', (t) =>
       src: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
       name: 'TTS_MECAB_IPADIC_CHATTERBOX'
     },
-    cangjieTsvSrc: 'registry://http/raw.githubusercontent.com/Jackchows/Cangjie5/Cangjie5_TC.txt'
+    cangjieTsvSrc: {
+      src: 'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv',
+      name: 'TTS_CANGJIE_ZH_CHATTERBOX'
+    }
   })
 
   t.is(r.success, true)

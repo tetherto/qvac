@@ -90,7 +90,8 @@ test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets
       language: 'ja',
       s3genModelSrc: 'registry://s3/s3gen.gguf',
       mecabDictSrc: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-      cangjieTsvSrc: 'registry://http/Cangjie5_TC.txt'
+      cangjieTsvSrc:
+        'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
     },
     {
       resolveModelPath: async (src) => {
@@ -100,7 +101,7 @@ test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets
           return '/tmp/qvac/sets/mecab-ipadic/char.bin'
         }
         if (value.includes('Cangjie5_TC')) {
-          return '/tmp/qvac/Cangjie5_TC.txt'
+          return '/tmp/qvac/Cangjie5_TC.tsv'
         }
         return '/tmp/qvac/s3gen.gguf'
       },
@@ -112,13 +113,13 @@ test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets
   t.alike(resolved, [
     'registry://s3/s3gen.gguf',
     'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-    'registry://http/Cangjie5_TC.txt'
+    'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
   ])
   t.alike(result.config, { ttsEngine: 'chatterbox', language: 'ja' })
   t.alike(result.artifacts, {
     s3genPath: '/tmp/qvac/s3gen.gguf',
     mecabDictPath: '/tmp/qvac/sets/mecab-ipadic',
-    cangjieTsvPath: '/tmp/qvac/Cangjie5_TC.txt'
+    cangjieTsvPath: '/tmp/qvac/Cangjie5_TC.tsv'
   })
 })
 
@@ -235,7 +236,7 @@ test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', 
     artifacts: {
       s3genPath: '/tmp/chatterbox-s3gen-mtl.gguf',
       mecabDictPath: '/tmp/mecab-ipadic',
-      cangjieTsvPath: '/tmp/Cangjie5_TC.txt'
+      cangjieTsvPath: '/tmp/Cangjie5_TC.tsv'
     },
     modelConfig: {
       ttsEngine: 'chatterbox',
@@ -245,5 +246,5 @@ test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', 
 
   const model = result.model as TtsGgmlDebugModel
   t.is(model._mecabDictPath, '/tmp/mecab-ipadic')
-  t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.txt')
+  t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.tsv')
 })
