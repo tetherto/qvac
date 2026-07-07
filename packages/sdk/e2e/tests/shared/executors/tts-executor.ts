@@ -1,6 +1,10 @@
 import { textToSpeech } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
+import {
+  makeEnhancedTtsHandler,
+  makeOutputSampleRateComparisonHandler
+} from '../utils/tts-lavasr-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -13,6 +17,12 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
     ttsTests.map((test) => {
       const params = test.params as TtsParams
       const dep = test.metadata?.dependency || 'tts-chatterbox'
+      if (test.testId === 'tts-supertonic-output-sample-rate') {
+        return [test.testId, this.makeOutputSampleRateComparison()]
+      }
+      if (test.testId === 'tts-supertonic-enhanced') {
+        return [test.testId, this.makeEnhanced(dep)]
+      }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
       }
@@ -23,6 +33,21 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
       return [test.testId, this.makeNonStreaming(dep, isEmptyTest)]
     })
   ) as never
+
+  private makeEnhanced(dep: string) {
+    return makeEnhancedTtsHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: ValidationHelpers.validate
+    })
+  }
+
+  private makeOutputSampleRateComparison() {
+    return makeOutputSampleRateComparisonHandler<Expectation, TestResult>({
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: ValidationHelpers.validate
+    })
+  }
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
     return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {

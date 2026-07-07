@@ -319,7 +319,7 @@ export class RequestNotFoundError extends QvacErrorBase {
  * policy refuses the request. Under the default queue policy a same-model
  * request waits FIFO rather than rejecting, so this fires on the bounded-queue
  * cases: an explicit `onOverflow: "reject"`, the per-model queue-depth cap, or
- * a `queueTimeoutMs` elapsing while waiting for a slot. Distinct from
+ * a `queueTimeoutMs` elapsing while waiting. Distinct from
  * `RequestIdConflictError`, which only fires on UUID collisions.
  */
 export class RequestRejectedByPolicyError extends QvacErrorBase {

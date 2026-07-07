@@ -223,9 +223,11 @@ safeTest('Cancelling after first token keeps cache growth bounded', { timeout: 6
   const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
   const stats = await runAndCancelAfterFirstToken(model, buildPrompt(), cacheOpts(sessionName))
   const delta = toNumber(stats.CacheTokens) - toNumber(warmStats.CacheTokens)
-  // Cache delta may be off by 1 due to BOS/EOS token handling
-  const expectedDelta = stats.promptTokens + stats.generatedTokens
-  t.ok(Math.abs(delta - expectedDelta) <= 1, `cache delta (${delta}) approximately equals tracked tokens (${expectedDelta})`)
+  // Cancel = "request never happened": cache is rolled back to the
+  // pre-request cursor, so delta versus the warm baseline must be ~0
+  // (allow ±1 for BOS/EOS bookkeeping). Prompt / generated counters
+  // still reflect work the model performed.
+  t.ok(Math.abs(delta) <= 1, `cache delta (${delta}) ~0 after cancel rollback`)
   const threshold = 20
   t.ok(stats.generatedTokens > 0, `at least one token generated before cancellation (generatedTokens=${stats.generatedTokens} > 0)`)
   t.ok(stats.generatedTokens < threshold, `generatedTokens (${stats.generatedTokens}) should be less than threshold (${threshold})`)
