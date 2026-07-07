@@ -135,7 +135,7 @@ runs:
     # no-op. The trusted-context actions/cache@v4 post-step then saves the now
     # complete dir so subsequent runs restore instead of re-downloading.
     - name: Warm models (download any missing from manifest)
-      if: inputs.warm == 'true'
+      if: ${{ inputs.warm == 'true' }}
       shell: bash
       env:
         PKG: ${{ inputs.package }}
