@@ -21,6 +21,8 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  TTS_ENHANCER_LAVASR_FP16,
+  TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -34,6 +36,7 @@ import {
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
 import { resolveBundledAssetUri } from './asset-uri.js'
+import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
@@ -80,6 +83,18 @@ resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('llm-batch', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llm',
+  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+})
+
+resources.define('tools-batch', {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: 'llm',
+  config: { ctx_size: 4096, tools: true, parallel: 2 }
 })
 
 resources.define('embeddings', {
@@ -290,6 +305,36 @@ resources.define('tts-supertonic-multilingual', {
   }
 })
 
+// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
+// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
+resources.define('tts-supertonic-8k', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    outputSampleRate: 8000
+  }
+})
+
+// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
+// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
+// resource manager's config walk pre-downloads them automatically.
+resources.define('tts-supertonic-enhanced', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
+    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
+  }
+})
+
 resources.define('parakeet-tdt', {
   constant: PARAKEET_TDT_0_6B_V3_Q8_0,
   type: 'parakeet-transcription',
@@ -319,6 +364,16 @@ resources.define('vision', {
   type: 'llamacpp-completion',
   config: {
     ctx_size: 1024,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-batch', {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -406,6 +461,28 @@ async function ensureMobileE2EConfig(useResilienceConfig: boolean) {
   )
 }
 
+let batchImageAssets: Record<string, number> | null = null
+
+async function loadBatchImageAssets() {
+  if (!batchImageAssets) {
+    // @ts-ignore - assets.ts is generated at consumer build time
+    const assets = await import('../../../assets')
+    batchImageAssets = assets.images
+  }
+  return batchImageAssets
+}
+
+async function resolveBatchAttachmentPath(inputPath: string) {
+  const images = await loadBatchImageAssets()
+  const fileName = inputPath.split('/').pop()
+  if (!fileName) return inputPath
+  const assetModule = images?.[fileName]
+  if (!assetModule) {
+    throw new Error(`Image file not found in assets: ${fileName}`)
+  }
+  return await resolveBundledAssetUri(assetModule)
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   await ensureMobileE2EConfig(isResilienceOnlyRun(filteredTests))
 
@@ -481,6 +558,9 @@ export const executor = createExecutor({
 
     // Real executors
     new ModelLoadingExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath
+    }),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),

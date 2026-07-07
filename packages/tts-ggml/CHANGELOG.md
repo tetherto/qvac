@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-07
+
+### Fixed
+
+- **Chatterbox no longer crashes at load on Samsung S25 / Adreno GPU.** The
+  multilingual model's quantized weights were uploaded to the OpenCL backend in
+  partial pieces, which the backend read past and faulted on at model load.
+  Quantized weights are now uploaded whole. Bumps the `tts-cpp` requirement to
+  `2026-07-06`.
+- **T3 (Chatterbox Turbo/MTL) now falls back to CPU per-op instead of aborting
+  when the GPU backend can't run an op.** New shared `sched_dispatch` helper
+  (mirroring the existing S3Gen/Supertonic pattern) walks the graph and only
+  engages a `ggml_backend_sched` fallback when the primary backend can't run
+  every op, so the happy-path direct-compute output is unchanged. S3Gen and
+  Supertonic converge onto the same helper, which also fixes a Supertonic
+  sched graph-reuse corruption bug on natural-sched backends (Adreno). Bumps
+  the `tts-cpp` requirement to `2026-07-07`.
+
 ## [0.4.0] - 2026-07-03
 
 ### Changed

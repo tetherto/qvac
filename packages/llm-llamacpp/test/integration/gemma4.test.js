@@ -317,7 +317,9 @@ test('Gemma 4 remove_thinking_from_context compacts cache after channel close', 
 
   const toNum = v => typeof v === 'number' ? v : Number(v || 0)
 
-  // Opt-in — compaction enabled by passing the flag explicitly.
+  // Explicit-on — compaction enabled by passing the flag explicitly.
+  // Both branches pin their overrides so the test stays valid
+  // regardless of any future default change.
   const compactRun = await runOnce({
     generationParams: { remove_thinking_from_context: true }
   })
@@ -325,15 +327,17 @@ test('Gemma 4 remove_thinking_from_context compacts cache after channel close', 
   t.comment(`compact stats: ${JSON.stringify(compactRun.stats)}`)
 
   // Gemma 4 emits the reasoning channel only when it deems the question
-  // worth deliberating about; if the opt-in run did not engage the channel,
+  // worth deliberating about; if the compact run did not engage the channel,
   // there is nothing to compact and the rest of the assertions become
   // vacuous.
   if (/<\|channel>thought/i.test(compactRun.output)) {
     t.ok(toNum(compactRun.stats.thinkingBlockDiscards) >= 1,
-      `opt-in run should compact at least one channel block (got ${compactRun.stats.thinkingBlockDiscards})`)
+      `explicit-on run should compact at least one channel block (got ${compactRun.stats.thinkingBlockDiscards})`)
 
-    // Default — compaction disabled (opt-in toggle left at false).
-    const disabledRun = await runOnce()
+    // Explicit-off — compaction disabled via `remove_thinking_from_context: false`.
+    const disabledRun = await runOnce({
+      generationParams: { remove_thinking_from_context: false }
+    })
     t.comment(`disabled (${disabledRun.output.length} chars): ${disabledRun.output.slice(0, 200)}`)
     t.comment(`disabled stats: ${JSON.stringify(disabledRun.stats)}`)
     t.is(toNum(disabledRun.stats.thinkingBlockDiscards), 0,
@@ -403,7 +407,9 @@ test('Gemma 4 multi-turn with remove_thinking_from_context reduces cache growth'
   const onRun = await runTwoTurns('on', {
     generationParams: { remove_thinking_from_context: true }
   })
-  const offRun = await runTwoTurns('off', {})
+  const offRun = await runTwoTurns('off', {
+    generationParams: { remove_thinking_from_context: false }
+  })
 
   t.comment(`ON  t1 stats=${JSON.stringify(onRun.t1.stats)}`)
   t.comment(`ON  t2 stats=${JSON.stringify(onRun.t2.stats)}`)
@@ -442,10 +448,11 @@ test('Gemma 4 multi-turn with remove_thinking_from_context reduces cache growth'
 })
 
 // Multimodal compaction: loads Gemma 4 with the projection model
-// (forcing the multimodal context path) and verifies the same opt-in
-// toggle drops the reasoning block from the KV cache when the channel
-// is engaged. Text-only prompt is sufficient; we are not testing
-// vision here, only that the multimodal context honours the toggle.
+// (forcing the multimodal context path) and verifies the same
+// `remove_thinking_from_context` toggle drops the reasoning block
+// from the KV cache when the channel is engaged. Text-only prompt is
+// sufficient; we are not testing vision here, only that the
+// multimodal context honours the toggle.
 test('Gemma 4 multimodal honours remove_thinking_from_context', {
   timeout: 1_800_000
 }, async t => {
@@ -504,13 +511,16 @@ test('Gemma 4 multimodal honours remove_thinking_from_context', {
   // not become flaky on prompt-dependent behaviour.
   if (/<\|channel>thought/i.test(compactRun.output)) {
     t.ok(toNum(compactRun.stats.thinkingBlockDiscards) >= 1,
-      `multimodal opt-in should compact at least one channel block (got ${compactRun.stats.thinkingBlockDiscards})`)
+      `multimodal explicit-on should compact at least one channel block (got ${compactRun.stats.thinkingBlockDiscards})`)
 
-    const defaultRun = await runOnce()
-    t.comment(`multimodal default (${defaultRun.output.length} chars): ${defaultRun.output.slice(0, 200)}`)
-    t.comment(`multimodal default stats: ${JSON.stringify(defaultRun.stats)}`)
+    // Explicit-off — pins the disabled path regardless of the default.
+    const defaultRun = await runOnce({
+      generationParams: { remove_thinking_from_context: false }
+    })
+    t.comment(`multimodal disabled (${defaultRun.output.length} chars): ${defaultRun.output.slice(0, 200)}`)
+    t.comment(`multimodal disabled stats: ${JSON.stringify(defaultRun.stats)}`)
     t.is(toNum(defaultRun.stats.thinkingBlockDiscards), 0,
-      `multimodal default (no opt-in) should report 0 discards (got ${defaultRun.stats.thinkingBlockDiscards})`)
+      `multimodal explicit-off should report 0 discards (got ${defaultRun.stats.thinkingBlockDiscards})`)
   } else {
     t.comment('Gemma 4 multimodal did not emit <|channel>thought - skipping compaction assertions')
     t.pass('multimodal compaction assertions skipped (channel not engaged)')

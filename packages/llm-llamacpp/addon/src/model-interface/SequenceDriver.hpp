@@ -102,8 +102,9 @@ struct PrefillPlan {
 ///
 /// Method ordering below mirrors a sequence's lifecycle:
 ///   `validatePromptPolicy` -> `loadCache` -> `preparePrefill`
-///   -> `onPrefillComplete` -> N x `onLogitsReady` ->
-///   (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
+///   -> `snapshotPreRequestCursor` -> `snapshotPreRequestRollbackAnchor`
+///   -> `onPrefillComplete` -> N x `onLogitsReady`
+///   -> (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
 ///   `saveCache`
 class SequenceDriver {
 public:
@@ -215,7 +216,15 @@ public:
       const std::function<void(const std::string&)>& outputCallback) = 0;
 
   /// Fired when the sequence is cancelled (user-requested or fatal error).
-  virtual void
+  /// Returns `true` when internal rollback (metadata + live KV / recurrent
+  /// state) is coherent with the pre-request cursor and callers may persist
+  /// the driver's state via `saveCache`. Returns `false` when the
+  /// rollback could not be completed (e.g. recurrent full-state restore
+  /// refused): live state may not match `getNPast()` and callers MUST skip
+  /// cache persistence for this request to preserve the last
+  /// known-good on-disk cache. Implementations that need no rollback
+  /// (single hook) may simply return `true`.
+  [[nodiscard]] virtual bool
   onCancel(const std::function<void(const std::string&)>& outputCallback) = 0;
 
   /// Try to populate this sequence's KV-cache from a previously
@@ -226,4 +235,23 @@ public:
   loadCache(const std::string& cacheKey, llama_pos configuredNDiscarded) = 0;
 
   virtual void saveCache(const std::string& cacheKey) const = 0;
+
+  /// Capture the post-`preparePrefill` cursor for `onCancel` rollback. The
+  /// scheduler calls this after `preparePrefill` because prefill preparation
+  /// may slide or otherwise mutate existing KV state; anchoring earlier would
+  /// roll cancellation back to a stale cursor. Cheap: bookkeeping only, no I/O.
+  /// Default no-op for drivers whose cancel does not need it.
+  virtual void snapshotPreRequestCursor() {}
+
+  /// Capture the batch-path rollback anchor used by `onCancel` on
+  /// drivers whose memory rejects partial `seq_rm` (hybrid / recurrent).
+  /// Writes a full sequence-state snapshot to disk, so it is expensive
+  /// and gated: pure-attention drivers no-op, and single-prompt drivers
+  /// keep their own capture site rather than paying this cost twice.
+  /// This is cancel-path bookkeeping, unrelated to the
+  /// `remove_thinking_from_context` hard-fail contract, so overrides
+  /// that fail the capture must log a warning and continue rather than
+  /// throwing (a silent no-op would leak the peak `nPast` back into
+  /// user-visible `CacheTokens` on a subsequent cancel).
+  virtual void snapshotPreRequestRollbackAnchor() {}
 };
