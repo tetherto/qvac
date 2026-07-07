@@ -59,7 +59,7 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    name: test-${{ matrix.label }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/llm-llamacpp
