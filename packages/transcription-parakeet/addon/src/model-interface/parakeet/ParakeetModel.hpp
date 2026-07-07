@@ -312,8 +312,7 @@ private:
   // Human-readable GPU device name (e.g. "NVIDIA GeForce RTX 3090", "Apple
   // M2 Pro") recovered from the ggml device registry at load(); empty on CPU
   // or when ggml provides no description. Surfaced to JS via getBackendInfo()
-  // as the nvidia-smi-independent GPU-name fallback for the perf reporter
-  // (QVAC-20684).
+  // as the nvidia-smi-independent GPU-name fallback for the perf reporter.
   std::string backend_description_;
 
   // ── Token / sentinel constants ─────────────────────────────────────────

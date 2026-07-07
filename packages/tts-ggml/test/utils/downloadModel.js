@@ -418,8 +418,8 @@ async function ensureWhisperModel (targetPath = null) {
 const REGISTRY_SOURCE = 's3'
 const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl* q4_0 (under ggml/chatterbox/)
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
-const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32 (QVAC-20568)
-const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0 (QVAC-20686)
+const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32
+const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -436,7 +436,7 @@ const SIZE_SUPERTONIC_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // Supertonic 3 (31-language) tiers: q8_0 ~126 MB, q4_0 ~80 MB, f16 ~191 MB,
 // f32 ~398 MB.  All four are published on the QVAC model registry (f16 / f32 @
-// 2026-06-10, QVAC-20568; q8_0 / q4_0 @ 2026-06-15, QVAC-20686).  One generous
+// 2026-06-10; q8_0 / q4_0 @ 2026-06-15). One generous
 // band covers them all so the resolver accepts whichever tier was fetched.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
 
@@ -809,8 +809,8 @@ async function ensureSupertonicMtlModel (options = {}) {
 // encodes the quant so q8_0 / q4_0 can coexist in one models/ dir (unlike v1/v2
 // which keep a single canonical filename and read the quant from metadata).
 // All four tiers are published on the QVAC model registry: f16 / f32 under the
-// 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants under the
-// 2026-06-15 build (QVAC-20686).  Each tier maps to its own S3 build date.
+// 2026-06-10 build and the q8_0 / q4_0 block-quants under the
+// 2026-06-15 build. Each tier maps to its own S3 build date.
 const SUPERTONIC3_REGISTRY_DATES = {
   f16: REGISTRY_DATE_SUPERTONIC3,
   f32: REGISTRY_DATE_SUPERTONIC3,
@@ -836,8 +836,8 @@ function supertonic3Gguf (quant) {
  * Ensure a Supertonic 3 GGUF for the requested quant tier is staged in a
  * directory the native addon can read, and return that path.
  *
- * All four tiers are published on the QVAC model registry (f16 / f32 via
- * QVAC-20568, q8_0 / q4_0 via QVAC-20686), so this helper resolves them from
+ * All four tiers are published on the QVAC model registry (f16 / f32 and
+ * q8_0 / q4_0), so this helper resolves them from
  * S3 only (mirroring the v1/v2 helpers): it reuses an already-staged copy when
  * present, otherwise fetches from the registry.  If the fetch fails (offline,
  * or the @qvac/registry-client devDependency is missing) it returns

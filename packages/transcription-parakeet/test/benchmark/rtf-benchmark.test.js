@@ -42,7 +42,7 @@ const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
 
-// QVAC-20684: detect the desktop GPU hardware name (e.g. "NVIDIA RTX 4000 SFF
+// detect the desktop GPU hardware name (e.g. "NVIDIA RTX 4000 SFF
 // Ada") via the shared perf reporter's detectDevice(), which shells out to
 // nvidia-smi / vulkaninfo / system_profiler through bare-subprocess, and stamp
 // it into the report so aggregate-parakeet-rtf.js can render the "GPU Model"
@@ -50,7 +50,7 @@ const RESULT_MARKER = 'QVAC_RTF_REPORT::'
 // dynamically (path.join keeps bare-pack from statically resolving it during
 // mobile bundling) and guard with try/catch — on mobile it's absent and the GPU
 // stays null (the Device Farm device name is the proxy there). Mirrors the
-// QVAC-20499 wiring already in test/integration/helpers.js. Probed once at
+// wiring already in test/integration/helpers.js. Probed once at
 // module load.
 let _hwDevice = null
 try {
@@ -307,7 +307,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     const loadStart = getTimeMs()
     await model.load()
 
-    // QVAC-20684: on CI GPU runners the host probe (nvidia-smi / procfs) often
+    // on CI GPU runners the host probe (nvidia-smi / procfs) often
     // can't see the GPU, so fall back to the device name the loaded addon's
     // ggml backend reports (CUDA / Vulkan / Metal expose it via the driver).
     let backendGpuModel = null

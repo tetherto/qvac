@@ -12,8 +12,8 @@
 //     new language codes.
 //
 // All four tiers are pulled from the QVAC model registry (S3): fp16 / fp32 from
-// the 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
-// 2026-06-15 build (QVAC-20686).  Every tier is published, so a fetch failure
+// the 2026-06-10 build and the q8_0 / q4_0 block-quants from the
+// 2026-06-15 build. Every tier is published, so a fetch failure
 // is a real error and the corresponding test FAILS (it no longer self-skips).
 // CI stages all four tiers via `download-models:registry`.
 
