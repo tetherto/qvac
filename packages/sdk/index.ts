@@ -1,5 +1,6 @@
 // Public API exports only
 export {
+  batchCompletion,
   completion,
   deleteCache,
   loadModel,
@@ -72,6 +73,10 @@ export {
   type CompletionFinal,
   type CompletionRun,
   type CompletionStats,
+  type BatchCompletionEvent,
+  type BatchCompletionResult,
+  type BatchCompletionRun,
+  type BatchPrompt,
   type EmbedStats,
   VERBOSITY,
   type Attachment,
@@ -187,10 +192,9 @@ export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
 // `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
 // rejections. `RequestRejectedByPolicyError` is thrown by
 // `await RequestRegistry.begin(...)` when a registered concurrency policy
-// refuses a new request. With the default queue policy a same-model
-// `completion` no longer rejects — it waits FIFO — so this now surfaces the
-// bounded-queue cases: `onOverflow: "reject"`, the per-model queue-depth cap,
-// or a `queueTimeoutMs` elapsing. It propagates out through the worker so the
+// refuses a new request. A same-model `completion` doesn't reject — it waits
+// FIFO — so this surfaces only when the per-model wait queue is already at its
+// `maxQueueDepthPerModel` cap. It propagates out through the worker so the
 // client can distinguish "the model is saturated" from "the request failed".
 //
 // `RequestIdConflictError` and `RequestNotFoundError` are thrown by
