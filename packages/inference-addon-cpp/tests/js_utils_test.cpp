@@ -1,6 +1,7 @@
 #include "inference-addon-cpp/JsUtils.hpp"
 #include "helpers_header/js.h"
 #include <gtest/gtest.h>
+#include <cmath>
 #include <utility>
 #include <thread>
 #include <chrono>
@@ -68,6 +69,36 @@ TEST(JsUtilsTest, UniqueJsRefConstructorWithDeleter) {
     js_env_t env;
     js::UniqueJsRef<js::Object> ref(&env, &jsValue, &deleter);
     // Test passes if no exception is thrown
+}
+
+TEST(JsUtilsTest, NumberAsUint64RejectsNegative) {
+    js_env_t env;
+    auto number = js::Number::create(&env, -1.0);
+    EXPECT_THROW(number.as<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsUint64RejectsNaN) {
+    js_env_t env;
+    auto number = js::Number::create(&env, std::nan(""));
+    EXPECT_THROW(number.as<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsUint64RejectsNonIntegral) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 1.5);
+    EXPECT_THROW(number.as<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsUint64RejectsAboveMaxSafeInteger) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 9007199254740992.0 * 4);
+    EXPECT_THROW(number.as<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsUint64AcceptsIntegral) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 42.0);
+    EXPECT_EQ(number.as<uint64_t>(&env), 42U);
 }
 
 } // namespace qvac_lib_inference_addon_cpp::js_utils
