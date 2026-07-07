@@ -1,10 +1,20 @@
 # Changelog
 
-## [0.8.3] - 2026-07-03
+## [0.9.1] - 2026-07-07
 
 ### Fixed
 
 - Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.9.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.0` → `9341.1.3` (Gemma-4 E2B vision-encoder Arm Mali/Vulkan attention speedup + encoder token-count fix; no API change for this package).
+
+### Pull Requests
+
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
 
 ## [0.8.2] - 2026-07-03
 

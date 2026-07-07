@@ -60,8 +60,8 @@
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
   "dependencies": {
-    "@qvac/ai-sdk-provider": "^0.2.2",
-    "@qvac/cli": "^0.7.0"
+    "@qvac/ai-sdk-provider": "^0.3.0",
+    "@qvac/cli": "^0.8.0"
   },
   "devDependencies": {
     "@types/node": "^24.2.1",

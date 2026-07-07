@@ -16,7 +16,7 @@
     "ssplit",
     {
       "name": "qvac-fabric",
-      "version>=": "9341.1.0",
+      "version>=": "9341.1.3",
       "default-features": false,
       "features": [
         "gpu-backends"

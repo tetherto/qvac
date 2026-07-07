@@ -2,8 +2,8 @@
 
 // Reusable harness for the Chatterbox KV-cache × engine × backend matrix.
 //
-// WHY THIS EXISTS (QVAC-21401):
-//   `@qvac/tts-ggml` 0.3.2 (QVAC-19557) flipped the default T3 KV-cache
+// WHY THIS EXISTS:
+// `@qvac/tts-ggml` 0.3.2 flipped the default T3 KV-cache
 //   dtype to `q8_0` to fix an iOS peak-memory OOM.  That default shipped
 //   validated only on the **Turbo** model, on **CPU**, and by a load-time
 //   probe (`chatterbox_resolve_kv_type`) that only checks `flash_attn_ext`.
@@ -55,7 +55,7 @@ const PROBE_UNSAFE = !!(proc.env && proc.env.QVAC_TTS_KV_PROBE_UNSAFE === '1')
 // MTL step graph with* (flash-attn + the CONT eval_step_mtl issues on the KV
 // cache).  q8_0 is deliberately excluded: it is memory-cheapest but only
 // works where the backend implements the q8_0 CONT (CPU, CUDA) — it aborts
-// the MTL model on Metal (QVAC-21401).
+// the MTL model on Metal.
 const GPU_SAFE_KV_TYPES = ['f16', 'f32']
 
 // Every selectable dtype.  `undefined` is the package default (must itself be

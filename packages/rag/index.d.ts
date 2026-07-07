@@ -94,11 +94,7 @@ export interface SaveEmbeddingsOpts {
 }
 
 export type IngestStage =
-  | 'chunking'
-  | 'embedding'
-  | 'saving:deduplicating'
-  | 'saving:preparing'
-  | 'saving:writing'
+  'chunking' | 'embedding' | 'saving:deduplicating' | 'saving:preparing' | 'saving:writing'
 
 export interface IngestOpts {
   chunk?: boolean | undefined

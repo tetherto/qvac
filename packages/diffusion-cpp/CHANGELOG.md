@@ -33,14 +33,14 @@ This release restores the diffusion-cpp npm publish path after the LTX dependenc
 
 ### Changed
 
-- `stable-diffusion-cpp` now resolves to `2026-07-03#1`, which depends on the matching slim `ggml` port revision.
+- `stable-diffusion-cpp` now resolves to `2026-07-03#2`, which depends on the matching slim `ggml` port revision.
 - The diffusion-cpp vcpkg registry baseline is restored to the pre-LTX value while the package explicitly opts into the bumped `stable-diffusion-cpp` port revision.
 
 ### Fixed
 
 #### Keep LTX prebuilds under the npm package size limit
 
-The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets or desktop Adreno/TBQ/PQ Vulkan shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
+The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets, desktop Adreno/TBQ/PQ/TQ1/TQ2/MXFP4/NVFP4 Vulkan shader payloads, or Vulkan training/backward/loss shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
 
 #### Reduce LTX smoke-test memory pressure
 
