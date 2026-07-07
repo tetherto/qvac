@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "6.3.1",
+  "version": "7.0.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {

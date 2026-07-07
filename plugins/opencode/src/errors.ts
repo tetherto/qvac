@@ -4,10 +4,7 @@
 // code rather than a bare `Error`.
 
 export type QvacOpencodePluginErrorCode =
-  | 'INVALID_OPTION'
-  | 'HOST_SPAWN_FAILED'
-  | 'HOST_EXITED'
-  | 'HOST_LISTEN_TIMEOUT'
+  'INVALID_OPTION' | 'HOST_SPAWN_FAILED' | 'HOST_EXITED' | 'HOST_LISTEN_TIMEOUT'
 
 export class QvacOpencodePluginError extends Error {
   readonly code: QvacOpencodePluginErrorCode

@@ -1,5 +1,6 @@
 export { loadModel } from './load-model'
 export { downloadAsset } from './download-asset'
+export { batchCompletion } from './batch-completion'
 export { completion } from './completion-stream'
 export { deleteCache } from './delete-cache'
 export { unloadModel } from './unload-model'

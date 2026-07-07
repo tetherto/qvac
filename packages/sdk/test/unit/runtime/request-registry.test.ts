@@ -784,6 +784,83 @@ test("queue: onOverflow 'reject' still throws RequestRejectedByPolicyError", asy
   t.is(r.list().length, 1, 'rejected begin left no slot behind')
 })
 
+test('queue: a sharedSlotGroup serializes different kinds on the same model', async (t) => {
+  // Mirrors the singleton wiring: completion + batchCompletion share one
+  // llama.cpp run queue, so they must contend for one admission lane per
+  // model rather than each getting an independent (kind, modelId) slot.
+  const r = createRequestRegistry()
+  const sharedSlotGroup = 'llamacppCompletion'
+  r.policy({
+    kind: 'completion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup
+  })
+  r.policy({
+    kind: 'batchCompletion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup
+  })
+
+  const completion = await r.begin({
+    requestId: 'r-1',
+    kind: 'completion',
+    modelId: 'm1'
+  })
+
+  let batchResolved = false
+  const batchPromise = r
+    .begin({ requestId: 'r-2', kind: 'batchCompletion', modelId: 'm1' })
+    .then((ctx) => {
+      batchResolved = true
+      return ctx
+    })
+
+  await settle()
+  t.is(
+    batchResolved,
+    false,
+    'batchCompletion queues behind the running completion on the shared lane'
+  )
+  t.is(r.list().length, 1, 'only the completion is in flight')
+
+  await completion[Symbol.asyncDispose]()
+  const batch = await batchPromise
+  t.is(batchResolved, true, 'disposing the completion admitted the batch')
+  t.is(batch.requestId, 'r-2')
+
+  await batch[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('queue: a kind outside the sharedSlotGroup is not blocked by the lane', async (t) => {
+  // embeddings has no policy and isn't part of the completion lane, so it
+  // must run concurrently with a completion holding the shared slot.
+  const r = createRequestRegistry()
+  r.policy({
+    kind: 'completion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup: 'llamacppCompletion'
+  })
+
+  await using completion = await r.begin({
+    requestId: 'r-1',
+    kind: 'completion',
+    modelId: 'm1'
+  })
+  await using embed = await r.begin({
+    requestId: 'r-2',
+    kind: 'embeddings',
+    modelId: 'm1'
+  })
+
+  t.is(completion.requestId, 'r-1')
+  t.is(embed.requestId, 'r-2')
+  t.is(r.list().length, 2, 'embeddings runs alongside the completion lane')
+})
+
 test('queue: maxQueueDepthPerModel caps the queue and rejects the overflow', async (t) => {
   const r = createRequestRegistry()
   r.policy({

@@ -18,7 +18,7 @@ export abstract class AbstractModelExecutor<
   }
 
   async reload(testId: string, context: unknown) {
-    await this.resources.evictAll();
-    await this.setup(testId, context);
+    await this.resources.evictAll()
+    await this.setup(testId, context)
   }
 }
