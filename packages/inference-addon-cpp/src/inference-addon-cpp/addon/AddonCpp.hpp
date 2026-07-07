@@ -85,9 +85,8 @@ public:
     }
   }
 
-  // The scheduler queues terminal events for still-admitted jobs on
-  // destruction; it must go before stop() makes the callback's notify() a
-  // no-op.
+  // The scheduler must go before stop(): its teardown terminal events are
+  // only delivered while the callback's notify() is live.
   ~AddonCpp() {
     jobScheduler_.reset();
     outputCallback_->stop();
