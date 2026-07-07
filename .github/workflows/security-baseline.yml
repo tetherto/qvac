@@ -29,7 +29,7 @@ jobs:
   baseline:
     # Pinned to the 0.1.0 tag's immutable commit SHA per the org freeze-and-pin
     # convention for reusable workflows (never `@main`).
-    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
     permissions:
       contents: read
       security-events: write
