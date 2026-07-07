@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.35.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion, GPU mmproj-encode ~1.46× → ~1.28× of same-device CPU on Pixel 9 Pro — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
 ## [0.34.1] - 2026-07-08
 
 ### Fixed
