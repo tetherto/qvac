@@ -1,6 +1,7 @@
 // Re-export all schemas and types
 export * from './archive'
 export * from './cancel'
+export * from './batch-completion-stream'
 export * from './completion-stream'
 export * from './completion-event'
 export {

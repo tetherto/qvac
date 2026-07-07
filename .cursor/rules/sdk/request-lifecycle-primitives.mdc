@@ -236,7 +236,7 @@ The truth table above describes the addon-level capability for plugin handlers. 
 
 | `RequestKind`     | Dispatched from                                                  | Cancel reach                                                 | Notes                                                                                                                                                                                              |
 |-------------------|------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | Reference handler. `oneAtATimePerModel` policy.                                                                                                                                                    |
+| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | Reference handler. Serializing policy (shared `llamacppCompletion` lane).                                                                                                                                                    |
 | `embeddings`      | `llamacpp-embedding/plugin.ts` → `server/bare/ops/embed.ts`      | Hard (`addon.cancel()` mid-decode)                            | Unary op (no streaming). Single `addon.embedText` call wrapped in the registry context; post-await `signal.aborted` check is the soft-cancel safety net for the gap between `model.run(...)` and `response.await()`. |
 | `transcribe`      | `whispercpp-transcription` / `parakeet-transcription` plugins → `server/bare/ops/transcribe.ts` | Hard (`addon.cancel()` mid-decode); per-iteration soft check on the response loop | `restorePrompt` registered via `scope.defer`; per-iteration `if (ctx.signal.aborted) break;` in the streaming response loop is the canonical soft-cancel pattern. |
 | `translate`       | `llamacpp-completion` / `nmtcpp-translation` plugins → `server/bare/ops/translate.ts` | Mixed: LLM branch hard (`addon.cancel()`), NMT branch soft (`nmtcpp-translation.translate` declares `scope: "none"`) | Both branches share the registry context. LLM branch wires `signal → addon.cancel()`; NMT branch relies on a per-iteration soft-cancel guard around `runBatch(...)` and the early-return path. |
@@ -255,15 +255,36 @@ The registry exposes an opt-in admission-control surface on `policy(...)`:
 ```typescript
 interface RequestRegistry {
   // ...
-  policy(opts: { kind: RequestKind; oneAtATimePerModel: boolean }): void;
+  policy(opts: {
+    kind: RequestKind;
+    // Slots per (lane, modelId). Default Infinity (no gating). Set 1 to
+    // serialize; raise to the addon's batching width for N-way concurrency.
+    maxConcurrentPerModel?: number;
+    // Over-capacity behavior: "queue" (default, wait FIFO) or "reject".
+    onOverflow?: "queue" | "reject";
+    // Cap on FIFO waiters per (lane, modelId) before begin() rejects. Default 64.
+    maxQueueDepthPerModel?: number;
+    // Reject a waiter that waits longer than this many ms. Default: unbounded.
+    queueTimeoutMs?: number;
+    // @deprecated alias: true ⇒ { maxConcurrentPerModel: 1, onOverflow: "reject" }.
+    oneAtATimePerModel?: boolean;
+    // Opt several kinds into ONE admission lane per model (see below).
+    sharedSlotGroup?: string;
+  }): void;
 }
 ```
 
-`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `{ kind: "completion", oneAtATimePerModel: true }` on first use. The llama.cpp addon owns one KV-cache + one decode loop per model — two concurrent `completionStream` requests on the same model would interleave on the same logical session, so the second `begin(...)` is rejected explicitly with `RequestRejectedByPolicyError` (code 52420) instead of producing a confusing interleave.
+A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configurable concurrency limit. `maxConcurrentPerModel` is the slot count (`1` serializes — today's single-context reality; bump it to the addon's batching width once continuous batching lands; `Infinity`/omitted leaves the kind ungated). `onOverflow` decides what an over-capacity `begin(...)` does: `"queue"` (the default) waits FIFO for a slot; `"reject"` throws immediately. A `begin` rejects with `RequestRejectedByPolicyError` (code 52420) when `onOverflow: "reject"` hits capacity, the `(maxQueueDepthPerModel + 1)`th waiter would exceed the depth cap, or a queued waiter exceeds `queueTimeoutMs` — a typed error carrying `requestId` / `kind` / `modelId` / `reason` that survives the RPC boundary so clients can `instanceof`-narrow. `oneAtATimePerModel: true` is a back-compat alias for `{ maxConcurrentPerModel: 1, onOverflow: "reject" }`.
 
-Kinds without a registered policy are unconstrained. `embeddings` / `transcribe` / `translate` / `finetune` deliberately do **not** register `oneAtATimePerModel` — those addons can sustain concurrent requests against the same model, and the registry's per-request lifecycle is sufficient for cancel routing without admission control. Per-kind policies can be registered if and when an addon's concurrency invariants change.
+### Shared slot groups
 
-Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin both the rejection and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
+`sharedSlotGroup` keys the admission slot on `(group, modelId)` instead of `(kind, modelId)`, so **different kinds** that target the same model contend for one slot pool. This exists to mirror an addon that serializes unrelated kinds on a single native context.
+
+`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `completion` and `batchCompletion` on first use, both serializing (`maxConcurrentPerModel: 1, onOverflow: "queue", maxQueueDepthPerModel: 64`) and both keyed to the **same** `sharedSlotGroup: "llamacppCompletion"`. The reason: `@qvac/llm-llamacpp` funnels every `run()` (single-prompt **and** batch) through one per-instance `exclusiveRunQueue` plus a single-job native runner, so a completion and a batch on the same model can never actually execute at once. Sharing one lane makes the SDK admission queue the authoritative serialization point — a batch fired while a completion runs waits FIFO at the SDK layer instead of both being admitted and silently serializing inside the addon (which would hide the second request from the registry's queue-depth accounting, `requestId` diagnostics, and cancel routing).
+
+Kinds without a registered policy are unconstrained, and a policy without `sharedSlotGroup` only contends with its own kind. `embeddings` / `transcribe` / `translate` / `finetune` deliberately register no policy — those addons tolerate concurrent requests against the same model (and the registry's per-request lifecycle is enough for cancel routing). Note this means `translate` / `finetune` on an llama.cpp model are *not* in the completion lane today; they still serialize against completion inside the addon's run queue, just not at the SDK admission layer. Fold them into `llamacppCompletion` if that addon-level serialization ever needs to be SDK-visible.
+
+Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin the FIFO wait, the shared-lane cross-kind serialization, and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
 
 ## Structured Logging
 
@@ -499,7 +520,7 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 |-------|----------------------------------|----------------------------------------------------------------------------|
 | 52417 | `RequestIdConflictError`         | `registry.begin(...)` called with a `requestId` already present.           |
 | 52419 | `InferenceCancelledError`        | A cancelled inference run's `CompletionRun` promise-aggregates (`final` / `text` / `toolCalls` / `stats`) reject with this carrying the partial state. The `events` stream itself ends normally with `stopReason: "cancelled"`. |
-| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy (e.g. `oneAtATimePerModel` for `completion`). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.   |
+| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy: `onOverflow: "reject"` at capacity, the per-model FIFO queue at its `maxQueueDepthPerModel` cap, or a `queueTimeoutMs` elapse. Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.   |
 | 53503 | `AsyncDisposeUnavailableError`   | Module-load guard: host runtime doesn't expose `Symbol.asyncDispose`.      |
 
 `InferenceCancelledError` carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload. Construction is **client-side** (`packages/sdk/client/api/completion-stream.ts`): when the event stream ends with `stopReason: "cancelled"`, the client builds the error from its locally-aggregated partial state and rejects the aggregates. The class is server-defined for reusability and re-exported from `@qvac/sdk` so client code can `instanceof`-check it. See `error-handling.mdc`.
@@ -511,7 +532,7 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 Five unit-test files pin the contract — read them as canonical examples:
 
 - `packages/sdk/test/unit/runtime/disposable-scope.test.ts` — LIFO cleanup, idempotency, error aggregation, late `defer` behavior.
-- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and concurrency policy** (`oneAtATimePerModel` admission rule + `RequestRejectedByPolicyError` propagation + rejected-begin leaves no slot behind).
+- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and concurrency policy** (`maxConcurrentPerModel` serialize + FIFO queueing, N-way concurrency, `onOverflow: "reject"`, `queueTimeoutMs`, the depth cap, `sharedSlotGroup` cross-kind serialization for the `completion` + `batchCompletion` lane, `RequestRejectedByPolicyError` propagation, and rejected-begin leaves no slot behind).
 - `packages/sdk/test/unit/runtime/kv-cache-session.test.ts` — `beginTurn` / `commitTurn` / `rollback` semantics in isolation: commit suppresses the deferred rollback, rollback after commit is a no-op, double-rollback is idempotent, and rollback wipes all three layers (file / `initializedCaches` / `cachedMessageCounts`) regardless of who fails along the way.
 - `packages/sdk/test/unit/runtime/request-lifecycle-logging.test.ts` — registry's `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee on redundant cancels, `cancelAll` fans out one line per active entry, `state=cancelling` on a `parentSignal`-pre-aborted begin, and the `modelId=-` placeholder for model-less requests.
 - `packages/sdk/test/unit/runtime/with-request-context.test.ts` — `withRequestContext` prefix shape across every level, `modelId`-segment dropping when absent, multi-argument preservation, and pass-through of `setLevel` / `getLevel` / `addTransport` / `setConsoleOutput`.

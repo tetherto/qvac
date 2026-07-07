@@ -26,6 +26,17 @@ test('llmConfigBaseSchema: split-mode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
+test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ parallel: 4 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.parallel, 4)
+})
+
+test('llmConfigBaseSchema: rejects invalid parallel values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ parallel: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ parallel: 1.5 }).success, false)
+})
+
 test('llmConfigBaseSchema: accepts tensor-split string', (t) => {
   const result = llmConfigBaseSchema.safeParse({ 'tensor-split': '1,1' })
   t.is(result.success, true)
