@@ -1,7 +1,7 @@
 name: Setup vcpkg
 description: >-
-  Point VCPKG_ROOT at the runner's pre-installed vcpkg (Linux) or do a
-  shallow blobless sparse bootstrap (macOS, Windows), pin policy env vars
+  Point VCPKG_ROOT at the runner's pre-installed vcpkg (Linux, Windows) or do
+  a shallow blobless sparse bootstrap (macOS), pin policy env vars
   (VCPKG_BUILD_TYPE=release to skip debug libs, --no-parallel-configure to
   stabilize Visual Studio / Apple toolchain configuration), and enable the
   shared S3-backed binary cache.
@@ -47,26 +47,16 @@ runs:
       run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
 
     - if: ${{ runner.os == 'Windows' }}
-      name: Bootstrap vcpkg on Windows
+      name: Configure vcpkg on Windows
       shell: powershell
       run: |
-        # The pre-installed vcpkg on the self-hosted Windows runners predates
-        # Visual Studio 2026: its bundled CMake does not know the
-        # "Visual Studio 18 2026" generator (needed by MSBuild-based ports
-        # such as mecab) and it cannot compute binary-cache ABIs for the
-        # v145 toolset. Bootstrap a current vcpkg per job instead, mirroring
-        # the macOS step above.
-        if (Test-Path vcpkg) { Remove-Item -Recurse -Force vcpkg }
-        git clone --depth=1 --filter=blob:none --sparse https://github.com/microsoft/vcpkg.git
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        cd vcpkg
-        git sparse-checkout set --no-cone '/*' '!/ports' '!/versions'
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        .\bootstrap-vcpkg.bat -disableMetrics
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
+        if (-not $env:VCPKG_INSTALLATION_ROOT -or -not (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+          Write-Error "VCPKG_INSTALLATION_ROOT is not set or does not exist; expected a pre-installed vcpkg on the runner"
+          exit 1
+        }
+        $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
         echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
-        echo (Get-Location).Path >> $env:GITHUB_PATH
+        echo $vcpkgRoot >> $env:GITHUB_PATH
 
     - name: Export vcpkg policy env
       shell: bash
