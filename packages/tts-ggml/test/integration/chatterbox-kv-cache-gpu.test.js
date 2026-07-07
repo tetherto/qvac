@@ -1,6 +1,6 @@
 'use strict'
 
-// Chatterbox KV-cache × engine × GPU regression suite (QVAC-21401).
+// Chatterbox KV-cache × engine × GPU regression suite.
 //
 // This is the test that would have caught the multilingual Metal abort:
 // `@qvac/tts-ggml` 0.3.2–0.3.5 defaulted the T3 KV cache to `q8_0`, which
@@ -89,9 +89,9 @@ async function runGpuCase (t, variant, kvCacheType) {
 }
 
 // ── Headline regression: the exact cell that shipped broken ──────────────
-// MTL + useGPU=true + DEFAULT KV cache.  Pre-QVAC-21401 (q8_0 default) this
+// MTL + useGPU=true + DEFAULT KV cache. Pre-(q8_0 default) this
 // aborts on Metal; post-fix (f16 default) it completes.
-test('Chatterbox MTL + useGPU=true + DEFAULT KV cache synthesizes to completion (QVAC-21401)',
+test('Chatterbox MTL + useGPU=true + DEFAULT KV cache synthesizes to completion',
   { timeout: 600000, skip: NO_GPU },
   async (t) => {
     await runGpuCase(t, 'mtl', undefined)

@@ -31,7 +31,7 @@ gh workflow run benchmark-vlm-model-comparison.yml \
   -f matrix_sources=addon \                   # addon | addon@candidate | addon@baseline | fabric[@ref] | upstream[@ref]
   -f ref=<branch|tag|commit-sha> \            # addon built as addon@candidate; default = the --ref branch
   -f matrix_desktop=linux-cpu,linux-gpu \     # any subset of {linux,macos,macmini,windows}-{cpu,gpu}
-  -f matrix_mobile=s26,iphone17pro \          # any subset of {s26,s25,pixel9,iphone16,iphone17,iphone17pro}[-{cpu,gpu}]
+  -f matrix_mobile=s26,iphone17pro \          # any subset of {s26,s25,pixel9,iphone16,iphone17,iphone17pro}[any][-{cpu,gpu}]; plain = exact model, 'any' = any subfamily variant
   -f matrix_samples=5 \                       # override samples/task (empty = preset default)
   -f mobile_timeout_min=60                    # mobile per-leg timeout in minutes (≤120)
 ```
@@ -90,7 +90,8 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | Mac mini M4 | ✅ | — | `macmini-cpu`, `macmini-gpu` | Self-hosted bare-metal; GPU = Metal. |
 | Windows CPU/GPU | ✅ | — | `windows-cpu`, `windows-gpu` | GPU = Vulkan. CLI builds use pre-installed clang + Ninja (no Visual Studio on the runner). |
 | Android | — | ✅ | `-f matrix_mobile=s26,s25,pixel9` | Each suffixable `-cpu`/`-gpu`; **bare token = CPU **and** GPU in one session**. One phone per leg (AWS Device Farm). |
-| iOS | — | ✅ | `iphone16,iphone17,iphone17pro` | Same suffix rule. `iphone17` is a CONTAINS filter (may pick a 17-family variant). |
+| iOS | — | ✅ | `iphone16,iphone17,iphone17pro` | Same suffix rule. |
+| Exact vs any-variant device | — | ✅ | `pixel9` vs `pixel9any` | Plain token = **exact model** (MODEL EQUALS — a `pixel9` run can never land on a Pixel 9 Pro / Pro XL; if the exact model leaves the AWS fleet the leg fails at Schedule, loudly). `any` suffix = any subfamily variant (MODEL CONTAINS, availability-picked — the pre-fix behavior; also the fallback if the exact model is unavailable). |
 
 ### 2.4 Models & knobs
 

@@ -12,14 +12,14 @@
  * ```
  */
 
-import * as controller from "./controller";
-import * as exporters from "./exporters";
+import * as controller from './controller'
+import * as exporters from './exporters'
 import type {
   ProfilerRuntimeOptions,
   ProfilingEvent,
   ProfilerExport,
-  AggregatedStats,
-} from "./types";
+  AggregatedStats
+} from './types'
 
 export const profiler = {
   /**
@@ -71,8 +71,7 @@ export const profiler = {
    * @param callback - Invoked once per recorded profiling event.
    * @returns An unsubscribe function; call it to remove the listener.
    */
-  onRecord: (callback: (event: ProfilingEvent) => void) =>
-    controller.onRecord(callback),
+  onRecord: (callback: (event: ProfilingEvent) => void) => controller.onRecord(callback),
 
   /**
    * Returns the current effective profiler configuration.
@@ -86,44 +85,43 @@ export const profiler = {
    *
    * @returns A record of `AggregatedStats` keyed by operation name.
    */
-  getAggregates: (): Record<string, AggregatedStats> =>
-    controller.getAggregates(),
+  getAggregates: (): Record<string, AggregatedStats> => controller.getAggregates(),
 
   /**
    * Clears all aggregated data and the recent-events ring buffer.
    */
-  clear: () => controller.clear(),
-};
+  clear: () => controller.clear()
+}
 
 export type {
   ProfilerRuntimeOptions,
   ProfilingEvent,
   ProfilerExport,
   AggregatedStats,
-  ProfilingEventKind,
-} from "./types";
-export type { ProfilerMode } from "@/schemas";
-export { nowMs } from "./clock";
+  ProfilingEventKind
+} from './types'
+export type { ProfilerMode } from '@/schemas'
+export { nowMs } from './clock'
 export {
   record,
   shouldProfile,
   shouldIncludeServerBreakdown,
   generateId,
   isEnabled,
-  type ResolvedProfilerConfig,
-} from "./controller";
+  type ResolvedProfilerConfig
+} from './controller'
 export {
   createProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,
-  stripProfilingMeta,
-} from "./envelope";
+  stripProfilingMeta
+} from './envelope'
 export {
   recordPhase,
   recordFailure,
   recordServerBreakdownPhases,
   recordDelegationBreakdownPhases,
   type BaseTimings,
-  type BaseEvent,
-} from "./events";
+  type BaseEvent
+} from './events'

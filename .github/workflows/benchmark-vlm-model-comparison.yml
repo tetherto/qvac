@@ -53,7 +53,7 @@ on:
         type: string
         default: ""
       matrix_mobile:
-        description: "  mobile (AWS Device Farm) legs, comma-sep <device>[-<backend>]: s26,s25,pixel9,iphone16,iphone17,iphone17pro, e.g. 's26-cpu,s26-gpu,iphone17' (bare device = cpu+gpu in one session; empty = no mobile)"
+        description: "  mobile (AWS Device Farm) legs, comma-sep <device>[any][-<backend>]: s26,s25,pixel9,iphone16,iphone17,iphone17pro — plain token = that EXACT model; 'any' suffix (e.g. pixel9any) = any subfamily variant, availability-picked. e.g. 's26-cpu,pixel9any,iphone17pro' (bare device = cpu+gpu in one session; empty = no mobile)"
         required: false
         type: string
         default: ""
@@ -255,15 +255,27 @@ jobs:
                 *-gpu) vlm_devices=gpu;       dev=${sel%-gpu} ;;
                 *)     vlm_devices="cpu,gpu"; dev=$sel ;;
               esac
-              case "$dev" in
-                s26)         platform=Android; manufacturer=Samsung; model="S26 Ultra" ;;
-                s25)         platform=Android; manufacturer=Samsung; model="S25 Ultra" ;;
-                pixel9)      platform=Android; manufacturer=Google;  model="Pixel 9" ;;
-                iphone16)    platform=iOS;     manufacturer=Apple;   model="iPhone 16" ;;
-                iphone17)    platform=iOS;     manufacturer=Apple;   model="iPhone 17" ;;
-                iphone17pro) platform=iOS;     manufacturer=Apple;   model="iPhone 17 Pro" ;;
-                *) echo "::warning::Unknown matrix_mobile device '$dev' (known: s26, s25, pixel9, iphone16, iphone17, iphone17pro)"; continue ;;
+              # Device tokens select the EXACT model (MODEL EQUALS) so a run is never
+              # silently substituted with a subfamily variant — Device Farm's CONTAINS
+              # matching handed 'pixel9' runs a Pixel 9, a 9 Pro, AND a 9 Pro XL on
+              # different days, which breaks baseline/checkpoint comparability. Append
+              # 'any' to a token (e.g. pixel9any, s26any) to opt back into the loose
+              # family match: any model containing the family string, availability-picked.
+              model_op=EQUALS
+              base="$dev"
+              case "$dev" in *any) model_op=CONTAINS; base="${dev%any}" ;; esac
+              # model = exact Device Farm MODEL string (EQUALS); family = the subfamily
+              # substring used by the '<token>any' variants (CONTAINS).
+              case "$base" in
+                s26)         platform=Android; manufacturer=Samsung; model="Galaxy S26 Ultra"; family="Galaxy S26" ;;
+                s25)         platform=Android; manufacturer=Samsung; model="Galaxy S25 Ultra"; family="Galaxy S25" ;;
+                pixel9)      platform=Android; manufacturer=Google;  model="Pixel 9";          family="Pixel 9" ;;
+                iphone16)    platform=iOS;     manufacturer=Apple;   model="iPhone 16";        family="iPhone 16" ;;
+                iphone17)    platform=iOS;     manufacturer=Apple;   model="iPhone 17";        family="iPhone 17" ;;
+                iphone17pro) platform=iOS;     manufacturer=Apple;   model="iPhone 17 Pro";    family="iPhone 17 Pro" ;;
+                *) echo "::warning::Unknown matrix_mobile device '$dev' (known: s26, s25, pixel9, iphone16, iphone17, iphone17pro — each also accepts an 'any' suffix, e.g. pixel9any)"; continue ;;
               esac
+              if [[ "$model_op" == "CONTAINS" ]]; then model="$family"; fi
               # One cell per (device × addon source). srctag is the artifact-name-safe
               # short label (no '@') for unique per-leg log artifacts.
               for source in $mobile_sources; do
@@ -274,8 +286,8 @@ jobs:
                 esac
                 cells=$(echo "$cells" | jq -c \
                   --arg t "$sel" --arg p "$platform" --arg man "$manufacturer" \
-                  --arg mod "$model" --arg d "$vlm_devices" --arg src "$source" --arg st "$srctag" \
-                  '. + [{"token":$t,"platform":$p,"manufacturer":$man,"model":$mod,"vlm_devices":$d,"source":$src,"srctag":$st}]')
+                  --arg mod "$model" --arg op "$model_op" --arg d "$vlm_devices" --arg src "$source" --arg st "$srctag" \
+                  '. + [{"token":$t,"platform":$p,"manufacturer":$man,"model":$mod,"model_op":$op,"vlm_devices":$d,"source":$src,"srctag":$st}]')
               done
             done
           fi
@@ -775,6 +787,9 @@ jobs:
       platforms: ${{ matrix.platform }}
       device_manufacturer: ${{ matrix.manufacturer }}
       device_model: ${{ matrix.model }}
+      # EQUALS for plain tokens (exact device, no subfamily substitution);
+      # CONTAINS for '<token>any' (any family member, availability-picked).
+      device_model_operator: ${{ matrix.model_op }}
       # source_id/source_ref identify the build on this session (candidate = git:<sha>,
       # baseline = npm:<ver>); two-models legs have no matrix.source → falls back to addon.
       device_env: "QVAC_VLM_DEVICES=${{ matrix.vlm_devices }};QVAC_VLM_MODE=${{ inputs.matrix_mode }};QVAC_VLM_PRESET=${{ inputs.matrix_preset }};QVAC_VLM_SOURCE_ID=${{ matrix.source || 'addon' }};QVAC_VLM_SOURCE_REF=${{ matrix.source == 'addon@candidate' && format('git:{0}', needs.context.outputs.head_sha) || (matrix.source == 'addon@baseline' && format('npm:{0}', needs.context.outputs.baseline_npm) || '') }}${{ inputs.matrix_samples != '' && format(';QVAC_VLM_SAMPLES={0}', inputs.matrix_samples) || '' }}${{ inputs.matrix_models != '' && format(';QVAC_VLM_MODELS=b64:{0}', needs.context.outputs.models_b64) || '' }}${{ needs.context.outputs.mobile_pertest_min != '' && format(';QVAC_VLM_TEST_TIMEOUT_MIN={0}', needs.context.outputs.mobile_pertest_min) || '' }}"

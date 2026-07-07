@@ -93,9 +93,17 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: bun install
 
-      - name: Run checks
+      - name: Run format
         working-directory: ${{ env.WORKDIR }}
-        run: npm run check
+        run: npm run format
+
+      - name: Run lint
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run lint
+
+      - name: Run typecheck
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run typecheck
 
       - name: Run tests
         working-directory: ${{ env.WORKDIR }}

@@ -1,6 +1,6 @@
-import test from "brittle";
-import { cancelBroadSugarSchema, cancelRequestSchema } from "@/schemas/cancel";
-import type { RequestKind } from "@/server/bare/runtime/request-context";
+import test from 'brittle'
+import { cancelBroadSugarSchema, cancelRequestSchema } from '@/schemas/cancel'
+import type { RequestKind } from '@/server/bare/runtime/request-context'
 
 // Compile-time exhaustive map of every server-side `RequestKind`. Adding a
 // new kind to the union without a matching entry here is a TS error, which
@@ -19,34 +19,30 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   finetune: true,
   loadModel: true,
   downloadAsset: true,
-  rag: true,
-};
+  rag: true
+}
 
-test("broad-cancel sugar accepts every RequestKind", (t) => {
+test('broad-cancel sugar accepts every RequestKind', (t) => {
   for (const kind of Object.keys(ALL_REQUEST_KINDS) as RequestKind[]) {
-    const result = cancelBroadSugarSchema.safeParse({ modelId: "m1", kind });
-    t.is(
-      result.success,
-      true,
-      `cancel({ modelId, kind: "${kind}" }) should parse`,
-    );
+    const result = cancelBroadSugarSchema.safeParse({ modelId: 'm1', kind })
+    t.is(result.success, true, `cancel({ modelId, kind: "${kind}" }) should parse`)
   }
-});
+})
 
-test("cancel wire schema accepts kind: batchCompletion", (t) => {
+test('cancel wire schema accepts kind: batchCompletion', (t) => {
   const result = cancelRequestSchema.safeParse({
-    type: "cancel",
-    operation: "broad",
-    modelId: "m1",
-    kind: "batchCompletion",
-  });
-  t.is(result.success, true);
-});
+    type: 'cancel',
+    operation: 'broad',
+    modelId: 'm1',
+    kind: 'batchCompletion'
+  })
+  t.is(result.success, true)
+})
 
-test("broad-cancel sugar rejects an unknown kind", (t) => {
+test('broad-cancel sugar rejects an unknown kind', (t) => {
   const result = cancelBroadSugarSchema.safeParse({
-    modelId: "m1",
-    kind: "notAKind",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'm1',
+    kind: 'notAKind'
+  })
+  t.is(result.success, false)
+})

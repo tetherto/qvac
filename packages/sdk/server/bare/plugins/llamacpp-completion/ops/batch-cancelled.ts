@@ -20,10 +20,10 @@
  * of surfacing a generic `CompletionFailedError`.
  */
 export function isAddonCancelledError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const code = (err as { code?: unknown }).code;
+  if (typeof err !== 'object' || err === null) return false
+  const code = (err as { code?: unknown }).code
   // Anchor to the codeString tail (`[ <addonId> :: Cancelled ]`) so a
   // hypothetical sibling like `CancelledByPolicy` after an addon-side
   // rename doesn't false-positive here.
-  return typeof code === "string" && /::\s*Cancelled\s*\]/.test(code);
+  return typeof code === 'string' && /::\s*Cancelled\s*\]/.test(code)
 }

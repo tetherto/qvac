@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.13.2] - 2026-07-06
+
+This release exposes a `main-gpu` config for image generation, giving callers the same GPU-pinning control the LLM path already has. On multi-GPU hosts, diffusion previously fell back to whatever device the backend picked.
+
+### Features
+
+#### Pin the GPU for image generation via `main-gpu`
+
+`SdConfig` now accepts a `main-gpu` key (`number | 'integrated' | 'dedicated'`) that selects which GPU to use when `device` is `'gpu'`. Pass a device index, `'integrated'`, or `'dedicated'` (the discrete GPU with the most VRAM); omit it to let the backend choose the first enumerated device.
+
+The value is resolved against the addon's own ggml device enumeration, so the selected device cannot desync from the list the backend actually uses. Resolution is pinned deterministically through the stable-diffusion `sd_ctx_params_t.backend` C API rather than any process-wide environment mutation.
+
+### Changed
+
+- When an explicit `main-gpu` request cannot be satisfied (e.g. `'integrated'` on a host with no integrated GPU, `'dedicated'` with no discrete GPU, or an out-of-range index), the addon now falls back to CPU instead of silently substituting a different GPU. An unset `main-gpu` is unchanged and keeps the backend default (first enumerated device).
+- `main-gpu` is ignored when `device` is `'cpu'`, and rejected with an `InvalidArgument` error on mobile (Android/iOS), which are single-GPU devices.
+
+## Pull Requests
+
+- [#2936](https://github.com/tetherto/qvac/pull/2936) - QVAC-20811 fix[api]: expose main-gpu config for image generation
+
+## [0.13.1] - 2026-07-05
+
+This release restores the diffusion-cpp npm publish path after the LTX dependency update made the native prebuild package too large. The addon now consumes slimmed `stable-diffusion-cpp` and `ggml` registry ports that remove unused tokenizer and Vulkan shader payloads while preserving the supported LTX, FLUX, SD3, and Wan model paths.
+
+### Changed
+
+- `stable-diffusion-cpp` now resolves to `2026-07-03#2`, which depends on the matching slim `ggml` port revision.
+- The diffusion-cpp vcpkg registry baseline is restored to the pre-LTX value while the package explicitly opts into the bumped `stable-diffusion-cpp` port revision.
+
+### Fixed
+
+#### Keep LTX prebuilds under the npm package size limit
+
+The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets, desktop Adreno/TBQ/PQ/TQ1/TQ2/MXFP4/NVFP4 Vulkan shader payloads, or Vulkan training/backward/loss shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
+
+#### Reduce LTX smoke-test memory pressure
+
+The LTX integration smoke test now uses a smaller text-encoder configuration so CI can exercise the slim dependency stack without exceeding Metal memory on M4 runners.
+
+## Pull Requests
+
+- [#3058](https://github.com/tetherto/qvac/pull/3058) - chore(diffusion-cpp): reduce package size
+
 ## [0.13.0] - 2026-07-03
 
 This release adds LTX-2 text-to-video support alongside the existing Wan video path. LTX-2 jobs can now generate synchronized video and audio through the diffusion addon, with model-aware validation and documentation for the additional runtime files required by the LTX engine.
