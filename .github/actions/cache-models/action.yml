@@ -93,9 +93,10 @@ runs:
     #
     # Cache writes from fork-PR code are the poisoning risk the devops rule
     # guards against (.cursor/rules/devops/github-actions.mdc). This is not a
-    # hard boundary (the action runs from PR-head code); consumer-side sha256
-    # integrity in each addon's download util is the actual protection, which
-    # is why keeping restore-keys is safe.
+    # hard boundary (the action runs from PR-head code); consumer-side manifest
+    # validation in each addon's download util catches missing, truncated, or
+    # wrong-size files. SHA-256 pins can be added later for stronger poisoning
+    # protection.
     - name: Cache test models (restore + save, trusted contexts)
       id: cache
       if: >-
@@ -103,7 +104,7 @@ runs:
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
         github.event.pull_request.head.repo.full_name == github.repository
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
@@ -119,7 +120,7 @@ runs:
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
         github.event.pull_request.head.repo.full_name != github.repository
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
