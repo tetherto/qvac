@@ -30,13 +30,8 @@ const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
 const { recordPerformance } = require('./_perf-helper')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
-const isDarwin = os.platform() === 'darwin'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-// Skip Wan tests on mobile, on any CPU-only runner (NO_GPU), and on macOS.
-// The Wan 14B I2V model OOMs the Mac mini M4 Metal GPU during diffusion compute
-// (kIOGPUCommandBufferCallbackErrorOutOfMemory), even at 256x256, so darwin is
-// excluded entirely. Wan tests continue to run on Linux/Windows GPU runners.
-const skip = isMobile || isDarwin || noGpu
+const skip = isMobile || noGpu
 
 // Log skip status for CI visibility
 console.log('[Wan Video Tests] Platform:', os.platform(), 'Arch:', os.arch(), 'NO_GPU:', noGpu, '→ Skip:', skip)
