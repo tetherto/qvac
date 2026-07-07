@@ -26791,24 +26791,6 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
   params: models[668].params
 } as const
 
-export const TTS_DENOISER_LAVASR_FP32_1 = {
-  name: 'TTS_DENOISER_LAVASR_FP32_1',
-  src: `registry://${models[669].registrySource}/${models[669].registryPath}`,
-  registryPath: models[669].registryPath,
-  registrySource: models[669].registrySource,
-  blobCoreKey: models[669].blobCoreKey,
-  blobBlockOffset: models[669].blobBlockOffset,
-  blobBlockLength: models[669].blobBlockLength,
-  blobByteOffset: models[669].blobByteOffset,
-  modelId: models[669].modelId,
-  expectedSize: models[669].expectedSize,
-  sha256Checksum: models[669].sha256Checksum,
-  addon: models[669].addon,
-  engine: models[669].engine,
-  quantization: models[669].quantization,
-  params: models[669].params
-} as const
-
 export const TTS_ENHANCER_BACKBONE_LAVASR_FP32 = {
   name: 'TTS_ENHANCER_BACKBONE_LAVASR_FP32',
   src: `registry://${models[670].registrySource}/${models[670].registryPath}`,
