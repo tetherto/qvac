@@ -54,11 +54,11 @@ class SingleJobScheduler final : public IJobScheduler {
   mutable ProcessingSync processingSync_;
 
   void finalizeJob(std::unique_lock<std::timed_mutex>& lock) {
-    processingSync_.setActive(false);
     if (!lock.owns_lock()) {
       lock.lock();
     }
     job_.reset();
+    processingSync_.setActive(false);
   }
 
   void process() {
