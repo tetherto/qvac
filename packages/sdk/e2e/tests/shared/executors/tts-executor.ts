@@ -4,7 +4,7 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   makeEnhancedTtsHandler,
   makeOutputSampleRateComparisonHandler
-} from './tts-lavasr-helpers.js'
+} from '../utils/tts-lavasr-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }

@@ -9,7 +9,7 @@ import { ModelAssetExecutor } from './model-asset-executor.js'
 import {
   makeEnhancedTtsHandler,
   makeOutputSampleRateComparisonHandler
-} from '../../shared/executors/tts-lavasr-helpers.js'
+} from '../../shared/utils/tts-lavasr-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
