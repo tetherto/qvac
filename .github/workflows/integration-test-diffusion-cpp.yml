@@ -90,7 +90,7 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
             ltx: 'true'
           - os: macos-15-large
             platform: darwin
