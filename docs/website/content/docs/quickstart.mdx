@@ -57,7 +57,7 @@ Run the quickstart script with Node.js, pointing `QVAC_CONFIG_PATH` at the confi
 QVAC_CONFIG_PATH=./qvac.config.json node quickstart.js
 ```
 
-Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a little setup — a `process` global and plugin registration — so see [Running on Bare](#running-on-bare) below.
+Or on the [Bare](https://bare.pears.com) runtime with `@qvac/core` — see [Running on Bare](#running-on-bare) below.
 </Step>
 
 </Steps>
@@ -76,18 +76,21 @@ Follow these instructions to run any example in this documentation:
 
 ## Running on Bare
 
-To run an example on Bare:
+The examples in this documentation target Node.js with `@qvac/sdk`. On Bare, use **[@qvac/core](https://github.com/tetherto/qvac/tree/main/packages/core)** — the Bare-only build of the SDK. To run any example on Bare, apply three edits:
 
-1. Provide a `process` global. Install `bare-process` and set it before using the SDK:
+1. Change the imports from `@qvac/sdk` to `@qvac/core`.
+2. Bare has no `process` global. If the example uses `process` (e.g. `process.stdout`), install `bare-process` and import it:
    ```js
    import process from "bare-process";
-   globalThis.process = process;
    ```
-2. Register the plugins the example uses — Bare runs in-process and nothing auto-registers. See [Runtime registration on Bare](/configuration/plugins#runtime-registration-on-bare).
+3. Register the plugins the example uses — `@qvac/core` ships none by default — before the first call:
+   ```js
+   import { registerPlugin } from "@qvac/core";
+   import { llmPlugin } from "@qvac/core/llamacpp-completion/plugin";
+   registerPlugin(llmPlugin);
+   ```
 
-Here is the quickstart adapted for Bare:
+Here is the quickstart adapted for Bare using `@qvac/core`:
 
-```ts file=<rootDir>/packages/sdk/examples/quickstart.bare.ts title="quickstart.bare.ts" lineNumbers
+```ts file=<rootDir>/packages/core/examples/quickstart-adapted.ts title="quickstart-adapted.ts" lineNumbers
 ```
-
-For running QVAC on Bare in production, we recommend **[@qvac/bare-sdk](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk)** — a slim, Bare-only assembly where you select addons and register plugins explicitly. It also sets up the bare module shims that examples using `fs` and similar modules rely on.
