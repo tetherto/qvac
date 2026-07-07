@@ -360,12 +360,6 @@ The default export from `@qvac/diffusion-cpp/video` and the named
 | `files.audioVae` | LTX | Audio VAE decoder for synchronized audio |
 | `files.embeddingsConnectors` | LTX | Text-embedding connector weights; also marks the context as LTX |
 
-Wan 2.2 support is currently exposed as file/parameter plumbing in the JS and
-native layers: pass the low-noise expert as `files.model`, the high-noise expert
-as `files.highNoiseDiffusionModel`, and tune the `high_noise_*` parameters plus
-`moe_boundary`. The package does not currently include a Wan 2.2 download script
-or runnable Wan 2.2 example.
-
 ### Video Parameters
 
 | Key | Description |
@@ -511,16 +505,16 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 
 ### Test Images
 
-`assets/von-neumann.jpg` - John von Neumann (1956).
+`assets/von-neumann.jpg` — **John von Neumann** (1956).
 Source: U.S. Department of Energy, File ID: HD.3F.191.
-This image is in the Public Domain as a work of the U.S. Federal Government.
+This image is in the **Public Domain** as a work of the U.S. Federal Government.
 
-`assets/claude-shannon.jpg` - Claude Shannon.
+`assets/claude-shannon.jpg` — **Claude Shannon**.
 Source: Bell Labs / [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Claude_Shannon).
-Licensed under Creative Commons Attribution-ShareAlike (CC BY-SA). Attribution
-must be preserved; any redistribution of this image or a derivative must be
-released under a compatible CC BY-SA license.
+Licensed under **Creative Commons Attribution-ShareAlike (CC BY-SA)**.
+Attribution must be preserved; any redistribution of this image or a derivative
+must be released under a compatible CC BY-SA license.
 
 ## License
 
-Apache-2.0 - see [LICENSE](./LICENSE) for details.
+Apache-2.0 — see [LICENSE](./LICENSE) for details.
