@@ -18,9 +18,9 @@
 //
 // Integrity: when a manifest entry has sha256/bytes pinned, a present file is
 // verified (size first, then sha256) and re-downloaded on mismatch; a freshly
-// downloaded file is verified and the step FAILS if it does not match. While a
-// value is null, verification is skipped with a loud warning (matches the
-// runtime ensureModel behaviour).
+// downloaded file is verified and the step FAILS if it does not match. Entries
+// with neither sha256 nor bytes skip verification with a loud warning (matches
+// the runtime ensureModel behaviour).
 //
 // Usage:
 //   node warm-models.mjs --package diffusion-cpp [--root <repoRoot>]

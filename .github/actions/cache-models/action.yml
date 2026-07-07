@@ -131,7 +131,7 @@ runs:
     # no per-test (brittle) timeout. This is the fix for cold-cache runs where
     # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
     # inside a single test's timeout and fail. On a full cache hit every file is
-    # already present (and verified when sha256 is pinned), so this is a fast
+    # already present (and verified when integrity is pinned), so this is a fast
     # no-op. The trusted-context actions/cache@v4 post-step then saves the now
     # complete dir so subsequent runs restore instead of re-downloading.
     - name: Warm models (download any missing from manifest)

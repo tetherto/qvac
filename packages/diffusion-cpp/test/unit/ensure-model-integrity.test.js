@@ -177,7 +177,7 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
-test('entry without pinned sha256 skips verification (keeps a non-zero cached file)', async function (t) {
+test('entry without pinned integrity skips verification (keeps a non-zero cached file)', async function (t) {
   const name = 'unpinned.bin'
   const manifest = { models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } } }
   const dir = mkTmpDir()
@@ -204,5 +204,16 @@ test('verifyModelFile flags size before hashing (fail-fast)', async function (t)
     t.ok(/size/.test(res.reason), 'reason mentions size mismatch')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('integration manifest pins integrity for every model', function (t) {
+  const manifestPath = path.resolve(__dirname, '../integration/models.manifest.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+
+  for (const [name, entry] of Object.entries(manifest.models)) {
+    const hasBytes = Number.isInteger(entry.bytes) && entry.bytes > 0
+    const hasSha = typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)
+    t.ok(hasBytes || hasSha, `${name} pins bytes or sha256`)
   }
 })

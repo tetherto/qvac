@@ -125,6 +125,7 @@ jobs:
         uses: ./.github/actions/cache-models
         with:
           package: diffusion-cpp
+          warm: 'false'
           paths: |
             packages/diffusion-cpp/test/model
             packages/diffusion-cpp/models
