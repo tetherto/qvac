@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.32.1] - 2026-07-07
+
+### Fixed
+
+- `test/mobile/integration.auto.cjs` was stale since `qwen3-5-image-tile-mode-tokens.test.js` was added (#2887, 2026-06-29) — the generated dispatch file was never regenerated, so `runQwen35ImageTileModeTokensTest` silently never ran on Android or iOS despite being listed in `test-groups.json`. Regenerated via `npm run test:mobile:generate`; desktop CI was unaffected (it regenerates its own runner list fresh every run).
+
 ## [0.32.0] - 2026-07-06
 
 ### Changed
