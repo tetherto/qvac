@@ -44,6 +44,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
@@ -89,6 +90,18 @@ resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('llm-batch', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llm',
+  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+})
+
+resources.define('tools-batch', {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: 'llm',
+  config: { ctx_size: 4096, tools: true, parallel: 2 }
 })
 
 resources.define('finetune-llm', {
@@ -372,6 +385,16 @@ resources.define('vision', {
   }
 })
 
+resources.define('vision-batch', {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+  }
+})
+
 resources.define('diffusion', {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: 'sdcpp-generation',
@@ -478,6 +501,12 @@ function ensureDesktopE2EConfig() {
   }
 }
 
+function resolveBatchAttachmentPath(inputPath: string) {
+  const fileName = inputPath.split('/').pop()
+  if (!fileName) return inputPath
+  return path.resolve(process.cwd(), 'assets/images', fileName)
+}
+
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureDesktopE2EConfig()
 
@@ -490,6 +519,9 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     new ModelLoadingExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath
+    }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
