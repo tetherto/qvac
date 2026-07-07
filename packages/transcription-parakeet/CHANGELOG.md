@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Bumped the `parakeet-cpp` `version>=` floors (`osx | ios` → `metal`, `android`
+  → `vulkan, opencl`, `!(osx | ios | android)` → `vulkan`) from `2026-06-18#3`
+  to `2026-07-06`, consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#234](https://github.com/tetherto/qvac-registry-vcpkg/pull/234)
+  (QVAC-18192). The Parakeet encoder, subsampling, and Sortformer paths now
+  route compute through a shared `ggml_backend_sched` with the CPU backend
+  last, giving automatic per-op CPU fallback for ops the active GPU backend
+  can't run (previously any GPU-unsupported op would abort). The cached
+  encoder graph stays on a persistent gallocr; the TDT decoder stays on direct
+  compute. Manifest-only: `default-registry.baseline` is unchanged, and the
+  `ggml-speech` floor stays `2026-07-03` (PR #74 carries no ggml change).
+  Behaviour is unchanged on today's supported backends.
+
 ## [0.8.3] - 2026-07-01
 
 ### Changed

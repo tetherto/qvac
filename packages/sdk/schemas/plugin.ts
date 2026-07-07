@@ -74,11 +74,10 @@ export interface DuplexPluginHandlerDefinition<
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
  * - `vadModelPath` - Whisper voice activity detection model
- * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
- * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
- * - `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
- * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
- * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
+ * - `s3genPath` - TTS (Chatterbox GGML) S3Gen + HiFT GGUF
+ * - `referenceAudioPath` - TTS (Chatterbox GGML) path to reference WAV file for voice cloning
+ * - `lavasrEnhancerPath` - TTS (GGML) optional LavaSR enhancer GGUF (48 kHz bandwidth extension; both engines)
+ * - `lavasrDenoiserPath` - TTS (GGML) optional LavaSR denoiser GGUF (runs before the enhancer; both engines)
  * - `detectorModelPath` - OCR detector model
  * - `embedderPath` - BCI whisper.cpp embedder weights
  *

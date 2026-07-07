@@ -97,6 +97,12 @@ const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
 
+// Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
+// accepted range; omit to keep the engine's native rate (or 48 kHz when the
+// LavaSR enhancer is active). Supertonic-only: the Chatterbox engine does not
+// yet resample its output, so the field is not exposed on that config.
+const ttsOutputSampleRateSchema = ttsIntegerSchema.min(8000).max(192000)
+
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal('chatterbox'),
   language: ttsChatterboxLanguageSchema,
@@ -117,7 +123,8 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   voice: z.string().optional(),
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
-  useGPU: z.boolean().optional()
+  useGPU: z.boolean().optional(),
+  outputSampleRate: ttsOutputSampleRateSchema.optional()
 })
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
@@ -125,14 +132,26 @@ export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsSupertonicRuntimeConfigSchema
 ])
 
+// Optional LavaSR post-processing model sources, shared across engines. Supply
+// the enhancer GGUF to bandwidth-extend the output to 48 kHz, and/or the
+// denoiser GGUF (runs before the enhancer, rate-preserving). Resolved to
+// artifacts by the plugin's resolveConfig and forwarded to @qvac/tts-ggml.
+const ttsLavasrLoadFieldsShape = {
+  lavasrEnhancerModelSrc: modelSrcInputSchema.optional(),
+  lavasrDenoiserModelSrc: modelSrcInputSchema.optional()
+}
+
 export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
   // Optional at schema time so legacy ONNX configs (no s3genModelSrc) reach
   // the plugin's resolveConfig and raise LegacyTtsModelDeprecatedError.
   s3genModelSrc: modelSrcInputSchema.optional(),
-  referenceAudioSrc: modelSrcInputSchema.optional()
+  referenceAudioSrc: modelSrcInputSchema.optional(),
+  ...ttsLavasrLoadFieldsShape
 })
 
-export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema
+export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
+  ...ttsLavasrLoadFieldsShape
+})
 
 export const ttsLoadConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxLoadConfigSchema,
