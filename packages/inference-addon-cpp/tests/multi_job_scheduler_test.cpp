@@ -705,6 +705,27 @@ TEST_F(MultiJobSchedulerTest, DestructorFailsQueuedJobs) {
       << "a queued job dropped at teardown must surface a terminal error";
 }
 
+// Teardown must not wait for the model: the destructor signals model cancel
+// before joining, so a worker stuck in a long process() returns promptly.
+TEST_F(MultiJobSchedulerTest, DestructorCancelsInFlightJobs) {
+  build(1, std::chrono::milliseconds{5000});
+  ASSERT_TRUE(scheduler_->runJob(std::string("slow"), JobId{1}));
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (model_->active() == 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  ASSERT_EQ(model_->active(), 1) << "Job never reached the model";
+
+  const auto start = std::chrono::steady_clock::now();
+  scheduler_.reset();
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  EXPECT_LT(elapsed, std::chrono::milliseconds{1500})
+      << "Destructor blocked on the in-flight job";
+}
+
 namespace {
 
 /// The RuntimeStats snapshot queued as @p id's jobEnded event, or nullopt when

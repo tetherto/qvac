@@ -546,4 +546,30 @@ TEST(PolymorphicSchedulerTest, PolymorphicScheduler_CancelIgnoresTaggedId) {
   EXPECT_FALSE(sched->runJob(std::string("second"), kNoJobId));
 }
 
+// Teardown must not wait for the model: the destructor signals model cancel
+// before joining, so a worker stuck in a long process() returns promptly.
+TEST_F(JobRunnerTest, DestructorCancelsInFlightJob) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{5000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("slow"), kNoJobId));
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (!model_->isProcessing() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  ASSERT_TRUE(model_->isProcessing()) << "Job never reached the model";
+
+  const auto start = std::chrono::steady_clock::now();
+  jobRunner_.reset();
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  EXPECT_LT(elapsed, std::chrono::milliseconds{1500})
+      << "Destructor blocked on the in-flight job";
+}
+
 } // namespace qvac_lib_inference_addon_cpp
