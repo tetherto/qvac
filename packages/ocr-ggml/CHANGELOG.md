@@ -4,11 +4,17 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.1] - 2026-07-07
+## [0.9.1] - 2026-07-07
 
 ### Fixed
 
 - Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.9.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking for i8mm/AVX2 GEMM; no API change for this package).
 
 ## [0.8.0] - 2026-07-06
 

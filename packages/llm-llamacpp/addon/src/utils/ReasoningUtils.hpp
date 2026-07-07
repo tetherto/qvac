@@ -43,6 +43,13 @@ struct ReasoningState {
   // token (enables EOS-inside-reasoning replacement).
   llama_token cached_close_tag_token = LLAMA_TOKEN_NULL;
   llama_token cached_newline_token = LLAMA_TOKEN_NULL;
+  // True iff `tags.close` tokenises to a single token under the
+  // active vocab. Gates the recurrent reasoning-boundary snapshot in
+  // `ReasoningSnapshotPolicy`: the replay path seeds
+  // `postReasoningTokens_` with the single sampled token that triggers
+  // the close transition, so a multi-piece close would leave the SSM
+  // state with an unbalanced `<think>` opener on restore.
+  bool close_is_single_token = false;
   bool inside_reasoning = false;
   std::string recent_output_buffer;
 

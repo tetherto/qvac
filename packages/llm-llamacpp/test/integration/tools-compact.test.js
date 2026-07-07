@@ -404,7 +404,29 @@ safeTest('[tools-compact] multi-turn session with same tools works correctly', {
   const rTool2 = await runAndCollect(model, toolResponse2, opts)
   t.ok(rTool2.output.length > 0, 'turn rTool2 produces output')
   t.ok(rTool2.stats.CacheTokens > 0, 'turn rTool2 has cache tokens')
-  t.ok(rTool2.stats.CacheTokens < TOOL_A_TOKENS, 'turn rTool2 has all tools removed')
+  // Two model-output shapes are both correct here, and the compactor must
+  // preserve cache accordingly (see ToolsCompactController::onGenerationComplete):
+  //   1. Chain terminated  → assistant answers in natural language, no
+  //      `<tool_call>` marker → compactor trims the tool region →
+  //      CacheTokens should drop below TOOL_A_TOKENS.
+  //   2. Chain continued   → assistant emits another `<tool_call>` (model
+  //      decides another tool call is needed) → compactor MUST NOT trim
+  //      (the next hop needs the tool schemas in cache) → CacheTokens
+  //      cannot shrink below the previous turn.
+  // Which branch fires is model/sampler dependent; each branch is asserted
+  // independently so a future compactor bug in either direction is caught.
+  const rTool2ChainContinued = rTool2.output.includes('<tool_call>')
+  if (rTool2ChainContinued) {
+    t.ok(
+      rTool2.stats.CacheTokens >= r2.stats.CacheTokens,
+      `chain continued at turn rTool2; tools must remain in cache — CacheTokens must not shrink (rTool2=${rTool2.stats.CacheTokens} vs r2=${r2.stats.CacheTokens})`
+    )
+  } else {
+    t.ok(
+      rTool2.stats.CacheTokens < TOOL_A_TOKENS,
+      `turn rTool2 has all tools removed (CacheTokens=${rTool2.stats.CacheTokens} < ${TOOL_A_TOKENS})`
+    )
+  }
   t.ok(
     r2.stats.CacheTokens < 2 * r1.stats.CacheTokens,
     `CacheTokens after turn 2 (${r2.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens})`
