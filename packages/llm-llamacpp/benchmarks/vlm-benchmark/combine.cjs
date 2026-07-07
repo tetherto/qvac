@@ -77,9 +77,39 @@ function main () {
     if (h) inputs.push({ label: h, file: f })
   }
 
-  // ── provenance: desktop prov-*.md as-is + synthesized mobile blocks ─────
+  // ── provenance: desktop prov-*.md + synthesized mobile blocks ─────
+  // Launch-level source facts (addon/git/engine lines) are identical for every
+  // platform in one run, so they are hoisted OUT of the per-platform blocks
+  // into `launch` and rendered once under the report's Sources section.
   const prov = []
-  for (const f of files) if (/^prov-.*\.md$/.test(path.basename(f))) prov.push(fs.readFileSync(f, 'utf8'))
+  const launch = new Set()
+  // 'git' kept for prov files from older benchmark-code checkouts (renamed to
+  // 'benchmark code' to disambiguate from the Sources table's git:<sha>, which is
+  // an addon@candidate BUILD source — this line is the benchmark-code checkout).
+  const LAUNCH_LINE = /^- (addon|git|benchmark code|engine): /
+  for (const f of files) {
+    if (!/^prov-.*\.md$/.test(path.basename(f))) continue
+    const kept = []
+    for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+      if (LAUNCH_LINE.test(line)) launch.add(line.replace(/^- /, ''))
+      else kept.push(line)
+    }
+    prov.push(kept.join('\n'))
+  }
+  // GPU model from the device driver's own logcat lines: concrete model when the
+  // driver printed one (Qualcomm "Adreno (TM) 840", ARM "Mali-G715"), family from
+  // the Vulkan HAL library name as fallback. Matching is deliberately narrow —
+  // a bare /mali/i would hit unrelated words (e.g. "maliciousFiles" in app logs).
+  const gpuOf = (txt) => {
+    const adreno = txt.match(/Adreno\s*\(TM\)\s*(\d{3})/i)
+    if (adreno) return `Adreno ${adreno[1]} (Vulkan)`
+    const mali = txt.match(/Mali-G(\d+)/i)
+    if (mali) return `Mali-G${mali[1]} (Vulkan)`
+    if (/AdrenoVK|vulkan\.adreno/i.test(txt)) return 'Adreno (Vulkan)'
+    if (/vulkan\.mali/i.test(txt)) return 'Mali (Vulkan)'
+    return '?'
+  }
+  const MOBILE_ENGINE = 'engine: `@qvac/llm-llamacpp` addon (published prebuild)'
   const seen = new Set()
   for (const f of files) {
     if (!lc(f).includes('logcat_full')) continue
@@ -88,14 +118,33 @@ function main () {
     seen.add(h)
     const txt = fs.readFileSync(f, 'utf8')
     const pick = (re) => { const m = txt.match(re); return m ? m[1] : null }
-    const devName = (path.basename(f).match(/(Samsung|Google)_[A-Za-z0-9_]*/) || [''])[0]
-      .replace(/_logcat_full.*/, '').replace(/_/g, ' ')
+    // The capability lines (model=…, platformVersionRelease=…) are not reliably
+    // present in logcat — some sessions never echo them there. The per-device
+    // appium log always carries the session's device JSON
+    // ("model":"SM-S942U1" … "platformVersion":"16"); fall back to it for any
+    // field the logcat pick missed.
+    const appiumFile = files.find(x => hostOf(x) === h && /appium/i.test(path.basename(x)))
+    const appium = appiumFile ? fs.readFileSync(appiumFile, 'utf8') : ''
+    const pickA = (re) => { const m = appium.match(re); return m ? m[1] : null }
+    // Appium first: its JSON field is the full ro.product.model ("Pixel 9",
+    // "SM-S942U1"); logcat's space-delimited `model=` capability truncates
+    // multi-word models ("Pixel 9" -> "Pixel") and is missing entirely in
+    // some sessions.
+    const devModel = pickA(/"model":"([A-Za-z0-9 ._-]+)"/) || pick(/model=([A-Za-z0-9-]+)/)
+    const androidVer = pickA(/"platformVersion":"([0-9.]+)"/) || pick(/platformVersionRelease=(\d+)/)
+    // Device name = the LAST manufacturer-prefixed segment of the filename
+    // (<df-run-name>_<device-name>_logcat_full…). The DF run name embeds the
+    // exact model too (EQUALS tokens), so a greedy first-match would render the
+    // name twice ("Google Pixel 9 Google Pixel 9").
+    const stem = path.basename(f).replace(/_logcat_full.*/, '')
+    const di = Math.max(stem.lastIndexOf('Samsung_'), stem.lastIndexOf('Google_'))
+    const devName = di >= 0 ? stem.slice(di).replace(/_/g, ' ') : ''
     const ramB = parseInt(pick(/totalMemory: (\d+)/) || '0', 10)
+    launch.add(MOBILE_ENGINE)
     prov.push([
       `**${h}** — ${devName || 'Android device'} (AWS Device Farm)`,
-      `- device: ${pick(/model=([A-Za-z0-9-]+)/) || '?'} · Android ${pick(/platformVersionRelease=(\d+)/) || '?'} · ${pick(/supportedAbis=([a-z0-9-]+)/) || 'arm64-v8a'}`,
-      `- ram: ${ramB ? (ramB / 1073741824).toFixed(1) + ' GB' : '?'} · gpu: ${/AdrenoVK|vulkan\.adreno/i.test(txt) ? 'Adreno (Vulkan)' : '?'}`,
-      '- engine: `@qvac/llm-llamacpp` addon (published prebuild)'
+      `- device: ${devModel || '?'} · Android ${androidVer || '?'} · ${pick(/supportedAbis=([a-z0-9-]+)/) || 'arm64-v8a'}`,
+      `- ram: ${ramB ? (ramB / 1073741824).toFixed(1) + ' GB' : '?'} · gpu: ${gpuOf(txt)}`
     ].join('\n'))
   }
   for (const f of files) {
@@ -103,11 +152,14 @@ function main () {
     const h = hostOf(f)
     if (!h || seen.has(h)) continue
     seen.add(h)
-    const dev = (path.basename(f).match(/Apple_[A-Za-z0-9_]*/) || [''])[0]
-      .replace(/_bare_console.*/, '').replace(/_/g, ' ')
+    // Same last-occurrence rule as the Android block: the DF run name embeds
+    // the exact model, so the filename carries "Apple_iPhone…" twice.
+    const iosStem = path.basename(f).replace(/_bare_console.*/, '')
+    const ai = iosStem.lastIndexOf('Apple_')
+    const dev = ai >= 0 ? iosStem.slice(ai).replace(/_/g, ' ') : ''
+    launch.add(MOBILE_ENGINE)
     prov.push([
-      `**${h}** — ${dev || 'Apple iPhone'} (AWS Device Farm)`,
-      '- engine: `@qvac/llm-llamacpp` addon (published prebuild)'
+      `**${h}** — ${dev || 'Apple iPhone'} (AWS Device Farm)`
     ].join('\n'))
   }
 
@@ -138,7 +190,7 @@ function main () {
     let versions = null
     try { if (args.versionsB64) versions = JSON.parse(Buffer.from(args.versionsB64, 'base64').toString('utf8')) } catch (_) {}
     md = build(rows, vision, meta, prov.join('\n\n'), args.title,
-      { mode: args.mode, engine: args.engine, preset: args.preset, base, candidate, versions })
+      { mode: args.mode, engine: args.engine, preset: args.preset, base, candidate, versions, launch: [...launch] })
   }
   process.stdout.write(md + '\n')
   if (args.out) {

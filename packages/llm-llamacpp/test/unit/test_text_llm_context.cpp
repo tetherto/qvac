@@ -209,10 +209,67 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
   TextLlmContext driver(params, shared, tools, /*seqId=*/0);
 
   EXPECT_THROW(
-      { driver.loadCache(cachePathString, 64); }, qvac_errors::StatusError);
+      { (void)driver.loadCache(cachePathString, 64); },
+      qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed sequence cache validation left loaded KV rows resident";
+
+  removeCacheFile(cachePath);
+}
+
+TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt seedPrompt;
+  seedPrompt.prefill = true;
+  seedPrompt.input = R"([{"role": "user", "content": "Seed cache rows."}])";
+  ASSERT_NO_THROW({ model->processPrompt(seedPrompt); });
+
+  const llama_pos nPast = seqPosMax(*model) + 1;
+  ASSERT_GT(nPast, 0);
+
+  const fs::path cachePath = uniqueTextCachePath("bad-cachetokens-seq-cache");
+  const std::string cachePathString = cachePath.string();
+  const llama_token metadata[SESSION_METADATA_FIELD_COUNT] = {
+      static_cast<llama_token>(nPast),
+      static_cast<llama_token>(1),
+      static_cast<llama_token>(nPast + 1),
+      static_cast<llama_token>(1)};
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          model->getContext(),
+          cachePathString.c_str(),
+          0,
+          metadata,
+          SESSION_METADATA_FIELD_COUNT),
+      0u);
+
+  model->reset();
+  ASSERT_EQ(seqPosMax(*model), -1);
+
+  LlmModelContext shared{
+      .model = model->getModel(),
+      .lctx = model->getContext(),
+      .vocab = llama_model_get_vocab(model->getModel()),
+  };
+  ToolsCompactController tools(std::nullopt);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+
+  EXPECT_THROW(
+      { (void)driver.loadCache(cachePathString, 64); },
+      qvac_errors::StatusError);
+  EXPECT_EQ(driver.getNPast(), 0);
+  EXPECT_EQ(seqPosMax(*model), -1)
+      << "failed cache-token validation left loaded KV rows resident";
 
   removeCacheFile(cachePath);
 }

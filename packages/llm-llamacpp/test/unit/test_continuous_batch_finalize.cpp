@@ -52,9 +52,12 @@ public:
       const std::function<void(const std::string&)>&) override {
     calls.emplace_back("onGenerationFinished");
   }
-  void onCancel(const std::function<void(const std::string&)>&) override {
+  [[nodiscard]] bool
+  onCancel(const std::function<void(const std::string&)>&) override {
     calls.emplace_back("onCancel");
+    return rollbackOk;
   }
+  bool rollbackOk = true;
   [[nodiscard]] bool loadCache(const std::string&, llama_pos) override {
     return false;
   }
@@ -76,7 +79,7 @@ const std::function<void(const std::string&)> kNoCallback;
 /// skips the trim, leaving tool-compaction KV state inconsistent.
 TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::DecodeError, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onCancel") || driver.fired("onGenerationFinished"))
@@ -89,7 +92,7 @@ TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
 /// shared mapping).
 TEST(ContinuousBatchFinalize, CancelledRunsCancelHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onCancel"));
@@ -98,7 +101,7 @@ TEST(ContinuousBatchFinalize, CancelledRunsCancelHook) {
 /// Natural end-of-generation routes through onGenerationFinished.
 TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
@@ -108,10 +111,35 @@ TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
 /// and must not run the generation-complete trim.
 TEST(ContinuousBatchFinalize, PrefillOnlyOnlyFlushes) {
   RecordingDriver driver;
-  finalizeTerminalDriver(
+  (void)finalizeTerminalDriver(
       driver, StopReason::Finished, /*prefillOnly=*/true, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onSequenceEnd"));
   EXPECT_FALSE(driver.fired("onGenerationFinished"));
   EXPECT_FALSE(driver.fired("onCancel"));
+}
+
+/// `finalizeTerminalDriver` must forward the driver's rollback-ok signal
+/// from `onCancel` on Cancelled / DecodeError paths so the scheduler can
+/// skip `saveCache` when a recurrent full-state restore was refused.
+/// Non-cancel paths always report OK because no rollback runs.
+TEST(ContinuousBatchFinalize, CancelForwardsRollbackFailure) {
+  RecordingDriver driver;
+  driver.rollbackOk = false;
+  EXPECT_FALSE(finalizeTerminalDriver(
+      driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback));
+}
+
+TEST(ContinuousBatchFinalize, CancelForwardsRollbackSuccess) {
+  RecordingDriver driver;
+  driver.rollbackOk = true;
+  EXPECT_TRUE(finalizeTerminalDriver(
+      driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback));
+}
+
+TEST(ContinuousBatchFinalize, NaturalFinishAlwaysReportsRollbackOk) {
+  RecordingDriver driver;
+  driver.rollbackOk = false; // Should be ignored on non-cancel paths.
+  EXPECT_TRUE(finalizeTerminalDriver(
+      driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback));
 }

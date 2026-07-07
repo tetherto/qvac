@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking for i8mm/AVX2 GEMM; no API change for this package).
+
 ## [0.9.0] - 2026-07-06
 
 ### Changed
