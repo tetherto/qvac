@@ -46,7 +46,10 @@ public:
   void onSequenceEnd(const std::function<void(const std::string&)>&) override {}
   void onGenerationFinished(
       const std::function<void(const std::string&)>&) override {}
-  void onCancel(const std::function<void(const std::string&)>&) override {}
+  [[nodiscard]] bool
+  onCancel(const std::function<void(const std::string&)>&) override {
+    return true;
+  }
   [[nodiscard]] bool loadCache(const std::string&, llama_pos) override {
     return false;
   }

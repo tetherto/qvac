@@ -60,7 +60,7 @@ on:
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -98,7 +98,7 @@ on:
         default: 90
       desktop-platforms:
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
       test-version:
         type: string
       cache-models:
@@ -138,7 +138,7 @@ jobs:
       consumer: desktop
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -157,7 +157,7 @@ jobs:
       consumer: electron
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
