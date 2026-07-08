@@ -5,7 +5,7 @@
 import type { ProfilerExport, AggregatedStats } from './types'
 import { getEffectiveConfig, getAggregates, getRecentEvents } from './controller'
 import { getDroppedCount, getEventCount } from './aggregator'
-import { nowMs, getClockSource, isMonotonic } from './clock'
+import { nowMs } from './clock'
 
 export function exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport {
   const config = getEffectiveConfig()
@@ -215,7 +215,6 @@ export function exportSummary(): string {
     'Session:',
     `  Status:        ${config.enabled ? 'enabled' : 'disabled'}`,
     `  Mode:          ${config.mode}`,
-    `  Clock:         ${getClockSource()} (monotonic: ${isMonotonic()})`,
     `  Events:        ${eventCount.toLocaleString()}`,
     `  Dropped:       ${droppedCount.toLocaleString()}`,
     ''
