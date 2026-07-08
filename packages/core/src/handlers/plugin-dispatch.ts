@@ -1,7 +1,7 @@
 import { getModelEntry } from '../runtime/model-registry'
 import { getAllPlugins, getPlugin } from '../plugins'
 import type { PluginHandlerDefinition } from '../schemas/plugin'
-import { profileReplyHandler, profileStreamHandler } from '../engine/profiling'
+import { profileReplyHandler, profileStreamHandler } from '../profiling'
 import {
   ModelNotFoundError,
   ModelIsDelegatedError,

@@ -1,6 +1,6 @@
 import type { LoadModelSrcRequest, LoadModelResponse, ModelProgressUpdate } from '../schemas'
 import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from '../schemas'
-import type { DelegatedHandlerOptions } from '../engine/profiling'
+import type { DelegatedHandlerOptions } from '../profiling'
 import type { ResponseWithDelegation } from './delegate-transport'
 import { registerModel, isModelLoaded, unregisterModel } from '../runtime/model-registry'
 import { send, stream, type DelegateOptions } from './delegate-transport'

@@ -18,7 +18,7 @@ import {
 import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '../runtime'
 import { generateRandomRequestId } from '../runtime/request-id'
 import { getEngineLogger } from '../logging'
-import { profileReplyHandler, registerOperationMetrics } from '../engine/profiling'
+import { profileReplyHandler, registerOperationMetrics } from '../profiling'
 
 type ProgressOperation = 'ingest' | 'saveEmbeddings' | 'reindex'
 

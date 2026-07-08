@@ -1,5 +1,5 @@
 import type { CompletionStreamRequest, CompletionStreamResponse } from '../schemas'
-import type { DelegatedHandlerOptions } from '../engine/profiling'
+import type { DelegatedHandlerOptions } from '../profiling'
 import { getModelEntry } from '../runtime/model-registry'
 import { getRPC } from './delegate-client'
 import { stream, type DelegateOptions } from './delegate-transport'

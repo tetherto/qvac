@@ -6,7 +6,7 @@ import type {
 } from '../schemas/plugin'
 import { getModelEntry } from '../runtime/model-registry'
 import { getPlugin, getPluginHandler } from '../plugins'
-import { profileReplyHandler, profileStreamHandler } from '../engine/profiling'
+import { profileReplyHandler, profileStreamHandler } from '../profiling'
 import {
   PluginNotFoundError,
   PluginHandlerNotFoundError,

@@ -12,7 +12,7 @@ import { nowMs } from '../profiling'
 import {
   cacheDelegationConnectionTime,
   clearPeerConnectionTracking
-} from '../engine/profiling/delegation-profiler'
+} from '../profiling/delegation-profiler'
 import { getNextCommandId } from './rpc-utils'
 import { Buffer } from 'bare-buffer'
 

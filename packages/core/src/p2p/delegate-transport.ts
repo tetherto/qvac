@@ -43,8 +43,8 @@ import {
   consumeBreakdownConnectionTime,
   type DelegationTimings,
   type DelegationStreamTimings
-} from '../engine/profiling/delegation-profiler'
-import type { DelegatedHandlerOptions } from '../engine/profiling'
+} from '../profiling/delegation-profiler'
+import type { DelegatedHandlerOptions } from '../profiling'
 
 export interface DelegateOptions extends RPCOptions, DelegatedHandlerOptions {
   peerKey?: string

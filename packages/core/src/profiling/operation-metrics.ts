@@ -12,10 +12,10 @@ import {
   type TtsStats,
   type DiffusionStats,
   type VideoStats
-} from '../../schemas'
-import { readModelExecutionMs } from '../../profiling/model-execution'
-import type { ProfilingEvent, ProfilingEventKind } from '../../profiling/types'
-import type { LoadModelProfilingMeta, DownloadStats } from '../../handlers/load-model/types'
+} from '../schemas'
+import { readModelExecutionMs } from './model-execution'
+import type { ProfilingEvent, ProfilingEventKind } from './types'
+import type { LoadModelProfilingMeta, DownloadStats } from '../handlers/load-model/types'
 
 export type MetricExtractor<T> = (data: T) => Record<string, number> | undefined
 

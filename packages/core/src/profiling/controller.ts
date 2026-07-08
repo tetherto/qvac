@@ -45,7 +45,7 @@ interface ControllerState {
   initialized: boolean
 }
 
-const CONTROLLER_STATE_KEY = Symbol.for('@qvac/sdk:profiler-controller-state')
+const CONTROLLER_STATE_KEY = Symbol.for('@qvac/core:profiler-controller-state')
 
 function getControllerState(): ControllerState {
   const state = getGlobalSingleton(CONTROLLER_STATE_KEY, () => {

@@ -6,7 +6,7 @@ import {
   type Request,
   type ProfilingRequestMeta
 } from '../schemas'
-import { nowMs } from '../profiling'
+import { nowMs, createServerProfiler, type ServerProfiler } from '../profiling'
 import { resolveModelConfig } from '../runtime/state'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
@@ -21,7 +21,6 @@ import {
   handleShutdown,
   isShutdownMessage
 } from './handler-utils'
-import { createServerProfiler, type ServerProfiler } from '../engine/profiling'
 import { assertLifecycleAllowed } from '../runtime/runtime-lifecycle'
 import { shouldUseStreamErrorTransport } from './transport-selector'
 

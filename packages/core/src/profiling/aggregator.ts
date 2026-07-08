@@ -30,7 +30,7 @@ interface AggregatorState {
   eventBuffer: RingBufferState<ProfilingEvent>
 }
 
-const AGGREGATOR_STATE_KEY = Symbol.for('@qvac/sdk:profiler-aggregator-state')
+const AGGREGATOR_STATE_KEY = Symbol.for('@qvac/core:profiler-aggregator-state')
 
 function getAggregatorState(): AggregatorState {
   return getGlobalSingleton(AGGREGATOR_STATE_KEY, () => {

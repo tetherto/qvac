@@ -3,7 +3,7 @@ import { getEngineLogger } from '../logging'
 import { getModelEntry } from '../runtime/model-registry'
 import { getRPC } from './delegate-client'
 import { send, type DelegateOptions } from './delegate-transport'
-import type { DelegatedHandlerOptions } from '../engine/profiling'
+import type { DelegatedHandlerOptions } from '../profiling'
 
 const logger = getEngineLogger()
 

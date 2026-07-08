@@ -9,11 +9,11 @@ import {
   type PerCallProfiling,
   type ProfilingRequestMeta,
   type OperationEvent
-} from '../../schemas'
-import { nowMs, generateProfileId } from '../../profiling/clock'
-import { record, shouldProfile } from '../../profiling/controller'
+} from '../schemas'
+import { nowMs, generateProfileId } from './clock'
+import { record, shouldProfile } from './controller'
 import { buildOperationEvent } from './operation-metrics'
-import { isTerminalChunk } from '../../p2p/rpc-utils'
+import { isTerminalChunk } from '../p2p/rpc-utils'
 
 type ResponseWithOperationEvent<T> = T & { [OPERATION_EVENT_KEY]?: OperationEvent }
 
