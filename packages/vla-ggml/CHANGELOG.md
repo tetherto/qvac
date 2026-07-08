@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.10.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking for i8mm/AVX2 GEMM; no API change for this package).
+
 ## [0.9.0] - 2026-07-06
 
 ### Changed
