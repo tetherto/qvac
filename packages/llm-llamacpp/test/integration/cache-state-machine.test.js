@@ -45,7 +45,7 @@ const STOP_PROMPT = [
 ]
 
 const LONG_PREFILL_TEXT = Array.from(
-  { length: 512 },
+  { length: 940 },
   (_, index) => `prefill segment ${index} keeps the decoder busy before cancellation.`
 ).join(' ')
 
@@ -282,7 +282,7 @@ safeTest('Cancelling after first token only stores one generation chunk', { time
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '8192', batch_size: '8' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '12288', batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
   const stats = await runWithPrefillCancellation(
     model,
@@ -299,7 +299,7 @@ safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())'
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '8192', batch_size: '8' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '12288', batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
   const stats = await runWithPrefillCancellation(
     model,
