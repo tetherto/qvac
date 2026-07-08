@@ -23,6 +23,11 @@ import { BERGAMOT_MODEL_RE } from '@/schemas'
  *     The addon resolves the embedder by exact filename next to the model
  *     (`dirname(model)/bci-embedder.bin`), so the two files must be
  *     physically co-located — which the companion-set cache layout guarantees.
+ *
+ *   Chatterbox MeCab/IPAdic sets (directory-based):
+ *     Primary: `char.bin`
+ *     Companions in same directory: dicrc, matrix.bin, mecabrc, sys.dic, unk.dic
+ *     The TTS addon receives the containing directory for Japanese tokenization.
  */
 export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
@@ -35,6 +40,7 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   groupOnnxCompanions(models, bySourcePath, companionKeys)
   groupBergamotCompanions(models, bySourcePath, companionKeys)
   groupBciCompanions(models, bySourcePath, companionKeys)
+  groupMecabCompanions(models, bySourcePath, companionKeys)
 
   return models.map((model) => {
     const key = sourceKey(model.registrySource, model.registryPath)
@@ -217,6 +223,66 @@ function groupBciCompanions(
   }
 }
 
+const MECAB_PRIMARY_FILENAME = 'char.bin'
+const MECAB_REQUIRED_FILENAMES = ['dicrc', 'matrix.bin', 'mecabrc', 'sys.dic', 'unk.dic'] as const
+const MECAB_IPADIC_DIR_SUFFIX = '/mecab-ipadic/'
+
+function groupMecabCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>,
+  companionKeys: Set<string>
+): void {
+  for (const model of models) {
+    if (!model.registryPath.includes(MECAB_IPADIC_DIR_SUFFIX)) continue
+
+    const lastSep = model.registryPath.lastIndexOf('/')
+    const filename = lastSep >= 0 ? model.registryPath.slice(lastSep + 1) : model.registryPath
+    if (filename !== MECAB_PRIMARY_FILENAME) continue
+
+    const dirPrefix = lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : ''
+    const source = model.registrySource
+    const companions = findMecabCompanions(source, dirPrefix, bySourcePath)
+    if (companions.length !== MECAB_REQUIRED_FILENAMES.length) continue
+
+    const setKey = shortHash(`${source}:${dirPrefix}`)
+    const primaryEntry: CompanionSetMetadataEntry = {
+      key: 'mecabDictPath',
+      registryPath: model.registryPath,
+      registrySource: source,
+      targetName: MECAB_PRIMARY_FILENAME,
+      expectedSize: model.expectedSize,
+      sha256Checksum: model.sha256Checksum,
+      blobCoreKey: model.blobCoreKey,
+      blobBlockOffset: model.blobBlockOffset,
+      blobBlockLength: model.blobBlockLength,
+      blobByteOffset: model.blobByteOffset,
+      primary: true
+    }
+
+    const companionEntries = companions.map(({ filename, model: comp }) => {
+      companionKeys.add(sourceKey(comp.registrySource, comp.registryPath))
+      return {
+        key: `mecab:${filename}`,
+        registryPath: comp.registryPath,
+        registrySource: comp.registrySource,
+        targetName: filename,
+        expectedSize: comp.expectedSize,
+        sha256Checksum: comp.sha256Checksum,
+        blobCoreKey: comp.blobCoreKey,
+        blobBlockOffset: comp.blobBlockOffset,
+        blobBlockLength: comp.blobBlockLength,
+        blobByteOffset: comp.blobByteOffset
+      }
+    })
+
+    model.companionSet = {
+      setKey,
+      primaryKey: 'mecabDictPath',
+      files: [primaryEntry, ...companionEntries]
+    }
+  }
+}
+
 function findBergamotCompanions(
   source: string,
   dirPrefix: string,
@@ -250,6 +316,22 @@ function findBergamotCompanions(
   const metadata = bySourcePath.get(sourceKey(source, metadataPath))
   if (metadata) {
     found.push({ key: 'metadataPath', model: metadata })
+  }
+
+  return found
+}
+
+function findMecabCompanions(
+  source: string,
+  dirPrefix: string,
+  bySourcePath: Map<string, ProcessedModel>
+): { filename: string; model: ProcessedModel }[] {
+  const found: { filename: string; model: ProcessedModel }[] = []
+
+  for (const filename of MECAB_REQUIRED_FILENAMES) {
+    const model = bySourcePath.get(sourceKey(source, `${dirPrefix}${filename}`))
+    if (!model) return []
+    found.push({ filename, model })
   }
 
   return found
