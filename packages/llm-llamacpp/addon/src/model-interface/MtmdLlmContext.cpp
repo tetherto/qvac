@@ -587,6 +587,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
 
     if (stopGeneration_.load()) {
+      // A prior chunk may have queued GPU work whose logits are never read on
+      // the cancel path. Finish it before rolling KV/recurrent state back.
+      llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasPrefillEntry()) {
         // Recurrent / hybrid path: restore the pre-prefill snapshot to
@@ -721,6 +724,10 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
+  // If cancellation lands after llama_decode() but before the next sampler
+  // read, the implicit sampler-side synchronize is skipped. Finish any queued
+  // backend work before mutating KV/recurrent state during rollback.
+  llama_synchronize(modelCtx_.lctx);
   flushPendingUtf8ToCallback(outputCallback);
 
   const bool rollbackOk = rollbackCancelledRequest({
