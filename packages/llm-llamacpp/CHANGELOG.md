@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.35.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
 ## [0.35.0] - 2026-07-07
 
 ### Changed
