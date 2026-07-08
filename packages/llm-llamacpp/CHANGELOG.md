@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
 ## [0.35.3] - 2026-07-08
 
 ### Changed
