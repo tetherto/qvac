@@ -135,7 +135,7 @@ jobs:
       - context
       - prebuild
       - label-gate
-    if: always() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && needs.prebuild.result != 'failure'
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     runs-on: ${{ matrix.os }}
     environment: release
     timeout-minutes: 180

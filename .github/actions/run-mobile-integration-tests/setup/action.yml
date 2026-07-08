@@ -244,15 +244,25 @@ runs:
         # pin was not honored — fail loudly instead of measuring the wrong binary.
         # The pin may arrive as a bare version or a full name@version spec; the
         # version to assert against is the segment after the last '@' in either
-        # form ("@qvac/foo@1.0.0" -> "1.0.0", "1.0.0" -> "1.0.0").
+        # form ("@qvac/foo@1.0.0" -> "1.0.0", "1.0.0" -> "1.0.0"). Only assert
+        # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
+        # ^1.2.0) legitimately resolves to a different concrete version, so
+        # comparing the packed version to the tag string would false-fail.
         if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
           EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
-          PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
-          if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
-            exit 1
-          fi
-          echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+          case "$EXPECTED_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*)
+              PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
+              if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
+                echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
+                exit 1
+              fi
+              echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+              ;;
+            *)
+              echo "package-version '$EXPECTED_VERSION' is a dist-tag/range; skipping exact-version provenance assertion"
+              ;;
+          esac
         fi
         mv package/prebuilds ./prebuilds
         rm -rf package *.tgz

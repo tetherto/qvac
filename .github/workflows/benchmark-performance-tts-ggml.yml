@@ -113,7 +113,7 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
       benchmark_matrix_json: ${{ needs.context.outputs.benchmark_matrix_json }}
-    if: always() && needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && needs.prebuild.result != 'failure'
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   mobile-benchmarks:
     needs:
@@ -132,7 +132,7 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
       run_rtf_benchmarks: true
-    if: always() && needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && needs.prebuild.result != 'failure'
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   summarize:
     needs:
