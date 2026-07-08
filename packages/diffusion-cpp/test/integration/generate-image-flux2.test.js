@@ -25,18 +25,15 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const DIFFUSION_MODEL = {
-  name: 'flux-2-klein-4b-Q8_0.gguf',
-  url: 'https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf'
+  name: 'flux-2-klein-4b-Q8_0.gguf'
 }
 
 const LLM_MODEL = {
-  name: 'Qwen3-4B-Q4_K_M.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf'
+  name: 'Qwen3-4B-Q4_K_M.gguf'
 }
 
 const VAE_MODEL = {
-  name: 'flux2-vae.safetensors',
-  url: 'https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors'
+  name: 'flux2-vae.safetensors'
 }
 
 safeTest('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000, skip }, async (t) => {
@@ -45,18 +42,15 @@ safeTest('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DIFFUSION_MODEL.name,
-      downloadUrl: DIFFUSION_MODEL.url
+      modelName: DIFFUSION_MODEL.name
     })
 
     await ensureModel({
-      modelName: LLM_MODEL.name,
-      downloadUrl: LLM_MODEL.url
+      modelName: LLM_MODEL.name
     })
 
     await ensureModel({
-      modelName: VAE_MODEL.name,
-      downloadUrl: VAE_MODEL.url
+      modelName: VAE_MODEL.name
     })
 
     console.log('\n' + '='.repeat(60))
