@@ -80,6 +80,7 @@ import { DownloadResilienceExecutor } from '../shared/executors/node/download-re
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
+import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 
 const resources = new ResourceManager({
@@ -90,6 +91,18 @@ resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('llm-batch', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llm',
+  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+})
+
+resources.define('tools-batch', {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: 'llm',
+  config: { ctx_size: 4096, tools: true, parallel: 2 }
 })
 
 resources.define('embeddings', {
@@ -354,8 +367,24 @@ resources.define('vision', {
   }
 })
 
+resources.define('vision-batch', {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+  }
+})
+
 function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
+}
+
+function resolveBatchAttachmentPath(inputPath: string) {
+  const fileName = inputPath.split('/').pop()
+  if (!fileName) return inputPath
+  return path.resolve(process.cwd(), 'assets/images', fileName)
 }
 
 function ensureElectronE2EConfig() {
@@ -417,6 +446,9 @@ export const executor = createExecutor({
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
     ),
     new ModelLoadingExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath
+    }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
