@@ -1,5 +1,5 @@
-import type { Request } from '../schemas'
-import type { HandlerEntry } from '../handlers/types'
+import type { Request } from './schemas'
+import type { HandlerEntry } from './handlers/types'
 
 export interface HandlerSelection {
   handler: HandlerEntry['handler']

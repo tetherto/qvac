@@ -13,7 +13,7 @@ import { setConfig, setRuntimeContext } from '../runtime/state'
 import { type ServerProfiler } from '../profiling'
 import { isTerminalChunk } from './rpc-utils'
 import { createProgressThrottle } from './progress-throttle'
-import { handlerSupportsProgress, selectHandler } from '../engine/selection'
+import { handlerSupportsProgress, selectHandler } from '../selection'
 import type {
   HandlerEntry,
   ReplyHandler,

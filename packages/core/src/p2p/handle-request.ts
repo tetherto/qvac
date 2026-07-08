@@ -11,7 +11,7 @@ import { resolveModelConfig } from '../runtime/state'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
 import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../errors'
-import { registry } from '../engine/registry'
+import { registry } from '../registry'
 import type { HandlerEntry } from '../handlers/types'
 import {
   executeHandler,

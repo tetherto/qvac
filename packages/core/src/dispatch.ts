@@ -11,19 +11,20 @@ import { normalizeModelType, PROFILING_KEY, createErrorResponse } from './schema
 import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
-import { registry } from './engine/registry'
+import { registry } from './registry'
 import type { HandlerEntry } from './handlers/types'
-import { handlerSupportsProgress, selectHandler } from './engine/selection'
+import { handlerSupportsProgress, selectHandler } from './selection'
 import { assertLifecycleAllowed } from './runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext } from './runtime/state'
 import { initialize, close as closeEngine } from './runtime/lifecycle'
 import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from './logging'
+import { profileReplyHandler, profileStreamHandler } from './profiling'
 import { RPCNoHandlerError, PluginsNotRegisteredError } from './errors'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
-// `send`/`stream`/`duplex`; this runs each against the engine's handler registry.
+// `send`/`stream`/`duplex`; this runs each against the handler registry.
 // A thrown handler error propagates as its real typed instance, so consumers can
 // `instanceof`-check it directly.
 
@@ -54,7 +55,7 @@ function ensurePluginsRegistered(): void {
   }
 }
 
-function applyClientLoggerSettings(config: QvacConfig): void {
+function applyLoggerSettings(config: QvacConfig): void {
   if (config.loggerLevel !== undefined) setGlobalLogLevel(config.loggerLevel)
   if (config.loggerConsoleOutput !== undefined) {
     setGlobalConsoleOutput(config.loggerConsoleOutput)
@@ -64,7 +65,7 @@ function applyClientLoggerSettings(config: QvacConfig): void {
 async function initializeConfig(): Promise<void> {
   const config = await resolveConfig()
   if (config) {
-    applyClientLoggerSettings(config)
+    applyLoggerSettings(config)
     setConfig(config)
     logger.info('📦 Initializing QVAC config')
   }
@@ -196,7 +197,17 @@ export async function send<T extends Request>(
   const processed = applyDeviceDefaults(request)
   const entry = getHandlerEntry(processed.type)
   const { handler, isDelegated } = selectHandler(entry, processed)
-  return (await invokeHandler(processed, handler, isDelegated)) as Response
+
+  // Plugin capabilities profile themselves inside plugin dispatch; delegated
+  // requests are timed on the provider. Everything else is timed here so the
+  // `profiler` covers every operation. Profiling is a no-op unless enabled.
+  if (entry.pluginOp || isDelegated) {
+    return (await invokeHandler(processed, handler, isDelegated)) as Response
+  }
+  return profileReplyHandler(
+    { op: processed.type, request: processed },
+    () => invokeHandler(processed, handler, isDelegated) as Promise<Response>
+  )
 }
 
 export async function* stream<T extends Request>(
@@ -210,16 +221,24 @@ export async function* stream<T extends Request>(
   const entry = getHandlerEntry(processed.type)
   const { handler, isDelegated } = selectHandler(entry, processed)
 
-  if (handlerSupportsProgress(entry, processed)) {
-    yield* streamWithProgress(processed, handler, isDelegated)
-    return
+  async function* run(): AsyncGenerator<Response> {
+    if (handlerSupportsProgress(entry, processed)) {
+      yield* streamWithProgress(processed, handler, isDelegated)
+      return
+    }
+    const result = invokeHandler(processed, handler, isDelegated)
+    if (isAsyncGenerator(result)) {
+      yield* result
+    } else {
+      yield await result
+    }
   }
 
-  const result = invokeHandler(processed, handler, isDelegated)
-  if (isAsyncGenerator(result)) {
-    yield* result
+  // See `send`: plugin capabilities and delegated requests are timed elsewhere.
+  if (entry.pluginOp || isDelegated) {
+    yield* run()
   } else {
-    yield await result
+    yield* profileStreamHandler({ op: processed.type, request: processed }, run)
   }
 }
 
