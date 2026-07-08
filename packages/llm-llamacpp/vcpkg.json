@@ -9,11 +9,11 @@
     "concurrentqueue",
     {
       "name": "qvac-fabric",
-      "version>=": "9341.1.4"
+      "version>=": "9341.1.5"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.2"
+      "version>=": "1.2.3"
     },
     {
       "name": "qvac-lint-cpp",

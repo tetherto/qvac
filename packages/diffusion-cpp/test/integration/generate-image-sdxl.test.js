@@ -25,8 +25,7 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
-  name: 'stable-diffusion-xl-base-1.0-Q4_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf'
+  name: 'stable-diffusion-xl-base-1.0-Q4_0.gguf'
 }
 
 safeTest('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip }, async (t) => {
@@ -35,8 +34,7 @@ safeTest('SDXL txt2img — generates a valid PNG image', { timeout: 900000, skip
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name,
-      downloadUrl: DEFAULT_MODEL.url
+      modelName: DEFAULT_MODEL.name
     })
 
     console.log('\n' + '='.repeat(60))
