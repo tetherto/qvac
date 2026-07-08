@@ -169,7 +169,7 @@ export {
   PLUGIN_DIFFUSION,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION,
-  SDK_DEFAULT_PLUGINS,
+  BUILTIN_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
   type FinetuneValidation,

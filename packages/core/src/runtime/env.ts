@@ -2,7 +2,6 @@ import env from 'bare-env'
 import { z } from 'zod'
 
 const envSchema = z.object({
-  QVAC_IPC_SOCKET_PATH: z.string().optional(),
   HOME_DIR: z.string()
 })
 
@@ -13,14 +12,13 @@ let validatedEnv: Env | null = null
 /**
  * Initialize the environment. Call once at startup.
  */
-export function initEnv(): { hasRPCConfig: boolean } {
+export function initEnv(): void {
   const defaultHomeDir =
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
     env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
-  let envConfig: Record<string, string | undefined> = {
+  const envConfig: Record<string, string | undefined> = {
     HOME_DIR: defaultHomeDir
   }
-  let hasRPCConfig = false
 
   // On the mobile bare-kit host the app passes HOME as the first argv entry.
   const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
@@ -28,19 +26,7 @@ export function initEnv(): { hasRPCConfig: boolean } {
     envConfig['HOME_DIR'] = Bare.argv[0]
   }
 
-  // Try to parse any argument as JSON config (fail gracefully)
-  if (Bare.argv[2]) {
-    try {
-      const rpcArgs = JSON.parse(Bare.argv[2]) as Record<string, string>
-      envConfig = { ...envConfig, ...rpcArgs }
-      hasRPCConfig = true
-    } catch {
-      // Not JSON or invalid - use defaults (direct mode)
-    }
-  }
-
   validatedEnv = envSchema.parse(envConfig)
-  return { hasRPCConfig }
 }
 
 /**

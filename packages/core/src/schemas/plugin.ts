@@ -316,55 +316,55 @@ export const pluginDefinitionRuntimeSchema = z
  * LLM text completion plugin (llama.cpp).
  * Provides: completion, streaming chat, tool calling.
  */
-export const PLUGIN_LLM = '@qvac/sdk/llamacpp-completion/plugin' as const
+export const PLUGIN_LLM = '@qvac/core/llamacpp-completion/plugin' as const
 
 /**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
-export const PLUGIN_EMBEDDING = '@qvac/sdk/llamacpp-embedding/plugin' as const
+export const PLUGIN_EMBEDDING = '@qvac/core/llamacpp-embedding/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
  * Provides: audio transcription, language detection.
  */
-export const PLUGIN_WHISPER = '@qvac/sdk/whispercpp-transcription/plugin' as const
+export const PLUGIN_WHISPER = '@qvac/core/whispercpp-transcription/plugin' as const
 
 /**
  * Brain-Computer Interface neural-signal transcription plugin
  * (whisper.cpp). Provides: transcription of neural signals to text.
  */
-export const PLUGIN_BCI = '@qvac/sdk/bci-whispercpp-transcription/plugin' as const
+export const PLUGIN_BCI = '@qvac/core/bci-whispercpp-transcription/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (Parakeet ONNX).
  * Provides: audio transcription using NVIDIA Parakeet models.
  */
-export const PLUGIN_PARAKEET = '@qvac/sdk/parakeet-transcription/plugin' as const
+export const PLUGIN_PARAKEET = '@qvac/core/parakeet-transcription/plugin' as const
 
 /**
  * Neural machine translation plugin (nmt.cpp).
  * Provides: text translation between languages.
  */
-export const PLUGIN_NMT = '@qvac/sdk/nmtcpp-translation/plugin' as const
+export const PLUGIN_NMT = '@qvac/core/nmtcpp-translation/plugin' as const
 
 /**
  * Text-to-speech synthesis plugin (GGML).
  * Provides: speech synthesis from text.
  */
-export const PLUGIN_TTS = '@qvac/sdk/tts-ggml/plugin' as const
+export const PLUGIN_TTS = '@qvac/core/tts-ggml/plugin' as const
 
 /**
  * Optical character recognition plugin (GGML).
  * Provides: text extraction from images.
  */
-export const PLUGIN_OCR = '@qvac/sdk/ggml-ocr/plugin' as const
+export const PLUGIN_OCR = '@qvac/core/ggml-ocr/plugin' as const
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
  * Provides: text-to-image generation and standalone ESRGAN image upscaling.
  */
-export const PLUGIN_DIFFUSION = '@qvac/sdk/sdcpp-generation/plugin' as const
+export const PLUGIN_DIFFUSION = '@qvac/core/sdcpp-generation/plugin' as const
 
 /**
  * Vision-Language-Action plugin (ggml). Supports SmolVLA and π₀.₅ (pi05),
@@ -372,24 +372,23 @@ export const PLUGIN_DIFFUSION = '@qvac/sdk/sdcpp-generation/plugin' as const
  * Provides: robot-action inference from one or more camera frames (2 for
  * SmolVLA, 3 for π₀.₅) and a natural-language instruction.
  */
-export const PLUGIN_VLA = '@qvac/sdk/ggml-vla/plugin' as const
+export const PLUGIN_VLA = '@qvac/core/ggml-vla/plugin' as const
 
 /**
  * Image classification plugin (GGML / MobileNetV3-Small).
  * Provides: image classification with bundled 3-class model (food / report / other).
  */
-export const PLUGIN_CLASSIFICATION = '@qvac/sdk/ggml-classification/plugin' as const
+export const PLUGIN_CLASSIFICATION = '@qvac/core/ggml-classification/plugin' as const
 
 /**
- * All built-in SDK plugins.
+ * Every built-in plugin specifier.
  *
  * @example
- * // Use all defaults plus a custom plugin:
  * const config = {
- *   plugins: [...SDK_DEFAULT_PLUGINS, myCustomPlugin],
+ *   plugins: [...BUILTIN_PLUGINS, myCustomPlugin],
  * };
  */
-export const SDK_DEFAULT_PLUGINS = [
+export const BUILTIN_PLUGINS = [
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
@@ -403,7 +402,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_CLASSIFICATION
 ] as const
 
-export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number]
+export type BuiltinPlugin = (typeof BUILTIN_PLUGINS)[number]
 
 // ============================================
 // Addon Packages
