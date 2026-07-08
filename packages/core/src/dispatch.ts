@@ -25,9 +25,8 @@ import { setGlobalLogLevel, setGlobalConsoleOutput, getClientLogger } from './lo
 import { RPCNoHandlerError, WorkerPluginsNotRegisteredError } from './utils/errors-client'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
-// `send`/`stream`/`duplex`; here we run it straight against the engine's handler
-// registry in the same Bare process — no wire, no serialization, no worker. A
-// thrown handler error propagates as its real typed instance, so consumers can
+// `send`/`stream`/`duplex`; this runs each against the engine's handler registry.
+// A thrown handler error propagates as its real typed instance, so consumers can
 // `instanceof`-check it directly.
 
 const logger = getClientLogger()
@@ -69,7 +68,7 @@ async function initializeConfig(): Promise<void> {
   if (config) {
     applyClientLoggerSettings(config)
     setSDKConfig(config)
-    logger.info('📦 Initializing SDK config')
+    logger.info('📦 Initializing QVAC config')
   }
   const runtimeContext: RuntimeContext = {
     runtime: 'bare',

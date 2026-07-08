@@ -44,11 +44,11 @@ export function embed(
 ): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> & {
   requestId: string
 } {
-  // Client-generated `requestId` is surfaced synchronously on the
+  // The caller-generated `requestId` is surfaced synchronously on the
   // returned promise so the caller can `cancel({ requestId })` before
-  // `await` resolves. The same id is threaded onto the wire envelope so
-  // the server's registry entry uses it as the canonical key —
-  // matching the `loadModel` / `downloadAsset` / `completion` shape.
+  // `await` resolves. The same id is carried on the request so the
+  // registry entry uses it as the canonical key — matching the
+  // `loadModel` / `downloadAsset` / `completion` shape.
   const requestId = generateClientRequestId()
   const inner = runEmbed(params, requestId, options)
   return decoratePromise(inner, { requestId })

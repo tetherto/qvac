@@ -190,7 +190,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED]: {
     name: 'PEAR_WORKER_ENTRY_REQUIRED',
     message: (workerEntry: string) =>
-      `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`
+      `No plugins registered. Register the plugins you need in code with \`registerPlugin(...)\` / \`plugins([...])\` in ${workerEntry} before your first call.`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
     name: 'WORKER_PLUGINS_NOT_REGISTERED',

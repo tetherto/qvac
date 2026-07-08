@@ -22,7 +22,7 @@
  *     don't.
  *   - We deliberately avoid extending `Promise.prototype` or calling
  *     `Object.setPrototypeOf`. Either would silently affect every
- *     promise in the worker; the plain-object approach is intentional
+ *     promise in the process; the plain-object approach is intentional
  *     and the helper exists to keep call sites consistent.
  *
  * @example

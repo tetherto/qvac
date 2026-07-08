@@ -15,18 +15,16 @@ type DelegationTarget = {
 /**
  * Resolve the delegated provider for a cancel request, if any.
  *
- * After the 0.11.0 wire-schema collapse the cancel envelope has only
- * two operations. Only `broad` cancels delegate at the cancel layer —
- * see `isCancelDelegated` in `handler-registry.ts` for the policy and
- * the rationale.
+ * The cancel envelope has two operations. Only `broad` cancels delegate
+ * at the cancel layer — see `isCancelDelegated` in `handler-registry.ts`
+ * for the policy and the rationale.
  *
  * The targeted `request` arm is handled locally because the registry
- * is worker-singleton and already holds the entry for delegated
+ * is process-singleton and already holds the entry for delegated
  * requests (the delegated handler registers its own context on the
- * provider-facing side). For pre-0.11.0 behaviour where a `requestId`
- * cancel against a delegated model needed to round-trip to the
- * provider, hold onto the delegated `loadModel(...).requestId` and
- * fire a broad cancel against the model id instead.
+ * provider-facing side). To cancel a specific delegated request, hold
+ * onto the delegated `loadModel(...).requestId` and fire a broad cancel
+ * against the model id instead.
  */
 function resolveDelegationTarget(request: CancelRequest): DelegationTarget | null {
   if (request.operation !== 'broad') return null

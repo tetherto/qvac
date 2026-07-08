@@ -32,7 +32,7 @@ function createLogger(namespace: string, options?: LoggerOptions): Logger {
  * calls with the same namespace return the same instance. When `options` is
  * supplied, a fresh logger is returned and the cache is bypassed.
  *
- * @param namespace - Namespace used to prefix log messages from this logger (e.g. `"my-app"`, `"@qvac/sdk:embed"`).
+ * @param namespace - Namespace used to prefix log messages from this logger (e.g. `"my-app"`, `"@qvac/core:embed"`).
  * @param options - Optional logger configuration (custom transports, log level, etc.). When provided, a new logger is always constructed.
  * @returns A `Logger` instance scoped to `namespace`.
  */

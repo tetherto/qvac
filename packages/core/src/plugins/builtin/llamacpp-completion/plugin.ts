@@ -142,9 +142,8 @@ export const llmPlugin = definePlugin({
         // Open a request-scoped lifecycle. The registry is the single
         // source of truth for "is this turn cancelled?" — we plumb the
         // signal into `completion()` and expose `requestId` so the
-        // client can target this run with `cancel({ requestId })`.
-        // Falls back to a server-generated id if the client (e.g. an
-        // older release) didn't send one.
+        // caller can target this run with `cancel({ requestId })`.
+        // Falls back to a generated id if the caller didn't send one.
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'completion',
@@ -153,7 +152,7 @@ export const llmPlugin = definePlugin({
 
         const requestLogger = withRequestContext(getServerLogger(), ctx)
 
-        // begin() can return already-aborted when the client cancels while
+        // begin() can return already-aborted when the caller cancels while
         // this completion is queued behind another same-model one. It never
         // decoded, so it must not touch the shared native context — emit a
         // cancelled terminal and return. Boolean(...) keeps ctx.signal.aborted

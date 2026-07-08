@@ -89,8 +89,8 @@ export async function* bciTranscribe(
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and `cancel({ modelId, kind: "transcribe" })`
-  // through this context. Falls back to a server-generated id if the
-  // client didn't send one.
+  // through this context. Falls back to a generated id if the
+  // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: 'transcribe',

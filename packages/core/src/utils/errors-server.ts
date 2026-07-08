@@ -225,12 +225,13 @@ export class CompletionFailedError extends QvacErrorBase {
  * in `TextLlmContext.cpp` and `MtmdLlmContext.cpp` format both numbers
  * into the message; the bare `processPromptImpl: context overflow`
  * fallback in `LlamaModel.cpp` carries neither — both fields are
- * therefore optional). `modelId` is supplied by the server-side handler
- * that wraps the addon error.
+ * therefore optional). `modelId` is supplied by the handler that wraps
+ * the addon error.
  *
- * Round-trips the RPC boundary via the typed-error reconstructor in
- * `client/rpc/rpc-error.ts`, so `err instanceof ContextOverflowError`
- * works on the consumer side.
+ * Serializes its typed fields into the error envelope
+ * (`toErrorResponseFields`) so a receiver can rebuild
+ * `ContextOverflowError` after the error crosses a serialization
+ * boundary (e.g. a delegated provider's response).
  */
 export class ContextOverflowError extends QvacErrorBase {
   readonly promptTokens?: number
@@ -290,11 +291,11 @@ export class RequestIdConflictError extends QvacErrorBase {
   }
 
   /**
-   * Surface typed fields on the RPC error envelope so the client-side
-   * reconstructor in `client/rpc/rpc-error.ts` can rebuild this exact
-   * class on the consumer side. Without this, `err instanceof
-   * RequestIdConflictError` would always be `false` after the error
-   * crosses the worker boundary.
+   * Surface typed fields on the serialized error envelope so a receiver
+   * can rebuild this exact class from `typedFields` after the error is
+   * serialized across a boundary (e.g. a delegated provider's response).
+   * Without this, `err instanceof RequestIdConflictError` would always be
+   * `false` on the far side.
    */
   toErrorResponseFields(): Record<string, unknown> {
     return { requestId: this.requestId }
@@ -372,14 +373,13 @@ export class RequestRejectedByPolicyError extends QvacErrorBase {
  *        }
  *      }
  *
- * The error is constructed client-side in
- * `client/api/completion-stream.ts` when the wire stream ends with
- * `stopReason: "cancelled"` — the partial payload comes from the
- * client's own event aggregator. The class lives in `errors-server.ts`
- * (and is re-exported from the package root) because the *semantic*
- * origin of the cancel is server-side, and other handlers
- * (embeddings, transcribe, …) will reuse the same class once their
- * cancel surface lands.
+ * The error is constructed in `api/completion-stream.ts` when the
+ * response stream ends with `stopReason: "cancelled"` — the partial
+ * payload comes from the api layer's own event aggregator. The class
+ * lives in `errors-server.ts` (and is re-exported from the package root)
+ * because the *semantic* origin of the cancel is the engine, and other
+ * handlers (embeddings, transcribe, …) will reuse the same class once
+ * their cancel surface lands.
  */
 export class InferenceCancelledError extends QvacErrorBase {
   readonly requestId: string

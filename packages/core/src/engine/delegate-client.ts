@@ -245,7 +245,7 @@ export async function getRPC(publicKey: string, options: RPCOptions = {}): Promi
     // failure is *observed* on `tracked` itself — using `tracked.finally(...)`
     // returns a fresh promise that re-rejects with the original error, and
     // since nothing awaits that fresh promise it would surface as an
-    // unhandled rejection. The worker treats unhandled rejections as fatal
+    // unhandled rejection. The process treats unhandled rejections as fatal
     // and tears down the swarm + cancels all in-flight downloads, which then
     // breaks the legitimate fallback-to-local path that the caller awaits via
     // `withTimeout(inflight, ...)` below. Caller still observes the original

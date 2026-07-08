@@ -12,7 +12,7 @@ interface VlaModelLike {
 
 export function vlaGetHparams(request: VlaHparamsRequest): Promise<VlaHparamsResponse> {
   const model = getModel(request.modelId) as unknown as VlaModelLike
-  // Validate the addon-reported hparams against our schema so the wire
+  // Validate the addon-reported hparams against our schema so the response
   // shape stays consistent even if the underlying addon changes.
   const parsed = vlaHparamsSchema.parse(model.hparams)
   return Promise.resolve({

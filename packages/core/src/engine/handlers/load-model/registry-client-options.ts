@@ -12,7 +12,7 @@ export interface RegistryClientDownloadOptions {
 
 /**
  * Build the options passed to @qvac/registry-client download methods from the
- * current SDK config. Pure helper (no bare-* imports) so the mapping can be
+ * current QVAC config. Pure helper (no bare-* imports) so the mapping can be
  * unit-tested without standing up a real registry client.
  */
 export function buildRegistryClientOptions(params: {

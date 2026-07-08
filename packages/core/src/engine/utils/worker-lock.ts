@@ -43,7 +43,7 @@ export function acquireWorkerLock(): void {
   if (existing) {
     if (isProcessAlive(existing.pid)) {
       logger.warn(
-        `Another worker (PID ${existing.pid}) is still running — lock file exists at ${lockPath}`
+        `Another process (PID ${existing.pid}) is still running — lock file exists at ${lockPath}`
       )
     } else {
       logger.warn(

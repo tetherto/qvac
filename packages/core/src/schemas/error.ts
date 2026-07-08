@@ -3,20 +3,18 @@ import { QvacErrorBase } from '@qvac/error'
 import { formatZodError } from '../utils/zod-error'
 
 /**
- * Wire shape for errors thrown across the RPC boundary. The fields are
- * the union of (a) the legacy `QvacErrorBase` serialisation (`name`,
- * `code`, `message`, `stack`, `cause`, `timestamp`) and (b) the new
- * `typedFields` map (0.11.0+) carrying per-class structured data the
- * client-side reconstructor uses to rebuild the original typed error.
+ * Serialized shape for errors that cross a response boundary — a
+ * delegated provider's response over `bare-rpc`, or a duplex stream.
+ * The fields are the union of (a) the `QvacErrorBase` serialisation
+ * (`name`, `code`, `message`, `stack`, `cause`, `timestamp`) and (b) the
+ * `typedFields` map carrying per-class structured data a receiver uses
+ * to rebuild the original typed error.
  *
- * `typedFields` is opaque on the wire — `z.unknown()` — and the
- * per-class reconstructor in `client/rpc/rpc-error.ts` casts each
- * member at the boundary. The single-map shape keeps the schema
- * compact regardless of how many typed-error classes the SDK
- * eventually surfaces across RPC. New typed-error classes that need
- * cross-RPC reconstruction add a `toErrorResponseFields()` method on
- * the server side and a row to the reconstructor map on the client
- * side; the schema itself doesn't change.
+ * `typedFields` is opaque in transit — `z.unknown()` — and a receiver
+ * casts each member at the boundary. The single-map shape keeps the
+ * schema compact regardless of how many typed-error classes core
+ * surfaces. A new typed-error class that needs reconstruction adds a
+ * `toErrorResponseFields()` method; the schema itself doesn't change.
  */
 export const errorResponseSchema = z.object({
   type: z.literal('error'),
@@ -32,15 +30,14 @@ export const errorResponseSchema = z.object({
 export type ErrorResponse = z.infer<typeof errorResponseSchema>
 
 /**
- * A `QvacErrorBase` subclass that opts into typed-field serialisation
- * across the RPC boundary. The method returns the subset of own
- * properties the client-side reconstructor needs to rebuild the
- * original class with its named constructor arguments populated.
+ * A `QvacErrorBase` subclass that opts into typed-field serialisation.
+ * The method returns the subset of own properties a receiver needs to
+ * rebuild the original class with its named constructor arguments
+ * populated.
  *
- * Co-located with each class (see `utils/errors-server.ts`) so adding
- * a new cross-RPC typed error is a three-step change in one PR: define
- * the class, implement the method, add a reconstructor entry in
- * `client/rpc/rpc-error.ts`.
+ * Co-located with each class (see `utils/errors-server.ts`) so adding a
+ * new typed error that survives serialisation is a two-step change:
+ * define the class and implement the method.
  */
 export interface TypedErrorSerializer {
   toErrorResponseFields(): Record<string, unknown>

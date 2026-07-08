@@ -37,7 +37,7 @@ function validateRegistryResponse(response: RegistryResponse, fallbackError?: st
 /**
  * Returns all available models from the QVAC distributed model registry.
  *
- * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model the SDK's connected registry knows about.
+ * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model core's connected registry knows about.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistryList(): Promise<ModelRegistryEntry[]> {

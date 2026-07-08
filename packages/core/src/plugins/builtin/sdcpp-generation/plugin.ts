@@ -77,7 +77,7 @@ function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
  *
- * Video mode is supported on React Native, but the SDK-published Wan model
+ * Video mode is supported on React Native, but the QVAC-published Wan model
  * set is too large to load on typical mobile devices. Mobile apps should
  * pass a `delegate` to `loadModel(...)` to run video generation on a
  * desktop peer instead of loading the model on-device.

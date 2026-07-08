@@ -1,12 +1,12 @@
 /**
- * QVAC SDK Profiler
+ * QVAC Core Profiler
  *
  * @example
  * ```ts
- * import { profiler } from "@qvac/sdk";
+ * import { profiler } from "@qvac/core";
  *
  * profiler.enable({ mode: "summary" });
- * // ... run SDK operations ...
+ * // ... run core operations ...
  * console.log(profiler.exportTable());
  * profiler.disable();
  * ```
@@ -30,7 +30,7 @@ export const profiler = {
   enable: (options?: ProfilerRuntimeOptions) => controller.enable(options),
 
   /**
-   * Disables profiling. New SDK operations will no longer be recorded.
+   * Disables profiling. New operations will no longer be recorded.
    */
   disable: () => controller.disable(),
 

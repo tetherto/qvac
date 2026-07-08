@@ -159,9 +159,7 @@ export const rpcOptionsSchema = z.object({
     .number()
     .min(100)
     .optional()
-    .describe(
-      'Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only.'
-    ),
+    .describe('Per-call RPC timeout in milliseconds; overrides the default for this request only.'),
   healthCheckTimeout: z
     .number()
     .min(100)
@@ -174,7 +172,7 @@ export const rpcOptionsSchema = z.object({
   profiling: perCallProfilingSchema
     .optional()
     .describe(
-      "Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request."
+      'Per-call profiler configuration; when present, overrides the global profiler settings for this request.'
     )
 })
 

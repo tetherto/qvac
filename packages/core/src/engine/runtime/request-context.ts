@@ -40,7 +40,7 @@ export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | '
  * Per-request lifecycle handle. Created by `RequestRegistry.begin(...)`
  * and consumed by long-running handlers as the single owner of:
  *
- *  - `requestId` — stable identity; visible to the client so it can
+ *  - `requestId` — stable identity; visible to the caller so it can
  *    target this exact request with `cancel({ requestId })`.
  *  - `signal` — `AbortSignal` that fires when the request is cancelled.
  *    Composes with addon-level cancellation through a single

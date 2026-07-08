@@ -80,7 +80,7 @@ export const perCallProfilingSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Enable profiling for this call only; when omitted, the SDK-level profiler configuration applies.'
+      'Enable profiling for this call only; when omitted, the global profiler configuration applies.'
     ),
   includeServerBreakdown: z
     .boolean()

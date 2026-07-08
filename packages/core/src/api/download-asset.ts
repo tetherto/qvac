@@ -34,7 +34,7 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions
  *
  * @throws {QvacErrorBase} When asset download fails, with details in the error message
  * @throws {QvacErrorBase} When streaming ends unexpectedly (only when using onProgress)
- * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ * @throws {QvacErrorBase} When receiving an invalid response type from the engine
  *
  * @example
  * ```typescript

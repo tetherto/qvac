@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const getModelInfoParamsSchema = z.object({
-  name: z.string().describe("The model's registry name (as found in the SDK's built-in catalog).")
+  name: z.string().describe("The model's registry name (as found in QVAC's built-in catalog).")
 })
 
 export const getModelInfoRequestSchema = getModelInfoParamsSchema.extend({
@@ -29,7 +29,7 @@ export const cacheFileInfoSchema = z.object({
 
 export const modelInfoSchema = z.object({
   name: z.string().describe('Catalog name of the model.'),
-  modelId: z.string().describe('Unique identifier used to reference the model in SDK calls.'),
+  modelId: z.string().describe('Unique identifier used to reference the model in QVAC calls.'),
   // Registry-based fields
   registryPath: z
     .string()

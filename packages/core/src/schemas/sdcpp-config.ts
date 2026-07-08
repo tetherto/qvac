@@ -61,7 +61,7 @@ export const sdcppConfigSchema = z.object({
         "`'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). " +
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
-        'shipped by the SDK are too large to load on typical mobile devices; ' +
+        'shipped by QVAC are too large to load on typical mobile devices; ' +
         'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.'
     ),
   threads: z.number().optional(),
@@ -335,7 +335,7 @@ export const diffusionRequestSchema = z
       .number()
       .int()
       .optional()
-      .describe('Random seed; when omitted the SDK picks one and returns it in stats.'),
+      .describe('Random seed; when omitted core picks one and returns it in stats.'),
     batch_count: z
       .number()
       .int()
@@ -450,7 +450,7 @@ const videoGenerationBaseSchema = z.object({
     .describe(
       'The identifier of the loaded video model to use for generation. ' +
         'On React Native, prefer a `modelId` loaded with a `delegate` because ' +
-        'the video diffusion models currently shipped by the SDK are too ' +
+        'the video diffusion models currently shipped by QVAC are too ' +
         'large to load on typical mobile devices.'
     ),
   requestId: z
@@ -458,7 +458,7 @@ const videoGenerationBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.'
+      'Stable identifier for this in-flight video generation. Optional — core falls back to a generated id when the field is missing.'
     ),
   prompt: z.string().describe('Positive prompt describing the video to generate.'),
   negative_prompt: z
@@ -497,7 +497,7 @@ const videoGenerationBaseSchema = z.object({
     .number()
     .int()
     .optional()
-    .describe('Random seed; when omitted the SDK picks one and returns it in stats.'),
+    .describe('Random seed; when omitted core picks one and returns it in stats.'),
   steps: z
     .number()
     .int()
@@ -558,11 +558,11 @@ const videoGenerationBaseSchema = z.object({
   cache_threshold: z.number().optional().describe('Direct cache reuse threshold override.')
 })
 
-// Single wire object with mode-dependent rules expressed via a shared refine.
-// Keeping the wire schema a plain object (instead of a discriminated union)
-// lets the client builder construct the request without an `as` cast that
+// Single request object with mode-dependent rules expressed via a shared refine.
+// Keeping the request schema a plain object (instead of a discriminated union)
+// lets the request builder construct the request without an `as` cast that
 // would otherwise disable field-level type-checking. The compile-time
-// "img2vid requires init_image" guarantee lives on the client-facing
+// "img2vid requires init_image" guarantee lives on the caller-facing
 // discriminated union types below.
 const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
   mode: z

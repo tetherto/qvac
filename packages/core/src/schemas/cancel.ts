@@ -7,7 +7,7 @@ const cancelBaseSchema = z.object({
 /**
  * Public-API base for the broad-cancel escape hatch. Kept exported so
  * the bare-side `cancel({ modelId, kind? })` helper can parse the
- * `modelId` field consistently with the wire envelope.
+ * `modelId` field consistently with the request envelope.
  */
 export const cancelInferenceBaseSchema = z.object({
   modelId: z.string().describe('The model ID to cancel inference for')
@@ -15,7 +15,7 @@ export const cancelInferenceBaseSchema = z.object({
 
 /**
  * Coarse kind narrowing for the broad-cancel escape hatch. Matches the
- * server-side `RequestKind` union in `server/bare/runtime/request-context.ts`
+ * `RequestKind` union in `engine/runtime/request-context.ts`
  * — keep the two lists in sync. The kind is optional; omitting it
  * cancels every in-flight request on the model regardless of kind
  * (the "cancel everything on this model" sweep used by model-unload
@@ -75,16 +75,11 @@ const cancelByRequestIdParamsSchema = z.object({
  * non-`requestId` cancel surface for model-unload, app-shutdown, and
  * admin sweeps where the caller doesn't have a `requestId` to hand.
  *
- * Replaces the legacy per-kind discriminator arms (`"inference"`,
- * `"embeddings"`, `"downloadAsset"`, `"rag"`) with a single `"broad"`
- * arm plus an optional `kind` field. The old arms went away as part
- * of the 0.11.0 cleanup once every handler was on the registry; the
- * wire shape collapse is a `[bc]` for any external caller hand-rolling
- * the old RPC envelope. The public-API `cancel(...)` function in
- * `client/api/cancel.ts` keeps the old `{ operation: "inference", modelId }`
- * / `{ operation: "embeddings", modelId }` forms callable and translates
- * them into this new shape at the client boundary, so consumers using
- * the official SDK client see no change.
+ * A single `"broad"` arm plus an optional `kind` field is the only
+ * model-scoped cancel shape. The public-API `cancel(...)` function in
+ * `api/cancel.ts` also accepts the `{ operation: "inference", modelId }`
+ * / `{ operation: "embeddings", modelId }` sugar forms and normalises
+ * them into this shape.
  */
 const cancelBroadParamsSchema = z.object({
   operation: z.literal('broad').describe('Operation type'),
@@ -113,9 +108,9 @@ export const cancelResponseSchema = z.object({
 })
 
 /**
- * Sugar for the most common new path — `cancel({ requestId })`. The
- * client accepts either this shape (no `operation`) or the explicit
- * `{ operation: "request", requestId }` and normalises before sending.
+ * Sugar for the most common path — `cancel({ requestId })`. The public
+ * API accepts either this shape (no `operation`) or the explicit
+ * `{ operation: "request", requestId }` and normalises it.
  */
 export const cancelByRequestIdSugarSchema = z
   .object({
@@ -126,7 +121,7 @@ export const cancelByRequestIdSugarSchema = z
 
 /**
  * Sugar for the broad-cancel escape hatch — `cancel({ modelId, kind? })`.
- * Translates to `{ operation: "broad", modelId, kind? }` at the client
+ * Translates to `{ operation: "broad", modelId, kind? }` at the API
  * boundary.
  */
 export const cancelBroadSugarSchema = z
@@ -167,7 +162,7 @@ export type CancelKind = z.infer<typeof cancelKindSchema>
 export type CancelRequest = z.infer<typeof cancelRequestSchema>
 export type CancelResponse = z.infer<typeof cancelResponseSchema>
 
-/** Public client-API input — accepts the wire union *or* the requestId/broad sugars and the legacy per-kind sugars. */
+/** Public API input — accepts the request union *or* the requestId/broad sugars and the legacy per-kind sugars. */
 export type CancelClientInput =
   | CancelParams
   | CancelByRequestIdSugar

@@ -10,7 +10,7 @@ export interface WhisperAddonSegment {
 }
 
 /**
- * Normalize a native whisper-addon segment to the SDK-level `TranscribeSegment`
+ * Normalize a native whisper-addon segment to the core-level `TranscribeSegment`
  * shape exposed to callers: seconds → milliseconds, `toAppend` → `append`,
  * and defaults for optional fields.
  */

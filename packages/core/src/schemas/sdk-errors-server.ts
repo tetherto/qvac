@@ -147,7 +147,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE]: {
     name: 'UNKNOWN_MODEL_TYPE',
     message: (modelType: string) =>
-      `Unknown model type: ${modelType}. If using a custom worker bundle, ensure the plugin for "${modelType}" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`
+      `Unknown model type: ${modelType}. Register the plugin for "${modelType}" in code with \`registerPlugin\` / \`plugins([...])\` before this call.`
   },
 
   // Model Loading Errors (52,200-52,399)
@@ -279,7 +279,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
         : ' This model does not expose any operations.'
       const suggestionClause = suggestedModelTypes
         ? ` To use ${operation}, load a model of type: ${suggestedModelTypes}.`
-        : ` No model registered in this worker bundle exposes ${operation}.`
+        : ` No registered model exposes ${operation}.`
       return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`
     }
   },
@@ -479,7 +479,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE]: {
     name: 'ASYNC_DISPOSE_UNAVAILABLE',
     message:
-      'Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.'
+      'Host runtime does not expose Symbol.asyncDispose; core request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare ≥ 1.24) and any polyfill registration.'
   },
 
   // RPC/Delegation (Server-side) (53,700-53,899)
@@ -509,7 +509,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.PLUGIN_NOT_FOUND]: {
     name: 'PLUGIN_NOT_FOUND',
     message: (modelType: string) =>
-      `Plugin not found for model type "${modelType}". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk".`
+      `Plugin not found for model type "${modelType}". Register the plugin in code with \`registerPlugin\` / \`plugins([...])\` before this call.`
   },
   [SDK_SERVER_ERROR_CODES.PLUGIN_HANDLER_NOT_FOUND]: {
     name: 'PLUGIN_HANDLER_NOT_FOUND',

@@ -2,8 +2,8 @@ import { send } from '../dispatch'
 import { InvalidResponseError } from '../utils/errors-client'
 
 /**
- * Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore
- * resources and releases the lifecycle gate so all SDK operations are allowed
+ * Resumes the QVAC runtime: restores all suspended Hyperswarm and Corestore
+ * resources and releases the lifecycle gate so all QVAC operations are allowed
  * again.
  *
  * Safe to call from any lifecycle state — `resume()` is never blocked by the
@@ -11,7 +11,7 @@ import { InvalidResponseError } from '../utils/errors-client'
  * serves as the recovery path after a partial suspend failure.
  *
  * After `resume()` resolves successfully, runtime state is `"active"` and
- * non-lifecycle SDK operations are accepted normally.
+ * non-lifecycle operations are accepted normally.
  *
  * Behavior of in-flight operations from before the previous `suspend()`:
  *   - P2P / Hyperdrive downloads: continue automatically once their underlying

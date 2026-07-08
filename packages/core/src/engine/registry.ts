@@ -62,14 +62,13 @@ function isModelDelegated(request: Request): boolean {
 /**
  * Should the cancel be forwarded to a delegated provider?
  *
- * After the 0.11.0 wire-schema collapse the cancel envelope has two
- * operations:
+ * The cancel envelope has two operations:
  *
  *  - `request` — targeted cancel by `requestId`. Always handled
- *    locally: the worker-singleton `RequestRegistry` is the source of
+ *    locally: the process-singleton `RequestRegistry` is the source of
  *    truth for active requests (delegated handlers register their own
  *    requests on it the same way local handlers do), so a `requestId`
- *    cancel always lands on the right worker without needing a hop
+ *    cancel always lands on the right engine without needing a hop
  *    through the provider. Returning `false` here keeps the cancel on
  *    the local cancel handler, where it routes through the registry
  *    and (for downloads) the `markClearCacheForRequest` helper.
@@ -77,8 +76,8 @@ function isModelDelegated(request: Request): boolean {
  *  - `broad` — abort every in-flight request on a model. Forwarded to
  *    the delegated provider iff the targeted model itself is
  *    delegated; the provider then runs the same broad-cancel sweep
- *    server-side. Local broad cancels for non-delegated models stay
- *    on this worker.
+ *    on its side. Local broad cancels for non-delegated models stay
+ *    on this engine.
  */
 function isCancelDelegated(request: Request): boolean {
   if (request.type !== 'cancel') return false

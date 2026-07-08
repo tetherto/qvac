@@ -44,7 +44,7 @@ export function deriveBergamotRegistryVocabSources(modelSrc: string) {
 }
 
 /**
- * Resolves Bergamot vocab sources to absolute filesystem paths via the SDK
+ * Resolves Bergamot vocab sources to absolute filesystem paths via the core
  * resolver context, optionally including a pivot model.
  *
  * For `registry://` sources with auto-derived vocabs, this skips per-vocab

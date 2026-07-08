@@ -230,7 +230,7 @@ type HistoryMsg = {
  *   - The addon anchors the tool block after the last user message and
  *     trims tools + the assistant's tool-call output from the cache once
  *     the chain resolves. After that trim, the cache only holds messages
- *     up to the last user turn, so the SDK has to ship the right slice
+ *     up to the last user turn, so core has to ship the right slice
  *     plus the (possibly new) tool set:
  *       * tool-chain continuation (last role is "tool"): send the trailing
  *         consecutive tool messages, no tool block — tools are still
@@ -574,7 +574,7 @@ export async function* completion(
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
   // to rename to, so we let the deferred rollback drop the file. Once
-  // the SDK supports auto-cache for structured assistant/tool turns,
+  // core supports auto-cache for structured assistant/tool turns,
   // this becomes a normal commit path.
   if (result.toolCalls.length > 0) {
     logger.warn(

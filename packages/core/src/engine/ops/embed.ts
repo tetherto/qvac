@@ -33,8 +33,8 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
-  // straight to this context's signal. Falls back to a server-generated
-  // id if the client didn't send one (older releases).
+  // straight to this context's signal. Falls back to a generated
+  // id if the caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: 'embeddings',

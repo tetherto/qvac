@@ -79,9 +79,9 @@ const cachedMessageCounts = new Map<string, number>()
 /**
  * In-memory registry of caches initialized this session. The addon
  * defers disk writes, so the absence of a `.bin` file on disk isn't
- * proof that the cache hasn't been primed in this worker process. Keyed
+ * proof that the cache hasn't been primed in this process. Keyed
  * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
- * older worker runs still hit the lazy-load path in `beginTurn`.
+ * older process runs still hit the lazy-load path in `beginTurn`.
  */
 const initializedCaches = new Set<string>()
 
@@ -238,7 +238,7 @@ export function createKvCacheSession(
     // In-memory registry check first — the addon defers disk writes, so
     // a freshly-primed cache may not yet exist on disk. If the
     // in-memory flag isn't set, fall back to a filesystem probe so
-    // caches surviving across worker restarts still hit the reuse path.
+    // caches surviving across process restarts still hit the reuse path.
     let exists = initializedCaches.has(registryKey)
     if (!exists) {
       try {
@@ -398,7 +398,7 @@ export function createKvCacheSession(
  *
  * Why this isn't a method on `KvCacheSession`: deletes are
  * cross-model (`all: true` has no model; the keyed form has
- * `modelId` optional on the wire). A session, by contrast, is
+ * `modelId` optional in the request). A session, by contrast, is
  * created with a *fixed* `modelId` for the duration of a turn. Making
  * delete a method would force callers to materialise an irrelevant
  * session for cross-model administrative cleanups.

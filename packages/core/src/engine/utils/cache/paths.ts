@@ -113,7 +113,7 @@ export function getShardPath(hyperdriveKey: string, shardFilename: string): stri
 }
 
 /**
- * Returns the deletion target for `clearStorage`. Scoped to the SDK cache
+ * Returns the deletion target for `clearStorage`. Scoped to the QVAC cache
  * directory — companion set and legacy ONNX paths delete the parent directory.
  */
 export function getClearStorageTarget(modelPath: string): {

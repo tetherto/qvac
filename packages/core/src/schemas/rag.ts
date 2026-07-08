@@ -177,9 +177,8 @@ const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(
 
 // `requestId` is threaded onto every RAG operation as an optional field so
 // the request registry can correlate the in-flight context with the
-// client-side decorated-promise (`op.requestId`). Optional on the wire
-// so legacy clients keep working — the server falls back to a
-// server-generated id when the field is missing.
+// caller's decorated promise (`op.requestId`). Optional — core falls back
+// to a generated id when the field is missing.
 const ragRequestIdField = {
   requestId: z.string().min(1).optional()
 }

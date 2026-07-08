@@ -5,7 +5,7 @@ export const classificationConfigSchema = z.object({
   modelPath: z.string().optional(),
   /** Limit returned results to the top-K classes. Default: all classes. */
   topK: z.number().int().optional(),
-  /** Forward native C++ log lines through the SDK logger. Off by default. */
+  /** Forward native C++ log lines through the core logger. Off by default. */
   nativeLogger: z.boolean().optional()
 })
 

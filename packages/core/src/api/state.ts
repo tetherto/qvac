@@ -9,7 +9,7 @@ import { InvalidResponseError } from '../utils/errors-client'
  * lifecycle gate (along with `suspend()` and `resume()`).
  *
  * @returns The current lifecycle state:
- *   - `"active"`: all SDK operations are allowed
+ *   - `"active"`: all operations are allowed
  *   - `"suspending"` | `"suspended"` | `"resuming"`: non-lifecycle operations
  *     throw `LifecycleOperationBlockedError`
  *

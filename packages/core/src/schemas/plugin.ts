@@ -248,7 +248,7 @@ export function defineDuplexHandler<TRequest extends z.ZodType, TResponse extend
 }
 
 // ============================================
-// Worker runtime validation
+// Runtime validation
 // ============================================
 
 const functionRuntimeSchema = z.instanceof(Function, {

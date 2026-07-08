@@ -27,10 +27,10 @@ const logger = getClientLogger()
  *
  * The source is injected as an `AsyncIterable<TtsResponse>` so this class can
  * be unit-tested directly against the real implementation (without mocking
- * the RPC layer). Production callsites adapt `streamRpc(...)` via
+ * dispatch). Production callsites adapt `streamRpc(...)` via
  * `ttsResponseSource()` below.
  *
- * Exported for test use; not part of the public SDK surface.
+ * Exported for test use; not part of the public API surface.
  */
 export class TtsMulticast {
   private readonly queue: TtsResponse[] = []
@@ -94,10 +94,10 @@ export class TtsMulticast {
   private async pump(source: AsyncIterable<TtsResponse>): Promise<void> {
     try {
       for await (const response of source) {
-        // The server owns this response schema; per-frame Zod .parse() adds
+        // The engine owns this response schema; per-frame Zod .parse() adds
         // non-trivial CPU overhead for large sentences with many PCM frames.
-        // Rely on the discriminated union narrowing at the RPC boundary and
-        // skip re-validation here.
+        // Rely on the discriminated union narrowing done where the response
+        // is produced and skip re-validation here.
         this.queue.push(response)
         this.notify()
         if (response.done) break
@@ -326,8 +326,8 @@ async function* plainTtsBufferStream(
   try {
     for await (const response of streamRpc(request, options)) {
       if (response.type !== 'textToSpeech') continue
-      // See TtsMulticast.pump — skip per-frame Zod validation; the server is
-      // the source of truth for this wire shape.
+      // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
+      // the source of truth for this response shape.
       if (response.buffer.length > 0) {
         yield* response.buffer
       }
@@ -396,7 +396,7 @@ async function collectTtsBuffer(
 
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Buffer should be a complete UTF-8 fragment. The engine forwards them to ONNX TTS `runStreaming`
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  */
@@ -474,7 +474,7 @@ async function* parseTextToSpeechStreamLines(
       if (yielded === undefined) continue
       yield yielded
       // Close the stream after the terminal frame so consumers don't
-      // depend on the server closing the socket to stop iteration.
+      // depend on the engine ending the stream to stop iteration.
       if (yielded.done) return
     }
   }

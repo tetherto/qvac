@@ -195,8 +195,8 @@ export * from './models/registry'
 export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
 
 // Error classes consumers need for `instanceof` checks on rejected promises.
-// In-process, a handler's thrown error propagates as its real typed instance,
-// so these match directly with no RPC reconstruction.
+// A handler's thrown error propagates as its real typed instance, so these
+// match directly.
 export { InferenceCancelledError } from './utils/errors-server'
 export type { InferenceCancelledPartial } from './utils/errors-server'
 export {

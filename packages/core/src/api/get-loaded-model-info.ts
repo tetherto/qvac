@@ -11,7 +11,7 @@ import { InvalidResponseError } from '../utils/errors-client'
  * Returns introspection info for a loaded `modelId` (local or delegated).
  *
  * For local models, `info.modelType` and `info.handlers` are authoritative.
- * Use them to preflight an SDK call before sending the actual RPC, e.g.
+ * Use them to preflight a call before making the actual request, e.g.
  * confirm that a model supports `transcribeStream` before calling `transcribe()`.
  *
  * For delegated models, only `modelId`, `isDelegated: true`, `providerInfo`,

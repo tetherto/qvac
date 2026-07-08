@@ -25,7 +25,7 @@ const configRegistry: QvacConfig = {
 let configIsSet = false
 
 /**
- * Sets the SDK configuration. This can only be called ONCE during initialization.
+ * Sets the QVAC configuration. This can only be called ONCE during initialization.
  * After the first call, the config becomes immutable and any subsequent calls will throw.
  *
  * @param config - The configuration to set

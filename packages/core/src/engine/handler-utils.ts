@@ -255,9 +255,8 @@ export function isShutdownMessage(data: unknown): data is ShutdownMessage {
 
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
   try {
-    // Lazy import to avoid the import cycle:
-    //   handler-utils -> worker-core -> create-server -> handle-request
-    //   -> handler-utils. By the time this runs, all modules are loaded.
+    // Lazy import to avoid an import cycle with `./lifecycle`. By the time
+    // this runs, all modules are loaded.
     const { cleanupForTerminate } = await import('./lifecycle')
     await cleanupForTerminate()
     req.reply(JSON.stringify({ success: true }), 'utf-8')

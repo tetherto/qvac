@@ -60,7 +60,7 @@ function f32FromBase64(b64: string): Float32Array {
  *
  * @example
  * ```typescript
- * import { loadModel, vla, vlaPreprocessImage, vlaPadState, vlaHparams } from "@qvac/sdk";
+ * import { loadModel, vla, vlaPreprocessImage, vlaPadState, vlaHparams } from "@qvac/core";
  *
  * const modelId = await loadModel({ modelSrc: "/path/to/smolvla.gguf", modelType: "vla" });
  * const { hparams } = await vlaHparams({ modelId });

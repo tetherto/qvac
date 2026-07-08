@@ -13,12 +13,12 @@ import type { Logger } from '../../logging/types'
 export type RequestOutcome = 'completed' | 'failed' | 'cancelled'
 
 export interface BeginOpts {
-  /** Stable identity. Caller-provided so the client and server agree. */
+  /** Stable identity. Caller-provided so a `cancel` can target it by id. */
   requestId: string
   kind: RequestKind
   modelId?: string
   /**
-   * Optional parent abort signal — typically the worker-level "shutdown"
+   * Optional parent abort signal — typically the process-level "shutdown"
    * signal. When the parent aborts, the request's own signal aborts too.
    * Composes through a `addEventListener("abort", ...)` hook so cancelling
    * the parent does not require iterating the registry.
@@ -163,7 +163,7 @@ export interface RequestRegistry {
   cancel(target: CancelTarget): number
 
   /**
-   * Cancel every active request — the worker-shutdown / model-unload
+   * Cancel every active request — the process-shutdown / model-unload
    * sweep. The reason is forwarded to each request as the abort reason
    * so handler logs can distinguish a normal cancel from a sweep.
    * Resolves once all targeted contexts have flipped to `"cancelling"`;
@@ -186,7 +186,7 @@ interface RegistryEntry {
   /**
    * Cleanup hook removed from `parentSignal` after the request ends, so
    * a long-lived shutdown signal doesn't accumulate per-request listeners
-   * for the lifetime of the worker.
+   * for the lifetime of the process.
    */
   detachParent: () => void
   /** `Date.now()` at `begin(...)` — used for `durationMs` on the end emit. */
@@ -258,18 +258,19 @@ interface KeyState {
 /**
  * Tuning knobs for the "cancelled-before-begin" bookkeeping set.
  *
- * The race window is bounded by the client-to-server round-trip: a
- * `cancel({ requestId })` issued by the client at the same time as the
- * matching `completion(...)` either lands first (and we need to remember
- * it long enough for the server's `begin(...)` to follow) or lands
- * second (and we never touch this set). 30 seconds is overkill for a
- * 500ms round-trip but gives slow networks / pause-the-debugger
- * scenarios enough slack while still bounding worst-case retention.
+ * The race window spans the gap between a `cancel({ requestId })` and
+ * the matching operation's `begin(...)`: a `cancel` issued at the same
+ * time as the matching `completion(...)` either lands first (and we need
+ * to remember it long enough for `begin(...)` to follow) or lands second
+ * (and we never touch this set). For a local call the gap is tiny; a
+ * delegated call adds the provider round-trip. 30 seconds is overkill for
+ * that but gives slow networks / pause-the-debugger scenarios enough
+ * slack while still bounding worst-case retention.
  *
- * The size cap protects against a buggy or malicious client firing a
+ * The size cap protects against a buggy or malicious caller firing a
  * stream of cancels for ids that never get a `begin(...)` follow-up —
  * each `cancel({ requestId })` that doesn't match an in-flight context
- * inserts one entry, so without a cap the worker would grow the map
+ * inserts one entry, so without a cap the process would grow the map
  * unbounded. At the cap, the oldest entry is evicted.
  *
  * Tweak with care: both bounds appear in the registry race test
@@ -429,7 +430,7 @@ export function createRequestRegistry(options?: {
     if (!policy || !Number.isFinite(policy.maxConcurrent)) {
       return { slotKey: undefined }
     }
-    // A parent (worker-shutdown) signal that's already aborted: don't
+    // A parent (process-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
@@ -697,7 +698,7 @@ export function createRequestRegistry(options?: {
         cancelQueuedWaiterGracefully(queued.key, queued.waiter, target.reason)
         return cancelled + 1
       }
-      // Stop-button race: the client beat its own
+      // Stop-button race: the cancel beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
       // request was matched, which is still the truth — but the
@@ -731,7 +732,7 @@ export function createRequestRegistry(options?: {
     // leave a `begin(...)` promise hung forever — which would in turn block
     // the unload waiting on a request that never resolves. Unlike the
     // targeted cancels above these *reject* rather than resolve-into-
-    // aborted: the model / worker they queued against is being torn down,
+    // aborted: the model / process they queued against is being torn down,
     // so there is nothing left for them to run. Snapshot first —
     // `removeWaiter` mutates `waitersById`.
     for (const { key, waiter } of Array.from(waitersById.values())) {

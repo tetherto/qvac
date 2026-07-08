@@ -145,7 +145,7 @@ export const parakeetPlugin = definePlugin({
       cancel: { scope: 'model', hard: true },
 
       // TODO(QVAC-17869-followup): wire `AbortSignal` through the duplex
-      // handler signature so the worker learns about consumer disconnects
+      // handler signature so the handler learns about consumer disconnects
       // without depending on `inputStream.end()` (which does not fire if the
       // client drops packets while TCP stays alive). Under sustained slow
       // consumers, `runStreaming` may buffer between the server generator and

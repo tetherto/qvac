@@ -54,8 +54,8 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     }
 
     // Handle internal pre-terminate cleanup signal (bypasses schema). Lets
-    // the client tear addons down while the JS env is still alive so static
-    // js_ref_t state doesn't survive into the next worklet's isolate.
+    // the host tear addons down while the JS env is still alive so static
+    // js_ref_t state doesn't survive into the next isolate.
     if (isShutdownMessage(jsonData)) {
       await handleShutdown(req)
       return

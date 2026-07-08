@@ -12,7 +12,7 @@ type WorkerEnv = z.infer<typeof envSchema>
 let validatedEnv: WorkerEnv | null = null
 
 /**
- * Initialize the worker environment. Call once at worker startup.
+ * Initialize the engine environment. Call once at process startup.
  * Returns whether RPC config was parsed from arguments.
  */
 export function initEnv(): { hasRPCConfig: boolean } {
@@ -44,7 +44,7 @@ export function initEnv(): { hasRPCConfig: boolean } {
 }
 
 /**
- * Get the worker environment. Must call initEnv() first.
+ * Get the engine environment. Must call initEnv() first.
  */
 export function getEnv() {
   if (!validatedEnv) {
