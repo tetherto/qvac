@@ -45,14 +45,6 @@ public:
     scheduler.decodeFunc_ = std::move(fn);
   }
 
-  /// Override the context synchronization used after successful decode/media
-  /// eval; inject a blocking stub to verify throughput timing includes backend
-  /// completion.
-  static void
-  setSynchronizeFunc(Scheduler& scheduler, Scheduler::SynchronizeFunc fn) {
-    scheduler.synchronizeFunc_ = std::move(fn);
-  }
-
   /// Override the media-segment eval used by serviceNextMediaSegmentLocked();
   /// inject a stub that throws to exercise the media-eval failure path.
   static void
