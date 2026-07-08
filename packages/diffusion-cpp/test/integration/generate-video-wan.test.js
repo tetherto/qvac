@@ -46,18 +46,15 @@ const platform = detectPlatform()
 const WAN_FILES = [
   {
     key: 'model',
-    name: 'wan2.1_t2v_1.3B_fp16.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors'
+    name: 'wan2.1_t2v_1.3B_fp16.safetensors'
   },
   {
     key: 'vae',
-    name: 'wan_2.1_vae.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors'
+    name: 'wan_2.1_vae.safetensors'
   },
   {
     key: 't5Xxl',
-    name: 'umt5_xxl_fp16.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors'
+    name: 'umt5_xxl_fp16.safetensors'
   }
 ]
 
@@ -67,23 +64,19 @@ const WAN_FILES = [
 const WAN_I2V_FILES = [
   {
     key: 'model',
-    name: 'wan2.1-i2v-14b-480p-Q4_K_M.gguf',
-    url: 'https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf'
+    name: 'wan2.1-i2v-14b-480p-Q4_K_M.gguf'
   },
   {
     key: 'vae',
-    name: 'wan_2.1_vae.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors'
+    name: 'wan_2.1_vae.safetensors'
   },
   {
     key: 't5Xxl',
-    name: 'umt5_xxl_fp16.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors'
+    name: 'umt5_xxl_fp16.safetensors'
   },
   {
     key: 'clipVision',
-    name: 'clip_vision_h.safetensors',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors'
+    name: 'clip_vision_h.safetensors'
   }
 ]
 
@@ -189,8 +182,7 @@ test('Wan 2.1 T2V — smoke (txt2vid) generates a structurally valid AVI',
         modelPath = overridePath
       } else {
         modelPath = await ensureModelPath({
-          modelName: entry.name,
-          downloadUrl: entry.url
+          modelName: entry.name
         })
       }
       resolvedFiles[entry.key] = modelPath
@@ -379,8 +371,7 @@ test('Wan 2.1 I2V — smoke (img2vid) generates a structurally valid AVI',
         modelPath = overridePath
       } else {
         modelPath = await ensureModelPath({
-          modelName: entry.name,
-          downloadUrl: entry.url
+          modelName: entry.name
         })
       }
       resolvedFiles[entry.key] = modelPath
