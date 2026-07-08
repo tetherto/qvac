@@ -5,23 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2026-07-08
-
-### Added
-
-- **Opt-in `vulkanCacheDir` option (Supertonic + `useGPU: true`).** When set to a
-  writable directory, the addon forwards it to the Vulkan backend via
-  `GGML_VK_PIPELINE_CACHE_DIR` so the compiled compute pipelines are persisted to
-  disk and pre-warmed at `load()`. The Vulkan backend otherwise compiles every
-  pipeline lazily on the first GPU dispatch — several seconds on Mali (Pixel 9)
-  that land on the first `run()`, making a short GPU synth look slower than CPU.
-  Persisting + pre-warming pays that cost once per install instead of once per
-  process; on a Pixel 9a it turns the short-utterance GPU path from
-  slower-than-CPU into faster-than-CPU with no change to the audio output. Fully
-  opt-in and non-breaking: unset means no env override and no pre-warm, so
-  existing callers are byte-identical. Vulkan analogue of `openclCacheDir`; inert
-  on Metal / OpenCL / CPU (QVAC-21910, tetherto/qvac#3120).
-
 ## [0.4.2] - 2026-07-08
 
 ### Fixed
