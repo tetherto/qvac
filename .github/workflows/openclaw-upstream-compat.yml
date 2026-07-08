@@ -5,6 +5,12 @@ name: OpenClaw Upstream Compatibility
 # localService, config, model-catalog, and agent-run drift is caught early.
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/openclaw-upstream-compat.yml"
+      - "scripts/ci/openclaw-upstream-compat-smoke.sh"
   schedule:
     - cron: "30 7 * * *" # daily 07:30 UTC, after the OpenCode compatibility smoke
   workflow_dispatch:
