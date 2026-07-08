@@ -164,28 +164,87 @@ function unionArmsOf(node: JsonSchema): JsonSchema[] | undefined {
 }
 
 /**
+ * Collapses `oneOf`/`anyOf` arrays that carry exactly one arm into that arm
+ * directly, recursively from the leaves up. A single-arm union discriminates
+ * nothing, so naming it as a union (wrapper title + arm title) forces the
+ * arm into a name distinct from a wrapper it's identical to — e.g.
+ * `reloadConfigRequestSchema = z.union([reloadConfigWhisperRequestSchema])`
+ * produced both a `ReloadConfigRequest` (the wrapper) and a
+ * `ReloadConfigRequest2` (the lone arm) for what is really one type.
+ * Collapsing first means there's only ever one node here for titling to see.
+ * The wrapper's own explicit `title` (its `.meta()`), if any, wins over the
+ * arm's — it's the intentional public name for the schema export.
+ */
+function collapseSingleMemberUnions(node: unknown): unknown {
+  if (!isSchemaObject(node)) return node
+
+  const properties = node['properties']
+  if (isSchemaObject(properties)) {
+    for (const key of Object.keys(properties)) {
+      properties[key] = collapseSingleMemberUnions(properties[key])
+    }
+  }
+  if (node['items'] !== undefined) {
+    node['items'] = collapseSingleMemberUnions(node['items'])
+  }
+  if (isSchemaObject(node['additionalProperties'])) {
+    node['additionalProperties'] = collapseSingleMemberUnions(node['additionalProperties'])
+  }
+
+  const unionKey = Array.isArray(node['oneOf'])
+    ? 'oneOf'
+    : Array.isArray(node['anyOf'])
+      ? 'anyOf'
+      : undefined
+  if (!unionKey) return node
+
+  const arms = (node[unionKey] as unknown[]).map(collapseSingleMemberUnions)
+  if (arms.length !== 1) {
+    node[unionKey] = arms
+    return node
+  }
+
+  const arm = arms[0]
+  const wrapperTitle = typeof node['title'] === 'string' ? node['title'] : undefined
+  const wrapperRest: JsonSchema = { ...node }
+  delete wrapperRest[unionKey]
+  if (!isSchemaObject(arm)) return wrapperTitle ? wrapperRest : arm
+
+  const merged: JsonSchema = { ...wrapperRest, ...arm }
+  if (wrapperTitle) merged['title'] = wrapperTitle
+  return merged
+}
+
+function constValueOf(arm: JsonSchema, key: string): string | undefined {
+  const properties = arm['properties']
+  const field = isSchemaObject(properties) ? properties[key] : undefined
+  return isSchemaObject(field) && typeof field['const'] === 'string' ? field['const'] : undefined
+}
+
+/**
  * Property key that best discriminates a set of sibling union arms: the
  * `const` string field, wherever present, that splits the arms into the most
- * distinct groups. Picks the *best* key rather than requiring perfection —
- * two shortcomings otherwise cause bad names:
+ * distinct groups — counting "arms with no const for this key at all" as one
+ * more group (they'll be disambiguated some other way; see `nameUnionArms`).
+ * Picks the *best* key rather than requiring perfection — two shortcomings
+ * otherwise cause bad names:
  *
  * - Requiring every arm to carry the key: `loadModel`'s custom-plugin
  *   catch-all arm has no `modelType` const, so demanding full coverage threw
  *   away `modelType` for the other 11 arms too.
  * - Requiring the value to never repeat: `completionStream`'s event union
- *   has two arms both typed `completionDone` (success vs. error), so
- *   demanding perfect uniqueness rejected `type` for all 8 events, even
- *   though it cleanly separates the other 6. A same-named pair among many
- *   otherwise-unique arms still bumps to `...2` via `ensureUniqueTitle`
- *   downstream — better than every arm losing its name to that one clash.
+ *   has two arms both typed `completionDone` (success vs. error) — demanding
+ *   perfect uniqueness rejected `type` for all 8 events, even though it
+ *   cleanly separates the other 6. `nameUnionArms` recurses into the
+ *   colliding pair to find a secondary key (`stopReason`) instead.
  *
  * Also deliberately not a fixed guess-list of names (`type`/`operation`/...):
  * the wire method discriminator (`type`) is IDENTICAL across every arm of a
  * single method's own operation union (e.g. every `rag` arm has
  * `type: 'rag'`), so guessing by name picked the one field that never
  * discriminates anything and produced `RagRequestRag`, `RagRequestRag2`, ...
- * A key with only one distinct value across all arms is rejected outright —
- * it's exactly this "same value everywhere" case.
+ * A key where every arm lands in one single group is rejected outright —
+ * it's exactly this "same value everywhere" (or "no arm has it") case.
  */
 function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
   const candidateKeys = new Set<string>()
@@ -196,17 +255,16 @@ function pickDiscriminatorKey(arms: JsonSchema[]): string | undefined {
     }
   }
   let bestKey: string | undefined
-  let bestGroupCount = 1 // a key with only 1 distinct value discriminates nothing
+  let bestGroupCount = 1 // a key producing only 1 group discriminates nothing
   for (const key of candidateKeys) {
-    const values: string[] = []
+    const values = new Set<string>()
+    let anyMissing = false
     for (const arm of arms) {
-      const properties = arm['properties']
-      const field = isSchemaObject(properties) ? properties[key] : undefined
-      if (isSchemaObject(field) && typeof field['const'] === 'string') {
-        values.push(field['const'])
-      }
+      const value = constValueOf(arm, key)
+      if (value === undefined) anyMissing = true
+      else values.add(value)
     }
-    const groupCount = new Set(values).size
+    const groupCount = values.size + (anyMissing ? 1 : 0)
     if (groupCount > bestGroupCount) {
       bestKey = key
       bestGroupCount = groupCount
@@ -227,18 +285,85 @@ function ensureUniqueTitle(base: string, seenTitles: Set<string>): string {
   return unique
 }
 
-/** Names each arm of a union: by the shared discriminator's value when the
- * arms have one in common, else positionally (1-based, index 0 unsuffixed). */
+/** Whether a schema node is itself substantial enough to need a title: an
+ * object, an enum, or a nested union (whose own arms will need names) —
+ * as opposed to a bare scalar (`{type: 'string'}`) or `{}` ("any"), which
+ * never get titled regardless of position. */
+function needsOwnTitle(node: unknown): boolean {
+  if (!isSchemaObject(node)) return false
+  if (unionArmsOf(node)) return true
+  const isEnum = Array.isArray(node['enum'])
+  const isObject = node['type'] === 'object' || isSchemaObject(node['properties'])
+  const hasConst = node['const'] !== undefined
+  return (isEnum || isObject) && !hasConst
+}
+
+/**
+ * Names each arm of a union: by the shared discriminator's value when the
+ * arms have one in common; else, if at most one arm actually needs a title
+ * (e.g. `string | { repeats: number }` — only the object arm does), that one
+ * arm gets the bare prefix with no suffix, since there's nothing to
+ * disambiguate; only when neither applies does it fall back to positional
+ * naming (1-based: `Foo1`, `Foo2`, ...).
+ */
 function nameUnionArms(arms: JsonSchema[], namePrefix: string): string[] {
+  if (arms.length <= 1) {
+    return arms.map(function () {
+      return namePrefix
+    })
+  }
+
   const key = pickDiscriminatorKey(arms)
-  return arms.map(function (arm, index) {
-    const properties = isSchemaObject(arm) ? arm['properties'] : undefined
-    const field = key && isSchemaObject(properties) ? properties[key] : undefined
-    const discriminator = isSchemaObject(field) ? (field['const'] as string | undefined) : undefined
-    return discriminator
-      ? `${namePrefix}${toPascalCase(discriminator)}`
-      : `${namePrefix}${index + 1}`
+  if (!key) {
+    if (arms.filter(needsOwnTitle).length <= 1) {
+      return arms.map(function () {
+        return namePrefix
+      })
+    }
+    return arms.map(function (_arm, index) {
+      return `${namePrefix}${index + 1}`
+    })
+  }
+
+  // Group arms by their value for `key` (arms with no const for `key` share
+  // the `undefined` group). A key is only ever picked when it produces more
+  // than one group (see pickDiscriminatorKey), so every group here is
+  // strictly smaller than `arms` — groups with more than one member recurse
+  // to find a secondary discriminator instead of falling straight to
+  // `ensureUniqueTitle`'s numeric bump. This is what turns two arms sharing
+  // `type: 'completionDone'` into `...CompletionDoneError` (has a `stopReason`
+  // const) and bare `...CompletionDone` (the lone arm left without one)
+  // instead of `...CompletionDone` / `...CompletionDone2`.
+  const groupOrder: Array<string | undefined> = []
+  const groups = new Map<string | undefined, number[]>()
+  arms.forEach(function (arm, index) {
+    const value = constValueOf(arm, key)
+    if (!groups.has(value)) {
+      groupOrder.push(value)
+      groups.set(value, [])
+    }
+    groups.get(value)?.push(index)
   })
+
+  const names = new Array<string>(arms.length)
+  for (const value of groupOrder) {
+    const indexes = groups.get(value) as number[]
+    const groupPrefix = value !== undefined ? `${namePrefix}${toPascalCase(value)}` : namePrefix
+    if (indexes.length === 1) {
+      names[indexes[0] as number] = groupPrefix
+      continue
+    }
+    const subNames = nameUnionArms(
+      indexes.map(function (index) {
+        return arms[index] as JsonSchema
+      }),
+      groupPrefix
+    )
+    indexes.forEach(function (armIndex, i) {
+      names[armIndex] = subNames[i] as string
+    })
+  }
+  return names
 }
 
 /**
@@ -248,9 +373,10 @@ function nameUnionArms(arms: JsonSchema[], namePrefix: string): string[] {
  * `completionStream.response`'s event union gets
  * `CompletionStreamResponseEventsItemContentDelta` instead of a bare `Events3`.
  *
- * Without this, nested/inline Zod schemas reach Python codegen (verified
- * against datamodel-code-generator) as positionally-numbered classes
- * (`Stats13`, `Events7`) with no indication of what they represent.
+ * Without this, nested/inline Zod schemas reach codegen (verified against
+ * datamodel-code-generator, a JSON-Schema-to-pydantic tool) as
+ * positionally-numbered classes (`Stats13`, `Events7`) with no indication of
+ * what they represent.
  *
  * If `node` already carries a `title` (a schema author's explicit Zod
  * `.meta({ title: ... })`, e.g. `FinetuneRunRequest`), that title wins over
@@ -263,10 +389,10 @@ function titleSchemaNode(node: unknown, namePrefix: string, seenTitles: Set<stri
 
   const existingTitle = typeof node['title'] === 'string' ? node['title'] : undefined
   if (existingTitle) seenTitles.add(existingTitle)
-  const effectivePrefix = existingTitle ?? namePrefix
 
   const arms = unionArmsOf(node)
   if (arms) {
+    const effectivePrefix = existingTitle ?? namePrefix
     const armNames = nameUnionArms(arms, effectivePrefix)
     arms.forEach(function (arm, index) {
       titleSchemaNode(arm, armNames[index] as string, seenTitles)
@@ -274,12 +400,15 @@ function titleSchemaNode(node: unknown, namePrefix: string, seenTitles: Set<stri
     return
   }
 
-  const isEnum = Array.isArray(node['enum'])
-  const isObject = node['type'] === 'object' || isSchemaObject(node['properties'])
-  const hasConst = node['const'] !== undefined
-  if ((isEnum || isObject) && !hasConst && !existingTitle) {
-    node['title'] = ensureUniqueTitle(namePrefix, seenTitles)
-  }
+  // If namePrefix collided with an already-assigned title, ensureUniqueTitle
+  // bumps it (e.g. `...CompletionDone` -> `...CompletionDone2`). Children
+  // must be prefixed with that *final* title, not the pre-bump namePrefix —
+  // otherwise a child two levels down silently collides with an unrelated
+  // sibling's identically-(pre-bump-)named child instead of its own.
+  const assignedTitle =
+    needsOwnTitle(node) && !existingTitle ? ensureUniqueTitle(namePrefix, seenTitles) : undefined
+  if (assignedTitle) node['title'] = assignedTitle
+  const effectivePrefix = existingTitle ?? assignedTitle ?? namePrefix
 
   const properties = node['properties']
   if (isSchemaObject(properties)) {
@@ -329,8 +458,9 @@ function toWireJsonSchema(schema: z.ZodType, io: 'input' | 'output', defName: st
   }) as JsonSchema
   delete json['$schema']
   const flattened = flattenAllOfWithUnion(json, defName)
-  assertNoRefs(flattened, defName)
-  return flattened
+  const collapsed = collapseSingleMemberUnions(flattened) as JsonSchema
+  assertNoRefs(collapsed, defName)
+  return collapsed
 }
 
 function collectByWireType(
@@ -356,9 +486,9 @@ function refTo(defName: string): JsonSchema {
 /**
  * PascalCase class name for a wire type, e.g. `loadModel` -> `LoadModel`,
  * `finetune:progress` -> `FinetuneProgress`. Without a `title`, JSON Schema
- * -> Python codegen (e.g. datamodel-code-generator) falls back to
- * positional names like `Request1Model11` for nested unions — verified
- * empirically against the actual generator, not assumed.
+ * -> codegen (e.g. datamodel-code-generator) falls back to positional names
+ * like `Request1Model11` for nested unions — verified empirically against
+ * the actual generator, not assumed.
  */
 function toPascalCase(name: string): string {
   return name
@@ -371,6 +501,34 @@ function toPascalCase(name: string): string {
 
 function classTitleFor(name: string, suffix: 'Request' | 'Response'): string {
   return `${toPascalCase(name)}${suffix}`
+}
+
+/**
+ * The 4 methods that can switch from a plain unary reply to a stream of
+ * responses when the caller opts in (`request.withProgress === true`):
+ * progress events and the final reply both arrive as stream frames,
+ * distinguished only by each payload's own `type` — see
+ * `server/rpc/handler-selection.ts` (`handlerSupportsProgress`) and
+ * `server/rpc/handler-registry.ts` for the source of truth this mirrors.
+ *
+ * `rag` and `finetune` gate progress further on the request's `operation`
+ * (see `ragSupportsProgress`/`finetuneSupportsProgress` in
+ * `handler-registry.ts`) — `condition` spells out that extra check so a
+ * contract consumer doesn't have to special-case it separately.
+ */
+const progressByMethod: Partial<Record<MethodName, { condition: string; responseType: string }>> = {
+  loadModel: { condition: 'request.withProgress === true', responseType: 'modelProgress' },
+  downloadAsset: { condition: 'request.withProgress === true', responseType: 'modelProgress' },
+  rag: {
+    condition:
+      "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
+    responseType: 'rag:progress'
+  },
+  finetune: {
+    condition:
+      "request.withProgress === true && ['start', 'resume', undefined].includes(request.operation)",
+    responseType: 'finetune:progress'
+  }
 }
 
 export function buildContract() {
@@ -393,6 +551,15 @@ export function buildContract() {
   }
 
   const responseTypes = [...responseByType.keys()].sort()
+
+  for (const [methodName, progress] of Object.entries(progressByMethod)) {
+    if (!responseByType.has(progress.responseType)) {
+      throw new Error(
+        `progressByMethod["${methodName}"] points at response type "${progress.responseType}", ` +
+          'which has no schema in the response union'
+      )
+    }
+  }
 
   const defs: Record<string, JsonSchema> = {
     request: {
@@ -440,11 +607,18 @@ export function buildContract() {
 
   const manifest = {
     methods: methodNames.map(function (name) {
+      const progress = progressByMethod[name]
       return {
         name,
         callShape: callShapeByHandlerType[methodShapes[name]],
         requestSchema: `schema.json#/$defs/${name}.request`,
-        responseSchema: `schema.json#/$defs/${name}.response`
+        responseSchema: `schema.json#/$defs/${name}.response`,
+        ...(progress && {
+          progress: {
+            condition: progress.condition,
+            responseSchema: `schema.json#/$defs/${progress.responseType}.response`
+          }
+        })
       }
     })
   }

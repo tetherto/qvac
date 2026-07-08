@@ -45,3 +45,32 @@ across many unrelated fields (e.g. `modelSrcInputSchema`'s "string or
 descriptor object" pattern, reused by a dozen different `modelConfig` fields)
 — a single shared title there would be less useful than the exporter's
 per-field derived name, which tells you which field it's for.
+
+## Progress responses
+
+4 methods — `loadModel`, `downloadAsset`, `rag`, `finetune` — can switch from
+a plain unary reply to a stream of responses when the caller opts in
+(`request.withProgress === true`): progress events and the final reply both
+arrive as stream frames, distinguished only by each payload's own `type`
+field, not by frame position. `manifest.json` marks these 4 methods with a
+`progress` block:
+
+```json
+"progress": {
+  "condition": "request.withProgress === true",
+  "responseSchema": "schema.json#/$defs/rag:progress.response"
+}
+```
+
+`rag` and `finetune` gate progress on the request's `operation` in addition to
+`withProgress` — a consumer that only checks `withProgress` would wrongly
+expect progress frames for operations that never emit them. `condition`
+spells out the full check, e.g. `rag`'s is:
+
+```
+request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)
+```
+
+`downloadAsset` has no progress schema of its own — it reuses `loadModel`'s
+(`modelProgress.response`), since both stream the same underlying
+model-fetch progress.

@@ -46,7 +46,11 @@
       "name": "downloadAsset",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/downloadAsset.request",
-      "responseSchema": "schema.json#/$defs/downloadAsset.response"
+      "responseSchema": "schema.json#/$defs/downloadAsset.response",
+      "progress": {
+        "condition": "request.withProgress === true",
+        "responseSchema": "schema.json#/$defs/modelProgress.response"
+      }
     },
     {
       "name": "embed",
@@ -58,7 +62,11 @@
       "name": "finetune",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/finetune.request",
-      "responseSchema": "schema.json#/$defs/finetune.response"
+      "responseSchema": "schema.json#/$defs/finetune.response",
+      "progress": {
+        "condition": "request.withProgress === true && ['start', 'resume', undefined].includes(request.operation)",
+        "responseSchema": "schema.json#/$defs/finetune:progress.response"
+      }
     },
     {
       "name": "getLoadedModelInfo",
@@ -82,7 +90,11 @@
       "name": "loadModel",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/loadModel.request",
-      "responseSchema": "schema.json#/$defs/loadModel.response"
+      "responseSchema": "schema.json#/$defs/loadModel.response",
+      "progress": {
+        "condition": "request.withProgress === true",
+        "responseSchema": "schema.json#/$defs/modelProgress.response"
+      }
     },
     {
       "name": "loggingStream",
@@ -136,7 +148,11 @@
       "name": "rag",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/rag.request",
-      "responseSchema": "schema.json#/$defs/rag.response"
+      "responseSchema": "schema.json#/$defs/rag.response",
+      "progress": {
+        "condition": "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
+        "responseSchema": "schema.json#/$defs/rag:progress.response"
+      }
     },
     {
       "name": "resume",

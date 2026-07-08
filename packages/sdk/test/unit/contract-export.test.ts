@@ -58,6 +58,43 @@ test('manifest lists every method with its call shape', (t) => {
   }
 })
 
+test('progress block is present only on the 4 progress-capable methods', (t) => {
+  const { schemaDocument, manifest } = buildContract()
+  const defs = schemaDocument.$defs as Record<string, unknown>
+
+  const expected = new Set(['loadModel', 'downloadAsset', 'rag', 'finetune'])
+  const actual = new Set(
+    manifest.methods.filter((method) => 'progress' in method).map((method) => method.name)
+  )
+  t.alike(actual, expected, 'exactly loadModel/downloadAsset/rag/finetune carry a progress block')
+
+  for (const method of manifest.methods) {
+    const progress = (method as { progress?: { condition: string; responseSchema: string } })
+      .progress
+    if (!expected.has(method.name)) {
+      t.absent(progress, `${method.name} has no progress block`)
+      continue
+    }
+    t.ok(
+      typeof progress?.condition === 'string' && progress.condition.length > 0,
+      `${method.name} progress condition`
+    )
+    t.ok(
+      progress?.condition.includes('withProgress'),
+      `${method.name} condition checks withProgress`
+    )
+
+    const match = /^schema\.json#\/\$defs\/(.+)$/.exec(progress?.responseSchema ?? '')
+    t.ok(match, `${method.name} progress responseSchema points into schema.json#/$defs`)
+    if (match) {
+      t.ok(
+        defs[match[1] as string],
+        `${method.name} progress responseSchema def "${match[1]}" exists`
+      )
+    }
+  }
+})
+
 test('schema document has request and response defs for every method', (t) => {
   const { schemaDocument, manifest } = buildContract()
   const defs = schemaDocument.$defs
@@ -75,11 +112,11 @@ test('schema document has request and response defs for every method', (t) => {
   )
 })
 
-test('schema defs carry unique titles for Python codegen class names', (t) => {
-  // Without a `title`, JSON Schema -> Python codegen (e.g.
-  // datamodel-code-generator) falls back to positional names like
-  // `Request1Model11` for nested unions instead of `LoadModelRequest` —
-  // verified against the actual generator, not assumed.
+test('schema defs carry unique titles for codegen class names', (t) => {
+  // Without a `title`, JSON Schema -> codegen (e.g. datamodel-code-generator)
+  // falls back to positional names like `Request1Model11` for nested unions
+  // instead of `LoadModelRequest` — verified against the actual generator,
+  // not assumed.
   const { schemaDocument, manifest } = buildContract()
   const defs = schemaDocument.$defs as Record<string, { title?: string }>
 
@@ -100,11 +137,11 @@ test('schema defs carry unique titles for Python codegen class names', (t) => {
 })
 
 test('every nested object/enum schema carries a title, not a positional name', (t) => {
-  // Regression guard: without per-node titling, Python codegen produces
-  // unlabeled positional class names for every untitled nested schema
-  // (`Stats13`, `Events7`, `NeuralData1`) with no indication of what they
-  // represent. Every def must be fully titled down to its leaves, and all
-  // titles (top-level + nested) must be globally unique in one flat check.
+  // Regression guard: without per-node titling, codegen produces unlabeled
+  // positional class names for every untitled nested schema (`Stats13`,
+  // `Events7`, `NeuralData1`) with no indication of what they represent.
+  // Every def must be fully titled down to its leaves, and all titles
+  // (top-level + nested) must be globally unique in one flat check.
   const { schemaDocument } = buildContract()
   const defs = schemaDocument.$defs as Record<string, JsonSchema>
 
@@ -120,6 +157,43 @@ test('every nested object/enum schema carries a title, not a positional name', (
         allTitles.add(title)
       }
     }
+  }
+})
+
+test('no generated title falls back to a bare positional number', (t) => {
+  // Strict guard for the exact defect the naming algorithm exists to
+  // eliminate: a nested/union schema with no discriminator or meaningful
+  // property path falling back to `${prefix}${index}` (`Request1Model11`,
+  // `ReloadConfigRequest2`) instead of a name derived from a discriminator
+  // value, a property key, or an explicit `.meta({ title })`. A title ending
+  // in digits is only legitimate when those digits are part of a real
+  // technical term baked into a property name (`imageBase64` -> `...Base64`),
+  // never a positional ordinal — so any trailing-digit title must end in one
+  // of a short, closed list of known real terms, not just any digit run.
+  const KNOWN_NUMERIC_TERMS = ['Base64']
+
+  const { schemaDocument } = buildContract()
+  const defs = schemaDocument.$defs as Record<string, JsonSchema>
+
+  const allTitles: Array<{ title: string; defName: string }> = []
+  for (const [defName, def] of Object.entries(defs)) {
+    if (typeof def['title'] === 'string') allTitles.push({ title: def['title'], defName })
+    const nodes: JsonSchema[] = []
+    collectTitleableNodes(def, nodes)
+    for (const node of nodes) {
+      if (typeof node['title'] === 'string') allTitles.push({ title: node['title'], defName })
+    }
+  }
+
+  t.ok(allTitles.length > 0, 'sanity: contract actually has titles to check')
+
+  for (const { title, defName } of allTitles) {
+    if (!/[0-9]$/.test(title)) continue
+    const isKnownTerm = KNOWN_NUMERIC_TERMS.some((term) => title.endsWith(term))
+    t.ok(
+      isKnownTerm,
+      `"${title}" (under ${defName}) ends in a digit but isn't a known numeric term — looks positionally suffixed`
+    )
   }
 })
 

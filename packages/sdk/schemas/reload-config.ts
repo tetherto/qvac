@@ -45,7 +45,7 @@ export const reloadConfigWhisperRequestSchema = reloadConfigRequestBaseSchema.ex
 // Using z.union since modelType accepts multiple values
 export const reloadConfigRequestSchema = z
   .union([reloadConfigWhisperRequestSchema])
-  .meta({ title: 'ReloadModelConfigRequest' })
+  .meta({ title: 'ReloadConfigRequest' })
 
 export type ReloadConfigRequest = z.infer<typeof reloadConfigRequestSchema>
 export type ReloadConfigOptions = z.infer<typeof reloadConfigOptionsSchema>
