@@ -41,7 +41,7 @@ Omitting `ttsEngine` defaults to Chatterbox.
 
 ### Supertonic
 
-Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`. Supertonic also accepts an optional `outputSampleRate` (see [Output sample rate](#output-sample-rate)).
+Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`.
 
 ```ts
 await loadModel({
