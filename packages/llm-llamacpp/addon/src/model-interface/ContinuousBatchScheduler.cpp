@@ -672,7 +672,16 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
       error = std::current_exception();
       try {
         synchronizeFunc_(shared_.lctx);
+      } catch (const std::exception& e) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            e.what());
       } catch (...) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            nullptr);
       }
     }
     evalDuration = std::chrono::steady_clock::now() - evalStart;
