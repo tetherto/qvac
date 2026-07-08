@@ -1,5 +1,5 @@
-import EmbedLlamacpp, { type GGMLConfig } from "@qvac/embed-llamacpp";
-import embedAddonLogging from "@qvac/embed-llamacpp/addonLogging";
+import EmbedLlamacpp, { type GGMLConfig } from '@qvac/embed-llamacpp'
+import embedAddonLogging from '@qvac/embed-llamacpp/addonLogging'
 import {
   definePlugin,
   defineHandler,
@@ -10,111 +10,101 @@ import {
   ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
-  type EmbedConfig,
-} from "@/schemas";
-import { createStreamLogger, registerAddonLogger, getServerLogger } from "@/logging";
-import { expandGGUFIntoShards } from "@/server/utils";
-import { embed } from "@/server/bare/ops/embed";
-import { forwardModelExecution } from "@/profiling/model-execution";
-import { isMobile } from "@/server/bare/registry/runtime-context-registry";
-import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
+  type EmbedConfig
+} from '@/schemas'
+import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
+import { expandGGUFIntoShards } from '@/server/utils'
+import { embed } from '@/server/bare/ops/embed'
+import { forwardModelExecution } from '@/profiling/model-execution'
+import { isMobile } from '@/server/bare/registry/runtime-context-registry'
+import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
-    device: embedConfig.device as "gpu" | "cpu",
+    device: embedConfig.device as 'gpu' | 'cpu',
     gpu_layers: `${embedConfig.gpuLayers}` as `${number}`,
-    batch_size: `${embedConfig.batchSize}` as `${number}`,
-  };
+    batch_size: `${embedConfig.batchSize}` as `${number}`
+  }
 
   if (embedConfig.flashAttention) {
-    config.flash_attn = embedConfig.flashAttention;
+    config.flash_attn = embedConfig.flashAttention
   }
 
   if (embedConfig.pooling) {
-    config.pooling = embedConfig.pooling;
+    config.pooling = embedConfig.pooling
   }
 
   if (embedConfig.attention) {
-    config.attention = embedConfig.attention;
+    config.attention = embedConfig.attention
   }
 
-  if (typeof embedConfig.embdNormalize === "number") {
-    config.embd_normalize = `${embedConfig.embdNormalize}`;
+  if (typeof embedConfig.embdNormalize === 'number') {
+    config.embd_normalize = `${embedConfig.embdNormalize}`
   }
 
   if (embedConfig.mainGpu !== undefined) {
-    config["main-gpu"] =
-      typeof embedConfig.mainGpu === "number"
-        ? `${embedConfig.mainGpu}`
-        : embedConfig.mainGpu;
+    config['main-gpu'] =
+      typeof embedConfig.mainGpu === 'number' ? `${embedConfig.mainGpu}` : embedConfig.mainGpu
   }
 
   if (embedConfig.splitMode) {
-    config["split-mode"] = embedConfig.splitMode;
+    config['split-mode'] = embedConfig.splitMode
   }
 
   if (embedConfig.tensorSplit) {
-    config["tensor-split"] = embedConfig.tensorSplit;
+    config['tensor-split'] = embedConfig.tensorSplit
   }
 
-  if (typeof embedConfig.verbosity === "number") {
-    config.verbosity = `${embedConfig.verbosity}`;
+  if (typeof embedConfig.verbosity === 'number') {
+    config.verbosity = `${embedConfig.verbosity}`
   }
 
   if (embedConfig.openclCacheDir) {
-    config.openclCacheDir = embedConfig.openclCacheDir;
+    config.openclCacheDir = embedConfig.openclCacheDir
   }
 
-  return config;
+  return config
 }
 
-function createEmbeddingsModel(
-  modelId: string,
-  modelPath: string,
-  embedConfig: EmbedConfig,
-) {
-  const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding);
-  registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger);
+function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: EmbedConfig) {
+  const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding)
+  registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger)
 
-  const config = transformEmbedConfig(embedConfig);
+  const config = transformEmbedConfig(embedConfig)
 
   if (isMobile()) {
-    const stripped = stripMultiGpuKeys(config);
+    const stripped = stripMultiGpuKeys(config)
     if (stripped.length > 0) {
       getServerLogger().warn(
-        `[${ModelType.llamacppEmbedding}:${modelId}] Multi-GPU parameters (${stripped.join(", ")}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`,
-      );
+        `[${ModelType.llamacppEmbedding}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+      )
     }
   }
 
-  const modelFiles = expandGGUFIntoShards(modelPath);
+  const modelFiles = expandGGUFIntoShards(modelPath)
 
   const model = new EmbedLlamacpp({
     files: { model: modelFiles },
     config,
     logger,
-    opts: { stats: true },
-  });
+    opts: { stats: true }
+  })
 
-  return { model };
+  return { model }
 }
 
 export const embeddingsPlugin = definePlugin({
   modelType: ModelType.llamacppEmbedding,
-  displayName: "Embeddings (llama.cpp)",
+  displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
   loadConfigSchema: embedConfigBaseSchema,
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const embedConfig = (params.modelConfig ?? {}) as EmbedConfig;
+    const embedConfig = (params.modelConfig ?? {}) as EmbedConfig
 
-    const { model } = createEmbeddingsModel(
-      params.modelId,
-      params.modelPath,
-      embedConfig,
-    );
+    const { model } = createEmbeddingsModel(params.modelId, params.modelPath, embedConfig)
 
-    return { model };
+    return { model }
   },
 
   handlers: {
@@ -124,29 +114,32 @@ export const embeddingsPlugin = definePlugin({
       streaming: false,
       // Model-wide hard cancel via `addon.cancel()` on the llama.cpp
       // embedding addon. Compute is interrupted when fired.
-      cancel: { scope: "model", hard: true },
+      cancel: { scope: 'model', hard: true },
 
       handler: async function (request) {
         const embedResult = await embed(
           {
             modelId: request.modelId,
-            text: request.text,
+            text: request.text
           },
-          request.requestId,
-        );
+          request.requestId
+        )
 
-        return forwardModelExecution({
-          type: "embed" as const,
-          success: true,
-          embedding: embedResult.embedding,
-          ...(embedResult.stats && { stats: embedResult.stats }),
-        }, embedResult);
-      },
-    }),
+        return forwardModelExecution(
+          {
+            type: 'embed' as const,
+            success: true,
+            embedding: embedResult.embedding,
+            ...(embedResult.stats && { stats: embedResult.stats })
+          },
+          embedResult
+        )
+      }
+    })
   },
 
   logging: {
     module: embedAddonLogging,
-    namespace: ModelType.llamacppEmbedding,
-  },
-});
+    namespace: ModelType.llamacppEmbedding
+  }
+})

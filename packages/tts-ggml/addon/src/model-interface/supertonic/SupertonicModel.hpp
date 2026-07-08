@@ -18,6 +18,7 @@ class Engine;
 }
 namespace tts_cpp::lavasr {
 class Enhancer;
+class Denoiser;
 }
 
 namespace qvac::ttsggml::supertonic {
@@ -80,6 +81,11 @@ private:
   // cfg_.enhancerGgufPath is set; null disables enhancement. Holds only
   // const weights, so it is safe to share across concurrent enhance() calls.
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
+  // LavaSR denoiser (runs before the enhancer, rate-preserving): loaded when
+  // cfg_.denoiserGgufPath is set; null disables denoising. The tts-cpp UL-UNAS
+  // forward is implemented in qvac-ext-lib-whisper.cpp PR #78. Holds only const
+  // weights, safe to share across concurrent denoise() calls.
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser_;
 
   std::atomic_bool jobInProgress_{false};
 

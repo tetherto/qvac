@@ -1,97 +1,96 @@
 export interface LlmStats {
-  TTFT?: number;
-  TPS?: number;
-  CacheTokens?: number;
-  promptTokens?: number;
-  generatedTokens?: number;
-  backendDevice?: "cpu" | "gpu";
+  TTFT?: number
+  TPS?: number
+  CacheTokens?: number
+  promptTokens?: number
+  generatedTokens?: number
+  avgConcurrentSeq?: number
+  backendDevice?: 'cpu' | 'gpu'
 }
 
 export interface LlmResponse {
-  stats?: LlmStats;
-  iterate(): AsyncIterable<string>;
+  stats?: LlmStats
+  iterate(): AsyncIterable<string>
 }
 
 export interface NmtStats {
-  totalTime?: number;
-  totalTokens?: number;
-  decodeTime?: number;
-  encodeTime?: number;
-  TPS?: number;
-  TTFT?: number;
+  totalTime?: number
+  totalTokens?: number
+  decodeTime?: number
+  encodeTime?: number
+  TPS?: number
+  TTFT?: number
 }
 
 export interface NmtResponse {
-  stats?: NmtStats;
-  iterate(): AsyncIterable<string>;
+  stats?: NmtStats
+  iterate(): AsyncIterable<string>
 }
 
 export interface TtsStats {
-  audioDurationMs?: number;
-  totalSamples?: number;
+  audioDurationMs?: number
+  totalSamples?: number
 }
 
 export interface TtsResponse {
-  stats?: TtsStats;
-  iterate(): AsyncIterable<{ outputArray: ArrayLike<number> }>;
+  stats?: TtsStats
+  iterate(): AsyncIterable<{ outputArray: ArrayLike<number> }>
 }
 
 export interface EmbedStats {
-  total_time_ms?: number;
-  tokens_per_second?: number;
-  total_tokens?: number;
-  backendDevice?: "cpu" | "gpu";
-  context_size?: number;
+  total_time_ms?: number
+  tokens_per_second?: number
+  total_tokens?: number
+  backendDevice?: 'cpu' | 'gpu'
+  context_size?: number
 }
 
 export interface EmbedResponse {
-  stats?: EmbedStats;
-  await(): Promise<Float32Array[][]>;
+  stats?: EmbedStats
+  await(): Promise<Float32Array[][]>
 }
 
 export interface TranscribeStats {
-  audioDurationMs?: number;
-  realTimeFactor?: number;
-  tokensPerSecond?: number;
-  totalTokens?: number;
-  totalSegments?: number;
-  whisperEncodeMs?: number;
-  whisperDecodeMs?: number;
-  encoderMs?: number;
-  decoderMs?: number;
-  melSpecMs?: number;
-  backendDevice?: number;
-  backendId?: number;
-  gpuUnsupported?: number;
-  gpuMemTotalMb?: number;
-  gpuMemFreeMb?: number;
+  audioDurationMs?: number
+  realTimeFactor?: number
+  tokensPerSecond?: number
+  totalTokens?: number
+  totalSegments?: number
+  whisperEncodeMs?: number
+  whisperDecodeMs?: number
+  encoderMs?: number
+  decoderMs?: number
+  melSpecMs?: number
+  backendDevice?: number
+  backendId?: number
+  gpuUnsupported?: number
+  gpuMemTotalMb?: number
+  gpuMemFreeMb?: number
 }
 
 export interface TranscribeAddonSegment {
-  text: string;
-  start?: number;
-  end?: number;
-  toAppend?: boolean;
-  id?: number;
+  text: string
+  start?: number
+  end?: number
+  toAppend?: boolean
+  id?: number
 }
 
 export interface TranscribeAddonVadEvent {
-  type: "vad";
-  speaking: boolean;
-  probability: number;
+  type: 'vad'
+  speaking: boolean
+  probability: number
 }
 
 export interface TranscribeAddonEndOfTurnEvent {
-  type: "endOfTurn";
-  silenceDurationMs: number;
+  type: 'endOfTurn'
+  silenceDurationMs: number
 }
 
 export type TranscribeAddonOutput =
-  | Array<TranscribeAddonSegment>
-  | TranscribeAddonVadEvent
-  | TranscribeAddonEndOfTurnEvent;
+  Array<TranscribeAddonSegment> | TranscribeAddonVadEvent | TranscribeAddonEndOfTurnEvent
 
 export interface TranscribeResponse {
-  stats?: TranscribeStats;
-  iterate(): AsyncIterable<TranscribeAddonOutput>;
+  stats?: TranscribeStats
+  iterate(): AsyncIterable<TranscribeAddonOutput>
 }

@@ -436,6 +436,11 @@ async function runImageHighResAuroraTest (options = {}) { // eslint-disable-line
   return runIntegrationModule('../integration/image-high-res-aurora.test.js', options)
 }
 
+async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheTypeDefaultsTest')) return __FILTERED
+  return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)
@@ -484,6 +489,11 @@ async function runQwen35ImageFruitPlatePerfTest (options = {}) { // eslint-disab
 async function runQwen35ImageHighResAuroraPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageHighResAuroraPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5-image-high-res-aurora-perf.test.js', options)
+}
+
+async function runQwen35ImageTileModeTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35ImageTileModeTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen3-5-image-tile-mode-tokens.test.js', options)
 }
 
 async function runQwen35MultimodalCacheStressTest (options = {}) { // eslint-disable-line no-unused-vars

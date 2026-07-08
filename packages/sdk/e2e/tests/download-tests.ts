@@ -1,16 +1,16 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 export const downloadCancelIsolation: TestDefinition = {
-  testId: "download-cancel-isolation",
+  testId: 'download-cancel-isolation',
   params: { cancelAtPercent: 1 },
   // expectation is ignored in test executor, it does validation in the executor itself.
-  expectation: { validation: "function", fn: () => true },
-  suites: ["smoke"],
+  expectation: { validation: 'function', fn: () => true },
+  suites: ['smoke'],
   metadata: {
-    category: "download",
-    dependency: "none",
-    estimatedDurationMs: 180000,
-  },
-};
+    category: 'download',
+    dependency: 'none',
+    estimatedDurationMs: 180000
+  }
+}
 
-export const downloadTests = [downloadCancelIsolation];
+export const downloadTests = [downloadCancelIsolation]

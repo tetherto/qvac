@@ -133,8 +133,8 @@ Plugin config can override the local service launcher:
       qvac: {
         enabled: true,
         config: {
-          model: "qwen3.5-9b",
-          qvacCommand: "/absolute/path/to/qvac",
+          model: 'qwen3.5-9b',
+          qvacCommand: '/absolute/path/to/qvac',
           port: 11434,
           ctxSize: 32768,
           tools: true
@@ -153,7 +153,8 @@ Plugin config can override the local service launcher:
 - Local service command: `node <plugin>/dist/local-service.js`, which writes a
   temporary QVAC serve config and starts `qvac serve openai`
 - Model catalog: the shared `@qvac/ai-sdk-provider` catalog ids, including
-  `qwen3.5-0.8b`, `qwen3.5-2b`, `qwen3.5-4b`, and `qwen3.5-9b`
+  `qwen3.5-0.8b`, `qwen3.5-2b`, `qwen3.5-4b`, `qwen3.5-9b`,
+  `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b`
 
 ## Current Scope
 

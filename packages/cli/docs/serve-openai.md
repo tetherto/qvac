@@ -199,22 +199,22 @@ Both routes require an alias whose **endpoint category** is `image`. Built-in SD
 
 This server is intentionally **loud** about every OpenAI image-API field it cannot honor without producing the wrong bytes. Every case below is a `400` with a stable `error.code` so an agent can branch on it instead of silently shipping the wrong output to a user.
 
-| HTTP | `error.code`                                         | Trigger                                                                                                                                                                                                        |
+| HTTP | `error.code` | Trigger |
 | ---- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------- |
-| 400  | `mask_not_supported`                                 | `/v1/images/edits` received a `mask` / `mask[]` field. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image. Resend without `mask`. |
-| 400  | `unsupported_response_format`                        | `response_format=url` was requested but the server is not configured with `--public-base-url` (no way to mint a downloadable URL — see below). Use `response_format=b64_json`.                                 |
-| 400  | `invalid_response_format`                            | Anything other than `b64_json` / `url`.                                                                                                                                                                        |
-| 400  | `unsupported_output_format`                          | `output_format` other than `png`. The server only emits PNG.                                                                                                                                                   |
-| 400  | `unsupported_output_compression`                     | `output_compression` is set. Only meaningful with jpeg/webp, which we do not emit.                                                                                                                             |
-| 400  | `unsupported_background`                             | `background=transparent                                                                                                                                                                                        | opaque | auto`. The server has no alpha-channel control. |
-| 400  | `invalid_strength`                                   | `/v1/images/edits` received a `strength` outside `[0, 1]` or a non-numeric value.                                                                                                                              |
-| 400  | `missing_prompt` / `missing_model` / `missing_image` | Required fields absent.                                                                                                                                                                                        |
-| 400  | `invalid_size`                                       | `size` is not `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`.                                                                                                                                                   |
-| 400  | `invalid_n`                                          | `n` is not a positive integer.                                                                                                                                                                                 |
-| 404  | `model_not_found`                                    | Unknown alias.                                                                                                                                                                                                 |
-| 400  | `invalid_model_type`                                 | Alias is not an `image` model.                                                                                                                                                                                 |
-| 503  | `model_not_ready`                                    | Model not loaded yet.                                                                                                                                                                                          |
-| 500  | `image_generation_error` / `image_edit_error`        | SDK / engine failure.                                                                                                                                                                                          |
+| 400 | `mask_not_supported` | `/v1/images/edits` received a `mask` / `mask[]` field. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image. Resend without `mask`. |
+| 400 | `unsupported_response_format` | `response_format=url` was requested but the server is not configured with `--public-base-url` (no way to mint a downloadable URL — see below). Use `response_format=b64_json`. |
+| 400 | `invalid_response_format` | Anything other than `b64_json` / `url`. |
+| 400 | `unsupported_output_format` | `output_format` other than `png`. The server only emits PNG. |
+| 400 | `unsupported_output_compression` | `output_compression` is set. Only meaningful with jpeg/webp, which we do not emit. |
+| 400 | `unsupported_background` | `background=transparent                                                                                                                                                                                        | opaque | auto`. The server has no alpha-channel control. |
+| 400 | `invalid_strength` | `/v1/images/edits` received a `strength` outside `[0, 1]` or a non-numeric value. |
+| 400 | `missing_prompt` / `missing_model` / `missing_image` | Required fields absent. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`. |
+| 400 | `invalid_n` | `n` is not a positive integer. |
+| 404 | `model_not_found` | Unknown alias. |
+| 400 | `invalid_model_type` | Alias is not an `image` model. |
+| 503 | `model_not_ready` | Model not loaded yet. |
+| 500 | `image_generation_error` / `image_edit_error` | SDK / engine failure. |
 
 The following OpenAI fields are **accepted and silently ignored** (a warning is logged) because they are advisory and would not change the bytes returned: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
 

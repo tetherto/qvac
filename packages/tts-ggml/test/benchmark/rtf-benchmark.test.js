@@ -72,7 +72,7 @@ const arch = os.arch()
 const platformArch = `${platform}-${arch}`
 const isMobile = platform === 'ios' || platform === 'android'
 
-// QVAC-20499: detect the desktop GPU/CPU hardware name (e.g. "NVIDIA RTX 4000
+// detect the desktop GPU/CPU hardware name (e.g. "NVIDIA RTX 4000
 // SFF Ada") via the shared perf reporter's detectDevice(), which shells out to
 // nvidia-smi / vulkaninfo / system_profiler through bare-subprocess. The
 // reporter lives outside the addon bundle, so require it dynamically (path.join

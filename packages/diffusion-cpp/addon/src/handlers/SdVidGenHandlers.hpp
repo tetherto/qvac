@@ -118,6 +118,10 @@ struct SdVidGenConfig {
   int vaeTileSizeX = 512;      // tile width  in pixels
   int vaeTileSizeY = 512;      // tile height in pixels
   float vaeTileOverlap = 0.5f; // fraction of tile used as overlap seam (0-1)
+  // Temporal tiling for the LTX-2 video VAE decode -- tiles along the time
+  // axis to bound peak VRAM at high resolution / long clips. Maps to
+  // sd_tiling_params_t::temporal_tiling. No effect on Wan (spatial-only VAE).
+  bool vaeTemporalTiling = false;
 
   // -- Step-caching ----------------------------------------------------------
   // Mapped to sd_vid_gen_params_t::cache. Same enum as image generation.

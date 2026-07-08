@@ -63,50 +63,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        shell: bash
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          ref_name="${GITHUB_REF_NAME}"
-          event_name="${GITHUB_EVENT_NAME}"
-          input_tag="${INPUT_TAG}"
-
-          publish_main="false"
-          publish_release="false"
-          publish_feature="false"
-          publish_tmp="false"
-
-          if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
-            if [ "$ref_name" = "main" ]; then
-              publish_main="true"
-            elif [[ "$ref_name" == release-* ]]; then
-              publish_release="true"
-            elif [[ "$ref_name" == feature-* ]]; then
-              publish_feature="true"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              publish_tmp="true"
-            fi
-          fi
-
-          gpr_tag="$input_tag"
-          if [ -z "$gpr_tag" ]; then
-            if [ "$ref_name" = "main" ]; then
-              gpr_tag="dev"
-            elif [[ "$ref_name" == feature-* ]]; then
-              gpr_tag="feature"
-            elif [[ "$ref_name" == tmp-* ]]; then
-              gpr_tag="temp"
-            else
-              gpr_tag="dev"
-            fi
-          fi
-
-          echo "publish_main=$publish_main" >> "$GITHUB_OUTPUT"
-          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
-          echo "publish_feature=$publish_feature" >> "$GITHUB_OUTPUT"
-          echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
-          echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
   release-merge-guard:
     name: Release Merge Guard
@@ -217,11 +174,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: "packages/decoder-audio"
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ inputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: "packages/decoder-audio"
 
   # Tag the published version (no GitHub Release; SDK-only releases policy)

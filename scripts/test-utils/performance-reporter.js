@@ -99,10 +99,24 @@ function _detectGpu (platform) {
     : null
   if (!nodeExecSync && !bareSpawnSync) return null
 
+  // Accepts either a flat string command (split on whitespace) or an explicit
+  // argv array. Use the array form when a single argument must retain spaces or
+  // shell metacharacters — e.g. PowerShell's `-Command "<expr>"`, where the `|`
+  // is parsed by PowerShell itself, not by an OS shell. Splitting such a command
+  // on whitespace shattered the pipeline, so PowerShell echoed the literal query
+  // back and it surfaced as the Windows "GPU name" in perf reports (QVAC-21618).
   function _safeExec (cmd) {
+    const argv = Array.isArray(cmd) ? cmd.filter(Boolean) : null
+
     if (nodeExecSync) {
+      // Node's execSync runs through a shell, so a flat string works as-is. For
+      // the argv form, quote any argument containing whitespace so the shell
+      // keeps it as a single token (and does not interpret the inner `|`).
+      const cmdStr = argv
+        ? argv.map(part => /\s/.test(part) ? `"${part}"` : part).join(' ')
+        : cmd
       try {
-        return nodeExecSync(cmd, {
+        return nodeExecSync(cmdStr, {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
           timeout: 5000
@@ -111,11 +125,11 @@ function _detectGpu (platform) {
         return null
       }
     }
-    // Bare path: spawnSync takes (bin, args[]). All commands we shell
-    // out to here are flat (no shell metacharacters, no quoting) so a
-    // simple split-on-whitespace is safe.
+    // Bare path: spawnSync takes (bin, args[]) with no shell, so an explicit
+    // argv array passes metacharacters through untouched. Flat strings (which
+    // carry no shell metacharacters) are split on whitespace as before.
     try {
-      const parts = cmd.split(/\s+/).filter(Boolean)
+      const parts = argv || cmd.split(/\s+/).filter(Boolean)
       if (!parts.length) return null
       const res = bareSpawnSync(parts[0], parts.slice(1), {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -261,7 +275,7 @@ function _detectGpu (platform) {
     // PowerShell CIM: `wmic` was removed in Windows 11 24H2 / Server 2025, so it
     // is absent on the windows-2025 runner. Try CIM first, keep wmic for older
     // Windows images. QVAC-20684.
-    const ps = _safeExec('powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"')
+    const ps = _safeExec(['powershell', '-NoProfile', '-Command', 'Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name'])
     if (ps) {
       const lines = ps.split('\n').map(l => l.trim()).filter(Boolean)
       if (lines.length) return lines[0]

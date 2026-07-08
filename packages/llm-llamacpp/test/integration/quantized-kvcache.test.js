@@ -39,20 +39,29 @@ const MODEL_3B = {
   url: 'https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf',
   headDim: 128
 }
+
 const MODEL_1B = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
   url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
   headDim: 64
 }
+
 const MODEL_QWEN35_08B = {
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
   url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf?download=true',
-  headDim: 256
+  headDim: 256,
+  disableReasoning: true
 }
 
 const PROMPT = [
-  { role: 'system', content: 'You are a helpful, respectful and honest assistant.' },
-  { role: 'user', content: 'Explain what a neural network is in two sentences.' }
+  {
+    role: 'system',
+    content: 'You are a helpful, respectful and honest assistant.'
+  },
+  {
+    role: 'user',
+    content: 'Explain what a neural network is in two sentences.'
+  }
 ]
 
 // Ordered: f16 first so it is always the reference baseline, followed by
@@ -143,7 +152,13 @@ async function runBenchmark (cfg, modelInfo) {
   try {
     await model.load()
 
-    const response = await model.run(PROMPT)
+    // Qwen3.5 can exhaust this short KV-cache smoke budget mid-<think>. These
+    // rows validate cache-type load/generation behavior, not reasoning, so keep
+    // that model out of the thinking path.
+    const runOptions = modelInfo.disableReasoning
+      ? { generationParams: { reasoning_budget: 0 } }
+      : undefined
+    const response = await model.run(PROMPT, runOptions)
     const chunks = []
     await response.onUpdate(data => { chunks.push(data) }).await()
     const output = chunks.join('').trim()

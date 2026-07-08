@@ -1,4 +1,4 @@
-import type { TtsStats } from "@/schemas";
+import type { TtsStats } from '@/schemas'
 
 /**
  * Shared types and utilities for TTS operations.
@@ -6,26 +6,26 @@ import type { TtsStats } from "@/schemas";
  */
 
 export type TtsStreamChunk = {
-  outputArray: ArrayLike<number>;
-  chunkIndex?: number;
-  sentenceChunk?: string;
-};
+  outputArray: ArrayLike<number>
+  chunkIndex?: number
+  sentenceChunk?: string
+}
 
 export type TtsOpYield = {
-  buffer: number[];
-  chunkIndex?: number;
-  sentenceChunk?: string;
-};
+  buffer: number[]
+  chunkIndex?: number
+  sentenceChunk?: string
+}
 
 export function collectTtsStats(response: {
-  stats?: { audioDurationMs?: number; totalSamples?: number };
+  stats?: { audioDurationMs?: number; totalSamples?: number }
 }): TtsStats {
   return {
     ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs,
+      audioDuration: response.stats.audioDurationMs
     }),
     ...(response.stats?.totalSamples !== undefined && {
-      totalSamples: response.stats.totalSamples,
-    }),
-  };
+      totalSamples: response.stats.totalSamples
+    })
+  }
 }

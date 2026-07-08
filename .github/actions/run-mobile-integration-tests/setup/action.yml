@@ -7,6 +7,14 @@ description: |
   resolves the addon's prebuilds (PR artifacts -> npm fallback -> committed),
   and prunes desktop prebuilds to keep the runner from running out of disk.
 
+  Prebuild precedence: CI artifacts win by default (artifact-first). A caller
+  that needs a PINNED published version instead (e.g. the baseline session of a
+  candidate-vs-baseline benchmark) MUST set force-npm-prebuild=true alongside
+  package-version — artifact presence alone would otherwise silently shadow the
+  pin with binaries built in the same run (QVAC-21879). Any addon workflow that
+  adds a pinned-npm session must wire this input the way
+  integration-mobile-test-llm-llamacpp.yml does.
+
   Pre-condition: the consumer has already checked out the addon repository
   at ./addon/. We do NOT check the addon out here so the consumer can run
   addon-specific pre-steps between checkout and this phase (NMT model URLs,
@@ -50,6 +58,17 @@ inputs:
       pin a specific published version.
     required: false
     default: ""
+  force-npm-prebuild:
+    description: |
+      When "true", ignore ALL CI prebuild artifacts (per-matrix and the merged
+      `prebuilds` artifact) and pull the native prebuild from npm at
+      `package-version`. Used by the baseline leg of a candidate-vs-baseline
+      benchmark: without this, the merged `prebuilds` artifact (built from the
+      candidate in the same run) is pulled in when the per-matrix artifact is
+      absent, so the baseline session would silently run the candidate binary.
+      Defaults to "false" so existing artifact-first callers are unchanged.
+    required: false
+    default: "false"
   allow-npm-fallback:
     description: |
       Whether the npm fallback (npm pack <addon>@<version>) is allowed when
@@ -108,7 +127,7 @@ runs:
         npm install -g --force @expo/cli@latest
 
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -117,7 +136,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -150,7 +169,7 @@ runs:
     # npm. No-op for addons / runs that never produced this artifact (e.g.
     # genuine workflow_dispatch), where the npm fallback below still applies.
     - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
-      if: inputs.skip-prebuilds != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         name: prebuilds
@@ -168,17 +187,31 @@ runs:
     # published package is the intended behaviour, so the fallback stays on.
     # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
     - name: Download prebuilds (from npm — fallback when no artifacts found)
-      if: inputs.skip-prebuilds != 'true' && (inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
+      if: inputs.skip-prebuilds != 'true' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
         ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
         PACKAGE_VERSION: ${{ inputs.package-version }}
+        FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
       run: |
         if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
-          echo "Prebuilds already present from artifacts — skipping npm fallback"
-          ls -la prebuilds/
-          exit 0
+          if [ "$FORCE_NPM_PREBUILD" = "true" ]; then
+            # force-npm-prebuild guarantees the npm prebuild at package-version.
+            # Anything already in prebuilds/ (an artifact that slipped past the
+            # gated download steps, committed prebuilds, a future step reordering)
+            # would silently shadow the pin — the exact failure mode this input
+            # exists to prevent (QVAC-21879: the benchmark's mobile baseline
+            # session ran the candidate binary under a npm:<pin> label). Discard
+            # it and install the pinned version.
+            echo "force-npm-prebuild: discarding pre-existing prebuilds/ so the pinned npm version cannot be shadowed:"
+            ls -la prebuilds/
+            rm -rf prebuilds
+          else
+            echo "Prebuilds already present from artifacts — skipping npm fallback"
+            ls -la prebuilds/
+            exit 0
+          fi
         fi
         VERSION="${PACKAGE_VERSION:-latest}"
         echo "No prebuilds from artifacts — downloading $ADDON_NPM_NAME@$VERSION from npm..."
@@ -191,6 +224,18 @@ runs:
         if [ ! -d "package/prebuilds" ]; then
           echo "ERROR: No prebuilds directory found in package"
           exit 1
+        fi
+        # Provenance assertion: when the caller pinned a version, prove the packed
+        # tarball IS that version before its prebuilds are used. npm pack of an
+        # exact spec cannot legitimately resolve elsewhere, so a mismatch means the
+        # pin was not honored — fail loudly instead of measuring the wrong binary.
+        if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
+          PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
+          if [ "$PACKED_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $PACKAGE_VERSION"
+            exit 1
+          fi
+          echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
         fi
         mv package/prebuilds ./prebuilds
         rm -rf package *.tgz
