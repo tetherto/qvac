@@ -18,8 +18,20 @@
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/OutputResampler.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml::supertonic {
+
+void detail::applyVulkanPipelineCache(
+    tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg) {
+  if (opts.n_gpu_layers <= 0 || cfg.vulkanCacheDir.empty())
+    return;
+  opts.vulkan_env_overrides[detail::kVulkanPipelineCacheDirEnv] =
+      cfg.vulkanCacheDir;
+  if (opts.prewarm_text.empty()) {
+    opts.prewarm_text = detail::kVulkanPrewarmText;
+  }
+}
 
 namespace {
 
@@ -72,23 +84,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   }
   opts.opencl_cache_dir = cfg.openclCacheDir;
 
-  // GPU first-synth latency mitigation, opt-in via vulkanCacheDir (no-op on
-  // CPU, and no-op unless the host provides a cache dir — so existing GPU
-  // callers see byte-identical behaviour). The Vulkan backend compiles every
-  // compute pipeline lazily on the first dispatch, which on Mali costs several
-  // seconds and otherwise lands on the first run() — making a single short
-  // synth look slower than CPU even though the GPU is ~3x faster in steady
-  // state. When the host opts in, two coupled levers kick in:
-  //   - persist the compiled pipelines across process launches
-  //     (GGML_VK_PIPELINE_CACHE_DIR), so the cost is paid once per install;
-  //   - pre-warm during load() so the first run() sees steady-state latency.
-  if (opts.n_gpu_layers > 0 && !cfg.vulkanCacheDir.empty()) {
-    opts.vulkan_env_overrides["GGML_VK_PIPELINE_CACHE_DIR"] =
-        cfg.vulkanCacheDir;
-    if (opts.prewarm_text.empty()) {
-      opts.prewarm_text = "The quick brown fox.";
-    }
-  }
+  detail::applyVulkanPipelineCache(opts, cfg);
   return opts;
 }
 
