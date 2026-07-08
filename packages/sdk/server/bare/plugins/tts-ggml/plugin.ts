@@ -38,6 +38,13 @@ function rejectLegacyOnnxFields(cfg: object) {
   }
 }
 
+function dirname(path: string) {
+  const normalized = path.replace(/\\/g, '/')
+  const index = normalized.lastIndexOf('/')
+  if (index <= 0) return index === 0 ? '/' : '.'
+  return path.slice(0, index)
+}
+
 // Resolve the optional LavaSR enhancer/denoiser GGUFs shared by both engines.
 async function resolveLavasrArtifacts(
   lavasrEnhancerModelSrc: TtsChatterboxLoadConfig['lavasrEnhancerModelSrc'],
@@ -65,6 +72,8 @@ async function resolveChatterboxConfig(
   const {
     s3genModelSrc,
     referenceAudioSrc,
+    mecabDictSrc,
+    cangjieTsvSrc,
     lavasrEnhancerModelSrc,
     lavasrDenoiserModelSrc,
     ...runtime
@@ -74,17 +83,22 @@ async function resolveChatterboxConfig(
   }
 
   const resolve = ctx.resolveModelPath
-  const [s3genPath, referenceAudioPath, lavasrArtifacts] = await Promise.all([
-    resolve(s3genModelSrc),
-    referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
-    resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx)
-  ])
+  const [s3genPath, referenceAudioPath, mecabDictFilePath, cangjieTsvPath, lavasrArtifacts] =
+    await Promise.all([
+      resolve(s3genModelSrc),
+      referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
+      mecabDictSrc ? resolve(mecabDictSrc) : Promise.resolve(undefined),
+      cangjieTsvSrc ? resolve(cangjieTsvSrc) : Promise.resolve(undefined),
+      resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx)
+    ])
 
   return {
     config: runtime,
     artifacts: {
       s3genPath,
       ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...(mecabDictFilePath ? { mecabDictPath: dirname(mecabDictFilePath) } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {}),
       ...lavasrArtifacts
     }
   }
@@ -126,6 +140,8 @@ function createChatterboxModel(
   const t3Model = params.modelPath
   const s3genModel = artifacts['s3genPath']
   const referenceAudioPath = artifacts['referenceAudioPath']
+  const mecabDictPath = artifacts['mecabDictPath']
+  const cangjieTsvPath = artifacts['cangjieTsvPath']
 
   if (!t3Model || !s3genModel) {
     throw new TtsArtifactsRequiredError()
@@ -136,7 +152,13 @@ function createChatterboxModel(
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_CHATTERBOX,
-    files: { t3Model, s3genModel, ...lavasrFiles(artifacts) },
+    files: {
+      t3Model,
+      s3genModel,
+      ...(mecabDictPath ? { mecabDictPath } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {}),
+      ...lavasrFiles(artifacts)
+    },
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }

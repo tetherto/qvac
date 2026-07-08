@@ -1,6 +1,6 @@
 {
   "name": "@qvac/openclaw-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenClaw provider plugin that runs a local QVAC serve through OpenClaw localService",
   "author": "Tether",
   "license": "Apache-2.0",
