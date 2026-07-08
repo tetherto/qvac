@@ -24,7 +24,7 @@ function createStub(defaultImpl = () => {}) {
 }
 
 /// parallel: 2 puts the model in multi-job mode so run() gets a per-job
-/// QvacResponse stored in _jobSinks rather than the single-job _job handler.
+/// QvacResponse stored in _jobSinks.
 function createMultiJobModel() {
   const model = new LlmLlamacpp({
     files: { model: ['/tmp/test.gguf'] },

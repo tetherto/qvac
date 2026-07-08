@@ -51,8 +51,9 @@ function baseFinetuneOpts(overrides = {}) {
 async function assertInferenceSucceeds(t, model, token) {
   model.addon.runJob.callsFake(() => ({ accepted: true, id: 1 }))
   const response = await model._runInternal([{ role: 'user', content: 'test' }])
-  model._addonOutputCallback(null, 'Output', token, null)
-  model._addonOutputCallback(null, 'Output', { TPS: 1, tokens: 1 }, null)
+  // Inference events are always tagged with the admitted jobId.
+  model._addonOutputCallback(null, 'Output', token, null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 1, tokens: 1 }, null, 1)
   const output = await response.await()
   t.ok(Array.isArray(output), 'inference should resolve with output array')
   t.ok(output.includes(token), 'output should contain the generated token')
@@ -67,11 +68,12 @@ const createModelWithMockAddon = (opts = {}) => {
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
   })
   model.addon = createMockAddon()
-  /// Stand in for the native scheduler's activeJobs(): these are all cap=1
-  /// flows, so an active _job (finetune or single inference) means one
-  /// outstanding job. Lets the model's activeJobs-based admission gate work
-  /// without a JS-side counter.
-  model.addon.activeJobs = () => (model._job.active ? 1 : 0)
+  /// Stand in for the native scheduler's activeJobs(): an active finetune
+  /// (exclusive job) or any registered inference sink counts as outstanding.
+  /// Lets the model's activeJobs-based admission gate work without a JS-side
+  /// counter.
+  model.addon.activeJobs = () =>
+    (model._finetuneJob.active ? 1 : 0) + model._jobSinks.size
   return model
 }
 
@@ -421,8 +423,8 @@ test('TPS stats without prior finetune are forwarded as normal JobEnded', async 
   const response = await model._runInternal([{ role: 'user', content: 'Hello' }])
   t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should be false without finetune')
 
-  model._addonOutputCallback(null, 'Output', 'world', null)
-  model._addonOutputCallback(null, 'Output', { TPS: 42.5, tokens: 10, time_ms: 235 }, null)
+  model._addonOutputCallback(null, 'Output', 'world', null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 42.5, tokens: 10, time_ms: 235 }, null, 1)
 
   const output = await response.await()
   t.ok(Array.isArray(output), 'inference response should resolve with output array')
@@ -460,8 +462,8 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
     'inference must still be running after stale TPS was swallowed'
   )
 
-  model._addonOutputCallback(null, 'Output', 'answer', null)
-  model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null)
+  model._addonOutputCallback(null, 'Output', 'answer', null, 1)
+  model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null, 1)
 
   const output = await inferResponse.await()
   t.ok(Array.isArray(output), 'inference should resolve with output array')

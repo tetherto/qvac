@@ -24,7 +24,7 @@ function createStub(defaultImpl = () => {}) {
 }
 
 /// parallel: 2 puts the model in multi-job mode so each run() gets its own
-/// job id and responses are not funnelled through the single-job _job handler.
+/// job id; every inference response is tracked per-job in _jobSinks.
 function createMultiJobModel() {
   const model = new LlmLlamacpp({
     files: { model: ['/tmp/test.gguf'] },
