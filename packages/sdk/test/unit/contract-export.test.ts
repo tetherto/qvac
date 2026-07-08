@@ -7,6 +7,7 @@ import {
   contractDir,
   renderContractFiles
 } from '@/scripts/contract/build-contract'
+import { buildModelsRegistry } from '@/scripts/contract/build-models-registry'
 import { methodShapes } from '@/server/rpc/method-shapes'
 import { contractValidate } from './utils/contract-validator'
 
@@ -223,12 +224,43 @@ test('cancel.request flattens allOf-of-union so both operations keep their field
   )
 })
 
+test('models registry catalog exports every named model constant', (t) => {
+  // Regression guard for the Python (and future non-JS) client parity gap:
+  // JS consumers import named constants directly from @/models/registry
+  // (`QWEN3_600M_INST_Q4`, ...) and pass them straight as `modelSrc`. This
+  // catalog is the language-neutral mirror of those same constants.
+  const catalog = buildModelsRegistry()
+  const names = Object.keys(catalog)
+
+  t.ok(names.length > 0, 'catalog is non-empty')
+  t.ok(names.includes('QWEN3_600M_INST_Q4'), 'includes a known model constant')
+  t.ok(names.includes('BCI_EMBEDDER'), 'includes the hand-derived BCI_EMBEDDER constant')
+
+  for (const name of names) {
+    const entry = catalog[name] as Record<string, unknown>
+    t.is(entry['name'], name, `${name}: name field matches its catalog key`)
+    t.is(
+      entry['src'],
+      `registry://${entry['registrySource']}/${entry['registryPath']}`,
+      `${name}: src is derived from registrySource/registryPath`
+    )
+    for (const field of ['registryPath', 'registrySource', 'modelId', 'engine', 'addon']) {
+      t.ok(typeof entry[field] === 'string' && entry[field] !== '', `${name}: ${field} is set`)
+    }
+    t.ok(
+      typeof entry['expectedSize'] === 'number' && entry['expectedSize'] > 0,
+      `${name}: expectedSize is set`
+    )
+  }
+})
+
 test('export is deterministic across runs', async (t) => {
   const first = await renderContractFiles()
   const second = await renderContractFiles()
 
   t.is(first['schema.json'], second['schema.json'])
   t.is(first['manifest.json'], second['manifest.json'])
+  t.is(first['models.json'], second['models.json'])
 })
 
 test('committed artifacts are up to date', async (t) => {

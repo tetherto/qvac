@@ -3,6 +3,7 @@ import { z } from 'zod'
 import prettier from 'prettier'
 import { requestSchema, responseSchema } from '@/schemas/common'
 import { methodShapes, type MethodName } from '@/server/rpc/method-shapes'
+import { buildModelsRegistry } from './build-models-registry'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
 
@@ -647,8 +648,10 @@ async function formatJson(value: unknown, fileName: string) {
 
 export async function renderContractFiles() {
   const { schemaDocument, manifest } = buildContract()
+  const modelsRegistry = buildModelsRegistry()
   return {
     'schema.json': await formatJson(schemaDocument, 'schema.json'),
-    'manifest.json': await formatJson(manifest, 'manifest.json')
+    'manifest.json': await formatJson(manifest, 'manifest.json'),
+    'models.json': await formatJson(modelsRegistry, 'models.json')
   }
 }
