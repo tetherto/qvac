@@ -64,7 +64,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
   // emit nothing).
   ok({})
 
-  // promptTokens is the new field — must round-trip a number and
+  // promptTokens and avgConcurrentSeq must round-trip numbers and
   // coexist with the rest of the stats fields.
   ok({ promptTokens: 1234 })
   ok({
@@ -73,6 +73,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
     cacheTokens: 100,
     promptTokens: 1234,
     generatedTokens: 56,
+    avgConcurrentSeq: 3.5,
     backendDevice: 'gpu'
   })
 
@@ -81,6 +82,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
   // undefined` after parsing.
   bad({ promptTokens: '1234' })
   bad({ promptTokens: null })
+  bad({ avgConcurrentSeq: '3.5' })
 })
 
 test('statsEvent: promptTokens flows through the wire event shape', (t) => {

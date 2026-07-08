@@ -91,6 +91,21 @@ export interface ConcurrencyPolicy {
    * `maxConcurrentPerModel` is set explicitly.
    */
   oneAtATimePerModel?: boolean
+  /**
+   * Opt several kinds into one shared admission lane per model. When set,
+   * the slot is keyed on `(sharedSlotGroup, modelId)` instead of
+   * `(kind, modelId)`, so requests of *different* kinds that target the
+   * same model contend for the same slot pool.
+   *
+   * This exists to mirror an addon that serializes unrelated request
+   * kinds on a single native context — e.g. `@qvac/llm-llamacpp` funnels
+   * single-prompt `completion` and `batchCompletion` through one
+   * per-instance run queue, so the two can't actually run at once on the
+   * same model. Sharing a lane makes the admission queue the
+   * authoritative serialization point rather than relying on the addon's
+   * internal queue.
+   */
+  sharedSlotGroup?: string
 }
 
 /**
@@ -219,11 +234,16 @@ interface CancelBeforeBeginEntry {
  * `oneAtATimePerModel` alias on every call.
  */
 interface NormalizedPolicy {
-  /** Effective slots per `(kind, modelId)`. `Infinity` ⇒ no gating. */
+  /** Effective slots per `(lane, modelId)`. `Infinity` ⇒ no gating. */
   maxConcurrent: number
   onOverflow: 'queue' | 'reject'
   maxQueueDepth: number
   queueTimeoutMs: number | undefined
+  /**
+   * Lane label used in place of `kind` when keying the admission slot.
+   * `undefined` ⇒ slot is keyed on the request's own `kind`.
+   */
+  slotGroup: string | undefined
 }
 
 /**
@@ -384,10 +404,11 @@ export function createRequestRegistry(options?: {
     return entry
   }
 
-  function slotKey(kind: RequestKind, modelId: string): string {
-    // NUL separator can't appear in a kind (closed union) or a modelId
-    // (sdkModelId is a generated handle), so the join is unambiguous.
-    return `${kind}\u0000${modelId}`
+  function slotKey(lane: string, modelId: string): string {
+    // NUL separator can't appear in a lane (a closed-union kind or a
+    // controlled `sharedSlotGroup` label) or a modelId (a generated handle),
+    // so the join is unambiguous.
+    return `${lane}\u0000${modelId}`
   }
 
   /**
@@ -436,7 +457,10 @@ export function createRequestRegistry(options?: {
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
 
     const modelId = opts.modelId
-    const key = slotKey(opts.kind, modelId)
+    // A shared lane lets unrelated kinds (e.g. completion + batchCompletion)
+    // contend for one slot pool per model, matching an addon that serializes
+    // them on a single native context.
+    const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
       st = { active: 0, waiters: [] }
@@ -817,7 +841,8 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     maxConcurrent,
     onOverflow,
     maxQueueDepth: opts.maxQueueDepthPerModel ?? DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL,
-    queueTimeoutMs: opts.queueTimeoutMs
+    queueTimeoutMs: opts.queueTimeoutMs,
+    slotGroup: opts.sharedSlotGroup
   }
 }
 

@@ -24,6 +24,7 @@ export const cancelInferenceBaseSchema = z.object({
 const cancelKindSchema = z
   .enum([
     'completion',
+    'batchCompletion',
     'embeddings',
     'transcribe',
     'translate',

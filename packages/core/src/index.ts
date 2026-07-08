@@ -1,5 +1,6 @@
 // Public API exports only
 export {
+  batchCompletion,
   completion,
   deleteCache,
   loadModel,
@@ -85,6 +86,10 @@ export {
   type CompletionFinal,
   type CompletionRun,
   type CompletionStats,
+  type BatchCompletionEvent,
+  type BatchCompletionResult,
+  type BatchCompletionRun,
+  type BatchPrompt,
   type EmbedStats,
   VERBOSITY,
   type Attachment,

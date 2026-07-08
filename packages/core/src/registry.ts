@@ -143,6 +143,11 @@ export const registry: Record<string, HandlerEntry> = {
     delegatedHandler: handleCompletionStreamDelegated,
     isDelegated: isModelDelegated
   },
+  batchCompletionStream: {
+    type: 'stream',
+    pluginOp: true,
+    handler: pluginStream('batchCompletionStream')
+  },
   transcribe: { type: 'stream', pluginOp: true, handler: pluginStream('transcribe') },
   bciTranscribe: { type: 'stream', pluginOp: true, handler: pluginStream('bciTranscribe') },
   translate: { type: 'stream', pluginOp: true, handler: pluginStream('translate') },
