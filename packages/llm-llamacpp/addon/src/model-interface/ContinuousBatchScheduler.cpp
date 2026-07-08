@@ -1298,9 +1298,9 @@ ObservedRequestStats computeObservedStats(
   if (!req.firstTokenAt.has_value() || !req.lastTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
   }
-  observed.ttftMs = std::chrono::duration<double, std::milli>(
-                        *req.firstTokenAt - enqueuedAt)
-                        .count();
+  observed.ttftMs =
+      std::chrono::duration<double, std::milli>(*req.firstTokenAt - enqueuedAt)
+          .count();
   const double genWindowMs = std::chrono::duration<double, std::milli>(
                                  *req.lastTokenAt - *req.firstTokenAt)
                                  .count();

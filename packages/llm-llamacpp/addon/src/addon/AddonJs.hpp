@@ -1,8 +1,8 @@
 #pragma once
 #include <algorithm>
 #include <any>
-#include <cmath>
 #include <atomic>
+#include <cmath>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -13,10 +13,10 @@
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
-#include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "addon/JsBatchIds.hpp"
@@ -533,7 +533,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   unsigned maxConcurrency = 1;
   if (auto it = config.find("parallel"); it != config.end()) {
     try {
-      maxConcurrency = std::max(1U, static_cast<unsigned>(std::stoul(it->second)));
+      maxConcurrency =
+          std::max(1U, static_cast<unsigned>(std::stoul(it->second)));
     } catch (const std::exception&) {
       maxConcurrency = 1;
     }
@@ -628,8 +629,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
 
   vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
-  LlamaModel::Prompt prompt = parsePromptInputs(
-      env, inputs, makeQueueOutputCallback(instance, jobId));
+  LlamaModel::Prompt prompt =
+      parsePromptInputs(env, inputs, makeQueueOutputCallback(instance, jobId));
 
   js_value_t* acceptedJs = instance.runJob(any(std::move(prompt)), jobId);
 
@@ -671,7 +672,6 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   });
 }
 JSCATCH
-
 
 inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;

@@ -303,8 +303,14 @@ TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
   // generation): rates/TTFT average only over the active two, counts sum over
   // all three.
   const std::vector<ObservedRequestStats> group{
-      {.ttftMs = 100.0, .genTps = 10.0, .generatedTokens = 11, .promptTokens = 10},
-      {.ttftMs = 300.0, .genTps = 30.0, .generatedTokens = 31, .promptTokens = 20},
+      {.ttftMs = 100.0,
+       .genTps = 10.0,
+       .generatedTokens = 11,
+       .promptTokens = 10},
+      {.ttftMs = 300.0,
+       .genTps = 30.0,
+       .generatedTokens = 31,
+       .promptTokens = 20},
       {.ttftMs = 0.0, .genTps = 0.0, .generatedTokens = 0, .promptTokens = 5}};
 
   const ObservedRequestStats agg = aggregateObservedStats(group);
