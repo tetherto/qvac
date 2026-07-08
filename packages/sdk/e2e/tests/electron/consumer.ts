@@ -82,6 +82,7 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -171,6 +172,12 @@ resources.define('ocr', {
 // so no registry constant / pre-download is required.
 resources.define('classification', {
   type: 'ggml-classification'
+})
+
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {
@@ -482,7 +489,8 @@ export const executor = createExecutor({
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
-    new NodeCancellationExecutor(resources)
+    new NodeCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),
