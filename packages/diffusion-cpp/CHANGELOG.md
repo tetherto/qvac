@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.3] - 2026-07-06
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
 ## [0.13.2] - 2026-07-06
 
 This release exposes a `main-gpu` config for image generation, giving callers the same GPU-pinning control the LLM path already has. On multi-GPU hosts, diffusion previously fell back to whatever device the backend picked.

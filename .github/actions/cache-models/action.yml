@@ -37,21 +37,113 @@ inputs:
       (e.g. Python venvs).
     required: false
     default: 'true'
+  warm:
+    description: |
+      When 'true' (default) and the package has a
+      `test/integration/models.manifest.json`, download every declared model
+      into `packages/<package>/test/model` right after the cache restore, so
+      the multi-GB fetch happens as an ordinary step (no per-test brittle
+      timeout) and the post-job save persists a complete set. No-op on a full
+      cache hit. Set 'false' for callers that provision models another way.
+    required: false
+    default: 'true'
+  hf-token:
+    description: |
+      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN for
+      gated model repositories.
+    required: false
+    default: ''
 
 outputs:
   cache-hit:
     description: "'true' when cache was restored (download can be skipped)"
-    value: ${{ steps.cache.outputs.cache-hit }}
+    value: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
 
 runs:
   using: composite
   steps:
-    - name: Cache test models
+    # Effective glob folded into the cache key. Precedence:
+    #   1. explicit hash-files-glob input (S3/script callers point at their YAML/script)
+    #   2. models.manifest.json if the package has one (content-addressed by model
+    #      set, so editing test logic no longer churns the key or forces a re-save)
+    #   3. legacy default: every .js under test/integration/
+    # Resolved here (not in the workflow) so the manifest key takes effect from a
+    # PR-head checkout without editing the pull_request_target workflow YAML.
+    - name: Resolve cache-key hash glob
+      id: keyglob
+      shell: bash
+      env:
+        HASH_GLOB_OVERRIDE: ${{ inputs.hash-files-glob }}
+        PKG: ${{ inputs.package }}
+      run: |
+        set -euo pipefail
+        manifest="packages/${PKG}/test/integration/models.manifest.json"
+        if [ -n "${HASH_GLOB_OVERRIDE}" ]; then
+          glob="${HASH_GLOB_OVERRIDE}"
+        elif [ -f "${manifest}" ]; then
+          glob="${manifest}"
+        else
+          glob="packages/${PKG}/test/integration/**/*.js"
+        fi
+        echo "glob=${glob}" >> "$GITHUB_OUTPUT"
+
+    # Restore + automatic post-job save on trusted contexts (same-repo head,
+    # push, workflow_dispatch, merge_group). The combined cache action
+    # registers a post-step that saves models downloaded LATER in the job.
+    #
+    # Cache writes from fork-PR code are the poisoning risk the devops rule
+    # guards against (.cursor/rules/devops/github-actions.mdc). This is not a
+    # hard boundary (the action runs from PR-head code); consumer-side manifest
+    # validation in each addon's download util catches missing, truncated, or
+    # wrong-size files. SHA-256 pins can be added later for stronger poisoning
+    # protection.
+    - name: Cache test models (restore + save, trusted contexts)
       id: cache
-      uses: actions/cache@v4
+      if: >-
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'merge_group' ||
+        github.event.pull_request.head.repo.full_name == github.repository
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
-        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.hash-files-glob != '' && inputs.hash-files-glob || format('packages/{0}/test/integration/**/*.js', inputs.package)) }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         restore-keys: |
           models-${{ inputs.package }}-${{ inputs.cache-version }}-
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
+
+    # Fork-PR (untrusted) path: restore only, never save.
+    - name: Cache test models (restore-only, untrusted contexts)
+      id: cache-restore-only
+      if: >-
+        github.event_name != 'push' &&
+        github.event_name != 'workflow_dispatch' &&
+        github.event_name != 'merge_group' &&
+        github.event.pull_request.head.repo.full_name != github.repository
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
+        restore-keys: |
+          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+        enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
+
+    # Download any models NOT provided by the restore, as an ordinary step with
+    # no per-test (brittle) timeout. This is the fix for cold-cache runs where
+    # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
+    # inside a single test's timeout and fail. On a full cache hit every file is
+    # already present (and verified when integrity is pinned), so this is a fast
+    # no-op. The trusted-context cache post-step then saves the now
+    # complete dir so subsequent runs restore instead of re-downloading.
+    - name: Warm models (download any missing from manifest)
+      if: ${{ inputs.warm == 'true' }}
+      shell: bash
+      env:
+        PKG: ${{ inputs.package }}
+        HF_TOKEN_INPUT: ${{ inputs.hf-token }}
+      run: |
+        set -euo pipefail
+        # Only override an inherited job-level HF_TOKEN when a token was passed
+        # explicitly; otherwise let the ambient env (if any) pass through.
+        if [ -n "${HF_TOKEN_INPUT:-}" ]; then export HF_TOKEN="$HF_TOKEN_INPUT"; fi
+        node "$GITHUB_ACTION_PATH/warm-models.mjs" --package "$PKG"

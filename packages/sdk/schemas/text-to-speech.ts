@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils'
+import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils'
 
-// Chatterbox multilingual supported languages (22). The engines support
+// Chatterbox multilingual supported languages (23). The engines support
 // different language sets, so the language enum is validated per engine.
 export const TTS_CHATTERBOX_LANGUAGES = [
   'en', // English
@@ -9,6 +9,7 @@ export const TTS_CHATTERBOX_LANGUAGES = [
   'fr', // French
   'de', // German
   'it', // Italian
+  'ja', // Japanese
   'pt', // Portuguese
   'nl', // Dutch
   'pl', // Polish
@@ -68,7 +69,6 @@ export const TTS_SUPERTONIC_LANGUAGES = [
 // Supertonic languages not already present in the Chatterbox set, used to keep
 // TTS_LANGUAGES a true union across engines without duplicates.
 const TTS_SUPERTONIC_ONLY_LANGUAGES = [
-  'ja', // Japanese
   'bg', // Bulgarian
   'cs', // Czech
   'et', // Estonian
@@ -146,6 +146,8 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.ex
   // the plugin's resolveConfig and raise LegacyTtsModelDeprecatedError.
   s3genModelSrc: modelSrcInputSchema.optional(),
   referenceAudioSrc: modelSrcInputSchema.optional(),
+  mecabDictSrc: modelSrcInputSchema.optional(),
+  cangjieTsvSrc: modelSrcInputSchema.optional(),
   ...ttsLavasrLoadFieldsShape
 })
 
@@ -153,10 +155,36 @@ export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.ex
   ...ttsLavasrLoadFieldsShape
 })
 
-export const ttsLoadConfigSchema = z.discriminatedUnion('ttsEngine', [
-  ttsChatterboxLoadConfigSchema,
-  ttsSupertonicLoadConfigSchema
-])
+type TtsTokenizerAssetRefinementInput = {
+  ttsEngine?: string
+  language?: string
+  mecabDictSrc?: ModelSrcInput | undefined
+  cangjieTsvSrc?: ModelSrcInput | undefined
+}
+
+function refineChatterboxTokenizerAssets(data: TtsTokenizerAssetRefinementInput, ctx: z.RefinementCtx) {
+  if (data.ttsEngine !== 'chatterbox') return
+
+  if (data.language === 'ja' && data.mecabDictSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['mecabDictSrc'],
+      message: 'mecabDictSrc is required when Chatterbox language is "ja".'
+    })
+  }
+
+  if (data.language === 'zh' && data.cangjieTsvSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['cangjieTsvSrc'],
+      message: 'cangjieTsvSrc is required when Chatterbox language is "zh".'
+    })
+  }
+}
+
+export const ttsLoadConfigSchema = z
+  .discriminatedUnion('ttsEngine', [ttsChatterboxLoadConfigSchema, ttsSupertonicLoadConfigSchema])
+  .superRefine(refineChatterboxTokenizerAssets)
 
 // === Legacy ONNX modelConfig fields (deprecated) ===
 //
@@ -195,7 +223,7 @@ const legacyTtsOnnxFieldsShape = LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
 export const ttsConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
   ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
-])
+]).superRefine(refineChatterboxTokenizerAssets)
 
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),
