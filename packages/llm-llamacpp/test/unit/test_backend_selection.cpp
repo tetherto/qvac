@@ -931,7 +931,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuTrueForMaliVulkan) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = false;
   auto result = chooseBackend(
-      BackendType::GPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::GPU);
   EXPECT_TRUE(isMaliGpu);
@@ -942,7 +947,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuTrueForMaliIGpuCaseInsensitive) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = false;
   auto result = chooseBackend(
-      BackendType::GPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::GPU);
   EXPECT_TRUE(isMaliGpu);
@@ -954,7 +964,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseForAdreno) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = true;
   auto result = chooseBackend(
-      BackendType::GPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::GPU);
   EXPECT_FALSE(isMaliGpu);
@@ -965,7 +980,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseForDesktopGpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = true;
   auto result = chooseBackend(
-      BackendType::GPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::GPU);
   EXPECT_FALSE(isMaliGpu);
@@ -976,7 +996,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenNoGpuDevices) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = true;
   auto result = chooseBackend(
-      BackendType::GPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_FALSE(isMaliGpu);
@@ -989,7 +1014,12 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   bool isMaliGpu = true;
   auto result = chooseBackend(
-      BackendType::CPU, bckI, nullptr, std::nullopt, nullptr, false,
+      BackendType::CPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
       &isMaliGpu);
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_FALSE(isMaliGpu);

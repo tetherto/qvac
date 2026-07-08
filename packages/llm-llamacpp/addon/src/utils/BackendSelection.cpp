@@ -19,12 +19,12 @@ using namespace backend_selection;
 
 namespace {
 
-constexpr std::array<std::string_view, 3> kSupportedFinetuneArchitectures = {
+constexpr std::array<std::string_view, 3> SUPPORTED_FINETUNE_ARCHITECTURES = {
     "gemma3", "qwen3", "bitnet"};
 
 bool isSupportedFinetuneArchitecture(std::string_view arch) {
-  return std::ranges::find(kSupportedFinetuneArchitectures, arch) !=
-         kSupportedFinetuneArchitectures.end();
+  return std::ranges::find(SUPPORTED_FINETUNE_ARCHITECTURES, arch) !=
+         SUPPORTED_FINETUNE_ARCHITECTURES.end();
 }
 
 } // namespace
