@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932). Ships in the 0.9.x line, which stays outside the `^0.8.3` range the already-released SDK 0.14.x pins, so it does not implicitly flow into that SDK.
+
 ## [0.9.0] - 2026-07-07
 
 ### Changed
@@ -32,12 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compute. Manifest-only: `default-registry.baseline` is unchanged, and the
   `ggml-speech` floor stays `2026-07-03` (PR #74 carries no ggml change).
   Behaviour is unchanged on today's supported backends.
-
-## [0.9.0] - 2026-07-07
-
-### Fixed
-
-- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932). Released as a minor (not patch) bump so it falls outside the `^` range the already-released SDK 0.14.x pins, and does not implicitly flow into that SDK.
 
 ## [0.8.3] - 2026-07-01
 
