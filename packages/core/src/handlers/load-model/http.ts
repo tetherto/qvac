@@ -21,7 +21,7 @@ import {
   generateShardFilenames,
   hasValidGGUFHeader
 } from '../../utils'
-import { getConfig } from '../../runtime/config-registry'
+import { getConfig } from '../../runtime/state'
 import { getLifecycleState, onResume } from '../../runtime/runtime-lifecycle'
 import {
   createHttpDownloadKey,

@@ -33,7 +33,7 @@ test('embed: cancel-by-requestId routes through registry and rejects with Infere
   ] = await Promise.all([
     import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/runtime/request-registry-singleton'),
+    import('../src/runtime/request-context'),
     import('../src/plugins/ops/embed'),
     import('../src/errors')
   ])
@@ -107,7 +107,7 @@ test('embed: cancel-by-modelId+kind aborts the in-flight embed', async (t) => {
   ] = await Promise.all([
     import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/runtime/request-registry-singleton'),
+    import('../src/runtime/request-context'),
     import('../src/plugins/ops/embed'),
     import('../src/errors')
   ])
@@ -166,7 +166,7 @@ test("embed: in-flight request is registered with kind='embeddings'", async (t) 
     await Promise.all([
       import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/runtime/request-registry-singleton'),
+      import('../src/runtime/request-context'),
       import('../src/plugins/ops/embed')
     ])
 
@@ -223,7 +223,7 @@ test('translate (NMT): cancel-by-modelId+kind aborts the batch path', async (t) 
     await Promise.all([
       import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/runtime/request-registry-singleton'),
+      import('../src/runtime/request-context'),
       import('../src/plugins/ops/translate')
     ])
 
@@ -299,7 +299,7 @@ test("translate: in-flight request is registered with kind='translate'", async (
     await Promise.all([
       import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/runtime/request-registry-singleton'),
+      import('../src/runtime/request-context'),
       import('../src/plugins/ops/translate')
     ])
 
@@ -362,7 +362,7 @@ test('transcribe (whisper): cancel-by-requestId exits loop and runs restorePromp
   ] = await Promise.all([
     import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/runtime/request-registry-singleton'),
+    import('../src/runtime/request-context'),
     import('../src/plugins/ops/transcribe')
   ])
 
@@ -440,7 +440,7 @@ test('finetune: cancel-by-requestId calls model.cancel() and runs clearFinetuneR
   ] = await Promise.all([
     import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/runtime/request-registry-singleton'),
+    import('../src/runtime/request-context'),
     import('../src/plugins/builtin/llamacpp-completion/ops/finetune')
   ])
 

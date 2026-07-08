@@ -1,6 +1,6 @@
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getConfiguredCacheDir } from '../../runtime/config-registry'
+import { getConfiguredCacheDir } from '../../runtime/state'
 import { getQvacPath } from '../qvac-paths'
 import type { ShardFileMetadata } from '../../schemas'
 import { calculateFileChecksum } from '../checksum'

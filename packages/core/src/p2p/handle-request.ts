@@ -7,7 +7,7 @@ import {
   type ProfilingRequestMeta
 } from '../schemas'
 import { nowMs } from '../profiling'
-import { resolveModelConfig } from '../runtime/model-config-registry'
+import { resolveModelConfig } from '../runtime/state'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
 import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../errors'

@@ -26,7 +26,21 @@ export const envSchema = z.object({
   QVAC_HYPERSWARM_SEED: z.string()
 })
 
+export const stopProvideRequestSchema = z
+  .object({
+    type: z.literal('stopProvide')
+  })
+  .strict()
+
+export const stopProvideResponseSchema = z.object({
+  type: z.literal('stopProvide'),
+  success: z.boolean(),
+  error: z.string().optional()
+})
+
 export type FirewallConfig = z.infer<typeof firewallConfigSchema>
 export type ProvideParams = z.infer<typeof provideParamsSchema>
 export type ProvideRequest = z.infer<typeof provideRequestSchema>
 export type ProvideResponse = z.infer<typeof provideResponseSchema>
+export type StopProvideRequest = z.infer<typeof stopProvideRequestSchema>
+export type StopProvideResponse = z.infer<typeof stopProvideResponseSchema>

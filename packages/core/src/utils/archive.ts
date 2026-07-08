@@ -21,7 +21,7 @@ import {
   SUPPORTED_ARCHIVE_EXTENSIONS,
   filenameToArchiveTypeSchema,
   type ArchiveType
-} from '../schemas/archive'
+} from '../schemas/model-file'
 
 const logger = getEngineLogger()
 

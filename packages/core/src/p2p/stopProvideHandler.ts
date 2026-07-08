@@ -1,4 +1,4 @@
-import type { StopProvideResponse } from '../schemas/stop-provide'
+import type { StopProvideResponse } from '../schemas/provide'
 import { unregisterProvider } from './swarm'
 import { getEngineLogger } from '../logging'
 

@@ -16,7 +16,7 @@ import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../
 import { expandGGUFIntoShards } from '../../../utils'
 import { embed } from '../../ops/embed'
 import { forwardModelExecution } from '../../../profiling/model-execution'
-import { isMobile } from '../../../runtime/runtime-context-registry'
+import { isMobile } from '../../../runtime/state'
 import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile'
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {

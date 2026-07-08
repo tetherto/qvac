@@ -34,7 +34,7 @@ import { getRequestRegistry, withRequestContext } from '../../../runtime'
 import { generateRandomRequestId } from '../../../runtime/request-id'
 import { ContextOverflowError } from '../../../errors'
 import { isAddonContextOverflowError, parseContextOverflowMessage } from './ops/context-overflow'
-import { isMobile } from '../../../runtime/runtime-context-registry'
+import { isMobile } from '../../../runtime/state'
 import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile'
 
 function createLlmModel(

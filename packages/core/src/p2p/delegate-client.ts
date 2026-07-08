@@ -1,5 +1,5 @@
 import { getSwarm } from './swarm'
-import { getConfig } from '../runtime/config-registry'
+import { getConfig } from '../runtime/state'
 import { ensureDhtBootstrapped, describeConnectFailure } from './delegate-connect-diagnostics'
 import RPC from 'bare-rpc'
 import type { Connection } from 'hyperswarm'

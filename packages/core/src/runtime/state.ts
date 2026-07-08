@@ -6,10 +6,26 @@ import {
   CacheDirNotWritableError,
   ConfigAlreadySetError
 } from '../errors'
-import type { QvacConfig } from '../schemas'
+import type { QvacConfig, RuntimeContext, CanonicalModelType } from '../schemas'
 import { getEngineLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '../logging'
 
+export {
+  CANONICAL_TO_ALIAS,
+  MODEL_CONFIG_SCHEMAS,
+  BUILTIN_DEVICE_PATTERNS,
+  matchesPattern,
+  findAllMatchingPatterns,
+  getDefaultsFromPattern,
+  resolveModelConfigWithContext
+} from './model-config-utils'
+
+import { BUILTIN_DEVICE_PATTERNS, resolveModelConfigWithContext } from './model-config-utils'
+
 const logger = getEngineLogger()
+
+// ============================================
+// Global configuration
+// ============================================
 
 const configRegistry: QvacConfig = {
   cacheDirectory: undefined,
@@ -116,4 +132,58 @@ function getDefaultCacheDir() {
 
 export function getConfiguredCacheDir(): string {
   return configRegistry.cacheDirectory || getDefaultCacheDir()
+}
+
+// ============================================
+// Runtime context
+// ============================================
+
+let context: RuntimeContext = {}
+let isSet = false
+
+export function setRuntimeContext(ctx: RuntimeContext) {
+  if (isSet) return
+  context = ctx
+  isSet = true
+}
+
+export function getRuntimeContext(): RuntimeContext {
+  return context
+}
+
+export function isMobile(): boolean {
+  return context.runtime === 'react-native'
+}
+
+export function isAndroid(): boolean {
+  return context.platform === 'android'
+}
+
+export function isIOS(): boolean {
+  return context.platform === 'ios'
+}
+
+// ============================================
+// Model config resolution
+// ============================================
+
+export function resolveModelConfig<T>(
+  modelType: CanonicalModelType,
+  userInput: Record<string, unknown>
+): T {
+  const ctx = getRuntimeContext()
+  const userPatterns = getConfig().deviceDefaults ?? []
+
+  return resolveModelConfigWithContext<T>(
+    modelType,
+    userInput,
+    ctx,
+    userPatterns,
+    BUILTIN_DEVICE_PATTERNS,
+    (log) => {
+      if (log.appliedPatterns.length > 0) {
+        logger.debug(`[device-defaults] ${modelType}: applied [${log.appliedPatterns.join(' → ')}]`)
+      }
+    }
+  )
 }

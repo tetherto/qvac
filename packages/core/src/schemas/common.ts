@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { perCallProfilingSchema } from './profiling'
-import { heartbeatRequestSchema, heartbeatResponseSchema } from './heartbeat'
+import { heartbeatRequestSchema, heartbeatResponseSchema } from './delegate'
 import { completionStreamRequestSchema, completionStreamResponseSchema } from './completion-stream'
 import {
   loadModelRequestSchema,
@@ -8,7 +8,12 @@ import {
   modelProgressUpdateSchema
 } from './load-model'
 import { downloadAssetRequestSchema, downloadAssetResponseSchema } from './download-asset'
-import { unloadModelRequestSchema, unloadModelResponseSchema } from './unload-model'
+import {
+  unloadModelRequestSchema,
+  unloadModelResponseSchema,
+  deleteCacheRequestSchema,
+  deleteCacheResponseSchema
+} from './model-ops'
 import {
   transcribeRequestSchema,
   transcribeResponseSchema,
@@ -23,8 +28,12 @@ import {
 } from './bci'
 import { embedRequestSchema, embedResponseSchema } from './embed'
 import { cancelRequestSchema, cancelResponseSchema } from './cancel'
-import { provideRequestSchema, provideResponseSchema } from './provide'
-import { stopProvideRequestSchema, stopProvideResponseSchema } from './stop-provide'
+import {
+  provideRequestSchema,
+  provideResponseSchema,
+  stopProvideRequestSchema,
+  stopProvideResponseSchema
+} from './provide'
 import { translateRequestSchema, translateResponseSchema } from './translate'
 import { loggingStreamRequestSchema, loggingStreamResponseSchema } from './logging-stream'
 import {
@@ -35,12 +44,12 @@ import {
 } from './text-to-speech'
 import { errorResponseSchema } from './error'
 import { ragRequestSchema, ragResponseSchema, ragProgressUpdateSchema } from './rag'
-import { deleteCacheRequestSchema, deleteCacheResponseSchema } from './delete-cache'
-import { getModelInfoRequestSchema, getModelInfoResponseSchema } from './get-model-info'
 import {
+  getModelInfoRequestSchema,
+  getModelInfoResponseSchema,
   getLoadedModelInfoRequestSchema,
   getLoadedModelInfoResponseSchema
-} from './get-loaded-model-info'
+} from './model-info'
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from './ocr'
 import {
   diffusionStreamRequestSchema,
@@ -69,9 +78,14 @@ import {
   modelRegistryGetModelRequestSchema,
   modelRegistryGetModelResponseSchema
 } from './registry'
-import { suspendRequestSchema, suspendResponseSchema } from './suspend'
-import { resumeRequestSchema, resumeResponseSchema } from './resume'
-import { stateRequestSchema, stateResponseSchema } from './state'
+import {
+  suspendRequestSchema,
+  suspendResponseSchema,
+  resumeRequestSchema,
+  resumeResponseSchema,
+  stateRequestSchema,
+  stateResponseSchema
+} from './lifecycle'
 import { classifyRequestSchema, classifyResponseSchema } from './classification'
 
 export const requestSchema = z.union([

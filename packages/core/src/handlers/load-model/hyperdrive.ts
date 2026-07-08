@@ -25,7 +25,7 @@ import {
   startOrJoinDownload,
   applyJoinedDownloadStats
 } from './download-manager'
-import { getConfig } from '../../runtime/config-registry'
+import { getConfig } from '../../runtime/state'
 import {
   FileNotFoundError,
   ChecksumValidationFailedError,
