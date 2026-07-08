@@ -45,7 +45,7 @@ const STOP_PROMPT = [
 ]
 
 const LONG_PREFILL_TEXT = Array.from(
-  { length: 256 },
+  { length: 512 },
   (_, index) => `prefill segment ${index} keeps the decoder busy before cancellation.`
 ).join(' ')
 
@@ -186,16 +186,35 @@ async function runAndCancelAfterFirstToken (model, prompt, runOptions) {
   return normalizeStats(response.stats, { _chunkCount: chunkCount })
 }
 
+async function waitForActiveResponse (model) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const response = model._job?.active
+    if (response) return response
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  return null
+}
+
 async function runWithPrefillCancellation (model, prompt, runOptions, cancelViaResponse = false) {
   cleanupRunOptionsCache(runOptions)
-  const response = await model.run(prompt, { ...runOptions, prefill: true })
-  if (cancelViaResponse) {
-    if (typeof response.cancel !== 'function') throw new Error('QvacResponse.cancel is not available')
-    await response.cancel()
-  } else {
-    await model.cancel()
+  const responsePromise = model.run(prompt, { ...runOptions, prefill: true })
+  const activeResponse = await waitForActiveResponse(model)
+  const cancelRequested = activeResponse?._status === 'running'
+  if (cancelRequested) {
+    if (cancelViaResponse) {
+      await activeResponse.cancel()
+    } else {
+      await model.cancel()
+    }
   }
-  return normalizeStats(response.stats, { _chunkCount: 0 })
+
+  const response = await responsePromise
+  try {
+    await response.await()
+  } catch (err) {
+    if (!isCancellationError(err)) throw err
+  }
+  return normalizeStats(response.stats, { _chunkCount: 0, _cancelRequested: cancelRequested })
 }
 
 safeTest('CacheTokens remain zero without cacheKey', { timeout: 600_000 }, async t => {
@@ -263,13 +282,14 @@ safeTest('Cancelling after first token only stores one generation chunk', { time
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '4096', batch_size: '32' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '8192', batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
   const stats = await runWithPrefillCancellation(
     model,
     buildLongPrefillPrompt(),
     cacheOpts(sessionName, { saveCacheToDisk: true })
   )
+  t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
   t.is(stats._chunkCount, 0, 'prefill-only cancellation emits no chunks')
   t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
   t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
@@ -279,7 +299,7 @@ safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())'
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '4096', batch_size: '32' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '8192', batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
   const stats = await runWithPrefillCancellation(
     model,
@@ -287,6 +307,7 @@ safeTest('Cancelling prefill-only request rolls back cache (via QvacResponse.can
     cacheOpts(sessionName, { saveCacheToDisk: true }),
     true
   )
+  t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
   t.is(stats._chunkCount, 0, 'prefill-only cancellation emits no chunks')
   t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
   t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
@@ -381,10 +402,6 @@ safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_00
   // Run and cancel after first token
   const cancelAfterFirstStats = await runAndCancelAfterFirstToken(model, noCachePrompt)
 
-  // Run with explicit prefill-only cancellation. A cancelled prefill may have
-  // done partial prompt work, but it must not generate output or retain cache.
-  const prefillCancelStats = await runWithPrefillCancellation(model, buildLongPrefillPrompt())
-
   // Verify cancel-after-first-token stats are smaller than full run
   // On Windows compare <= due to less responsive threads, which can lead to timeout false positives in CI
   // since we are testing asynchronously, the timeout may not have been able to cancel the run in time, leading to false positives.
@@ -406,20 +423,6 @@ safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_00
   t.ok(
     cancelAfterFirstStats._chunkCount <= fullStats._chunkCount,
     `cancel-after-first chunkCount (${cancelAfterFirstStats._chunkCount}) <= full run (${fullStats._chunkCount})`
-  )
-
-  // Verify prefill-cancel stats are smaller than full run stats.
-  t.ok(
-    prefillCancelStats.generatedTokens < fullStats.generatedTokens,
-    `prefill-cancel generatedTokens (${prefillCancelStats.generatedTokens}) < full run (${fullStats.generatedTokens})`
-  )
-  t.ok(
-    prefillCancelStats.CacheTokens <= fullStats.CacheTokens,
-    `prefill-cancel CacheTokens (${prefillCancelStats.CacheTokens}) <= full run (${fullStats.CacheTokens})`
-  )
-  t.ok(
-    prefillCancelStats._chunkCount <= fullStats._chunkCount,
-    `prefill-cancel chunkCount (${prefillCancelStats._chunkCount}) <= full run (${fullStats._chunkCount})`
   )
 })
 
