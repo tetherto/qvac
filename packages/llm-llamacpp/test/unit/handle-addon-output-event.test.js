@@ -2,8 +2,8 @@
 
 // Multi-job event routing: _addonOutputCallback(...jobId) → _handleAddonOutputEvent
 // must direct each tagged event to the QvacResponse registered under that jobId
-// in _jobSinks, keep concurrent jobs isolated, and let untagged events fall
-// through to the legacy _job handler. This is the JS side of continuous
+// in _jobSinks, keep concurrent jobs isolated, and route untagged events to
+// the finetune-only _finetuneJob handler. This is the JS side of continuous
 // batching and had no unit coverage.
 
 const test = require('brittle')
@@ -23,8 +23,8 @@ function createStub(defaultImpl = () => {}) {
   return fn
 }
 
-// parallel: 4 puts the model on the tagged multi-job path (_maxConcurrency > 1),
-// so routing goes solely through _jobSinks and never the legacy _job fallback.
+// parallel: 4 puts the model on the tagged multi-job path (_maxConcurrency > 1);
+// inference routing goes solely through _jobSinks at every parallel value.
 function createModel() {
   const model = new LlmLlamacpp({
     files: { model: ['/tmp/test.gguf'] },
@@ -188,7 +188,7 @@ test('a tagged batch Error fails only its group; the peer group still completes'
   )
 })
 
-test('untagged events fall through to _job, not to any per-job sink', (t) => {
+test('untagged events route to _finetuneJob, not to any per-job sink', (t) => {
   const model = createModel()
   const calls = []
   model._jobSinks.set(1, {
@@ -200,7 +200,7 @@ test('untagged events fall through to _job, not to any per-job sink', (t) => {
     failed() {}
   })
   let jobOutput = null
-  model._job = {
+  model._finetuneJob = {
     output(d) {
       jobOutput = d
     },
@@ -210,6 +210,6 @@ test('untagged events fall through to _job, not to any per-job sink', (t) => {
   // jobId undefined => untagged.
   model._handleAddonOutputEvent('Output', 'untagged', null, undefined)
 
-  t.is(jobOutput, 'untagged', 'untagged output goes to the legacy _job handler')
+  t.is(jobOutput, 'untagged', 'untagged output goes to the finetune handler')
   t.alike(calls, [], 'no per-job sink receives an untagged event')
 })

@@ -250,8 +250,11 @@ class LlmLlamacpp {
     this._config = config
     this.logger = new QvacLogger(logger)
     this.opts = opts
+    // Finetune-only response holder. Native finetune does not go through the
+    // job scheduler, so its events carry no jobId and cannot route via
+    // _jobSinks; inference never touches this handler.
     // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
-    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
+    this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() })
     this._run = exclusiveRunQueue()
     this.addon = null
     this._checkpointSaveDir = null
@@ -382,11 +385,6 @@ class LlmLlamacpp {
 
     let jobId = null
     const response = new QvacResponse({ cancelHandler: () => this.addon?.cancelJob(jobId) })
-    /// For cap=1 (single-job), also register with _job so that legacy untagged
-    /// callbacks (no 5th jobId arg) can still be routed via _job.active.
-    if (this._maxConcurrency <= 1) {
-      this._job.startWith(response)
-    }
 
     /// The native addon mints the jobId and hands it back here. Single-threaded
     /// JS guarantees this resolves before any tagged output callback runs, so
@@ -441,17 +439,17 @@ class LlmLlamacpp {
         this._checkpointSaveDir = finetuningOptions.checkpointSaveDir
       }
 
-      const response = this._job.start()
+      const response = this._finetuneJob.start()
       let accepted
       try {
         accepted = await this.addon.finetune(paramsToSend)
       } catch (err) {
-        this._job.fail(err)
+        this._finetuneJob.fail(err)
         throw err
       }
 
       if (!accepted) {
-        this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+        this._finetuneJob.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
@@ -466,9 +464,10 @@ class LlmLlamacpp {
 
   /// Route an output event to the correct sink. A tagged event owned by an
   /// in-flight batch group goes to that group's response; other tagged events
-  /// go to the per-job QvacResponse stored in _jobSinks; untagged events
-  /// (jobId === undefined) fall through to _job for backward-compatible
-  /// finetune handling (and streamed batch chunks, routed by string id).
+  /// go to the per-job QvacResponse stored in _jobSinks. Untagged events
+  /// (jobId === undefined) belong to finetune, which does not go through the
+  /// job scheduler, and route to _finetuneJob (streamed batch chunks are also
+  /// untagged but route by their per-prompt string id).
   _handleAddonOutputEvent(eventType, data, error, jobId) {
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
@@ -499,7 +498,7 @@ class LlmLlamacpp {
       if (sink) {
         sink.failed(error)
       } else {
-        this._job.fail(error)
+        this._finetuneJob.fail(error)
       }
     } else if (eventType === 'BatchOutput') {
       // Streaming chunks are untagged; the handler routes them by their
@@ -509,11 +508,11 @@ class LlmLlamacpp {
       if (sink) {
         sink.updateOutput(data)
       } else {
-        this._job.output(data)
+        this._finetuneJob.output(data)
       }
     } else if (eventType === 'FinetuneProgress') {
       if (this.opts.stats && data && data.stats) {
-        this._job.active?.updateStats(data.stats)
+        this._finetuneJob.active?.updateStats(data.stats)
       }
     } else if (eventType === 'JobEnded') {
       this.logger.info('Job completed')
@@ -523,12 +522,12 @@ class LlmLlamacpp {
         data.op === 'finetune' &&
         typeof data.status === 'string'
       if (isFinetuneTerminal) {
-        this._job.end(null, data)
+        this._finetuneJob.end(null, data)
       } else if (sink) {
         if (this.opts.stats && data != null) sink.updateStats(data)
         sink.ended()
       } else {
-        this._job.end(this.opts.stats ? data : null)
+        this._finetuneJob.end(this.opts.stats ? data : null)
       }
     }
   }
@@ -603,8 +602,8 @@ class LlmLlamacpp {
       try {
         await this.pause()
       } catch (_) {}
-      if (this._job.active) {
-        this._job.fail(new Error('Model was unloaded'))
+      if (this._finetuneJob.active) {
+        this._finetuneJob.fail(new Error('Model was unloaded'))
       }
       /// Settle every in-flight concurrent response before dropping it, or its
       /// awaiting run() caller would hang forever.
