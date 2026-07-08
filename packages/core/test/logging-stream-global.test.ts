@@ -6,7 +6,7 @@ import {
   sendLogToStreams,
   startLogBuffering,
   clearAllLoggingStreams
-} from '../src/engine/state/logging-stream-registry'
+} from '../src/runtime/logging-stream-registry'
 
 test('global stream receives logs from every source id', (t) => {
   clearAllLoggingStreams()

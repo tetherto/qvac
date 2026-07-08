@@ -1,8 +1,8 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import { getEngineLogger } from '../../../../logging'
-import { getModel, getModelEntry } from '../../../../engine/state/model-registry'
-import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
-import { generateServerRequestId } from '../../../../engine/runtime/request-id'
+import { getModel, getModelEntry } from '../../../../runtime/model-registry'
+import { getRequestRegistry, withRequestContext } from '../../../../runtime'
+import { generateRandomRequestId } from '../../../../runtime/request-id'
 import { ModelOperationNotSupportedError } from '../../../../errors'
 import { ModelType } from '../../../../schemas'
 import type {
@@ -32,7 +32,7 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
 
 export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
-    requestId: request.requestId ?? generateServerRequestId(),
+    requestId: request.requestId ?? generateRandomRequestId(),
     kind: 'diffusion',
     modelId: request.modelId
   })

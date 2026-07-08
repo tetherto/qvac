@@ -1,5 +1,5 @@
 // tar-stream ships no type declarations. Minimal surface covering the extract
-// path used by `engine/utils/archive.ts` (plus a loose pack for completeness).
+// path used by `utils/archive.ts` (plus a loose pack for completeness).
 // Extract/Pack are streamx streams at runtime, but streamx's Writable/Readable
 // carry nominal private brands an interface can't satisfy, so the pipe sites in
 // archive.ts cast to the stream type rather than this shim declaring `extends`.

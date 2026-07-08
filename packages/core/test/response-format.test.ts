@@ -3,7 +3,7 @@ import {
   responseFormatSchema,
   completionClientParamsSchema
 } from '../src/schemas/completion-stream'
-import { getResponseFormatJsonSchema } from '../src/engine/utils/response-format'
+import { getResponseFormatJsonSchema } from '../src/utils/response-format'
 
 test('responseFormatSchema: accepts text', (t) => {
   t.is(responseFormatSchema.safeParse({ type: 'text' }).success, true)

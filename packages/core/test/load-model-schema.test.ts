@@ -7,7 +7,7 @@ import { llmConfigBaseSchema, ModelType } from '../src/schemas'
 import {
   getExplicitRegistryMetadata,
   resolveRegistryDownloadMetadata
-} from '../src/engine/handlers/load-model/registry-metadata'
+} from '../src/handlers/load-model/registry-metadata'
 import type { RegistryItem } from '../src/models/registry'
 
 test('loadModelSrcRequestSchema: rejects unknown top-level keys', (t) => {

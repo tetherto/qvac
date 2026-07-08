@@ -1,5 +1,5 @@
 import type { DiffusionStreamRequest, DiffusionStreamResponse } from '../../schemas/sdcpp-config'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleDiffusionStream(
   request: DiffusionStreamRequest

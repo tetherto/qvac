@@ -1,5 +1,5 @@
 import test from 'brittle'
-import type { SuspendableSwarm, SuspendableStore } from '../src/engine/runtime-lifecycle'
+import type { SuspendableSwarm, SuspendableStore } from '../src/runtime/runtime-lifecycle'
 import {
   registerSwarm,
   unregisterSwarm,
@@ -12,7 +12,7 @@ import {
   resetLifecycleState,
   assertLifecycleAllowed,
   onResume
-} from '../src/engine/runtime-lifecycle'
+} from '../src/runtime/runtime-lifecycle'
 import type { Request } from '../src/schemas'
 import { LifecycleOperationBlockedError } from '../src/errors'
 

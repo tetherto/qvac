@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { expandGGUFIntoShards } from '../src/engine/utils/expand-gguf-shards'
+import { expandGGUFIntoShards } from '../src/utils/expand-gguf-shards'
 
 test('expandGGUFIntoShards: returns single path for non-sharded model', (t) => {
   const result = expandGGUFIntoShards('/models/llama-7b.gguf')

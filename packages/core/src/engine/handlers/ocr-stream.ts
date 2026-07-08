@@ -1,5 +1,5 @@
 import type { OCRStreamRequest, OCRStreamResponse } from '../../schemas'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleOCRStream(
   request: OCRStreamRequest

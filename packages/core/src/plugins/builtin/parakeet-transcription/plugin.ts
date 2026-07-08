@@ -27,7 +27,7 @@ import {
   TranscriptionFailedError,
   LegacyParakeetModelDeprecatedError
 } from '../../../errors'
-import { transcribe, transcribeStream } from '../../../engine/ops/transcribe'
+import { transcribe, transcribeStream } from '../../ops/transcribe'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'
 
 function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {

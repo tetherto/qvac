@@ -1,5 +1,5 @@
 import fs from 'bare-fs'
-import { getModel, type AnyModel } from '../../../../engine/state/model-registry'
+import { getModel, type AnyModel } from '../../../../runtime/model-registry'
 import type {
   FinetuneRunParams,
   FinetuneRunRequest,
@@ -11,8 +11,8 @@ import type {
   FinetuneGetStateRequest
 } from '../../../../schemas'
 import { CompletionFailedError } from '../../../../errors'
-import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
-import { generateServerRequestId } from '../../../../engine/runtime/request-id'
+import { getRequestRegistry, withRequestContext } from '../../../../runtime'
+import { generateRandomRequestId } from '../../../../runtime/request-id'
 import { getEngineLogger } from '../../../../logging'
 
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
@@ -119,7 +119,7 @@ export async function startFinetune(
   // model.cancel().
   await using ctx = await getRequestRegistry()
     .begin({
-      requestId: request.requestId ?? generateServerRequestId(),
+      requestId: request.requestId ?? generateRandomRequestId(),
       kind: 'finetune',
       modelId: request.modelId
     })

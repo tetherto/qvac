@@ -3,8 +3,8 @@ import { AbortController } from 'bare-abort-controller'
 import {
   startOrJoinDownload,
   type DownloadContext
-} from '../src/engine/handlers/load-model/download-manager'
-import { createDisposableScope } from '../src/engine/runtime/disposable-scope'
+} from '../src/handlers/load-model/download-manager'
+import { createDisposableScope } from '../src/runtime/disposable-scope'
 import { InferenceCancelledError } from '../src/errors'
 
 // -----------------------------------------------------------------------------

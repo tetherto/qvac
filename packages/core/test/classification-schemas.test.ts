@@ -15,8 +15,8 @@ import {
   loadClassificationModelRequestSchema
 } from '../src/schemas/load-model'
 import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/engine/state/model-registry'
-import { handlePluginInvokeStream } from '../src/engine/handlers/plugin-invoke'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
 import { classify as classifyOp } from '../src/plugins/builtin/ggml-classification/ops/classify'
 import { encodeBase64 } from '../src/utils/encoding'
 

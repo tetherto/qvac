@@ -31,7 +31,7 @@ import {
   RAGCloseWorkspaceFailedError,
   RAGListWorkspacesFailedError
 } from '../errors'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 import { decoratePromise } from '../utils/decorate-promise'
 
 // ============== Chunk ==============
@@ -130,7 +130,7 @@ export function ragIngest(
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> & {
   requestId: string
 } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagIngest(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -233,7 +233,7 @@ export function ragSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
   options?: RPCOptions
 ): Promise<RagSaveEmbeddingsResult[]> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagSaveEmbeddings(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -436,7 +436,7 @@ export function ragReindex(
   params: RagReindexParams,
   options?: RPCOptions
 ): Promise<RagReindexResult> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagReindex(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }

@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { z } from 'zod'
 import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/engine/state/model-registry'
-import { handlePluginInvoke, handlePluginInvokeStream } from '../src/engine/handlers/plugin-invoke'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvoke, handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
 import {
   ModelIsDelegatedError,
   PluginAlreadyRegisteredError,

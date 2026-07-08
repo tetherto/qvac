@@ -9,7 +9,7 @@ import {
   CANONICAL_TO_ALIAS,
   BUILTIN_DEVICE_PATTERNS,
   type ConfigResolutionLog
-} from '../src/engine/state/model-config-utils'
+} from '../src/runtime/model-config-utils'
 
 test('matchesPattern: matches Pixel device', (t) => {
   const ctx: RuntimeContext = {

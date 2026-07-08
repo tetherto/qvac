@@ -3,7 +3,7 @@ import {
   createProgressThrottle,
   PROGRESS_THROTTLE_MS,
   PROGRESS_MAX_PENDING
-} from '../src/engine/progress-throttle'
+} from '../src/p2p/progress-throttle'
 
 const T0 = 1_000_000
 

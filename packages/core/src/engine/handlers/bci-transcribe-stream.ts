@@ -1,5 +1,5 @@
 import type { BciTranscribeStreamRequest, BciTranscribeStreamResponse } from '../../schemas'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleBciTranscribeStream(
   request: BciTranscribeStreamRequest,

@@ -1,5 +1,5 @@
 import type { CompletionStreamRequest, CompletionStreamResponse } from '../../schemas'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleCompletionStream(
   request: CompletionStreamRequest

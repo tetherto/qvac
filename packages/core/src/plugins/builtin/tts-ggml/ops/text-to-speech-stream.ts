@@ -1,4 +1,4 @@
-import { getModel } from '../../../../engine/state/model-registry'
+import { getModel } from '../../../../runtime/model-registry'
 import {
   textToSpeechStreamRequestSchema,
   type TextToSpeechStreamRequest,
@@ -7,11 +7,7 @@ import {
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
 import { TextToSpeechStreamFailedError } from '../../../../errors'
-import {
-  type TtsStreamChunk,
-  type TtsOpYield,
-  collectTtsStats
-} from '../../../../engine/bare-utils/tts-stats'
+import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '../../../../utils/tts-stats'
 
 type RunStreamingModel = {
   runStreaming: (

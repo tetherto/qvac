@@ -15,8 +15,8 @@ import {
 } from '../src/schemas'
 import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '../src/schemas/load-model'
 import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/engine/state/model-registry'
-import { handlePluginInvokeStream } from '../src/engine/handlers/plugin-invoke'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
 import {
   PluginResponseValidationFailedError,
   PluginRequestValidationFailedError

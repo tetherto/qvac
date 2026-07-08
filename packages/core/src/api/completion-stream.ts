@@ -18,7 +18,7 @@ import { CompletionFailedError, InferenceCancelledError } from '../errors'
 import { getMcpToolsWithHandlers } from '../utils/mcp-adapter'
 import { validateTools, type ToolHandlerMap, type ToolInput } from '../utils/tool-helpers'
 import { buildFinalFromEvents } from '../utils/aggregate-events'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -132,7 +132,7 @@ export function completion(params: CompletionParams): CompletionRun {
   // have a "stop" handler. Surfaced on the returned `CompletionRun`
   // (`run.requestId`) so callers can `cancel({ requestId })` at any
   // point during the stream.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
 
   let statsResolver: (value: CompletionStats | undefined) => void = () => {}
   let statsRejecter: (error: unknown) => void = () => {}

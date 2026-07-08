@@ -21,7 +21,7 @@ import {
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger } from '../../../logging'
 import path from 'bare-path'
-import { translate } from '../../../engine/ops/translate'
+import { translate } from '../../ops/translate'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'
 import { resolveBergamotVocab, type PivotModelConfig } from './resolve-vocab'
 

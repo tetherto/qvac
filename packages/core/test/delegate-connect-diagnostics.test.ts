@@ -2,7 +2,7 @@ import test from 'brittle'
 import {
   ensureDhtBootstrapped,
   describeConnectFailure
-} from '../src/engine/delegate-connect-diagnostics'
+} from '../src/p2p/delegate-connect-diagnostics'
 
 function fakeDht(opts: { bootstrapped: boolean; resolve?: boolean; onCall?: () => void }) {
   return {

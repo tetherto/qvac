@@ -2,7 +2,7 @@ import { send } from '../dispatch'
 import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '../schemas'
 import { InvalidResponseError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 /**
  * Generates embeddings for a single text using a specified model.
@@ -49,7 +49,7 @@ export function embed(
   // `await` resolves. The same id is carried on the request so the
   // registry entry uses it as the canonical key — matching the
   // `loadModel` / `downloadAsset` / `completion` shape.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runEmbed(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }

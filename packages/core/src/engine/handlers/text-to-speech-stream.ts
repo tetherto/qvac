@@ -1,5 +1,5 @@
 import type { TextToSpeechStreamRequest, TextToSpeechStreamResponse } from '../../schemas'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleTextToSpeechStream(
   request: TextToSpeechStreamRequest,

@@ -11,8 +11,8 @@ import type {
 } from '../../../../schemas'
 import { TOOLS_MODE } from '../../../../schemas/tools'
 import { logCacheDisabled, logCacheInit, logCacheSave, logMessagesToAddon } from './cache-logger'
-import { extractSystemPrompt, getCurrentCacheInfo } from '../../../../engine/ops/kv-cache-utils'
-import { getModel, getModelConfig, type AnyModel } from '../../../../engine/state/model-registry'
+import { extractSystemPrompt, getCurrentCacheInfo } from '../../../ops/kv-cache-utils'
+import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry'
 import { decideCachedHistorySlice } from './kv-cache-state'
 import {
   createKvCacheSession,
@@ -20,21 +20,21 @@ import {
   type KvCacheSession,
   type TurnHandle
 } from './kv-cache-session'
-import type { DisposableScope } from '../../../../engine/runtime/disposable-scope'
+import type { DisposableScope } from '../../../../runtime/disposable-scope'
 import {
   appendToolsToHistory,
   detectToolDialect,
   prependToolsToHistory
-} from '../../../../engine/utils/tool-integration'
-import { parseToolCalls } from '../../../../engine/utils/tools'
-import { getResponseFormatJsonSchema } from '../../../../engine/utils/response-format'
-import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../engine/utils'
+} from '../../../../utils/tool-integration'
+import { parseToolCalls } from '../../../../utils/tools'
+import { getResponseFormatJsonSchema } from '../../../../utils/response-format'
+import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../utils'
 import { getEngineLogger } from '../../../../logging'
 import type { Logger } from '../../../../logging/types'
 import { AttachmentNotFoundError } from '../../../../errors'
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult } from '../../../../profiling/model-execution'
-import type { LlmStats } from '../../../../engine/types/addon-responses'
+import type { LlmStats } from '../../../../utils/addon-responses'
 import { normalizeCompletionStats } from './completion-stats'
 import fs from 'bare-fs'
 

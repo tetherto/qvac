@@ -1,6 +1,6 @@
 import QvacLogger, { type LogLevel } from '@qvac/logging'
 import { LOG_LEVELS } from '@qvac/logging/constants'
-import { sendLogToStreams } from '../engine/state/logging-stream-registry'
+import { sendLogToStreams } from '../runtime/logging-stream-registry'
 import { isLevelEnabled, formatArg } from './utils'
 import { LOG_ID, LOG_NAMESPACE } from './namespaces'
 import type { Logger, LoggerOptions, LogTransport } from './types'

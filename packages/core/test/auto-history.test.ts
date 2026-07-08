@@ -2,7 +2,7 @@ import test from 'brittle'
 import {
   buildAutoCacheSaveHistory,
   getAutoCacheLookupHistory
-} from '../src/engine/utils/cache/auto-history'
+} from '../src/utils/cache/auto-history'
 import { buildFinalFromEvents } from '../src/utils/aggregate-events'
 import { normalizeAssistantCacheContent } from '../src/utils/cache-normalize'
 

@@ -1,5 +1,5 @@
 import type { VideoStreamRequest, VideoStreamResponse } from '../../schemas/sdcpp-config'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleVideoStream(
   request: VideoStreamRequest

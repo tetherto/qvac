@@ -21,21 +21,21 @@ import {
   type LlmConfigInput
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging'
-import { expandGGUFIntoShards } from '../../../engine/utils'
+import { expandGGUFIntoShards } from '../../../utils'
 import { completion } from './ops/completion-stream'
 import { finetune } from './ops/finetune'
-import { translate } from '../../../engine/ops/translate'
+import { translate } from '../../ops/translate'
 import { transformLlmConfig } from './transform'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'
-import { getModelConfig } from '../../../engine/state/model-registry'
-import { createCompletionNormalizer } from '../../../engine/utils/completion-normalizer'
-import { detectToolDialect } from '../../../engine/utils/tool-integration'
-import { getRequestRegistry, withRequestContext } from '../../../engine/runtime'
-import { generateServerRequestId } from '../../../engine/runtime/request-id'
+import { getModelConfig } from '../../../runtime/model-registry'
+import { createCompletionNormalizer } from '../../../utils/completion-normalizer'
+import { detectToolDialect } from '../../../utils/tool-integration'
+import { getRequestRegistry, withRequestContext } from '../../../runtime'
+import { generateRandomRequestId } from '../../../runtime/request-id'
 import { ContextOverflowError } from '../../../errors'
 import { isAddonContextOverflowError, parseContextOverflowMessage } from './ops/context-overflow'
-import { isMobile } from '../../../engine/state/runtime-context-registry'
-import { stripMultiGpuKeys } from '../../../engine/utils/multi-gpu-mobile'
+import { isMobile } from '../../../runtime/runtime-context-registry'
+import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile'
 
 function createLlmModel(
   modelId: string,
@@ -145,7 +145,7 @@ export const llmPlugin = definePlugin({
         // caller can target this run with `cancel({ requestId })`.
         // Falls back to a generated id if the caller didn't send one.
         await using ctx = await getRequestRegistry().begin({
-          requestId: request.requestId ?? generateServerRequestId(),
+          requestId: request.requestId ?? generateRandomRequestId(),
           kind: 'completion',
           modelId: request.modelId
         })

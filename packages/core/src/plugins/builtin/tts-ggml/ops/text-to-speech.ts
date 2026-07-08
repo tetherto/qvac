@@ -1,14 +1,10 @@
-import { getModel } from '../../../../engine/state/model-registry'
+import { getModel } from '../../../../runtime/model-registry'
 import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../schemas'
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
-import type { TtsResponse } from '../../../../engine/types/addon-responses'
+import type { TtsResponse } from '../../../../utils/addon-responses'
 import { TextToSpeechFailedError } from '../../../../errors'
-import {
-  type TtsStreamChunk,
-  type TtsOpYield,
-  collectTtsStats
-} from '../../../../engine/bare-utils/tts-stats'
+import { type TtsStreamChunk, type TtsOpYield, collectTtsStats } from '../../../../utils/tts-stats'
 
 type RunStreamModel = {
   runStream: (

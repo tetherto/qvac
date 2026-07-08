@@ -8,9 +8,9 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/engine/state/model-registry'
+} from '../src/runtime/model-registry'
 import { clearPlugins, registerPlugin } from '../src/plugins'
-import { handleFinetune } from '../src/engine/handlers/finetune'
+import { handleFinetune } from '../src/handlers/finetune'
 import { finetune as finetuneOp } from '../src/plugins/builtin/llamacpp-completion/ops/finetune'
 import {
   ModelType,

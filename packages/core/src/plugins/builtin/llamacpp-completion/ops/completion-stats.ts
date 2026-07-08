@@ -1,5 +1,5 @@
 import type { CompletionStats } from '../../../../schemas'
-import type { LlmStats } from '../../../../engine/types/addon-responses'
+import type { LlmStats } from '../../../../utils/addon-responses'
 
 function finiteNumber(value: number | undefined) {
   return value !== undefined && Number.isFinite(value) ? value : undefined

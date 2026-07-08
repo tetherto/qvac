@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { createDisposableScope } from '../src/engine/runtime/disposable-scope'
+import { createDisposableScope } from '../src/runtime/disposable-scope'
 
 // -----------------------------------------------------------------------------
 // DisposableScope unit tests.

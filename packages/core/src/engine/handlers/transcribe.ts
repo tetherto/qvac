@@ -1,5 +1,5 @@
 import type { TranscribeRequest, TranscribeResponse } from '../../schemas'
-import { dispatchPluginStream } from './plugin-dispatch'
+import { dispatchPluginStream } from '../../handlers/plugin-dispatch'
 
 export async function* handleTranscribe(
   request: TranscribeRequest

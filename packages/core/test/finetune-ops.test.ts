@@ -7,7 +7,7 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/engine/state/model-registry'
+} from '../src/runtime/model-registry'
 import {
   finetune as finetuneOp,
   getFinetuneState,

@@ -1,4 +1,4 @@
-import { getModel } from '../../../../engine/state/model-registry'
+import { getModel } from '../../../../runtime/model-registry'
 import {
   classifyRequestSchema,
   type ClassifyRequest,

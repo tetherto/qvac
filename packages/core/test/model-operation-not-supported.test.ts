@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { z } from 'zod'
 import { clearPlugins, registerPlugin } from '../src/plugins'
-import { registerModel, unregisterModel, type AnyModel } from '../src/engine/state/model-registry'
-import { dispatchPluginReply } from '../src/engine/handlers/plugin-dispatch'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { dispatchPluginReply } from '../src/handlers/plugin-dispatch'
 import { ModelOperationNotSupportedError } from '../src/errors'
 import { type CanonicalModelType, ERROR_CODES } from '../src/schemas'
 

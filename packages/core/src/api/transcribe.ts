@@ -18,7 +18,7 @@ import { stream, duplex, type DuplexReadable } from '../dispatch'
 import { getAppLogger } from '../logging'
 import { TranscriptionFailedError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -75,7 +75,7 @@ export function transcribe(
   // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
   // `cancel({ requestId })` immediately after the call returns so a
   // client disconnect aborts the in-flight transcription.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runTranscribe(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -218,7 +218,7 @@ async function* streamTranscribeValues<T>(
   options: RPCOptions | undefined,
   extract: (parsed: TranscribeResponse) => T | undefined
 ): AsyncGenerator<T> {
-  const request = buildTranscribeRequest(params, generateClientRequestId())
+  const request = buildTranscribeRequest(params, generateRequestId())
 
   for await (const response of stream(request, options)) {
     if (response.type === 'transcribe') {

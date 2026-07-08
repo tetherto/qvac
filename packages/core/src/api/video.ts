@@ -5,7 +5,7 @@ import {
   type VideoStats
 } from '../schemas'
 import { stream as streamRpc } from '../dispatch'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 import { decodeBase64, encodeBase64 } from '../utils/encoding'
 
 export interface VideoProgressTick {
@@ -92,7 +92,7 @@ export interface VideoResult {
  * ```
  */
 export function video(params: VideoClientParams): VideoResult {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
 
   const { control_frames, init_image, ...rest } = params
   const request: VideoStreamRequest = {

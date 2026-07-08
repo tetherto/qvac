@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { registerModel, unregisterModel } from '../src/engine/state/model-registry'
-import { handleGetLoadedModelInfo } from '../src/engine/handlers/get-loaded-model-info'
+import { registerModel, unregisterModel } from '../src/runtime/model-registry'
+import { handleGetLoadedModelInfo } from '../src/handlers/get-loaded-model-info'
 import { ModelNotFoundError } from '../src/errors'
 import { ERROR_CODES } from '../src/schemas'
 

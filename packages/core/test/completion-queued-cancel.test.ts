@@ -5,8 +5,8 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '../src/engine/state/model-registry'
-import { getRequestRegistry } from '../src/engine/runtime'
+} from '../src/runtime/model-registry'
+import { getRequestRegistry } from '../src/runtime'
 import { ModelType } from '../src/schemas'
 
 // -----------------------------------------------------------------------------

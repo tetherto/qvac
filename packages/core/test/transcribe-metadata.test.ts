@@ -10,10 +10,7 @@ import {
 } from '../src/schemas/transcription'
 import { ModelType } from '../src/schemas/model-types'
 import { createErrorResponse } from '../src/schemas/error'
-import {
-  toTranscribeSegment,
-  assertMetadataSupported
-} from '../src/engine/bare-utils/transcribe-metadata'
+import { toTranscribeSegment, assertMetadataSupported } from '../src/utils/transcribe-metadata'
 import { TranscriptionFailedError } from '../src/errors'
 
 // =============================================================================

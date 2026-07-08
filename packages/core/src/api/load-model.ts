@@ -28,7 +28,7 @@ import { assertModelSrcMatchesModelType } from '../utils/load-model-validation'
 import { parseClientInput } from './parse-input'
 import { getAppLogger } from '../logging'
 import { decoratePromise } from '../utils/decorate-promise'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -237,7 +237,7 @@ export function loadModel(
   //     it synchronously is what closes the "stop-button race" gap for
   //     `loadModel` / `downloadAsset` callers — same shape as the
   //     `CompletionRun.requestId` contract.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runLoadModel(options, requestId, rpcOptions)
   return decoratePromise(inner, { requestId })
 }

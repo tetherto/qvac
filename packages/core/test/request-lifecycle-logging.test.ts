@@ -2,7 +2,7 @@ import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
 import type { LogLevel } from '@qvac/logging'
 import type { Logger, LogTransport } from '../src/logging/types'
-import { createRequestRegistry } from '../src/engine/runtime/request-registry'
+import { createRequestRegistry } from '../src/runtime/request-registry'
 
 // -----------------------------------------------------------------------------
 // Registry structured logging (Deliverable 3)

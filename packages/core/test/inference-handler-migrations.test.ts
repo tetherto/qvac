@@ -31,10 +31,10 @@ test('embed: cancel-by-requestId routes through registry and rejects with Infere
     { embed },
     { InferenceCancelledError }
   ] = await Promise.all([
-    import('../src/engine/state/model-registry'),
+    import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/engine/runtime/request-registry-singleton'),
-    import('../src/engine/ops/embed'),
+    import('../src/runtime/request-registry-singleton'),
+    import('../src/plugins/ops/embed'),
     import('../src/errors')
   ])
 
@@ -105,10 +105,10 @@ test('embed: cancel-by-modelId+kind aborts the in-flight embed', async (t) => {
     { embed },
     { InferenceCancelledError }
   ] = await Promise.all([
-    import('../src/engine/state/model-registry'),
+    import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/engine/runtime/request-registry-singleton'),
-    import('../src/engine/ops/embed'),
+    import('../src/runtime/request-registry-singleton'),
+    import('../src/plugins/ops/embed'),
     import('../src/errors')
   ])
 
@@ -164,10 +164,10 @@ test('embed: cancel-by-modelId+kind aborts the in-flight embed', async (t) => {
 test("embed: in-flight request is registered with kind='embeddings'", async (t) => {
   const [{ registerModel, unregisterModel }, { ModelType }, { getRequestRegistry }, { embed }] =
     await Promise.all([
-      import('../src/engine/state/model-registry'),
+      import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/engine/runtime/request-registry-singleton'),
-      import('../src/engine/ops/embed')
+      import('../src/runtime/request-registry-singleton'),
+      import('../src/plugins/ops/embed')
     ])
 
   let release: () => void = () => {}
@@ -221,10 +221,10 @@ test("embed: in-flight request is registered with kind='embeddings'", async (t) 
 test('translate (NMT): cancel-by-modelId+kind aborts the batch path', async (t) => {
   const [{ registerModel, unregisterModel }, { ModelType }, { getRequestRegistry }, { translate }] =
     await Promise.all([
-      import('../src/engine/state/model-registry'),
+      import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/engine/runtime/request-registry-singleton'),
-      import('../src/engine/ops/translate')
+      import('../src/runtime/request-registry-singleton'),
+      import('../src/plugins/ops/translate')
     ])
 
   const modelId = makeId('nmt-cancel-modelid')
@@ -297,10 +297,10 @@ test('translate (NMT): cancel-by-modelId+kind aborts the batch path', async (t) 
 test("translate: in-flight request is registered with kind='translate'", async (t) => {
   const [{ registerModel, unregisterModel }, { ModelType }, { getRequestRegistry }, { translate }] =
     await Promise.all([
-      import('../src/engine/state/model-registry'),
+      import('../src/runtime/model-registry'),
       import('../src/schemas'),
-      import('../src/engine/runtime/request-registry-singleton'),
-      import('../src/engine/ops/translate')
+      import('../src/runtime/request-registry-singleton'),
+      import('../src/plugins/ops/translate')
     ])
 
   const modelId = makeId('translate-listed')
@@ -360,10 +360,10 @@ test('transcribe (whisper): cancel-by-requestId exits loop and runs restorePromp
     { getRequestRegistry },
     { transcribe }
   ] = await Promise.all([
-    import('../src/engine/state/model-registry'),
+    import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/engine/runtime/request-registry-singleton'),
-    import('../src/engine/ops/transcribe')
+    import('../src/runtime/request-registry-singleton'),
+    import('../src/plugins/ops/transcribe')
   ])
 
   const modelId = makeId('transcribe-cancel-id')
@@ -438,9 +438,9 @@ test('finetune: cancel-by-requestId calls model.cancel() and runs clearFinetuneR
     { getRequestRegistry },
     { startFinetune, getFinetuneState }
   ] = await Promise.all([
-    import('../src/engine/state/model-registry'),
+    import('../src/runtime/model-registry'),
     import('../src/schemas'),
-    import('../src/engine/runtime/request-registry-singleton'),
+    import('../src/runtime/request-registry-singleton'),
     import('../src/plugins/builtin/llamacpp-completion/ops/finetune')
   ])
 

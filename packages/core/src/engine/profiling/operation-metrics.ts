@@ -15,7 +15,7 @@ import {
 } from '../../schemas'
 import { readModelExecutionMs } from '../../profiling/model-execution'
 import type { ProfilingEvent, ProfilingEventKind } from '../../profiling/types'
-import type { LoadModelProfilingMeta, DownloadStats } from '../handlers/load-model/types'
+import type { LoadModelProfilingMeta, DownloadStats } from '../../handlers/load-model/types'
 
 export type MetricExtractor<T> = (data: T) => Record<string, number> | undefined
 

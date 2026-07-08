@@ -17,7 +17,7 @@ import {
   type TranscribeSegment
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger } from '../../../logging'
-import { bciTranscribe, bciTranscribeStream } from '../../../engine/ops/bci-transcribe'
+import { bciTranscribe, bciTranscribeStream } from '../../ops/bci-transcribe'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'
 import { buildBciWhispercppArgs } from './args'
 import { resolveBciConfig } from './resolve-config'

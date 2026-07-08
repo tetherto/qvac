@@ -13,11 +13,11 @@ import {
   type EmbedConfig
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging'
-import { expandGGUFIntoShards } from '../../../engine/utils'
-import { embed } from '../../../engine/ops/embed'
+import { expandGGUFIntoShards } from '../../../utils'
+import { embed } from '../../ops/embed'
 import { forwardModelExecution } from '../../../profiling/model-execution'
-import { isMobile } from '../../../engine/state/runtime-context-registry'
-import { stripMultiGpuKeys } from '../../../engine/utils/multi-gpu-mobile'
+import { isMobile } from '../../../runtime/runtime-context-registry'
+import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile'
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {

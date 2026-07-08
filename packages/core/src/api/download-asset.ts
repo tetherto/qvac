@@ -7,7 +7,7 @@ import {
 import { DownloadAssetFailedError, StreamEndedError, InvalidResponseError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
 import { parseClientInput } from './parse-input'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 export type DownloadAssetOptions = BaseDownloadAssetOptions
 
@@ -59,7 +59,7 @@ export function downloadAsset(
   options: DownloadAssetOptions,
   rpcOptions?: RPCOptions
 ): Promise<string> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runDownloadAsset(options, requestId, rpcOptions)
   return decoratePromise(inner, { requestId })
 }

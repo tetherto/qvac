@@ -16,7 +16,7 @@ async function withRegisteredVideoModel<T>(
   cancelImpl: () => Promise<void> = async function () {}
 ) {
   const [{ registerModel, unregisterModel }, { ModelType }] = await Promise.all([
-    import('../src/engine/state/model-registry'),
+    import('../src/runtime/model-registry'),
     import('../src/schemas')
   ])
   const modelId = makeId('test-video')
@@ -134,7 +134,7 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
 
 test('video op: broad cancel routes through registry and calls model.cancel', async function (t) {
   const [{ getRequestRegistry }, { video: videoOp }] = await Promise.all([
-    import('../src/engine/runtime'),
+    import('../src/runtime'),
     import('../src/plugins/builtin/sdcpp-generation/ops/video')
   ])
   let release: () => void = () => {}

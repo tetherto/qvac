@@ -3,8 +3,8 @@ import { resolve, sep, join } from 'bare-path'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import { sanitizePathComponent, checkPathWithinBase } from '../src/utils/path-sanitize'
-import { validateAndJoinPath, isPathWithinBase } from '../src/engine/utils/path-security'
-import { extractTarStream } from '../src/engine/utils/archive'
+import { validateAndJoinPath, isPathWithinBase } from '../src/utils/path-security'
+import { extractTarStream } from '../src/utils/archive'
 
 // ============== sanitizePathComponent ==============
 

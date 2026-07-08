@@ -12,13 +12,13 @@ import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
 import { registry } from './engine/registry'
-import type { HandlerEntry } from './engine/handler-utils'
+import type { HandlerEntry } from './handlers/types'
 import { handlerSupportsProgress, selectHandler } from './engine/selection'
-import { assertLifecycleAllowed } from './engine/runtime-lifecycle'
-import { resolveModelConfig } from './engine/state/model-config-registry'
-import { setSDKConfig } from './engine/state/config-registry'
-import { setRuntimeContext } from './engine/state/runtime-context-registry'
-import { initialize, close as closeEngine } from './engine/lifecycle'
+import { assertLifecycleAllowed } from './runtime/runtime-lifecycle'
+import { resolveModelConfig } from './runtime/model-config-registry'
+import { setConfig } from './runtime/config-registry'
+import { setRuntimeContext } from './runtime/runtime-context-registry'
+import { initialize, close as closeEngine } from './runtime/lifecycle'
 import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from './logging'
@@ -67,7 +67,7 @@ async function initializeConfig(): Promise<void> {
   const config = await resolveConfig()
   if (config) {
     applyClientLoggerSettings(config)
-    setSDKConfig(config)
+    setConfig(config)
     logger.info('📦 Initializing QVAC config')
   }
   const runtimeContext: RuntimeContext = {

@@ -1,4 +1,4 @@
-import { getModel } from '../../../../engine/state/model-registry'
+import { getModel } from '../../../../runtime/model-registry'
 import { type VlaRunRequest, type VlaRunResponse, type VlaStats } from '../../../../schemas'
 import { decodeBase64, encodeBase64 } from '../../../../utils/encoding'
 

@@ -18,7 +18,7 @@ import { getAppLogger } from '../logging'
 import { TranscriptionFailedError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
 import { parseClientInput } from './parse-input'
-import { generateClientRequestId } from './client-request-id'
+import { generateRequestId } from '../runtime/request-id'
 
 const logger = getAppLogger()
 
@@ -72,7 +72,7 @@ export function bciTranscribe(
   options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
   const parsed = parseClientInput(bciTranscribeClientParamsSchema, params)
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runBciTranscribe(parsed, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -202,7 +202,7 @@ async function createBciStreamSession<T>(
   destroy(): void
   [Symbol.asyncIterator](): AsyncIterator<T>
 }> {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const request = buildBciTranscribeStreamRequest(params, requestId)
 
   const { requestStream, responseStream } = await duplex(request, options)

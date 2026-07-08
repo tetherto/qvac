@@ -7,8 +7,8 @@ import {
   getCurrentCacheInfo,
   renameCacheFile,
   deleteCache as deleteCacheUtil
-} from '../../../../engine/ops/kv-cache-utils'
-import type { CacheMessage } from '../../../../engine/utils'
+} from '../../../ops/kv-cache-utils'
+import type { CacheMessage } from '../../../../utils'
 import { logCacheSaveError, logCacheStatus } from './cache-logger'
 import { getEngineLogger } from '../../../../logging'
 import type { Logger } from '../../../../logging/types'

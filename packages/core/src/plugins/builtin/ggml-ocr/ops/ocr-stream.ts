@@ -1,9 +1,9 @@
-import { getModel } from '../../../../engine/state/model-registry'
+import { getModel } from '../../../../runtime/model-registry'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import { type OCRParams, type OCRTextBlock, type OCRStats } from '../../../../schemas'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
-import { getCacheDir } from '../../../../engine/utils'
+import { getCacheDir } from '../../../../utils'
 import { ImageFileNotFoundError, InvalidImageInputError } from '../../../../errors'
 import { nowMs } from '../../../../profiling'
 
