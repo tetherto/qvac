@@ -7,9 +7,14 @@ const { cleanupIntegrationCacheFiles, ensureModel, safeTest: integrationTest } =
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
-const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
-const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const platform = os.platform()
+const arch = os.arch()
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isDesktopRunner = platform !== 'ios' && platform !== 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
+const prefillCancelSegments = isDesktopRunner ? 1880 : 640
+const prefillCancelCtxSize = isDesktopRunner ? '24576' : '8192'
 
 function safeTest (name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
@@ -45,7 +50,7 @@ const STOP_PROMPT = [
 ]
 
 const LONG_PREFILL_TEXT = Array.from(
-  { length: 940 },
+  { length: prefillCancelSegments },
   (_, index) => `prefill segment ${index} keeps the decoder busy before cancellation.`
 ).join(' ')
 
@@ -282,7 +287,7 @@ safeTest('Cancelling after first token only stores one generation chunk', { time
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '12288', batch_size: '8' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: prefillCancelCtxSize, batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
   const stats = await runWithPrefillCancellation(
     model,
@@ -299,7 +304,7 @@ safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())'
 })
 
 safeTest('Cancelling prefill-only request rolls back cache (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: '12288', batch_size: '8' })
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: prefillCancelCtxSize, batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
   const stats = await runWithPrefillCancellation(
     model,
