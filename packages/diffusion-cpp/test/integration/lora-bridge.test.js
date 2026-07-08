@@ -23,13 +23,11 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 const LORA_ADAPTER = {
-  name: 'pytorch_lora_weights-sd21-comfyui.safetensors',
-  url: 'https://huggingface.co/radames/sd-21-DPO-LoRA/resolve/main/pytorch_lora_weights-sd21-comfyui.safetensors'
+  name: 'pytorch_lora_weights-sd21-comfyui.safetensors'
 }
 
 safeTest('SD2.1 txt2img with LoRA — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
@@ -38,13 +36,11 @@ safeTest('SD2.1 txt2img with LoRA — generates a valid PNG image', { timeout: 6
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name,
-      downloadUrl: DEFAULT_MODEL.url
+      modelName: DEFAULT_MODEL.name
     })
 
     const [downloadedLoraName] = await ensureModel({
-      modelName: LORA_ADAPTER.name,
-      downloadUrl: LORA_ADAPTER.url
+      modelName: LORA_ADAPTER.name
     })
 
     console.log('\n' + '='.repeat(60))

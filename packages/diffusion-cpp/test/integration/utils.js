@@ -3,7 +3,13 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
-const addonLogging = require('../../addonLogging')
+
+// Lazily loaded: requiring addonLogging pulls in the native binding, which
+// isn't needed for model download/integrity helpers and lets those run in
+// unit tests without a compiled addon.
+function getAddonLogging () {
+  return require('../../addonLogging')
+}
 
 const ANDROID_GENERATED_IMAGE_ARTIFACT_DIRS = [
   '/sdcard/Download/qvac-generated-images',
@@ -209,36 +215,162 @@ async function downloadFileWithRetries (urls, dest, opts) {
   throw lastErr
 }
 
-async function ensureModel ({ modelName, downloadUrl }) {
-  const modelDir = path.resolve(__dirname, '../model')
-  const modelPath = path.join(modelDir, modelName)
+const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+let _manifestCache
+
+// Loads and caches the model manifest (single source of truth for model
+// URLs + sha256/bytes integrity values). Returns null when absent so callers
+// can fall back to an explicitly-passed downloadUrl.
+function loadManifest (manifestPath = DEFAULT_MANIFEST_PATH) {
+  if (manifestPath === DEFAULT_MANIFEST_PATH && _manifestCache !== undefined) {
+    return _manifestCache
+  }
+  let parsed = null
+  try {
+    parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  } catch (_) {
+    parsed = null
+  }
+  if (manifestPath === DEFAULT_MANIFEST_PATH) _manifestCache = parsed
+  return parsed
+}
+
+function resolveModelEntry (modelName, { manifest } = {}) {
+  const m = manifest !== undefined ? manifest : loadManifest()
+  if (!m || !m.models) return null
+  return m.models[modelName] || null
+}
+
+function entryHasIntegrity (entry) {
+  if (!entry) return false
+  const hasSha = typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  const hasBytes = Number.isInteger(entry.bytes)
+  return hasSha || hasBytes
+}
+
+// Streaming sha256 via bare-crypto (matches the pattern used in vla-ggml
+// tests). Returns null when bare-crypto is unavailable so callers can decide
+// how to degrade.
+async function sha256File (filePath) {
+  let crypto
+  try { crypto = require('bare-crypto') } catch (_) { return null }
+  return await new Promise((resolve, reject) => {
+    let hash
+    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verifies a model file against a manifest entry. Byte-length is checked first
+// (cheap) so a size mismatch fails fast before hashing a multi-GB file.
+// { ok: true } when it passes (or when no integrity value is pinned yet).
+async function verifyModelFile (filePath, entry) {
+  let stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+  if (stats.size === 0) return { ok: false, reason: 'zero-byte file' }
+
+  if (entry && Number.isInteger(entry.bytes) && stats.size !== entry.bytes) {
+    return { ok: false, reason: `size ${stats.size} != expected ${entry.bytes}` }
+  }
+
+  const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  if (hasSha) {
+    const got = await sha256File(filePath)
+    if (got === null) {
+      // bare-crypto missing: we cannot honour the pinned hash. Degrade to a
+      // loud warning rather than looping forever on re-download.
+      console.log('[download] WARNING: sha256 pinned for this model but bare-crypto is unavailable — integrity NOT verified')
+      return { ok: true, unverified: true }
+    }
+    if (got !== entry.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
+    }
+    return { ok: true }
+  }
+
+  return { ok: true, skipped: true }
+}
+
+let _downloadCount = 0
+function getDownloadCount () { return _downloadCount }
+function resetDownloadCount () { _downloadCount = 0 }
+
+// Resolves a model into test/model/, reusing a cached copy when it passes
+// integrity. Model URL + sha256/bytes come from models.manifest.json (by
+// `modelName`); an explicit `downloadUrl` is honoured only as a fallback when
+// the manifest has no entry. `modelDir`, `manifest`, and `download` overrides
+// exist for unit testing.
+async function ensureModel ({ modelName, downloadUrl, modelDir, manifest, download } = {}) {
+  const dir = modelDir || path.resolve(__dirname, '../model')
+  const modelPath = path.join(dir, modelName)
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
+  const doDownload = download || downloadFileWithRetries
+
+  const urls = entry && Array.isArray(entry.urls) && entry.urls.length
+    ? entry.urls
+    : (downloadUrl ? [].concat(downloadUrl) : null)
+
+  const hasIntegrity = entryHasIntegrity(entry)
 
   if (fs.existsSync(modelPath)) {
-    const stats = fs.statSync(modelPath)
-    if (stats.size === 0) {
-      console.log(`[download] Removing zero-byte cached file: ${modelName}`)
-      fs.unlinkSync(modelPath)
+    if (hasIntegrity) {
+      const res = await verifyModelFile(modelPath, entry)
+      if (res.ok) {
+        console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+        return [modelName, dir]
+      }
+      console.log(`[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`)
+      try { fs.unlinkSync(modelPath) } catch (_) {}
     } else {
-      return [modelName, modelDir]
+      const stats = fs.statSync(modelPath)
+      if (stats.size === 0) {
+        console.log(`[download] Removing zero-byte cached file: ${modelName}`)
+        fs.unlinkSync(modelPath)
+      } else {
+        if (entry) {
+          console.log(`[download] ${modelName}: no sha256/bytes pinned in manifest — integrity check SKIPPED (run scripts/generate-model-manifest.mjs to pin)`)
+        }
+        return [modelName, dir]
+      }
     }
   }
 
-  fs.mkdirSync(modelDir, { recursive: true })
+  if (!urls) {
+    throw new Error(`No download URL for model "${modelName}": not in models.manifest.json and no downloadUrl provided`)
+  }
+
+  fs.mkdirSync(dir, { recursive: true })
   console.log(`[download] Downloading test model ${modelName}...`)
+  _downloadCount++
 
   // Multi-GB model downloads on device-farm runners hit flaky CDN/network
   // (connection resets, DNS blips); give them extra retries so a single drop
   // doesn't fail the whole test.
-  await downloadFileWithRetries(downloadUrl, modelPath, { retries: 6 })
+  await doDownload(urls, modelPath, { retries: 6 })
+
+  if (hasIntegrity) {
+    const res = await verifyModelFile(modelPath, entry)
+    if (!res.ok) {
+      try { fs.unlinkSync(modelPath) } catch (_) {}
+      throw new Error(`[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`)
+    }
+  }
 
   const stats = fs.statSync(modelPath)
   console.log(`[download] Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
-  return [modelName, modelDir]
+  return [modelName, dir]
 }
 
-async function ensureModelPath ({ modelName, downloadUrl }) {
-  const [downloadedModelName, modelDir] = await ensureModel({ modelName, downloadUrl })
-  return path.join(modelDir, downloadedModelName)
+async function ensureModelPath ({ modelName, downloadUrl, modelDir, manifest, download } = {}) {
+  const [downloadedModelName, resolvedDir] = await ensureModel({ modelName, downloadUrl, modelDir, manifest, download })
+  return path.join(resolvedDir, downloadedModelName)
 }
 
 /**
@@ -302,7 +434,7 @@ function detectPlatform () {
   return `${os.platform()}-${os.arch()}`
 }
 
-function setupJsLogger (binding = addonLogging) {
+function setupJsLogger (binding = getAddonLogging()) {
   const priorityNames = {
     0: 'ERROR',
     1: 'WARNING',
@@ -318,7 +450,7 @@ function setupJsLogger (binding = addonLogging) {
   return binding
 }
 
-function releaseJsLogger (binding = addonLogging) {
+function releaseJsLogger (binding = getAddonLogging()) {
   try {
     binding.releaseLogger()
   } catch (_) {}
@@ -372,6 +504,12 @@ module.exports = {
   GeneratedImageSaver,
   ensureModel,
   ensureModelPath,
+  loadManifest,
+  resolveModelEntry,
+  verifyModelFile,
+  sha256File,
+  getDownloadCount,
+  resetDownloadCount,
   getMediaPath,
   makeOutputCollector,
   detectPlatform,
