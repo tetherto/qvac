@@ -5,7 +5,7 @@ import {
 } from '../schemas'
 import { type RPCOptions } from '../schemas/common'
 import { send } from '../dispatch'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Returns introspection info for a loaded `modelId` (local or delegated).

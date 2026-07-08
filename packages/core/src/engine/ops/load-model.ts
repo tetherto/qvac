@@ -14,7 +14,7 @@ import {
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError
-} from '../../utils/errors-server'
+} from '../../errors'
 import { getPlugin } from '../../plugins'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'

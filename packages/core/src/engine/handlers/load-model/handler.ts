@@ -25,7 +25,7 @@ import {
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
-} from '../../../utils/errors-server'
+} from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import { formatZodError } from '../../../utils/zod-error'
 import { getPlugin } from '../../../plugins'

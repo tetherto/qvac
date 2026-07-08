@@ -1,5 +1,5 @@
 import path from 'bare-path'
-import { PathTraversalError } from '../../utils/errors-server'
+import { PathTraversalError } from '../../errors'
 import { sanitizePathComponent, checkPathWithinBase } from '../../utils/path-sanitize'
 
 // Re-export sanitizePathComponent unchanged

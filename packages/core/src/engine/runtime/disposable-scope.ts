@@ -1,4 +1,4 @@
-import { AsyncDisposeUnavailableError } from '../../utils/errors-server'
+import { AsyncDisposeUnavailableError } from '../../errors'
 
 /**
  * Module-load guard. The whole request-lifecycle primitive stack (scopes,

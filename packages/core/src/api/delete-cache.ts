@@ -1,6 +1,6 @@
 import type { DeleteCacheRequest, DeleteCacheResponse } from '../schemas'
 import { send } from '../dispatch'
-import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '../utils/errors-client'
+import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '../errors'
 
 /**
  * Deletes KV cache files.

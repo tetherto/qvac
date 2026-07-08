@@ -1,6 +1,6 @@
 import { getModel } from '../state/model-registry'
 import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '../../schemas'
-import { ModelNotLoadedError } from '../../utils/errors-server'
+import { ModelNotLoadedError } from '../../errors'
 import { getRequestRegistry } from '../runtime'
 import type { RequestKind } from '../runtime'
 import { getServerLogger } from '../../logging'

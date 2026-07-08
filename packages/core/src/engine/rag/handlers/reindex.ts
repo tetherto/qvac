@@ -1,7 +1,7 @@
 import { getRagDbAdapter, hasRagWorkspaceStorage } from '../rag-workspace-manager'
 import { ragReindexParamsSchema, type RagReindexParams } from '../../../schemas'
 import type { ReindexOpts, ReindexResult, ReindexStage } from '@qvac/rag'
-import { RAGHyperDBFailedError } from '../../../utils/errors-server'
+import { RAGHyperDBFailedError } from '../../../errors'
 
 interface ReindexHandlerOptions {
   onProgress?: (stage: ReindexStage, current: number, total: number) => void

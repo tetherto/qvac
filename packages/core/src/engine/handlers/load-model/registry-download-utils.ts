@@ -7,7 +7,7 @@ import { measureChecksum, calculatePercentage } from '../../utils'
 import { getRegistryClient } from '../../state/registry-client'
 import { getSDKConfig } from '../../state/config-registry'
 import { buildRegistryClientOptions } from './registry-client-options'
-import { ChecksumValidationFailedError, DownloadCancelledError } from '../../../utils/errors-server'
+import { ChecksumValidationFailedError, DownloadCancelledError } from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 

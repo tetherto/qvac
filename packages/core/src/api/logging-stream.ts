@@ -4,7 +4,7 @@ import type {
   LoggingStreamRequest,
   LoggingParams
 } from '../schemas/logging-stream'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Opens a logging stream to receive real-time logs.

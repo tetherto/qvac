@@ -1,7 +1,7 @@
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import { createDisposableScope, type DisposableScope } from './disposable-scope'
 import type { RequestContext, RequestKind, RequestState } from './request-context'
-import { RequestIdConflictError, RequestRejectedByPolicyError } from '../../utils/errors-server'
+import { RequestIdConflictError, RequestRejectedByPolicyError } from '../../errors'
 import { getServerLogger } from '../../logging'
 import type { Logger } from '../../logging/types'
 

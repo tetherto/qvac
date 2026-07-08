@@ -2,7 +2,7 @@ import {
   ModelAlreadyRegisteredError,
   ModelNotFoundError,
   ModelIsDelegatedError
-} from '../../utils/errors-server'
+} from '../../errors'
 import type { CanonicalModelType } from '../../schemas'
 import { getServerLogger } from '../../logging'
 import type BaseInference from '@qvac/infer-base'

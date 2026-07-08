@@ -1,6 +1,6 @@
 import { type ProvideParams, type ProvideRequest } from '../schemas'
 import { send } from '../dispatch'
-import { InvalidResponseError, ProviderStartFailedError } from '../utils/errors-client'
+import { InvalidResponseError, ProviderStartFailedError } from '../errors'
 
 /**
  * Starts a provider service that offers QVAC capabilities to remote peers.

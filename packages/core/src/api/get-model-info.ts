@@ -1,6 +1,6 @@
 import { type GetModelInfoRequest, type GetModelInfoParams } from '../schemas'
 import { send } from '../dispatch'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Returns status information for a catalog model, including cache state and loaded instances.

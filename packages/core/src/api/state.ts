@@ -1,6 +1,6 @@
 import { send } from '../dispatch'
 import type { LifecycleState } from '../schemas'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Returns the current runtime lifecycle state.

@@ -2,7 +2,7 @@ import { isBare } from 'which-runtime'
 import { type UnloadModelRequest, type UnloadModelParams } from '../schemas'
 import { send, close } from '../dispatch'
 import { stopLoggingStreamForModel } from './logging-stream-registry'
-import { InvalidResponseError, ModelUnloadFailedError } from '../utils/errors-client'
+import { InvalidResponseError, ModelUnloadFailedError } from '../errors'
 import { getClientLogger } from '../logging'
 
 const logger = getClientLogger()

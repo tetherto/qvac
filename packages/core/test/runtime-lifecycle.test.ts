@@ -14,7 +14,7 @@ import {
   onResume
 } from '../src/engine/runtime-lifecycle'
 import type { Request } from '../src/schemas'
-import { LifecycleOperationBlockedError } from '../src/utils/errors-server'
+import { LifecycleOperationBlockedError } from '../src/errors'
 
 interface MockOptions {
   failSuspend?: boolean

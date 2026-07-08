@@ -9,7 +9,7 @@ import type {
   ModelRegistryEntryAddon
 } from '../schemas'
 import { send } from '../dispatch'
-import { ModelRegistryQueryFailedError } from '../utils/errors-client'
+import { ModelRegistryQueryFailedError } from '../errors'
 
 export type { ModelRegistryEntry, ModelRegistryEntryAddon }
 

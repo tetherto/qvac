@@ -35,7 +35,7 @@ test('embed: cancel-by-requestId routes through registry and rejects with Infere
     import('../src/schemas'),
     import('../src/engine/runtime/request-registry-singleton'),
     import('../src/engine/ops/embed'),
-    import('../src/utils/errors-server')
+    import('../src/errors')
   ])
 
   let addonCancelCalls = 0
@@ -109,7 +109,7 @@ test('embed: cancel-by-modelId+kind aborts the in-flight embed', async (t) => {
     import('../src/schemas'),
     import('../src/engine/runtime/request-registry-singleton'),
     import('../src/engine/ops/embed'),
-    import('../src/utils/errors-server')
+    import('../src/errors')
   ])
 
   let release: () => void = () => {}

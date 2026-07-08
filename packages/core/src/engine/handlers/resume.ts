@@ -1,6 +1,6 @@
 import type { ResumeResponse } from '../../schemas'
 import { resumeRuntime } from '../runtime-lifecycle'
-import { LifecycleResumeFailedError } from '../../utils/errors-server'
+import { LifecycleResumeFailedError } from '../../errors'
 
 export async function handleResume(): Promise<ResumeResponse> {
   try {

@@ -5,7 +5,7 @@ import type {
   PluginInvokeStreamResponse,
   RPCOptions
 } from '../schemas'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 export interface InvokePluginOptions<TParams = unknown> {
   modelId: string

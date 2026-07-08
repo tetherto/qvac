@@ -1,6 +1,6 @@
 import { promises as fsPromises, createReadStream } from 'bare-fs'
 import { getServerLogger } from '../../logging'
-import { ModelLoadFailedError } from '../../utils/errors-server'
+import { ModelLoadFailedError } from '../../errors'
 import { validateAndJoinPath } from './path-security'
 
 const logger = getServerLogger()

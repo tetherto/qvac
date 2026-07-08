@@ -30,7 +30,7 @@ import {
   ModelLoadFailedError,
   ModelNotFoundError,
   SeedingNotSupportedError
-} from '../../../utils/errors-server'
+} from '../../../errors'
 import { validateAndJoinPath } from '../../utils/path-security'
 import { getServerLogger } from '../../../logging'
 

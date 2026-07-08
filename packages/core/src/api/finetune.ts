@@ -15,7 +15,7 @@ import {
   type FinetuneStopParams,
   type RPCOptions
 } from '../schemas'
-import { InvalidResponseError, StreamEndedError } from '../utils/errors-client'
+import { InvalidResponseError, StreamEndedError } from '../errors'
 import { parseClientInput } from './parse-input'
 
 export interface FinetuneHandle {

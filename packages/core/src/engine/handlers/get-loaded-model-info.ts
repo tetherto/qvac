@@ -5,7 +5,7 @@ import type {
 } from '../../schemas'
 import { getModelEntry } from '../state/model-registry'
 import { getPlugin } from '../../plugins/registry'
-import { ModelNotFoundError } from '../../utils/errors-server'
+import { ModelNotFoundError } from '../../errors'
 import { getServerLogger } from '../../logging'
 
 const logger = getServerLogger()

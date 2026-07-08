@@ -10,7 +10,7 @@ import type {
   FinetuneStatus,
   FinetuneGetStateRequest
 } from '../../../../schemas'
-import { CompletionFailedError } from '../../../../utils/errors-server'
+import { CompletionFailedError } from '../../../../errors'
 import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
 import { generateServerRequestId } from '../../../../engine/runtime/request-id'
 import { getServerLogger } from '../../../../logging'

@@ -15,7 +15,7 @@ import {
   PluginResponseValidationFailedError,
   ModelIsDelegatedError,
   ModelNotFoundError
-} from '../../utils/errors-server'
+} from '../../errors'
 import { getServerLogger } from '../../logging'
 import { formatZodError } from '../../utils/zod-error'
 

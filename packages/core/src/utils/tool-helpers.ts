@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '../schemas/tools'
-import { InvalidToolsArrayError, InvalidToolSchemaError } from './errors-client'
+import { InvalidToolsArrayError, InvalidToolSchemaError } from '../errors'
 
 type ZodObjectType = z.ZodObject<z.ZodRawShape>
 

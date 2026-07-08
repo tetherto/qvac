@@ -14,7 +14,7 @@ import {
   type ToolCallWithCall,
   type RPCOptions
 } from '../schemas'
-import { CompletionFailedError, InferenceCancelledError } from '../utils/errors-server'
+import { CompletionFailedError, InferenceCancelledError } from '../errors'
 import { getMcpToolsWithHandlers } from '../utils/mcp-adapter'
 import { validateTools, type ToolHandlerMap, type ToolInput } from '../utils/tool-helpers'
 import { buildFinalFromEvents } from '../utils/aggregate-events'

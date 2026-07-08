@@ -1,5 +1,5 @@
 import { send } from '../dispatch'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Suspends the QVAC runtime: pauses all registered Hyperswarm and Corestore

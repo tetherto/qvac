@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { plugins, clearPlugins, getAllPlugins, hasPlugin } from '../src/plugins'
 import { ModelType } from '../src/schemas'
-import { PluginDefinitionInvalidError } from '../src/utils/errors-server'
+import { PluginDefinitionInvalidError } from '../src/errors'
 import type { QvacPlugin } from '../src/schemas/plugin'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 

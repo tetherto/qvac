@@ -2,7 +2,7 @@ import type { HeartbeatRequest, HeartbeatResponse } from '../../schemas'
 import { getServerLogger } from '../../logging'
 import { getRPC } from '../delegate-client'
 import { send, type DelegateOptions } from '../delegate-transport'
-import { DelegateConnectionFailedError } from '../../utils/errors-server'
+import { DelegateConnectionFailedError } from '../../errors'
 import type { DelegatedHandlerOptions } from '../profiling'
 
 const logger = getServerLogger()

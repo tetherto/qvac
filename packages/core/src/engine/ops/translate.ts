@@ -13,11 +13,7 @@ import { getLangName } from '@qvac/langdetect-text'
 import { nowMs } from '../../profiling'
 import { buildStreamResult } from '../../profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '../types/addon-responses'
-import {
-  ModelIsDelegatedError,
-  ModelNotFoundError,
-  ModelTypeMismatchError
-} from '../../utils/errors-server'
+import { ModelIsDelegatedError, ModelNotFoundError, ModelTypeMismatchError } from '../../errors'
 import { getRequestRegistry, withRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
 import { getServerLogger } from '../../logging'

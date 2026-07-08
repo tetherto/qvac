@@ -22,7 +22,7 @@ import { initialize, close as closeEngine } from './engine/lifecycle'
 import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getClientLogger } from './logging'
-import { RPCNoHandlerError, WorkerPluginsNotRegisteredError } from './utils/errors-client'
+import { RPCNoHandlerError, PluginsNotRegisteredError } from './errors'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
 // `send`/`stream`/`duplex`; this runs each against the engine's handler registry.
@@ -52,7 +52,7 @@ let ready = false
 
 function ensurePluginsRegistered(): void {
   if (getAllPlugins().length === 0) {
-    throw new WorkerPluginsNotRegisteredError()
+    throw new PluginsNotRegisteredError()
   }
 }
 

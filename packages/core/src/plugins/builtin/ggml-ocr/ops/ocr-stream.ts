@@ -4,7 +4,7 @@ import path from 'bare-path'
 import { type OCRParams, type OCRTextBlock, type OCRStats } from '../../../../schemas'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
 import { getCacheDir } from '../../../../engine/utils'
-import { ImageFileNotFoundError, InvalidImageInputError } from '../../../../utils/errors-server'
+import { ImageFileNotFoundError, InvalidImageInputError } from '../../../../errors'
 import { nowMs } from '../../../../profiling'
 
 interface OCRResponse {

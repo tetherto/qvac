@@ -8,7 +8,7 @@ import {
 } from '../schemas'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
-import { PluginHandlerTypeMismatchError } from '../utils/errors-server'
+import { PluginHandlerTypeMismatchError } from '../errors'
 import { setSDKConfig } from './state/config-registry'
 import { setRuntimeContext } from './state/runtime-context-registry'
 import { type ServerProfiler } from './profiling'

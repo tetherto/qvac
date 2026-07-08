@@ -16,7 +16,7 @@ import {
 } from '../schemas'
 import { stream, duplex, type DuplexReadable } from '../dispatch'
 import { getClientLogger } from '../logging'
-import { TranscriptionFailedError } from '../utils/errors-client'
+import { TranscriptionFailedError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
 import { generateClientRequestId } from './client-request-id'
 

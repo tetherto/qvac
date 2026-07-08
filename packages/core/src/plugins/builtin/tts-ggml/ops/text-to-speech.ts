@@ -3,7 +3,7 @@ import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../sc
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
 import type { TtsResponse } from '../../../../engine/types/addon-responses'
-import { TextToSpeechFailedError } from '../../../../utils/errors-server'
+import { TextToSpeechFailedError } from '../../../../errors'
 import {
   type TtsStreamChunk,
   type TtsOpYield,

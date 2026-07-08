@@ -14,7 +14,7 @@ import { nowMs, generateProfileId } from '../../profiling/clock'
 import { getServerLogger } from '../../logging'
 import { getRequestRegistry, withRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
-import { InferenceCancelledError } from '../../utils/errors-server'
+import { InferenceCancelledError } from '../../errors'
 
 const logger = getServerLogger()
 

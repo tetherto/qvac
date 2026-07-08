@@ -1,6 +1,6 @@
 import { inferModelTypeFromModelSrc } from '../schemas/model-src-utils'
 import { normalizeModelType } from '../schemas/model-types'
-import { ModelSrcTypeMismatchError } from './errors-client'
+import { ModelSrcTypeMismatchError } from '../errors'
 
 /**
  * Throws {@link ModelSrcTypeMismatchError} when explicit

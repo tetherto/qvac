@@ -1,4 +1,4 @@
-import { ModelLoadFailedError, InvalidShardUrlPatternError } from '../../utils/errors-server'
+import { ModelLoadFailedError, InvalidShardUrlPatternError } from '../../errors'
 import { generateShortHash } from './formatting'
 import { validateAndJoinPath } from './path-security'
 import type { ShardPatternInfo, ShardUrl } from '../../schemas'

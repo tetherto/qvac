@@ -1,6 +1,6 @@
 import { send } from '../dispatch'
 import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '../schemas'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
 import { generateClientRequestId } from './client-request-id'
 

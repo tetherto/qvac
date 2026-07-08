@@ -9,7 +9,7 @@ import {
   type RPCOptions
 } from '../schemas'
 import { detectOne } from '@qvac/langdetect-text'
-import { TranslationFailedError } from '../utils/errors-client'
+import { TranslationFailedError } from '../errors'
 
 /**
  * Translates text from one language to another using a specified translation model.

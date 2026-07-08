@@ -5,7 +5,7 @@ import {
   type ResolveContext,
   type ResolveResult
 } from '../../../schemas'
-import { ModelLoadFailedError } from '../../../utils/errors-server'
+import { ModelLoadFailedError } from '../../../errors'
 
 export interface PivotModelConfig {
   modelSrc: string

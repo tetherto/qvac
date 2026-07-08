@@ -30,7 +30,7 @@ import {
 } from '../profiling'
 import { withTimeout, withTimeoutStream } from '../utils/withTimeout'
 import { getServerLogger } from '../logging'
-import { DelegateProviderError } from '../utils/errors-server'
+import { DelegateProviderError } from '../errors'
 import { cleanupStaleConnection } from './delegate-client'
 import {
   shouldProfileDelegation,

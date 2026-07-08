@@ -28,7 +28,7 @@ import {
   DownloadCancelledError,
   ModelNotFoundError,
   RegistryDownloadFailedError
-} from '../../../utils/errors-server'
+} from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 import { resolveRegistryDownloadMetadata, type ExplicitRegistryMetadata } from './registry-metadata'

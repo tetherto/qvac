@@ -32,7 +32,7 @@ import { createCompletionNormalizer } from '../../../engine/utils/completion-nor
 import { detectToolDialect } from '../../../engine/utils/tool-integration'
 import { getRequestRegistry, withRequestContext } from '../../../engine/runtime'
 import { generateServerRequestId } from '../../../engine/runtime/request-id'
-import { ContextOverflowError } from '../../../utils/errors-server'
+import { ContextOverflowError } from '../../../errors'
 import { isAddonContextOverflowError, parseContextOverflowMessage } from './ops/context-overflow'
 import { isMobile } from '../../../engine/state/runtime-context-registry'
 import { stripMultiGpuKeys } from '../../../engine/utils/multi-gpu-mobile'
@@ -243,7 +243,7 @@ export const llmPlugin = definePlugin({
           // surfaces it as a JS Error with `.code = "[ <addonId> :: ContextOverflow ]"`
           // and `.message` carrying the C++-formatted detail. Rethrow as
           // a typed `ContextOverflowError` so consumers can switch on the
-          // class (and `err.code === SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW`)
+          // class (and `err.code === ERROR_CODES.CONTEXT_OVERFLOW`)
           // instead of substring-matching on the raw addon message.
           if (isAddonContextOverflowError(err)) {
             const { promptTokens, ctxSize } = parseContextOverflowMessage(

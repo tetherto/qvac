@@ -23,7 +23,7 @@ import {
   ModelTypeRequiredError,
   StreamEndedError,
   InvalidResponseError
-} from '../utils/errors-client'
+} from '../errors'
 import { assertModelSrcMatchesModelType } from '../utils/load-model-validation'
 import { parseClientInput } from './parse-input'
 import { getClientLogger } from '../logging'

@@ -7,7 +7,7 @@ import {
   RequestRejectedByPolicyError,
   InferenceCancelledError,
   ModelNotLoadedError
-} from '../src/utils/errors-server'
+} from '../src/errors'
 
 test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
   const err = new RequestRejectedByPolicyError(
@@ -19,9 +19,8 @@ test('createErrorResponse: RequestRejectedByPolicyError carries its named fields
   const response = createErrorResponse(err)
 
   t.is(response.type, 'error')
-  // `QvacErrorBase.name` is the SCREAMING_SNAKE error-code name from
-  // sdk-errors-server.ts, not the JS class name — the rpc-error.ts
-  // reconstructor map keys off this value.
+  // `QvacErrorBase.name` is the SCREAMING_SNAKE error-code name from the
+  // error-code definitions, not the JS class name.
   t.is(response.name, 'REQUEST_REJECTED_BY_POLICY')
   t.is(response.code, 52420)
   t.alike(response.typedFields, {

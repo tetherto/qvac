@@ -33,7 +33,7 @@ import {
   HyperdriveDownloadFailedError,
   ModelLoadFailedError,
   NoBlobFoundError
-} from '../../../utils/errors-server'
+} from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import {
   registerSwarm,

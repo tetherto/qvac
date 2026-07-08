@@ -15,7 +15,7 @@ import {
 } from '../schemas'
 import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch'
 import { getClientLogger } from '../logging'
-import { TextToSpeechStreamFailedError } from '../utils/errors-client'
+import { TextToSpeechStreamFailedError } from '../errors'
 import { parseClientInput } from './parse-input'
 
 const logger = getClientLogger()

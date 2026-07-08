@@ -7,11 +7,11 @@ import type {
   ModelRegistryEntry
 } from '../../schemas'
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { REGISTRY_ERROR_CODES } from '../../schemas/sdk-errors-registry'
+import { REGISTRY_ERROR_CODES } from '../../schemas/errors'
 import { getAddonFromEngine, resolveCanonicalEngine } from '../../schemas/engine-addon-map'
 import { getRegistryClient } from '../state/registry-client'
 import { getServerLogger } from '../../logging'
-import { ModelRegistryQueryFailedError } from '../../utils/errors-server'
+import { ModelRegistryQueryFailedError } from '../../errors'
 
 interface QvacError extends Error {
   code?: number

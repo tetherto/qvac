@@ -3,7 +3,7 @@ import { getServerLogger } from '../../../../logging'
 import { getModel, getModelEntry } from '../../../../engine/state/model-registry'
 import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
 import { generateServerRequestId } from '../../../../engine/runtime/request-id'
-import { ModelOperationNotSupportedError } from '../../../../utils/errors-server'
+import { ModelOperationNotSupportedError } from '../../../../errors'
 import { ModelType } from '../../../../schemas'
 import type {
   VideoRequest,

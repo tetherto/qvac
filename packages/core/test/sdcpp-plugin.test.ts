@@ -9,7 +9,7 @@ import {
   upscaleStatsSchema,
   modelInfoSchema,
   ModelType,
-  SDK_SERVER_ERROR_CODES,
+  ERROR_CODES,
   type DiffusionStreamResponse,
   type PluginInvokeStreamResponse
 } from '../src/schemas'
@@ -20,7 +20,7 @@ import { handlePluginInvokeStream } from '../src/engine/handlers/plugin-invoke'
 import {
   PluginResponseValidationFailedError,
   PluginRequestValidationFailedError
-} from '../src/utils/errors-server'
+} from '../src/errors'
 import { diffusion as diffusionOp } from '../src/plugins/builtin/sdcpp-generation/ops/diffusion'
 
 // ============================================
@@ -1136,7 +1136,7 @@ test('diffusion plugin: rejects invalid request schema', async function (t) {
         t.ok(error instanceof PluginRequestValidationFailedError)
         t.is(
           (error as PluginRequestValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED
+          ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED
         )
       }
     }
@@ -1163,7 +1163,7 @@ test('diffusion plugin: rejects invalid response from handler', async function (
         t.ok(error instanceof PluginResponseValidationFailedError)
         t.is(
           (error as PluginResponseValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+          ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
         )
       }
     }

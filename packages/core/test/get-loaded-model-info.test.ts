@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { registerModel, unregisterModel } from '../src/engine/state/model-registry'
 import { handleGetLoadedModelInfo } from '../src/engine/handlers/get-loaded-model-info'
-import { ModelNotFoundError } from '../src/utils/errors-server'
-import { SDK_SERVER_ERROR_CODES } from '../src/schemas'
+import { ModelNotFoundError } from '../src/errors'
+import { ERROR_CODES } from '../src/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {
@@ -46,6 +46,6 @@ test('getLoadedModelInfo: unknown modelId throws ModelNotFoundError', function (
     t.fail('Expected handleGetLoadedModelInfo to throw')
   } catch (error) {
     t.ok(error instanceof ModelNotFoundError)
-    t.is((error as ModelNotFoundError).code, SDK_SERVER_ERROR_CODES.MODEL_NOT_FOUND)
+    t.is((error as ModelNotFoundError).code, ERROR_CODES.MODEL_NOT_FOUND)
   }
 })

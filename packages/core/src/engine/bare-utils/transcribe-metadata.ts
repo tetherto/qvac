@@ -1,5 +1,5 @@
 import { ModelType, type TranscribeSegment } from '../../schemas'
-import { TranscriptionFailedError } from '../../utils/errors-server'
+import { TranscriptionFailedError } from '../../errors'
 
 export interface WhisperAddonSegment {
   text: string

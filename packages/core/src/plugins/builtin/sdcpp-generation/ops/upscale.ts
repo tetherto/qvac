@@ -1,6 +1,6 @@
 import { EsrganUpscaler } from '@qvac/diffusion-cpp'
 import { getModel, getModelEntry } from '../../../../engine/state/model-registry'
-import { ModelOperationNotSupportedError } from '../../../../utils/errors-server'
+import { ModelOperationNotSupportedError } from '../../../../errors'
 import { ModelType } from '../../../../schemas'
 import type {
   UpscaleRequest,

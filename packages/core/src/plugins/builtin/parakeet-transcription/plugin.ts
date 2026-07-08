@@ -26,7 +26,7 @@ import {
   ModelLoadFailedError,
   TranscriptionFailedError,
   LegacyParakeetModelDeprecatedError
-} from '../../../utils/errors-server'
+} from '../../../errors'
 import { transcribe, transcribeStream } from '../../../engine/ops/transcribe'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'
 

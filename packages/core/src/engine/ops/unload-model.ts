@@ -5,7 +5,7 @@ import { unregisterAllLoggingStreams } from '../state/logging-stream-registry'
 import { clearFinetuneRuntimeState } from '../../plugins/builtin/llamacpp-completion/ops/finetune'
 import { unregisterAddonLogger, getServerLogger } from '../../logging'
 import { type UnloadModelParams, unloadModelParamsSchema } from '../../schemas'
-import { ModelNotLoadedError } from '../../utils/errors-server'
+import { ModelNotLoadedError } from '../../errors'
 import { detectShardedModel } from '../utils'
 import { getClearStorageTarget } from '../utils/cache/paths'
 

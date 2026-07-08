@@ -3,7 +3,7 @@ import type { DelegatedHandlerOptions } from '../profiling'
 import { getModelEntry } from '../state/model-registry'
 import { getRPC } from '../delegate-client'
 import { stream, type DelegateOptions } from '../delegate-transport'
-import { ModelIsDelegatedError } from '../../utils/errors-server'
+import { ModelIsDelegatedError } from '../../errors'
 import { getServerLogger } from '../../logging'
 
 const logger = getServerLogger()

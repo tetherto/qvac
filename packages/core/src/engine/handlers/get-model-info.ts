@@ -11,7 +11,7 @@ import { generateShortHash } from '../utils'
 import { promises as fsPromises } from 'bare-fs'
 import { getShardPath, getModelsCacheDir, getSingleFileCachePath } from '../utils/cache/paths'
 import { validateAndJoinPath } from '../utils/path-security'
-import { ModelNotFoundError } from '../../utils/errors-server'
+import { ModelNotFoundError } from '../../errors'
 
 type CacheStatusResult = {
   cacheFiles: CacheFileInfo[]

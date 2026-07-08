@@ -11,7 +11,7 @@ import {
 } from '../../schemas'
 import { createAudioStream } from '../bare-utils/audio-input'
 import { getServerLogger } from '../../logging'
-import { TranscriptionFailedError } from '../../utils/errors-server'
+import { TranscriptionFailedError } from '../../errors'
 import type { TranscribeResponse } from '../types/addon-responses'
 import { nowMs } from '../../profiling'
 import { buildStreamResult } from '../../profiling/model-execution'

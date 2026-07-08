@@ -31,7 +31,7 @@ import { getResponseFormatJsonSchema } from '../../../../engine/utils/response-f
 import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../engine/utils'
 import { getServerLogger } from '../../../../logging'
 import type { Logger } from '../../../../logging/types'
-import { AttachmentNotFoundError } from '../../../../utils/errors-server'
+import { AttachmentNotFoundError } from '../../../../errors'
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult } from '../../../../profiling/model-execution'
 import type { LlmStats } from '../../../../engine/types/addon-responses'

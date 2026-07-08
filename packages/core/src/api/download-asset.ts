@@ -4,11 +4,7 @@ import {
   type RPCOptions,
   downloadAssetOptionsToRequestSchema
 } from '../schemas'
-import {
-  DownloadAssetFailedError,
-  StreamEndedError,
-  InvalidResponseError
-} from '../utils/errors-client'
+import { DownloadAssetFailedError, StreamEndedError, InvalidResponseError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
 import { parseClientInput } from './parse-input'
 import { generateClientRequestId } from './client-request-id'

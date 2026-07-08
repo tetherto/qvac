@@ -6,7 +6,7 @@ import type { Connection } from 'hyperswarm'
 import type { Duplex } from 'bare-stream'
 import { withTimeout } from '../utils/withTimeout'
 import type { RPCOptions } from '../schemas'
-import { DelegateConnectionFailedError } from '../utils/errors-server'
+import { DelegateConnectionFailedError } from '../errors'
 import { getServerLogger } from '../logging'
 import { nowMs } from '../profiling'
 import {

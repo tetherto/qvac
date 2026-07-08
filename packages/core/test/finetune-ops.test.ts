@@ -15,7 +15,7 @@ import {
   startFinetune
 } from '../src/plugins/builtin/llamacpp-completion/ops/finetune'
 import { ModelType } from '../src/schemas'
-import { CompletionFailedError } from '../src/utils/errors-server'
+import { CompletionFailedError } from '../src/errors'
 
 function createTempCheckpointDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'finetune-op-test-'))

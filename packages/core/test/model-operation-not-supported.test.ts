@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { clearPlugins, registerPlugin } from '../src/plugins'
 import { registerModel, unregisterModel, type AnyModel } from '../src/engine/state/model-registry'
 import { dispatchPluginReply } from '../src/engine/handlers/plugin-dispatch'
-import { ModelOperationNotSupportedError } from '../src/utils/errors-server'
-import { type CanonicalModelType, SDK_SERVER_ERROR_CODES } from '../src/schemas'
+import { ModelOperationNotSupportedError } from '../src/errors'
+import { type CanonicalModelType, ERROR_CODES } from '../src/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {
@@ -20,7 +20,7 @@ test('ModelOperationNotSupportedError: empty supported and suggested degrade gra
     'empty supported uses the alternate clause'
   )
   t.ok(
-    error.message.includes('No model registered in this worker bundle'),
+    error.message.includes('No registered model exposes'),
     'empty suggestions uses the alternate clause'
   )
 })
@@ -82,7 +82,7 @@ test('dispatch: throws ModelOperationNotSupportedError with bundle-aware suggest
     t.ok(error instanceof ModelOperationNotSupportedError)
     const e = error as ModelOperationNotSupportedError
 
-    t.is(e.code, SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED)
+    t.is(e.code, ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED)
     t.is(e.operation, 'transcribe')
     t.is(e.modelType, llmType)
     t.alike(e.supportedOperations, ['completionStream'])

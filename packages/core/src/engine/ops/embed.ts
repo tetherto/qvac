@@ -1,11 +1,7 @@
 import { getModel } from '../state/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '../../schemas'
 import { buildUnaryResult } from '../../profiling/model-execution'
-import {
-  EmbedNoEmbeddingsError,
-  EmbedFailedError,
-  InferenceCancelledError
-} from '../../utils/errors-server'
+import { EmbedNoEmbeddingsError, EmbedFailedError, InferenceCancelledError } from '../../errors'
 import { nowMs } from '../../profiling'
 import type { EmbedResponse } from '../types/addon-responses'
 import { getRequestRegistry, withRequestContext } from '../runtime'

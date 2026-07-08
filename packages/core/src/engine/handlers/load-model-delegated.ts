@@ -6,7 +6,7 @@ import { registerModel, isModelLoaded, unregisterModel } from '../state/model-re
 import { send, stream, type DelegateOptions } from '../delegate-transport'
 import { getRPC } from '../delegate-client'
 import { handleLoadModel } from './load-model'
-import { ModelLoadFailedError, DelegateNoFinalResponseError } from '../../utils/errors-server'
+import { ModelLoadFailedError, DelegateNoFinalResponseError } from '../../errors'
 import { getServerLogger } from '../../logging'
 
 const logger = getServerLogger()

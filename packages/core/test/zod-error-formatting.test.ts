@@ -10,10 +10,7 @@ import { LLAMA_3_2_1B_INST_Q4_0 } from '../src/models/registry'
 import { formatZodError } from '../src/utils/zod-error'
 import { parseClientInput } from '../src/api/parse-input'
 import { validateConfig } from '../src/config/config-utils'
-import {
-  ConfigValidationFailedError,
-  RequestValidationFailedError
-} from '../src/utils/errors-client'
+import { ConfigValidationFailedError, RequestValidationFailedError } from '../src/errors'
 
 // A raw ZodError serialises its `.message` as a JSON array of issues; a friendly
 // message does not. Validation errors shown to consumers must never be JSON.

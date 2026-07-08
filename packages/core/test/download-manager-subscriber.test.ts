@@ -5,7 +5,7 @@ import {
   type DownloadContext
 } from '../src/engine/handlers/load-model/download-manager'
 import { createDisposableScope } from '../src/engine/runtime/disposable-scope'
-import { InferenceCancelledError } from '../src/utils/errors-server'
+import { InferenceCancelledError } from '../src/errors'
 
 // -----------------------------------------------------------------------------
 // download-manager: per-`requestId` cancel + content-addressed dedup.

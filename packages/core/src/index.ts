@@ -118,8 +118,7 @@ export {
   type RagIngestStage,
   type RagReindexStage,
   type RagSaveStage,
-  SDK_CLIENT_ERROR_CODES,
-  SDK_SERVER_ERROR_CODES,
+  ERROR_CODES,
   RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
@@ -197,15 +196,15 @@ export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
 // Error classes consumers need for `instanceof` checks on rejected promises.
 // A handler's thrown error propagates as its real typed instance, so these
 // match directly.
-export { InferenceCancelledError } from './utils/errors-server'
-export type { InferenceCancelledPartial } from './utils/errors-server'
 export {
+  InferenceCancelledError,
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
-  RequestRejectedByPolicyError
-} from './utils/errors-server'
-export { RequestValidationFailedError } from './utils/errors-client'
+  RequestRejectedByPolicyError,
+  RequestValidationFailedError
+} from './errors'
+export type { InferenceCancelledPartial } from './errors'
 
 // Logging exports
 export { getLogger, CORE_LOG_ID, CORE_ALL_LOG_ID } from './logging'

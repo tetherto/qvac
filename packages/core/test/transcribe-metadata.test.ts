@@ -14,7 +14,7 @@ import {
   toTranscribeSegment,
   assertMetadataSupported
 } from '../src/engine/bare-utils/transcribe-metadata'
-import { TranscriptionFailedError } from '../src/utils/errors-server'
+import { TranscriptionFailedError } from '../src/errors'
 
 // =============================================================================
 // Schema round-trip — transcribeSegmentSchema / transcribeResponseSchema

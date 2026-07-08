@@ -23,10 +23,7 @@ import {
   type TtsSupertonicRuntimeConfig
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger } from '../../../logging'
-import {
-  TtsArtifactsRequiredError,
-  LegacyTtsModelDeprecatedError
-} from '../../../utils/errors-server'
+import { TtsArtifactsRequiredError, LegacyTtsModelDeprecatedError } from '../../../errors'
 import { textToSpeech } from './ops/text-to-speech'
 import { textToSpeechStream } from './ops/text-to-speech-stream'
 import { attachModelExecutionMs } from '../../../profiling/model-execution'

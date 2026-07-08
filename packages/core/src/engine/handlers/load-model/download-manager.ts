@@ -1,6 +1,6 @@
 import type { ModelProgressUpdate } from '../../../schemas'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { DownloadCancelledError, InferenceCancelledError } from '../../../utils/errors-server'
+import { DownloadCancelledError, InferenceCancelledError } from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import { getRequestRegistry } from '../../runtime'
 import type { DisposableScope } from '../../runtime/disposable-scope'

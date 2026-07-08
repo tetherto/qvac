@@ -7,7 +7,7 @@ import {
   type PivotModelConfig
 } from '../src/plugins/builtin/nmtcpp-translation/resolve-vocab'
 import type { ModelSrcInput, NmtConfig, ResolveContext } from '../src/schemas'
-import { ModelLoadFailedError } from '../src/utils/errors-server'
+import { ModelLoadFailedError } from '../src/errors'
 
 interface MockResolveCall {
   src: ModelSrcInput

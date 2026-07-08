@@ -6,7 +6,7 @@ import { send, stream, close } from '../src/dispatch'
 import { registerPlugin, clearPlugins } from '../src/plugins'
 import { ModelType } from '../src/schemas'
 import type { Request, Response } from '../src/schemas'
-import { WorkerPluginsNotRegisteredError, RPCNoHandlerError } from '../src/utils/errors-client'
+import { PluginsNotRegisteredError, RPCNoHandlerError } from '../src/errors'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 
 // Keep the storage-root lock out of the real home: the first `ensureReady`
@@ -18,11 +18,11 @@ function fakeRequest(type: string): Request {
   return { type } as unknown as Request
 }
 
-test('send rejects with WorkerPluginsNotRegisteredError when nothing is assembled', async function (t) {
+test('send rejects with PluginsNotRegisteredError when nothing is assembled', async function (t) {
   clearPlugins()
   await t.exception(
     () => send(fakeRequest('heartbeat')),
-    WorkerPluginsNotRegisteredError,
+    PluginsNotRegisteredError,
     'the readiness guard fires before any handler runs'
   )
   await close()
@@ -80,6 +80,6 @@ test('close resets readiness so the next call re-runs the guard', async function
   // With readiness reset and no plugins, the guard must fire again — proving
   // close() cleared the memoized ready flag rather than leaving it latched.
   clearPlugins()
-  await t.exception(() => send(fakeRequest('heartbeat')), WorkerPluginsNotRegisteredError)
+  await t.exception(() => send(fakeRequest('heartbeat')), PluginsNotRegisteredError)
   await close()
 })

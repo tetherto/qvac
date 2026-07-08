@@ -1,6 +1,6 @@
 import type { LifecycleState, Request } from '../schemas'
 import { getServerLogger } from '../logging'
-import { LifecycleOperationBlockedError } from '../utils/errors-server'
+import { LifecycleOperationBlockedError } from '../errors'
 
 const logger = getServerLogger()
 

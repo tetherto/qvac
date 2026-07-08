@@ -30,7 +30,7 @@ import {
   RAGDeleteFailedError,
   RAGCloseWorkspaceFailedError,
   RAGListWorkspacesFailedError
-} from '../utils/errors-client'
+} from '../errors'
 import { generateClientRequestId } from './client-request-id'
 import { decoratePromise } from '../utils/decorate-promise'
 

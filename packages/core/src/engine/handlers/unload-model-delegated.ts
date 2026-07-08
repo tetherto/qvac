@@ -3,7 +3,7 @@ import { getModelEntry, unregisterModel, getRegistryStats } from '../state/model
 import { getRPC } from '../delegate-client'
 import { send } from '../delegate-transport'
 import { hasActiveProviders } from '../swarm'
-import { ModelIsDelegatedError } from '../../utils/errors-server'
+import { ModelIsDelegatedError } from '../../errors'
 import { getServerLogger } from '../../logging'
 
 const logger = getServerLogger()

@@ -4,7 +4,7 @@ import {
   createRequestRegistry,
   __requestRegistryTestHooks
 } from '../src/engine/runtime/request-registry'
-import { RequestIdConflictError, RequestRejectedByPolicyError } from '../src/utils/errors-server'
+import { RequestIdConflictError, RequestRejectedByPolicyError } from '../src/errors'
 
 // -----------------------------------------------------------------------------
 // RequestRegistry unit tests.

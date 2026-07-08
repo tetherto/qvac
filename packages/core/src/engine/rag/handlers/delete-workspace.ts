@@ -3,7 +3,7 @@ import {
   deleteWorkspace as deleteWorkspaceFromManager
 } from '../rag-workspace-manager'
 import { ragDeleteWorkspaceParamsSchema, type RagDeleteWorkspaceParams } from '../../../schemas'
-import { RAGWorkspaceNotFoundError, RAGWorkspaceInUseError } from '../../../utils/errors-server'
+import { RAGWorkspaceNotFoundError, RAGWorkspaceInUseError } from '../../../errors'
 
 export async function deleteWorkspace(params: RagDeleteWorkspaceParams) {
   const { workspace } = ragDeleteWorkspaceParamsSchema.parse(params)

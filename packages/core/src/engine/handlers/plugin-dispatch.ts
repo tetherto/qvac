@@ -8,7 +8,7 @@ import {
   ModelOperationNotSupportedError,
   PluginNotFoundError,
   PluginHandlerTypeMismatchError
-} from '../../utils/errors-server'
+} from '../../errors'
 
 interface DispatchResult<TResponse> {
   result: Promise<TResponse> | AsyncGenerator<TResponse>

@@ -45,9 +45,7 @@ export * from './shard'
 export * from './suspend'
 export * from './resume'
 export * from './state'
-export { SDK_CLIENT_ERROR_CODES } from './sdk-errors-client'
-export { SDK_SERVER_ERROR_CODES } from './sdk-errors-server'
-export { REGISTRY_ERROR_CODES } from './sdk-errors-registry'
+export { ERROR_CODES, REGISTRY_ERROR_CODES } from './errors'
 export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
 export {
   qvacConfigSchema,

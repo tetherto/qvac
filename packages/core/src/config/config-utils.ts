@@ -1,5 +1,5 @@
 import { qvacConfigSchema, type QvacConfig } from '../schemas'
-import { ConfigValidationFailedError } from '../utils/errors-client'
+import { ConfigValidationFailedError } from '../errors'
 import { formatZodError } from '../utils/zod-error'
 
 export type { QvacConfig }

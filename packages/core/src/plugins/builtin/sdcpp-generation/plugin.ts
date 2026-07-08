@@ -26,7 +26,7 @@ import {
   type SdcppConfig
 } from '../../../schemas'
 import { createStreamLogger, registerAddonLogger } from '../../../logging'
-import { ModelLoadFailedError } from '../../../utils/errors-server'
+import { ModelLoadFailedError } from '../../../errors'
 import { diffusion } from './ops/diffusion'
 import { video } from './ops/video'
 import { upscale } from './ops/upscale'

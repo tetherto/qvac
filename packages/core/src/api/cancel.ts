@@ -1,6 +1,6 @@
 import { send } from '../dispatch'
 import { type CancelClientInput, type CancelParams, type CancelRequest } from '../schemas'
-import { InvalidResponseError, CancelFailedError } from '../utils/errors-client'
+import { InvalidResponseError, CancelFailedError } from '../errors'
 
 /**
  * Cancels an ongoing operation.

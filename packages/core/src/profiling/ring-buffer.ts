@@ -3,7 +3,7 @@
  * Oldest events are overwritten when full.
  */
 
-import { ProfilerInvalidCapacityError } from '../utils/errors-client'
+import { ProfilerInvalidCapacityError } from '../errors'
 
 export interface RingBufferState<T> {
   buffer: (T | undefined)[]

@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { assertModelSrcMatchesModelType } from '../src/utils/load-model-validation'
-import { ModelSrcTypeMismatchError } from '../src/utils/errors-client'
-import { ModelType, SDK_CLIENT_ERROR_CODES } from '../src/schemas'
+import { ModelSrcTypeMismatchError } from '../src/errors'
+import { ModelType, ERROR_CODES } from '../src/schemas'
 
 test('assertModelSrcMatchesModelType: descriptor engine vs incompatible canonical modelType throws', (t) => {
   const llamaDescriptor = {
@@ -14,7 +14,7 @@ test('assertModelSrcMatchesModelType: descriptor engine vs incompatible canonica
     t.fail('Expected ModelSrcTypeMismatchError to be thrown')
   } catch (error) {
     t.ok(error instanceof ModelSrcTypeMismatchError)
-    t.is((error as ModelSrcTypeMismatchError).code, SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH)
+    t.is((error as ModelSrcTypeMismatchError).code, ERROR_CODES.MODEL_SRC_TYPE_MISMATCH)
     t.ok(
       (error as Error).message.includes(ModelType.llamacppCompletion),
       'message should mention the inferred (modelSrc) type'

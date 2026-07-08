@@ -6,7 +6,7 @@ import {
 } from '../schemas/sdcpp-config'
 import { stream as streamRpc } from '../dispatch'
 import { decodeBase64, encodeBase64 } from '../utils/encoding'
-import { StreamEndedError } from '../utils/errors-client'
+import { StreamEndedError } from '../errors'
 
 interface UpscaleResult {
   outputs: Promise<Uint8Array[]>

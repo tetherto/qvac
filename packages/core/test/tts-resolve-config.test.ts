@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { ttsConfigSchema } from '../src/schemas/text-to-speech'
-import { LegacyTtsModelDeprecatedError } from '../src/utils/errors-server'
+import { LegacyTtsModelDeprecatedError } from '../src/errors'
 
 type TtsGgmlDebugModel = {
   _streamChunkTokens?: number

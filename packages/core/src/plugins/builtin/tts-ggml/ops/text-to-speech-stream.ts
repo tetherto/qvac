@@ -6,7 +6,7 @@ import {
 } from '../../../../schemas'
 import { nowMs } from '../../../../profiling'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
-import { TextToSpeechStreamFailedError } from '../../../../utils/errors-server'
+import { TextToSpeechStreamFailedError } from '../../../../errors'
 import {
   type TtsStreamChunk,
   type TtsOpYield,

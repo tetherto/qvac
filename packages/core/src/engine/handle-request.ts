@@ -10,7 +10,7 @@ import { nowMs } from '../profiling'
 import { resolveModelConfig } from './state/model-config-registry'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
-import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../utils/errors-server'
+import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../errors'
 import { registry } from './registry'
 import type { HandlerEntry } from './handler-utils'
 import {

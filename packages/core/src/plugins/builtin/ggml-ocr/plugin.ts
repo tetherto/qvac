@@ -12,7 +12,7 @@ import {
   type ResolveContext,
   type ResolveResult
 } from '../../../schemas'
-import { ModelLoadFailedError } from '../../../utils/errors-server'
+import { ModelLoadFailedError } from '../../../errors'
 import { hyperdriveUrlSchema } from '../../../schemas/load-model'
 import { createStreamLogger, registerAddonLogger } from '../../../logging'
 import ocrAddonLogging from '@qvac/ocr-ggml/addonLogging'

@@ -17,7 +17,7 @@ import {
   downloadSingleFileFromRegistry,
   validateCachedFile
 } from './registry-download-utils'
-import { DownloadCancelledError, RegistryDownloadFailedError } from '../../../utils/errors-server'
+import { DownloadCancelledError, RegistryDownloadFailedError } from '../../../errors'
 import { getServerLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 

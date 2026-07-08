@@ -35,9 +35,9 @@ export type ErrorResponse = z.infer<typeof errorResponseSchema>
  * rebuild the original class with its named constructor arguments
  * populated.
  *
- * Co-located with each class (see `utils/errors-server.ts`) so adding a
- * new typed error that survives serialisation is a two-step change:
- * define the class and implement the method.
+ * Co-located with each class (see `errors/index.ts`) so adding a new
+ * typed error that survives serialisation is a two-step change: define
+ * the class and implement the method.
  */
 export interface TypedErrorSerializer {
   toErrorResponseFields(): Record<string, unknown>

@@ -14,7 +14,7 @@ import {
   ArchiveUnsupportedTypeError,
   ArchiveMissingShardsError,
   DownloadCancelledError
-} from '../../utils/errors-server'
+} from '../../errors'
 import { isPathWithinBase } from './path-security'
 import { getServerLogger } from '../../logging'
 import {

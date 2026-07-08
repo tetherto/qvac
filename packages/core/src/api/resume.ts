@@ -1,5 +1,5 @@
 import { send } from '../dispatch'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Resumes the QVAC runtime: restores all suspended Hyperswarm and Corestore

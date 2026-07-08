@@ -9,7 +9,7 @@ import {
   PluginDefinitionInvalidError,
   PluginLoggingInvalidError,
   PluginModelTypeReservedError
-} from '../utils/errors-server'
+} from '../errors'
 import { createAddonLoggerCallback } from '../logging/addon'
 import { formatZodError } from '../utils/zod-error'
 

@@ -5,7 +5,7 @@ import {
   CacheDirNotAbsoluteError,
   CacheDirNotWritableError,
   ConfigAlreadySetError
-} from '../../utils/errors-server'
+} from '../../errors'
 import type { QvacConfig } from '../../schemas'
 import { getServerLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '../../logging'
 

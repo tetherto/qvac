@@ -7,7 +7,7 @@ import {
   type TranscribeStats
 } from '../../schemas'
 import { getServerLogger } from '../../logging'
-import { TranscriptionFailedError } from '../../utils/errors-server'
+import { TranscriptionFailedError } from '../../errors'
 import { nowMs } from '../../profiling'
 import { buildStreamResult } from '../../profiling/model-execution'
 import { toTranscribeSegment, type WhisperAddonSegment } from '../bare-utils/transcribe-metadata'

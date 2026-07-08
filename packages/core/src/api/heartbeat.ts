@@ -1,7 +1,7 @@
 import { type HeartbeatRequest, type HeartbeatResponse } from '../schemas'
 import type { DelegateBase } from '../schemas/delegate'
 import { send } from '../dispatch'
-import { InvalidResponseError } from '../utils/errors-client'
+import { InvalidResponseError } from '../errors'
 
 /**
  * Checks if a delegated provider is online by sending a heartbeat round-trip.
