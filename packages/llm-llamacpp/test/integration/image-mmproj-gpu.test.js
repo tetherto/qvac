@@ -3,11 +3,13 @@
 // multimodal projector (mmproj / vision encoder) backend runtime-configurable.
 //
 // Historically the projector was hard-pinned to CPU on Android via a
-// compile-time #ifdef. The new key lets callers run it on the mobile GPU
-// without recompiling, defaulting to the previous per-platform behaviour
-// (Android -> CPU, desktop/iOS -> GPU). These tests assert the key is
-// honoured on a GPU backend and that requesting it on a CPU backend warns
-// and cleanly falls back (the projector stays on CPU, vision still works).
+// compile-time #ifdef. The key lets callers force either backend without
+// recompiling; when unset the backend is auto-selected per device class
+// (QVAC-21867): desktop/iOS -> GPU; Android Adreno 800+ / other non-Mali GPUs
+// -> GPU; Android Mali and Adreno <800 -> CPU. These tests
+// assert the key is honoured on a GPU backend and that requesting it on a
+// CPU backend warns and cleanly falls back (the projector stays on CPU,
+// vision still works).
 //
 // This file ends in `.test.js`, so the mobile generator picks it up as
 // `runImageMmprojGpuTest` and it runs on the Android + iOS Device Farm pools
@@ -15,52 +17,25 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
-const path = require('bare-path')
 const {
   DEVICE_CONFIGS,
-  MULTIMODAL_MODEL_CONFIG,
   TEST_CONSTANTS,
   checkKeywordsInText,
-  describeImage
+  describeImage,
+  setupMultimodalInference
 } = require('./_image-common.js')
-const { ensureModel, getMediaPath } = require('./utils')
-const LlmLlamacpp = require('../../index.js')
+const { getMediaPath } = require('./utils')
+const { attachSpecLogger } = require('./spec-logger')
 
 const IMAGE_FILE = 'elephant.jpg'
 const KEYWORDS = ['elephant', 'elephants']
 const gpuAvailable = DEVICE_CONFIGS.some(c => c.id === 'gpu')
 
-// Build a VLM inference with an explicit `mmproj-use-gpu` override. Mirrors
-// setupMultimodalInference() from _image-common.js but threads the new key
-// through the config so we can assert its effect directly.
+// Build a VLM inference with an explicit `mmproj-use-gpu` override via the
+// shared multimodal setup helper (threading the new key through extraConfig).
 async function loadVlm (t, device, mmprojUseGpu) {
-  const cfg = MULTIMODAL_MODEL_CONFIG
-  const [modelName, dirPath] = await ensureModel(cfg.llmModel)
-  t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
-
-  const [projModelName] = await ensureModel(cfg.projModel)
-  t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
-
-  const inference = new LlmLlamacpp({
-    files: {
-      model: [path.join(dirPath, modelName)],
-      projectionModel: path.join(dirPath, projModelName)
-    },
-    config: {
-      gpu_layers: device === 'cpu' ? '0' : '98',
-      temp: '0.0',
-      verbosity: '2',
-      device,
-      ctx_size: cfg.ctx_size,
-      'mmproj-use-gpu': mmprojUseGpu
-    },
-    logger: console,
-    opts: { stats: true }
-  })
-  t.teardown(async () => {
-    try { await inference.unload() } catch (_) {}
-  })
-  await inference.load()
+  const { inference } = await setupMultimodalInference(
+    t, device, undefined, { 'mmproj-use-gpu': mmprojUseGpu })
   return inference
 }
 
@@ -101,4 +76,39 @@ test('device:cpu + mmproj-use-gpu:true loads without error and runs the projecto
   { timeout: TEST_CONSTANTS.timeout }, async t => {
     const inference = await loadVlm(t, 'cpu', 'true')
     await assertDescribesImage(t, inference, '[CPU][mmproj=cpu]')
+  })
+
+// QVAC-21867: with the key unset the projector backend is auto-selected per
+// device class (desktop/iOS + non-Mali Android GPUs -> GPU; Android Mali ->
+// CPU). This is the PR's headline behavior, so assert the auto-default branch
+// actually ran (not an override) via the native decision log, and that the
+// image is still described correctly whichever backend was chosen.
+//
+// The decision line is emitted only when a GPU compute backend is actually
+// selected (LlamaModel.cpp GPU branch). A host may advertise `device: 'gpu'`
+// (so this test is not skipped) yet have no usable GPU at runtime, in which
+// case the addon falls back to the CPU backend — which is silent for the
+// no-override case — and the line is absent. Tolerate that fallback: only
+// assert the auto-default semantics when the GPU branch ran; otherwise the
+// projector still described the image on CPU, which is all we can verify here.
+test('device:gpu + mmproj-use-gpu unset auto-defaults the projector by device class',
+  { timeout: TEST_CONSTANTS.timeout, skip: !gpuAvailable }, async t => {
+    const spec = attachSpecLogger({ forwardToConsole: false })
+    t.teardown(() => spec.release())
+
+    const { inference } = await setupMultimodalInference(t, 'gpu')
+    await assertDescribesImage(t, inference, '[GPU][mmproj=auto]')
+
+    const decisionLog = spec.logs.find(l =>
+      l.includes('multimodal projector backend:'))
+    if (!decisionLog) {
+      t.comment('no GPU backend selected at runtime (CPU fallback) — projector ' +
+        'auto-default path not exercised on this host; skipping the decision-log ' +
+        'assertion')
+      t.pass('projector ran and described the image on the CPU-fallback backend')
+      return
+    }
+    t.ok(decisionLog.includes('auto-default'),
+      'projector backend should be auto-defaulted with no override. ' +
+      `Log: ${decisionLog}`)
   })
