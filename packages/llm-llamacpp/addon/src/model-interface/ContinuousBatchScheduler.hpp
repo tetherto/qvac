@@ -99,6 +99,21 @@ struct SubmitRequest {
   StreamCallbacks streams;
 };
 
+using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+using SchedulerSynchronizeFunc = std::function<void(llama_context*)>;
+
+struct TimedDecodeResult {
+  int rc = 0;
+  std::chrono::nanoseconds duration{};
+};
+
+/// Time one scheduler decode step through backend completion. Some GPU backends
+/// enqueue work in llama_decode() and only block when logits/perf counters are
+/// read, so successful decodes must synchronize before the duration is recorded.
+[[nodiscard]] TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize);
+
 /// Aggregated per-scheduler runtime stats. `avgConcurrentSeq`/`elapsedMs`
 /// are derived getters computed from live state, not stored.
 struct RuntimeStatsSnapshot {
@@ -257,17 +272,20 @@ public:
   /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
-  /// Decode function used by stepLocked() (defaults to llama_decode) and the
-  /// media-segment eval used by serviceNextMediaSegmentLocked() (defaults to
-  /// driver.evalMediaSegment()). Unit tests override them through
-  /// ContinuousBatchSchedulerTestPeer to inject failing/blocking stubs.
-  using DecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+  /// Decode function used by stepLocked() (defaults to llama_decode), context
+  /// synchronization used before recording decode/media step time (defaults to
+  /// llama_synchronize), and the media-segment eval used by
+  /// serviceNextMediaSegmentLocked() (defaults to driver.evalMediaSegment()).
+  /// Unit tests override them through ContinuousBatchSchedulerTestPeer to inject
+  /// failing/blocking stubs.
+  using DecodeFunc = SchedulerDecodeFunc;
+  using SynchronizeFunc = SchedulerSynchronizeFunc;
   using EvalMediaFunc =
       std::function<llama_pos(SequenceDriver&, size_t, llama_pos)>;
 
 private:
-  // Test peer (global namespace) sets decodeFunc_/evalMediaFunc_ directly.
-  // See test_internal_peers.hpp.
+  // Test peer (global namespace) sets decodeFunc_, synchronizeFunc_, and
+  // evalMediaFunc_ directly. See test_internal_peers.hpp.
   friend class ::ContinuousBatchSchedulerTestPeer;
 
   /// RAII for the two points where a step must drop `mutex_` for a blocking
@@ -437,6 +455,11 @@ private:
   /// stub can be injected via
   /// ContinuousBatchSchedulerTestPeer::setDecodeFunc().
   DecodeFunc decodeFunc_;
+
+  /// Context synchronization used after a successful decode/media eval and
+  /// before recording step time. Defaults to llama_synchronize; a test stub can
+  /// be injected via ContinuousBatchSchedulerTestPeer::setSynchronizeFunc().
+  SynchronizeFunc synchronizeFunc_;
 
   /// Media-segment eval used in serviceNextMediaSegmentLocked(). Defaults to
   /// driver.evalMediaSegment(); a test stub can be injected via

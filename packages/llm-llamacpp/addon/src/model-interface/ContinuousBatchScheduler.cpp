@@ -101,6 +101,22 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
+TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize) {
+  const auto decodeStart = std::chrono::steady_clock::now();
+  const int rc = decode(ctx, batch);
+  if (rc == 0) {
+    synchronize(ctx);
+  }
+
+  TimedDecodeResult result;
+  result.rc = rc;
+  result.duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now() - decodeStart);
+  return result;
+}
+
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
@@ -117,6 +133,9 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
         return llama_decode(ctx, b);
+      }),
+      synchronizeFunc_([](llama_context* ctx) {
+        llama_synchronize(ctx);
       }),
       evalMediaFunc_(
           [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
@@ -651,6 +670,10 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
     try {
       newPos =
           evalMediaFunc_(driver, awaiting->mediaIndex, awaiting->currentPos);
+      // Media eval can run embedded llama_decode work without a logits read.
+      // Synchronize before stopping the timer and before deferred teardown can
+      // reacquire the context, matching the main decode-step boundary.
+      synchronizeFunc_(shared_.lctx);
     } catch (...) {
       error = std::current_exception();
     }
@@ -724,9 +747,10 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   std::chrono::steady_clock::duration decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
-    const auto decodeStart = std::chrono::steady_clock::now();
-    decodeRc = decodeFunc_(shared_.lctx, *batch_);
-    decodeDuration = std::chrono::steady_clock::now() - decodeStart;
+    const TimedDecodeResult decodeTiming =
+        timeDecodeStep(shared_.lctx, *batch_, decodeFunc_, synchronizeFunc_);
+    decodeRc = decodeTiming.rc;
+    decodeDuration = decodeTiming.duration;
   }
 
   if (decodeRc != 0) {

@@ -1,4 +1,5 @@
 #include <chrono>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -21,6 +22,49 @@ TEST(RuntimeStatsRates, NoStepsYieldZeroRates) {
   RuntimeStatsSnapshot stats;
   EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 0.0);
   EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 0.0);
+}
+
+TEST(RuntimeStatsRates, TimedDecodeIncludesSynchronizeDurationOnSuccess) {
+  llama_batch batch{};
+  bool decodeCalled = false;
+  bool synchronizeCalled = false;
+  const auto synchronizeDelay = milliseconds(25);
+
+  const TimedDecodeResult result = timeDecodeStep(
+      nullptr,
+      batch,
+      [&decodeCalled](llama_context* ctx, llama_batch&) {
+        EXPECT_EQ(ctx, nullptr);
+        decodeCalled = true;
+        return 0;
+      },
+      [synchronizeDelay, &synchronizeCalled](llama_context* ctx) {
+        EXPECT_EQ(ctx, nullptr);
+        synchronizeCalled = true;
+        std::this_thread::sleep_for(synchronizeDelay);
+      });
+
+  EXPECT_EQ(result.rc, 0);
+  EXPECT_TRUE(decodeCalled);
+  EXPECT_TRUE(synchronizeCalled);
+  EXPECT_GE(
+      result.duration.count(),
+      std::chrono::duration_cast<std::chrono::nanoseconds>(synchronizeDelay)
+          .count());
+}
+
+TEST(RuntimeStatsRates, TimedDecodeSkipsSynchronizeOnDecodeFailure) {
+  llama_batch batch{};
+  bool synchronizeCalled = false;
+
+  const TimedDecodeResult result = timeDecodeStep(
+      nullptr,
+      batch,
+      [](llama_context*, llama_batch&) { return -1; },
+      [&synchronizeCalled](llama_context*) { synchronizeCalled = true; });
+
+  EXPECT_EQ(result.rc, -1);
+  EXPECT_FALSE(synchronizeCalled);
 }
 
 TEST(RuntimeStatsRates, PureDecodeStepsComputeDecodeRate) {

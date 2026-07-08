@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mutex>
 #include <shared_mutex>
 #include <utility>
 
@@ -44,6 +43,14 @@ public:
   /// returns a non-zero rc or blocks to exercise the decode path.
   static void setDecodeFunc(Scheduler& scheduler, Scheduler::DecodeFunc fn) {
     scheduler.decodeFunc_ = std::move(fn);
+  }
+
+  /// Override the context synchronization used after successful decode/media
+  /// eval; inject a blocking stub to verify throughput timing includes backend
+  /// completion.
+  static void
+  setSynchronizeFunc(Scheduler& scheduler, Scheduler::SynchronizeFunc fn) {
+    scheduler.synchronizeFunc_ = std::move(fn);
   }
 
   /// Override the media-segment eval used by serviceNextMediaSegmentLocked();
