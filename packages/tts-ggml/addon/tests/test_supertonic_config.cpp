@@ -20,8 +20,8 @@
 using qvac::ttsggml::supertonic::SupertonicConfig;
 using qvac::ttsggml::supertonic::SupertonicModel;
 using qvac::ttsggml::supertonic::detail::applyVulkanPipelineCache;
-using qvac::ttsggml::supertonic::detail::kVulkanPipelineCacheDirEnv;
-using qvac::ttsggml::supertonic::detail::kVulkanPrewarmText;
+using qvac::ttsggml::supertonic::detail::VULKAN_PIPELINE_CACHE_DIR_ENV;
+using qvac::ttsggml::supertonic::detail::VULKAN_PREWARM_TEXT;
 using qvac_errors::StatusError;
 
 namespace {
@@ -162,10 +162,10 @@ TEST(SupertonicVulkanCache, GpuWithDirSetsEnvAndPrewarm) {
 
   applyVulkanPipelineCache(opts, cfg);
 
-  ASSERT_EQ(opts.vulkan_env_overrides.count(kVulkanPipelineCacheDirEnv), 1u);
+  ASSERT_EQ(opts.vulkan_env_overrides.count(VULKAN_PIPELINE_CACHE_DIR_ENV), 1u);
   EXPECT_EQ(
-      opts.vulkan_env_overrides.at(kVulkanPipelineCacheDirEnv), "/data/vk");
-  EXPECT_EQ(opts.prewarm_text, kVulkanPrewarmText);
+      opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
+  EXPECT_EQ(opts.prewarm_text, VULKAN_PREWARM_TEXT);
 }
 
 TEST(SupertonicVulkanCache, CpuIgnoresCacheDir) {
@@ -201,7 +201,7 @@ TEST(SupertonicVulkanCache, DoesNotOverwriteCallerPrewarm) {
   applyVulkanPipelineCache(opts, cfg);
 
   EXPECT_EQ(
-      opts.vulkan_env_overrides.at(kVulkanPipelineCacheDirEnv), "/data/vk");
+      opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
   EXPECT_EQ(opts.prewarm_text, "caller sentence");
 }
 

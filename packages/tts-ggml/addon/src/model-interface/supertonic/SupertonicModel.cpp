@@ -28,10 +28,10 @@ void detail::applyVulkanPipelineCache(
     tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg) {
   if (opts.n_gpu_layers <= 0 || cfg.vulkanCacheDir.empty())
     return;
-  opts.vulkan_env_overrides[detail::kVulkanPipelineCacheDirEnv] =
+  opts.vulkan_env_overrides[detail::VULKAN_PIPELINE_CACHE_DIR_ENV] =
       cfg.vulkanCacheDir;
   if (opts.prewarm_text.empty()) {
-    opts.prewarm_text = detail::kVulkanPrewarmText;
+    opts.prewarm_text = detail::VULKAN_PREWARM_TEXT;
   }
 }
 
