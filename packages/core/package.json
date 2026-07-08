@@ -117,7 +117,7 @@
     "@qvac/transcription-parakeet": "^0.9.0",
     "@qvac/transcription-whispercpp": "^0.10.0",
     "@qvac/translation-nmtcpp": "^6.3.0",
-    "@qvac/tts-ggml": "^0.3.1",
+    "@qvac/tts-ggml": "^0.4.0",
     "@qvac/vla-ggml": "^0.7.0"
   },
   "peerDependenciesMeta": {
@@ -173,7 +173,7 @@
     "@qvac/transcription-parakeet": "^0.9.0",
     "@qvac/transcription-whispercpp": "^0.10.2",
     "@qvac/translation-nmtcpp": "^6.3.1",
-    "@qvac/tts-ggml": "^0.3.6",
+    "@qvac/tts-ggml": "^0.4.0",
     "@qvac/vla-ggml": "^0.7.0",
     "@types/brittle": "^3.5.0",
     "bare-stdio": "^1.0.2",
