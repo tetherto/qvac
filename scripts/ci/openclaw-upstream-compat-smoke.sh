@@ -33,14 +33,14 @@ npm install --no-fund --no-audit \
   "$QVAC_SDK_SPEC" \
   2>&1 | tee "$ARTIFACT_DIR/npm-install.log"
 
-node - > "$ARTIFACT_DIR/package-specs.json" <<'NODE'
-console.log(JSON.stringify({
-  openclaw: process.env.OPENCLAW_PACKAGE_SPEC,
-  '@qvac/openclaw-plugin': process.env.QVAC_OPENCLAW_PLUGIN_SPEC,
-  '@qvac/cli': process.env.QVAC_CLI_SPEC,
-  '@qvac/sdk': process.env.QVAC_SDK_SPEC
-}, null, 2))
-NODE
+cat > "$ARTIFACT_DIR/package-specs.json" <<JSON
+{
+  "openclaw": "$OPENCLAW_PACKAGE_SPEC",
+  "@qvac/openclaw-plugin": "$QVAC_OPENCLAW_PLUGIN_SPEC",
+  "@qvac/cli": "$QVAC_CLI_SPEC",
+  "@qvac/sdk": "$QVAC_SDK_SPEC"
+}
+JSON
 
 npm ls --json \
   openclaw \

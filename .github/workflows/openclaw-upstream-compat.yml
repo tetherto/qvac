@@ -51,7 +51,7 @@ jobs:
         with:
           name: openclaw-upstream-compat
           path: ${{ runner.temp }}/openclaw-compat-artifacts
-          if-no-files-found: warn
+          if-no-files-found: error
 
   notify-on-failure:
     name: Open or update tracking issue
