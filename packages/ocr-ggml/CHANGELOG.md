@@ -4,7 +4,11 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.1] - 2026-07-07
+## [0.10.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
 
 ### Fixed
 

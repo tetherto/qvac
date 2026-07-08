@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.25.1",
+  "version": "0.26.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
