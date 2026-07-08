@@ -143,6 +143,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('GalleryHorizontal'),
   },
   {
+    name: 'Batch processing',
+    url: '/ai-capabilities/batch-processing',
+    type: 'page',
+    icon: resolveIcon('Boxes'),
+  },
+  {
     name: 'Image generation',
     url: '/ai-capabilities/image-generation',
     type: 'page',
