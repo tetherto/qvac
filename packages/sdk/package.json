@@ -198,7 +198,7 @@
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
-    "update-models": "tsx ./models/update-models/index.ts",
+    "update-models": "tsx ./models/update-models/index.ts && bun run contract:export",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
