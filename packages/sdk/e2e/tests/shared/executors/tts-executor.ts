@@ -38,14 +38,14 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
     return makeEnhancedTtsHandler<Expectation, TestResult>({
       dependency: dep,
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
-      validate: ValidationHelpers.validate
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
     })
   }
 
   private makeOutputSampleRateComparison() {
     return makeOutputSampleRateComparisonHandler<Expectation, TestResult>({
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
-      validate: ValidationHelpers.validate
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
     })
   }
 

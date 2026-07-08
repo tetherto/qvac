@@ -25,8 +25,7 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const SD3_MODEL = {
-  name: 'sd3_medium_incl_clips.safetensors',
-  url: 'https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors'
+  name: 'sd3_medium_incl_clips.safetensors'
 }
 
 const STEPS = 20
@@ -40,8 +39,7 @@ safeTest('SD3 Medium img2img — transforms an input image', { timeout: 1800000,
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: SD3_MODEL.name,
-      downloadUrl: SD3_MODEL.url
+      modelName: SD3_MODEL.name
     })
 
     console.log('\n' + '='.repeat(60))
