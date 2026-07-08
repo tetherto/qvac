@@ -8,10 +8,10 @@ import { getRegistryClient } from '../../state/registry-client'
 import { getSDKConfig } from '../../state/config-registry'
 import { buildRegistryClientOptions } from './registry-client-options'
 import { ChecksumValidationFailedError, DownloadCancelledError } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export {
   DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,

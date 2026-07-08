@@ -29,7 +29,7 @@ import {
 import { parseToolCalls } from '../../../../engine/utils/tools'
 import { getResponseFormatJsonSchema } from '../../../../engine/utils/response-format'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../engine/utils'
-import { getServerLogger } from '../../../../logging'
+import { getEngineLogger } from '../../../../logging'
 import type { Logger } from '../../../../logging/types'
 import { AttachmentNotFoundError } from '../../../../errors'
 import { nowMs } from '../../../../profiling'
@@ -38,7 +38,7 @@ import type { LlmStats } from '../../../../engine/types/addon-responses'
 import { normalizeCompletionStats } from './completion-stats'
 import fs from 'bare-fs'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface ResponseWithStats {
   stats?: LlmStats

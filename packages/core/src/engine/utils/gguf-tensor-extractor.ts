@@ -1,9 +1,9 @@
 import { promises as fsPromises, createReadStream } from 'bare-fs'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { ModelLoadFailedError } from '../../errors'
 import { validateAndJoinPath } from './path-security'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // GGUF value types
 const GGUF_TYPE = {

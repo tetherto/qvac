@@ -35,10 +35,10 @@ import {
   PartialDownloadOfflineError,
   ResponseBodyNotReadableError
 } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const DEFAULT_CONCURRENCY = 3
 

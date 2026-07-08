@@ -10,13 +10,13 @@ import {
 } from '../../../../engine/ops/kv-cache-utils'
 import type { CacheMessage } from '../../../../engine/utils'
 import { logCacheSaveError, logCacheStatus } from './cache-logger'
-import { getServerLogger } from '../../../../logging'
+import { getEngineLogger } from '../../../../logging'
 import type { Logger } from '../../../../logging/types'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
 // the caller — typically `withRequestContext(...)`.
-const moduleLogger = getServerLogger()
+const moduleLogger = getEngineLogger()
 
 /**
  * Single owner of the three KV-cache bookkeeping layers.
@@ -204,7 +204,7 @@ interface InternalTurnState {
 /**
  * Construct a session bound to one `(modelId, turn-owning request)`
  * scope. `options.logger` is the per-instance logger the session emits
- * through (typically `withRequestContext(getServerLogger(), ctx)`);
+ * through (typically `withRequestContext(getEngineLogger(), ctx)`);
  * falls back to the module-scoped logger when omitted.
  */
 export function createKvCacheSession(

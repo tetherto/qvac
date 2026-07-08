@@ -1,12 +1,12 @@
 import type { ModelProgressUpdate } from '../../../schemas'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import { DownloadCancelledError, InferenceCancelledError } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import { getRequestRegistry } from '../../runtime'
 import type { DisposableScope } from '../../runtime/disposable-scope'
 import type { DownloadHooks } from './types'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Per-subscriber binding to a registry-tracked request.

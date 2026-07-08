@@ -2,9 +2,9 @@ import type { CancelRequest, CancelResponse } from '../../schemas/cancel'
 import { cancel as cancelByModelId } from '../ops/cancel'
 import { getRequestRegistry } from '../runtime'
 import { markClearCacheForRequest } from './load-model/download-manager'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Cancel handler entry point. Every long-running handler registers

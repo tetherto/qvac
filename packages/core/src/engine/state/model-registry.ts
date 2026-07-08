@@ -4,10 +4,10 @@ import {
   ModelIsDelegatedError
 } from '../../errors'
 import type { CanonicalModelType } from '../../schemas'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import type BaseInference from '@qvac/infer-base'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface AddonInterface {
   cancel(jobId?: string): Promise<void>

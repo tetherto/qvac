@@ -21,7 +21,7 @@ import { setRuntimeContext } from './engine/state/runtime-context-registry'
 import { initialize, close as closeEngine } from './engine/lifecycle'
 import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
-import { setGlobalLogLevel, setGlobalConsoleOutput, getClientLogger } from './logging'
+import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from './logging'
 import { RPCNoHandlerError, PluginsNotRegisteredError } from './errors'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
@@ -29,7 +29,7 @@ import { RPCNoHandlerError, PluginsNotRegisteredError } from './errors'
 // A thrown handler error propagates as its real typed instance, so consumers can
 // `instanceof`-check it directly.
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 type Handler =
   | ((

@@ -34,7 +34,7 @@ import {
   ModelLoadFailedError,
   NoBlobFoundError
 } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import {
   registerSwarm,
   unregisterSwarm,
@@ -44,7 +44,7 @@ import {
 import type { DownloadHooks } from './types'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface HyperdriveSetup {
   corestore: Corestore

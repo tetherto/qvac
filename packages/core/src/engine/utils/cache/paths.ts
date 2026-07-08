@@ -6,11 +6,11 @@ import type { ShardFileMetadata } from '../../../schemas'
 import { calculateFileChecksum } from '../checksum'
 import { validateAndJoinPath } from '../path-security'
 import { generateShortHash } from '../formatting'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import { nowMs } from '../../../profiling'
 import { resolveClearStorageTarget } from '../clear-storage'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function getCacheDir(subDir: string): string {
   const cacheDir = getQvacPath(subDir)

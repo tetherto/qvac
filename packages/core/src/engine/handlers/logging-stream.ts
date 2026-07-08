@@ -13,7 +13,7 @@ export async function* handleLoggingStream(
   const streamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => {
     const logResponse: LoggingStreamResponse = {
       type: 'loggingStream',
-      // For the global CORE_ALL_LOG_ID stream `sourceId` is the real origin of the
+      // For the global ALL_LOG_ID stream `sourceId` is the real origin of the
       // log; for a per-id stream it equals the subscription `id`.
       id: sourceId,
       level: level,

@@ -207,7 +207,7 @@ export {
 export type { InferenceCancelledPartial } from './errors'
 
 // Logging exports
-export { getLogger, CORE_LOG_ID, CORE_ALL_LOG_ID } from './logging'
+export { getLogger, LOG_ID, ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports

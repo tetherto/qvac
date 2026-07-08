@@ -7,7 +7,7 @@ import type { Duplex } from 'bare-stream'
 import { withTimeout } from '../utils/withTimeout'
 import type { RPCOptions } from '../schemas'
 import { DelegateConnectionFailedError } from '../errors'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 import { nowMs } from '../profiling'
 import {
   cacheDelegationConnectionTime,
@@ -16,7 +16,7 @@ import {
 import { getNextCommandId } from './rpc-utils'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // This needs to run on Bare, hence why it's in server and not in client
 

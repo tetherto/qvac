@@ -1,10 +1,10 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { getQvacPath } from './qvac-paths'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const LOCK_FILENAME = '.worker.lock'
 

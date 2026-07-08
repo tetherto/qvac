@@ -18,13 +18,13 @@ import {
   validateCachedFile
 } from './registry-download-utils'
 import { DownloadCancelledError, RegistryDownloadFailedError } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 
 type CompanionSetMetadata = NonNullable<RegistryItem['companionSet']>
 type CompanionSetMetadataEntry = CompanionSetMetadata['files'][number]
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface DownloadCompanionSetOptions {
   companionSet: CompanionSetMetadata

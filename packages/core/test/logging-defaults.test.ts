@@ -1,6 +1,5 @@
 import test from 'brittle'
-import { getClientLogger } from '../src/logging/client-logger'
-import { createBaseLogger } from '../src/logging/base-logger'
+import { getAppLogger, createBaseLogger } from '../src/logging/logger'
 import { logLevelSchema } from '../src/schemas/logging-stream'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
@@ -10,7 +9,7 @@ test('logLevelSchema: accepts off alongside the standard levels', (t) => {
   t.is(logLevelSchema.safeParse('verbose').success, false)
 })
 
-test('getClientLogger: silent console by default, still feeds transports', (t) => {
+test('getAppLogger: silent console by default, still feeds transports', (t) => {
   const original = console.info
   let printed = 0
   console.info = () => {
@@ -21,7 +20,7 @@ test('getClientLogger: silent console by default, still feeds transports', (t) =
   })
 
   const received: string[] = []
-  const logger = getClientLogger({
+  const logger = getAppLogger({
     transports: [
       (_level, _namespace, message) => {
         received.push(message)
@@ -34,7 +33,7 @@ test('getClientLogger: silent console by default, still feeds transports', (t) =
   t.alike(received, ['hello'], 'transport still receives the log')
 })
 
-test('getClientLogger: enableConsole opts back into console output', (t) => {
+test('getAppLogger: enableConsole opts back into console output', (t) => {
   const original = console.info
   let printed = 0
   console.info = () => {
@@ -44,7 +43,7 @@ test('getClientLogger: enableConsole opts back into console output', (t) => {
     console.info = original
   })
 
-  getClientLogger({ enableConsole: true }).info('hi')
+  getAppLogger({ enableConsole: true }).info('hi')
 
   t.ok(printed > 0, 'console prints when explicitly enabled')
 })

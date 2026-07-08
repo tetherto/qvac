@@ -1,5 +1,5 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
-import { getServerLogger } from '../../../../logging'
+import { getEngineLogger } from '../../../../logging'
 import { getModel, getModelEntry } from '../../../../engine/state/model-registry'
 import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
 import { generateServerRequestId } from '../../../../engine/runtime/request-id'
@@ -36,7 +36,7 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     kind: 'diffusion',
     modelId: request.modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
 
   const onAbort = () => {

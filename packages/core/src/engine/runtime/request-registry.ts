@@ -2,7 +2,7 @@ import { AbortController, type AbortSignal } from 'bare-abort-controller'
 import { createDisposableScope, type DisposableScope } from './disposable-scope'
 import type { RequestContext, RequestKind, RequestState } from './request-context'
 import { RequestIdConflictError, RequestRejectedByPolicyError } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import type { Logger } from '../../logging/types'
 
 /**
@@ -289,12 +289,12 @@ const CANCEL_BEFORE_BEGIN_TTL_MS = 30_000
 const DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL = 64
 
 export function createRequestRegistry(options?: {
-  /** Defaults to `getServerLogger()`. Tests inject a stub. */
+  /** Defaults to `getEngineLogger()`. Tests inject a stub. */
   logger?: Logger
 }): RequestRegistry {
   const entries = new Map<string, RegistryEntry>()
   const policies = new Map<RequestKind, NormalizedPolicy>()
-  const logger = options?.logger ?? getServerLogger()
+  const logger = options?.logger ?? getEngineLogger()
 
   /**
    * Per-`(kind, modelId)` admission semaphores. Keyed by

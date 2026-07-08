@@ -1,8 +1,8 @@
-import { type Logger, getClientLogger } from '../logging'
+import { type Logger, getAppLogger } from '../logging'
 import { loggingStream } from './logging-stream'
 import type { LoggingStreamResponse } from '../schemas/logging-stream'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 const activeStreams = new Map<
   string,

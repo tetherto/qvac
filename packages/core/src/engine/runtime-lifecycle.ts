@@ -1,8 +1,8 @@
 import type { LifecycleState, Request } from '../schemas'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 import { LifecycleOperationBlockedError } from '../errors'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set(['suspend', 'resume', 'state'])
 

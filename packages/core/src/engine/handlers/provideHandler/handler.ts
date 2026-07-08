@@ -1,9 +1,9 @@
 import type { ProvideRequest, ProvideResponse } from '../../../schemas/provide'
 import { getSwarm, hasActiveProviders, registerProvider } from '../../swarm'
 import { setupConnectionHandlers } from './connection'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Tracks whether the connection listener has been attached on this swarm
 // instance. `swarm.listen()` and `swarm.on("connection", ...)` cannot be

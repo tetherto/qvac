@@ -2,9 +2,9 @@ import { unloadModel } from '../ops/unload-model'
 import { getRegistryStats } from '../state/model-registry'
 import { hasActiveProviders } from '../swarm'
 import type { UnloadModelRequest, UnloadModelResponse } from '../../schemas'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleUnloadModel(request: UnloadModelRequest): Promise<UnloadModelResponse> {
   const { modelId, clearStorage } = request

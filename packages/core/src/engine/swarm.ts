@@ -4,10 +4,10 @@ import crypto from 'bare-crypto'
 import { envSchema, type FirewallConfig } from '../schemas/provide'
 import { getSDKConfig } from './state/config-registry'
 import { registerSwarm, unregisterSwarm } from './runtime-lifecycle'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function getHyperswarmSeedBuffer() {
   const parsedEnv = envSchema.safeParse(env)

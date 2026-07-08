@@ -1,9 +1,9 @@
 import type RPC from 'bare-rpc'
 import { createErrorResponse, responseSchema } from '../schemas'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 import { type ServerProfiler } from './profiling'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function buildErrorResponseData(error: unknown, profiler?: ServerProfiler): string {
   const errorResponse = createErrorResponse(error)

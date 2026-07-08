@@ -26,13 +26,13 @@ import {
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
 } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import { formatZodError } from '../../../utils/zod-error'
 import { getPlugin } from '../../../plugins'
 import { getRequestRegistry, withRequestContext } from '../../runtime'
 import { generateServerRequestId } from '../../runtime/request-id'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -63,7 +63,7 @@ export async function handleLoadModel(
     requestId,
     kind: 'loadModel'
   })
-  const log = withRequestContext(getServerLogger(), ctx)
+  const log = withRequestContext(getEngineLogger(), ctx)
   log.debug(`loadModel start modelSrc=${String(modelSrc ?? '')}`)
 
   try {

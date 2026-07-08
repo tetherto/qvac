@@ -6,7 +6,7 @@ import { nowMs } from '../../profiling'
 import type { EmbedResponse } from '../types/addon-responses'
 import { getRequestRegistry, withRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
 export interface EmbedResult {
   embedding: number[] | number[][]
@@ -41,7 +41,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   // shape, even when this op has no per-step emits beyond the
   // registry's own lifecycle lines. Future addon-level warns inside
   // this body should route through `requestLogger`.
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId)
 

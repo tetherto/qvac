@@ -1,6 +1,6 @@
-import { getServerLogger } from '../../../../logging'
+import { getEngineLogger } from '../../../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface ChatMessage {
   role?: string

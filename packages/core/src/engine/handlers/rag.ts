@@ -17,7 +17,7 @@ import {
 } from '../rag'
 import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { profileReplyHandler, registerOperationMetrics } from '../profiling'
 
 type ProgressOperation = 'ingest' | 'saveEmbeddings' | 'reindex'
@@ -143,7 +143,7 @@ async function handleRagInternal(
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
       const requestId = request.requestId ?? generateServerRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('ingest start')
       const handlerOptions = createHandlerOptions('ingest', workspace, ctx.signal, onProgress)
       const params = omitOnProgress(request)
@@ -161,7 +161,7 @@ async function handleRagInternal(
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
       const requestId = request.requestId ?? generateServerRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('saveEmbeddings start')
       const handlerOptions = createHandlerOptions(
         'saveEmbeddings',
@@ -202,7 +202,7 @@ async function handleRagInternal(
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
       const requestId = request.requestId ?? generateServerRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('reindex start')
       const handlerOptions = createHandlerOptions('reindex', workspace, ctx.signal, onProgress)
       const params = omitOnProgress(request)

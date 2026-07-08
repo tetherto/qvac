@@ -5,11 +5,11 @@ import path from 'bare-path'
 import { getConfiguredCacheDir } from '../state/config-registry'
 import { RAGWorkspaceModelMismatchError, RAGWorkspaceNotOpenError } from '../../errors'
 import { validateAndJoinPath } from '../utils/path-security'
-import { createStreamLogger, getServerLogger, RAG_NAMESPACE } from '../../logging'
+import { createStreamLogger, getEngineLogger, RAG_NAMESPACE } from '../../logging'
 import { cancelAllRagOperations } from './rag-operation-manager'
 import { registerCorestore, unregisterCorestore } from '../runtime-lifecycle'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Workspace-based RAG storage
 interface RagWorkspaceEntry {

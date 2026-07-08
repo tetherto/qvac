@@ -1,5 +1,5 @@
 import { stream as streamRpc } from '../dispatch'
-import { getClientLogger } from '../logging'
+import { getAppLogger } from '../logging'
 import {
   completionStreamResponseSchema,
   type CompletionClientParams,
@@ -20,7 +20,7 @@ import { validateTools, type ToolHandlerMap, type ToolInput } from '../utils/too
 import { buildFinalFromEvents } from '../utils/aggregate-events'
 import { generateClientRequestId } from './client-request-id'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
   tools?: Tool[] | ToolInput[]

@@ -3,9 +3,9 @@ import { type UnloadModelRequest, type UnloadModelParams } from '../schemas'
 import { send, close } from '../dispatch'
 import { stopLoggingStreamForModel } from './logging-stream-registry'
 import { InvalidResponseError, ModelUnloadFailedError } from '../errors'
-import { getClientLogger } from '../logging'
+import { getAppLogger } from '../logging'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 /**
  * Unloads a previously loaded model from the engine.

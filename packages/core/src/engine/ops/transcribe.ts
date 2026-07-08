@@ -10,7 +10,7 @@ import {
   type ParakeetStreamingRunConfig
 } from '../../schemas'
 import { createAudioStream } from '../bare-utils/audio-input'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { TranscriptionFailedError } from '../../errors'
 import type { TranscribeResponse } from '../types/addon-responses'
 import { nowMs } from '../../profiling'
@@ -144,7 +144,7 @@ export async function* transcribe(
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
   assertMetadataSupported(modelId, engineType, metadata)
@@ -324,7 +324,7 @@ export async function* transcribeStream(
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
   assertMetadataSupported(modelId, engineType, metadata)

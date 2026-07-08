@@ -19,7 +19,7 @@ type LogMethod = 'error' | 'warn' | 'info' | 'debug' | 'trace'
  *
  * @example
  *   await using ctx = await registry.begin({ requestId, kind: "completion", modelId });
- *   const log = withRequestContext(getServerLogger(), ctx);
+ *   const log = withRequestContext(getEngineLogger(), ctx);
  *   log.info("decoding token 7");
  *   // → "[request-lifecycle completion requestId=<id> modelId=<id>] decoding token 7"
  */

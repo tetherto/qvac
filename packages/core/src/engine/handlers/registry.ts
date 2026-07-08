@@ -10,14 +10,14 @@ import type { QVACModelEntry } from '@qvac/registry-client'
 import { REGISTRY_ERROR_CODES } from '../../schemas/errors'
 import { getAddonFromEngine, resolveCanonicalEngine } from '../../schemas/engine-addon-map'
 import { getRegistryClient } from '../state/registry-client'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { ModelRegistryQueryFailedError } from '../../errors'
 
 interface QvacError extends Error {
   code?: number
 }
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function toHexString(value: Buffer | string | { data: number[] } | undefined): string {
   if (!value) return ''

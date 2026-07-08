@@ -1,7 +1,7 @@
 import type { CanonicalModelType } from '../../schemas'
 import { getSDKConfig } from './config-registry'
 import { getRuntimeContext } from './runtime-context-registry'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
 export {
   CANONICAL_TO_ALIAS,
@@ -15,7 +15,7 @@ export {
 
 import { BUILTIN_DEVICE_PATTERNS, resolveModelConfigWithContext } from './model-config-utils'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function resolveModelConfig<T>(
   modelType: CanonicalModelType,

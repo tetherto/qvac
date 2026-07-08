@@ -4,9 +4,9 @@ import { getModelEntry } from '../state/model-registry'
 import { getRPC } from '../delegate-client'
 import { stream, type DelegateOptions } from '../delegate-transport'
 import { ModelIsDelegatedError } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export type HandleCompletionStreamDelegatedOptions = DelegatedHandlerOptions
 

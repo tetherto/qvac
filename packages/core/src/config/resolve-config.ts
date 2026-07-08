@@ -8,11 +8,11 @@ import os from 'bare-os'
 import env from 'bare-env'
 import { validateConfig, type QvacConfig } from './config-utils'
 import { ConfigFileInvalidError, ConfigFileParseFailedError } from '../errors'
-import { getClientLogger } from '../logging'
+import { getAppLogger } from '../logging'
 
 const SUPPORTED_CONFIG_FILE_EXTS = ['.js', '.json']
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 function findProjectRoot(): string {
   return os.cwd()

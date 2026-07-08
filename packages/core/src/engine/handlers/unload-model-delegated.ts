@@ -4,9 +4,9 @@ import { getRPC } from '../delegate-client'
 import { send } from '../delegate-transport'
 import { hasActiveProviders } from '../swarm'
 import { ModelIsDelegatedError } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleUnloadModelDelegated(
   request: UnloadModelRequest

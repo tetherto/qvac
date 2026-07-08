@@ -7,9 +7,9 @@ import {
   ConfigAlreadySetError
 } from '../../errors'
 import type { QvacConfig } from '../../schemas'
-import { getServerLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '../../logging'
+import { getEngineLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const configRegistry: QvacConfig = {
   cacheDirectory: undefined,

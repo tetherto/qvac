@@ -4,9 +4,9 @@ import type { Connection } from 'hyperswarm'
 import type Hyperswarm from 'hyperswarm'
 import { createRpcProxy } from './proxy'
 import { hasActiveProviders } from '../../swarm'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function setupConnectionHandlers(swarm: Hyperswarm) {
   logger.debug('👂 Setting up connection listener...')

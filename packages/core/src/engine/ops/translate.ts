@@ -16,7 +16,7 @@ import type { NmtResponse, LlmResponse } from '../types/addon-responses'
 import { ModelIsDelegatedError, ModelNotFoundError, ModelTypeMismatchError } from '../../errors'
 import { getRequestRegistry, withRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return ''
@@ -102,7 +102,7 @@ export async function* translate(
     kind: 'translate',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   if (isLlm) {
     const onAbort = () => {

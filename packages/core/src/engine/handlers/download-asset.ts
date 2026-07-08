@@ -11,12 +11,12 @@ import {
   type DownloadHooks
 } from './load-model/types'
 import { nowMs, generateProfileId } from '../../profiling/clock'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { getRequestRegistry, withRequestContext } from '../runtime'
 import { generateServerRequestId } from '../runtime/request-id'
 import { InferenceCancelledError } from '../../errors'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleDownloadAsset(
   request: DownloadAssetRequest,
@@ -37,7 +37,7 @@ export async function handleDownloadAsset(
     requestId,
     kind: 'downloadAsset'
   })
-  const log = withRequestContext(getServerLogger(), ctx)
+  const log = withRequestContext(getEngineLogger(), ctx)
   log.debug(`downloadAsset start assetSrc=${assetSrc}`)
 
   const hooks: DownloadHooks = {

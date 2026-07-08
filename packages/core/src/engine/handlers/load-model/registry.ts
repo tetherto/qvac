@@ -29,11 +29,11 @@ import {
   ModelNotFoundError,
   RegistryDownloadFailedError
 } from '../../../errors'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import type { DownloadHooks } from './types'
 import { resolveRegistryDownloadMetadata, type ExplicitRegistryMetadata } from './registry-metadata'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Find all shards for a model using path prefix query.

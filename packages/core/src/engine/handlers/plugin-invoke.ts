@@ -16,10 +16,10 @@ import {
   ModelIsDelegatedError,
   ModelNotFoundError
 } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { formatZodError } from '../../utils/zod-error'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function resolvePluginHandler(modelId: string, handlerName: string) {
   const modelEntry = getModelEntry(modelId)

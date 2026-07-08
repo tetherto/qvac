@@ -26,11 +26,11 @@ import {
 } from '../errors'
 import { assertModelSrcMatchesModelType } from '../utils/load-model-validation'
 import { parseClientInput } from './parse-input'
-import { getClientLogger } from '../logging'
+import { getAppLogger } from '../logging'
 import { decoratePromise } from '../utils/decorate-promise'
 import { generateClientRequestId } from './client-request-id'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 interface ReactNativeRuntimeGlobal {
   navigator?: { product?: string }

@@ -13,7 +13,7 @@ import type {
 import { CompletionFailedError } from '../../../../errors'
 import { getRequestRegistry, withRequestContext } from '../../../../engine/runtime'
 import { generateServerRequestId } from '../../../../engine/runtime/request-id'
-import { getServerLogger } from '../../../../logging'
+import { getEngineLogger } from '../../../../logging'
 
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
 
@@ -127,7 +127,7 @@ export async function startFinetune(
       if (!wasRunning) clearFinetuneRuntimeState(request.modelId)
       throw err
     })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
   // Cleared on scope unwind; deferred before the listener detach so LIFO
   // removes the listener first.
   ctx.scope.defer(() => {

@@ -20,7 +20,7 @@ import {
   type LlmConfig,
   type LlmConfigInput
 } from '../../../schemas'
-import { createStreamLogger, registerAddonLogger, getServerLogger } from '../../../logging'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging'
 import { expandGGUFIntoShards } from '../../../engine/utils'
 import { completion } from './ops/completion-stream'
 import { finetune } from './ops/finetune'
@@ -50,7 +50,7 @@ function createLlmModel(
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(llmConfigStrings)
     if (stripped.length > 0) {
-      getServerLogger().warn(
+      getEngineLogger().warn(
         `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
       )
     }
@@ -150,7 +150,7 @@ export const llmPlugin = definePlugin({
           modelId: request.modelId
         })
 
-        const requestLogger = withRequestContext(getServerLogger(), ctx)
+        const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
         // begin() can return already-aborted when the caller cancels while
         // this completion is queued behind another same-model one. It never

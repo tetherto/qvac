@@ -6,7 +6,7 @@ import {
   type TranscribeSegment,
   type TranscribeStats
 } from '../../schemas'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { TranscriptionFailedError } from '../../errors'
 import { nowMs } from '../../profiling'
 import { buildStreamResult } from '../../profiling/model-execution'
@@ -96,7 +96,7 @@ export async function* bciTranscribe(
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId) as unknown as BciTranscribableModel
 
@@ -221,7 +221,7 @@ export async function* bciTranscribeStream(
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId) as unknown as BciStreamableModel
 

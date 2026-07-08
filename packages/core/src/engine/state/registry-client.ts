@@ -6,10 +6,10 @@ import {
   registerCorestore,
   unregisterCorestore
 } from '../runtime-lifecycle'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { DEFAULT_REGISTRY_CORE_KEY } from '../../constants'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // fd-lock retry budget for the registry corestore.
 //

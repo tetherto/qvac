@@ -20,7 +20,7 @@ import { InvalidResponseError } from '../errors'
  * const logStream = loggingStream({ id: 'my-model-id' });
  *
  * // Or stream core's own logs
- * const coreLogs = loggingStream({ id: CORE_LOG_ID });
+ * const coreLogs = loggingStream({ id: LOG_ID });
  *
  * for await (const logMessage of logStream) {
  *   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);

@@ -29,7 +29,7 @@ import {
   generateId
 } from '../profiling'
 import { withTimeout, withTimeoutStream } from '../utils/withTimeout'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 import { DelegateProviderError } from '../errors'
 import { cleanupStaleConnection } from './delegate-client'
 import {
@@ -55,7 +55,7 @@ export type ResponseWithDelegation = Response & {
   [OPERATION_EVENT_KEY]?: OperationEvent
 }
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 import { getNextCommandId } from './rpc-utils'
 

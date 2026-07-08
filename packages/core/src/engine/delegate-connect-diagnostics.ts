@@ -1,7 +1,7 @@
 import { withTimeout } from '../utils/withTimeout'
-import { getServerLogger } from '../logging'
+import { getEngineLogger } from '../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export const DHT_BOOTSTRAP_WAIT_CAP_MS = 5000
 

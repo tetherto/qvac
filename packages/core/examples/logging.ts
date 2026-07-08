@@ -11,7 +11,7 @@ import {
   completion,
   unloadModel,
   loggingStream,
-  CORE_LOG_ID,
+  LOG_ID,
   LLAMA_3_2_1B_INST_Q4_0
 } from '@qvac/core'
 import { llmPlugin } from '@qvac/core/llamacpp-completion/plugin'
@@ -20,7 +20,7 @@ registerPlugin(llmPlugin)
 
 // Consume server logs in the background until the engine closes.
 void (async () => {
-  for await (const log of loggingStream({ id: CORE_LOG_ID })) {
+  for await (const log of loggingStream({ id: LOG_ID })) {
     console.log(`[${log.level.toUpperCase()}] [${log.namespace}] ${log.message}`)
   }
 })()

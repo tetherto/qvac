@@ -1,8 +1,8 @@
 import { handleRequest } from '../../handle-request'
 import type RPC from 'bare-rpc'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Proxies RPC requests to the main handler: handleRequest
 export function createRpcProxy() {

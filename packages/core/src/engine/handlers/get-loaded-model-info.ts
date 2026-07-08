@@ -6,9 +6,9 @@ import type {
 import { getModelEntry } from '../state/model-registry'
 import { getPlugin } from '../../plugins/registry'
 import { ModelNotFoundError } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function handleGetLoadedModelInfo(
   request: GetLoadedModelInfoRequest

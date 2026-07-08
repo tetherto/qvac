@@ -16,14 +16,14 @@ import {
   DownloadCancelledError
 } from '../../errors'
 import { isPathWithinBase } from './path-security'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import {
   SUPPORTED_ARCHIVE_EXTENSIONS,
   filenameToArchiveTypeSchema,
   type ArchiveType
 } from '../../schemas/archive'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Gzip magic bytes: 1f 8b 08
 const GZIP_MAGIC_0 = 0x1f

@@ -12,11 +12,11 @@
  */
 
 import type { LogLevel } from '@qvac/logging'
-import { CORE_ALL_LOG_ID } from '../../logging/namespaces'
+import { ALL_LOG_ID } from '../../logging/namespaces'
 
-// `sourceId` is the id the log was emitted under (a model id, CORE_LOG_ID, a RAG
+// `sourceId` is the id the log was emitted under (a model id, LOG_ID, a RAG
 // workspace key, …). It usually equals the subscription id, but for the global
-// CORE_ALL_LOG_ID stream it carries the real origin so subscribers can tell which
+// ALL_LOG_ID stream it carries the real origin so subscribers can tell which
 // model/SDK/RAG source produced each line instead of always seeing "__all__".
 type StreamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => void
 
@@ -109,8 +109,8 @@ export function sendLogToStreams(id: string, level: LogLevel, namespace: string,
   // The originating id is preserved as `sourceId` so the global stream keeps the
   // real origin of each log instead of reporting the subscription id.
   deliverToStream(id, level, namespace, message, id)
-  if (id !== CORE_ALL_LOG_ID) {
-    deliverToStream(CORE_ALL_LOG_ID, level, namespace, message, id)
+  if (id !== ALL_LOG_ID) {
+    deliverToStream(ALL_LOG_ID, level, namespace, message, id)
   }
 }
 

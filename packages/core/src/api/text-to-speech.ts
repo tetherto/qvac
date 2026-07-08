@@ -14,11 +14,11 @@ import {
   type TtsSentenceChunkUpdate
 } from '../schemas'
 import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch'
-import { getClientLogger } from '../logging'
+import { getAppLogger } from '../logging'
 import { TextToSpeechStreamFailedError } from '../errors'
 import { parseClientInput } from './parse-input'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 /**
  * Fan-out queue that lets multiple consumers iterate the same TTS response

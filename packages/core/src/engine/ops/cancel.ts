@@ -3,9 +3,9 @@ import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '../..
 import { ModelNotLoadedError } from '../../errors'
 import { getRequestRegistry } from '../runtime'
 import type { RequestKind } from '../runtime'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Broad cancel: abort every in-flight request matching `modelId` (and

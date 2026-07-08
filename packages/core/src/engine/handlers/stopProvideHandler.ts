@@ -1,8 +1,8 @@
 import type { StopProvideResponse } from '../../schemas/stop-provide'
 import { unregisterProvider } from '../swarm'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Decrements the active-provider counter. The shared connection listener
 // (set up once in `provideHandler` per process) checks `hasActiveProviders()`

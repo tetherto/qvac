@@ -1,11 +1,11 @@
 import type { HeartbeatRequest, HeartbeatResponse } from '../../schemas'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { getRPC } from '../delegate-client'
 import { send, type DelegateOptions } from '../delegate-transport'
 import { DelegateConnectionFailedError } from '../../errors'
 import type { DelegatedHandlerOptions } from '../profiling'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleHeartbeatDelegated(
   request: HeartbeatRequest,

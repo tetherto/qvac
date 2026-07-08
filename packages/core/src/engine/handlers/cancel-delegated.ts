@@ -1,11 +1,11 @@
 import type { CancelRequest, CancelResponse } from '../../schemas/cancel'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 import { getModelEntry } from '../state/model-registry'
 import { getRPC } from '../delegate-client'
 import { send, type DelegateOptions } from '../delegate-transport'
 import type { DelegatedHandlerOptions } from '../profiling'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 type DelegationTarget = {
   providerPublicKey: string

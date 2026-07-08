@@ -7,9 +7,9 @@ import { send, stream, type DelegateOptions } from '../delegate-transport'
 import { getRPC } from '../delegate-client'
 import { handleLoadModel } from './load-model'
 import { ModelLoadFailedError, DelegateNoFinalResponseError } from '../../errors'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface HandleLoadModelDelegatedOptions extends DelegatedHandlerOptions {
   progressCallback?: (update: ModelProgressUpdate) => void

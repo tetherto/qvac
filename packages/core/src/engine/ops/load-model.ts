@@ -18,9 +18,9 @@ import {
 import { getPlugin } from '../../plugins'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getServerLogger } from '../../logging'
+import { getEngineLogger } from '../../logging'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface LoadModelResult {
   timing?: LoadTimingStats

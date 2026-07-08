@@ -32,11 +32,11 @@ import {
   SeedingNotSupportedError
 } from '../../../errors'
 import { validateAndJoinPath } from '../../utils/path-security'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 
 type ResolveMode = 'base' | 'stats'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function isArchivePath(filePath: string) {
   const filename = path.basename(filePath).toLowerCase()

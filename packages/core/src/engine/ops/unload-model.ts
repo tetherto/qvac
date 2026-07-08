@@ -3,13 +3,13 @@ import path from 'bare-path'
 import { unregisterModel } from '../state/model-registry'
 import { unregisterAllLoggingStreams } from '../state/logging-stream-registry'
 import { clearFinetuneRuntimeState } from '../../plugins/builtin/llamacpp-completion/ops/finetune'
-import { unregisterAddonLogger, getServerLogger } from '../../logging'
+import { unregisterAddonLogger, getEngineLogger } from '../../logging'
 import { type UnloadModelParams, unloadModelParamsSchema } from '../../schemas'
 import { ModelNotLoadedError } from '../../errors'
 import { detectShardedModel } from '../utils'
 import { getClearStorageTarget } from '../utils/cache/paths'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function unloadModel(params: UnloadModelParams) {
   const { modelId, clearStorage } = unloadModelParamsSchema.parse(params)

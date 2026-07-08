@@ -3,10 +3,10 @@ import path from 'bare-path'
 import { FFmpegDecoder } from '@qvac/decoder-audio'
 import { FORMATS_NEEDING_DECODE } from '@qvac/decoder-audio/constants'
 import { Readable } from 'bare-stream'
-import { getServerLogger } from '../../../logging'
+import { getEngineLogger } from '../../../logging'
 import { type AudioFormat } from '../../../schemas'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function needsDecoding(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase()
