@@ -109,7 +109,8 @@ struct TimedDecodeResult {
 
 /// Time one scheduler decode step through backend completion. Some GPU backends
 /// enqueue work in llama_decode() and only block when logits/perf counters are
-/// read, so successful decodes must synchronize before the duration is recorded.
+/// read, so successful decodes must synchronize before the duration is
+/// recorded.
 [[nodiscard]] TimedDecodeResult timeDecodeStep(
     llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
     const SchedulerSynchronizeFunc& synchronize);
@@ -276,8 +277,8 @@ public:
   /// synchronization used before recording decode/media step time (defaults to
   /// llama_synchronize), and the media-segment eval used by
   /// serviceNextMediaSegmentLocked() (defaults to driver.evalMediaSegment()).
-  /// Unit tests override them through ContinuousBatchSchedulerTestPeer to inject
-  /// failing/blocking stubs.
+  /// Unit tests override them through ContinuousBatchSchedulerTestPeer to
+  /// inject failing/blocking stubs.
   using DecodeFunc = SchedulerDecodeFunc;
   using SynchronizeFunc = SchedulerSynchronizeFunc;
   using EvalMediaFunc =

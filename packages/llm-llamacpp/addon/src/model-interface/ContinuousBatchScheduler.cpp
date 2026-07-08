@@ -134,9 +134,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
         return llama_decode(ctx, b);
       }),
-      synchronizeFunc_([](llama_context* ctx) {
-        llama_synchronize(ctx);
-      }),
+      synchronizeFunc_([](llama_context* ctx) { llama_synchronize(ctx); }),
       evalMediaFunc_(
           [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
             return driver.evalMediaSegment(mediaIndex, pos);
