@@ -1,4 +1,5 @@
 import test from 'brittle'
+import Buffer from 'bare-buffer'
 import {
   transcribeRequestSchema,
   transcribeStreamRequestSchema,

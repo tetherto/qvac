@@ -14,6 +14,7 @@ import {
   type AudioFormat,
   type ParakeetStreamingRunConfig
 } from '../../schemas'
+import type Buffer from 'bare-buffer'
 import { createAudioStream } from '../../utils/audio-input'
 import { getEngineLogger } from '../../logging'
 import { TranscriptionFailedError } from '../../errors'

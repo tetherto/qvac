@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type Buffer from 'bare-buffer'
 
 export const audioInputSchema = z.discriminatedUnion('type', [
   z.object({

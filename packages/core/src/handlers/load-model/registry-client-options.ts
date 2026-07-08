@@ -1,3 +1,4 @@
+import type { AbortSignal } from 'bare-abort-controller'
 import type { QvacConfig } from '../../schemas'
 
 export const DEFAULT_REGISTRY_STREAM_TIMEOUT_MS = 60_000
@@ -7,7 +8,7 @@ export interface RegistryClientDownloadOptions {
   outputFile: string
   maxRetries?: number
   onProgress?: (progress: { downloaded: number; total: number }) => void
-  signal?: globalThis.AbortSignal
+  signal?: AbortSignal
 }
 
 /**
@@ -19,7 +20,7 @@ export function buildRegistryClientOptions(params: {
   sdkConfig: Pick<QvacConfig, 'registryStreamTimeoutMs' | 'registryDownloadMaxRetries'>
   outputFile: string
   onProgress?: ((progress: { downloaded: number; total: number }) => void) | undefined
-  signal?: globalThis.AbortSignal | undefined
+  signal?: AbortSignal | undefined
 }): RegistryClientDownloadOptions {
   const { sdkConfig, outputFile, onProgress, signal } = params
   const timeout = sdkConfig.registryStreamTimeoutMs ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS

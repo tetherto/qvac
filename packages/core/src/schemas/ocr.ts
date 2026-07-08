@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type Buffer from 'bare-buffer'
 import { modelSrcInputSchema } from './model-src-utils'
 
 // Model config — maps to @qvac/ocr-ggml `OcrGgmlParams`. Legacy ONNX-only knobs

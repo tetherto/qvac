@@ -1,5 +1,6 @@
 import { getRagDbAdapter, hasRagWorkspaceStorage } from '../rag-workspace-manager'
 import { ragReindexParamsSchema, type RagReindexParams } from '../../schemas'
+import type { AbortSignal } from 'bare-abort-controller'
 import type { ReindexOpts, ReindexResult, ReindexStage } from '@qvac/rag'
 import { RAGHyperDBFailedError } from '../../errors'
 

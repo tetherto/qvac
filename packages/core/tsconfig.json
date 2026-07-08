@@ -1,8 +1,7 @@
 {
   "include": ["src/**/*", "examples/**/*"],
-  "exclude": ["node_modules"],
   "compilerOptions": {
-    "lib": ["DOM", "DOM.Iterable", "ES2022", "ESNext.Disposable"],
+    "lib": ["ES2022", "ESNext.Disposable"],
     "target": "ES2022",
     "module": "esnext",
     "types": [],

@@ -136,7 +136,7 @@ test('download-manager: cancelling one subscriber does not affect the other', as
 
   // Cancel only A. B is still attached so the underlying transfer
   // must keep running.
-  acA.abort()
+  acA.abort(undefined)
 
   await t.exception(
     async () => {
@@ -175,13 +175,13 @@ test('download-manager: last subscriber leaving aborts the transfer', async (t) 
 
   await dl.attached
 
-  acA.abort()
+  acA.abort(undefined)
   await t.exception(async () => {
     await first.promise
   })
   t.is(dl.ctx?.signal.aborted, false, 'transfer still alive after first cancel')
 
-  acB.abort()
+  acB.abort(undefined)
   await t.exception(async () => {
     await second.promise
   })
@@ -241,7 +241,7 @@ test('download-manager: cancel error carries the requestId', async (t) => {
   )
 
   await dl.attached
-  ac.abort()
+  ac.abort(undefined)
 
   try {
     await result.promise

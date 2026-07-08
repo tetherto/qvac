@@ -1,6 +1,7 @@
 import { getRagInstance } from '../rag-workspace-manager'
 import { embed } from '../../plugins/ops/embed'
 import { ragIngestParamsSchema, type RagIngestParams } from '../../schemas'
+import type { AbortSignal } from 'bare-abort-controller'
 import type { IngestOpts, IngestStage } from '@qvac/rag'
 
 interface IngestHandlerOptions {

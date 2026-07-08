@@ -1,4 +1,5 @@
 import { EsrganUpscaler } from '@qvac/diffusion-cpp'
+import Buffer from 'bare-buffer'
 import { getModel, getModelEntry } from '../../../../runtime/model-registry'
 import { ModelOperationNotSupportedError } from '../../../../errors'
 import { ModelType } from '../../../../schemas'

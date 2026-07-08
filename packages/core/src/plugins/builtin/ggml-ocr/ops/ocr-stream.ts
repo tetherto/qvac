@@ -1,6 +1,7 @@
 import { getModel } from '../../../../runtime/model-registry'
 import fs from 'bare-fs'
 import path from 'bare-path'
+import Buffer from 'bare-buffer'
 import { type OCRParams, type OCRTextBlock, type OCRStats } from '../../../../schemas'
 import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution'
 import { getCacheDir } from '../../../../utils'

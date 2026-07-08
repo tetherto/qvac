@@ -2,6 +2,8 @@ import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { createGunzip } from 'bare-zlib'
 import tarStream from 'tar-stream'
+import Buffer from 'bare-buffer'
+import type { AbortSignal } from 'bare-abort-controller'
 import {
   detectShardedModel,
   generateShardFilenames,

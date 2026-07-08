@@ -13,6 +13,7 @@ import {
   type RPCOptions,
   type TranscribeSegment
 } from '../schemas'
+import Buffer from 'bare-buffer'
 import { stream, duplex, type DuplexReadable } from '../dispatch'
 import { getAppLogger } from '../logging'
 import { TranscriptionFailedError } from '../errors'

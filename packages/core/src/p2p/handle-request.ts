@@ -9,6 +9,7 @@ import {
 import { nowMs, createServerProfiler, type ServerProfiler } from '../profiling'
 import { resolveModelConfig } from '../runtime/state'
 import type RPC from 'bare-rpc'
+import type Buffer from 'bare-buffer'
 import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers'
 import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../errors'
 import { registry } from '../registry'

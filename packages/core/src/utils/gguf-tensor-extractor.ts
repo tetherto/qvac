@@ -1,4 +1,5 @@
 import { promises as fsPromises, createReadStream } from 'bare-fs'
+import Buffer from 'bare-buffer'
 import { getEngineLogger } from '../logging'
 import { ModelLoadFailedError } from '../errors'
 import { validateAndJoinPath } from './path-security'

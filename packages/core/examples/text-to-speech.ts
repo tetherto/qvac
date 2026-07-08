@@ -5,6 +5,7 @@
 // Requires: npm install @qvac/core @qvac/tts-ggml
 
 import fs from 'bare-fs'
+import Buffer from 'bare-buffer'
 import {
   registerPlugin,
   loadModel,

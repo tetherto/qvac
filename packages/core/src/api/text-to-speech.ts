@@ -13,6 +13,7 @@ import {
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate
 } from '../schemas'
+import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch'
 import { getAppLogger } from '../logging'
 import { TextToSpeechStreamFailedError } from '../errors'

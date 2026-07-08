@@ -5,6 +5,7 @@
 // Requires: npm install @qvac/core @qvac/classification-ggml
 
 import fs from 'bare-fs'
+import type Buffer from 'bare-buffer'
 import { registerPlugin, loadModel, classify, unloadModel } from '@qvac/core'
 import { classificationPlugin } from '@qvac/core/ggml-classification/plugin'
 

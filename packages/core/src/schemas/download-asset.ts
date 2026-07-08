@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { AbortController } from 'bare-abort-controller'
 import type { ModelProgressUpdate } from './load-model'
 import { modelSrcInputSchema, modelInputToSrcSchema } from './model-src-utils'
 

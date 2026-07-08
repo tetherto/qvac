@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type Buffer from 'bare-buffer'
 import type { ModelSrcInput } from './model-src-utils'
 
 /**

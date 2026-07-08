@@ -1,4 +1,5 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
+import Buffer from 'bare-buffer'
 import { getEngineLogger } from '../../../../logging'
 import { getModel, getModelEntry } from '../../../../runtime/model-registry'
 import { getRequestRegistry, withRequestContext } from '../../../../runtime'

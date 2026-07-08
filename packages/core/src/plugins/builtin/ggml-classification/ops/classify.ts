@@ -1,4 +1,5 @@
 import { getModel } from '../../../../runtime/model-registry'
+import Buffer from 'bare-buffer'
 import {
   classifyRequestSchema,
   type ClassifyRequest,

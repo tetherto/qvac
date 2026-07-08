@@ -4,6 +4,7 @@ import path from 'bare-path'
 import { Readable, type Writable } from 'bare-stream'
 import fetch, { Headers } from 'bare-fetch'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
+import Buffer from 'bare-buffer'
 import { withTimeout } from '../../utils/withTimeout'
 import {
   getModelsCacheDir,
@@ -585,13 +586,13 @@ async function performHttpDownloadWithResume(
   let attempt = 0
   for (;;) {
     const attemptController = new AbortController()
-    const forwardCancel = () => attemptController.abort()
+    const forwardCancel = () => attemptController.abort(undefined)
     if (signal) {
-      if (signal.aborted) attemptController.abort()
+      if (signal.aborted) attemptController.abort(undefined)
       else signal.addEventListener('abort', forwardCancel, { once: true })
     }
     // resume() → abort this attempt so it range-resumes now, not after the stall.
-    const offResume = onResume(() => attemptController.abort())
+    const offResume = onResume(() => attemptController.abort(undefined))
 
     try {
       await performHttpDownload(

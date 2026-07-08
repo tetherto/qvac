@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type Buffer from 'bare-buffer'
 import { modelSrcInputSchema } from './model-src-utils'
 
 // Chatterbox multilingual supported languages (22). The engines support

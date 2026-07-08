@@ -1,5 +1,6 @@
 import test from 'brittle'
 import { z } from 'zod'
+import Buffer from 'bare-buffer'
 import {
   defineHandler,
   defineDuplexHandler,

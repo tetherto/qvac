@@ -1,5 +1,6 @@
 import { getModelEntry } from '../runtime/model-registry'
 import { getAllPlugins, getPlugin } from '../plugins'
+import type Buffer from 'bare-buffer'
 import type { PluginHandlerDefinition } from '../schemas/plugin'
 import { profileReplyHandler, profileStreamHandler } from '../profiling'
 import {

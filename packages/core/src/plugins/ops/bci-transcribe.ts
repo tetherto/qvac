@@ -6,6 +6,7 @@ import {
   type TranscribeSegment,
   type TranscribeStats
 } from '../../schemas'
+import Buffer from 'bare-buffer'
 import { getEngineLogger } from '../../logging'
 import { TranscriptionFailedError } from '../../errors'
 import { nowMs } from '../../profiling'

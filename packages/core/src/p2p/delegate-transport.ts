@@ -6,6 +6,7 @@
  */
 
 import type RPC from 'bare-rpc'
+import type Buffer from 'bare-buffer'
 import {
   requestSchema,
   responseSchema,

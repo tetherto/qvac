@@ -164,7 +164,7 @@ function maybeCancelTransfer(transfer: Transfer): void {
   if (transfer.subscribers.size > 0) return
   if (transfer.abortController.signal.aborted) return
   logger.debug(`[download-manager] last subscriber left, aborting transfer ${transfer.downloadKey}`)
-  transfer.abortController.abort()
+  transfer.abortController.abort(undefined)
 }
 
 function attachRequestBinding(

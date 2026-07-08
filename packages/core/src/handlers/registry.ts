@@ -6,6 +6,7 @@ import type {
   ModelRegistryGetModelResponse,
   ModelRegistryEntry
 } from '../schemas'
+import Buffer from 'bare-buffer'
 import type { QVACModelEntry } from '@qvac/registry-client'
 import { REGISTRY_ERROR_CODES } from '../schemas/errors'
 import { getAddonFromEngine, resolveCanonicalEngine } from '../schemas/engine-addon-map'
