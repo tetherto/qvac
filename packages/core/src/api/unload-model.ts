@@ -1,4 +1,3 @@
-import { isBare } from 'which-runtime'
 import { type UnloadModelRequest, type UnloadModelParams } from '../schemas'
 import { send, close } from '../dispatch'
 import { stopLoggingStreamForModel } from './logging-stream-registry'
@@ -40,7 +39,7 @@ export async function unloadModel(params: UnloadModelParams) {
 
   stopLoggingStreamForModel(params.modelId)
 
-  const shouldAutoClose = params.autoClose ?? !isBare
+  const shouldAutoClose = params.autoClose ?? false
   if (
     shouldAutoClose &&
     response.hasActiveModels === false &&

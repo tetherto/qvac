@@ -1,5 +1,4 @@
 import env from 'bare-env'
-import { isBareKit } from 'which-runtime'
 import { z } from 'zod'
 
 const envSchema = z.object({
@@ -23,6 +22,8 @@ export function initEnv(): { hasRPCConfig: boolean } {
   }
   let hasRPCConfig = false
 
+  // On the mobile bare-kit host the app passes HOME as the first argv entry.
+  const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
   if (isBareKit && Bare.argv[0]) {
     envConfig['HOME_DIR'] = Bare.argv[0]
   }
