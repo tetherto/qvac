@@ -13,8 +13,9 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isDesktopRunner = platform !== 'ios' && platform !== 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
-const prefillCancelSegments = isDesktopRunner ? 1880 : 640
-const prefillCancelCtxSize = isDesktopRunner ? '24576' : '8192'
+const isGpuDesktopRunner = isDesktopRunner && !useCpu
+const prefillCancelSegments = isGpuDesktopRunner ? 2500 : isDesktopRunner ? 1880 : 640
+const prefillCancelCtxSize = isGpuDesktopRunner ? '32768' : isDesktopRunner ? '24576' : '8192'
 
 function safeTest (name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
