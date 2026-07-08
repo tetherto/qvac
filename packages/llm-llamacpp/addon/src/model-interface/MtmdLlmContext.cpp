@@ -1484,6 +1484,8 @@ void MtmdLlmContext::resetState(bool resetStats) {
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
 
+  // Finish queued backend work before mutating KV/recurrent memory.
+  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
 
   // Reset the performance metrics
@@ -1493,9 +1495,6 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
-
-  // Synchronize to ensure all operations are complete
-  llama_synchronize(modelCtx_.lctx);
 }
 
 void MtmdLlmContext::resetMedia() { bitmaps_.entries.clear(); }

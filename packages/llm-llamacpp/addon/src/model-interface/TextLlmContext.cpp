@@ -1643,6 +1643,8 @@ void TextLlmContext::resetState(bool resetStats) {
     userVisiblePerf_.reset();
   }
 
+  // Finish queued backend work before mutating KV/recurrent memory.
+  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
 
   // Reset performance metrics
@@ -1652,9 +1654,6 @@ void TextLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
-
-  // Synchronize to ensure all operations are complete
-  llama_synchronize(modelCtx_.lctx);
 }
 
 llama_context* TextLlmContext::getCtx() { return modelCtx_.lctx; }

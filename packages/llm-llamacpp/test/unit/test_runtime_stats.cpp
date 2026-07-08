@@ -53,7 +53,7 @@ TEST(RuntimeStatsRates, TimedDecodeIncludesSynchronizeDurationOnSuccess) {
           .count());
 }
 
-TEST(RuntimeStatsRates, TimedDecodeSkipsSynchronizeOnDecodeFailure) {
+TEST(RuntimeStatsRates, TimedDecodeSynchronizesOnDecodeFailure) {
   llama_batch batch{};
   bool synchronizeCalled = false;
 
@@ -64,7 +64,7 @@ TEST(RuntimeStatsRates, TimedDecodeSkipsSynchronizeOnDecodeFailure) {
       [&synchronizeCalled](llama_context*) { synchronizeCalled = true; });
 
   EXPECT_EQ(result.rc, -1);
-  EXPECT_FALSE(synchronizeCalled);
+  EXPECT_TRUE(synchronizeCalled);
 }
 
 TEST(RuntimeStatsRates, PureDecodeStepsComputeDecodeRate) {

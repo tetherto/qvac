@@ -106,9 +106,7 @@ TimedDecodeResult timeDecodeStep(
     const SchedulerSynchronizeFunc& synchronize) {
   const auto decodeStart = std::chrono::steady_clock::now();
   const int rc = decode(ctx, batch);
-  if (rc == 0) {
-    synchronize(ctx);
-  }
+  synchronize(ctx);
 
   TimedDecodeResult result;
   result.rc = rc;
@@ -674,6 +672,10 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
       synchronizeFunc_(shared_.lctx);
     } catch (...) {
       error = std::current_exception();
+      try {
+        synchronizeFunc_(shared_.lctx);
+      } catch (...) {
+      }
     }
     evalDuration = std::chrono::steady_clock::now() - evalStart;
   }

@@ -108,7 +108,7 @@ struct TimedDecodeResult {
 };
 
 /// Time one scheduler decode step through backend completion: llama_decode can
-/// run asynchronously, so successful decodes synchronize before recording time.
+/// run asynchronously, so synchronize before recording time or mutating state.
 [[nodiscard]] TimedDecodeResult timeDecodeStep(
     llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
     const SchedulerSynchronizeFunc& synchronize);
