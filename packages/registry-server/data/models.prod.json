@@ -13338,5 +13338,21 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv",
+    "engine": "@qvac/tts-ggml",
+    "description": "Cangjie5 traditional Chinese input table (hanzi -> Cangjie codes) used for Chatterbox multilingual Chinese (zh) tokenization",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "cangjie",
+      "zh"
+    ],
+    "notes": "",
+    "link": "https://github.com/Jackchows/Cangjie5"
   }
 ]

@@ -8,9 +8,13 @@
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
+#include "../utils/ReasoningRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
+#include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
+#include "ContextShifter.hpp"
 #include "LlmContext.hpp"
+#include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
@@ -46,9 +50,9 @@ public:
    * @param chatMsgs - chat messages.
    * @param is_cache_loaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - eval result (success / cancellation / rollback status).
    */
-  bool evalMessage(
+  EvalMessageResult evalMessage(
       const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
       bool prefill) override;
 
@@ -60,9 +64,9 @@ public:
    * @param tools - tools.
    * @param isCacheLoaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - eval result (success / cancellation / rollback status).
    */
-  bool evalMessageWithTools(
+  EvalMessageResult evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
       bool prefill) override;
@@ -71,9 +75,9 @@ public:
    * The generate response method. It generates the response token by token.
    *
    * @param output_callback - the output callback.
-   * @return - true if successful, false if context overflow.
+   * @return - generation result (success / cancellation / rollback status).
    */
-  bool generateResponse(
+  GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   std::function<void()>
@@ -149,6 +153,9 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] std::optional<llama_perf_context_data>
+  takeUserVisiblePerfSnapshot() override;
+
   void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] bool supportsSliding() const override { return true; }
@@ -193,7 +200,7 @@ public:
   void onGenerationFinished(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void onCancel(
+  [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   void validatePromptPolicy(
@@ -204,6 +211,27 @@ public:
   [[nodiscard]] bool loadCache(
       const std::string& cacheKey, llama_pos configuredNDiscarded) override;
   void saveCache(const std::string& cacheKey) const override;
+
+  void snapshotPreRequestCursor() override;
+  void snapshotPreRequestRollbackAnchor() override;
+
+  // Testing seams: expose the owned `ReasoningBlockCompactor` and the
+  // otherwise-private `compactThinkSpan()` entry point so driver-level
+  // unit tests can install an `IContextSliderOps` override and drive
+  // the end-of-generation compaction step directly. Production code
+  // MUST NOT use these — production compaction fires from within
+  // `onGenerationFinished` / the scheduler's slot cleanup.
+  [[nodiscard]] qvac_lib_inference_addon_llama::ReasoningBlockCompactor&
+  compactorForTesting() noexcept {
+    return compactor_;
+  }
+  void compactThinkSpanForTesting() { compactThinkSpan(); }
+  void seedPrefillEntryRollbackForTesting(llama_pos nPast) noexcept {
+    rollbackState_.seedPrefillEntryForTesting(nPast);
+  }
+  void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
+    forcePrefillEntryRestoreFailureForTesting_ = value;
+  }
 
 private:
   /// Hook fired exactly once per slot, immediately before the policy
@@ -249,7 +277,6 @@ private:
   /// Slide the context window if the next token would not fit. Returns
   /// the number of tokens discarded (0 when no slide happened).
   llama_pos applyContextDiscard();
-  void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   // Reasoning-block KV-cache compaction helpers. Single-block policy:
   // at most one `<think>...</think>` block is tracked per inference.
@@ -260,6 +287,37 @@ private:
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
+
+  // Delegates to `rollbackState_.recordPostReasoningToken` when the
+  // post-reasoning capture phase is active (close marker committed AND
+  // a recurrent boundary snapshot exists). No-op for pure-attention
+  // models where capture never starts.
+  void recordPostReasoningTokenIfActive(llama_token tokenId);
+
+  // Returns the token index in the prefill stream at which we should
+  // pause and snapshot the sequence state for the recurrent rollback
+  // path. Returns the sentinel `-1` when no snapshot is needed for
+  // this inference (memory module supports shift, feature disabled,
+  // prefill-only request, or reasoning channel not active). Throws when
+  // the feature is enabled for a recurrent / hybrid generation request
+  // but the template does not satisfy the snapshot + replay
+  // preconditions. Snapshots at END of prefill (boundary ==
+  // `prefillLen`); generated opener tokens, when present, are seeded
+  // into the replay buffer so the restored recurrent state stays
+  // structurally balanced after replay.
+  [[nodiscard]] llama_pos
+  computeRecurrentSnapshotBoundary(llama_pos prefillLen) const;
+
+  // Takes a full-state snapshot of `seqId_` at the current `nPast_`
+  // and stores it in `rollbackState_`. No-op unless recurrent snapshot
+  // compaction is relevant for this request. Under the uniform
+  // hard-fail contract for `remove_thinking_from_context`, unsupported
+  // recurrent template shapes and snapshot capture failures propagate
+  // as `qvac_errors::StatusError`; the wrapper restores its pre-prompt
+  // checkpoint via `restorePrefillEntry`, resets local positional
+  // accounting, and re-throws so no saveCache path can persist a cache
+  // whose header no longer matches live memory.
+  void snapshotForRecurrentRollback();
 
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
@@ -272,11 +330,13 @@ private:
   std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
-  llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
-  int32_t nSlides_ = 0;
-  int32_t thinkingBlockDiscards_ = 0;
+  bool forcePrefillEntryRestoreFailureForTesting_ = false;
+  // Snapshot of `nPast_` / `firstMsgTokens_` at `evalMessageWithTools`
+  // entry. Restored by `onCancel` to roll back to the pre-request cursor.
+  llama_pos preRequestNPast_ = 0;
+  llama_pos preRequestFirstMsgTokens_ = 0;
   bool pendingBatchFirstMsg_ = false;
   bool generationStarted_ = false;
   std::string assistantOutput_;
@@ -309,30 +369,58 @@ private:
   std::string thinkingForcedOpenText_;
 
   // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-off (opt-in via `generationParams`); set
-  // by `applyGenerationParams`.
-  bool removeThinkingFromContext_ = false;
+  // cache compaction. Default-on (opt-out via `generationParams` with
+  // `remove_thinking_from_context: false`); set by
+  // `applyGenerationParams`. Applies uniformly to pure-attention and
+  // recurrent / hybrid-SSM models — the model-type distinction is
+  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
+  // this default per model.
+  bool removeThinkingFromContext_ = true;
 
-  // True when the model uses recurrent memory (Mamba-style SSM layers
-  // or hybrid SSM + attention like Qwen3.5). Detected at construction
-  // via `llama_model_is_recurrent` plus an `<arch>.ssm.*` metadata
-  // probe. `setRemoveThinkingFromContext(true)` throws when this is
-  // true — `seq_rm + seq_add` succeeds on the attention KV but the SSM
-  // hidden state still carries the dropped tokens, so subsequent turns
-  // read contaminated state. Pure-attention models (Qwen3, Qwen3-MoE,
-  // Gemma 4, ...) are unaffected.
-  bool hasRecurrentMemory_ = false;
+  // True when this context's model is recurrent or hybrid
+  // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
+  // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
+  // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
+  // For these we use the snapshot + replay path: snapshot the full
+  // sequence state at end-of-prefill, restore at end-of-generation,
+  // then batched-replay the captured post-reasoning tokens.
+  // Pure-attention models keep the existing
+  // `seq_rm + seq_add` path untouched.
+  bool needsRecurrentSnapshot_ = false;
 
-  // [start, end) KV positions of the reasoning block emitted in this
-  // inference, if any. `end == -1` marks an open (still-being-emitted)
-  // span. Single-block policy: only the first `<think>...</think>` pair
-  // is tracked; later blocks (which no supported model currently emits)
-  // are ignored.
-  std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
-  // True when the close marker was detected but its token has not yet
-  // been committed to the KV cache; the next `onLogitsReady` records
-  // the end position once the commit has happened.
-  bool pendingThinkCloseCapture_ = false;
+  // Tracks whether the currently-prepared prefill is a cache-warm
+  // (prefill-only) request. Captured in `preparePrefill` from the
+  // scheduler / single-prompt caller and consulted by the recurrent
+  // reasoning snapshot path: prefill-only requests never enter
+  // generation and cannot emit reasoning tokens, so the hard-fail
+  // contract for unsupported multi-token recurrent close markers does
+  // not apply. Prevents cache-warm calls from failing on models that
+  // would only fail at generation time.
+  bool isPrefillOnlyRequest_ = false;
+
+  // Shared rollback state for recurrent / hybrid SSM models. Owns the
+  // prefill-entry snapshot (cancel during prefill), the end-of-prefill
+  // snapshot (compaction + cancel during generation), and the
+  // post-reasoning token replay buffer. Always empty / inactive on
+  // pure-attention models, where compaction is just `seq_rm + seq_add`
+  // on the attention KV.
+  qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
+  // Reasoning-block tracker + compactor: owns the `<think>...</think>`
+  // span, close-capture flag, and the pure-attention + recurrent
+  // compaction paths plus their stats counters.
+  qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
+  // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
+  // post-slide-invalidated state on the compactor and rollback owners.
+  qvac_lib_inference_addon_llama::ContextShifter shifter_;
+
+  // Snapshot of `llama_perf_context()` taken at the start of
+  // `compactThinkSpan` — i.e. right after user-visible generation
+  // completes and before any recurrent replay decode runs. Consumed by
+  // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
+  // `llama_decode` calls (which accumulate into `n_p_eval` /
+  // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
+  // Reset at the start of each inference and on `resetState`.
+  std::optional<llama_perf_context_data> userVisiblePerf_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

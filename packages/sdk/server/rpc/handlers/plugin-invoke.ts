@@ -2,14 +2,11 @@ import type {
   PluginInvokeRequest,
   PluginInvokeResponse,
   PluginInvokeStreamRequest,
-  PluginInvokeStreamResponse,
-} from "@/schemas/plugin";
-import { getModelEntry } from "@/server/bare/registry/model-registry";
-import { getPlugin, getPluginHandler } from "@/server/plugins";
-import {
-  profileReplyHandler,
-  profileStreamHandler,
-} from "@/server/rpc/profiling";
+  PluginInvokeStreamResponse
+} from '@/schemas/plugin'
+import { getModelEntry } from '@/server/bare/registry/model-registry'
+import { getPlugin, getPluginHandler } from '@/server/plugins'
+import { profileReplyHandler, profileStreamHandler } from '@/server/rpc/profiling'
 import {
   PluginNotFoundError,
   PluginHandlerNotFoundError,
@@ -17,139 +14,114 @@ import {
   PluginRequestValidationFailedError,
   PluginResponseValidationFailedError,
   ModelIsDelegatedError,
-  ModelNotFoundError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import { formatZodError } from "@/utils/zod-error";
+  ModelNotFoundError
+} from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import { formatZodError } from '@/utils/zod-error'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 function resolvePluginHandler(modelId: string, handlerName: string) {
-  const modelEntry = getModelEntry(modelId);
+  const modelEntry = getModelEntry(modelId)
   if (!modelEntry) {
-    throw new ModelNotFoundError(modelId);
+    throw new ModelNotFoundError(modelId)
   }
   if (modelEntry.isDelegated) {
-    throw new ModelIsDelegatedError(modelId);
+    throw new ModelIsDelegatedError(modelId)
   }
 
-  const modelType = modelEntry.local.modelType;
-  const plugin = getPlugin(modelType);
+  const modelType = modelEntry.local.modelType
+  const plugin = getPlugin(modelType)
   if (!plugin) {
-    throw new PluginNotFoundError(modelType);
+    throw new PluginNotFoundError(modelType)
   }
 
-  const handlerDef = getPluginHandler(modelType, handlerName);
+  const handlerDef = getPluginHandler(modelType, handlerName)
   if (!handlerDef) {
-    const availableHandlers = Object.keys(plugin.handlers);
-    throw new PluginHandlerNotFoundError(
-      modelType,
-      handlerName,
-      availableHandlers,
-    );
+    const availableHandlers = Object.keys(plugin.handlers)
+    throw new PluginHandlerNotFoundError(modelType, handlerName, availableHandlers)
   }
 
-  return { modelType, plugin, handlerDef };
+  return { modelType, plugin, handlerDef }
 }
 
 export async function handlePluginInvoke(
-  request: PluginInvokeRequest,
+  request: PluginInvokeRequest
 ): Promise<PluginInvokeResponse> {
-  return profileReplyHandler({ op: "pluginInvoke", request }, async () => {
-    const { modelId, handler: handlerName, params } = request;
+  return profileReplyHandler({ op: 'pluginInvoke', request }, async () => {
+    const { modelId, handler: handlerName, params } = request
 
-    logger.debug(`[pluginInvoke] modelId=${modelId} handler=${handlerName}`);
+    logger.debug(`[pluginInvoke] modelId=${modelId} handler=${handlerName}`)
 
-    const { handlerDef } = resolvePluginHandler(modelId, handlerName);
+    const { handlerDef } = resolvePluginHandler(modelId, handlerName)
 
     if (handlerDef.streaming) {
-      throw new PluginHandlerTypeMismatchError(
-        handlerName,
-        "reply",
-        "streaming",
-      );
+      throw new PluginHandlerTypeMismatchError(handlerName, 'reply', 'streaming')
     }
 
-    const parseResult = handlerDef.requestSchema.safeParse(params);
+    const parseResult = handlerDef.requestSchema.safeParse(params)
     if (!parseResult.success) {
-      throw new PluginRequestValidationFailedError(
-        handlerName,
-        formatZodError(parseResult.error),
-      );
+      throw new PluginRequestValidationFailedError(handlerName, formatZodError(parseResult.error))
     }
 
-    const result = await handlerDef.handler(parseResult.data);
+    const result = await handlerDef.handler(parseResult.data)
 
-    const responseParseResult = handlerDef.responseSchema.safeParse(result);
+    const responseParseResult = handlerDef.responseSchema.safeParse(result)
     if (!responseParseResult.success) {
       throw new PluginResponseValidationFailedError(
         handlerName,
-        formatZodError(responseParseResult.error),
-      );
+        formatZodError(responseParseResult.error)
+      )
     }
 
     return {
-      type: "pluginInvoke" as const,
-      result: responseParseResult.data,
-    };
-  });
+      type: 'pluginInvoke' as const,
+      result: responseParseResult.data
+    }
+  })
 }
 
 export async function* handlePluginInvokeStream(
-  request: PluginInvokeStreamRequest,
+  request: PluginInvokeStreamRequest
 ): AsyncGenerator<PluginInvokeStreamResponse> {
-  yield* profileStreamHandler(
-    { op: "pluginInvokeStream", request },
-    async function* () {
-      const { modelId, handler: handlerName, params } = request;
+  yield* profileStreamHandler({ op: 'pluginInvokeStream', request }, async function* () {
+    const { modelId, handler: handlerName, params } = request
 
-      logger.debug(
-        `[pluginInvokeStream] modelId=${modelId} handler=${handlerName}`,
-      );
+    logger.debug(`[pluginInvokeStream] modelId=${modelId} handler=${handlerName}`)
 
-      const { handlerDef } = resolvePluginHandler(modelId, handlerName);
+    const { handlerDef } = resolvePluginHandler(modelId, handlerName)
 
-      if (!handlerDef.streaming) {
-        throw new PluginHandlerTypeMismatchError(
+    if (!handlerDef.streaming) {
+      throw new PluginHandlerTypeMismatchError(handlerName, 'streaming', 'reply')
+    }
+
+    const parseResult = handlerDef.requestSchema.safeParse(params)
+    if (!parseResult.success) {
+      throw new PluginRequestValidationFailedError(handlerName, formatZodError(parseResult.error))
+    }
+
+    const generator = handlerDef.handler(parseResult.data) as AsyncGenerator<unknown>
+
+    for await (const chunk of generator) {
+      const responseParseResult = handlerDef.responseSchema.safeParse(chunk)
+      if (!responseParseResult.success) {
+        throw new PluginResponseValidationFailedError(
           handlerName,
-          "streaming",
-          "reply",
-        );
-      }
-
-      const parseResult = handlerDef.requestSchema.safeParse(params);
-      if (!parseResult.success) {
-        throw new PluginRequestValidationFailedError(
-          handlerName,
-          formatZodError(parseResult.error),
-        );
-      }
-
-      const generator = handlerDef.handler(
-        parseResult.data,
-      ) as AsyncGenerator<unknown>;
-
-      for await (const chunk of generator) {
-        const responseParseResult = handlerDef.responseSchema.safeParse(chunk);
-        if (!responseParseResult.success) {
-          throw new PluginResponseValidationFailedError(
-            handlerName,
-            formatZodError(responseParseResult.error),
-          );
-        }
-
-        yield {
-          type: "pluginInvokeStream" as const,
-          result: responseParseResult.data,
-          done: false,
-        };
+          formatZodError(responseParseResult.error)
+        )
       }
 
       yield {
-        type: "pluginInvokeStream" as const,
-        result: null,
-        done: true,
-      };
-    },
-  );
+        type: 'pluginInvokeStream' as const,
+        result: responseParseResult.data,
+        done: false
+      }
+    }
+
+    yield {
+      type: 'pluginInvokeStream' as const,
+      result: null,
+      done: true
+    }
+  })
 }

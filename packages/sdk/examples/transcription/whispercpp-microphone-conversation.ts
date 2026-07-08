@@ -16,53 +16,47 @@
  *
  * Requirements: FFmpeg installed, microphone access.
  */
-import {
-  loadModel,
-  unloadModel,
-  transcribeStream,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-} from "@qvac/sdk";
-import { spawnSync } from "child_process";
-import { startMicrophone } from "../audio/mic-input";
+import { loadModel, unloadModel, transcribeStream, WHISPER_TINY, VAD_SILERO_5_1_2 } from '@qvac/sdk'
+import { spawnSync } from 'child_process'
+import { startMicrophone } from '../audio/mic-input'
 
-const SAMPLE_RATE = 16000;
+const SAMPLE_RATE = 16000
 
 try {
-  const r = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-  if (r.error || r.status !== 0) throw new Error("FFmpeg not found");
+  const r = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' })
+  if (r.error || r.status !== 0) throw new Error('FFmpeg not found')
 } catch {
-  console.error("✖ FFmpeg is required. Install it and try again.");
-  process.exit(1);
+  console.error('✖ FFmpeg is required. Install it and try again.')
+  process.exit(1)
 }
 
-let modelId: string | null = null;
-let ffmpeg: ReturnType<typeof startMicrophone> | null = null;
+let modelId: string | null = null
+let ffmpeg: ReturnType<typeof startMicrophone> | null = null
 
 async function cleanup() {
-  console.log("\n\n▸ Stopping...");
-  ffmpeg?.kill();
-  if (modelId) await unloadModel({ modelId });
-  console.log("▸ Done.");
+  console.log('\n\n▸ Stopping...')
+  ffmpeg?.kill()
+  if (modelId) await unloadModel({ modelId })
+  console.log('▸ Done.')
 }
 
-process.on("SIGINT", () => {
-  void cleanup().finally(() => process.exit(0));
-});
-process.on("SIGTERM", () => {
-  void cleanup().finally(() => process.exit(0));
-});
+process.on('SIGINT', () => {
+  void cleanup().finally(() => process.exit(0))
+})
+process.on('SIGTERM', () => {
+  void cleanup().finally(() => process.exit(0))
+})
 
 try {
-  console.log("▸ Loading model (whisper-tiny + Silero VAD)...");
+  console.log('▸ Loading model (whisper-tiny + Silero VAD)...')
   modelId = await loadModel({
     modelSrc: WHISPER_TINY,
     modelConfig: {
       vadModelSrc: VAD_SILERO_5_1_2,
-      audio_format: "f32le",
-      strategy: "greedy",
+      audio_format: 'f32le',
+      strategy: 'greedy',
       n_threads: 4,
-      language: "en",
+      language: 'en',
       no_timestamps: true,
       suppress_blank: true,
       suppress_nst: true,
@@ -72,53 +66,51 @@ try {
         min_speech_duration_ms: 250,
         min_silence_duration_ms: 300,
         max_speech_duration_s: 15.0,
-        speech_pad_ms: 100,
-      },
-    },
-  });
-  console.log("▸ Model loaded.\n");
+        speech_pad_ms: 100
+      }
+    }
+  })
+  console.log('▸ Model loaded.\n')
 
-  ffmpeg = startMicrophone({ sampleRate: SAMPLE_RATE, format: "f32le" });
+  ffmpeg = startMicrophone({ sampleRate: SAMPLE_RATE, format: 'f32le' })
 
   const session = await transcribeStream({
     modelId,
     emitVadEvents: true,
-    endOfTurnSilenceMs: 800,
-  });
+    endOfTurnSilenceMs: 800
+  })
 
-  ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
+  ffmpeg.stdout.on('data', (chunk: Buffer) => session.write(chunk))
 
   console.log(
-    "▸ Listening... speak and pause to see transcripts, VAD events, and end-of-turn signals.\n",
-  );
+    '▸ Listening... speak and pause to see transcripts, VAD events, and end-of-turn signals.\n'
+  )
 
-  let lastSpeaking = false;
+  let lastSpeaking = false
   for await (const event of session) {
     switch (event.type) {
-      case "text":
-        console.log(`> ${event.text.trim()}`);
-        break;
-      case "vad":
+      case 'text':
+        console.log(`> ${event.text.trim()}`)
+        break
+      case 'vad':
         if (event.speaking !== lastSpeaking) {
           console.log(
-            `▸ [vad] speaking=${event.speaking} probability=${event.probability.toFixed(2)}`,
-          );
-          lastSpeaking = event.speaking;
+            `▸ [vad] speaking=${event.speaking} probability=${event.probability.toFixed(2)}`
+          )
+          lastSpeaking = event.speaking
         }
-        break;
-      case "endOfTurn":
-        if (event.source === "whisper") {
-          console.log(
-            `▸ [endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`,
-          );
+        break
+      case 'endOfTurn':
+        if (event.source === 'whisper') {
+          console.log(`▸ [endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`)
         } else {
-          console.log(`▸ [endOfTurn] turn complete (token-driven EOU)\n`);
+          console.log(`▸ [endOfTurn] turn complete (token-driven EOU)\n`)
         }
-        break;
+        break
     }
   }
 } catch (error) {
-  console.error("✖", error);
-  await cleanup();
-  process.exit(1);
+  console.error('✖', error)
+  await cleanup()
+  process.exit(1)
 }

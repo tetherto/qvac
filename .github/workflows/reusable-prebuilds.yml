@@ -423,15 +423,30 @@ jobs:
 
           # Prefer dumpbin on PATH; otherwise locate it via vswhere (installed
           # alongside the MSVC build tools that the vcpkg build already requires).
+          # -prerelease covers VS preview installs, and the filesystem fallback
+          # covers Build Tools instances the VS installer never registered
+          # (both seen on the self-hosted qvac-win25-x64 fleet after the VS
+          # 2026 rollout, where vswhere returns nothing yet the build works).
           $dumpbin = (Get-Command dumpbin -ErrorAction SilentlyContinue).Source
           if (-not $dumpbin) {
             $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
             if (Test-Path $vswhere) {
-              $dumpbin = & $vswhere -latest -products * -find "**\dumpbin.exe" | Select-Object -First 1
+              $dumpbin = & $vswhere -latest -prerelease -products * -find "**\dumpbin.exe" | Select-Object -First 1
             }
           }
           if (-not $dumpbin) {
-            Write-Error "dumpbin.exe not found (checked PATH and vswhere)"
+            $roots = @("${env:ProgramFiles(x86)}\Microsoft Visual Studio", "${env:ProgramFiles}\Microsoft Visual Studio")
+            foreach ($root in $roots) {
+              if (Test-Path $root) {
+                $found = Get-ChildItem -Path $root -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -match 'Hostx64\\x64' } |
+                  Sort-Object FullName -Descending | Select-Object -First 1
+                if ($found) { $dumpbin = $found.FullName; break }
+              }
+            }
+          }
+          if (-not $dumpbin) {
+            Write-Error "dumpbin.exe not found (checked PATH, vswhere, and Visual Studio install roots)"
             exit 1
           }
           Write-Output "Using dumpbin: $dumpbin"

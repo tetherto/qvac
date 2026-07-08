@@ -1,8 +1,8 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 const cancelBaseSchema = z.object({
-  type: z.literal("cancel"),
-});
+  type: z.literal('cancel')
+})
 
 /**
  * Public-API base for the broad-cancel escape hatch. Kept exported so
@@ -10,8 +10,8 @@ const cancelBaseSchema = z.object({
  * `modelId` field consistently with the wire envelope.
  */
 export const cancelInferenceBaseSchema = z.object({
-  modelId: z.string().describe("The model ID to cancel inference for"),
-});
+  modelId: z.string().describe('The model ID to cancel inference for')
+})
 
 /**
  * Coarse kind narrowing for the broad-cancel escape hatch. Matches the
@@ -23,22 +23,23 @@ export const cancelInferenceBaseSchema = z.object({
  */
 const cancelKindSchema = z
   .enum([
-    "completion",
-    "embeddings",
-    "transcribe",
-    "translate",
-    "diffusion",
-    "tts",
-    "ocr",
-    "vla",
-    "finetune",
-    "loadModel",
-    "downloadAsset",
-    "rag",
+    'completion',
+    'batchCompletion',
+    'embeddings',
+    'transcribe',
+    'translate',
+    'diffusion',
+    'tts',
+    'ocr',
+    'vla',
+    'finetune',
+    'loadModel',
+    'downloadAsset',
+    'rag'
   ] as const)
   .describe(
-    "Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
-  );
+    'Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.'
+  )
 
 /**
  * Targeted cancel by `requestId` — the primary cancel path in
@@ -54,20 +55,20 @@ const cancelKindSchema = z
  * leaves. Ignored for other kinds.
  */
 const cancelByRequestIdParamsSchema = z.object({
-  operation: z.literal("request").describe("Operation type"),
+  operation: z.literal('request').describe('Operation type'),
   requestId: z
     .string()
     .min(1)
     .describe(
-      "Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).",
+      'Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).'
     ),
   clearCache: z
     .boolean()
     .optional()
     .describe(
-      "Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.",
-    ),
-});
+      'Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.'
+    )
+})
 
 /**
  * Broad cancel escape hatch — abort every in-flight request running on
@@ -87,25 +88,20 @@ const cancelByRequestIdParamsSchema = z.object({
  * the official SDK client see no change.
  */
 const cancelBroadParamsSchema = z.object({
-  operation: z.literal("broad").describe("Operation type"),
-  modelId: z
-    .string()
-    .describe("Cancel every in-flight request on this model"),
-  kind: cancelKindSchema.optional(),
-});
+  operation: z.literal('broad').describe('Operation type'),
+  modelId: z.string().describe('Cancel every in-flight request on this model'),
+  kind: cancelKindSchema.optional()
+})
 
-const cancelParamsSchema = z.discriminatedUnion("operation", [
+const cancelParamsSchema = z.discriminatedUnion('operation', [
   cancelByRequestIdParamsSchema,
-  cancelBroadParamsSchema,
-]);
+  cancelBroadParamsSchema
+])
 
-export const cancelRequestSchema = z.intersection(
-  cancelBaseSchema,
-  cancelParamsSchema,
-);
+export const cancelRequestSchema = z.intersection(cancelBaseSchema, cancelParamsSchema)
 
 export const cancelResponseSchema = z.object({
-  type: z.literal("cancel"),
+  type: z.literal('cancel'),
   success: z.boolean(),
   /**
    * Number of in-flight contexts that this call flipped to
@@ -114,8 +110,8 @@ export const cancelResponseSchema = z.object({
    * without double-counting). Always present on `success: true`.
    */
   cancelled: z.number().int().nonnegative().optional(),
-  error: z.string().optional(),
-});
+  error: z.string().optional()
+})
 
 /**
  * Sugar for the most common new path — `cancel({ requestId })`. The
@@ -125,9 +121,9 @@ export const cancelResponseSchema = z.object({
 export const cancelByRequestIdSugarSchema = z
   .object({
     requestId: z.string().min(1),
-    clearCache: z.boolean().optional(),
+    clearCache: z.boolean().optional()
   })
-  .strict();
+  .strict()
 
 /**
  * Sugar for the broad-cancel escape hatch — `cancel({ modelId, kind? })`.
@@ -137,9 +133,9 @@ export const cancelByRequestIdSugarSchema = z
 export const cancelBroadSugarSchema = z
   .object({
     modelId: z.string().min(1),
-    kind: cancelKindSchema.optional(),
+    kind: cancelKindSchema.optional()
   })
-  .strict();
+  .strict()
 
 /**
  * Legacy per-kind broad-cancel sugars retained at the public-API
@@ -151,36 +147,26 @@ export const cancelBroadSugarSchema = z
  * `cancel({ modelId, kind? })`.
  */
 export const cancelLegacyInferenceSugarSchema = z.object({
-  operation: z.literal("inference"),
-  modelId: z.string().min(1),
-});
+  operation: z.literal('inference'),
+  modelId: z.string().min(1)
+})
 
 export const cancelLegacyEmbeddingsSugarSchema = z.object({
-  operation: z.literal("embeddings"),
-  modelId: z.string().min(1),
-});
+  operation: z.literal('embeddings'),
+  modelId: z.string().min(1)
+})
 
-export type CancelParams = z.infer<typeof cancelParamsSchema>;
-export type CancelInferenceBaseParams = z.infer<
-  typeof cancelInferenceBaseSchema
->;
-export type CancelByRequestIdParams = z.infer<
-  typeof cancelByRequestIdParamsSchema
->;
-export type CancelBroadParams = z.infer<typeof cancelBroadParamsSchema>;
-export type CancelByRequestIdSugar = z.infer<
-  typeof cancelByRequestIdSugarSchema
->;
-export type CancelBroadSugar = z.infer<typeof cancelBroadSugarSchema>;
-export type CancelLegacyInferenceSugar = z.infer<
-  typeof cancelLegacyInferenceSugarSchema
->;
-export type CancelLegacyEmbeddingsSugar = z.infer<
-  typeof cancelLegacyEmbeddingsSugarSchema
->;
-export type CancelKind = z.infer<typeof cancelKindSchema>;
-export type CancelRequest = z.infer<typeof cancelRequestSchema>;
-export type CancelResponse = z.infer<typeof cancelResponseSchema>;
+export type CancelParams = z.infer<typeof cancelParamsSchema>
+export type CancelInferenceBaseParams = z.infer<typeof cancelInferenceBaseSchema>
+export type CancelByRequestIdParams = z.infer<typeof cancelByRequestIdParamsSchema>
+export type CancelBroadParams = z.infer<typeof cancelBroadParamsSchema>
+export type CancelByRequestIdSugar = z.infer<typeof cancelByRequestIdSugarSchema>
+export type CancelBroadSugar = z.infer<typeof cancelBroadSugarSchema>
+export type CancelLegacyInferenceSugar = z.infer<typeof cancelLegacyInferenceSugarSchema>
+export type CancelLegacyEmbeddingsSugar = z.infer<typeof cancelLegacyEmbeddingsSugarSchema>
+export type CancelKind = z.infer<typeof cancelKindSchema>
+export type CancelRequest = z.infer<typeof cancelRequestSchema>
+export type CancelResponse = z.infer<typeof cancelResponseSchema>
 
 /** Public client-API input — accepts the wire union *or* the requestId/broad sugars and the legacy per-kind sugars. */
 export type CancelClientInput =
@@ -188,4 +174,4 @@ export type CancelClientInput =
   | CancelByRequestIdSugar
   | CancelBroadSugar
   | CancelLegacyInferenceSugar
-  | CancelLegacyEmbeddingsSugar;
+  | CancelLegacyEmbeddingsSugar

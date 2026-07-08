@@ -1,11 +1,6 @@
-import { z } from "zod";
-import {
-  toolCallSchema,
-  toolCallErrorSchema,
-  type Tool,
-  type ToolCallWithCall,
-} from "./tools";
-import type { ToolDialect } from "./completion-stream";
+import { z } from 'zod'
+import { toolCallSchema, toolCallErrorSchema, type Tool, type ToolCallWithCall } from './tools'
+import type { ToolDialect } from './completion-stream'
 
 export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
@@ -13,56 +8,57 @@ export const completionStatsSchema = z.object({
   cacheTokens: z.number().optional(),
   promptTokens: z.number().optional(),
   generatedTokens: z.number().optional(),
-  backendDevice: z.enum(["cpu", "gpu"]).optional(),
-});
+  avgConcurrentSeq: z.number().optional(),
+  backendDevice: z.enum(['cpu', 'gpu']).optional()
+})
 
-export type CompletionStats = z.infer<typeof completionStatsSchema>;
+export type CompletionStats = z.infer<typeof completionStatsSchema>
 
-export const seqSchema = z.number().int().nonnegative();
+export const seqSchema = z.number().int().nonnegative()
 
 export const contentDeltaEventSchema = z.object({
-  type: z.literal("contentDelta"),
+  type: z.literal('contentDelta'),
   seq: seqSchema,
-  text: z.string(),
-});
+  text: z.string()
+})
 
 export const rawDeltaEventSchema = z.object({
-  type: z.literal("rawDelta"),
+  type: z.literal('rawDelta'),
   seq: seqSchema,
-  text: z.string(),
-});
+  text: z.string()
+})
 
 export const thinkingDeltaEventSchema = z.object({
-  type: z.literal("thinkingDelta"),
+  type: z.literal('thinkingDelta'),
   seq: seqSchema,
-  text: z.string(),
-});
+  text: z.string()
+})
 
 export const toolCallEventSchema = z.object({
-  type: z.literal("toolCall"),
+  type: z.literal('toolCall'),
   seq: seqSchema,
-  call: toolCallSchema,
-});
+  call: toolCallSchema
+})
 
 export const toolErrorEventSchema = z.object({
-  type: z.literal("toolError"),
+  type: z.literal('toolError'),
   seq: seqSchema,
-  error: toolCallErrorSchema,
-});
+  error: toolCallErrorSchema
+})
 
 export const statsEventSchema = z.object({
-  type: z.literal("completionStats"),
+  type: z.literal('completionStats'),
   seq: seqSchema,
-  stats: completionStatsSchema,
-});
+  stats: completionStatsSchema
+})
 
 export const completionErrorSchema = z.object({
-  message: z.string(),
-});
+  message: z.string()
+})
 
 const rawOutputSchema = z.object({
-  fullText: z.string(),
-});
+  fullText: z.string()
+})
 
 // `"cancelled"` is a clean termination, not a mid-stream failure: the
 // stream ended on purpose because the request was aborted, just not at
@@ -74,28 +70,28 @@ const rawOutputSchema = z.object({
 // client-side `CompletionRun` (`final` / `text` / `toolCalls` / `stats`)
 // reject with `InferenceCancelledError` carrying the partial state — see
 // `client/api/completion-stream.ts` for the rejection plumbing.
-const stopReasonEnum = z.enum(["eos", "length", "stopSequence", "cancelled"]);
+const stopReasonEnum = z.enum(['eos', 'length', 'stopSequence', 'cancelled'])
 
 const successDoneSchema = z
   .object({
-    type: z.literal("completionDone"),
+    type: z.literal('completionDone'),
     seq: seqSchema,
     stopReason: stopReasonEnum.optional(),
-    raw: rawOutputSchema.optional(),
+    raw: rawOutputSchema.optional()
   })
-  .strict();
+  .strict()
 
 const errorDoneSchema = z
   .object({
-    type: z.literal("completionDone"),
+    type: z.literal('completionDone'),
     seq: seqSchema,
-    stopReason: z.literal("error"),
+    stopReason: z.literal('error'),
     error: completionErrorSchema,
-    raw: rawOutputSchema.optional(),
+    raw: rawOutputSchema.optional()
   })
-  .strict();
+  .strict()
 
-export const doneEventSchema = z.union([errorDoneSchema, successDoneSchema]);
+export const doneEventSchema = z.union([errorDoneSchema, successDoneSchema])
 
 export const completionEventSchema = z.union([
   contentDeltaEventSchema,
@@ -105,29 +101,29 @@ export const completionEventSchema = z.union([
   toolErrorEventSchema,
   statsEventSchema,
   errorDoneSchema,
-  successDoneSchema,
-]);
+  successDoneSchema
+])
 
-export type ContentDeltaEvent = z.infer<typeof contentDeltaEventSchema>;
-export type RawDeltaEvent = z.infer<typeof rawDeltaEventSchema>;
-export type ThinkingDeltaEvent = z.infer<typeof thinkingDeltaEventSchema>;
-export type ToolCallEvent = z.infer<typeof toolCallEventSchema>;
-export type ToolErrorEvent = z.infer<typeof toolErrorEventSchema>;
-export type StatsEvent = z.infer<typeof statsEventSchema>;
-export type CompletionError = z.infer<typeof completionErrorSchema>;
-export type DoneEvent = z.infer<typeof doneEventSchema>;
-export type CompletionEvent = z.infer<typeof completionEventSchema>;
-export type StopReason = z.infer<typeof stopReasonEnum>;
+export type ContentDeltaEvent = z.infer<typeof contentDeltaEventSchema>
+export type RawDeltaEvent = z.infer<typeof rawDeltaEventSchema>
+export type ThinkingDeltaEvent = z.infer<typeof thinkingDeltaEventSchema>
+export type ToolCallEvent = z.infer<typeof toolCallEventSchema>
+export type ToolErrorEvent = z.infer<typeof toolErrorEventSchema>
+export type StatsEvent = z.infer<typeof statsEventSchema>
+export type CompletionError = z.infer<typeof completionErrorSchema>
+export type DoneEvent = z.infer<typeof doneEventSchema>
+export type CompletionEvent = z.infer<typeof completionEventSchema>
+export type StopReason = z.infer<typeof stopReasonEnum>
 
 export type CompletionFinal = {
-  contentText: string;
-  thinkingText?: string;
-  toolCalls: ToolCallWithCall[];
-  stats?: CompletionStats;
-  stopReason?: StopReason;
+  contentText: string
+  thinkingText?: string
+  toolCalls: ToolCallWithCall[]
+  stats?: CompletionStats
+  stopReason?: StopReason
   raw: {
-    fullText: string;
-  };
+    fullText: string
+  }
   /**
    * Canonical assistant text to push back into `history` for the next turn
    * when using `kvCache: true` (auto-cache). Equals the assistant content
@@ -141,8 +137,8 @@ export type CompletionFinal = {
    * Tool-call turns currently can't be auto-cached, so this
    * field is omitted when `toolCalls.length > 0`.
    */
-  cacheableAssistantContent?: string;
-};
+  cacheableAssistantContent?: string
+}
 
 export type CompletionRun = {
   /**
@@ -155,38 +151,38 @@ export type CompletionRun = {
    * server has begun the request, so a cancel issued in the same tick
    * as `completion(...)` may race the begin and is logged as a no-match.
    */
-  requestId: string;
+  requestId: string
   /** Ordered stream of typed completion events — the canonical consumption API. */
-  events: AsyncIterable<CompletionEvent>;
+  events: AsyncIterable<CompletionEvent>
   /** Resolves when the stream ends with aggregated content, thinking, tool calls, stats, and raw output. */
-  final: Promise<CompletionFinal>;
+  final: Promise<CompletionFinal>
 
-  tokenStream: AsyncGenerator<string>;
-  toolCallStream: AsyncGenerator<ToolCallEvent>;
-  text: Promise<string>;
-  toolCalls: Promise<ToolCallWithCall[]>;
-  stats: Promise<CompletionStats | undefined>;
-};
+  tokenStream: AsyncGenerator<string>
+  toolCallStream: AsyncGenerator<ToolCallEvent>
+  text: Promise<string>
+  toolCalls: Promise<ToolCallWithCall[]>
+  stats: Promise<CompletionStats | undefined>
+}
 
-export type ToolCallingCapability = "textParse" | "none";
-export type ThinkingFramingCapability = "thinkTags" | "none";
+export type ToolCallingCapability = 'textParse' | 'none'
+export type ThinkingFramingCapability = 'thinkTags' | 'none'
 
 export type PluginCapabilities = {
-  toolCalling: ToolCallingCapability;
-  thinkingFraming: ThinkingFramingCapability;
-};
+  toolCalling: ToolCallingCapability
+  thinkingFraming: ThinkingFramingCapability
+}
 
 export const DEFAULT_PLUGIN_CAPABILITIES: PluginCapabilities = {
-  toolCalling: "none",
-  thinkingFraming: "none",
-};
+  toolCalling: 'none',
+  thinkingFraming: 'none'
+}
 
 export type NormalizerConfig = {
-  capabilities: PluginCapabilities;
-  tools: Tool[];
-  captureThinking: boolean;
-  emitRawDeltas: boolean;
+  capabilities: PluginCapabilities
+  tools: Tool[]
+  captureThinking: boolean
+  emitRawDeltas: boolean
   // Defaults to "hermes" (`<tool_call>...` framing + JSON-payload fallbacks)
   // when omitted. "json" is the no-framing pure JSON-payload dialect.
-  toolDialect?: ToolDialect;
-};
+  toolDialect?: ToolDialect
+}

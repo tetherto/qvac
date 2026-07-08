@@ -33,6 +33,17 @@ declare interface TTSGgmlFiles {
    * `enhancer.enhancerPath` is the only alternative).
    */
   lavasrEnhancer?: string
+  /**
+   * LavaSR denoiser GGUF: UL-UNAS speech denoiser produced by
+   * tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. Runs BEFORE the
+   * enhancer and is rate-preserving (the canonical way to enable denoising;
+   * `denoiser.denoiserPath` is the only alternative).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (scalar CPU port, validated bit-close to the ONNX reference); it
+   * activates at runtime once the pinned tts-cpp version includes #78.
+   */
+  lavasrDenoiser?: string
   /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
   /**
@@ -78,6 +89,23 @@ declare interface LavaSREnhancerOptions {
   type: 'lavasr'
   /** Enhancer GGUF path (alternative to `files.lavasrEnhancer`). */
   enhancerPath?: string
+}
+
+/**
+ * LavaSR denoiser config. The discriminated `type` mirrors the enhancer; v1
+ * ships `lavasr` (the UL-UNAS denoiser). Denoising is enabled by providing a
+ * GGUF path (here as `denoiserPath`, or via `files.lavasrDenoiser`) — there is
+ * no separate on/off flag. The denoiser runs BEFORE the enhancer and preserves
+ * the sample rate.
+ *
+ * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78
+ * (activates once the pinned tts-cpp includes it). Not supported with Chatterbox
+ * native chunk streaming (a stateful streaming denoiser is the follow-up).
+ */
+declare interface LavaSRDenoiserOptions {
+  type: 'lavasr'
+  /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
+  denoiserPath?: string
 }
 
 declare interface TTSGgmlOptions {
@@ -133,10 +161,21 @@ declare interface TTSGgmlOptions {
    * `enhancerPath` or through `files.lavasrEnhancer`). Works for Supertonic and
    * Chatterbox, including Chatterbox native chunk streaming
    * (`streamChunkTokens`), where it enhances each chunk seam-free at the cost
-   * of ~0.34 s of look-ahead latency. The denoiser stage is a planned
-   * follow-up.
+   * of ~0.34 s of look-ahead latency.
    */
   enhancer?: LavaSREnhancerOptions
+  /**
+   * LavaSR neural speech denoiser (UL-UNAS). Opt-in CPU/GGML pre-processing
+   * that runs BEFORE the enhancer and preserves the sample rate; enabled by
+   * providing a GGUF path (here via `denoiserPath` or through
+   * `files.lavasrDenoiser`).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (validated bit-close to the ONNX reference); it activates at runtime
+   * once the pinned tts-cpp version includes #78. It is rejected with Chatterbox
+   * native chunk streaming (a stateful streaming denoiser is the follow-up).
+   */
+  denoiser?: LavaSRDenoiserOptions
   /** Directory the addon scans for dynamically-loaded ggml backends */
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
@@ -276,6 +315,7 @@ declare namespace TTSGgml {
     TTSGgmlFiles,
     TTSGgmlOptions,
     LavaSREnhancerOptions,
+    LavaSRDenoiserOptions,
     TTSGgmlRuntimeConfig,
     RuntimeStats,
     SentenceStreamChunkMeta,

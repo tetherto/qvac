@@ -16,39 +16,35 @@
 
 // Note: This example uses .js file for the config
 // However it could be .json or .ts as well, depending on your needs.
-const configDir = import.meta.dirname ?? process.cwd();
-process.env["QVAC_CONFIG_PATH"] =
-  `${configDir}/config/default/default.config.js`;
+const configDir = import.meta.dirname ?? process.cwd()
+process.env['QVAC_CONFIG_PATH'] = `${configDir}/config/default/default.config.js`
 
-console.log(`▸ Using config from: ${process.env["QVAC_CONFIG_PATH"]}`);
+console.log(`▸ Using config from: ${process.env['QVAC_CONFIG_PATH']}`)
 
-const { loadModel, unloadModel, completion, LLAMA_3_2_1B_INST_Q4_0 } =
-  await import("@qvac/sdk");
+const { loadModel, unloadModel, completion, LLAMA_3_2_1B_INST_Q4_0 } = await import('@qvac/sdk')
 
 try {
-  console.log("▸ Loading model with configured settings...");
+  console.log('▸ Loading model with configured settings...')
 
   const modelId = await loadModel({
-    modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  });
+    modelSrc: LLAMA_3_2_1B_INST_Q4_0
+  })
 
-  console.log("▸ Running completion...");
+  console.log('▸ Running completion...')
 
   const result = completion({
     modelId,
-    history: [
-      { role: "user", content: "Say 'Config works!' in exactly 3 words." },
-    ],
-    stream: true,
-  });
+    history: [{ role: 'user', content: "Say 'Config works!' in exactly 3 words." }],
+    stream: true
+  })
 
   for await (const token of result.tokenStream) {
-    process.stdout.write(token);
+    process.stdout.write(token)
   }
-  console.log("\n");
+  console.log('\n')
 
-  await unloadModel({ modelId });
+  await unloadModel({ modelId })
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }
