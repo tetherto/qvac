@@ -24,8 +24,7 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
@@ -34,8 +33,7 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name,
-      downloadUrl: DEFAULT_MODEL.url
+      modelName: DEFAULT_MODEL.name
     })
 
     console.log('\n' + '='.repeat(60))
