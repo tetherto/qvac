@@ -7,8 +7,8 @@ import { z } from 'zod'
  * from the kv-cache once the tool-call chain resolves, so each user prompt
  * can carry its own tool set without poisoning the cache.
  *
- * Implementation detail: maps to the addon's `tools_compact` boolean. The
- * SDK uses the higher-level `static`/`dynamic` naming so the addon-side
+ * Implementation detail: maps to the addon's `tools_compact` boolean. core
+ * uses the higher-level `static`/`dynamic` naming so the addon-side
  * mapping can change without breaking the public API.
  */
 export const TOOLS_MODE = {

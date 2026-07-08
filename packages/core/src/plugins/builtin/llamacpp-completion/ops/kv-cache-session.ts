@@ -477,8 +477,8 @@ export async function deleteKvCacheState(
  *     truncated KV state). Catching this requires either an
  *     addon-side change (have `CacheManager::writeCacheFile` check the
  *     return value of `llama_state_save_file` and throw on failure) or
- *     a structural hash check we can't currently compute from the
- *     SDK. Filed as a follow-up — see `cache-api.md` in the addon
+ *     a structural hash check we can't currently compute from
+ *     core. Filed as a follow-up — see `cache-api.md` in the addon
  *     repo / tracking ticket.
  *
  * On failure we best-effort `unlink` an empty leftover file (so the
@@ -581,7 +581,7 @@ function clearInitializedCachesByScope(scope: {
  * for cache state exclusively through the session API; the unit suite
  * for `kv-cache-session.test.ts` needs to seed and inspect raw state
  * to assert the rollback / commit invariants. Not part of the public
- * SDK surface.
+ * surface.
  *
  * @internal
  */

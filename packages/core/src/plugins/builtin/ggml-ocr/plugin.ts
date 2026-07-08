@@ -137,7 +137,7 @@ export const ocrPlugin = definePlugin({
       requestSchema: ocrStreamRequestSchema,
       responseSchema: ocrStreamResponseSchema,
       streaming: true,
-      // GGML OCR does not expose a cancel surface — SDK falls back
+      // GGML OCR does not expose a cancel surface — core falls back
       // to soft-cancel.
       cancel: { scope: 'none' },
 

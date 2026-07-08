@@ -415,7 +415,7 @@ export async function* completion(
 
   // Hard-cancel wiring: when the registry aborts the request's signal,
   // forward to the addon so the C++ work stops as soon as it can. The
-  // SDK still treats `signal.aborted` as the truth for cancel detection
+  // core still treats `signal.aborted` as the truth for cancel detection
   // (post-completion bookkeeping below) — this listener only shortens
   // the latency between "user clicked stop" and "addon stops decoding".
   //

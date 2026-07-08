@@ -6,7 +6,7 @@ import type { ModelSrcInput } from './model-src-utils'
  * Granularity at which the addon can cancel.
  *  - `"request"` — addon cancels a specific in-flight `requestId`.
  *  - `"model"` — addon cancels whatever is running on the model.
- *  - `"none"` — no addon cancel surface; SDK falls back to soft-cancel
+ *  - `"none"` — no addon cancel surface; core falls back to soft-cancel
  *    (stop yielding, drop result; the C++ work runs to completion).
  */
 export type PluginHandlerCancelScope = 'request' | 'model' | 'none'

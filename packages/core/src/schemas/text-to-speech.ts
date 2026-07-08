@@ -163,7 +163,10 @@ type TtsTokenizerAssetRefinementInput = {
   cangjieTsvSrc?: ModelSrcInput | undefined
 }
 
-function refineChatterboxTokenizerAssets(data: TtsTokenizerAssetRefinementInput, ctx: z.RefinementCtx) {
+function refineChatterboxTokenizerAssets(
+  data: TtsTokenizerAssetRefinementInput,
+  ctx: z.RefinementCtx
+) {
   if (data.ttsEngine !== 'chatterbox') return
 
   if (data.language === 'ja' && data.mecabDictSrc === undefined) {
@@ -190,7 +193,7 @@ export const ttsLoadConfigSchema = z
 // === Legacy ONNX modelConfig fields (deprecated) ===
 //
 // Pre-@qvac/tts-ggml multi-file ONNX `modelConfig` fields are kept ONLY so
-// callers migrating from earlier SDK versions hit a structured
+// callers migrating from earlier @qvac/sdk versions hit a structured
 // `LegacyTtsModelDeprecatedError` from the TTS plugin's `resolveConfig`,
 // rather than a generic Zod `Unrecognized key` error.
 export const LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS = [

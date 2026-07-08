@@ -530,7 +530,7 @@ test('parseHarmonyFormat: to=functions. without complete frame returns matched: 
 })
 
 // Hyphenated names are valid per OpenAI's `[a-zA-Z0-9_-]{1,64}` and pass
-// the SDK's `name: z.string()` schema — must not silently drop.
+// core's `name: z.string()` schema — must not silently drop.
 test('parseHarmonyFormat: hyphenated function names parse', (t) => {
   const hyphenTool: Tool = {
     type: 'function',

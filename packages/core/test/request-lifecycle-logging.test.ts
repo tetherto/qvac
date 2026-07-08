@@ -14,7 +14,7 @@ import { createRequestRegistry } from '../src/runtime/request-registry'
 // part of the 0.11.0 request-lifecycle contract.
 //
 // Tests use the `options.logger` injection on `createRequestRegistry`
-// to capture every `info(...)` call without touching the SDK's
+// to capture every `info(...)` call without touching core's
 // cached singleton logger.
 // -----------------------------------------------------------------------------
 

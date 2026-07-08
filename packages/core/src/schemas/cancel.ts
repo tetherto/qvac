@@ -42,8 +42,8 @@ const cancelKindSchema = z
   )
 
 /**
- * Targeted cancel by `requestId` — the primary cancel path in
- * SDK 0.11.0. Pair with the `requestId` field exposed on
+ * Targeted cancel by `requestId` — the primary cancel path. Pair
+ * with the `requestId` field exposed on
  * `CompletionRun` (and the decorated promises returned by
  * `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,
  * `transcribe(...)`, `rag*(...)` etc.) to cancel a specific in-flight

@@ -17,14 +17,14 @@ export interface RegistryClientDownloadOptions {
  * unit-tested without standing up a real registry client.
  */
 export function buildRegistryClientOptions(params: {
-  sdkConfig: Pick<QvacConfig, 'registryStreamTimeoutMs' | 'registryDownloadMaxRetries'>
+  config: Pick<QvacConfig, 'registryStreamTimeoutMs' | 'registryDownloadMaxRetries'>
   outputFile: string
   onProgress?: ((progress: { downloaded: number; total: number }) => void) | undefined
   signal?: AbortSignal | undefined
 }): RegistryClientDownloadOptions {
-  const { sdkConfig, outputFile, onProgress, signal } = params
-  const timeout = sdkConfig.registryStreamTimeoutMs ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS
-  const maxRetries = sdkConfig.registryDownloadMaxRetries
+  const { config, outputFile, onProgress, signal } = params
+  const timeout = config.registryStreamTimeoutMs ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS
+  const maxRetries = config.registryDownloadMaxRetries
 
   return {
     timeout,

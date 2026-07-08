@@ -15,14 +15,14 @@ test('global stream receives logs from every source id', (t) => {
   const handler = (_level: string, _ns: string, message: string) => received.push(message)
   registerLoggingStream(ALL_LOG_ID, handler)
 
-  sendLogToStreams(LOG_ID, 'info', 'core', 'from sdk')
+  sendLogToStreams(LOG_ID, 'info', 'core', 'from core')
   sendLogToStreams('model-123', 'debug', 'llamacpp-completion', 'from model')
 
-  t.alike(received, ['from sdk', 'from model'], 'captures logs across ids')
+  t.alike(received, ['from core', 'from model'], 'captures logs across ids')
 
   unregisterLoggingStream(ALL_LOG_ID, handler)
   sendLogToStreams(LOG_ID, 'info', 'core', 'after unsubscribe')
-  t.alike(received, ['from sdk', 'from model'], 'stops after unsubscribe')
+  t.alike(received, ['from core', 'from model'], 'stops after unsubscribe')
 
   clearAllLoggingStreams()
 })
@@ -35,7 +35,7 @@ test('global stream preserves the originating source id per log', (t) => {
     sources.push(sourceId)
   registerLoggingStream(ALL_LOG_ID, handler)
 
-  sendLogToStreams(LOG_ID, 'info', 'core', 'from sdk')
+  sendLogToStreams(LOG_ID, 'info', 'core', 'from core')
   sendLogToStreams('model-123', 'debug', 'llamacpp-completion', 'from model')
 
   t.alike(sources, [LOG_ID, 'model-123'], 'global subscriber sees real origin id, not __all__')

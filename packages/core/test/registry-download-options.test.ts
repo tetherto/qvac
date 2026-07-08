@@ -9,7 +9,7 @@ const outputFile = '/tmp/model.bin'
 
 test('buildRegistryClientOptions: falls back to default timeout and omits maxRetries', (t) => {
   const opts = buildRegistryClientOptions({
-    sdkConfig: {},
+    config: {},
     outputFile
   })
 
@@ -22,7 +22,7 @@ test('buildRegistryClientOptions: falls back to default timeout and omits maxRet
 
 test('buildRegistryClientOptions: propagates registryStreamTimeoutMs from config', (t) => {
   const opts = buildRegistryClientOptions({
-    sdkConfig: { registryStreamTimeoutMs: 120_000 },
+    config: { registryStreamTimeoutMs: 120_000 },
     outputFile
   })
 
@@ -31,7 +31,7 @@ test('buildRegistryClientOptions: propagates registryStreamTimeoutMs from config
 
 test('buildRegistryClientOptions: propagates registryDownloadMaxRetries from config', (t) => {
   const opts = buildRegistryClientOptions({
-    sdkConfig: { registryDownloadMaxRetries: 7 },
+    config: { registryDownloadMaxRetries: 7 },
     outputFile
   })
 
@@ -40,7 +40,7 @@ test('buildRegistryClientOptions: propagates registryDownloadMaxRetries from con
 
 test('buildRegistryClientOptions: maxRetries=0 is propagated (retries disabled)', (t) => {
   const opts = buildRegistryClientOptions({
-    sdkConfig: { registryDownloadMaxRetries: 0 },
+    config: { registryDownloadMaxRetries: 0 },
     outputFile
   })
 
@@ -52,7 +52,7 @@ test('buildRegistryClientOptions: forwards onProgress and signal when provided',
   const onProgress = () => {}
 
   const opts = buildRegistryClientOptions({
-    sdkConfig: {},
+    config: {},
     outputFile,
     onProgress,
     signal: controller.signal
@@ -64,7 +64,7 @@ test('buildRegistryClientOptions: forwards onProgress and signal when provided',
 
 test('buildRegistryClientOptions: config with both values passes both through', (t) => {
   const opts = buildRegistryClientOptions({
-    sdkConfig: {
+    config: {
       registryStreamTimeoutMs: 90_000,
       registryDownloadMaxRetries: 5
     },

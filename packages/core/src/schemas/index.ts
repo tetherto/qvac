@@ -51,7 +51,7 @@ export {
   type DeviceMatch,
   type DeviceConfigDefaults,
   type DevicePattern
-} from './sdk-config'
+} from './config'
 export {
   PROFILING_KEY,
   PROFILING_TRAILER_KEY,

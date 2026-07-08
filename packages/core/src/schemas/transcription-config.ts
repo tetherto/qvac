@@ -145,7 +145,7 @@ export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>
 // As of @qvac/transcription-parakeet 0.6.0 the addon ships as a single
 // GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF
 // metadata. The pre-0.4 multi-file ONNX `modelConfig` fields below are
-// kept ONLY so callers migrating from earlier SDK versions hit a
+// kept ONLY so callers migrating from earlier @qvac/sdk versions hit a
 // structured `LegacyParakeetModelDeprecatedError` (with a migration
 // message) raised from the parakeet plugin's `resolveConfig`, rather
 // than a generic Zod `Unrecognized key` error.

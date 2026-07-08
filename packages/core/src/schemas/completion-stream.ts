@@ -30,7 +30,7 @@ export const attachmentSchema = z.object({
   path: z
     .string()
     .describe(
-      'Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).'
+      'Absolute or resolvable path to the attachment file (e.g., image for multimodal models).'
     )
 })
 

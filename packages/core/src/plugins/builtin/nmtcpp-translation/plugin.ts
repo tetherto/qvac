@@ -183,7 +183,7 @@ export const nmtPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      // nmtcpp does not expose a cancel surface today — SDK falls
+      // nmtcpp does not expose a cancel surface today — core falls
       // back to soft-cancel (stop yielding, drop result, skip
       // post-processing; the C++ work runs to completion).
       cancel: { scope: 'none' },

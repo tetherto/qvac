@@ -18,12 +18,12 @@ import { createDisposableScope } from '../src/runtime/disposable-scope'
 test('disposable-scope: host runtime exposes Symbol.asyncDispose', (t) => {
   // Tripwire for the module-load guard in disposable-scope.ts. If a future
   // runtime upgrade strips Symbol.asyncDispose (older Bare/Expo, missing
-  // polyfill), the guard throws at SDK import time and this test fails first.
+  // polyfill), the guard throws at import time and this test fails first.
   // The guard converts a silent registry-leak bug into a loud startup error.
   t.is(
     typeof Symbol.asyncDispose,
     'symbol',
-    'Symbol.asyncDispose must be a symbol; the SDK request-lifecycle stack depends on it'
+    'Symbol.asyncDispose must be a symbol; the request-lifecycle stack depends on it'
   )
 })
 

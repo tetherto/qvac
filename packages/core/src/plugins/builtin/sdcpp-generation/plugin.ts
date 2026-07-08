@@ -307,7 +307,7 @@ export const diffusionPlugin = definePlugin({
       requestSchema: upscaleRequestSchema,
       responseSchema: upscaleStreamResponseSchema,
       streaming: true,
-      // sdcpp upscale path has no cancel surface today — SDK falls
+      // sdcpp upscale path has no cancel surface today — core falls
       // back to soft-cancel.
       cancel: { scope: 'none' },
       handler: upscale

@@ -163,7 +163,7 @@ async function performHttpDownload(
 
   // Prepare headers for resume if needed
   const headers = new Headers({
-    'User-Agent': 'qvac-sdk'
+    'User-Agent': 'qvac'
   })
 
   if (startOffset > 0) {
@@ -221,7 +221,7 @@ async function performHttpDownload(
       response = await fetch(url, {
         method: 'GET',
         headers: new Headers({
-          'User-Agent': 'qvac-sdk'
+          'User-Agent': 'qvac'
         }),
         ...(signal && { signal })
       })

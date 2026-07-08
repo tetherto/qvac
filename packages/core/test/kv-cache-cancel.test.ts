@@ -8,11 +8,11 @@ import {
 // Unit-level regression coverage for `decideCachedHistorySlice` — the pure
 // piece of the kv-cache cancel/zero-token fix (QVAC-17780).
 //
-// In SDK 0.11.0 the cancel-counter side channel that used to live in
+// The cancel-counter side channel that used to live in
 // this module (`modelCancelCounters`, `noteCancelRequested`,
 // `snapshotCancelCount`, `shouldRecordSavedCount`) was retired. Cancel
 // detection now flows through the per-request `AbortSignal` from
-// `RequestRegistry` (see `test/unit/runtime/request-registry.test.ts`)
+// `RequestRegistry` (see `test/request-registry.test.ts`)
 // and `completion-stream.ts` reads `signal.aborted` directly.
 //
 // The `cachedMessageCounts` map and its `clearCachedMessageCounts`
@@ -115,7 +115,7 @@ test('decideCachedHistorySlice: savedCount = history.length slices to [] and fla
 
 test('regression: an externally-seeded stale savedCount still triggers the fallback', (t) => {
   // Belt-and-suspenders test: simulate an externally-poisoned savedCount
-  // (e.g. from a pre-upgrade SDK instance still running in memory) and
+  // (e.g. from a pre-upgrade instance still running in memory) and
   // confirm that `decideCachedHistorySlice` refuses to emit an empty
   // payload and also flags the stale count for cleanup.
   //

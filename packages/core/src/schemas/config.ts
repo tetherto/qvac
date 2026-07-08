@@ -107,16 +107,16 @@ export const qvacConfigSchema = z.object({
   swarmRelays: z.array(z.string()).optional(),
 
   /**
-   * Global log level for all SDK loggers.
+   * Global log level for all loggers.
    * Options: "error", "warn", "info", "debug", "off".
    * Defaults to "info".
    */
   loggerLevel: logLevelSchema.optional(),
 
   /**
-   * Print SDK logs to the console.
+   * Print logs to the console.
    * When false, logs still reach streams and transports but are not printed.
-   * Defaults to false; set to true to see SDK logs on the console.
+   * Defaults to false; set to true to see logs on the console.
    */
   loggerConsoleOutput: z.boolean().optional(),
 
@@ -156,7 +156,7 @@ export const qvacConfigSchema = z.object({
   /**
    * Device-specific config defaults.
    * Use this to override model config defaults for specific devices.
-   * User-defined patterns are checked before SDK built-in patterns.
+   * User-defined patterns are checked before the built-in patterns.
    * First matching pattern wins.
    *
    * @example

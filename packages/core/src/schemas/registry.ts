@@ -21,7 +21,7 @@ const modelRegistryEntryAddonSchema = z.enum([
 // Canonical engine names derived from ModelType (schemas/model-types.ts) plus
 // registry-only engines not present in ModelType.
 // Values reference ModelType.* directly to avoid string duplication.
-// The SDK resolves legacy engine names (e.g. @qvac/* package names) to canonical
+// core resolves legacy engine names (e.g. @qvac/* package names) to canonical
 // form via schemas/engine-addon-map.ts.
 export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppCompletion,

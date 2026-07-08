@@ -22,7 +22,7 @@ const TRAVERSAL_VECTORS = [
 
 // ============== Category B schemas (absolute user paths) ==============
 // These MUST continue to accept all paths — the user intentionally points
-// the SDK at files on their filesystem. These are regression guards:
+// core at files on their filesystem. These are regression guards:
 // if someone adds blanket .. rejection to these schemas, these tests break.
 
 test('audioInputSchema filePath accepts user paths (no-regression)', (t) => {

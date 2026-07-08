@@ -121,7 +121,7 @@ export async function downloadSingleFileFromRegistry(
     : undefined
 
   const clientOptions = buildRegistryClientOptions({
-    sdkConfig: getConfig(),
+    config: getConfig(),
     outputFile: modelPath,
     onProgress,
     signal

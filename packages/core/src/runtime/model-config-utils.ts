@@ -44,7 +44,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
 // Ordered general → specific (later patterns override earlier)
 export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
   {
-    name: 'Android devices (SDK default)',
+    name: 'Android devices (default)',
     match: {
       platform: 'android'
     },
@@ -53,7 +53,7 @@ export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
     }
   },
   {
-    name: 'Pixel devices (SDK default)',
+    name: 'Pixel devices (default)',
     match: {
       platform: 'android',
       deviceBrand: 'google',

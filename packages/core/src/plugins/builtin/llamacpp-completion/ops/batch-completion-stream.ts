@@ -1,5 +1,10 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { BatchCompletionStreamPrompt, CompletionStats, ResponseFormat, Tool } from '../../../../schemas'
+import type {
+  BatchCompletionStreamPrompt,
+  CompletionStats,
+  ResponseFormat,
+  Tool
+} from '../../../../schemas'
 import { TOOLS_MODE } from '../../../../schemas/tools'
 import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry'
 import type { DisposableScope } from '../../../../runtime/disposable-scope'
@@ -102,7 +107,7 @@ function renderPromptHistory(
         : prependToolsToHistory(prompt.history, tools)
   }
 
-  // Uses the same attachment expansion as single completion: each SDK
+  // Uses the same attachment expansion as single completion: each
   // attachment becomes an addon `type: "media"` message before the text turn.
   return transformMessages(historyWithTools)
 }

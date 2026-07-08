@@ -413,7 +413,7 @@ export async function textToSpeechStream(
   let consumed = false
   // `closed` flips on `end()` or `destroy()`. Without this guard a late
   // `write()` would propagate a raw Bare/Node "write after end" stream error
-  // to the caller. Throwing a typed SDK error keeps the duplex session
+  // to the caller. Throwing a typed error keeps the duplex session
   // surface predictable.
   let closed = false
 
