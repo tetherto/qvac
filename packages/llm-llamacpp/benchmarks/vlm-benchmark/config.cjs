@@ -37,9 +37,21 @@ const SHA = {
 // below is byte-identical to the registry's canonical source.
 const QWEN_REG = { license: 'Apache-2.0', link: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF' }
 
+// Quant variant parsed from a GGUF filename (Q8_0, Q4_K_M, IQ2_XS, F16, BF16…).
+// Appended to the human origin label so the report's "Models & origins" table shows
+// the MAIN model's quant the same way the hand-written mmproj labels always did.
+// Boundary-anchored so "BF16" is not misread as "F16" (and app-log noise can't match).
+function quantOf (file) {
+  const m = String(file).match(/(?:^|[-._])((?:I?Q\d+_[A-Z0-9_]+|F16|BF16|F32))(?=[-._]|$)/i)
+  return m ? m[1] : null
+}
+
 // hf-source blob helper: { modelName (local cache file), origin (human label),
-// source (fetch plan), registry? (mark as a registry entry) }.
+// source (fetch plan), registry? (mark as a registry entry) }. The quant variant is
+// auto-appended to the label unless it already carries it (mmproj labels do).
 function hf (modelName, origin, repo, sha, file, registry) {
+  const q = quantOf(file)
+  if (q && !origin.includes(q)) origin += ` · ${q}`
   return { modelName, origin, registry, source: { type: 'hf', repo, sha, file } }
 }
 
