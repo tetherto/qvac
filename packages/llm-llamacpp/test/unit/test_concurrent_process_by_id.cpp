@@ -129,7 +129,8 @@ TEST_F(ConcurrentProcessByIdTest, TwoConcurrentJobsRunIsolatedAndOverlap) {
       test_common::getStatValue(stats, "avgConcurrentSeq");
   EXPECT_GT(avgConcurrentSeq, 1.0)
       << "two id-tagged jobs did not overlap on the scheduler; "
-         "avgConcurrentSeq=" << avgConcurrentSeq;
+         "avgConcurrentSeq="
+      << avgConcurrentSeq;
 }
 
 /// Variant: parallel = 1, single request. The tagged call falls back to the
@@ -186,9 +187,8 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsReportsObservedFigures) {
     EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
     EXPECT_GT(test_common::getStatValue(stats, "promptTokens"), 0.0);
     EXPECT_GE(test_common::getStatValue(stats, "TPS"), 0.0);
-    perJobGenerated +=
-        static_cast<int64_t>(
-            test_common::getStatValue(stats, "generatedTokens"));
+    perJobGenerated += static_cast<int64_t>(
+        test_common::getStatValue(stats, "generatedTokens"));
     EXPECT_TRUE(model->consumeJobStats(id).empty())
         << "per-job stats must be take-once";
   }
@@ -215,12 +215,11 @@ TEST_F(ConcurrentProcessByIdTest, ConcurrentBatchGroupsAggregateOwnStats) {
   config_["n_predict"] = "32";
   auto model = loadModel(); // parallel = 4, micro-batches of 2
 
-  auto runGroup = [&model](
-                      const std::vector<LlamaModel::Prompt>& prompts,
-                      JobId id) {
-    std::any out = model->process(std::any(prompts), id);
-    return std::any_cast<std::vector<std::string>>(out);
-  };
+  auto runGroup =
+      [&model](const std::vector<LlamaModel::Prompt>& prompts, JobId id) {
+        std::any out = model->process(std::any(prompts), id);
+        return std::any_cast<std::vector<std::string>>(out);
+      };
   const std::vector<LlamaModel::Prompt> groupA{
       makePrompt("What is the capital of France? One word."),
       makePrompt("What is two plus two? One word.")};
@@ -246,9 +245,8 @@ TEST_F(ConcurrentProcessByIdTest, ConcurrentBatchGroupsAggregateOwnStats) {
     EXPECT_GT(test_common::getStatValue(stats, "generatedTokens"), 0.0);
     EXPECT_GT(test_common::getStatValue(stats, "promptTokens"), 0.0);
     EXPECT_GE(test_common::getStatValue(stats, "TPS"), 0.0);
-    perGroupGenerated +=
-        static_cast<int64_t>(
-            test_common::getStatValue(stats, "generatedTokens"));
+    perGroupGenerated += static_cast<int64_t>(
+        test_common::getStatValue(stats, "generatedTokens"));
     EXPECT_TRUE(model->consumeJobStats(id).empty());
   }
 
@@ -283,15 +281,13 @@ TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
   ASSERT_FALSE(stats.empty());
   const auto generic = model->runtimeStats();
   EXPECT_EQ(
-      static_cast<int64_t>(
-          test_common::getStatValue(stats, "generatedTokens")),
+      static_cast<int64_t>(test_common::getStatValue(stats, "generatedTokens")),
       static_cast<int64_t>(
           test_common::getStatValue(generic, "generatedTokens")))
       << "a full-width group IS the epoch: group counts == aggregate";
   EXPECT_EQ(
       static_cast<int64_t>(test_common::getStatValue(stats, "promptTokens")),
-      static_cast<int64_t>(
-          test_common::getStatValue(generic, "promptTokens")));
+      static_cast<int64_t>(test_common::getStatValue(generic, "promptTokens")));
   EXPECT_GT(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0)
       << "full-width admission must actually decode in parallel";
 }

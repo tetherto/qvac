@@ -45,7 +45,8 @@ struct Request {
   /// the first sampled token, advanced by every sample (see
   /// sampleAndAppendIdle). Batch-shared decode makes an isolated per-request
   /// compute rate unmeasurable; these give the observed timeline instead.
-  std::optional<std::chrono::steady_clock::time_point> firstTokenAt, lastTokenAt;
+  std::optional<std::chrono::steady_clock::time_point> firstTokenAt,
+      lastTokenAt;
 
   Request(
       uint32_t rid, PrefillPlan&& plan, unsigned maxTokens,

@@ -140,8 +140,8 @@ public:
   /// its `seqId` is recorded against @p id so `cancelById` can target it.
   /// Ineligible inputs or a model without a scheduler fall back to the
   /// single-job path.
-  std::any process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id)
-      final;
+  std::any
+  process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id) final;
 
   /// Cancel the in-flight job admitted under @p id by cancelling its scheduler
   /// slot. No-op when @p id is unknown (already finished or never admitted).

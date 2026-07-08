@@ -804,8 +804,7 @@ std::any LlamaModel::process(
   if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
     return process(input);
   }
-  if (isSingle &&
-      !isConcurrentEligible(std::any_cast<const Prompt&>(input))) {
+  if (isSingle && !isConcurrentEligible(std::any_cast<const Prompt&>(input))) {
     return process(input);
   }
   std::shared_lock lock(stateMtx_);
@@ -1237,20 +1236,20 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
         onSeqAssigned(requestIndex, seqId);
       }
     };
-    sr.streams.onToken = [userCb = prompt.outputCallback, notifySeq](
-                             uint32_t seqId, const std::string& piece) {
+    sr.streams.onToken = [userCb = prompt.outputCallback,
+                          notifySeq](uint32_t seqId, const std::string& piece) {
       notifySeq(seqId);
       if (userCb) {
         userCb(piece);
       }
     };
-    sr.streams.onDone = [notifySeq, onSeqDone, requestIndex = i](
-                            uint32_t seqId) {
-      notifySeq(seqId);
-      if (onSeqDone) {
-        onSeqDone(requestIndex, seqId);
-      }
-    };
+    sr.streams.onDone =
+        [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
+          notifySeq(seqId);
+          if (onSeqDone) {
+            onSeqDone(requestIndex, seqId);
+          }
+        };
 
     requests.push_back(std::move(sr));
   }
