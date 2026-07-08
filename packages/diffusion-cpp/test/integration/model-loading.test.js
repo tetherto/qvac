@@ -22,16 +22,14 @@ const BASE_TIMEOUT = 600_000
 const testTimeout = (isWindows || isMobile) ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 const DEFAULT_MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 safeTest('model loading - load and unload', { timeout: testTimeout }, async t => {
   let addon = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name,
-      downloadUrl: DEFAULT_MODEL.url
+      modelName: DEFAULT_MODEL.name
     })
 
     const config = {
