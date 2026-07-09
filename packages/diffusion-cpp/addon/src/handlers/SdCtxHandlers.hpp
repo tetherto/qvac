@@ -46,12 +46,12 @@ struct SdCtxConfig {
                                            // -- Wan 2.2 high-noise expert.
                                            // Leave empty for Wan 2.1 / all
                                            // non-Wan models.
-  std::string uncondDiffusionModelPath; // uncond_diffusion_model_path
-                                        // -- Ideogram 4 unconditional (CFG)
-                                        // diffusion model. Loaded alongside
-                                        // diffusionModelPath so real
-                                        // classifier-free guidance works.
-                                        // Empty for all other models.
+  std::string uncondDiffusionModelPath;    // uncond_diffusion_model_path
+                                           // -- Ideogram 4 unconditional (CFG)
+                                           // diffusion model. Loaded alongside
+                                           // diffusionModelPath so real
+                                           // classifier-free guidance works.
+                                           // Empty for all other models.
   std::string clipLPath; // clip_l_path           -- CLIP-L text encoder (SD3
                          // split / SDXL)
   std::string clipGPath; // clip_g_path           -- CLIP-G text encoder (SD3

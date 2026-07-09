@@ -221,12 +221,16 @@ void SdModel::load() {
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
 
-  // Upstream's master backend refactor replaced the standalone
-  // offload_params_to_cpu / keep_clip_on_cpu / keep_vae_on_cpu flags with the
-  // backend/params_backend spec strings. Preserve the legacy "offload params to
-  // CPU" intent by storing all parameters on the CPU backend (they are copied
-  // to the compute backend per use), which keeps GPU VRAM free on constrained
-  // setups -- exactly what offload_to_cpu meant before.
+  // Keep reusable ctx semantics explicit. sd.cpp defaults may free parameter
+  // buffers after a generation, but this addon runs many jobs through one
+  // sd_ctx_t.
+  params.free_params_immediately = config_.freeParamsImmediately;
+  params.offload_params_to_cpu = config_.offloadToCpu;
+  params.keep_clip_on_cpu = config_.keepClipOnCpu;
+  params.keep_vae_on_cpu = config_.keepVaeOnCpu;
+
+  // Also set the newer backend spec so offload intent survives sd.cpp builds
+  // that route parameter placement through params_backend.
   params.params_backend = config_.offloadToCpu ? "cpu" : nullptr;
 
   params.preferred_gpu_backend =
@@ -288,11 +292,6 @@ void SdModel::load() {
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
-
-  // NOTE: upstream's master backend refactor dropped the free_params_immediately
-  // flag; parameter lifetime is now owned by the model/backend managers, so the
-  // single-ctx reuse this addon relies on no longer needs the explicit opt-out
-  // that previously prevented a use-after-free on the second generation.
 
   sd_ctx_t* raw = new_sd_ctx(&params);
   if (!raw) {
