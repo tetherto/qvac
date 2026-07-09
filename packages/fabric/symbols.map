@@ -1,0 +1,54 @@
+{
+  global:
+    # Bare / Node-API runtime entry points (required for the .bare module).
+    bare_*;
+    napi_*;
+    js_*;
+
+    # llama.cpp public C API.
+    llama_*;
+    llava_*;
+    mtmd_*;
+
+    # llama.cpp build-info globals (from llama::build_info), e.g.
+    # LLAMA_BUILD_NUMBER / LLAMA_COMMIT, referenced by libcommon.
+    LLAMA_*;
+
+    # ggml public C API (also consumed by the dlopen'd backend .so files at
+    # runtime via ggml_backend_load_all_from_path, which resolve these symbols
+    # from this single loaded module).
+    ggml_*;
+    gguf_*;
+
+    # C++-linkage symbols consumed by the addons. Matched against *demangled*
+    # names, so the patterns are the source-level names (no _Z mangling).
+    # Patterns must stay unquoted: quoting would turn them into literal
+    # (non-wildcard) symbol names.
+    #
+    #  - common_* / json_schema_to_grammar: libcommon helpers (common_tokenize,
+    #    common_sampler_*, common_chat_*, ...).
+    #  - llama_* / llava_* / mtmd_*: the qvac-fabric fork adds C++-linkage
+    #    extensions alongside the stock C API (e.g. llama_model_meta_from_file,
+    #    which takes a std::unique_ptr). The C patterns above only cover the
+    #    extern "C" entry points, so these must be listed here as well.
+    #  - gguf_*: same rationale for the gguf helpers.
+    extern "C++" {
+      common_*;
+      json_schema_to_grammar*;
+      llama_*;
+      llava_*;
+      mtmd_*;
+      gguf_*;
+      ggml_*;
+      # Free helpers declared in common.h / qvac-fabric extensions that do not
+      # share the common_ prefix (e.g. string_format, the cpu_params helpers and
+      # the llama_metadata_handle deleter).
+      string_*;
+      set_process_priority*;
+      postprocess_cpu_params*;
+      metadata_handle_deleter*;
+    };
+
+  local:
+    *;
+};
