@@ -804,13 +804,34 @@ std::any LlamaModel::process(
   if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
     return process(input);
   }
-  if (isSingle && !isConcurrentEligible(std::any_cast<const Prompt&>(input))) {
+  // A tagged single-path prompt owns no scheduler slot: its cancel action
+  // stops the single-prompt context. The run-counter gate keeps a late
+  // cancel from leaving a stale stop flag on an idle engine; the action runs
+  // under the canceller's shared stateMtx_ (see cancelById), so state_ stays
+  // valid.
+  const auto processSinglePath = [this, &input, id] {
+    liveJobs_.add(id, [this] {
+      if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
+        state_->llmContext_->stop();
+      }
+    });
+    ScopeGuard registrationGuard([this, id] { liveJobs_.remove(id); });
     return process(input);
+  };
+  if (isSingle) {
+    const auto& prompt = std::any_cast<const Prompt&>(input);
+    // Finetune keeps the whole-model cancel semantics: never registered.
+    if (prompt.finetuningParams.has_value()) {
+      return process(input);
+    }
+    if (!isConcurrentEligible(prompt)) {
+      return processSinglePath();
+    }
   }
   std::shared_lock lock(stateMtx_);
   if (!state_ || !state_->batchScheduler_) {
     lock.unlock();
-    return process(input);
+    return isSingle ? processSinglePath() : process(input);
   }
   if (isBatch) {
     return {processConcurrentBatch(
@@ -835,25 +856,28 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
 
 std::string LlamaModel::processConcurrent(
     const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
-  ScopeGuard mapGuard([this, id] {
-    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
-    jobToSeq_.erase(id);
-  });
+  // Registered before submission so a cancel arriving while the request is
+  // still queued for a slot is parked instead of dropped as an unknown id.
+  liveJobs_.add(id);
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
-  // Record the slot the moment the scheduler assigns it. cancelById() runs on
-  // a different thread (never inside this observer), so it can safely take the
-  // batch scheduler's lock to cancel the recorded slot.
-  const SeqObserver onSeqAssigned = [this, id](size_t, uint32_t seqId) {
-    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
-    jobToSeq_[id] = seqId;
+  // Bind the slot teardown as the cancel action at admission, before the
+  // slot decodes anything. The action never runs inside this observer
+  // (cancelById is another thread), so it may take the scheduler lock; it
+  // runs under the canceller's shared stateMtx_, so state_ stays valid.
+  const SeqAssignedObserver onSeqAssigned = [this, id](size_t, uint32_t seqId) {
+    return liveJobs_.bind(id, [this, seqId] {
+      if (state_ && state_->batchScheduler_) {
+        state_->batchScheduler_->cancel(seqId);
+      }
+    });
   };
-  // Drop the binding the moment the slot ends. The scheduler frees the seqId
+  // Drop the job the moment the slot ends. The scheduler frees the seqId
   // here and may hand it to a peer job before this call returns and mapGuard
-  // runs; releasing now stops the stale binding from making cancelById target
+  // runs; removing now stops the stale action from making cancelById target
   // that peer's slot.
   const SeqObserver onSeqDone = [this, id](size_t, uint32_t) {
-    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
-    jobToSeq_.erase(id);
+    liveJobs_.remove(id);
   };
 
   const std::vector<Prompt> singleBatch{prompt};
@@ -902,20 +926,13 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
 }
 
 void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
+  // The shared lock keeps state_ alive for whatever cancel action runs —
+  // each job registered the action that stops its own engine.
   std::shared_lock lock(stateMtx_);
-  if (!state_ || !state_->batchScheduler_) {
+  if (!state_) {
     return;
   }
-  std::optional<uint32_t> seqId;
-  {
-    std::lock_guard<std::mutex> mapLock(jobSeqMtx_);
-    if (auto found = jobToSeq_.find(id); found != jobToSeq_.end()) {
-      seqId = found->second;
-    }
-  }
-  if (seqId.has_value()) {
-    state_->batchScheduler_->cancel(*seqId);
-  }
+  liveJobs_.cancel(id);
 }
 
 LlamaModel::ResolvedPrompt
@@ -1125,8 +1142,8 @@ bool LlamaModel::supportsBatching() const {
 }
 
 batching::BatchResult LlamaModel::processPromptBatchImpl(
-    const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned,
-    const SeqObserver& onSeqDone) {
+    const std::vector<Prompt>& prompts,
+    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone) {
   // `onSeqAssigned` (optional) fires once per request when the scheduler
   // assigns its seqId. Serialize the entry section (prior-count check, cache
   // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
@@ -1227,15 +1244,16 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
-    // `seen` fires the seq observer exactly once per slot, on whichever of
-    // onToken/onDone runs first, so the job id binds to its `seqId` even when
-    // the slot is cancelled or ends before emitting a token.
+    // `seen` fires the seq observer exactly once per slot: at admission
+    // (onAdmitted), with onToken/onDone as a fallback latch.
     auto seen = std::make_shared<std::atomic<bool>>(false);
     auto notifySeq = [onSeqAssigned, seen, requestIndex = i](uint32_t seqId) {
       if (onSeqAssigned && !seen->exchange(true)) {
-        onSeqAssigned(requestIndex, seqId);
+        return onSeqAssigned(requestIndex, seqId);
       }
+      return false;
     };
+    sr.streams.onAdmitted = notifySeq;
     sr.streams.onToken = [userCb = prompt.outputCallback,
                           notifySeq](uint32_t seqId, const std::string& piece) {
       notifySeq(seqId);
