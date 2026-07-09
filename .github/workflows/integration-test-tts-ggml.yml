@@ -29,6 +29,10 @@ on:
 
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/tts-ggml@1.0.0)"
+        type: string
+        required: false
       ref:
         description: 'ref'
         type: string
