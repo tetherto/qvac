@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -34,6 +35,53 @@ public:
       std::shared_ptr<OutputQueue> /*outputQueue*/) override {}
   void notify() override {}
   void stop() override { stopped_ = true; }
+};
+
+/// Samples a probe (the scheduler's activeJobs()) at every notify(), i.e. at
+/// the exact moment an event becomes observable to the consumer. notify()
+/// runs on the scheduler's worker thread, which holds no scheduler lock while
+/// publishing, so sampling activeJobs() here is deadlock-free.
+class ActiveJobsProbeCallback final : public MockOutputCallback {
+  std::function<std::size_t()> sample_;
+  mutable std::mutex mtx_;
+  std::vector<std::size_t> samples_;
+
+public:
+  void setSampler(std::function<std::size_t()> sample) {
+    sample_ = std::move(sample);
+  }
+
+  void notify() override {
+    if (sample_) {
+      const std::size_t value = sample_();
+      std::lock_guard lock(mtx_);
+      samples_.push_back(value);
+    }
+  }
+
+  std::vector<std::size_t> samples() const {
+    std::lock_guard lock(mtx_);
+    return samples_;
+  }
+
+  /// Blocks until at least @p count samples were recorded or the timeout
+  /// lapses. The publishing happens after the slot release, so waitForIdle
+  /// alone cannot guarantee the samples are already recorded.
+  bool waitForSamples(std::size_t count, std::chrono::milliseconds timeout) {
+    const std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      {
+        std::lock_guard lock(mtx_);
+        if (samples_.size() >= count) {
+          return true;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    std::lock_guard lock(mtx_);
+    return samples_.size() >= count;
+  }
 };
 
 /// Concurrent test model whose per-job process() blocks until its id is
@@ -960,6 +1008,60 @@ TEST_F(MultiJobSchedulerTest, CancelMiddleQueuedJobKeepsPeers) {
 
   EXPECT_EQ(tracking->startOrder(), (std::vector<JobId>{1, 2, 4}))
       << "survivors must keep FIFO (submission) order after the middle erase";
+}
+
+/// A consumer reacting to a job's terminal event (the JS run loop reacting to
+/// jobEnded) may immediately admit a follow-up job. If the scheduler still
+/// counts the finished job's slot as admitted at that moment, the follow-up
+/// admission is spuriously refused as busy. Every published event must
+/// therefore observe the slot already released: activeJobs() == 0 at every
+/// notify() of a lone job's result and jobEnded events.
+TEST_F(MultiJobSchedulerTest, SlotReleasedBeforeTerminalEventsPublished) {
+  auto probe = std::make_unique<ActiveJobsProbeCallback>();
+  ActiveJobsProbeCallback* probeRaw = probe.get();
+  model_ = std::make_unique<ConcurrentTestModel>(std::chrono::milliseconds{5});
+  callback_ = std::move(probe);
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 1, model_.get(), model_.get(), 0);
+  probeRaw->setSampler([this] { return scheduler_->activeJobs(); });
+  scheduler_->start(outputQueue_);
+
+  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+  // A successful job publishes two events: its result and its jobEnded.
+  ASSERT_TRUE(probeRaw->waitForSamples(2, std::chrono::seconds{5}));
+
+  for (const std::size_t active : probeRaw->samples()) {
+    EXPECT_EQ(active, 0u)
+        << "an event became observable while the scheduler still counted "
+           "the finished job's slot as admitted";
+  }
+}
+
+/// Same invariant for the error path: the terminal exception event of a
+/// throwing job must also observe the slot already released.
+TEST_F(MultiJobSchedulerTest, SlotReleasedBeforeErrorEventPublished) {
+  auto probe = std::make_unique<ActiveJobsProbeCallback>();
+  ActiveJobsProbeCallback* probeRaw = probe.get();
+  auto model =
+      std::make_unique<ConcurrentTestModel>(std::chrono::milliseconds{5});
+  model->throwForId(JobId{1});
+  model_ = std::move(model);
+  callback_ = std::move(probe);
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 1, model_.get(), model_.get(), 0);
+  probeRaw->setSampler([this] { return scheduler_->activeJobs(); });
+  scheduler_->start(outputQueue_);
+
+  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+  ASSERT_TRUE(probeRaw->waitForSamples(1, std::chrono::seconds{5}));
+
+  for (const std::size_t active : probeRaw->samples()) {
+    EXPECT_EQ(active, 0u)
+        << "the terminal error event became observable while the scheduler "
+           "still counted the failed job's slot as admitted";
+  }
 }
 
 } // namespace qvac_lib_inference_addon_cpp
