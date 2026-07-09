@@ -14,6 +14,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     const message = err.message ?? 'An internal error occurred.'
 
     if (reply.raw.headersSent) {
+      app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
       sendSSE(reply.raw, {
         error: {
           message,
@@ -63,7 +64,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
 
     if (isResponseSerializationError(err)) {
-      req.server.qvac.logger.error(
+      app.qvac.logger.error(
         formatServerError('response_serialization_error', req.method, req.url, err)
       )
       reply.code(500).send({
@@ -90,7 +91,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       return
     }
 
-    req.server.qvac.logger.error(formatServerError('unhandled', req.method, req.url, err))
+    app.qvac.logger.error(formatServerError('unhandled', req.method, req.url, err))
     reply.code(500).send({
       error: {
         message: 'An internal error occurred.',
