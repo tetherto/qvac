@@ -17,6 +17,10 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/bci-whispercpp@1.0.0). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
       include_desktop:
         description: "Run desktop (CPU/GPU) RTF benchmark matrix"
         required: false
@@ -95,14 +99,14 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
 
   desktop-benchmarks:
     needs:
       - context
       - prebuild
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false')
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -112,6 +116,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
       run_integration_tests: false
       run_rtf_benchmarks: true
 
@@ -120,7 +125,7 @@ jobs:
       - context
       - prebuild
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false')
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -131,6 +136,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
 
   summarize:
     needs:
