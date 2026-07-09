@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
+  now runs on the GPU when the model is constructed with the GPU enabled (the
+  same `useGPU` / `nGpuLayers` config the engine uses) — Vulkan on Windows/Linux,
+  Metal on macOS/iOS — and falls back to the CPU otherwise.
+- **Enhancer backend surfaced in `runtimeStats()`.** Both the Chatterbox and
+  Supertonic models now report `enhancerBackendDevice` (`-1` none / `0` CPU /
+  `1` GPU) and `enhancerBackendId` (the ggml backend id, e.g. `3` for Vulkan),
+  so hosts can confirm where the enhancer actually ran.
+- Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
+
 ## [0.4.2] - 2026-07-08
 
 ### Fixed

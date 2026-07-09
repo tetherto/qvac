@@ -822,30 +822,26 @@ safeTest('Qwen3.5 batch path does not inflate TTFT with recurrent replay', {
   t.ok(toNumber(on.stats.thinkingBlockDiscards) >= 1,
     'compaction-on batch must actually drop a reasoning block (otherwise no replay decode ran)')
 
-  // Tolerance: TTFT is wall-clock and noisy across runs, so we don't
-  // pin equality. We pin the regression shape: without the fix the
-  // on-run TTFT is inflated by the entire replay-decode time. Use a
-  // 1.5x ratio when the baseline is large enough for the ratio to be
-  // meaningful, and fall back to a 5 ms absolute floor on hosts where
-  // prefill itself is in the low-ms range (e.g. iOS Metal with a short
-  // prompt) so sub-ms GPU-dispatch variance is not read as a signal.
-  // The replay-inflation bug is far above either bound in practice.
+  // Batch TTFT and ppTPS are both derived from the same scheduler-owned
+  // prefill timer. Pin that internal contract instead of comparing two
+  // independent wall-clock runs: the off/on comparison is noisy on fast GPU
+  // hosts, while this invariant breaks if TTFT falls back to llama.cpp perf
+  // counters that include recurrent replay decode.
   const ttftOff = toNumber(off.stats.TTFT)
   const ttftOn = toNumber(on.stats.TTFT)
   t.ok(ttftOff > 0,
     `batch off-run must report a non-zero TTFT (got ${ttftOff})`)
   t.ok(ttftOn > 0,
     `batch on-run must report a non-zero TTFT (got ${ttftOn})`)
-  if (isLinuxArm64) {
-    t.comment(
-      `linux-arm64: skipping TTFT delta check (off=${ttftOff}ms, on=${ttftOn}ms); ` +
-      'GPU/driver scheduling jitter dominates this low-ms baseline')
-  } else {
-    const ttftSlack = Math.max(ttftOff * 0.5, 5)
-    t.ok(ttftOn <= ttftOff + ttftSlack,
-      `batch TTFT on=${ttftOn}ms must not exceed off=${ttftOff}ms by more than ${ttftSlack}ms — ` +
-      'a larger delta means the recurrent replay decode was counted as user-visible TTFT')
-  }
+  const promptTokensOn = toNumber(on.stats.promptTokens)
+  const ppTpsOn = toNumber(on.stats.ppTPS)
+  t.ok(ppTpsOn > 0,
+    `batch on-run must report non-zero ppTPS (got ${ppTpsOn})`)
+  const derivedPrefillMs = (1000 * promptTokensOn) / ppTpsOn
+  const ttftDiff = Math.abs(ttftOn - derivedPrefillMs)
+  t.ok(ttftDiff <= 0.001,
+    `batch TTFT (${ttftOn}ms) must match scheduler prefill time derived from ` +
+    `promptTokens/ppTPS (${derivedPrefillMs}ms, diff=${ttftDiff}ms)`)
 
   // promptTokens is scheduler-owned (populated by `accumulateSlot` from
   // `prefillTokenCount`, not from `llama_perf_context`), so this should
