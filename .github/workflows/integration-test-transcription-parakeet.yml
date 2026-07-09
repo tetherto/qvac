@@ -179,6 +179,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      # Cache key is derived from test/integration/models.manifest.json (the
+      # single source of truth for the staged set), NOT this workflow file — so
+      # unrelated edits here (timeouts, the RTF benchmark matrix, comments) no
+      # longer churn the multi-GB model cache. `warm: false` because parakeet
+      # models come from S3 (staged below), not from HuggingFace URLs, so the
+      # cache-models HTTP warm downloader does not apply.
       - name: Cache Parakeet GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -186,18 +192,16 @@ jobs:
         with:
           package: transcription-parakeet
           paths: packages/transcription-parakeet/models
-          hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
+          warm: 'false'
           enable-cross-os: 'false'
 
       # Stage every desktop quantisation the RTF benchmark matrix sweeps
-      # (f16 + q8_0 + q4_0), mirroring the registry prefixes encoded in
-      # test/integration/helpers.js MODEL_CONFIGS:
-      #   - f16        -> parakeet/2026-07-01 (all four model types)
-      #   - q8_0       -> parakeet/2026-05-11 (all four model types)
-      #   - q4_0       -> parakeet/2026-05-27 (tdt / eou / sortformer)
-      #   - ctc q4_0   -> parakeet/2026-07-01 (ctc q4_0 lives with the f16 set)
-      # Mobile q4_0 / q8_0 coverage is handled by the Device Farm workflow.
-      - name: Download Parakeet GGUFs from QVAC registry (f16 + q8_0 + q4_0)
+      # (f16 + q8_0 + q4_0). The staged set + its S3 paths are declared once in
+      # test/integration/models.manifest.json (also the cache-key source); the
+      # script copies each object from s3://$MODEL_S3_BUCKET/<s3Path>. Keeping
+      # the download list in the manifest guarantees the cache key and the fetch
+      # can never drift. Mobile q4_0 / q8_0 coverage is handled by Device Farm.
+      - name: Stage Parakeet GGUFs from QVAC registry (manifest-driven)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
@@ -205,23 +209,7 @@ jobs:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           set -euo pipefail
-          mkdir -p models
-          # f16 for all four model types + ctc q4_0 (both live under 2026-07-01).
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-07-01/" models/ \
-            --recursive --exclude "*" --include "*.f16.gguf" --include "parakeet-ctc-0.6b.q4_0.gguf"
-          # q8_0 for all four model types.
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-11/" models/ \
-            --recursive --exclude "*" \
-            --include "parakeet-tdt-0.6b-v3.q8_0.gguf" \
-            --include "parakeet-ctc-0.6b.q8_0.gguf" \
-            --include "parakeet-eou-120m-v1.q8_0.gguf" \
-            --include "sortformer-4spk-v1.q8_0.gguf"
-          # q4_0 for tdt / eou / sortformer (ctc q4_0 already fetched above).
-          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/ggml/parakeet/2026-05-27/" models/ \
-            --recursive --exclude "*" \
-            --include "parakeet-tdt-0.6b-v3.q4_0.gguf" \
-            --include "parakeet-eou-120m-v1.q4_0.gguf" \
-            --include "sortformer-4spk-v1.q4_0.gguf"
+          node scripts/stage-integration-models.mjs
           ls -lh models/
 
       - name: Run integration test

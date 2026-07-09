@@ -1,0 +1,67 @@
+{
+  "cacheEpoch": 1,
+  "source": "s3",
+  "_comment": "Single source of truth for the transcription-parakeet integration test model set. Consumed by scripts/stage-integration-models.mjs (CI staging via `aws s3 cp s3://$MODEL_S3_BUCKET/<s3Path>`) and by .github/actions/cache-models for the cache key. Because the key is hashFiles(this file), unrelated edits to integration-test-transcription-parakeet.yml no longer churn the multi-GB model cache; only changing the staged set does. Models come from S3 (not HuggingFace), so the cache-models `warm` step is disabled. `bytes`/`sha256` are pinned by scripts/generate-model-manifest.mjs from staged files; null means unpinned (size/integrity checks are skipped for that entry until pinned). Bump cacheEpoch to force a hard cache eviction. The s3Path date prefixes mirror the registry prefixes in test/integration/helpers.js MODEL_CONFIGS.",
+  "models": {
+    "parakeet-tdt-0.6b-v3.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-ctc-0.6b.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-eou-120m-v1.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "sortformer-4spk-v1.f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-ctc-0.6b.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-tdt-0.6b-v3.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-ctc-0.6b.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-eou-120m-v1.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "sortformer-4spk-v1.q8_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-tdt-0.6b-v3.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "parakeet-eou-120m-v1.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+      "sha256": null,
+      "bytes": null
+    },
+    "sortformer-4spk-v1.q4_0.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/parakeet/2026-05-27/sortformer-4spk-v1.q4_0.gguf",
+      "sha256": null,
+      "bytes": null
+    }
+  }
+}
