@@ -19,7 +19,7 @@ class BatchHandler {
    * @param {Function} deps.cancelHandler - cancels the in-flight job
    * @param {Function} deps.runJob - (items) => Promise<{accepted, ids}> admission result
    */
-  constructor ({ job, parsePrompt, cancelHandler, runJob }) {
+  constructor({ job, parsePrompt, cancelHandler, runJob }) {
     this._job = job
     this._parsePrompt = parsePrompt
     this._cancelHandler = cancelHandler
@@ -33,19 +33,18 @@ class BatchHandler {
    * `Message[]` prompts or `{ id?, prompt, runOptions? }` wrappers; the
    * single-prompt path keeps the legacy `Message[]` shape.
    */
-  static isBatchInput (prompt) {
+  static isBatchInput(prompt) {
     if (!Array.isArray(prompt) || prompt.length === 0) return false
     const first = prompt[0]
-    return Array.isArray(first) ||
-      (
-        first &&
-        typeof first === 'object' &&
-        !Array.isArray(first) &&
-        Array.isArray(first.prompt)
-      )
+    return (
+      Array.isArray(first) ||
+      (first && typeof first === 'object' && !Array.isArray(first) && Array.isArray(first.prompt))
+    )
   }
 
-  get isActive () { return this._activeIds !== null }
+  get isActive() {
+    return this._activeIds !== null
+  }
 
   /**
    * Ship a batch input to the native addon. Returns the `QvacResponse`
@@ -53,7 +52,7 @@ class BatchHandler {
    * Caller guards against busy state before invoking; this method only
    * mutates active-batch state once admission succeeds.
    */
-  async run (batchInput) {
+  async run(batchInput) {
     const items = this._unwrapItems(batchInput)
     const response = new QvacResponse({ cancelHandler: this._cancelHandler })
     this._job.startWith(response)
@@ -77,12 +76,12 @@ class BatchHandler {
   }
 
   /** Forward a streaming `BatchOutput` event into the active job. */
-  onOutput (data) {
+  onOutput(data) {
     this._job.output({ id: data.id, chunk: data.output })
   }
 
   /** Stash the final ordered output array so JobEnded can package it. */
-  onResult (data) {
+  onResult(data) {
     this._pendingResult = data
   }
 
@@ -91,7 +90,7 @@ class BatchHandler {
    * the consumer-facing `await()` resolves with. Returns `null` for
    * non-batch jobs so the caller can fall back to its own JobEnded path.
    */
-  buildFinalResultIfActive () {
+  buildFinalResultIfActive() {
     if (!this._activeIds) return null
     const outputs = Array.isArray(this._pendingResult) ? this._pendingResult : []
     return this._activeIds.map((id, index) => ({
@@ -101,17 +100,15 @@ class BatchHandler {
   }
 
   /** Drop active-batch state; called from the response-finalized hook. */
-  clear () {
+  clear() {
     this._activeIds = null
     this._pendingResult = null
   }
 
-  _unwrapItems (batchInput) {
+  _unwrapItems(batchInput) {
     return batchInput.map((item) => {
-      const isWrapped = item &&
-        typeof item === 'object' &&
-        !Array.isArray(item) &&
-        Array.isArray(item.prompt)
+      const isWrapped =
+        item && typeof item === 'object' && !Array.isArray(item) && Array.isArray(item.prompt)
       const prompt = isWrapped ? item.prompt : item
       const itemRunOptions = isWrapped && item.runOptions !== undefined ? item.runOptions : {}
       const unwrapped = { messages: this._parsePrompt(prompt, itemRunOptions) }
