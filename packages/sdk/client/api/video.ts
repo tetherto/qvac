@@ -27,10 +27,13 @@ export interface VideoResult {
  * @param params - Video request parameters (model, prompt, dimensions, frame count, fps, sampler, seed, etc.).
  * @returns A result object exposing `requestId` (stable identifier for this in-flight generation), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated video buffers, typically a single AVI file), and `stats` (promise of generation statistics).
  *
- * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video). For `img2vid`,
- * load the Wan pipeline with `modelConfig.clipVisionModelSrc` set to
- * `clip_vision_h.safetensors`. On React Native, prefer a `modelId` loaded with a
- * `delegate` since the bundled video diffusion models are too large for typical mobile devices.
+ * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video) for both the
+ * Wan and LTX-2 layouts. For Wan `img2vid`, load the pipeline with
+ * `modelConfig.clipVisionModelSrc` set to `clip_vision_h.safetensors`; LTX-2
+ * `img2vid` conditions on the first frame through its video VAE and needs no
+ * CLIP vision weights (the same LTX-2 model loaded for txt2vid also does
+ * img2vid). On React Native, prefer a `modelId` loaded with a `delegate` since
+ * the bundled video diffusion models are too large for typical mobile devices.
  *
  * @example Basic txt2vid generation
  * ```typescript

@@ -39,6 +39,8 @@ type DiffusionArtifactKey =
   | 'llmModelPath'
   | 'vaeModelPath'
   | 'highNoiseDiffusionModelPath'
+  | 'audioVaeModelPath'
+  | 'embeddingsConnectorsModelPath'
   | 'esrganModelPath'
 
 // Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
@@ -107,9 +109,32 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
+      audioVaeModelSrc,
+      embeddingsConnectorsModelSrc,
       upscaler,
       ...rest
     } = cfg
+
+    // audioVae / embeddingsConnectors are LTX-2 video companions. Reject them
+    // up front — before any companion download — when the selected layout
+    // can't consume them, instead of silently resolving the file and then
+    // dropping it in createModel. Both fields are new, so this cannot break
+    // existing callers.
+    if (embeddingsConnectorsModelSrc && cfg.mode !== 'video') {
+      throw new ModelLoadFailedError(
+        'modelConfig.embeddingsConnectorsModelSrc selects the LTX-2 video ' +
+          "layout and is only valid with mode: 'video'."
+      )
+    }
+    if (audioVaeModelSrc && !(cfg.mode === 'video' && embeddingsConnectorsModelSrc)) {
+      throw new ModelLoadFailedError(
+        'modelConfig.audioVaeModelSrc is LTX-2 video only. It requires ' +
+          "mode: 'video' together with modelConfig.embeddingsConnectorsModelSrc " +
+          '(which selects the LTX-2 layout). Add embeddingsConnectorsModelSrc ' +
+          'or remove audioVaeModelSrc.'
+      )
+    }
+
     // Video jobs do not apply ESRGAN so we drop the whole `upscaler` object.
     const effectiveUpscaler = cfg.mode === 'video' ? undefined : upscaler
     const { model_src: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
@@ -126,6 +151,8 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
+      audioVaeModelSrc,
+      embeddingsConnectorsModelSrc,
       esrganModelSrc
     }
     const hasSources = Object.values(sources).some(Boolean)
@@ -143,6 +170,8 @@ export const diffusionPlugin = definePlugin({
       llmModelPath,
       vaeModelPath,
       highNoiseDiffusionModelPath,
+      audioVaeModelPath,
+      embeddingsConnectorsModelPath,
       esrganModelPath
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
@@ -152,6 +181,8 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc ? resolve(llmModelSrc) : undefined,
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
       highNoiseDiffusionModelSrc ? resolve(highNoiseDiffusionModelSrc) : undefined,
+      audioVaeModelSrc ? resolve(audioVaeModelSrc) : undefined,
+      embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined
     ])
 
@@ -165,6 +196,8 @@ export const diffusionPlugin = definePlugin({
         ...(llmModelPath && { llmModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
         ...(highNoiseDiffusionModelPath && { highNoiseDiffusionModelPath }),
+        ...(audioVaeModelPath && { audioVaeModelPath }),
+        ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
         ...(esrganModelPath && { esrganModelPath })
       }
     }
@@ -206,30 +239,58 @@ export const diffusionPlugin = definePlugin({
     }
 
     if (config.mode === 'video') {
-      if (!artifacts?.['t5XxlModelPath']) {
-        throw new ModelLoadFailedError(
-          'modelConfig.t5XxlModelSrc is required in video mode. ' +
-            'Provide the Wan text encoder model before loading the video pipeline.'
-        )
-      }
+      // Layout is selected the same way the addon self-detects it: the
+      // presence of the LTX-2 text-embedding connectors switches from the
+      // Wan layout (UMT5 via t5Xxl) to the LTX-2 layout (Gemma via llm +
+      // video VAE + connectors, optional audio VAE). Mirrors
+      // `SdModel::isLtxModel_ = !embeddingsConnectorsPath.empty()`.
+      const embeddingsConnectorsModelPath = artifacts?.['embeddingsConnectorsModelPath']
+
       if (!artifacts?.['vaeModelPath']) {
         throw new ModelLoadFailedError(
           'modelConfig.vaeModelSrc is required in video mode. ' +
-            'Provide the Wan VAE model before loading the video pipeline.'
+            'Provide the Wan or LTX-2 video VAE model before loading the video pipeline.'
         )
       }
+      const vaeModelPath = artifacts['vaeModelPath']
 
-      const files: VideoStableDiffusionArgs['files'] = {
-        model: modelPath,
-        t5Xxl: artifacts['t5XxlModelPath'],
-        vae: artifacts['vaeModelPath'],
-        ...(artifacts?.['highNoiseDiffusionModelPath'] && {
-          highNoiseDiffusionModel: artifacts['highNoiseDiffusionModelPath']
-        }),
-        ...(artifacts?.['clipVisionModelPath'] && {
-          clipVision: artifacts['clipVisionModelPath']
-        }),
-        ...(artifacts?.['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
+      let files: VideoStableDiffusionArgs['files']
+      if (embeddingsConnectorsModelPath) {
+        if (!artifacts['llmModelPath']) {
+          throw new ModelLoadFailedError(
+            'modelConfig.llmModelSrc is required for LTX-2 video. ' +
+              'Provide the Gemma text encoder model before loading the LTX-2 pipeline.'
+          )
+        }
+        files = {
+          model: modelPath,
+          vae: vaeModelPath,
+          llm: artifacts['llmModelPath'],
+          embeddingsConnectors: embeddingsConnectorsModelPath,
+          ...(artifacts['audioVaeModelPath'] && {
+            audioVae: artifacts['audioVaeModelPath']
+          }),
+          ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
+        }
+      } else {
+        if (!artifacts['t5XxlModelPath']) {
+          throw new ModelLoadFailedError(
+            'modelConfig.t5XxlModelSrc is required in video mode. ' +
+              'Provide the Wan text encoder model before loading the video pipeline.'
+          )
+        }
+        files = {
+          model: modelPath,
+          vae: vaeModelPath,
+          t5Xxl: artifacts['t5XxlModelPath'],
+          ...(artifacts['highNoiseDiffusionModelPath'] && {
+            highNoiseDiffusionModel: artifacts['highNoiseDiffusionModelPath']
+          }),
+          ...(artifacts['clipVisionModelPath'] && {
+            clipVision: artifacts['clipVisionModelPath']
+          }),
+          ...(artifacts['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
+        }
       }
 
       /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -241,6 +302,8 @@ export const diffusionPlugin = definePlugin({
         llmModelSrc,
         vaeModelSrc,
         highNoiseDiffusionModelSrc,
+        audioVaeModelSrc,
+        embeddingsConnectorsModelSrc,
         upscaler,
         mode,
         ...rest

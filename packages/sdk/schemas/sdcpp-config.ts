@@ -58,7 +58,12 @@ export const sdcppConfigSchema = z.object({
         'upscaler, and exposes diffusion({ ... }). ' +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
         'file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). ' +
-        "`'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). " +
+        "`'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). " +
+        'The video layout is selected from the auxiliary sources: supplying ' +
+        '`embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder ' +
+        'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
+        'synchronized audio); otherwise the Wan layout is used (UMT5 text encoder ' +
+        'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
         'shipped by the SDK are too large to load on typical mobile devices; ' +
@@ -127,10 +132,16 @@ export const sdcppConfigSchema = z.object({
     .describe('T5-XXL text encoder model — required for SD3'),
   llmModelSrc: modelSrcInputSchema
     .optional()
-    .describe('LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]'),
+    .describe(
+      'LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for ' +
+        'LTX-2 video (Gemma).'
+    ),
   vaeModelSrc: modelSrcInputSchema
     .optional()
-    .describe('VAE decoder model — required for FLUX.2 [klein], optional for SDXL'),
+    .describe(
+      'VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), ' +
+        'optional for SDXL.'
+    ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
     .optional()
     .describe('High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models'),
@@ -138,7 +149,23 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for ' +
-        'Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines.'
+        'Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. ' +
+        'Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).'
+    ),
+  audioVaeModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Audio VAE decoder model — LTX-2 video only. Enables the synchronized ' +
+        '48 kHz audio track muxed into the output AVI; omit for silent video. ' +
+        'Ignored by the Wan layout.'
+    ),
+  embeddingsConnectorsModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Text-embedding connector weights — required for LTX-2 video. Its ' +
+        'presence selects the LTX-2 video layout (Gemma text encoder via ' +
+        '`llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead ' +
+        'of the Wan layout.'
     ),
   upscaler: z
     .object({
@@ -257,7 +284,18 @@ export const videoStatsSchema = diffusionStatsSchema
     fps: z
       .number()
       .optional()
-      .describe('Frames-per-second metadata for the most recent generated video.')
+      .describe('Frames-per-second metadata for the most recent generated video.'),
+    hasAudio: z
+      .boolean()
+      .optional()
+      .describe(
+        'True when the output AVI includes a muxed audio track (LTX-2 loaded ' +
+          'with audioVaeModelSrc), false otherwise.'
+      ),
+    audioSampleRate: z
+      .number()
+      .optional()
+      .describe('Sample rate (Hz) of the muxed audio track; 0 when there is no audio.')
   })
 
 export type VideoStats = z.infer<typeof videoStatsSchema>
@@ -471,14 +509,20 @@ const videoGenerationBaseSchema = z.object({
     .positive()
     .multipleOf(16)
     .optional()
-    .describe('Video width in pixels (must be a multiple of 16).'),
+    .describe(
+      'Video width in pixels (must be a multiple of 16). LTX-2 additionally ' +
+        'requires a multiple of 32, enforced by the addon at generation time.'
+    ),
   height: z
     .number()
     .int()
     .positive()
     .multipleOf(16)
     .optional()
-    .describe('Video height in pixels (must be a multiple of 16).'),
+    .describe(
+      'Video height in pixels (must be a multiple of 16). LTX-2 additionally ' +
+        'requires a multiple of 32, enforced by the addon at generation time.'
+    ),
   video_frames: z
     .number()
     .int()
@@ -486,7 +530,11 @@ const videoGenerationBaseSchema = z.object({
       message: 'video_frames must be an integer >= 5 of the form (4*k + 1)'
     })
     .optional()
-    .describe('Frame count for the generated video; must satisfy (4*k + 1), where k>=1.'),
+    .describe(
+      'Frame count for the generated video; must satisfy (4*k + 1), where k>=1. ' +
+        'LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, ' +
+        'enforced by the addon at generation time.'
+    ),
   fps: z
     .number()
     .positive()
@@ -550,6 +598,13 @@ const videoGenerationBaseSchema = z.object({
     .optional()
     .describe('VAE tile size override.'),
   vae_tile_overlap: z.number().optional().describe('VAE tile overlap override.'),
+  temporal_tiling: z
+    .boolean()
+    .optional()
+    .describe(
+      'LTX-2 only: tile the video VAE decode along the time axis to cap peak ' +
+        'VRAM for HD / long clips. No effect on Wan (spatial-only VAE).'
+    ),
   cache_mode: cacheModeSchema.optional().describe('Step-caching algorithm.'),
   cache_preset: z
     .string()
