@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.36.2] - 2026-07-09
+## [0.36.3] - 2026-07-09
 
 This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
 
