@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
+  now runs on the GPU when the model is constructed with the GPU enabled (the
+  same `useGPU` / `nGpuLayers` config the engine uses) — Vulkan on Windows/Linux,
+  Metal on macOS/iOS — and falls back to the CPU otherwise.
+- **Enhancer backend surfaced in `runtimeStats()`.** Both the Chatterbox and
+  Supertonic models now report `enhancerBackendDevice` (`-1` none / `0` CPU /
+  `1` GPU) and `enhancerBackendId` (the ggml backend id, e.g. `3` for Vulkan),
+  so hosts can confirm where the enhancer actually ran.
+- Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
+
+## [0.4.2] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.4.1] - 2026-07-07
+
+### Fixed
+
+- **Chatterbox no longer crashes at load on Samsung S25 / Adreno GPU.** The
+  multilingual model's quantized weights were uploaded to the OpenCL backend in
+  partial pieces, which the backend read past and faulted on at model load.
+  Quantized weights are now uploaded whole. Bumps the `tts-cpp` requirement to
+  `2026-07-06`.
+- **T3 (Chatterbox Turbo/MTL) now falls back to CPU per-op instead of aborting
+  when the GPU backend can't run an op.** New shared `sched_dispatch` helper
+  (mirroring the existing S3Gen/Supertonic pattern) walks the graph and only
+  engages a `ggml_backend_sched` fallback when the primary backend can't run
+  every op, so the happy-path direct-compute output is unchanged. S3Gen and
+  Supertonic converge onto the same helper, which also fixes a Supertonic
+  sched graph-reuse corruption bug on natural-sched backends (Adreno). Bumps
+  the `tts-cpp` requirement to `2026-07-07`.
+
+## [0.4.0] - 2026-07-03
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+### Added
+
+- **Chatterbox MTL Chinese (`zh`) synthesis.** `config.language: 'zh'` is now
+  accepted for the multilingual Chatterbox model. Chinese flows through the
+  Cangjie (hanzi → code) tokenizer path, so it requires a `Cangjie5_TC` TSV
+  supplied via `files.cangjieTsvPath` — when it is missing, `tts-cpp` throws a
+  clear error at load instead of silently degrading. Bumps the `tts-cpp`
+  requirement to `2026-07-03#0`, the registry port that adds `zh` to
+  `mtl_tokenizer::supported_languages()` (qvac-ext-lib-whisper.cpp PR #77).
+  The multilingual integration suite replaces its previous `zh` rejection
+  assertion with a real Chinese synthesis test (mirroring the Japanese/MeCab
+  test), and `downloadModel.js` gains `ensureCangjieTsv()` to stage/convert the
+  Cangjie5_TC table. The s3gen model downloads now pull the published q4_0
+  GGUFs (`chatterbox-s3gen-q4_0.gguf` / `chatterbox-s3gen-mtl-q4_0.gguf`)
+  instead of f16.
+
 - **LavaSR neural speech enhancement.** Opt-in CPU/GGML post-processing that
   bandwidth-extends synthesized audio to **48 kHz** using the LavaSR Vocos
   enhancer (ConvNeXt backbone + ISTFT spec head), converted to a single GGUF.
@@ -29,7 +85,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/convert-lavasr-enhancer-to-gguf.py` (f32 or f16). Examples:
   `examples/supertonic-enhanced.js`, `examples/chatterbox-enhanced.js`.
   Requires the `tts-cpp` pin that ships `tts_cpp::lavasr::Enhancer`
-  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is a planned follow-up.
+  (qvac-ext-lib-whisper.cpp PR #68). The denoiser stage is wired below.
+
+- **LavaSR denoiser wiring.** The addon now exposes the second LavaSR
+  stage — the UL-UNAS speech **denoiser**, which cleans the signal *before* the
+  enhancer bandwidth-extends it — via `files.lavasrDenoiser` (or a
+  `denoiser: { type: 'lavasr', denoiserPath }` block), mirroring the enhancer:
+
+  ```js
+  new TTSGgml({
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: {
+      supertonicModel,
+      lavasrDenoiser: 'lavasr-denoiser.gguf', // cleaned first…
+      lavasrEnhancer: 'lavasr-enhancer.gguf'  // …then bandwidth-extended
+    }
+  })
+  ```
+
+  The denoiser is rate-preserving and runs before the enhancer on the batch
+  path (both engines). The tts-cpp UL-UNAS forward is implemented in
+  qvac-ext-lib-whisper.cpp PR #78 (`tts_cpp::lavasr::Denoiser`, scalar CPU port
+  validated bit-close to the ONNX reference). With no denoiser path, output is
+  byte-identical (full backward compat). Denoiser + Chatterbox native chunk
+  streaming (`streamChunkTokens`) is rejected up front — a stateful streaming
+  denoiser is the follow-up. Active as of the `tts-cpp` pin bump to
+  `2026-07-03#1` (qvac-registry-vcpkg), which ships the PR #78 UL-UNAS forward.
 
 - **Selectable output sample rate.** `outputSampleRate` (8000–192000 Hz,
   runtime config) now resamples the synthesized audio to the requested rate,
@@ -55,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When the enhancer is active it produces 48 kHz; if `outputSampleRate` is also
   set, the enhanced audio is resampled to that rate afterwards.
 
+
 ### Fixed
 
 - **Chatterbox MTL Japanese now builds with MeCab support from the published
@@ -63,8 +145,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the `mecab.lib` / `bare_delay_load.lib` `DllMain` conflict.
 - **Chatterbox MTL language coverage now includes Japanese and Italian in the
   shared multilingual suite.** The standalone Japanese test has been folded into
-  `chatterbox-mtl.test.js`, which also keeps an explicit `zh` rejection
-  assertion until Chinese tokenizer support is enabled upstream.
+  `chatterbox-mtl.test.js`. (Chinese `zh` synthesis is now enabled — see the
+  Added section above.)
 - **Chatterbox now synthesizes correctly on both ARM CPU and the ARM Mali Vulkan
   GPU.** Bumps the `tts-cpp` pin to `2026-06-26` (`qvac-ext-lib-whisper.cpp`
   master `586268bf`, PR #67), consumed from `qvac-registry-vcpkg` (#214), which

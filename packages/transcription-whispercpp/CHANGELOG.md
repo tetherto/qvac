@@ -5,10 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-07-03
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
 ## [0.11.0] - 2026-07-01
 
 ### Changed
 
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
 - Bumped the `whisper-cpp` vcpkg override from `1.8.5#5` to `1.9.1`, which pulls
   the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
   `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,

@@ -1,20 +1,20 @@
-import type { BCIWhispercppArgs } from "@qvac/bci-whispercpp";
+import type { BCIWhispercppArgs } from '@qvac/bci-whispercpp'
 
 export function buildBciWhispercppArgs(
   modelPath: string,
   embedderPath: string,
-  logger: NonNullable<BCIWhispercppArgs["logger"]>,
+  logger: NonNullable<BCIWhispercppArgs['logger']>
 ) {
   const args: BCIWhispercppArgs = {
     files: {
       model: modelPath,
-      ...(embedderPath ? { embedder: embedderPath } : {}),
+      ...(embedderPath ? { embedder: embedderPath } : {})
     },
     logger,
     opts: {
-      stats: true,
-    },
-  };
+      stats: true
+    }
+  }
 
-  return args;
+  return args
 }

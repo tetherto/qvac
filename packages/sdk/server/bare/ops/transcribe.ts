@@ -2,8 +2,8 @@ import {
   type AnyModel,
   getModel,
   getModelConfig,
-  getModelEntry,
-} from "@/server/bare/registry/model-registry";
+  getModelEntry
+} from '@/server/bare/registry/model-registry'
 import {
   ModelType,
   type TranscribeParams,
@@ -12,140 +12,133 @@ import {
   type TranscribeStreamEvent,
   type WhisperConfig,
   type AudioFormat,
-  type ParakeetStreamingRunConfig,
-} from "@/schemas";
-import { createAudioStream } from "@/server/bare/utils/audio-input";
-import { getServerLogger } from "@/logging";
-import { TranscriptionFailedError } from "@/utils/errors-server";
-import type { TranscribeResponse } from "@/server/bare/types/addon-responses";
-import { nowMs } from "@/profiling";
-import { buildStreamResult } from "@/profiling/model-execution";
+  type ParakeetStreamingRunConfig
+} from '@/schemas'
+import { createAudioStream } from '@/server/bare/utils/audio-input'
+import { getServerLogger } from '@/logging'
+import { TranscriptionFailedError } from '@/utils/errors-server'
+import type { TranscribeResponse } from '@/server/bare/types/addon-responses'
+import { nowMs } from '@/profiling'
+import { buildStreamResult } from '@/profiling/model-execution'
 import {
   assertMetadataSupported,
   toTranscribeSegment,
-  type WhisperAddonSegment,
-} from "@/server/bare/utils/transcribe-metadata";
-import { getRequestRegistry, withRequestContext } from "@/server/bare/runtime";
-import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+  type WhisperAddonSegment
+} from '@/server/bare/utils/transcribe-metadata'
+import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
+import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 
-export {
-  assertMetadataSupported,
-  toTranscribeSegment,
-  type WhisperAddonSegment,
-};
+export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }
 
 type StreamingSegment = WhisperAddonSegment & {
-  isEndOfTurn?: boolean;
-  startsWord?: boolean;
-};
+  isEndOfTurn?: boolean
+  startsWord?: boolean
+}
 type StreamingModelOutput =
   | StreamingSegment[]
   | StreamingSegment
-  | { type: "vad"; speaking: boolean; probability: number }
-  | { type: "endOfTurn"; silenceDurationMs: number };
+  | { type: 'vad'; speaking: boolean; probability: number }
+  | { type: 'endOfTurn'; silenceDurationMs: number }
 
 interface StreamingModelResponse {
-  iterate(): AsyncIterable<StreamingModelOutput>;
-  await(): Promise<unknown>;
+  iterate(): AsyncIterable<StreamingModelOutput>
+  await(): Promise<unknown>
 }
 
 interface WhisperRunStreamingOpts {
-  emitVadEvents?: boolean;
-  endOfTurnSilenceMs?: number;
-  vadRunIntervalMs?: number;
+  emitVadEvents?: boolean
+  endOfTurnSilenceMs?: number
+  vadRunIntervalMs?: number
 }
 
-type ParakeetRunStreamingOpts = ParakeetStreamingRunConfig;
+type ParakeetRunStreamingOpts = ParakeetStreamingRunConfig
 
-type RunStreamingOpts = WhisperRunStreamingOpts | ParakeetRunStreamingOpts;
+type RunStreamingOpts = WhisperRunStreamingOpts | ParakeetRunStreamingOpts
 
 interface StreamableModel {
   runStreaming(
     audioStream: AsyncIterable<Buffer>,
-    opts?: RunStreamingOpts,
-  ): Promise<StreamingModelResponse>;
+    opts?: RunStreamingOpts
+  ): Promise<StreamingModelResponse>
 }
 
 function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
-  return "runStreaming" in model && typeof model.runStreaming === "function";
+  return 'runStreaming' in model && typeof model.runStreaming === 'function'
 }
 
 const SILENCE_MARKERS: Record<string, string> = {
-  [ModelType.whispercppTranscription]: "[BLANK_AUDIO]",
-  [ModelType.parakeetTranscription]: "[No speech detected]",
-};
+  [ModelType.whispercppTranscription]: '[BLANK_AUDIO]',
+  [ModelType.parakeetTranscription]: '[No speech detected]'
+}
 
 function getEngineModelType(modelId: string): string {
-  const entry = getModelEntry(modelId);
-  if (!entry || entry.isDelegated) return "";
-  return entry.local.modelType;
+  const entry = getModelEntry(modelId)
+  if (!entry || entry.isDelegated) return ''
+  return entry.local.modelType
 }
 
 function getAudioFormat(modelId: string, engineType: string): AudioFormat {
   if (engineType === ModelType.whispercppTranscription) {
-    const config = getModelConfig(modelId) as WhisperConfig;
-    return (config.audio_format as AudioFormat) || "s16le";
+    const config = getModelConfig(modelId) as WhisperConfig
+    return (config.audio_format as AudioFormat) || 's16le'
   }
-  return "s16le";
+  return 's16le'
 }
 
 async function applyPrompt(
   modelId: string,
   prompt: string | undefined,
-  engineType: string,
+  engineType: string
 ): Promise<WhisperConfig | null> {
   if (engineType !== ModelType.whispercppTranscription || !prompt) {
-    return null;
+    return null
   }
 
-  const model = getModel(modelId);
-  if (typeof model.reload !== "function") return null;
+  const model = getModel(modelId)
+  if (typeof model.reload !== 'function') return null
 
-  const originalConfig = getModelConfig(modelId) as WhisperConfig;
-  const updatedConfig = { ...originalConfig, initial_prompt: prompt };
+  const originalConfig = getModelConfig(modelId) as WhisperConfig
+  const updatedConfig = { ...originalConfig, initial_prompt: prompt }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { contextParams: _, miscConfig, ...whisperParams } = updatedConfig;
+  const { contextParams: _, miscConfig, ...whisperParams } = updatedConfig
 
   await model.reload({
     whisperConfig: whisperParams,
-    ...(miscConfig && { miscConfig }),
-  });
+    ...(miscConfig && { miscConfig })
+  })
 
-  return originalConfig;
+  return originalConfig
 }
 
-async function restorePrompt(
-  modelId: string,
-  originalConfig: WhisperConfig,
-): Promise<void> {
-  const model = getModel(modelId);
-  if (typeof model.reload !== "function") return;
+async function restorePrompt(modelId: string, originalConfig: WhisperConfig): Promise<void> {
+  const model = getModel(modelId)
+  if (typeof model.reload !== 'function') return
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { contextParams: _, miscConfig, ...whisperParams } = originalConfig;
+  const { contextParams: _, miscConfig, ...whisperParams } = originalConfig
 
   await model.reload({
-    whisperConfig: { ...whisperParams, initial_prompt: "" },
-    ...(miscConfig && { miscConfig }),
-  });
+    whisperConfig: { ...whisperParams, initial_prompt: '' },
+    ...(miscConfig && { miscConfig })
+  })
 }
 
-type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats };
+type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats }
 
 export function transcribe(
   params: TranscribeParams & { metadata: true },
-  requestId?: string,
-): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>;
+  requestId?: string
+): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>
 export function transcribe(
   params: TranscribeParams,
-  requestId?: string,
-): AsyncGenerator<string, TranscribeReturn, void>;
+  requestId?: string
+): AsyncGenerator<string, TranscribeReturn, void>
 export async function* transcribe(
   params: TranscribeParams,
-  requestId?: string,
+  requestId?: string
 ): AsyncGenerator<string | TranscribeSegment, TranscribeReturn, void> {
-  const { modelId, metadata } = params;
+  const { modelId, metadata } = params
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and `cancel({ modelId, kind: "transcribe" })`
@@ -153,25 +146,25 @@ export async function* transcribe(
   // client didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
-    kind: "transcribe",
-    modelId,
-  });
-  const requestLogger = withRequestContext(getServerLogger(), ctx);
+    kind: 'transcribe',
+    modelId
+  })
+  const requestLogger = withRequestContext(getServerLogger(), ctx)
 
-  const engineType = getEngineModelType(modelId);
-  assertMetadataSupported(modelId, engineType, metadata);
-  const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
-  const audioFormat = getAudioFormat(modelId, engineType);
+  const engineType = getEngineModelType(modelId)
+  assertMetadataSupported(modelId, engineType, metadata)
+  const silenceMarker = SILENCE_MARKERS[engineType] ?? ''
+  const audioFormat = getAudioFormat(modelId, engineType)
 
-  const originalConfig = await applyPrompt(modelId, params.prompt, engineType);
+  const originalConfig = await applyPrompt(modelId, params.prompt, engineType)
   if (originalConfig) {
     // `restorePrompt` runs on every exit path — happy, throw, cancel —
     // via the scope. LIFO unwinding pairs with the addon-cancel detach
     // below.
-    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig))
   }
 
-  const model = getModel(modelId);
+  const model = getModel(modelId)
 
   // Hard-cancel wiring: whisper.cpp / parakeet expose model-wide
   // `addon.cancel()`. The listener forwards an abort so the
@@ -180,131 +173,127 @@ export async function* transcribe(
   // the soft-cancel safety net for the case where the abort fires
   // between the addon flag flipping and the iterator's next pull.
   const onAbort = () => {
-    const addon = model.addon;
+    const addon = model.addon
     if (addon?.cancel) {
       addon.cancel.call(addon).catch((err: unknown) => {
         requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+        )
+      })
     }
-  };
-  ctx.signal.addEventListener("abort", onAbort, { once: true });
-  if (ctx.signal.aborted) onAbort();
+  }
+  ctx.signal.addEventListener('abort', onAbort, { once: true })
+  if (ctx.signal.aborted) onAbort()
   ctx.scope.defer(() => {
-    ctx.signal.removeEventListener("abort", onAbort);
-  });
+    ctx.signal.removeEventListener('abort', onAbort)
+  })
 
-  const audioStream = await createAudioStream(params.audioChunk, audioFormat);
+  const audioStream = await createAudioStream(params.audioChunk, audioFormat)
 
-  const modelStart = nowMs();
-  const response = (await model.run(
-    audioStream,
-  )) as unknown as TranscribeResponse;
+  const modelStart = nowMs()
+  const response = (await model.run(audioStream)) as unknown as TranscribeResponse
 
   for await (const output of response.iterate()) {
-    if (ctx.signal.aborted) break;
-    requestLogger.debug("Streaming Transcription Update:", output);
+    if (ctx.signal.aborted) break
+    requestLogger.debug('Streaming Transcription Update:', output)
 
-    const chunks = (
-      Array.isArray(output) ? output : [output]
-    ) as WhisperAddonSegment[];
+    const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[]
 
     if (metadata) {
       for (const chunk of chunks) {
-        if (!chunk.text) continue;
-        if (silenceMarker && chunk.text.includes(silenceMarker)) continue;
-        yield toTranscribeSegment(chunk);
+        if (!chunk.text) continue
+        if (silenceMarker && chunk.text.includes(silenceMarker)) continue
+        yield toTranscribeSegment(chunk)
       }
-      continue;
+      continue
     }
 
     const text = chunks
       .filter((chunk) => !silenceMarker || !chunk.text.includes(silenceMarker))
       .map((chunk) => chunk.text)
-      .join("");
+      .join('')
 
     if (text.trim()) {
-      yield text;
+      yield text
     }
   }
-  const modelExecutionMs = nowMs() - modelStart;
+  const modelExecutionMs = nowMs() - modelStart
 
   const stats: TranscribeStats = {
     ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs,
+      audioDuration: response.stats.audioDurationMs
     }),
     ...(response.stats?.realTimeFactor !== undefined && {
-      realTimeFactor: response.stats.realTimeFactor,
+      realTimeFactor: response.stats.realTimeFactor
     }),
     ...(response.stats?.tokensPerSecond !== undefined && {
-      tokensPerSecond: response.stats.tokensPerSecond,
+      tokensPerSecond: response.stats.tokensPerSecond
     }),
     ...(response.stats?.totalTokens !== undefined && {
-      totalTokens: response.stats.totalTokens,
+      totalTokens: response.stats.totalTokens
     }),
     ...(response.stats?.totalSegments !== undefined && {
-      totalSegments: response.stats.totalSegments,
+      totalSegments: response.stats.totalSegments
     }),
     ...(response.stats?.whisperEncodeMs !== undefined && {
-      whisperEncodeTime: response.stats.whisperEncodeMs,
+      whisperEncodeTime: response.stats.whisperEncodeMs
     }),
     ...(response.stats?.whisperDecodeMs !== undefined && {
-      whisperDecodeTime: response.stats.whisperDecodeMs,
+      whisperDecodeTime: response.stats.whisperDecodeMs
     }),
     ...(response.stats?.encoderMs !== undefined && {
-      encoderTime: response.stats.encoderMs,
+      encoderTime: response.stats.encoderMs
     }),
     ...(response.stats?.decoderMs !== undefined && {
-      decoderTime: response.stats.decoderMs,
+      decoderTime: response.stats.decoderMs
     }),
     ...(response.stats?.melSpecMs !== undefined && {
-      melSpecTime: response.stats.melSpecMs,
+      melSpecTime: response.stats.melSpecMs
     }),
     ...(response.stats?.backendDevice !== undefined && {
-      backendDevice: response.stats.backendDevice,
+      backendDevice: response.stats.backendDevice
     }),
     ...(response.stats?.backendId !== undefined && {
-      backendId: response.stats.backendId,
+      backendId: response.stats.backendId
     }),
     ...(response.stats?.gpuUnsupported !== undefined && {
-      gpuUnsupported: response.stats.gpuUnsupported,
+      gpuUnsupported: response.stats.gpuUnsupported
     }),
     ...(response.stats?.gpuMemTotalMb !== undefined && {
-      gpuMemTotalMb: response.stats.gpuMemTotalMb,
+      gpuMemTotalMb: response.stats.gpuMemTotalMb
     }),
     ...(response.stats?.gpuMemFreeMb !== undefined && {
-      gpuMemFreeMb: response.stats.gpuMemFreeMb,
-    }),
-  };
+      gpuMemFreeMb: response.stats.gpuMemFreeMb
+    })
+  }
 
-  return buildStreamResult(modelExecutionMs, stats);
+  return buildStreamResult(modelExecutionMs, stats)
 }
 
 export interface TranscribeStreamOpts {
-  emitVadEvents?: boolean;
-  endOfTurnSilenceMs?: number;
-  vadRunIntervalMs?: number;
-  parakeetStreamingConfig?: ParakeetStreamingRunConfig;
+  emitVadEvents?: boolean
+  endOfTurnSilenceMs?: number
+  vadRunIntervalMs?: number
+  parakeetStreamingConfig?: ParakeetStreamingRunConfig
 }
 
 function buildRunStreamingOpts(
   engineType: string,
-  opts?: TranscribeStreamOpts,
+  opts?: TranscribeStreamOpts
 ): RunStreamingOpts | undefined {
   if (engineType === ModelType.parakeetTranscription) {
-    return opts?.parakeetStreamingConfig;
+    return opts?.parakeetStreamingConfig
   }
 
-  const runOpts: WhisperRunStreamingOpts = {};
-  if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
+  const runOpts: WhisperRunStreamingOpts = {}
+  if (opts?.emitVadEvents) runOpts.emitVadEvents = true
   if (opts?.endOfTurnSilenceMs !== undefined) {
-    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
+    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs
   }
   if (opts?.vadRunIntervalMs !== undefined) {
-    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
+    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs
   }
-  return runOpts;
+  return runOpts
 }
 
 export function transcribeStream(
@@ -313,105 +302,99 @@ export function transcribeStream(
   prompt: string | undefined,
   metadata: true,
   opts?: TranscribeStreamOpts,
-  requestId?: string,
-): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, void, void>;
+  requestId?: string
+): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, void, void>
 export function transcribeStream(
   modelId: string,
   audioInputStream: AsyncIterable<Buffer>,
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string,
-): AsyncGenerator<string | TranscribeStreamEvent, void, void>;
+  requestId?: string
+): AsyncGenerator<string | TranscribeStreamEvent, void, void>
 export async function* transcribeStream(
   modelId: string,
   audioInputStream: AsyncIterable<Buffer>,
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string,
-): AsyncGenerator<
-  string | TranscribeSegment | TranscribeStreamEvent,
-  void,
-  void
-> {
+  requestId?: string
+): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, void, void> {
   // Same `kind: "transcribe"` as the unary variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
   // either shape.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
-    kind: "transcribe",
-    modelId,
-  });
-  const requestLogger = withRequestContext(getServerLogger(), ctx);
+    kind: 'transcribe',
+    modelId
+  })
+  const requestLogger = withRequestContext(getServerLogger(), ctx)
 
-  const engineType = getEngineModelType(modelId);
-  assertMetadataSupported(modelId, engineType, metadata);
-  const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
+  const engineType = getEngineModelType(modelId)
+  assertMetadataSupported(modelId, engineType, metadata)
+  const silenceMarker = SILENCE_MARKERS[engineType] ?? ''
 
-  const originalConfig = await applyPrompt(modelId, prompt, engineType);
+  const originalConfig = await applyPrompt(modelId, prompt, engineType)
   if (originalConfig) {
-    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig))
   }
 
-  const model = getModel(modelId);
+  const model = getModel(modelId)
 
   if (!hasRunStreaming(model)) {
-    throw new TranscriptionFailedError(
-      `Model ${modelId} does not support streaming transcription`,
-    );
+    throw new TranscriptionFailedError(`Model ${modelId} does not support streaming transcription`)
   }
 
   const onAbort = () => {
-    const addon = model.addon;
+    const addon = model.addon
     if (addon?.cancel) {
       addon.cancel.call(addon).catch((err: unknown) => {
         requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+        )
+      })
     }
-  };
-  ctx.signal.addEventListener("abort", onAbort, { once: true });
-  if (ctx.signal.aborted) onAbort();
+  }
+  ctx.signal.addEventListener('abort', onAbort, { once: true })
+  if (ctx.signal.aborted) onAbort()
   ctx.scope.defer(() => {
-    ctx.signal.removeEventListener("abort", onAbort);
-  });
+    ctx.signal.removeEventListener('abort', onAbort)
+  })
 
-  const runOpts = buildRunStreamingOpts(engineType, opts);
-  const response = await model.runStreaming(audioInputStream, runOpts);
+  const runOpts = buildRunStreamingOpts(engineType, opts)
+  const response = await model.runStreaming(audioInputStream, runOpts)
 
   for await (const output of response.iterate()) {
-    if (ctx.signal.aborted) break;
-    requestLogger.debug("Live Transcription Update:", output);
+    if (ctx.signal.aborted) break
+    requestLogger.debug('Live Transcription Update:', output)
 
     if (!Array.isArray(output)) {
-      if ("type" in output) {
-        if (output.type === "vad") {
+      if ('type' in output) {
+        if (output.type === 'vad') {
           yield {
-            type: "vad",
+            type: 'vad',
             speaking: output.speaking,
-            probability: output.probability,
-          };
-          continue;
+            probability: output.probability
+          }
+          continue
         }
-        if (output.type === "endOfTurn") {
+        if (output.type === 'endOfTurn') {
           yield {
-            type: "endOfTurn",
-            source: "whisper",
-            silenceDurationMs: output.silenceDurationMs,
-          };
-          continue;
+            type: 'endOfTurn',
+            source: 'whisper',
+            silenceDurationMs: output.silenceDurationMs
+          }
+          continue
         }
-        continue;
+        continue
       }
-      yield* emitSegment(output, metadata, silenceMarker);
-      continue;
+      yield* emitSegment(output, metadata, silenceMarker)
+      continue
     }
 
     for (const segment of output) {
-      yield* emitSegment(segment, metadata, silenceMarker);
+      yield* emitSegment(segment, metadata, silenceMarker)
     }
   }
 }
@@ -419,26 +402,26 @@ export async function* transcribeStream(
 function* emitSegment(
   segment: StreamingSegment,
   metadata: boolean | undefined,
-  silenceMarker: string,
+  silenceMarker: string
 ): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
   if (!segment.text) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", source: "parakeet" };
+      yield { type: 'endOfTurn', source: 'parakeet' }
     }
-    return;
+    return
   }
   if (silenceMarker && segment.text.includes(silenceMarker)) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", source: "parakeet" };
+      yield { type: 'endOfTurn', source: 'parakeet' }
     }
-    return;
+    return
   }
   if (metadata) {
-    yield toTranscribeSegment(segment);
+    yield toTranscribeSegment(segment)
   } else if (segment.text.trim()) {
-    yield segment.text;
+    yield segment.text
   }
   if (segment.isEndOfTurn) {
-    yield { type: "endOfTurn", source: "parakeet" };
+    yield { type: 'endOfTurn', source: 'parakeet' }
   }
 }

@@ -311,8 +311,23 @@ function build (rows, vision, meta, provText, title, opts = {}) {
       errs: rs.length - okRows.length,
       perTask,
       overall: mean(perTask.filter(v => v != null)),
-      ve: visMean(key),
-      sl: visSlices(key),
+      // Vision-encode ms + slice count. Native "slice encoded in N ms" stderr
+      // segments win where present (CLI legs, where the mtmd helper logs them);
+      // addon legs bypass that helper to time the encode, so they fall back to
+      // the per-completion `visionEncodeMs` / `visionEncodeTiles` runtime stats
+      // — captured on EVERY platform incl. mobile (where the stderr line is not
+      // captured at all). This keeps BOTH `mmproj enc` and `tiles` populated for
+      // addon legs, which the stderr-only path silently dropped.
+      ve: (() => {
+        const fromStderr = visMean(key)
+        if (fromStderr != null) return fromStderr
+        return mean(okRows.map(r => r.vision_enc_ms).filter(v => v != null))
+      })(),
+      sl: (() => {
+        const fromStderr = visSlices(key)
+        if (fromStderr != null) return fromStderr
+        return mean(okRows.map(r => r.vision_enc_tiles).filter(v => v != null))
+      })(),
       ttft: mean(okRows.map(r => r.ttft_ms).filter(v => v != null)),
       tps: mean(okRows.map(r => r.decode_tps).filter(v => v != null)),
       wall: mean(okRows.map(r => r.ms).filter(v => v != null)),
@@ -486,7 +501,12 @@ function build (rows, vision, meta, provText, title, opts = {}) {
         const b = groupStats(`${host}|${base}|${dv}`)
         const c = groupStats(`${host}|${candidate}|${dv}`)
         if (!b && !c) continue
-        const useEnc = (b && b.ve != null) || (c && c.ve != null)
+        // Use the mmproj-encode metric only when BOTH sides have it, else the
+        // comparison (Δ / Δ%) collapses to `—` for the missing side — e.g.
+        // repack-candidate (has the stat) vs published-baseline (no stat, no
+        // mobile stderr). In that case fall back to TTFT, which both sides
+        // always report. (Mirrors the Summary blend's `b.ve != null && c.ve`.)
+        const useEnc = (b && b.ve != null) && (c && c.ve != null)
         const metric = useEnc ? 'mmproj-enc ms' : 'TTFT ms (incl. enc)'
         const bv = useEnc ? (b && b.ve) : (b && b.ttft)
         const cv = useEnc ? (c && c.ve) : (c && c.ttft)
@@ -552,16 +572,25 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   // Sources legend — what each compared source resolves to (e.g. addon@candidate =
   // git:<sha>, addon@baseline = npm:0.24.0), so a reader knows exactly which builds the
   // columns above represent. Keyed by the report's comparison cell; shown only when the
-  // markers carry a resolved version.
+  // markers carry a resolved version. opts.launch carries the launch-level source facts
+  // (addon/git/engine lines) that combine.cjs hoisted out of the per-platform Provenance
+  // blocks — identical for every platform in one run, so they are stated ONCE here.
   const refByCell = {}
   for (const r of rows) if (r.source_ref && !refByCell[r.cell]) refByCell[r.cell] = r.source_ref
   const refCells = Object.keys(refByCell).sort()
-  if (refCells.length) {
+  const launch = Array.isArray(opts.launch) ? opts.launch : []
+  if (refCells.length || launch.length) {
     L.push('### Sources — resolved versions\n')
-    L.push('| Source | Resolved version |')
-    L.push('|---|---|')
-    for (const c of refCells) L.push(`| \`${c}\` | \`${refByCell[c]}\` |`)
-    L.push('')
+    if (refCells.length) {
+      L.push('| Source | Resolved version |')
+      L.push('|---|---|')
+      for (const c of refCells) L.push(`| \`${c}\` | \`${refByCell[c]}\` |`)
+      L.push('')
+    }
+    if (launch.length) {
+      for (const l of launch) L.push(`- ${l}`)
+      L.push('')
+    }
   }
   if (Object.keys(meta).length) {
     L.push('### Models & origins (Source = Registry / HF / S3 / URL · pinned commits)\n')
@@ -643,9 +672,11 @@ function build (rows, vision, meta, provText, title, opts = {}) {
     L.push(`| \`${cell}\` · ${dev.toUpperCase()} | ${host || '—'} | ${g.n} | ${g.errs} | ${fmtNum(g.ve, 1)} | ${fmtNum(g.sl, 1)} | ${fmtNum(g.ttft, 0)} | ${fmtNum(g.encTps, 1)} | ${fmtNum(g.tps, 1)} | ${fmtNum(g.genMs, 0)} | ${fmtNum(g.wall, 0)} |`)
   }
   L.push('')
-  L.push('> **mmproj enc** is parsed from llama.cpp\'s native stderr. On mobile (Device Farm) that ' +
-    'stream is not captured (Android logcat / iOS console), so it shows `—` there; TTFT on mobile ' +
-    'already includes the vision-encode + prompt-eval time and is the cross-platform proxy. ' +
+  L.push('> **mmproj enc** is the pure ViT vision-encode time (and **tiles** its slice count). ' +
+    'CLI legs parse llama.cpp\'s native stderr (`slice encoded in N ms`); addon legs read the ' +
+    'in-process `visionEncodeMs`/`visionEncodeTiles` runtime stats (same ViT encode) — so both ' +
+    'columns are populated on every platform, including mobile (Device Farm), where the native ' +
+    'stderr line is not captured. ' +
     '**encode TPS** = prompt + image tokens ÷ TTFT (prefill ingest rate); **decode TPS** is the ' +
     'generation rate; **gen (ms)** = wall − TTFT (the response-generation/decode phase). encode TPS ' +
     'and gen (ms) are reported on every platform that emits token counts, `—` where it does not.\n')

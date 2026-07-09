@@ -8,14 +8,17 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <tts-cpp/chatterbox/engine.h>
+#include <tts-cpp/lavasr/denoiser.h>
 #include <tts-cpp/lavasr/enhancer.h>
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/StreamingEnhancer.hpp"
 #include "model-interface/chatterbox/TimeStretch.hpp"
@@ -34,7 +37,7 @@ namespace general_error = qvac_errors::general_error;
 // n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
 // up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
 // (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
-// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the f16
+// ~3.1 GB peak footprint and into jetsam. With the f16
 // default KV dtype below, 4096 tokens (~160 s of generated audio per
 // synthesize() call; T3 speech tokens run at 25 Hz) cost ~390 MB of KV —
 // still well under f32@4096 (~780 MB) AND double the context.  (The prior
@@ -51,7 +54,7 @@ constexpr int DEFAULT_N_CTX = 4096;
 // and the ggml-speech Metal backend only supports a q8_0-source CONT to
 // f32/f16 (not q8_0->q8_0), so a q8_0 KV cache hard-aborts that path with
 // GGML_ABORT("unsupported op 'CONT'").  q8_0 had been the default since
-// 0.3.2 (QVAC-19557, iOS peak-memory) — it stores the cache at ~27% of
+// 0.3.2 (iOS peak-memory) — it stores the cache at ~27% of
 // f32 and decodes 20-30% faster on Metal — but it only works where the
 // backend implements the q8_0 CONT (CPU, CUDA), so it is now opt-in via
 // kvCacheType:"q8_0".  Upstream validation on real GGUFs
@@ -189,6 +192,25 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "lavasr enhancer GGUF not found: " + cfg.enhancerGgufPath);
   }
+  if (!cfg.denoiserGgufPath.empty() &&
+      !std::filesystem::exists(cfg.denoiserGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
+  }
+  // LavaSR denoiser + native chunk streaming is not supported yet: the UL-UNAS
+  // denoiser is causal but tts-cpp only exposes a one-shot denoise(), so a
+  // stateful streaming denoiser (à la StreamingEnhancer) is the follow-up.
+  // Reject the combo up front rather than silently dropping denoising on the
+  // streaming path. Defense-in-depth: index.js rejects it before we get here.
+  if (!cfg.denoiserGgufPath.empty() && cfg.streamChunkTokens.value_or(0) > 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel: the LavaSR denoiser is not yet supported with native "
+        "chunk streaming (streamChunkTokens > 0). Use batch synthesis, or drop "
+        "the denoiser for streaming (streaming denoise is a planned "
+        "follow-up).");
+  }
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpu = *cfg.useGpu;
     const int  layers   = *cfg.nGpuLayers;
@@ -316,25 +338,43 @@ void ChatterboxModel::loadLocked() {
       engine_->gpu_unsupported() ||
       (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
 
-  // LavaSR enhancer: load when a GGUF path is set (the path is the on switch).
-  // CPU-only neural post-process; empty path = disabled.
-  if (!cfg_.enhancerGgufPath.empty()) {
+  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
+  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
+  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
+  // Pass the engine's *resolved* device, not the requested switch: if the
+  // engine fell back to CPU (gpu_unsupported / off-allowlist), keep the
+  // enhancer on CPU too instead of forcing it onto the GPU. Shared with
+  // Supertonic via loadEnhancer so the two loaders can't drift.
+  LoadedEnhancer loaded = loadEnhancer(
+      cfg_.enhancerGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "ChatterboxModel::load: lavasr enhancer: ");
+  enhancer_ = std::move(loaded.enhancer);
+  enhancerBackendDevice_ = loaded.backendDevice;
+  enhancerBackendId_ = loaded.backendId;
+
+  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
+  // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
+  // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
+  // clean InitializationFailed error.
+  if (!cfg_.denoiserGgufPath.empty()) {
     try {
-      enhancer_ = tts_cpp::lavasr::Enhancer::load(cfg_.enhancerGgufPath);
+      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
     } catch (const std::exception& e) {
-      enhancer_.reset();
+      denoiser_.reset();
       throw createTTSError(
           TTSErrorCode::InitializationFailed,
-          std::string("ChatterboxModel::load: lavasr enhancer: ") + e.what());
+          std::string("ChatterboxModel::load: lavasr denoiser: ") + e.what());
     }
   } else {
-    enhancer_.reset();
+    denoiser_.reset();
   }
 }
 
 void ChatterboxModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
+  denoiser_.reset();
 }
 
 void ChatterboxModel::cancel() const {
@@ -359,10 +399,12 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   // on the NEXT synthesize call.
   std::shared_ptr<tts_cpp::chatterbox::Engine> engine;
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
     enhancer = enhancer_;
+    denoiser = denoiser_;
   }
   if (!engine) {
     throw createTTSError(TTSErrorCode::ModelNotLoaded,
@@ -489,6 +531,21 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
                          std::string("engine.synthesize: ") + e.what());
   }
 
+  // LavaSR neural denoiser (batch path). Runs BEFORE the enhancer and preserves
+  // the sample rate. Streaming + denoiser is rejected in validateConfig (a
+  // stateful streaming denoiser is the follow-up), so this only applies on the
+  // batch path. The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+  // PR #78; this runs whenever a denoiser was loaded.
+  if (!wasStreaming && denoiser) {
+    try {
+      result.pcm = denoiser->denoise(result.pcm, result.sample_rate);
+    } catch (const std::exception& e) {
+      throw createTTSError(
+          TTSErrorCode::SynthesisFailed,
+          std::string("chatterbox.lavasr-denoiser: ") + e.what());
+    }
+  }
+
   // LavaSR neural bandwidth extension (batch path). The streaming path enhances
   // per chunk inside the callback above (StreamingEnhancer); here we enhance
   // the whole utterance at once. Applied before the WSOLA speed stretch so rate
@@ -610,6 +667,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
+  stats.emplace_back(
+      "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
   return stats;
 }
 

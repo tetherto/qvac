@@ -8,8 +8,8 @@
 // multilingual variant's tokenizer / language-conditioning code paths
 // (e.g. mtl_tokenizer break, run_t3 variant dispatch in tts-cpp). Japanese
 // also covers the MeCab/IPAdic path because kanji needs word-level
-// morphological segmentation for phonetic readings. Chinese is covered as
-// an explicit unsupported-language assertion until tts-cpp enables it.
+// morphological segmentation for phonetic readings. Chinese ("zh") covers the
+// Cangjie5_TC tokenizer path (hanzi -> Cangjie codes) enabled in tts-cpp.
 
 const fs = require('bare-fs')
 const os = require('bare-os')
@@ -19,7 +19,7 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 const { runTTS } = require('../utils/runTTS')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
-const { ensureChatterboxMtlModels, ensureMecabDict } = require('../utils/downloadModel')
+const { ensureChatterboxMtlModels, ensureMecabDict, ensureCangjieTsv } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
@@ -63,7 +63,8 @@ async function loadChatterboxMtlTTS (params) {
       modelDir: params.modelDir,
       t3Model: params.t3ModelPath,
       s3genModel: params.s3genModelPath,
-      ...(params.mecabDictDir ? { mecabDictDir: params.mecabDictDir } : {})
+      ...(params.mecabDictDir ? { mecabDictDir: params.mecabDictDir } : {}),
+      ...(params.cangjieTsvPath ? { cangjieTsvPath: params.cangjieTsvPath } : {})
     },
     referenceAudio: refWavPath,
     config: {
@@ -170,7 +171,7 @@ test('Chatterbox MTL TTS (ggml): synthesizes Japanese with MeCab dictionary', { 
   }
 })
 
-test('Chatterbox MTL TTS (ggml): rejects zh while tokenizer support is disabled', { timeout: 600000 }, async (t) => {
+test('Chatterbox MTL TTS (ggml): synthesizes Chinese with Cangjie table', { timeout: 1800000 }, async (t) => {
   const baseDir = getBaseDir()
   const download = await ensureChatterboxMtlModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) {
@@ -178,27 +179,43 @@ test('Chatterbox MTL TTS (ggml): rejects zh while tokenizer support is disabled'
     return
   }
 
-  let model = null
-  let error = null
-  try {
-    model = await loadChatterboxMtlTTS({
-      modelDir: download.targetDir,
-      t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
-      s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
-      language: 'zh'
-    })
-    await runTTS(model, { text: ZH_SENTENCE })
-  } catch (err) {
-    error = err
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_e) {}
-    }
+  const cangjie = await ensureCangjieTsv({ targetDir: path.join(baseDir, 'models') })
+  if (!cangjie.success) {
+    t.pass('Skipped: Cangjie5_TC TSV not available')
+    return
   }
 
-  const message = String(error?.cause?.message || error?.message || '')
-  t.ok(error, 'MTL zh is rejected by the current tokenizer')
-  t.ok(message.includes("language 'zh' not in the multilingual tokenizer's tier-1 set"), 'MTL zh rejection explains tokenizer support')
+  const model = await loadChatterboxMtlTTS({
+    modelDir: download.targetDir,
+    t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
+    s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
+    cangjieTsvPath: cangjie.path,
+    language: 'zh'
+  })
+  try {
+    const t0 = Date.now()
+    const result = await runTTS(
+      model,
+      { text: ZH_SENTENCE },
+      { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 },
+      { sampleRate: SAMPLE_RATE, engineTag: 'Chatterbox MTL ZH' }
+    )
+    const wallMs = Date.now() - t0
+    console.log('    ' + result.output)
+
+    t.ok(result.passed, 'MTL zh run passes expectations')
+    t.ok(result.data.sampleCount > 0, 'MTL zh produced audio')
+    t.is(result.data.reportedSampleRate || SAMPLE_RATE, SAMPLE_RATE, 'MTL zh reports 24 kHz')
+
+    const st = result.data?.stats || {}
+    t.comment(recordTtsStats(
+      'chatterbox mtl zh',
+      { realTimeFactor: st.realTimeFactor, audioDurationMs: st.audioDurationMs || result.data?.durationMs, totalSamples: st.totalSamples, backendDevice: st.backendDevice },
+      { wallMs, sampleCount: result.data?.sampleCount, model: 'chatterbox-mtl', output: ZH_SENTENCE }
+    ))
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
 })
 
 test('Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats', { timeout: 600000 }, async (t) => {

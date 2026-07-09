@@ -18,6 +18,7 @@ class Engine;
 }
 namespace tts_cpp::lavasr {
 class Enhancer;
+class Denoiser;
 }
 
 namespace qvac::ttsggml::supertonic {
@@ -80,6 +81,11 @@ private:
   // cfg_.enhancerGgufPath is set; null disables enhancement. Holds only
   // const weights, so it is safe to share across concurrent enhance() calls.
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
+  // LavaSR denoiser (runs before the enhancer, rate-preserving): loaded when
+  // cfg_.denoiserGgufPath is set; null disables denoising. The tts-cpp UL-UNAS
+  // forward is implemented in qvac-ext-lib-whisper.cpp PR #78. Holds only const
+  // weights, safe to share across concurrent denoise() calls.
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser_;
 
   std::atomic_bool jobInProgress_{false};
 
@@ -103,6 +109,14 @@ private:
   int backendId_ = 0;
   bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
+
+  // LavaSR enhancer backend, surfaced in runtimeStats so a host / GPU smoke
+  // test can confirm the enhancer network actually engaged the GPU (it uses the
+  // same useGPU/nGpuLayers switch as the engine).  Device: -1 = no enhancer
+  // loaded, 0 = CPU, 1 = GPU.  The id mirrors backendId_ and uses the same map
+  // as backendIdFromName() in BackendUtils.hpp (-1 = no enhancer loaded).
+  int enhancerBackendDevice_ = -1;
+  int enhancerBackendId_ = -1;
 };
 
 }

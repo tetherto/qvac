@@ -5,7 +5,13 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
+const COMPANION_FILE_KEYS = [
+  // Wan 2.1 / 2.2
+  'highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan',
+  // LTX-2 (LTXAV): Gemma text encoder (llm), audio VAE, embedding connectors.
+  // `vae` is reused for the LTX video VAE.
+  'llm', 'audioVae', 'embeddingsConnectors'
+]
 
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid'])
 
@@ -29,14 +35,28 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // visible quality breakdown / repetition. We don't reject above 81 because
 // larger Wan variants (14B, future checkpoints) may extend that range, but
 // the error message points users to the recommended set.
-function validateVideoFrames (n) {
+function validateVideoFrames (n, isLtx = false) {
   // Two distinct error classes: shape (must be an integer) vs. value
-  // (the 4*k+1 / >= 5 invariant). Tests rely on these messages staying
+  // (the frame-count invariant). Tests rely on these messages staying
   // separable; merging them obscures which one tripped.
+  //
+  // Wan 2.1 / 2.2: (4*k + 1), k >= 1.  LTX-2: (8*k + 1), k >= 1, max 257
+  // (the LTX latent temporal packing factor is 8, not 4).
+  const factor = isLtx ? 8 : 4
+  const min = factor + 1
   if (!Number.isInteger(n)) {
     throw new Error(
-      `video_frames must be an integer of the form (4*k + 1) with k >= 1. Got: ${n}`
+      `video_frames must be an integer of the form (${factor}*k + 1) with k >= 1. Got: ${n}`
     )
+  }
+  if (isLtx) {
+    if (n < min || (n - 1) % 8 !== 0 || n > 257) {
+      throw new Error(
+        'LTX-2 video_frames must be an integer of the form (8*k + 1) in ' +
+        `[9, 257] (9, 17, 25, 33, ..., 257). Got: ${n}`
+      )
+    }
+    return
   }
   if (n < 5 || (n - 1) % 4 !== 0) {
     throw new Error(
@@ -115,9 +135,10 @@ function peekImageDims (buf) {
  * `mode` field this wrapper always sets.
  *
  * Output: a single `Uint8Array` containing an MJPG-encoded AVI (RIFF
- * container) arrives through `QvacResponse.onUpdate(data)`. Progress ticks
- * are delivered as JSON strings in the same stream, identical to the image
- * wrapper.
+ * container) arrives through `QvacResponse.onUpdate(data)`. For LTX-2 models
+ * loaded with an `audioVae`, the AVI carries a second IEEE-float PCM audio
+ * stream (48 kHz) muxed alongside the video. Progress ticks are delivered as
+ * JSON strings in the same stream, identical to the image wrapper.
  */
 class VideoStableDiffusion {
   /**
@@ -203,10 +224,15 @@ class VideoStableDiffusion {
       clipLPath: '',
       clipGPath: '',
       t5XxlPath: this._files.t5Xxl || '',
-      llmPath: '',
+      // Gemma text encoder for LTX-2 (reuses the llm_path slot, same as FLUX.2
+      // Qwen3). Empty for Wan.
+      llmPath: this._files.llm || '',
       vaePath: this._files.vae || '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
+      // LTX-2 (LTXAV) extras. Empty for Wan.
+      audioVaePath: this._files.audioVae || '',
+      embeddingsConnectorsPath: this._files.embeddingsConnectors || '',
       config: this._config
     }
 
@@ -275,7 +301,8 @@ class VideoStableDiffusion {
    *   - `'img2vid'`  — animate a single starting frame; requires `init_image`.
    *
    * Output stream (via `QvacResponse.onUpdate(data)`):
-   *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job.
+   *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job (with a muxed
+   *     IEEE-float PCM audio stream for LTX-2 + audioVae).
    *   - `string`     — per-step progress JSON `{"step":N,"total":M,"elapsed_ms":T}`
    *
    * @param {object} params
@@ -342,27 +369,32 @@ class VideoStableDiffusion {
     // names the actual pixels rather than an internal derived value.
     const dimsImplicit = params.width == null && params.height == null
 
-    // ── Dimension alignment (multiples of 16) ────────────────────────────
+    // LTX-2 has stricter constraints than Wan: 32x spatial VAE compression
+    // (dims multiple of 32) and 8*k+1 frame packing. Detected from the
+    // LTX-only companion files supplied at construction.
+    const isLtx = this._isLtx()
+
+    // ── Dimension alignment (multiples of 16 for Wan, 32 for LTX-2) ───────
     // Wan's spatial compression requires 16-aligned width/height (see
     // addon.js::_fillDimsFromImage). Only validate provided dims; C++ falls
     // back to 480x832 (portrait, phone-screen friendly) when omitted. Override
     // either field for landscape (832x480 is Wan 1.3B's training res).
-    const alignTo = 16
+    const alignTo = isLtx ? 32 : 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
     const hBad = h != null && (!Number.isFinite(h) || h <= 0 || h % alignTo !== 0)
     if (wBad || hBad) {
-      const suggestW = Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : 480
-      const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : 832
+      const suggestW = Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : (isLtx ? 768 : 480)
+      const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : (isLtx ? 512 : 832)
       throw new Error(
         `width and height must be positive multiples of ${alignTo}. ` +
         `Got: ${w}x${h}. Use ${suggestW}x${suggestH} instead.`
       )
     }
 
-    // ── Frame-count validation (4*k+1 rule) ──────────────────────────────
-    if (params.video_frames != null) validateVideoFrames(params.video_frames)
+    // ── Frame-count validation (4*k+1 Wan / 8*k+1 LTX-2) ──────────────────
+    if (params.video_frames != null) validateVideoFrames(params.video_frames, isLtx)
 
     // ── FPS validation ───────────────────────────────────────────────────
     if (params.fps != null) {
@@ -389,9 +421,9 @@ class VideoStableDiffusion {
       }
       if (dimsImplicit) {
         const dims = peekImageDims(params.init_image)
-        if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+        if (dims && (dims.w % alignTo !== 0 || dims.h % alignTo !== 0)) {
           throw new Error(
-            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
+            `init_image dimensions ${dims.w}x${dims.h} must be multiples of ${alignTo}. ` +
             'Pass explicit width/height to override or pre-scale the image.'
           )
         }
@@ -450,9 +482,9 @@ class VideoStableDiffusion {
       if (dimsImplicit) {
         for (let i = 0; i < params.control_frames.length; i++) {
           const dims = peekImageDims(params.control_frames[i])
-          if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+          if (dims && (dims.w % alignTo !== 0 || dims.h % alignTo !== 0)) {
             throw new Error(
-              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
+              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of ${alignTo}. ` +
               'Pass explicit width/height to override or pre-scale the frame.'
             )
           }
@@ -476,7 +508,10 @@ class VideoStableDiffusion {
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
     // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
     // img_emb projection and will produce garbage or crash.
-    if (mode === 'img2vid' && !this._files.clipVision) {
+    // LTX-2 (LTXAV) img2vid conditions on the input frame through the video VAE
+    // rather than clip_vision, so this requirement is Wan-only — gating it on
+    // isLtx keeps LTX img2vid usable from JS without a clip_vision file.
+    if (mode === 'img2vid' && !isLtx && !this._files.clipVision) {
       throw new TypeError(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
         'Download clip_vision_h.safetensors from ' +
@@ -589,6 +624,19 @@ class VideoStableDiffusion {
   }
 
   getState () { return this.state }
+
+  /**
+   * True when the configured model is LTX-2 (LTXAV). Keyed on the
+   * embeddings-connectors input, which no other model family uses; this matches
+   * the native detection (SdModel: isLtxModel_ = !embeddingsConnectorsPath.empty()).
+   * audioVae is intentionally not used here: it is optional for LTX (silent runs
+   * omit it), so keying on it would disagree with the native layer. Drives
+   * model-aware validation (8*k+1 frames, x32 dims) on the JS side.
+   * @returns {boolean}
+   */
+  _isLtx () {
+    return !!this._files.embeddingsConnectors
+  }
 }
 
 module.exports = VideoStableDiffusion

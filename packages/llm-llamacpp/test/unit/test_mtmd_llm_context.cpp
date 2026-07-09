@@ -420,6 +420,12 @@ TEST_F(
   prompt.cacheKey = cachePath.string();
   prompt.saveCacheToDisk = true;
   prompt.media.push_back(readBinaryFile(imagePath));
+  // This test validates that cacheKey keeps generated multimodal memory
+  // resident after generation. The fixture's small n_predict can stop Qwen3.5
+  // inside an unfinished reasoning block, which is covered by dedicated
+  // remove_thinking_from_context tests; opt out here so the cache-residency
+  // assertion remains focused on its original contract.
+  prompt.generationParams.remove_thinking_from_context = false;
 
   std::string output = model->processPrompt(prompt);
   EXPECT_GE(output.length(), 0);
@@ -441,6 +447,120 @@ TEST_F(
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
       getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+
+  fs::remove(cachePath);
+}
+
+// Multimodal hybrid (Qwen3.5) compaction. `MtmdLlmContext` shares the
+// `ReasoningBlockCompactor` with `TextLlmContext` but applies its own
+// post-compact bookkeeping (`current_.pos` / `cacheTokens` / protected-
+// prefix). This pins the end-to-end multimodal compaction path:
+//   * a reasoning-capable hybrid multimodal model produces a `<think>` block,
+//   * end-of-prefill recurrent snapshot + restore + post-reasoning replay
+//     succeeds for the multimodal context,
+//   * `thinkingBlockDiscards` increments. Under the uniform hard-fail
+//     contract (PR #2813) any compaction failure would throw
+//     `qvac_errors::StatusError` from `processPrompt`, so the
+//     `ASSERT_NO_THROW` below is the failure-path guard.
+//
+// Companion JS coverage lives in `gemma4.test.js` (pure-attention
+// multimodal); this is the hybrid-multimodal C++ counterpart called out by
+// the reviewer.
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "Multimodal test image not found";
+  }
+
+  // The fixture's default `n_predict=10` is too small for a reasoning
+  // block to close — the SetUp budget was chosen for non-reasoning smoke
+  // tests. Bump it (plus a tight `temp=0` + binary-answer prompt below)
+  // so the model closes `</think>` and produces a visible answer within
+  // a single test run. `createQwen35Model` snapshots the config map, so
+  // the override is local to this test.
+  config_files["n_predict"] = "1024";
+  config_files["temp"] = "0";
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr)
+      << "single-prompt context for Qwen3.5 VLM must be MTMD";
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-thinking-compaction.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt prompt;
+  // Binary-answer prompt: encourages the model to close reasoning quickly
+  // rather than producing a long description that risks blowing past
+  // `n_predict` before `</think>` lands. Mirrors the gemma4 integration
+  // test's "Answer in one word" pattern.
+  prompt.input =
+      R"([{"role": "system", "content": "Answer with just one word: yes or no."},)"
+      R"( {"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Is there fruit in this image?"}])";
+  prompt.cacheKey = cachePath.string();
+  prompt.saveCacheToDisk = true;
+  prompt.media.push_back(readBinaryFile(imagePath));
+  prompt.generationParams.remove_thinking_from_context = true;
+
+  std::string output;
+  ASSERT_NO_THROW({ output = model->processPrompt(prompt); });
+  EXPECT_GT(output.length(), 0u)
+      << "multimodal compaction must not break generation";
+
+  const auto stats = model->runtimeStats();
+  const double discards = getStatValue(stats, "thinkingBlockDiscards");
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+  const llama_pos posMax = llama_memory_seq_pos_max(mem, seqId);
+  const auto sequenceCells =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+  SCOPED_TRACE(
+      "thinkingBlockDiscards=" + std::to_string(discards) +
+      ", nPast=" + std::to_string(ctx->getNPast()) +
+      ", cacheTokens=" + std::to_string(ctx->getCacheTokens()) +
+      ", firstMsgTokens=" + std::to_string(ctx->getFirstMsgTokens()) +
+      ", firstMsgCacheTokens=" + std::to_string(ctx->getFirstMsgCacheTokens()) +
+      ", seqPosMax=" + std::to_string(posMax) +
+      ", sequenceCells=" + std::to_string(sequenceCells) +
+      ", output (first 200 chars): " + output.substr(0, 200));
+
+  // Under the uniform hard-fail contract, any compaction failure
+  // (snapshot capture, restore underflow, or replay rejection) would
+  // have thrown `qvac_errors::StatusError` from `processPrompt` and
+  // failed the `ASSERT_NO_THROW` above. Reaching this point means the
+  // compaction path completed cleanly.
+  ASSERT_NE(output.find("</think>"), std::string::npos)
+      << "this test must reach a closed reasoning span; otherwise it does not "
+         "exercise MTMD compaction bookkeeping";
+  EXPECT_GE(discards, 1.0)
+      << "Qwen3.5 multimodal with remove_thinking_from_context=true "
+         "must compact at least one thinking block once </think> lands";
+  EXPECT_GT(sequenceCells, 0)
+      << "cacheKey must keep compacted MTMD memory resident for bookkeeping "
+         "assertions";
+  EXPECT_GT(ctx->getNPast(), 0)
+      << "context must not have reset before post-compaction bookkeeping "
+         "assertions";
+  EXPECT_GT(ctx->getCacheTokens(), 0)
+      << "cache token bookkeeping must remain resident after compaction";
+  EXPECT_EQ(ctx->getCacheTokens(), sequenceCells)
+      << "MTMD cacheTokens must be refreshed from llama memory after "
+         "compaction";
+  EXPECT_EQ(ctx->getNPast(), posMax + 1)
+      << "MTMD current_.pos must match the compacted sequence cursor";
+  EXPECT_LE(ctx->getFirstMsgTokens(), ctx->getNPast())
+      << "protected text prefix must not extend beyond compacted position";
+  EXPECT_LE(ctx->getFirstMsgCacheTokens(), ctx->getCacheTokens())
+      << "protected cache prefix must not extend beyond compacted KV cells";
 
   fs::remove(cachePath);
 }
@@ -551,6 +671,102 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
          "post-restore validation failure.";
 
   fs::remove(cachePath);
+}
+
+TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "single-prompt context for a VLM must be MTMD";
+  auto* lctx = model->getContext();
+  ASSERT_NE(lctx, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getNPast(), 0);
+  ASSERT_GT(ctx->getCacheTokens(), 0);
+
+  const llama_token nPast = static_cast<llama_token>(ctx->getNPast());
+  const llama_token firstMsgTokens =
+      static_cast<llama_token>(ctx->getFirstMsgTokens());
+  const llama_token cacheTokens =
+      static_cast<llama_token>(ctx->getCacheTokens());
+  const llama_token firstMsgCacheTokens =
+      static_cast<llama_token>(ctx->getFirstMsgCacheTokens());
+
+  const fs::path nPastMismatchPath =
+      fs::temp_directory_path() / "qvac-mtmd-loadcache-npast-mismatch.bin";
+  const fs::path cacheTokensMismatchPath =
+      fs::temp_directory_path() /
+      "qvac-mtmd-loadcache-cachetokens-mismatch.bin";
+  fs::remove(nPastMismatchPath);
+  fs::remove(cacheTokensMismatchPath);
+
+  const llama_token nPastMismatch[SESSION_METADATA_FIELD_COUNT] = {
+      static_cast<llama_token>(nPast + 1),
+      firstMsgTokens,
+      cacheTokens,
+      firstMsgCacheTokens};
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          lctx,
+          nPastMismatchPath.string().c_str(),
+          seqId,
+          nPastMismatch,
+          SESSION_METADATA_FIELD_COUNT),
+      0u);
+
+  const llama_token cacheTokensMismatch[SESSION_METADATA_FIELD_COUNT] = {
+      nPast,
+      firstMsgTokens,
+      static_cast<llama_token>(cacheTokens + 1),
+      firstMsgCacheTokens};
+  ASSERT_GT(
+      llama_state_seq_save_file(
+          lctx,
+          cacheTokensMismatchPath.string().c_str(),
+          seqId,
+          cacheTokensMismatch,
+          SESSION_METADATA_FIELD_COUNT),
+      0u);
+
+  ctx->resetState(true);
+  auto* mem = llama_get_memory(lctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
+
+  EXPECT_THROW(
+      { (void)ctx->loadCache(nPastMismatchPath.string(), 0); },
+      qvac_errors::StatusError)
+      << "loadCache must reject metadata nPast that differs from live KV";
+  EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
+      << "rejected nPast mismatch must clear restored KV cells";
+  EXPECT_EQ(ctx->getNPast(), 0);
+  EXPECT_EQ(ctx->getCacheTokens(), 0);
+
+  EXPECT_THROW(
+      { (void)ctx->loadCache(cacheTokensMismatchPath.string(), 0); },
+      qvac_errors::StatusError)
+      << "loadCache must reject metadata cacheTokens that differs from live KV";
+  EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
+      << "rejected cacheTokens mismatch must clear restored KV cells";
+  EXPECT_EQ(ctx->getNPast(), 0);
+  EXPECT_EQ(ctx->getCacheTokens(), 0);
+
+  fs::remove(nPastMismatchPath);
+  fs::remove(cacheTokensMismatchPath);
 }
 
 TEST_F(MtmdLlmContextTest, InvalidMedia) {

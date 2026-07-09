@@ -23,12 +23,13 @@ ecosystem under test* changes over time:
 | Models | `qwen3.5-q8` (LLM Q8_0 + mmproj Q8_0) · `gemma4-q4` (LLM Q4_K_M + mmproj Q8_0) |
 | Preset | `full` (cognitive VQA×5 + ocr-small ×5 + 1 ocr-page) |
 | Desktop | `linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu` |
-| Mobile | `s26,iphone17pro,pixel9` (each = CPU+GPU in one Device-Farm session) |
+| Mobile | `s26,iphone17pro,pixel9` (each = CPU+GPU in one Device-Farm session). Plain tokens select the **exact model** (MODEL EQUALS) — checkpoints must never mix subfamily variants (the first checkpoint's pixel9 row predates this and mixed Pixel 9 Pro / Pro XL). Do **not** use `<token>any` in checkpoints. |
 | Addon | **latest published** `@qvac/llm-llamacpp` (the `addon` source packs `@latest`) |
 | Dispatch ref | `main` (uses the current benchmark tooling + published addon) |
 | Runs | **3**, run **sequentially** (see gotchas) |
 
-Metrics captured per `Platform · Accel`: **mmproj-enc** (desktop) / **TTFT** (mobile),
+Metrics captured per `Platform · Accel`: **mmproj-enc** and **TTFT** (all platforms —
+mobile reads the addon's `visionEncodeMs` stat for the encode time),
 **full inference** (wall), **cognitive %** (VQA Overall), **OCR %** (avg BLEU×100).
 
 ---
@@ -93,7 +94,10 @@ When the user says **"make a checkpoint"**:
 ## Reading a checkpoint
 
 - **Value = `avg ± deviation%`** (deviation = sample stdev / mean across the 3 runs).
-- **`mmproj-enc`** is filled for desktop only; **`TTFT`** for mobile only (`—` in the other).
+- **`mmproj-enc`** is the pure vision-encode time on every platform (desktop parses
+  llama.cpp's stderr, mobile the addon's `visionEncodeMs` runtime stat); **`TTFT`** is
+  reported on all platforms. Older checkpoints (pre vision-encode stat) have `—` for
+  mobile mmproj-enc — compare those on TTFT.
 - **`†`** = the *median* is shown instead of the mean, because a one-run outlier skewed the
   average (almost always self-hosted **desktop-CPU** runner contention). Treat desktop-CPU
   *speed* with a wide tolerance (~±20%).

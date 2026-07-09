@@ -68,7 +68,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@0.1.0
+        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
 
   lint-and-test:
     runs-on: ubuntu-latest
@@ -123,37 +123,15 @@ jobs:
       - label-gate
     if: |-
       needs.label-gate.outputs.authorised == 'true' && (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
-    runs-on: ubuntu-latest
-    environment: npm
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Determine dist-tag
-        id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@0.1.0
-        with:
-          workdir: ${{ env.WORKDIR }}
-
-      - name: Enable Socket Firewall Guard
-        uses: ./.github/actions/sfw-guard
-        with:
-          firewall-mode: firewall-free
-          clear-caches: "false"
-          managers: npm,pip,pip3,uv,cargo
-          workdir: ${{ env.WORKDIR }}
-
-      - name: Publish to npm
-        id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@0.1.0
-        with:
-          workdir: ${{ env.WORKDIR }}
-          tag: ${{ steps.dist-tag.outputs.tag }}
+    uses: ./.github/workflows/public-reusable-npm.yml
+    secrets: inherit
+    with:
+      workdir: packages/qvac-ci
+      caller_event_name: ${{ github.event_name }}
 
   # Tag the published version (no GitHub Release; SDK-only releases policy)
   create-tag:

@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932). Ships in the 0.9.x line, which stays outside the `^0.8.3` range the already-released SDK 0.14.x pins, so it does not implicitly flow into that SDK.
+
+## [0.9.0] - 2026-07-07
+
+### Changed
+
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-06` to `2026-07-07`,
+  consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#239](https://github.com/tetherto/qvac-registry-vcpkg/pull/239)
+  (QVAC-21005). Fixes a GPU-only defect where the TDT decoder dropped the final
+  sub-word of some multi-piece words (`analyses` → `analys`, `kilomètres` →
+  `km`), inflating non-English WER and, on Vulkan/CUDA, degenerating into
+  repetition loops. Root cause: the 2-layer TDT predictor LSTM only persisted its
+  last layer's state on the on-device graph path (the other layer's state write
+  was pruned by graph construction), leaving the predictor partly stateless; the
+  fix persists every layer's state. Manifest-only: `default-registry.baseline` is
+  unchanged. CPU output was already correct.
+- Bumped the `parakeet-cpp` `version>=` floors (`osx | ios` → `metal`, `android`
+  → `vulkan, opencl`, `!(osx | ios | android)` → `vulkan`) from `2026-06-18#3`
+  to `2026-07-06`, consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#234](https://github.com/tetherto/qvac-registry-vcpkg/pull/234)
+  (QVAC-18192). The Parakeet encoder, subsampling, and Sortformer paths now
+  route compute through a shared `ggml_backend_sched` with the CPU backend
+  last, giving automatic per-op CPU fallback for ops the active GPU backend
+  can't run (previously any GPU-unsupported op would abort). The cached
+  encoder graph stays on a persistent gallocr; the TDT decoder stays on direct
+  compute. Manifest-only: `default-registry.baseline` is unchanged, and the
+  `ggml-speech` floor stays `2026-07-03` (PR #74 carries no ggml change).
+  Behaviour is unchanged on today's supported backends.
+
+## [0.8.3] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
 ## [0.8.2] - 2026-06-24
 
 ### Changed

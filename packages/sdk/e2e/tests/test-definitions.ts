@@ -1,196 +1,198 @@
 // Real SDK tests
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
-import { completionTests } from "./completion-tests.js";
-import { transcriptionTests } from "./transcription-tests.js";
-import { transcribeStreamEventsTests } from "./transcribe-stream-events-tests.js";
-import { embeddingTests } from "./embedding-tests.js";
-import { ragTests } from "./rag-tests.js";
-import { translationIndicTransTests } from "./translation-indictrans-tests.js";
-import { translationBergamotTests } from "./translation-bergamot-tests.js";
-import { translationBergamotCacheTests } from "./translation-bergamot-cache-tests.js";
-import { translationLlmTests } from "./translation-llm-tests.js";
-import { translationSalamandraTests } from "./translation-salamandra-tests.js";
-import { translationAfriquegemmaTests } from "./translation-afriquegemma-tests.js";
-import { modelInfoTests } from "./model-info-tests.js";
-import { kvCacheTests } from "./kv-cache-tests.js";
-import { errorTests } from "./error-tests.js";
-import { toolsTests } from "./tools-tests.js";
-import { ocrTests } from "./ocr-tests.js";
-import { classificationTests } from "./classification-tests.js";
-import { ttsTests } from "./tts-tests.js";
-import { configReloadTests } from "./config-reload-tests.js";
-import { loggingTests } from "./logging-tests.js";
-import { registryTests } from "./registry-tests.js";
-import { shardedModelTests } from "./sharded-model-tests.js";
-import { httpEmbeddingTests } from "./http-embedding-tests.js";
-import { parakeetTests } from "./parakeet-tests.js";
-import { parakeetStreamTests } from "./parakeet-stream-tests.js";
-import { bciTests } from "./bci-tests.js";
-import { visionTests } from "./vision-tests.js";
-import { downloadTests } from "./download-tests.js";
-import { downloadResilienceTests } from "./download-resilience-tests.js";
-import { delegatedInferenceTests } from "./delegated-inference-tests.js";
-import { diffusionTests } from "./diffusion-tests.js";
-import { finetuneTests } from "./finetune-tests.js";
-import { lifecycleTests } from "./lifecycle-tests.js";
-import { configTests } from "./config-tests.js";
-import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
-import { wrongModelTests } from "./wrong-model-tests.js";
-import { multiGpuTests } from "./multi-gpu-tests.js";
-import { cancellationTests } from "./cancellation-tests.js";
-import { vlaTests } from "./vla-tests.js";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { batchCompletionTests } from './batch-completion-tests.js'
+import { completionTests } from './completion-tests.js'
+import { transcriptionTests } from './transcription-tests.js'
+import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
+import { embeddingTests } from './embedding-tests.js'
+import { ragTests } from './rag-tests.js'
+import { translationIndicTransTests } from './translation-indictrans-tests.js'
+import { translationBergamotTests } from './translation-bergamot-tests.js'
+import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
+import { translationLlmTests } from './translation-llm-tests.js'
+import { translationSalamandraTests } from './translation-salamandra-tests.js'
+import { translationAfriquegemmaTests } from './translation-afriquegemma-tests.js'
+import { modelInfoTests } from './model-info-tests.js'
+import { kvCacheTests } from './kv-cache-tests.js'
+import { errorTests } from './error-tests.js'
+import { toolsTests } from './tools-tests.js'
+import { ocrTests } from './ocr-tests.js'
+import { classificationTests } from './classification-tests.js'
+import { ttsTests } from './tts-tests.js'
+import { configReloadTests } from './config-reload-tests.js'
+import { loggingTests } from './logging-tests.js'
+import { registryTests } from './registry-tests.js'
+import { shardedModelTests } from './sharded-model-tests.js'
+import { httpEmbeddingTests } from './http-embedding-tests.js'
+import { parakeetTests } from './parakeet-tests.js'
+import { parakeetStreamTests } from './parakeet-stream-tests.js'
+import { bciTests } from './bci-tests.js'
+import { visionTests } from './vision-tests.js'
+import { downloadTests } from './download-tests.js'
+import { downloadResilienceTests } from './download-resilience-tests.js'
+import { delegatedInferenceTests } from './delegated-inference-tests.js'
+import { diffusionTests } from './diffusion-tests.js'
+import { finetuneTests } from './finetune-tests.js'
+import { lifecycleTests } from './lifecycle-tests.js'
+import { configTests } from './config-tests.js'
+import { noLingeringBareTests } from './no-lingering-bare-tests.js'
+import { wrongModelTests } from './wrong-model-tests.js'
+import { multiGpuTests } from './multi-gpu-tests.js'
+import { cancellationTests } from './cancellation-tests.js'
+import { vlaTests } from './vla-tests.js'
+import { pluginTests } from './plugin-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
-  testId: "model-load-llm",
+  testId: 'model-load-llm',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
 
 export const modelLoadEmbedding: TestDefinition = {
-  testId: "model-load-embedding",
+  testId: 'model-load-embedding',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
 
 export const modelLoadOcr: TestDefinition = {
-  testId: "model-load-ocr",
+  testId: 'model-load-ocr',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 90000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 90000
+  }
+}
 
 export const modelLoadInvalid: TestDefinition = {
-  testId: "model-load-invalid",
+  testId: 'model-load-invalid',
   params: {
-    modelType: "llamacpp-completion",
-    modelPath: "/invalid/path/nonexistent-model.gguf",
+    modelType: 'llamacpp-completion',
+    modelPath: '/invalid/path/nonexistent-model.gguf'
   },
   expectation: {
-    validation: "throws-error",
-    errorContains: "failed to locate",
+    validation: 'throws-error',
+    errorContains: 'failed to locate'
   },
-  suites: ["smoke"],
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 5000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 5000
+  }
+}
 
 export const modelUnload: TestDefinition = {
-  testId: "model-unload",
+  testId: 'model-unload',
   params: { shouldClearStorage: false },
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
-  metadata: { category: "model", dependency: "llm", estimatedDurationMs: 5000 },
-};
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: { category: 'model', dependency: 'llm', estimatedDurationMs: 5000 }
+}
 
 export const modelLoadConcurrent: TestDefinition = {
-  testId: "model-load-concurrent",
+  testId: 'model-load-concurrent',
   params: {
     models: [
-      { type: "llamacpp-completion", constant: "LLAMA_3_2_1B_INST_Q4_0" },
-      { type: "llamacpp-embedding", constant: "GTE_LARGE_FP16" },
-    ],
+      { type: 'llamacpp-completion', constant: 'LLAMA_3_2_1B_INST_Q4_0' },
+      { type: 'llamacpp-embedding', constant: 'GTE_LARGE_FP16' }
+    ]
   },
-  expectation: { validation: "type", expectedType: "array" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'array' },
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
+    category: 'model',
+    dependency: 'none',
     estimatedDurationMs: 120000,
-    expectedCount: 2,
-  },
-};
+    expectedCount: 2
+  }
+}
 
 export const modelReloadLlm: TestDefinition = {
-  testId: "model-reload-llm",
+  testId: 'model-reload-llm',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
+  expectation: { validation: 'type', expectedType: 'string' },
   metadata: {
-    category: "model",
-    dependency: "llm",
-    estimatedDurationMs: 15000,
-  },
-};
+    category: 'model',
+    dependency: 'llm',
+    estimatedDurationMs: 15000
+  }
+}
 
 export const modelSwitchLlm: TestDefinition = {
-  testId: "model-switch-llm",
+  testId: 'model-switch-llm',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
+  expectation: { validation: 'type', expectedType: 'string' },
   metadata: {
-    category: "model",
-    dependency: "llm",
-    estimatedDurationMs: 90000,
-  },
-};
+    category: 'model',
+    dependency: 'llm',
+    estimatedDurationMs: 90000
+  }
+}
 
 export const modelReloadAfterError: TestDefinition = {
-  testId: "model-reload-after-error",
+  testId: 'model-reload-after-error',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
+  expectation: { validation: 'type', expectedType: 'string' },
   metadata: {
-    category: "model",
-    dependency: "llm",
-    estimatedDurationMs: 70000,
-  },
-};
+    category: 'model',
+    dependency: 'llm',
+    estimatedDurationMs: 70000
+  }
+}
 
 export const modelLoadInferredType: TestDefinition = {
-  testId: "model-load-inferred-type",
+  testId: 'model-load-inferred-type',
   params: {},
-  expectation: { validation: "type", expectedType: "string" },
-  suites: ["smoke"],
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 60000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
 
 export const modelLoadMissingTypeStringSrc: TestDefinition = {
-  testId: "model-load-missing-type-string-src",
-  params: { modelPath: "/invalid/path/nonexistent-model.gguf" },
+  testId: 'model-load-missing-type-string-src',
+  params: { modelPath: '/invalid/path/nonexistent-model.gguf' },
   expectation: {
-    validation: "throws-error",
-    errorContains: "modelType is required",
+    validation: 'throws-error',
+    errorContains: 'modelType is required'
   },
-  suites: ["smoke"],
+  suites: ['smoke'],
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 2000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 2000
+  }
+}
 
 export const modelLifecycleNmt: TestDefinition = {
-  testId: "model-lifecycle-nmt",
-  params: { text: "Hello, how are you today?" },
-  expectation: { validation: "type", expectedType: "string" },
+  testId: 'model-lifecycle-nmt',
+  params: { text: 'Hello, how are you today?' },
+  expectation: { validation: 'type', expectedType: 'string' },
   metadata: {
-    category: "model",
-    dependency: "none",
-    estimatedDurationMs: 180000,
-  },
-};
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 180000
+  }
+}
 
 // Export all tests as array
 export const tests = [
@@ -209,6 +211,7 @@ export const tests = [
 
   // Completion tests
   ...completionTests,
+  ...batchCompletionTests,
 
   // Transcription tests
   ...transcriptionTests,
@@ -320,6 +323,9 @@ export const tests = [
   // Device Farm infra (see note there).
   ...vlaTests,
 
+  // Custom plugin system tests (custom-echo-plugin, error paths)
+  ...pluginTests,
+
   // Additional model tests
   modelSwitchLlm,
   modelReloadAfterError,
@@ -327,5 +333,5 @@ export const tests = [
   modelLoadMissingTypeStringSrc,
 
   // NMT model lifecycle test
-  modelLifecycleNmt,
-];
+  modelLifecycleNmt
+]

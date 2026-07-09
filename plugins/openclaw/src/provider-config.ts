@@ -1,7 +1,11 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { qvacCatalog, resolveModelConstant } from '@qvac/ai-sdk-provider/models'
+import {
+  qvacCatalog as sharedQvacCatalog,
+  resolveModelConstant as resolveSharedModelConstant,
+  type QvacCatalogEntry
+} from '@qvac/ai-sdk-provider/models'
 import type { ModelProviderConfig } from 'openclaw/plugin-sdk/provider-model-shared'
 
 export interface ResolvedOptions {
@@ -126,7 +130,9 @@ export interface QvacProviderRegistration {
       readonly hint: string
       readonly kind: 'custom'
       run(context: { readonly config: OpenClawConfigLike }): Promise<QvacProviderAuthResult>
-      runNonInteractive(context: { readonly config: OpenClawConfigLike }): Promise<OpenClawConfigLike>
+      runNonInteractive(context: {
+        readonly config: OpenClawConfigLike
+      }): Promise<OpenClawConfigLike>
     }>
     resolveSyntheticAuth(context: {
       readonly provider: string
@@ -136,7 +142,9 @@ export interface QvacProviderRegistration {
       readonly source: string
       readonly mode: 'api-key'
     }
-    shouldDeferSyntheticProfileAuth(context: { readonly resolvedApiKey?: string }): boolean | undefined
+    shouldDeferSyntheticProfileAuth(context: {
+      readonly resolvedApiKey?: string
+    }): boolean | undefined
     readonly catalog: {
       readonly order: 'simple'
       run(): Promise<{ provider: OpenClawProvider }>
@@ -189,12 +197,42 @@ export const DEFAULT_OPTIONS: ResolvedOptions = {
 
 const ZERO_COST: OpenClawCost = Object.freeze({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 })
 
-export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[] {
-  return qvacCatalog.map((entry) => ({
+const OPENCLAW_CATALOG_OVERLAY: readonly QvacCatalogEntry[] = [
+  { id: 'qwen3.6-27b', constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL', name: 'Qwen3.6 27B' },
+  { id: 'qwen3.6-35b-a3b', constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', name: 'Qwen3.6 35B A3B' },
+  { id: 'gpt-oss-20b', constant: 'GPT_OSS_20B_INST_Q4_K_M', name: 'GPT-OSS 20B' },
+  { id: 'gemma4-31b', constant: 'GEMMA4_31B_MULTIMODAL_Q4_K_M', name: 'Gemma4 31B' }
+]
+
+function createOpenClawCatalog(): readonly QvacCatalogEntry[] {
+  const seen = new Set(sharedQvacCatalog.map((entry) => entry.id))
+  const entries: QvacCatalogEntry[] = [...sharedQvacCatalog]
+  for (const entry of OPENCLAW_CATALOG_OVERLAY) {
+    if (seen.has(entry.id)) continue
+    seen.add(entry.id)
+    entries.push(entry)
+  }
+  return entries
+}
+
+const openClawCatalog = createOpenClawCatalog()
+const openClawCatalogById = new Map(openClawCatalog.map((entry) => [entry.id, entry]))
+const openClawCatalogByConstant = new Map(openClawCatalog.map((entry) => [entry.constant, entry]))
+
+function resolveOpenClawModelConstant(idOrConstant: string): string {
+  return (
+    openClawCatalogById.get(idOrConstant)?.constant ??
+    openClawCatalogByConstant.get(idOrConstant)?.constant ??
+    resolveSharedModelConstant(idOrConstant)
+  )
+}
+
+export function createOpenClawModels(options: ResolvedOptions): OpenClawModel[] {
+  return openClawCatalog.map((entry) => ({
     id: entry.id,
     name: entry.name,
     reasoning: true,
-    input: ['text', 'image'],
+    input: entry.constant.includes('MULTIMODAL') ? ['text', 'image'] : ['text'],
     cost: ZERO_COST,
     contextWindow: options.ctxSize,
     maxTokens: 8192,
@@ -204,7 +242,7 @@ export function createOpenClawModels (options: ResolvedOptions): OpenClawModel[]
 
 export const openClawModels: OpenClawModel[] = createOpenClawModels(DEFAULT_OPTIONS)
 
-export const openClawCatalogRows: readonly OpenClawCatalogRow[] = qvacCatalog.map((entry) => ({
+export const openClawCatalogRows: readonly OpenClawCatalogRow[] = openClawCatalog.map((entry) => ({
   kind: 'text',
   provider: 'qvac',
   model: entry.id,
@@ -212,39 +250,43 @@ export const openClawCatalogRows: readonly OpenClawCatalogRow[] = qvacCatalog.ma
   source: 'static'
 }))
 
-function resolveOpenClawModelsMode (mode: string | undefined): OpenClawModelsMode {
+function resolveOpenClawModelsMode(mode: string | undefined): OpenClawModelsMode {
   return mode === 'replace' ? 'replace' : 'merge'
 }
 
-function coerceString (option: string, value: unknown): string {
+function coerceString(option: string, value: unknown): string {
   if (typeof value !== 'string') throw new TypeError(`${option} must be a string`)
   return value
 }
 
-function coerceNumber (option: string, value: unknown): number {
+function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) throw new TypeError(`${option} must be a finite number`)
   return n
 }
 
-function coerceBoolean (option: string, value: unknown): boolean {
+function coerceBoolean(option: string, value: unknown): boolean {
   if (typeof value === 'boolean') return value
   if (value === 'true' || value === '1') return true
   if (value === 'false' || value === '0') return false
   throw new TypeError(`${option} must be a boolean`)
 }
 
-export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
+export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
   const host = raw.host === undefined ? DEFAULT_OPTIONS.host : coerceString('host', raw.host)
   const port = raw.port === undefined ? DEFAULT_OPTIONS.port : coerceNumber('port', raw.port)
-  const baseUrl = raw.baseUrl === undefined ? `http://${host}:${port}/v1` : coerceString('baseUrl', raw.baseUrl)
+  const baseUrl =
+    raw.baseUrl === undefined ? `http://${host}:${port}/v1` : coerceString('baseUrl', raw.baseUrl)
   return {
     model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
     host,
     port,
     baseUrl,
     apiKey: raw.apiKey === undefined ? DEFAULT_OPTIONS.apiKey : coerceString('apiKey', raw.apiKey),
-    qvacCommand: raw.qvacCommand === undefined ? DEFAULT_OPTIONS.qvacCommand : coerceString('qvacCommand', raw.qvacCommand),
+    qvacCommand:
+      raw.qvacCommand === undefined
+        ? DEFAULT_OPTIONS.qvacCommand
+        : coerceString('qvacCommand', raw.qvacCommand),
     serviceRuntime:
       raw.serviceRuntime === undefined
         ? DEFAULT_OPTIONS.serviceRuntime
@@ -254,7 +296,8 @@ export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
         ? DEFAULT_OPTIONS.serviceEntrypoint
         : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
     cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
-    ctxSize: raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
+    ctxSize:
+      raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
     reasoningBudget:
       raw.reasoningBudget === undefined
         ? DEFAULT_OPTIONS.reasoningBudget
@@ -264,7 +307,10 @@ export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
       raw.readyTimeoutMs === undefined
         ? DEFAULT_OPTIONS.readyTimeoutMs
         : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
-    idleStopMs: raw.idleStopMs === undefined ? DEFAULT_OPTIONS.idleStopMs : coerceNumber('idleStopMs', raw.idleStopMs),
+    idleStopMs:
+      raw.idleStopMs === undefined
+        ? DEFAULT_OPTIONS.idleStopMs
+        : coerceNumber('idleStopMs', raw.idleStopMs),
     timeoutSeconds:
       raw.timeoutSeconds === undefined
         ? DEFAULT_OPTIONS.timeoutSeconds
@@ -272,11 +318,11 @@ export function resolveOptions (raw: RawOptions = {}): ResolvedOptions {
   }
 }
 
-export function createQvacServeModels (options: ResolvedOptions): Record<string, QvacServeModel> {
+export function createQvacServeModels(options: ResolvedOptions): Record<string, QvacServeModel> {
   const models: Record<string, QvacServeModel> = {}
-  for (const entry of qvacCatalog) {
+  for (const entry of openClawCatalog) {
     models[entry.id] = {
-      model: resolveModelConstant(entry.id),
+      model: resolveOpenClawModelConstant(entry.id),
       preload: entry.id === options.model,
       ...(entry.id === options.model ? { default: true as const } : {}),
       config: {
@@ -289,7 +335,7 @@ export function createQvacServeModels (options: ResolvedOptions): Record<string,
   return models
 }
 
-export function createOpenClawProvider (options: ResolvedOptions): OpenClawProvider {
+export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvider {
   return {
     baseUrl: options.baseUrl,
     apiKey: options.apiKey,
@@ -323,7 +369,7 @@ export function createOpenClawProvider (options: ResolvedOptions): OpenClawProvi
   }
 }
 
-export function createQvacSetupResult (
+export function createQvacSetupResult(
   config: OpenClawConfigLike,
   rawOptions: RawOptions = {}
 ): QvacProviderAuthResult {
@@ -357,7 +403,10 @@ export function createQvacSetupResult (
   }
 }
 
-export function applyQvacSetupConfig (config: OpenClawConfigLike, rawOptions: RawOptions = {}): OpenClawConfigLike {
+export function applyQvacSetupConfig(
+  config: OpenClawConfigLike,
+  rawOptions: RawOptions = {}
+): OpenClawConfigLike {
   const setup = createQvacSetupResult(config, rawOptions).configPatch
   return {
     ...config,
@@ -377,7 +426,10 @@ export function applyQvacSetupConfig (config: OpenClawConfigLike, rawOptions: Ra
   }
 }
 
-export function registerQvacProvider (api: QvacProviderRegistration, rawOptions: RawOptions = {}): void {
+export function registerQvacProvider(
+  api: QvacProviderRegistration,
+  rawOptions: RawOptions = {}
+): void {
   const pluginConfig = api.pluginConfig ?? {}
   const mergedOptions = () => ({ ...pluginConfig, ...rawOptions })
   api.registerModelCatalogProvider?.({
@@ -392,26 +444,33 @@ export function registerQvacProvider (api: QvacProviderRegistration, rawOptions:
     id: 'qvac',
     label: 'QVAC',
     docsPath: '/providers/qvac',
-    auth: [{
-      id: 'local',
-      label: 'Local QVAC',
-      hint: 'Start qvac serve through OpenClaw localService',
-      kind: 'custom',
-      run: async ({ config }) => createQvacSetupResult(config, mergedOptions()),
-      runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
-    }],
+    auth: [
+      {
+        id: 'local',
+        label: 'Local QVAC',
+        hint: 'Start qvac serve through OpenClaw localService',
+        kind: 'custom',
+        // lunte-disable-next-line require-await
+        run: async ({ config }) => createQvacSetupResult(config, mergedOptions()),
+        // lunte-disable-next-line require-await
+        runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
+      }
+    ],
     resolveSyntheticAuth: () => ({
       apiKey: 'custom-local',
       source: 'qvac plugin (synthetic local key)',
       mode: 'api-key'
     }),
-    shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) => resolvedApiKey === 'custom-local' || resolvedApiKey === 'qvac-local',
+    shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) =>
+      resolvedApiKey === 'custom-local' || resolvedApiKey === 'qvac-local',
     catalog: {
       order: 'simple',
+      // lunte-disable-next-line require-await
       run: async () => ({ provider: providerConfig() })
     },
     staticCatalog: {
       order: 'simple',
+      // lunte-disable-next-line require-await
       run: async () => ({ provider: providerConfig() })
     },
     wizard: {

@@ -245,8 +245,49 @@ Notes:
   streaming.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
-  different rate (`TTSOutputChunk.sampleRate` reports the actual rate). The
-  LavaSR denoiser stage is a planned follow-up.
+  different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+
+### Denoiser
+
+LavaSR's first stage — the UL-UNAS **denoiser**, which cleans the signal before
+the enhancer bandwidth-extends it — is wired through the addon. It is enabled the
+same way as the enhancer, via `files.lavasrDenoiser` (or a
+`denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the
+enhancer (rate-preserving) on the batch path for both engines:
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  files: {
+    supertonicModel,
+    lavasrDenoiser: 'models/lavasr/lavasr-denoiser.gguf', // cleaned first…
+    lavasrEnhancer: 'models/lavasr/lavasr-enhancer.gguf'  // …then upsampled
+  },
+  config: { language: 'en' }
+})
+```
+
+Convert the GGUF from the public [LavaSRcpp](https://github.com/Topping1/LavaSRcpp)
+ONNX release:
+
+```bash
+python scripts/convert-lavasr-denoiser-to-gguf.py \
+  --denoiser denoiser_core_legacy_fixed63.onnx \
+  --out models/lavasr/lavasr-denoiser.gguf --ftype f16   # or f32
+```
+
+Notes:
+
+- The UL-UNAS forward runs at 16 kHz internally (resampled in/out), so the
+  denoiser is **rate-preserving**: the emitted audio keeps the engine's sample
+  rate. With no denoiser path the output is unchanged (full backward compat).
+- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is
+  rejected up front — a stateful streaming denoiser is the follow-up. Use batch
+  synthesis, or drop the denoiser for streaming.
+- The tts-cpp UL-UNAS forward is implemented in
+  [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
+  (scalar CPU port, validated bit-close to the ONNX reference) and is active as of
+  the `tts-cpp` pin `2026-07-03#1` (this package's `vcpkg.json`).
 
 ## Backends & GPU acceleration
 
@@ -281,6 +322,13 @@ table above.  Hosts must pass `backendsDir: path.join(__dirname,
 so the runtime knows where to look.  `openclCacheDir` is also
 Android-specific; setting it to a writable path lets the OpenCL
 backend persist its compiled program cache across launches.
+`vulkanCacheDir` is the Vulkan analogue (Supertonic + `useGPU: true`):
+setting it to a writable path persists the compiled pipeline cache
+(`GGML_VK_PIPELINE_CACHE_DIR`) across launches and enables a load-time
+pre-warm, so the one-time first-dispatch shader-compile cost (seconds
+on Mali) is paid once per install rather than on the first `run()` of
+every process.  Both are fully opt-in: unset means behaviour is
+unchanged.
 
 ## API overview
 
@@ -303,6 +351,7 @@ backend persist its compiled program cache across launches.
 | `cfmSteps`                | number     | 2          | 1 = faster (halved CFM cost) |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
+| `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts, including Android, where `tts-cpp` selects the GPU backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali) |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |

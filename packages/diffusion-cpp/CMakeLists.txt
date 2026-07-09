@@ -71,6 +71,10 @@ if(ANDROID AND GGML_BACKEND_DL)
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
     endif()
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
+      continue()
+    endif()
     # qvac ggml ports prefix backend module filenames (e.g.
     # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). These
     # modules are installed under vcpkg's bin/ directory on Android.

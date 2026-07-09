@@ -1,4 +1,5 @@
 #include <chrono>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -21,6 +22,49 @@ TEST(RuntimeStatsRates, NoStepsYieldZeroRates) {
   RuntimeStatsSnapshot stats;
   EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 0.0);
   EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 0.0);
+}
+
+TEST(RuntimeStatsRates, TimedDecodeIncludesSynchronizeDurationOnSuccess) {
+  llama_batch batch{};
+  bool decodeCalled = false;
+  bool synchronizeCalled = false;
+  const auto synchronizeDelay = milliseconds(25);
+
+  const TimedDecodeResult result = timeDecodeStep(
+      nullptr,
+      batch,
+      [&decodeCalled](llama_context* ctx, llama_batch&) {
+        EXPECT_EQ(ctx, nullptr);
+        decodeCalled = true;
+        return 0;
+      },
+      [synchronizeDelay, &synchronizeCalled](llama_context* ctx) {
+        EXPECT_EQ(ctx, nullptr);
+        synchronizeCalled = true;
+        std::this_thread::sleep_for(synchronizeDelay);
+      });
+
+  EXPECT_EQ(result.rc, 0);
+  EXPECT_TRUE(decodeCalled);
+  EXPECT_TRUE(synchronizeCalled);
+  EXPECT_GE(
+      result.duration.count(),
+      std::chrono::duration_cast<std::chrono::nanoseconds>(synchronizeDelay)
+          .count());
+}
+
+TEST(RuntimeStatsRates, TimedDecodeSynchronizesOnDecodeFailure) {
+  llama_batch batch{};
+  bool synchronizeCalled = false;
+
+  const TimedDecodeResult result = timeDecodeStep(
+      nullptr,
+      batch,
+      [](llama_context*, llama_batch&) { return -1; },
+      [&synchronizeCalled](llama_context*) { synchronizeCalled = true; });
+
+  EXPECT_EQ(result.rc, -1);
+  EXPECT_TRUE(synchronizeCalled);
 }
 
 TEST(RuntimeStatsRates, PureDecodeStepsComputeDecodeRate) {
@@ -51,28 +95,28 @@ TEST(RuntimeStatsRates, PurePrefillStepsComputePrefillRate) {
   EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 0.0);
 }
 
-TEST(RuntimeStatsRates, MixedStepIsChargedToDecodeNotPrefill) {
+TEST(RuntimeStatsRates, MixedStepSplitsTimeAndTokensProportionally) {
   RuntimeStatsSnapshot stats;
-  // Pure-prefill step establishes the prefill rate: 100 tok / 50 ms.
+  // Pure-prefill step establishes an initial prefill rate: 100 tok / 50 ms.
   constexpr int numActiveSequences1 = 2;
   constexpr int prefillTokens1 = 100;
   constexpr int decodeTokens1 = 0;
   stats.recordDecodeStep(
       numActiveSequences1, prefillTokens1, decodeTokens1, milliseconds(50));
-  // Mixed step: a newcomer feeds 1 prefill token while 3 sequences generate.
-  // The whole step (time + its generated tokens) belongs to decode; the
-  // piggybacked prefill token must NOT inflate the prefill rate.
+  // Mixed step: a newcomer feeds 1 prefill token while 3 sequences generate
+  // over 30 ms. The step is split proportionally by token count:
+  //   prefill share = 1/(1+3) = 0.25 → prefill += 1 token, +7.5 ms
+  //   decode  share = 3/(1+3) = 0.75 → decode  += 3 tokens, +22.5 ms
   constexpr int numActiveSequences2 = 4;
   constexpr int prefillTokens2 = 1;
   constexpr int decodeTokens2 = 3;
   stats.recordDecodeStep(
       numActiveSequences2, prefillTokens2, decodeTokens2, milliseconds(30));
 
-  // Prefill rate unchanged: still 100 tok / 50 ms = 2000 tok/s. The mixed
-  // step's 1 prefill token and 30 ms were charged to decode, not prefill.
-  EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 2000.0);
-  // Decode rate: 3 tok / 30 ms = 100 tok/s.
-  EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 100.0);
+  // Prefill rate: (100 + 1) tok / (50 + 7.5) ms = 101000 / 57.5.
+  EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 1000.0 * 101.0 / 57.5);
+  // Decode rate: 3 tok / 22.5 ms = 3000 / 22.5.
+  EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 1000.0 * 3.0 / 22.5);
 }
 
 TEST(RuntimeStatsRates, ResetClearsRates) {
@@ -82,6 +126,34 @@ TEST(RuntimeStatsRates, ResetClearsRates) {
   stats.reset();
   EXPECT_DOUBLE_EQ(stats.decodeTokensPerSecond(), 0.0);
   EXPECT_DOUBLE_EQ(stats.prefillTokensPerSecond(), 0.0);
+}
+
+// Batch TTFT is sourced from `prefillTimeMs()`. It sums the prefill share
+// of every batch step: pure-prefill steps contribute fully, mixed steps
+// contribute the prefill-token fraction of their wall-clock. Compactor
+// replay decode is excluded because it fires in `onGenerationFinished`,
+// outside the scheduler's timed `recordDecodeStep` block — not by any
+// gating inside this function.
+TEST(RuntimeStatsRates, PrefillTimeMsIncludesProportionalMixedStepShare) {
+  RuntimeStatsSnapshot stats;
+  EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 0.0);
+
+  // Two pure-prefill steps: 50 ms + 30 ms = 80 ms.
+  stats.recordDecodeStep(
+      /*active=*/2, /*prefill=*/100, /*decode=*/0, milliseconds(50));
+  stats.recordDecodeStep(
+      /*active=*/2, /*prefill=*/40, /*decode=*/0, milliseconds(30));
+  EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 80.0);
+
+  // Mixed step: 1 prefill token piggybacks 3 decode tokens over 25 ms.
+  // Prefill share = 1/(1+3) = 0.25, so prefill picks up 25 * 0.25 = 6.25 ms
+  // → total prefill time = 80 + 6.25 = 86.25 ms.
+  stats.recordDecodeStep(
+      /*active=*/3, /*prefill=*/1, /*decode=*/3, milliseconds(25));
+  EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 86.25);
+
+  stats.reset();
+  EXPECT_DOUBLE_EQ(stats.prefillTimeMs(), 0.0);
 }
 
 // Minimal `Request` constructed only with the fields `accumulateSlot`
@@ -105,11 +177,20 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
 
   // (nPast, nSlides, thinkingDiscards, req)
   stats.accumulateSlot(
-      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/1, reqA);
+      /*nPast=*/0,
+      /*nSlides=*/0,
+      /*thinkingDiscards=*/1,
+      reqA);
   stats.accumulateSlot(
-      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/0, reqB);
+      /*nPast=*/0,
+      /*nSlides=*/0,
+      /*thinkingDiscards=*/0,
+      reqB);
   stats.accumulateSlot(
-      /*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/2, reqC);
+      /*nPast=*/0,
+      /*nSlides=*/0,
+      /*thinkingDiscards=*/2,
+      reqC);
 
   EXPECT_EQ(stats.thinkingBlockDiscards, 3);
 }
@@ -143,7 +224,11 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   RuntimeStatsSnapshot stats;
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
-  stats.accumulateSlot(/*nPast=*/0, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
+  stats.accumulateSlot(
+      /*nPast=*/0,
+      /*nSlides=*/0,
+      /*thinkingDiscards=*/0,
+      req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -164,7 +249,10 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
 
   RuntimeStatsSnapshot stats;
   stats.accumulateSlot(
-      /*nPast=*/42, /*nSlides=*/0, /*thinkingDiscards=*/0, req);
+      /*nPast=*/42,
+      /*nSlides=*/0,
+      /*thinkingDiscards=*/0,
+      req);
 
   EXPECT_EQ(stats.promptTokens, 42);
 }

@@ -59,6 +59,12 @@ struct SdCtxConfig {
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
   std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
                           // fast preview)
+  // -- LTX-2 (LTXAV) video model inputs --------------------------------------
+  // LTX-2 reuses diffusionModelPath (diffusion transformer), llmPath (Gemma
+  // text encoder) and vaePath (video VAE). These two are LTX-only extras:
+  std::string audioVaePath; // audio_vae_path        -- LTX-2 audio VAE decoder
+  std::string embeddingsConnectorsPath; // embeddings_connectors_path -- LTX-2
+                                        // text-embedding connector weights
 
   // -- Compute ---------------------------------------------------------------
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores
@@ -71,6 +77,10 @@ struct SdCtxConfig {
   bool offloadToCpu = false; // offload_params_to_cpu: keep weights in RAM, load
                              // per-layer to GPU
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
+  // Optional GPU pick when device == "gpu": a device index, "integrated", or
+  // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
+  // choose. Resolved to a concrete ggml device backend name in SdModel::load().
+  std::string mainGpu;
   bool keepClipOnCpu =
       false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
   bool keepVaeOnCpu =

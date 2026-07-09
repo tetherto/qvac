@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.11.2] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (clip flash-attention AUTO fallback on non-coopmat GPUs + bounded ggml-opencl driver submissions — fixes Android vision-encoder crashes on very large encodes; no API change for this package).
+
+## [0.11.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.11.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.10.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking for i8mm/AVX2 GEMM; no API change for this package).
+
+## [0.9.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.0` → `9341.1.3` (Gemma-4 E2B vision-encoder Arm Mali/Vulkan attention speedup + encoder token-count fix; no API change for this package).
+
+### Pull Requests
+
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+
+## [0.8.2] - 2026-07-03
+
+### Changed
+
+- pi0.5 HIP warm-path inference optimized ~479 → 384 ms (**-18%**) on Strix Halo / gfx1151, accuracy-neutral (cos = 0.9994 vs PyTorch). Combines graph reuse across ODE steps, batched vision, flash-attention at the three attention sites (SigLIP, VLM prefill, expert block), batched AdaLN, a llama.cpp-style unified F16 KV cache, and a fused GeGLU + adaRMSNorm path. No public API change.
+
+### Added
+
+- Load-time validation on pi0.5 checkpoints: rejects non-MQA expert KV configs (`expert_n_kv_heads != 1` — the unified KV cache assumes a single K/V head so the VLM prefix is contiguous at offset 0) and validates adaRMSNorm modulation width (`3 × expert_hidden`), failing fast at load instead of silently corrupting the KV layout or reading out of bounds.
+
+## Pull Requests
+
+- [#2971](https://github.com/tetherto/qvac/pull/2971) - QVAC-21319 perf[vla]: pi05 HIP warm-path optimization (479->384ms, accuracy-neutral)
+
+## [0.8.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
 ## [0.8.0] - 2026-06-30
 
 ### Added

@@ -38,7 +38,7 @@ struct ChatterboxConfig {
    *
    * The T3 KV cache is allocated UP-FRONT at n_ctx, in F32: the Turbo
    * GGUF ships n_ctx=8196 which costs ~1.6 GB of KV for synthesis that
-   * rarely needs more than a few hundred tokens (QVAC-19557 iOS OOM).
+   * rarely needs more than a few hundred tokens (iOS OOM).
    * When unset, {@link ChatterboxModel} applies kDefaultNCtx (2048,
    * ~400 MB KV on Turbo, ≈80 s of audio per synthesize() call).
    *
@@ -136,9 +136,8 @@ struct ChatterboxConfig {
    *                   kanji degrade to [UNK].
    *
    *   cangjieTsvPath: Cangjie hanzi->code TSV used for Chinese ("zh").
-   *                   zh is currently excluded from the multilingual
-   *                   tokenizer's supported_languages(), so this stays
-   *                   wired but unused until the Cangjie path is reworked.
+   *                   Required for "zh"; when empty tts-cpp throws at load
+   *                   time asking for the Cangjie5_TC TSV.
    *
    * Empty -> leave the corresponding EngineOptions field empty.
    */
@@ -156,6 +155,15 @@ struct ChatterboxConfig {
   // `outputSampleRate` is also set the enhanced signal is resampled to that
   // rate afterwards.
   std::string enhancerGgufPath;
+
+  // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
+  // the single switch: when set, the synthesized PCM is denoised BEFORE the
+  // enhancer (rate-preserving); empty disables it (full backward compat).
+  // The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR
+  // #78; a non-empty path activates it once the pinned tts-cpp includes #78.
+  // Native chunk streaming (streamChunkTokens > 0) with a denoiser is rejected
+  // up front (a stateful streaming denoiser is the follow-up) — batch only.
+  std::string denoiserGgufPath;
 };
 
 } // namespace qvac::ttsggml::chatterbox

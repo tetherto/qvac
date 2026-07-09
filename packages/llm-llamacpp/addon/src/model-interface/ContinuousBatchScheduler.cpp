@@ -9,6 +9,7 @@
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 #include <unordered_set>
 #include <utility>
@@ -57,6 +58,36 @@ void logTeardownFailureNoexcept(const char* what) noexcept {
   }
 }
 
+bool isFileMissingOrEmpty(const std::filesystem::path& path) {
+  std::error_code directoryErrorCode;
+  if (std::filesystem::is_directory(path, directoryErrorCode)) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const auto size = std::filesystem::file_size(path, errorCode);
+  if (!errorCode) {
+    return size == 0;
+  }
+  return errorCode == std::errc::no_such_file_or_directory ||
+         errorCode == std::errc::not_a_directory;
+}
+
+bool isParentDirectoryMissing(const std::filesystem::path& path) {
+  const auto parent = path.parent_path();
+  if (parent.empty()) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const bool exists = std::filesystem::exists(parent, errorCode);
+  return !errorCode && !exists;
+}
+
+bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
+  return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
+}
+
 /// Partition the whole-context KV pool uniformly across slots. Mirrors
 /// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
 /// n_parallel` as the per-sequence hard ceiling.
@@ -72,16 +103,18 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
 
 } // namespace
 
-void finalizeTerminalDriver(
+bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback) {
   if (reason == StopReason::Cancelled || reason == StopReason::DecodeError) {
-    driver.onCancel(outputCallback);
-  } else if (prefillOnly) {
+    return driver.onCancel(outputCallback);
+  }
+  if (prefillOnly) {
     driver.onSequenceEnd(outputCallback);
   } else {
     driver.onGenerationFinished(outputCallback);
   }
+  return true;
 }
 
 bool computeSlideCapable(
@@ -99,6 +132,20 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
+TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize) {
+  const auto decodeStart = std::chrono::steady_clock::now();
+  const int rc = decode(ctx, batch);
+  synchronize(ctx);
+
+  TimedDecodeResult result;
+  result.rc = rc;
+  result.duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now() - decodeStart);
+  return result;
+}
+
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
@@ -113,9 +160,8 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
-        return llama_decode(ctx, b);
-      }),
+      slots_(batchSize), decodeFunc_(llama_decode),
+      synchronizeFunc_(llama_synchronize),
       evalMediaFunc_(
           [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
             return driver.evalMediaSegment(mediaIndex, pos);
@@ -363,6 +409,15 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       isCacheLoaded,
       request.prefill);
 
+  // Anchored post-`preparePrefill` so a pure-attention in-prefill slide
+  // is reflected here; see `TextLlmContext::evalMessageWithTools` for
+  // the full rationale. Recurrent throws on slide, so the ordering is
+  // equivalent for that path.
+  driver->snapshotPreRequestCursor();
+  // Hybrid / recurrent full-state disk snapshot for cancel rollback
+  // (their memory rejects partial `seq_rm`). No-op for pure-attention.
+  driver->snapshotPreRequestRollbackAnchor();
+
   const auto promptSize = static_cast<unsigned>(driver->getNPast()) +
                           static_cast<unsigned>(plan.totalPositions());
   // M-RoPE media consumes more KV cells than positions; the cells must also
@@ -446,6 +501,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .group = std::move(queued.group),
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
+          .activeCacheSavedToDisk = isCacheLoaded,
           .prefillOnly = request.prefill});
   cacheGuard.dismiss();
   return seqId;
@@ -480,7 +536,19 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
   for (const auto& req : finished) {
     if (hasValidDriverF()(req)) {
       auto& slot = *slots_[req.seqId];
-      finalizeTerminalDriver(
+      // Sync the driver's live KV cursor to the batcher's authoritative
+      // `req.currentPos` before finalize so `onCancel` (called for
+      // Cancelled / DecodeError) computes the correct tail trim on
+      // pure-attention drivers. Without this a mid-prefill cancel /
+      // decode-error leaves the driver's `nPast_` at the admission
+      // cursor while live KV holds the partial prefill, so `onCancel`
+      // under-trims by `req.currentPos - preRequestNPast` cells and
+      // any subsequent save serialises a KV span wider than the
+      // metadata's `nPast`.
+      slot.driver->syncPosition(req.currentPos);
+      // Rollback-ok signal is intentionally discarded here: this path
+      // is the scheduler-teardown drain and does not persist cache.
+      (void)finalizeTerminalDriver(
           *slot.driver, req.stopReason, slot.prefillOnly, {});
     }
     clearSeqKv(req.seqId);
@@ -491,6 +559,18 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
 
 MultiRequestBatcher::PrefillCompleteFn
 ContinuousBatchScheduler::prefillCompleteFn() {
+  // A throw from `onPrefillComplete` (e.g. from the recurrent
+  // boundary-snapshot capture site inside `snapshotForRecurrentRollback`
+  // under the uniform hard-fail contract for
+  // `remove_thinking_from_context`) propagates through
+  // `batcher_.advance` / `batcher_.completeMediaBarrier` and is caught
+  // by the `try` block in `workerLoop`, which then routes the affected
+  // group through `failGroupLocked` -> `cancelSlotLocked(Skip)`. That
+  // keeps saveCache off (last known-good on-disk cache preserved) and
+  // clears the seq KV before the slot is freed. No scheduler code
+  // change is needed here; this comment pins the invariant so a future
+  // refactor doesn't accidentally introduce a swallow-and-continue
+  // path.
   return
       [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
         auto& slot = slots_[seqId];
@@ -528,8 +608,20 @@ void ContinuousBatchScheduler::failSlotLocked(
     return;
   }
   if (slot->driver) {
-    slot->driver->onCancel({});
-    if (const Request* req = batcher_.requestAt(seqId); req != nullptr) {
+    // Same rationale as cancelSlotLocked/drainFinishedLocked: sync the
+    // driver cursor to the batcher's `currentPos` before onCancel so a
+    // mid-prefill failure trims the exact partial-prefill KV span. When
+    // there is no admitted request (`req == nullptr`) the driver's own
+    // cursor is authoritative and we leave it untouched.
+    const Request* req = batcher_.requestAt(seqId);
+    if (req != nullptr) {
+      slot->driver->syncPosition(req->currentPos);
+    }
+    // Rollback-ok signal is intentionally discarded: this failure path
+    // never persists cache (no `saveCacheForSlot` below) — a subsequent
+    // `batcher_.cancel` wipes the sequence via `clearSeqKv`.
+    (void)slot->driver->onCancel({});
+    if (req != nullptr) {
       accumulateSlotRuntimeStats(*slot, *req);
     }
   }
@@ -604,8 +696,25 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
     try {
       newPos =
           evalMediaFunc_(driver, awaiting->mediaIndex, awaiting->currentPos);
+      // Media eval can run embedded llama_decode work without a logits read.
+      // Synchronize before stopping the timer and before deferred teardown can
+      // reacquire the context, matching the main decode-step boundary.
+      synchronizeFunc_(shared_.lctx);
     } catch (...) {
       error = std::current_exception();
+      try {
+        synchronizeFunc_(shared_.lctx);
+      } catch (const std::exception& e) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            e.what());
+      } catch (...) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            nullptr);
+      }
     }
     evalDuration = std::chrono::steady_clock::now() - evalStart;
   }
@@ -632,10 +741,27 @@ void ContinuousBatchScheduler::drainFinishedLocked() {
   for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
     auto& slot = *slots_[req.seqId];
     auto outputCallback = getOutputCallback(slot, req.seqId);
-    finalizeTerminalDriver(
+    // Align the driver's KV cursor with the batcher's authoritative
+    // `req.currentPos` before finalize. On pure-attention drivers a
+    // mid-prefill cancel or decode-error otherwise leaves `nPast_` at
+    // the admission cursor while live KV holds the partial prefill;
+    // `onCancel` would then under-trim (delta collapses to zero) and
+    // the subsequent `saveCacheForSlot` would serialise a KV span
+    // wider than the persisted `nPast` metadata. Successful-completion
+    // paths already sync via `sampleAndAppendIdle` and this call is a
+    // no-op for them.
+    slot.driver->syncPosition(req.currentPos);
+    const bool rollbackOk = finalizeTerminalDriver(
         *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
     accumulateSlotRuntimeStats(slot, req);
-    saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+    // Skip save when the driver reports a failed cancel rollback: live
+    // state may not match `getNPast()` and persisting it would leak the
+    // cancelled request into the on-disk cache. The last known-good
+    // cache from a prior turn is preserved. The subsequent
+    // `clearSeqKv` still wipes the sequence in memory.
+    if (rollbackOk) {
+      saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+    }
   }
   for (const auto& req : finished) {
     clearSeqKv(req.seqId);
@@ -660,9 +786,10 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   std::chrono::steady_clock::duration decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
-    const auto decodeStart = std::chrono::steady_clock::now();
-    decodeRc = decodeFunc_(shared_.lctx, *batch_);
-    decodeDuration = std::chrono::steady_clock::now() - decodeStart;
+    const TimedDecodeResult decodeTiming =
+        timeDecodeStep(shared_.lctx, *batch_, decodeFunc_, synchronizeFunc_);
+    decodeRc = decodeTiming.rc;
+    decodeDuration = decodeTiming.duration;
   }
 
   if (decodeRc != 0) {
@@ -766,7 +893,6 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   }
 
   drainFinishedLocked();
-
   return true;
 }
 
@@ -813,13 +939,24 @@ void RuntimeStatsSnapshot::recordDecodeStep(
   concurrentSeqSum_ += numActiveSequences;
   const double stepMs =
       std::chrono::duration<double, std::milli>(stepDuration).count();
-  if (decodeTokens > 0) {
-    decodeTimeMs_ += stepMs;
-    decodeTokenCount_ += decodeTokens;
-  } else {
-    prefillTimeMs_ += stepMs;
-    prefillTokenCount_ += prefillTokens;
+  const uint64_t totalTokens = prefillTokens + decodeTokens;
+  if (totalTokens == 0) {
+    return;
   }
+  // Split step time between prefill and decode by token count. On a mixed
+  // prefill+decode step (common in continuous batching when a new request
+  // starts prefilling while another is generating) the previous
+  // "all-or-nothing" rule dropped the piggybacked prefill tokens and their
+  // wall-clock time, under-reporting batch TTFT and ppTPS. Compactor replay
+  // decode is excluded at the call site — `onGenerationFinished` runs
+  // outside the scheduler's timed `recordDecodeStep` block — so a
+  // proportional split here cannot leak replay time into TTFT.
+  const double prefillFraction =
+      static_cast<double>(prefillTokens) / static_cast<double>(totalTokens);
+  prefillTimeMs_ += stepMs * prefillFraction;
+  decodeTimeMs_ += stepMs * (1.0 - prefillFraction);
+  prefillTokenCount_ += prefillTokens;
+  decodeTokenCount_ += decodeTokens;
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
@@ -881,7 +1018,8 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   return occupied;
 }
 
-void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) noexcept {
+void ContinuousBatchScheduler::cancelSlotLocked(
+    uint32_t seqId, SaveCachePolicy savePolicy) noexcept {
   const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (!occupied) {
     return;
@@ -897,12 +1035,36 @@ void ContinuousBatchScheduler::cancelSlotLocked(uint32_t seqId) noexcept {
     // regardless, so the slot is always freed. The normal-completion save in
     // drainFinishedLocked() is left throwing so live requests still surface the
     // error.
+    //
+    // `savePolicy == Skip` short-circuits the save leg: error-recovery callers
+    // (see `failGroupLocked`) arrive here after the driver has already thrown
+    // from a state-mutating hook, so live memory and driver accounting are
+    // unhealthy and a save would silently corrupt the user's on-disk cache.
+    // See `SaveCachePolicy` in the header for the full rationale.
     try {
-      slots_[seqId]->driver->onCancel({});
+      // Align the driver's KV cursor with the batcher's authoritative
+      // `req->currentPos` before onCancel so the tail trim matches the
+      // partial prefill actually committed to live KV. See the matching
+      // note in drainFinishedLocked / finalizeFinishedSequences: without
+      // this a mid-prefill cancel on a pure-attention driver under-trims
+      // and any subsequent saveCacheForSlot writes an `nPast` narrower
+      // than the KV span serialised to disk. `req == nullptr` (slot was
+      // never admitted into the batcher, e.g. failed admit) falls back
+      // to the driver's own cursor which is authoritative in that case.
+      if (req != nullptr) {
+        slots_[seqId]->driver->syncPosition(req->currentPos);
+      }
+      const bool rollbackOk = slots_[seqId]->driver->onCancel({});
       if (req != nullptr) {
         accumulateSlotRuntimeStats(*slots_[seqId], *req);
       }
-      saveCacheForSlot(seqId, *slots_[seqId]);
+      // Skip save on rollback failure regardless of policy: persisting
+      // driver state whose live memory may not match `getNPast()` would
+      // let a cancelled request's peak state leak into the on-disk
+      // cache and survive across reloads.
+      if (savePolicy == SaveCachePolicy::Save && rollbackOk) {
+        saveCacheForSlot(seqId, *slots_[seqId]);
+      }
     } catch (const std::exception& e) {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, e.what());
     } catch (...) {
@@ -1014,9 +1176,15 @@ void ContinuousBatchScheduler::failGroupLocked(
   // thread and std::terminate). The group is marked done above, so the
   // completeGroupRequestLocked inside notifyDone no-ops rather than
   // double-counting.
+  //
+  // Pass `SaveCachePolicy::Skip`: this is the error-recovery path, so the
+  // driver's live state may be inconsistent (e.g. a hybrid-recurrent
+  // compaction failure clears the sequence and throws), and persisting that
+  // state would silently overwrite the user's previous on-disk cache with an
+  // empty/broken one. Graceful-cancel callers keep the default `Save`.
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
-      cancelSlotLocked(seqId);
+      cancelSlotLocked(seqId, SaveCachePolicy::Skip);
     }
   }
   workCv_.notify_all();
@@ -1090,12 +1258,24 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
 }
 
 void ContinuousBatchScheduler::saveCacheForSlot(
-    uint32_t seqId, const SlotState& slot) {
+    uint32_t seqId, SlotState& slot) {
   if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.driver) {
     return;
   }
-  (void)seqId;
+  if (slot.activeCacheSavedToDisk &&
+      persistedCacheBackingStoreMissing(slot.cacheKey)) {
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "ContinuousBatchScheduler::saveCacheForSlot: active cache backing "
+            "store was removed, dropping stale cache '%s' for seqId %u\n",
+            slot.cacheKey.c_str(),
+            seqId));
+    slot.activeCacheSavedToDisk = false;
+    return;
+  }
   slot.driver->saveCache(slot.cacheKey);
+  slot.activeCacheSavedToDisk = true;
 }
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
@@ -1104,6 +1284,15 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
   int64_t nSlides = 0;
   int64_t thinkingDiscards = 0;
   if (slot.driver) {
+    // `onCancel` has already rolled `nPast` back to the admission cursor
+    // and, on the graceful-cancel leg, `saveCacheForSlot` persists that
+    // state — so `CacheTokens` matches the live driver cursor and what
+    // is on disk. On the error-recovery leg (`SaveCachePolicy::Skip`,
+    // driven from `failGroupLocked`) the save is intentionally skipped
+    // to preserve the last known-good cache, but the live driver cursor
+    // is still the honest report for that batch: the request is
+    // logically rolled back to the admission cursor. Work performed is
+    // reported via `promptTokens` / `generatedTokens`.
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     nSlides = static_cast<int64_t>(slot.driver->getNSlides());
     thinkingDiscards =

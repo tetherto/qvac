@@ -1,12 +1,12 @@
-import { ModelType, type TranscribeSegment } from "@/schemas";
-import { TranscriptionFailedError } from "@/utils/errors-server";
+import { ModelType, type TranscribeSegment } from '@/schemas'
+import { TranscriptionFailedError } from '@/utils/errors-server'
 
 export interface WhisperAddonSegment {
-  text: string;
-  start?: number;
-  end?: number;
-  toAppend?: boolean;
-  id?: number;
+  text: string
+  start?: number
+  end?: number
+  toAppend?: boolean
+  id?: number
 }
 
 /**
@@ -20,8 +20,8 @@ export function toTranscribeSegment(chunk: WhisperAddonSegment): TranscribeSegme
     startMs: (chunk.start ?? 0) * 1000,
     endMs: (chunk.end ?? 0) * 1000,
     append: chunk.toAppend ?? false,
-    id: chunk.id ?? 0,
-  };
+    id: chunk.id ?? 0
+  }
 }
 
 /**
@@ -32,12 +32,12 @@ export function toTranscribeSegment(chunk: WhisperAddonSegment): TranscribeSegme
 export function assertMetadataSupported(
   modelId: string,
   engineType: string,
-  metadata: boolean | undefined,
+  metadata: boolean | undefined
 ): void {
-  if (!metadata) return;
+  if (!metadata) return
   if (engineType !== ModelType.whispercppTranscription) {
     throw new TranscriptionFailedError(
-      `metadata mode is not supported on model ${modelId} (engine: ${engineType || "unknown"}); only the whisper engine supports metadata`,
-    );
+      `metadata mode is not supported on model ${modelId} (engine: ${engineType || 'unknown'}); only the whisper engine supports metadata`
+    )
   }
 }
