@@ -85,7 +85,7 @@ test('timer flush writes all buffered events as single batch', async (t) => {
   t.alike(written, [1], 'only immediate write before timer')
 
   time += throttleMs
-  await new Promise((r) => setTimeout(r, throttleMs + 10))
+  await new Promise<void>((r) => setTimeout(r, throttleMs + 10))
 
   t.alike(written, [1, 2, 3], 'timer flushed all buffered events')
   t.alike(batchSizes, [1, 2], 'timer flush was a single batch call')

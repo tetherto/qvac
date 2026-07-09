@@ -525,7 +525,7 @@ const HTTP_RETRY_BASE_DELAY_MS = 500
 const LIFECYCLE_WAIT_POLL_MS = 200
 const LIFECYCLE_WAIT_MAX_MS = 5 * 60_000
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 /**
  * A mid-stream socket/body error, a connection failure (HTTP status 0, no

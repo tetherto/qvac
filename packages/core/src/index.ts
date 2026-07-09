@@ -1,3 +1,5 @@
+/// <reference types="bare" />
+
 // Public API exports only
 export {
   batchCompletion,

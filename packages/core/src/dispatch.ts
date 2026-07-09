@@ -179,7 +179,7 @@ async function* streamWithProgress(
     if (queue.length > 0) {
       yield queue.shift()!
     } else {
-      await new Promise((resolve) => setTimeout(resolve, 10))
+      await new Promise<void>((resolve) => setTimeout(resolve, 10))
     }
   }
 

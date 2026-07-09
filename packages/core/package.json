@@ -86,7 +86,7 @@
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
     "bare-abort-controller": "^1.1.2",
-    "bare-buffer": "^3.6.1",
+    "bare-buffer": "^3.6.2",
     "bare-crypto": "^1.15.3",
     "bare-env": "^3.0.1",
     "bare-fetch": "^3.0.1",
@@ -118,7 +118,10 @@
     "@qvac/transcription-whispercpp": "^0.10.0",
     "@qvac/translation-nmtcpp": "^6.3.0",
     "@qvac/tts-ggml": "^0.4.0",
-    "@qvac/vla-ggml": "^0.7.0"
+    "@qvac/vla-ggml": "^0.7.0",
+    "bare": "^1.30.3",
+    "bare-console": "*",
+    "bare-timers": "*"
   },
   "peerDependenciesMeta": {
     "@qvac/bci-whispercpp": {
@@ -159,6 +162,15 @@
     },
     "@qvac/vla-ggml": {
       "optional": true
+    },
+    "bare": {
+      "optional": true
+    },
+    "bare-console": {
+      "optional": true
+    },
+    "bare-timers": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -170,10 +182,10 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.31.2",
     "@qvac/ocr-ggml": "^0.7.1",
-    "@qvac/transcription-parakeet": "^0.9.0",
+    "@qvac/transcription-parakeet": "^0.9.1",
     "@qvac/transcription-whispercpp": "^0.10.2",
     "@qvac/translation-nmtcpp": "^6.3.1",
-    "@qvac/tts-ggml": "^0.4.0",
+    "@qvac/tts-ggml": "^0.4.2",
     "@qvac/vla-ggml": "^0.7.0",
     "@types/brittle": "^3.5.0",
     "bare-stdio": "^1.0.3",

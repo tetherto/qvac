@@ -294,7 +294,7 @@ test('getFinetuneState: returns running while finetune is active', async (t) => 
     t.is(result.status, 'RUNNING')
 
     // Yield to let startFinetune reach model.finetune().await() and set resolveAwait.
-    await new Promise((r) => setTimeout(r, 0))
+    await new Promise<void>((r) => setTimeout(r, 0))
     resolveAwait!({
       op: 'finetune',
       status: 'COMPLETED',
