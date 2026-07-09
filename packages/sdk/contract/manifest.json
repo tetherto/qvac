@@ -1,6 +1,12 @@
 {
   "methods": [
     {
+      "name": "batchCompletionStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/batchCompletionStream.request",
+      "responseSchema": "schema.json#/$defs/batchCompletionStream.response"
+    },
+    {
       "name": "bciTranscribe",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/bciTranscribe.request",

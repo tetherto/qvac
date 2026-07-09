@@ -8,6 +8,9 @@
       "description": "Any request accepted by the server, in wire (pre-parse) shape.",
       "anyOf": [
         {
+          "$ref": "#/$defs/batchCompletionStream.request"
+        },
+        {
           "$ref": "#/$defs/bciTranscribe.request"
         },
         {
@@ -118,6 +121,9 @@
       "title": "AnyResponse",
       "description": "Any response emitted by the server, including progress updates and error envelopes.",
       "anyOf": [
+        {
+          "$ref": "#/$defs/batchCompletionStream.response"
+        },
         {
           "$ref": "#/$defs/bciTranscribe.response"
         },
@@ -236,6 +242,621 @@
           "$ref": "#/$defs/videoStream.response"
         }
       ]
+    },
+    "batchCompletionStream.request": {
+      "title": "BatchCompletionStreamRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "The identifier of the model to use for batch completion."
+        },
+        "prompts": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Optional caller-supplied id used to correlate streamed chunks and final results.",
+                "type": "string",
+                "minLength": 1
+              },
+              "history": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Message content."
+                    },
+                    "attachments": {
+                      "description": "Optional file attachments for multimodal models.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "description": "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+                          }
+                        },
+                        "required": ["path"],
+                        "title": "BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem"
+                      }
+                    }
+                  },
+                  "required": ["role", "content"],
+                  "title": "BatchCompletionStreamRequestPromptsItemHistoryItem"
+                },
+                "description": "Array of conversation messages sent to the model."
+              },
+              "generationParams": {
+                "description": "Optional per-prompt sampling / generation parameters.",
+                "type": "object",
+                "properties": {
+                  "temp": {
+                    "description": "Sampling temperature (typically 0–2).",
+                    "type": "number"
+                  },
+                  "top_p": {
+                    "description": "Top-p (nucleus) sampling cutoff (0–1).",
+                    "type": "number"
+                  },
+                  "top_k": {
+                    "description": "Top-k sampling — keep only the top K tokens.",
+                    "type": "number"
+                  },
+                  "predict": {
+                    "description": "Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
+                    "type": "number"
+                  },
+                  "seed": {
+                    "description": "Random seed for reproducibility.",
+                    "type": "number"
+                  },
+                  "frequency_penalty": {
+                    "description": "Penalty applied to tokens based on frequency so far.",
+                    "type": "number"
+                  },
+                  "presence_penalty": {
+                    "description": "Penalty applied to tokens that have already appeared.",
+                    "type": "number"
+                  },
+                  "repeat_penalty": {
+                    "description": "Penalty applied to repeated tokens.",
+                    "type": "number"
+                  },
+                  "reasoning_budget": {
+                    "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+                    "type": "integer",
+                    "minimum": -1,
+                    "maximum": 2147483647
+                  },
+                  "remove_thinking_from_context": {
+                    "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "title": "BatchCompletionStreamRequestPromptsItemGenerationParams"
+              },
+              "responseFormat": {
+                "description": "Optional per-prompt structured-output constraint.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      }
+                    },
+                    "required": ["type"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamRequestPromptsItemResponseFormatText"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "json_object"
+                      }
+                    },
+                    "required": ["type"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "json_schema"
+                      },
+                      "json_schema": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Schema identifier; OpenAI-compatibility only — not used by the addon."
+                          },
+                          "description": {
+                            "description": "Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
+                            "type": "string"
+                          },
+                          "schema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {},
+                            "description": "JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+                            "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema"
+                          },
+                          "strict": {
+                            "description": "Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`.",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": ["name", "schema"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema"
+                      }
+                    },
+                    "required": ["type", "json_schema"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema"
+                  }
+                ]
+              },
+              "tools": {
+                "description": "Resolved per-prompt tools the model can call.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "function"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "object"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "integer",
+                                  "boolean",
+                                  "object",
+                                  "array"
+                                ],
+                                "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "enum": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": ["type"],
+                            "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue"
+                          },
+                          "title": "BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties"
+                        },
+                        "required": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": ["type", "properties"],
+                      "title": "BatchCompletionStreamRequestPromptsItemToolsItemParameters"
+                    }
+                  },
+                  "required": ["type", "name", "description", "parameters"],
+                  "title": "BatchCompletionStreamRequestPromptsItemToolsItem"
+                }
+              }
+            },
+            "required": ["history"],
+            "additionalProperties": false,
+            "title": "BatchCompletionStreamRequestPromptsItem"
+          },
+          "description": "Batch prompts submitted to the addon in one run."
+        },
+        "stream": {
+          "description": "Whether to stream tokens (`true`) or return all events on completion. Defaults to true.",
+          "type": "boolean"
+        },
+        "captureThinking": {
+          "description": "When `true`, capture and emit reasoning/thinking deltas separately from content deltas.",
+          "type": "boolean"
+        },
+        "emitRawDeltas": {
+          "description": "When `true`, also emit raw per-token deltas in addition to normalized content deltas.",
+          "type": "boolean"
+        },
+        "toolDialect": {
+          "description": "Override auto-detected tool-call dialect for all prompts.",
+          "type": "string",
+          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+          "title": "BatchCompletionStreamRequestToolDialect"
+        },
+        "requestId": {
+          "description": "Stable identifier for this in-flight batch request.",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "batchCompletionStream"
+        }
+      },
+      "required": ["modelId", "prompts", "type"],
+      "additionalProperties": false
+    },
+    "batchCompletionStream.response": {
+      "title": "BatchCompletionStreamResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "batchCompletionStream"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "event": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "contentDelta"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type", "seq", "text"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventContentDelta"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "rawDelta"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type", "seq", "text"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventRawDelta"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "thinkingDelta"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type", "seq", "text"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventThinkingDelta"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "toolCall"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "call": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "arguments": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {},
+                            "title": "BatchCompletionStreamResponseEventsItemEventToolCallCallArguments"
+                          },
+                          "raw": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["id", "name", "arguments"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventToolCallCall"
+                      }
+                    },
+                    "required": ["type", "seq", "call"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventToolCall"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "toolError"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "error": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": ["PARSE_ERROR", "VALIDATION_ERROR", "UNKNOWN_TOOL"],
+                            "title": "BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "raw": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["code", "message"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventToolErrorError"
+                      }
+                    },
+                    "required": ["type", "seq", "error"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventToolError"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "completionStats"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "stats": {
+                        "type": "object",
+                        "properties": {
+                          "timeToFirstToken": {
+                            "type": "number"
+                          },
+                          "tokensPerSecond": {
+                            "type": "number"
+                          },
+                          "cacheTokens": {
+                            "type": "number"
+                          },
+                          "promptTokens": {
+                            "type": "number"
+                          },
+                          "generatedTokens": {
+                            "type": "number"
+                          },
+                          "avgConcurrentSeq": {
+                            "type": "number"
+                          },
+                          "backendDevice": {
+                            "type": "string",
+                            "enum": ["cpu", "gpu"],
+                            "title": "BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice"
+                          }
+                        },
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventCompletionStatsStats"
+                      }
+                    },
+                    "required": ["type", "seq", "stats"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventCompletionStats"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "completionDone"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "stopReason": {
+                        "type": "string",
+                        "const": "error"
+                      },
+                      "error": {
+                        "type": "object",
+                        "properties": {
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["message"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError"
+                      },
+                      "raw": {
+                        "type": "object",
+                        "properties": {
+                          "fullText": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["fullText"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw"
+                      }
+                    },
+                    "required": ["type", "seq", "stopReason", "error"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventCompletionDoneError"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "completionDone"
+                      },
+                      "seq": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "stopReason": {
+                        "type": "string",
+                        "enum": ["eos", "length", "stopSequence", "cancelled"],
+                        "title": "BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason"
+                      },
+                      "raw": {
+                        "type": "object",
+                        "properties": {
+                          "fullText": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["fullText"],
+                        "additionalProperties": false,
+                        "title": "BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw"
+                      }
+                    },
+                    "required": ["type", "seq"],
+                    "additionalProperties": false,
+                    "title": "BatchCompletionStreamResponseEventsItemEventCompletionDone"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "event"],
+            "additionalProperties": false,
+            "title": "BatchCompletionStreamResponseEventsItem"
+          }
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "timeToFirstToken": {
+              "type": "number"
+            },
+            "tokensPerSecond": {
+              "type": "number"
+            },
+            "cacheTokens": {
+              "type": "number"
+            },
+            "promptTokens": {
+              "type": "number"
+            },
+            "generatedTokens": {
+              "type": "number"
+            },
+            "avgConcurrentSeq": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "BatchCompletionStreamResponseStatsBackendDevice"
+            }
+          },
+          "additionalProperties": false,
+          "title": "BatchCompletionStreamResponseStats"
+        }
+      },
+      "required": ["type", "events"],
+      "additionalProperties": false
     },
     "bciTranscribe.request": {
       "title": "BciTranscribeRequest",
@@ -586,6 +1207,7 @@
               "type": "string",
               "enum": [
                 "completion",
+                "batchCompletion",
                 "embeddings",
                 "transcribe",
                 "translate",
@@ -1149,6 +1771,9 @@
                         "type": "number"
                       },
                       "generatedTokens": {
+                        "type": "number"
+                      },
+                      "avgConcurrentSeq": {
                         "type": "number"
                       },
                       "backendDevice": {
@@ -2856,6 +3481,11 @@
                     "n_discarded": {
                       "type": "number"
                     },
+                    "parallel": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
                     "tools": {
                       "type": "boolean"
                     },
@@ -2986,6 +3616,9 @@
                       "type": "string",
                       "enum": ["disabled", "batched", "sequential"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
+                    },
+                    "mmproj-use-gpu": {
+                      "type": "boolean"
                     }
                   },
                   "title": "LoadModelSrcRequestLlamacppCompletionModelConfig"
@@ -4764,6 +5397,7 @@
                             "fr",
                             "de",
                             "it",
+                            "ja",
                             "pt",
                             "nl",
                             "pl",
@@ -4982,6 +5616,330 @@
                             }
                           ]
                         },
+                        "mecabDictSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc"
+                            }
+                          ]
+                        },
+                        "cangjieTsvSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc"
+                            }
+                          ]
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc"
+                            }
+                          ]
+                        },
                         "ttsSupertonicMultilingual": {},
                         "ttsTokenizerSrc": {},
                         "ttsSpeechEncoderSrc": {},
@@ -5055,6 +6013,173 @@
                         },
                         "useGPU": {
                           "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc"
+                            }
+                          ]
                         },
                         "ttsSupertonicMultilingual": {},
                         "ttsTokenizerSrc": {},
