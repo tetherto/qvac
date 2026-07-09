@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.36.3] - 2026-07-09
+
+This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
+
+### Fixed
+
+- Continuous-batch `tokensPerSecond`, `ppTPS`, and TTFT timing now include the explicit `llama_synchronize()` boundary after `llama_decode()` and multimodal media evaluation, preventing GPU backends from reporting launch-time-only throughput.
+- Text and multimodal cancellation paths now synchronize before rolling back prefill or generation state when cancellation bypasses the usual sampler-side synchronization.
+- Reset and deferred teardown paths now synchronize before clearing llama memory, including decode/media error paths that can run while a deferred scheduler clear is pending.
+
+### Changed
+
+- Batch and cancellation regression tests were hardened to assert scheduler-owned timing invariants and prefill cancellation rollback without relying on fragile cross-run wall-clock comparisons.
+
+### Pull Requests
+
+- [#3159](https://github.com/tetherto/qvac/pull/3159) - fix: synchronize async llama decode completion
+
+
+## [0.36.2] - 2026-07-09
+
+### Changed
+
+- Android multimodal-projector (mmproj / vision encoder) auto-default narrowed: with `mmproj-use-gpu` unset the projector now defaults to the GPU **only** on positively-detected Adreno 800+ GPUs. All other Android GPU classes — Arm Mali, Adreno < 800, and any GPU whose Adreno tier can't be detected — default to CPU (the LLM layers still run on the GPU). Only Adreno 800+ was benchmarked (QVAC-21257) to encode the projector faster on the mobile GPU than on CPU, so defaulting to GPU on unbenchmarked/undetectable classes was optimistic. Desktop and iOS continue to default to GPU, and an explicit `mmproj-use-gpu` value still overrides the default in either direction.
+
+### Pull Requests
+
+- [#3168](https://github.com/tetherto/qvac/pull/3168) - fix: default Android mmproj projector to GPU only on Adreno 800+
+
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
 ## [0.36.0] - 2026-07-08
 
 ### Added
