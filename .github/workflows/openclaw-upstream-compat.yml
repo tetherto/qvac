@@ -5,6 +5,12 @@ name: OpenClaw Upstream Compatibility
 # localService, config, model-catalog, and agent-run drift is caught early.
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/openclaw-upstream-compat.yml"
+      - "scripts/ci/openclaw-upstream-compat-smoke.sh"
   schedule:
     - cron: "30 7 * * *" # daily 07:30 UTC, after the OpenCode compatibility smoke
   workflow_dispatch:
@@ -25,10 +31,18 @@ jobs:
   smoke:
     name: openclaw@latest + @qvac/openclaw-plugin@latest
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
+    # install + plugin setup; scheduled/dispatch runs exercise the full agent
+    # turn and need headroom for the readyTimeoutMs wait (30m) + agent timeout (45m).
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 75 }}
     permissions:
       contents: read
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: Setup Node
@@ -43,6 +57,7 @@ jobs:
           QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
           QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
           OPENCLAW_AGENT_TIMEOUT: ${{ env.OPENCLAW_AGENT_TIMEOUT }}
+          SKIP_OPENCLAW_AGENT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: bash scripts/ci/openclaw-upstream-compat-smoke.sh
 
       - name: Upload smoke artifacts
