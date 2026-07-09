@@ -1,10 +1,11 @@
 'use strict'
 
-// Offline proof for the models.manifest.json wiring (QVAC-21937): ensureModel
-// resolves URLs + integrity from the manifest, re-downloads poisoned/truncated
-// caches, honours an explicit downloadUrl fallback, and the real integration
-// manifest is well-formed (every entry has a usable url, keys are unique). No
-// network and no native addon are touched — downloads are injected.
+// Offline integrity/manifest proof for llm-llamacpp, mirroring
+// diffusion-cpp/test/unit/ensure-model-integrity.test.js: ensureModel resolves
+// URL + sha256/bytes from models.manifest.json, re-downloads poisoned/truncated
+// caches, honours an explicit downloadUrl fallback, and the real manifest is
+// well-formed. No network and no native addon are touched — downloads are
+// injected.
 
 const test = require('brittle')
 const fs = require('bare-fs')
@@ -24,26 +25,29 @@ const GOOD = 'qvac-integrity-fixture-GOOD-content-0123456789'
 const BAD_SAME_LEN = 'qvac-integrity-fixture-BADD-content-0123456789'
 const BAD_SHORT = 'too-short'
 
-function mkTmpDir () {
+function mkTmpDir() {
   const base = (typeof os.tmpdir === 'function' && os.tmpdir()) || '/tmp'
-  const dir = path.join(base, `qvac-llm-manifest-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const dir = path.join(
+    base,
+    `qvac-llm-integrity-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  )
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
 
-function writeModel (dir, name, content) {
+function writeModel(dir, name, content) {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, name), content)
 }
 
-function fakeDownloader (content, spy) {
+function fakeDownloader(content, spy) {
   return async function (_urls, dest) {
     spy.calls++
     fs.writeFileSync(dest, content)
   }
 }
 
-async function buildManifest (modelName) {
+async function buildManifest(modelName) {
   const dir = mkTmpDir()
   const p = path.join(dir, '_probe')
   fs.writeFileSync(p, GOOD)
@@ -79,7 +83,12 @@ test('correct cached file verifies and performs NO download', async function (t)
   try {
     writeModel(dir, name, GOOD)
     resetDownloadCount()
-    const [, resolvedDir] = await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    const [, resolvedDir] = await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 0, 'no download for a valid cached file')
     t.is(getDownloadCount(), 0, 'download counter stays 0 on a warm run')
     t.is(resolvedDir, dir)
@@ -94,9 +103,14 @@ test('poisoned cached file (sha mismatch) is deleted and re-downloaded', async f
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    writeModel(dir, name, BAD_SAME_LEN) // same length defeats the size check, forces sha path
+    writeModel(dir, name, BAD_SAME_LEN) // same length -> defeats size check, forces sha path
     resetDownloadCount()
-    await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 1, 're-downloaded exactly once after integrity failure')
     t.is(getDownloadCount(), 1, 'download counter incremented')
     t.is(fs.readFileSync(path.join(dir, name), 'utf8'), GOOD, 'file replaced with correct content')
@@ -112,7 +126,12 @@ test('truncated cached file (size mismatch) is re-downloaded', async function (t
   const spy = { calls: 0 }
   try {
     writeModel(dir, name, BAD_SHORT)
-    await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 1, 'size mismatch triggered a re-download')
     t.is(fs.readFileSync(path.join(dir, name), 'utf8'), GOOD)
   } finally {
@@ -128,7 +147,12 @@ test('persistent mismatch hard-fails and removes the bad file', async function (
   try {
     writeModel(dir, name, BAD_SAME_LEN)
     await t.exception(
-      ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(BAD_SAME_LEN, spy) }),
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(BAD_SAME_LEN, spy)
+      }),
       /failed integrity/
     )
     t.is(spy.calls, 1, 'attempted a re-download before failing')
@@ -144,7 +168,12 @@ test('missing file downloads then verifies', async function (t) {
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 1, 'downloaded the missing file')
     t.is(fs.readFileSync(path.join(dir, name), 'utf8'), GOOD)
   } finally {
@@ -152,14 +181,21 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
-test('unpinned entry (null integrity) skips verification for an existing non-zero file', async function (t) {
+test('entry without pinned integrity skips verification (keeps a non-zero cached file)', async function (t) {
   const name = 'unpinned.gguf'
-  const manifest = { models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } } }
+  const manifest = {
+    models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } }
+  }
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    writeModel(dir, name, BAD_SAME_LEN)
-    await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    writeModel(dir, name, BAD_SAME_LEN) // any non-zero content is accepted when unpinned
+    await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 0, 'no download when an unpinned file already exists and is non-zero')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
@@ -172,7 +208,13 @@ test('downloadUrl is used as a fallback when the model is not in the manifest', 
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    await ensureModel({ modelName: name, downloadUrl: 'https://example.invalid/fallback', modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    await ensureModel({
+      modelName: name,
+      downloadUrl: 'https://example.invalid/fallback',
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 1, 'fell back to the explicit downloadUrl')
     t.is(fs.readFileSync(path.join(dir, name), 'utf8'), GOOD)
   } finally {
@@ -206,18 +248,37 @@ test('verifyModelFile flags size before hashing (fail-fast)', async function (t)
   }
 })
 
-test('real integration manifest is well-formed (every entry has a usable url, keys unique)', function (t) {
+test('integration manifest is well-formed (usable url per entry, unique keys)', function (t) {
   const manifest = loadManifest()
   t.ok(manifest && manifest.models, 'models.manifest.json loads')
   const names = Object.keys(manifest.models)
   t.ok(names.length >= 20, `declares the expected model set (${names.length} entries)`)
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
+
   for (const [name, entry] of Object.entries(manifest.models)) {
-    const hasUrl = Array.isArray(entry.urls) && entry.urls.length > 0 &&
-      entry.urls.every(u => typeof u === 'string' && u.startsWith('https://'))
+    const hasUrl =
+      Array.isArray(entry.urls) &&
+      entry.urls.length > 0 &&
+      entry.urls.every((u) => typeof u === 'string' && u.startsWith('https://'))
     t.ok(hasUrl, `${name} has at least one https url (warm-models requires this)`)
+
+    // Integrity is pinned in CI (scripts/generate-model-manifest.mjs). When
+    // present it must be the right shape; null is allowed until pinned.
+    if (entry.sha256 !== null && entry.sha256 !== undefined) {
+      t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is 64 hex chars when pinned`)
+    }
+    if (entry.bytes !== null && entry.bytes !== undefined) {
+      t.ok(
+        Number.isInteger(entry.bytes) && entry.bytes > 0,
+        `${name} bytes is a positive integer when pinned`
+      )
+    }
   }
+
   // Spot-check a scattered model resolves by its LOCAL filename.
   const mmproj = resolveModelEntry('mmproj-Qwen3.5-0.8B-F16.gguf')
-  t.ok(mmproj && mmproj.urls[0].endsWith('/mmproj-F16.gguf'), 'local name maps to the shared remote basename')
+  t.ok(
+    mmproj && mmproj.urls[0].endsWith('/mmproj-F16.gguf'),
+    'local name maps to the shared remote basename'
+  )
 })
