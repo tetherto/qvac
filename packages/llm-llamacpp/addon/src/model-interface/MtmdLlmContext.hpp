@@ -2,14 +2,19 @@
 
 #include <atomic>
 #include <optional>
+#include <vector>
 
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 
+#include "../utils/ReasoningRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
+#include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
+#include "ContextShifter.hpp"
 #include "ContextSlider.hpp"
 #include "LlmContext.hpp"
+#include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -67,9 +72,9 @@ public:
    * @param chatMsgs - chat messages.
    * @param is_cache_loaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - eval result (success / cancellation / rollback status).
    */
-  bool evalMessage(
+  EvalMessageResult evalMessage(
       const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
       bool prefill) override;
 
@@ -81,9 +86,9 @@ public:
    * @param tools - tools.
    * @param isCacheLoaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - eval result (success / cancellation / rollback status).
    */
-  bool evalMessageWithTools(
+  EvalMessageResult evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
       bool prefill) override;
@@ -92,9 +97,9 @@ public:
    * The generate response method. It generates the response.
    *
    * @param output_callback - the output callback.
-   * @return - true if successful, false if context overflow.
+   * @return - generation result (success / cancellation / rollback status).
    */
-  bool generateResponse(
+  GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   std::function<void()>
@@ -174,10 +179,17 @@ public:
   [[nodiscard]] int32_t getNSlides() const override;
   void resetNSlides() override;
 
+  [[nodiscard]] double getVisionEncodeMs() const override;
+  [[nodiscard]] int32_t getVisionEncodeTiles() const override;
+  void resetVisionEncodeMs() override;
+
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
   [[nodiscard]] bool supportsSliding() const override { return false; }
+
+  [[nodiscard]] std::optional<llama_perf_context_data>
+  takeUserVisiblePerfSnapshot() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -247,7 +259,7 @@ public:
   void onGenerationFinished(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void onCancel(
+  [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   void validatePromptPolicy(
@@ -262,6 +274,9 @@ public:
   [[nodiscard]] bool loadCache(
       const std::string& cacheKey, llama_pos configuredNDiscarded) override;
   void saveCache(const std::string& cacheKey) const override;
+
+  void snapshotPreRequestCursor() override;
+  void snapshotPreRequestRollbackAnchor() override;
 
 private:
   /**
@@ -300,7 +315,6 @@ private:
   /// text spans, so every position advance keeps the KV-cell count honest.
   void advanceTextSpan(llama_pos newPos);
   void applyContextDiscard();
-  void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
@@ -314,6 +328,38 @@ private:
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
 
+  // Delegates to `rollbackState_.recordPostReasoningToken` while the
+  // post-reasoning capture phase is active (close marker committed AND
+  // a recurrent boundary snapshot exists). No-op for pure-attention
+  // models.
+  void recordPostReasoningTokenIfActive(llama_token tokenId);
+
+  // Snapshot the full sequence state at end-of-prefill on memory
+  // modules that don't support partial-tail erasure. No-op unless
+  // recurrent snapshot compaction is relevant for this request. When
+  // `remove_thinking_from_context` is enabled on a recurrent / hybrid
+  // model, unsupported template shapes throw instead of silently
+  // preserving reasoning in cache.
+  void snapshotForRecurrentRollback();
+
+  // Cancel-during-generation cleanup. On recurrent / hybrid memory,
+  // restores the end-of-prefill snapshot to drop any partially decoded
+  // generation (including an in-flight reasoning span) from both
+  // attention KV and recurrent state. On pure-attention models or when
+  // no snapshot is available, only flushes the UTF-8 buffer. Used by
+  // the cancel exits in `generateResponse`.
+  // Returns `true` when the rollback (metadata + live memory) is
+  // coherent with the pre-request cursor and any downstream cache save
+  // is safe. Returns `false` when the recurrent full-state restore was
+  // refused: metadata is still forced back to `preRequestUsage_` /
+  // `preRequestProtectedPrefix_` so callers see a sane cursor, but live
+  // recurrent state may not match, so callers must skip `saveCache`
+  // for this request. The continuous-batch path consumes this directly
+  // from `onCancel`; the single-prompt path propagates it through
+  // `GenerateResponseResult::rollbackOk`.
+  [[nodiscard]] bool cancelGenerationCleanup(
+      const std::function<void(const std::string&)>& outputCallback);
+
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
@@ -326,6 +372,7 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  std::vector<llama_token> forcedTokens_;
 
   mtmd::bitmaps bitmaps_;
   /// Chunks staged by `preparePrefill` for the batch path; media barriers
@@ -333,10 +380,15 @@ private:
   mtmd::input_chunks stagedChunks_;
   ContextUsage current_;
   ContextUsage protectedPrefix_;
-  llama_pos nDiscarded_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
-  int32_t nSlides_ = 0;
+  double visionEncodeMs_ = 0.0;
+  int32_t visionEncodeTiles_ = 0;
   bool pendingBatchFirstMsg_ = false;
+  // Snapshot of `current_` / `protectedPrefix_` at `evalMessageWithTools`
+  // entry. Restored by `cancelGenerationCleanup` to roll back to the
+  // pre-request cursor.
+  ContextUsage preRequestUsage_;
+  ContextUsage preRequestProtectedPrefix_;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
@@ -365,23 +417,53 @@ private:
   // the multimodal path until a Qwen3-family vision model ships.
   bool isQwen3ReasoningFamily_ = false;
 
-  // True when the model uses recurrent memory (Mamba-style SSM layers
-  // or hybrid SSM + attention). Detected at construction. Opting in to
-  // `remove_thinking_from_context` on such models throws from
-  // `applyGenerationParams` to avoid SSM hidden-state contamination.
-  bool hasRecurrentMemory_ = false;
+  // True when this context's model is recurrent or hybrid
+  // (`llama_model_is_recurrent || llama_model_is_hybrid`). Drives the
+  // snapshot + replay path in `compactThinkSpan`. See
+  // `TextLlmContext::needsRecurrentSnapshot_` for the full rationale.
+  bool needsRecurrentSnapshot_ = false;
+
+  // Tracks whether the currently-prepared prefill is a cache-warm
+  // (prefill-only) request. Captured from `preparePrefill` on the
+  // batch path and `evalMessageWithTools` on the single-prompt path,
+  // then consulted by `snapshotForRecurrentRollback`: prefill-only
+  // requests never enter generation and cannot emit reasoning tokens,
+  // so the hard-fail contract for unsupported multi-token recurrent
+  // close markers does not apply. See
+  // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
+  bool isPrefillOnlyRequest_ = false;
 
   // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-off (opt-in via `generationParams`); set
-  // by `applyGenerationParams`.
-  bool removeThinkingFromContext_ = false;
+  // cache compaction. Default-on (opt-out via `generationParams` with
+  // `remove_thinking_from_context: false`); set by
+  // `applyGenerationParams`. Applies uniformly to pure-attention and
+  // recurrent / hybrid-SSM models — the model-type distinction is
+  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
+  // this default per model.
+  bool removeThinkingFromContext_ = true;
 
-  // [start, end) KV positions of the reasoning block emitted in this
-  // inference. `end == -1` marks an open (still-being-emitted) span.
-  std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
-  bool pendingThinkCloseCapture_ = false;
+  // Shared rollback state for recurrent / hybrid SSM models. Owns the
+  // prefill-entry snapshot (cancel during prefill), the end-of-prefill
+  // snapshot (compaction + cancel during generation), and the
+  // post-reasoning token replay buffer. Inactive on pure-attention
+  // models.
+  qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
+  // Reasoning-block tracker + compactor: owns the `<think>...</think>`
+  // span, close-capture flag, and the pure-attention + recurrent
+  // compaction paths plus their stats counters.
+  qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
+  // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
+  // post-slide-invalidated state on the compactor and rollback owners.
+  qvac_lib_inference_addon_llama::ContextShifter shifter_;
 
-  int32_t thinkingBlockDiscards_ = 0;
+  // Snapshot of `llama_perf_context()` taken at the start of
+  // `compactThinkSpan` — i.e. right after user-visible generation
+  // completes and before any recurrent replay decode runs. Consumed by
+  // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
+  // `llama_decode` calls (which accumulate into `n_p_eval` /
+  // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
+  // Reset at the start of each inference and on `resetState`.
+  std::optional<llama_perf_context_data> userVisiblePerf_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

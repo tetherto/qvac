@@ -189,6 +189,11 @@ jobs:
           enables-perf: ${{ inputs.test_groups != '' && 'true' || 'false' }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+          # Benchmark calls this reusable workflow once per (batchSize, flashAttn)
+          # batch with a distinct artifact_suffix; pass it through so each batch's
+          # console-logs/perf-report artifacts get a unique name instead of all 8
+          # batches colliding on the same one (which dropped every batch's logs).
+          batch-suffix: ${{ inputs.artifact_suffix }}
 
       # Benchmark batches only: pull the per-device perf-report.json the on-device
       # runner emitted out of the Device Farm customer artifacts and upload it

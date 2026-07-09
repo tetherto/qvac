@@ -1,8 +1,8 @@
-import nmtAddonLogging from "@qvac/translation-nmtcpp/addonLogging";
+import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'
 import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
-  type TranslationNmtcppFiles,
-} from "@qvac/translation-nmtcpp";
+  type TranslationNmtcppFiles
+} from '@qvac/translation-nmtcpp'
 import {
   definePlugin,
   defineHandler,
@@ -17,16 +17,16 @@ import {
   type PluginModelResult,
   type NmtConfig,
   type ResolveContext,
-  type ResolveResult,
-} from "@/schemas";
-import { createStreamLogger, registerAddonLogger } from "@/logging";
-import path from "bare-path";
-import { translate } from "@/server/bare/ops/translate";
-import { attachModelExecutionMs } from "@/profiling/model-execution";
+  type ResolveResult
+} from '@/schemas'
+import { createStreamLogger, registerAddonLogger } from '@/logging'
+import path from 'bare-path'
+import { translate } from '@/server/bare/ops/translate'
+import { attachModelExecutionMs } from '@/profiling/model-execution'
 import {
   resolveBergamotVocab,
-  type PivotModelConfig,
-} from "@/server/bare/plugins/nmtcpp-translation/resolve-vocab";
+  type PivotModelConfig
+} from '@/server/bare/plugins/nmtcpp-translation/resolve-vocab'
 
 /**
  * Derive absolute vocab paths from a resolved Bergamot model path.
@@ -35,21 +35,21 @@ import {
  * Returns null if modelPath is not a recognisable Bergamot model.
  */
 function deriveColocatedBergamotVocabPaths(modelPath: string) {
-  const dirPath = path.dirname(modelPath);
-  const basePath = path.basename(modelPath);
-  const match = basePath.match(/^model\.([a-z]+)\.intgemm\.alphas\.bin$/);
-  if (!match?.[1]) return null;
+  const dirPath = path.dirname(modelPath)
+  const basePath = path.basename(modelPath)
+  const match = basePath.match(/^model\.([a-z]+)\.intgemm\.alphas\.bin$/)
+  if (!match?.[1]) return null
 
-  const langPair = match[1];
+  const langPair = match[1]
   if (BERGAMOT_CJK_LANG_PAIRS.includes(langPair)) {
     return {
       srcVocabPath: path.join(dirPath, `srcvocab.${langPair}.spm`),
-      dstVocabPath: path.join(dirPath, `trgvocab.${langPair}.spm`),
-    };
+      dstVocabPath: path.join(dirPath, `trgvocab.${langPair}.spm`)
+    }
   }
 
-  const sharedPath = path.join(dirPath, `vocab.${langPair}.spm`);
-  return { srcVocabPath: sharedPath, dstVocabPath: sharedPath };
+  const sharedPath = path.join(dirPath, `vocab.${langPair}.spm`)
+  return { srcVocabPath: sharedPath, dstVocabPath: sharedPath }
 }
 
 function createNmtModel(
@@ -60,10 +60,10 @@ function createNmtModel(
   dstVocabPath?: string,
   pivotModelPath?: string,
   pivotSrcVocabPath?: string,
-  pivotDstVocabPath?: string,
+  pivotDstVocabPath?: string
 ) {
-  const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation);
-  registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger);
+  const logger = createStreamLogger(modelId, ModelType.nmtcppTranslation)
+  registerAddonLogger(modelId, ModelType.nmtcppTranslation, logger)
 
   const {
     mode,
@@ -77,8 +77,8 @@ function createNmtModel(
     norepeatngramsize,
     temperature,
     topk,
-    topp,
-  } = nmtConfig;
+    topp
+  } = nmtConfig
 
   const files: TranslationNmtcppFiles = {
     model: modelPath,
@@ -86,8 +86,8 @@ function createNmtModel(
     ...(dstVocabPath && { dstVocab: dstVocabPath }),
     ...(pivotModelPath && { pivotModel: pivotModelPath }),
     ...(pivotSrcVocabPath && { pivotSrcVocab: pivotSrcVocabPath }),
-    ...(pivotDstVocabPath && { pivotDstVocab: pivotDstVocabPath }),
-  };
+    ...(pivotDstVocabPath && { pivotDstVocab: pivotDstVocabPath })
+  }
 
   const generationParams = {
     beamsize,
@@ -97,84 +97,75 @@ function createNmtModel(
     norepeatngramsize,
     temperature,
     topk,
-    topp,
-  };
+    topp
+  }
 
   const config: TranslationNmtcppConfig = {
     modelType: TranslationNmtcpp.ModelTypes[engine],
     ...generationParams,
-    ...(nmtConfig.engine === "Bergamot" && {
+    ...(nmtConfig.engine === 'Bergamot' && {
       ...(nmtConfig.normalize !== undefined && {
-        normalize: nmtConfig.normalize,
+        normalize: nmtConfig.normalize
       }),
-      ...(nmtConfig.pivotModel && pivotModelPath && {
-        pivotConfig: (() => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { modelSrc, dstVocabSrc, srcVocabSrc, ...pivotGenConfig } = nmtConfig.pivotModel;
-          return pivotGenConfig;
-        })(),
-      }),
-    }),
-  };
+      ...(nmtConfig.pivotModel &&
+        pivotModelPath && {
+          pivotConfig: (() => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { modelSrc, dstVocabSrc, srcVocabSrc, ...pivotGenConfig } = nmtConfig.pivotModel
+            return pivotGenConfig
+          })()
+        })
+    })
+  }
 
   const model = new TranslationNmtcpp({
     files,
     params: { mode, srcLang: from, dstLang: to },
     config,
     logger,
-    opts: { stats: true },
-  });
+    opts: { stats: true }
+  })
 
-  return { model };
+  return { model }
 }
-
 
 export const nmtPlugin = definePlugin({
   modelType: ModelType.nmtcppTranslation,
-  displayName: "NMT (nmtcpp)",
+  displayName: 'NMT (nmtcpp)',
   addonPackage: ADDON_NMT,
   loadConfigSchema: nmtConfigBaseSchema,
 
   async resolveConfig(
     cfg: Record<string, unknown>,
-    ctx: ResolveContext,
+    ctx: ResolveContext
   ): Promise<ResolveResult<Record<string, unknown>>> {
-    const {
-      srcVocabSrc,
-      dstVocabSrc,
-      pivotModel,
-      ...nmtConfig
-    } = cfg as {
-      srcVocabSrc?: ModelSrcInput;
-      dstVocabSrc?: ModelSrcInput;
-      pivotModel?: PivotModelConfig;
-    } & NmtConfig;
+    const { srcVocabSrc, dstVocabSrc, pivotModel, ...nmtConfig } = cfg as {
+      srcVocabSrc?: ModelSrcInput
+      dstVocabSrc?: ModelSrcInput
+      pivotModel?: PivotModelConfig
+    } & NmtConfig
 
-    if (nmtConfig.engine !== "Bergamot") {
-      return { config: nmtConfig };
+    if (nmtConfig.engine !== 'Bergamot') {
+      return { config: nmtConfig }
     }
 
-    const bergamotConfig = { ...nmtConfig, ...(pivotModel && { pivotModel }) };
+    const bergamotConfig = { ...nmtConfig, ...(pivotModel && { pivotModel }) }
 
-    return resolveBergamotVocab(
-      bergamotConfig, ctx, srcVocabSrc, dstVocabSrc, pivotModel,
-    );
+    return resolveBergamotVocab(bergamotConfig, ctx, srcVocabSrc, dstVocabSrc, pivotModel)
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const nmtConfig = (params.modelConfig ?? {}) as NmtConfig;
-    const artifacts = params.artifacts ?? {};
-    const derived = deriveColocatedBergamotVocabPaths(params.modelPath);
+    const nmtConfig = (params.modelConfig ?? {}) as NmtConfig
+    const artifacts = params.artifacts ?? {}
+    const derived = deriveColocatedBergamotVocabPaths(params.modelPath)
 
-    const srcVocabPath = artifacts["srcVocabPath"] ?? derived?.srcVocabPath;
-    const dstVocabPath = artifacts["dstVocabPath"] ?? derived?.dstVocabPath;
+    const srcVocabPath = artifacts['srcVocabPath'] ?? derived?.srcVocabPath
+    const dstVocabPath = artifacts['dstVocabPath'] ?? derived?.dstVocabPath
 
-    const pivotModelPath = artifacts["pivotModelPath"];
-    const pivotDerived = pivotModelPath
-      ? deriveColocatedBergamotVocabPaths(pivotModelPath)
-      : null;
-    const pivotSrcVocabPath = artifacts["pivotSrcVocabPath"] ?? pivotDerived?.srcVocabPath;
-    const pivotDstVocabPath = artifacts["pivotDstVocabPath"] ?? pivotDerived?.dstVocabPath;
+    const pivotModelPath = artifacts['pivotModelPath']
+    const pivotDerived = pivotModelPath ? deriveColocatedBergamotVocabPaths(pivotModelPath) : null
+    const pivotSrcVocabPath = artifacts['pivotSrcVocabPath'] ?? pivotDerived?.srcVocabPath
+    const pivotDstVocabPath = artifacts['pivotDstVocabPath'] ?? pivotDerived?.dstVocabPath
 
     const { model } = createNmtModel(
       params.modelId,
@@ -184,10 +175,10 @@ export const nmtPlugin = definePlugin({
       dstVocabPath,
       pivotModelPath,
       pivotSrcVocabPath,
-      pivotDstVocabPath,
-    );
+      pivotDstVocabPath
+    )
 
-    return { model };
+    return { model }
   },
 
   handlers: {
@@ -198,37 +189,40 @@ export const nmtPlugin = definePlugin({
       // nmtcpp does not expose a cancel surface today — SDK falls
       // back to soft-cancel (stop yielding, drop result, skip
       // post-processing; the C++ work runs to completion).
-      cancel: { scope: "none" },
+      cancel: { scope: 'none' },
 
       handler: async function* (request) {
-        const stream = translate(request, request.requestId);
+        const stream = translate(request, request.requestId)
         try {
-          let result = await stream.next();
+          let result = await stream.next()
 
           while (!result.done) {
             yield {
-              type: "translate" as const,
-              token: result.value,
-            };
-            result = await stream.next();
+              type: 'translate' as const,
+              token: result.value
+            }
+            result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value;
-          yield attachModelExecutionMs({
-            type: "translate" as const,
-            token: "",
-            done: true,
-            ...(stats && { stats }),
-          }, modelExecutionMs);
+          const { modelExecutionMs, stats } = result.value
+          yield attachModelExecutionMs(
+            {
+              type: 'translate' as const,
+              token: '',
+              done: true,
+              ...(stats && { stats })
+            },
+            modelExecutionMs
+          )
         } finally {
-          await stream.return?.(undefined as never);
+          await stream.return?.(undefined as never)
         }
-      },
-    }),
+      }
+    })
   },
 
   logging: {
     module: nmtAddonLogging,
-    namespace: ModelType.nmtcppTranslation,
-  },
-});
+    namespace: ModelType.nmtcppTranslation
+  }
+})

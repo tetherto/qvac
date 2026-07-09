@@ -543,11 +543,18 @@ jobs:
           echo "Dist moved from staging area"
           ls -la ${{ env.WORKDIR }}/dist/
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ inputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.WORKDIR }}
 
   publish-npm-bare-sdk:
@@ -589,11 +596,18 @@ jobs:
           name: dist-bare-sdk
           path: ${{ env.WORKDIR_BARE }}/dist/
 
+      - name: Determine dist-tag
+        id: dist-tag-2
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ env.WORKDIR_BARE }}
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ inputs.npm_tag }}
+          tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.WORKDIR_BARE }}
 
   # Create GitHub release only for actual releases (after NPM publish).

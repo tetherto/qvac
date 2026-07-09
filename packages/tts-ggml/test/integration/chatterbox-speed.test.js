@@ -1,6 +1,6 @@
 'use strict'
 
-// Integration coverage for the Chatterbox `speed` configuration (QVAC-21119):
+// Integration coverage for the Chatterbox `speed` configuration:
 // drives the real GGUF engine through the JS addon and checks that the knob
 // adjusts output duration as documented while staying backward compatible
 // (unset == 1.0 == raw model output, no default slowdown).

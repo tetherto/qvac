@@ -30,7 +30,7 @@ The SDK and its native backends (llama.cpp / ggml) no longer print to the consol
 
 ```typescript
 // SDK and native logs printed to the console by default.
-await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 // → console fills with SDK + native output
 ```
 
@@ -38,7 +38,7 @@ await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
 
 ```typescript
 // Silent by default — no console output.
-await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 
 // Opt in:
 //   qvac.config.json → { "loggerConsoleOutput": true }                          // SDK logs
@@ -54,14 +54,14 @@ The bundled `bare-process` shim has been removed in favor of Bare primitives. Co
 
 ```typescript
 // process available as a global
-process.exit(0);
+process.exit(0)
 ```
 
 **After:**
 
 ```typescript
-import process from "bare-process";
-process.exit(0);
+import process from 'bare-process'
+process.exit(0)
 ```
 
 ### OCR Now Runs on GGML
@@ -75,14 +75,14 @@ The SDK's OCR path moves from ONNX to GGML-OCR 0.4.0. The legacy ONNX OCR model 
 `subscribeServerLogs` registers a single handler that receives all server-side logs, removing the need for per-ID `loggingStream()` calls.
 
 ```typescript
-import { subscribeServerLogs } from "@qvac/sdk";
+import { subscribeServerLogs } from '@qvac/sdk'
 
 const unsubscribe = subscribeServerLogs((log) => {
-  console.log(`[${log.level}] [${log.namespace}] ${log.message}`);
-});
+  console.log(`[${log.level}] [${log.namespace}] ${log.message}`)
+})
 
 // later
-unsubscribe();
+unsubscribe()
 ```
 
 ### Field-Level Validation Errors
@@ -90,13 +90,13 @@ unsubscribe();
 Invalid input now produces readable, field-level errors instead of opaque failures. A `RequestValidationFailedError` carries a message that points at the offending field.
 
 ```typescript
-import { loadModel, RequestValidationFailedError, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+import { loadModel, RequestValidationFailedError, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
 
 try {
-  await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { dtx_size: 4096 } });
+  await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { dtx_size: 4096 } })
 } catch (err) {
   if (err instanceof RequestValidationFailedError) {
-    console.error(err.message);
+    console.error(err.message)
     // Invalid request:
     // ✖ Unrecognized key: "dtx_size"
     //   → at modelConfig
@@ -111,20 +111,20 @@ Completions can now cap or disable the reasoning channel per request or at load 
 ```typescript
 // Per-request: cap the reasoning channel at 128 tokens for a single run()
 await session.run({
-  history: [{ role: "user", content: "Solve this step by step" }],
-  reasoning_budget: 128, // -1 = unrestricted, 0 = disabled, N = cap at N tokens
-});
+  history: [{ role: 'user', content: 'Solve this step by step' }],
+  reasoning_budget: 128 // -1 = unrestricted, 0 = disabled, N = cap at N tokens
+})
 
 // Load-time default
-await loadModel(src, { reasoning_budget: 256 });
+await loadModel(src, { reasoning_budget: 256 })
 ```
 
 ```typescript
 // Drop this turn's reasoning block from the KV cache after generation
 await model.completion({
   history,
-  generationParams: { remove_thinking_from_context: true },
-});
+  generationParams: { remove_thinking_from_context: true }
+})
 ```
 
 The same `remove_thinking_from_context` flag is accepted on the CLI's OpenAI-compatible `/v1/chat/completions` request body.
@@ -136,9 +136,9 @@ A new `image_tile_mode` config controls how multimodal images are tiled before i
 ```typescript
 await loadModel({
   modelSrc: QWEN3_5_VL_MODEL,
-  modelType: "llamacpp-completion",
-  modelConfig: { image_tile_mode: "sequential" }, // "disabled" | "batched" | "sequential" (default: "sequential")
-});
+  modelType: 'llamacpp-completion',
+  modelConfig: { image_tile_mode: 'sequential' } // "disabled" | "batched" | "sequential" (default: "sequential")
+})
 ```
 
 ### Per-Engine TTS Language Validation and More Languages
@@ -150,24 +150,24 @@ import {
   TTS_CHATTERBOX_LANGUAGES,
   TTS_SUPERTONIC_LANGUAGES,
   type TtsChatterboxLanguage,
-  type TtsSupertonicLanguage,
-} from "@qvac/sdk";
+  type TtsSupertonicLanguage
+} from '@qvac/sdk'
 
 await loadModel({
   modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
-  modelType: "tts-ggml",
+  modelType: 'tts-ggml',
   modelConfig: {
-    ttsEngine: "chatterbox",
-    language: "en",
+    ttsEngine: 'chatterbox',
+    language: 'en',
     s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX.src,
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
     threads: 8,
     nGpuLayers: 99,
-    seed: 42,
-  },
-});
+    seed: 42
+  }
+})
 ```
 
 ### Parakeet 0.8 Runtime Fields and Explicit BCI Embedder Loading
@@ -179,10 +179,10 @@ const modelId = await loadModel({
   modelSrc: BCI_WINDOWED,
   modelConfig: {
     embedderModelSrc: BCI_EMBEDDER,
-    whisperConfig: { language: "en", temperature: 0.0 },
-    bciConfig: { day_idx: 1 },
-  },
-});
+    whisperConfig: { language: 'en', temperature: 0.0 },
+    bciConfig: { day_idx: 1 }
+  }
+})
 ```
 
 ## Bug Fixes
@@ -359,20 +359,20 @@ QVAC SDK 0.13.0 broadens the SDK across video, neural-signal transcription, robo
 The video API now supports image-to-video generation for Wan image-to-video pipelines. Consumers can provide an initial frame through `init_image` and control denoising with `strength`, making it possible to animate a source image instead of generating entirely from text.
 
 ```typescript
-import fs from "node:fs";
-import { video } from "@qvac/sdk";
+import fs from 'node:fs'
+import { video } from '@qvac/sdk'
 
-const firstFrame = fs.readFileSync("portrait.png");
+const firstFrame = fs.readFileSync('portrait.png')
 const { outputs } = video({
   modelId,
-  mode: "img2vid",
-  prompt: "the subject slowly turns and smiles, cinematic lighting",
+  mode: 'img2vid',
+  prompt: 'the subject slowly turns and smiles, cinematic lighting',
   init_image: firstFrame,
-  strength: 0.85,
-});
+  strength: 0.85
+})
 
-const buffers = await outputs;
-fs.writeFileSync("output.avi", buffers[0]);
+const buffers = await outputs
+fs.writeFileSync('output.avi', buffers[0])
 ```
 
 This change also moves video dimension validation to the SDK schema boundary. Width and height now need to be multiples of 16, so invalid dimensions fail before they reach the native addon.
@@ -380,13 +380,13 @@ This change also moves video dimension validation to the SDK schema boundary. Wi
 **Before:**
 
 ```typescript
-video({ modelId, mode: "txt2vid", prompt: "...", width: 520, height: 264 });
+video({ modelId, mode: 'txt2vid', prompt: '...', width: 520, height: 264 })
 ```
 
 **After:**
 
 ```typescript
-video({ modelId, mode: "txt2vid", prompt: "...", width: 528, height: 272 });
+video({ modelId, mode: 'txt2vid', prompt: '...', width: 528, height: 272 })
 ```
 
 ## Worker Failures Are Now Typed SDK Errors
@@ -394,15 +394,15 @@ video({ modelId, mode: "txt2vid", prompt: "...", width: 528, height: 272 });
 Bare worker crashes and SDK shutdown now surface as structured RPC errors instead of ambiguous failures. Applications can distinguish an unexpected worker death from an in-flight request that was cancelled because the SDK is closing.
 
 ```typescript
-import { WorkerCrashedError, WorkerShutdownError } from "@qvac/sdk";
+import { WorkerCrashedError, WorkerShutdownError } from '@qvac/sdk'
 
 try {
-  await sdk.embed({ modelId, text: "hi" });
+  await sdk.embed({ modelId, text: 'hi' })
 } catch (err) {
   if (err instanceof WorkerCrashedError) {
-    console.error(err.exitCode, err.exitSignal);
+    console.error(err.exitCode, err.exitSignal)
   } else if (err instanceof WorkerShutdownError) {
-    console.error("The SDK closed while this request was in flight.");
+    console.error('The SDK closed while this request was in flight.')
   }
 }
 ```
@@ -412,18 +412,18 @@ try {
 The new Electron Forge plugin helps packaged desktop apps include only the native addon trees needed by their QVAC configuration. This reduces accidental bundling of unused prebuilds and keeps app packages closer to the target platform set.
 
 ```typescript
-const QvacForgePlugin = require("@qvac/sdk/electron-forge");
+const QvacForgePlugin = require('@qvac/sdk/electron-forge')
 
 module.exports = {
-  packagerConfig: { name: "MyApp" },
+  packagerConfig: { name: 'MyApp' },
   plugins: [
     new QvacForgePlugin({
-      configPath: "./qvac.config.json",
-      hosts: ["darwin-arm64", "darwin-x64"],
-      logLevel: "info",
-    }),
-  ],
-};
+      configPath: './qvac.config.json',
+      hosts: ['darwin-arm64', 'darwin-x64'],
+      logLevel: 'info'
+    })
+  ]
+}
 ```
 
 ## Completion and Transcription Metadata Are More Precise
@@ -435,10 +435,10 @@ Whisper transcription metadata now exposes backend and GPU stats in the final st
 ```typescript
 for await (const ev of sdk.transcribe({ modelId, audioChunk, metadata: true })) {
   if (ev.done && ev.stats) {
-    console.log(ev.stats.backendDevice);
-    console.log(ev.stats.backendId);
-    console.log(ev.stats.gpuMemTotalMb);
-    console.log(ev.stats.gpuMemFreeMb);
+    console.log(ev.stats.backendDevice)
+    console.log(ev.stats.backendId)
+    console.log(ev.stats.gpuMemTotalMb)
+    console.log(ev.stats.gpuMemFreeMb)
   }
 }
 ```
@@ -448,29 +448,29 @@ for await (const ev of sdk.transcribe({ modelId, audioChunk, metadata: true })) 
 The SDK now includes BCI transcription backed by whisper.cpp. It supports both batch transcription from a `.bin` path or `Uint8Array`, and streaming duplex sessions over neural-signal chunks.
 
 ```typescript
-import { loadModel, bciTranscribe, bciTranscribeStream, BCI_WINDOWED } from "@qvac/sdk";
+import { loadModel, bciTranscribe, bciTranscribeStream, BCI_WINDOWED } from '@qvac/sdk'
 
-const modelId = await loadModel({ modelSrc: BCI_WINDOWED });
-const text = await bciTranscribe({ modelId, neuralData: "./signal.bin" });
+const modelId = await loadModel({ modelSrc: BCI_WINDOWED })
+const text = await bciTranscribe({ modelId, neuralData: './signal.bin' })
 
-const session = await bciTranscribeStream({ modelId, emit: "delta" });
-session.write(chunk);
-session.end();
+const session = await bciTranscribeStream({ modelId, emit: 'delta' })
+session.write(chunk)
+session.end()
 
 for await (const token of session) {
-  process.stdout.write(token);
+  process.stdout.write(token)
 }
 ```
 
 This release also integrates the pi05 VLA model path for robot-action inference. The VLA API can inspect model hparams, preprocess camera frames, and run action generation with the required image, token, mask, and noise inputs.
 
 ```typescript
-import { loadModel, vla, vlaHparams, vlaPreprocessImage, PI05_BASE_Q_AGGRESSIVE } from "@qvac/sdk";
+import { loadModel, vla, vlaHparams, vlaPreprocessImage, PI05_BASE_Q_AGGRESSIVE } from '@qvac/sdk'
 
-const modelId = await loadModel({ modelSrc: PI05_BASE_Q_AGGRESSIVE, modelType: "ggml-vla" });
-const { hparams } = await vlaHparams({ modelId });
-const size = hparams.visionImageSize;
-const images = [cam0, cam1, cam2].map((px) => vlaPreprocessImage(px, w, h, { size }));
+const modelId = await loadModel({ modelSrc: PI05_BASE_Q_AGGRESSIVE, modelType: 'ggml-vla' })
+const { hparams } = await vlaHparams({ modelId })
+const size = hparams.visionImageSize
+const images = [cam0, cam1, cam2].map((px) => vlaPreprocessImage(px, w, h, { size }))
 
 const { actions } = await vla({
   modelId,
@@ -480,8 +480,8 @@ const { actions } = await vla({
   state: new Float32Array(0),
   tokens,
   mask,
-  noise,
-});
+  noise
+})
 ```
 
 ## Runtime Fixes and Dependency Cleanup
@@ -533,9 +533,9 @@ This patch release unblocks React Native and BareKit apps that bundle `@qvac/sdk
 React Native apps that only need model constant names previously had to import from the package root, which dragged server-side modules into Metro. v0.12.2 adds a `./models` export on both `@qvac/sdk` and `@qvac/bare-sdk` so you can depend on the registry alone.
 
 ```typescript
-import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk/models";
+import { LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk/models'
 // or on Bare-only clients:
-import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/bare-sdk/models";
+import { LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/bare-sdk/models'
 ```
 
 ## Bug Fixes
@@ -564,10 +564,10 @@ v0.12.1 introduces two structured RPC errors that propagate from the worker brid
 - `WorkerShutdownError` — the SDK is shutting down (`sdk.close()` was called) while this request was still in flight. Safe to swallow on intentional teardown; surfaces an actionable label for callers who want to log it.
 
 ```typescript
-import { WorkerCrashedError, WorkerShutdownError } from "@qvac/sdk";
+import { WorkerCrashedError, WorkerShutdownError } from '@qvac/sdk'
 
 try {
-  await sdk.embed({ modelId, text: "hi" });
+  await sdk.embed({ modelId, text: 'hi' })
 } catch (err) {
   if (err instanceof WorkerCrashedError) {
     // err.exitCode, err.exitSignal — worker died, decide whether to respawn.
@@ -604,27 +604,27 @@ The SDK TTS plugin now targets `@qvac/tts-ggml` instead of `@qvac/tts-onnx`. The
 ```typescript
 await loadModel({
   modelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
-  modelType: "tts",
+  modelType: 'tts',
   modelConfig: {
-    ttsEngine: "chatterbox",
-    language: "en",
+    ttsEngine: 'chatterbox',
+    language: 'en',
     ttsSpeechEncoderSrc: TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX.src,
     ttsEmbedTokensSrc: TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX.src,
     ttsConditionalDecoderSrc: TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX.src,
-    ttsLanguageModelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src,
-  },
-});
+    ttsLanguageModelSrc: TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX.src
+  }
+})
 ```
 
 **After:**
 
 ```typescript
-import { TTS_S3GEN_MULTILINGUAL_CHATTERBOX } from "@qvac/sdk";
+import { TTS_S3GEN_MULTILINGUAL_CHATTERBOX } from '@qvac/sdk'
 
 await loadModel({
   modelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX,
-  modelType: "tts",
-});
+  modelType: 'tts'
+})
 ```
 
 New registry constants cover Chatterbox and Supertonic variants in GGUF form (`TTS_S3GEN_*`, `TTS_T3_*`, `TTS_*_SUPERTONIC_*`).
@@ -637,26 +637,26 @@ Building on the 0.11.0 single-file GGUF migration, Parakeet now targets `@qvac/t
 
 ```typescript
 await loadModel({
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelConfig: {
-    modelType: "tdt",
+    modelType: 'tdt',
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
     parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR,
-  },
-});
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR
+  }
+})
 ```
 
 **After:**
 
 ```typescript
-import { PARAKEET_TDT_0_6B_V3_Q8_0 } from "@qvac/sdk";
+import { PARAKEET_TDT_0_6B_V3_Q8_0 } from '@qvac/sdk'
 
 await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
-  modelType: "parakeet",
-});
+  modelType: 'parakeet'
+})
 ```
 
 ### `@qvac/bare-sdk` requires explicit plugin registration
@@ -666,25 +666,25 @@ Bare consumers that previously called `getRPC()` against the full `@qvac/sdk` wo
 **Before:**
 
 ```typescript
-import { getRPC } from "@qvac/sdk";
+import { getRPC } from '@qvac/sdk'
 
-const rpc = await getRPC();
-await rpc.loadModel({ /* any built-in modelType works */ });
+const rpc = await getRPC()
+await rpc.loadModel({/* any built-in modelType works */})
 ```
 
 **After:**
 
 ```typescript
-import { plugins } from "@qvac/bare-sdk";
-import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
-import { llmPlugin } from "@qvac/bare-sdk/llamacpp-completion/plugin";
+import { plugins } from '@qvac/bare-sdk'
+import { nmtPlugin } from '@qvac/bare-sdk/nmtcpp-translation/plugin'
+import { llmPlugin } from '@qvac/bare-sdk/llamacpp-completion/plugin'
 
-const sdk = plugins([nmtPlugin, llmPlugin]);
+const sdk = plugins([nmtPlugin, llmPlugin])
 
 await sdk.loadModel({
   modelSrc: BERGAMOT_EN_FR,
-  modelType: "nmt",
-});
+  modelType: 'nmt'
+})
 ```
 
 Install matching addon packages (`@qvac/translation-nmtcpp`, `@qvac/llm-llamacpp`, etc.) alongside `@qvac/bare-sdk`. `@qvac/sdk` remains the right choice for Node and Expo apps that want the full default worker.
@@ -706,20 +706,20 @@ import {
   vlaHparams,
   vlaPreprocessImage,
   vlaPadState,
-  SMOLVLA_LIBERO_VISION_Q8,
-} from "@qvac/sdk";
+  SMOLVLA_LIBERO_VISION_Q8
+} from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: SMOLVLA_LIBERO_VISION_Q8,
-  modelType: "vla",
-  modelConfig: { backend: "auto" },
-});
+  modelType: 'vla',
+  modelConfig: { backend: 'auto' }
+})
 
-const { hparams } = await vlaHparams({ modelId });
+const { hparams } = await vlaHparams({ modelId })
 const image = vlaPreprocessImage(pixels, width, height, {
-  size: hparams.visionImageSize,
-});
-const state = vlaPadState(robotState, hparams.maxStateDim);
+  size: hparams.visionImageSize
+})
+const state = vlaPadState(robotState, hparams.maxStateDim)
 
 const { actions, actionDim, chunkSize } = await vla({
   modelId,
@@ -728,8 +728,8 @@ const { actions, actionDim, chunkSize } = await vla({
   imgHeight: hparams.visionImageSize,
   state,
   tokens,
-  mask,
-});
+  mask
+})
 ```
 
 ### Image classification
@@ -737,14 +737,14 @@ const { actions, actionDim, chunkSize } = await vla({
 Classify JPEG/PNG buffers or raw RGB bytes with bundled MobileNetV3-Small or a custom GGUF:
 
 ```typescript
-import { loadModel, classify } from "@qvac/sdk";
+import { loadModel, classify } from '@qvac/sdk'
 
 const modelId = await loadModel({
-  modelType: "classification",
-  modelConfig: { topK: 3 },
-});
+  modelType: 'classification',
+  modelConfig: { topK: 3 }
+})
 
-const results = await classify({ modelId, image: jpegBytes });
+const results = await classify({ modelId, image: jpegBytes })
 // → [{ label: "food", confidence: 0.91 }, ...]
 ```
 
@@ -753,24 +753,24 @@ const results = await classify({ modelId, image: jpegBytes });
 Generate video frames from text prompts using WAN models:
 
 ```typescript
-import { video } from "@qvac/sdk";
+import { video } from '@qvac/sdk'
 
 const run = video({
   modelId,
-  mode: "txt2vid",
-  prompt: "a cat surfing a wave at sunset",
+  mode: 'txt2vid',
+  prompt: 'a cat surfing a wave at sunset',
   width: 480,
   height: 832,
   video_frames: 17,
   fps: 16,
-  steps: 20,
-});
+  steps: 20
+})
 
 for await (const tick of run.progressStream) {
-  console.log(`step ${tick.step}/${tick.totalSteps}`);
+  console.log(`step ${tick.step}/${tick.totalSteps}`)
 }
 
-const frames = await run.outputs;
+const frames = await run.outputs
 ```
 
 ### `@qvac/sdk/commands` for bundling and verification
@@ -778,14 +778,14 @@ const frames = await run.outputs;
 Programmatic access to worker bundling and prebuild verification — the same primitives `qvac bundle` and `qvac verify bundle` use:
 
 ```typescript
-import { bundleSdk, verifyBundle } from "@qvac/sdk/commands";
+import { bundleSdk, verifyBundle } from '@qvac/sdk/commands'
 
-await bundleSdk({ projectRoot: process.cwd(), configPath: "./qvac.config.json" });
+await bundleSdk({ projectRoot: process.cwd(), configPath: './qvac.config.json' })
 await verifyBundle({
   projectRoot: process.cwd(),
-  addonsSource: "./qvac/worker.bundle.js",
-  hosts: ["android-arm64", "ios-arm64"],
-});
+  addonsSource: './qvac/worker.bundle.js',
+  hosts: ['android-arm64', 'ios-arm64']
+})
 ```
 
 ### RAG cancellation detection
@@ -793,7 +793,7 @@ await verifyBundle({
 Detect cancelled RAG operations without importing `@qvac/rag/errors`:
 
 ```typescript
-import { RAG_ERROR_CODES } from "@qvac/sdk";
+import { RAG_ERROR_CODES } from '@qvac/sdk'
 
 if (err.code === RAG_ERROR_CODES.OPERATION_CANCELLED) {
   // ingest was cancelled
@@ -817,17 +817,15 @@ Expo config plugins resolve `@qvac/sdk` from ancestor `node_modules` directories
 LLM completion now surfaces real input token counts in stats and throws a typed `ContextOverflowError` when the prompt exceeds the model context window — including across the Bare RPC boundary:
 
 ```typescript
-import { ContextOverflowError } from "@qvac/sdk";
+import { ContextOverflowError } from '@qvac/sdk'
 
-const run = sdk.completion({ /* ... */ });
+const run = sdk.completion({/* ... */})
 try {
-  const final = await run.final;
-  console.log(final.stats?.promptTokens);
+  const final = await run.final
+  console.log(final.stats?.promptTokens)
 } catch (err) {
   if (err instanceof ContextOverflowError) {
-    console.warn(
-      `prompt of ${err.promptTokens} tokens exceeded ${err.ctxSize}`,
-    );
+    console.warn(`prompt of ${err.promptTokens} tokens exceeded ${err.ctxSize}`)
   }
 }
 ```
@@ -906,20 +904,20 @@ override.
 **Before (Bare):**
 
 ```typescript
-import { unloadModel } from "@qvac/sdk";
+import { unloadModel } from '@qvac/sdk'
 
-await unloadModel({ modelId });
+await unloadModel({ modelId })
 // RPC connection closed → Bare worker host terminated.
 ```
 
 **After (Bare):**
 
 ```typescript
-import { unloadModel } from "@qvac/sdk";
+import { unloadModel } from '@qvac/sdk'
 
-await unloadModel({ modelId });
+await unloadModel({ modelId })
 // Worker survives; opt in to closing explicitly:
-await unloadModel({ modelId, autoClose: true });
+await unloadModel({ modelId, autoClose: true })
 ```
 
 ### Parakeet plugin moves to the 0.4.0 single-file GGUF API
@@ -936,24 +934,24 @@ Sortformer from GGUF metadata.
 ```typescript
 await loadModel({
   modelSrc: PARAKEET_TDT_ENCODER_INT8,
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelConfig: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
     parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
-  },
-});
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8
+  }
+})
 
 await loadModel({
   modelSrc: PARAKEET_CTC_FP32,
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelConfig: {
-    modelType: "ctc",
+    modelType: 'ctc',
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
-  },
-});
+    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER
+  }
+})
 ```
 
 **After:**
@@ -961,13 +959,13 @@ await loadModel({
 ```typescript
 await loadModel({
   modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
-  modelType: "parakeet",
-});
+  modelType: 'parakeet'
+})
 
 await loadModel({
   modelSrc: PARAKEET_CTC_0_6B_Q8_0,
-  modelType: "parakeet",
-});
+  modelType: 'parakeet'
+})
 ```
 
 The new GGUF constants (`PARAKEET_TDT_0_6B_V3_Q8_0`, `PARAKEET_CTC_0_6B_Q8_0`,
@@ -986,47 +984,47 @@ hatch.
 **Before — downloadAsset:**
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
+import { downloadAsset, cancel } from '@qvac/sdk'
 
-const op = downloadAsset({ assetSrc, onProgress });
-await cancel({ operation: "downloadAsset", downloadKey: assetSrc.key, clearCache: true });
+const op = downloadAsset({ assetSrc, onProgress })
+await cancel({ operation: 'downloadAsset', downloadKey: assetSrc.key, clearCache: true })
 ```
 
 **After — downloadAsset:** the decorated promise now exposes `op.requestId`
 synchronously, and `clearCache` is honoured on the `requestId` path.
 
 ```typescript
-import { downloadAsset, cancel } from "@qvac/sdk";
+import { downloadAsset, cancel } from '@qvac/sdk'
 
-const op = downloadAsset({ assetSrc, onProgress });
-await cancel({ requestId: op.requestId, clearCache: true });
+const op = downloadAsset({ assetSrc, onProgress })
+await cancel({ requestId: op.requestId, clearCache: true })
 ```
 
 **Before — rag:**
 
 ```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+import { ragIngest, cancel } from '@qvac/sdk'
 
-ragIngest({ workspace: "my-workspace", documents });
-await cancel({ operation: "rag", workspace: "my-workspace" });
+ragIngest({ workspace: 'my-workspace', documents })
+await cancel({ operation: 'rag', workspace: 'my-workspace' })
 ```
 
 **After — rag (primary path, by `requestId`):**
 
 ```typescript
-import { ragIngest, cancel } from "@qvac/sdk";
+import { ragIngest, cancel } from '@qvac/sdk'
 
-const op = ragIngest({ workspace: "my-workspace", documents });
-await cancel({ requestId: op.requestId });
+const op = ragIngest({ workspace: 'my-workspace', documents })
+await cancel({ requestId: op.requestId })
 ```
 
 **After — rag (broad escape hatch, no `requestId` to hand):**
 
 ```typescript
-import { cancel } from "@qvac/sdk";
+import { cancel } from '@qvac/sdk'
 
 // Cancel every in-flight RAG operation running on the embedding model:
-await cancel({ modelId: ragEmbeddingModelId, kind: "rag" });
+await cancel({ modelId: ragEmbeddingModelId, kind: 'rag' })
 ```
 
 Every other `cancel(...)` shape still works: `cancel({ operation: "inference",
@@ -1046,33 +1044,26 @@ network round-trip. The pattern covers `completion`, `loadModel`, `embed`,
 the three cancellable RAG ops (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
 
 ```typescript
-import {
-  completion,
-  loadModel,
-  embed,
-  downloadAsset,
-  ragIngest,
-  cancel,
-} from "@qvac/sdk";
+import { completion, loadModel, embed, downloadAsset, ragIngest, cancel } from '@qvac/sdk'
 
-const run = completion({ modelId, history });
-console.log(run.requestId);
+const run = completion({ modelId, history })
+console.log(run.requestId)
 
-const op = loadModel({ modelSrc: "..." });
-console.log(op.requestId);                    // synchronously, before await
-const modelId = await op;                     // legacy unwrap still works
+const op = loadModel({ modelSrc: '...' })
+console.log(op.requestId) // synchronously, before await
+const modelId = await op // legacy unwrap still works
 
-const handle = embed({ modelId, text: "hello" });
-console.log(handle.requestId);
-await handle;
+const handle = embed({ modelId, text: 'hello' })
+console.log(handle.requestId)
+await handle
 
-const download = downloadAsset({ assetSrc, onProgress });
-stopButton.onclick = () => cancel({ requestId: download.requestId });
-await download;                                // rejects with InferenceCancelledError if cancelled
+const download = downloadAsset({ assetSrc, onProgress })
+stopButton.onclick = () => cancel({ requestId: download.requestId })
+await download // rejects with InferenceCancelledError if cancelled
 
-const ingest = ragIngest({ workspace: "ws-a", modelId, documents });
-console.log(ingest.requestId);
-await ingest;
+const ingest = ragIngest({ workspace: 'ws-a', modelId, documents })
+console.log(ingest.requestId)
+await ingest
 ```
 
 The non-cancellable RAG ops (`ragChunk`, `ragSearch`, `ragDeleteEmbeddings`,
@@ -1096,17 +1087,19 @@ llama.cpp addon's opaque "job already set" error into a typed framework-level
 rejection.
 
 ```typescript
-import { completion, RequestRejectedByPolicyError } from "@qvac/sdk";
+import { completion, RequestRejectedByPolicyError } from '@qvac/sdk'
 
 try {
-  const run = completion({ modelId, history });
-  for await (const event of run.events) { /* ... */ }
+  const run = completion({ modelId, history })
+  for await (const event of run.events) {
+    /* ... */
+  }
 } catch (err) {
   if (err instanceof RequestRejectedByPolicyError) {
-    showBusy({ modelId: err.modelId, reason: err.reason });
-    return;
+    showBusy({ modelId: err.modelId, reason: err.reason })
+    return
   }
-  throw err;
+  throw err
 }
 ```
 
@@ -1118,10 +1111,10 @@ modelId, kind? }`). Two new client sugars wrap the broad shape so callers don't
 have to think about the wire representation:
 
 ```typescript
-import { cancel } from "@qvac/sdk";
+import { cancel } from '@qvac/sdk'
 
-await cancel({ modelId: "llama-3.2-1b", kind: "completion" });
-await cancel({ modelId: "llama-3.2-1b" });
+await cancel({ modelId: 'llama-3.2-1b', kind: 'completion' })
+await cancel({ modelId: 'llama-3.2-1b' })
 ```
 
 ### Plugin authors: declare cancel scope per handler
@@ -1137,7 +1130,7 @@ addon-side cancel actually interrupts compute. Plugin manifests that omit the
 field still load — it's optional.
 
 ```typescript
-import { definePlugin, defineHandler } from "@qvac/sdk";
+import { definePlugin, defineHandler } from '@qvac/sdk'
 
 definePlugin({
   manifestVersion: 1,
@@ -1146,11 +1139,13 @@ definePlugin({
       requestSchema,
       responseSchema,
       streaming: true,
-      cancel: { scope: "model", hard: true },
-      handler: async function* (request, ctx) { /* ... */ },
-    }),
-  },
-});
+      cancel: { scope: 'model', hard: true },
+      handler: async function* (request, ctx) {
+        /* ... */
+      }
+    })
+  }
+})
 ```
 
 ### Multi-GPU `split-mode`, `tensor-split`, and `main-gpu` on LLM and embed
@@ -1164,24 +1159,24 @@ convention (`splitMode`, `tensorSplit`, `mainGpu`).
 // LLM
 await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  modelType: "llm",
+  modelType: 'llm',
   modelConfig: {
-    "split-mode": "layer",        // "none" | "layer" | "row"
-    "tensor-split": "1,1",        // proportional split across GPUs
-    "main-gpu": 0,                // integer index or "integrated" | "dedicated"
-  },
-});
+    'split-mode': 'layer', // "none" | "layer" | "row"
+    'tensor-split': '1,1', // proportional split across GPUs
+    'main-gpu': 0 // integer index or "integrated" | "dedicated"
+  }
+})
 
 // Embed
 await loadModel({
   modelSrc: EMBEDDING_GEMMA_300M_Q8_0,
-  modelType: "embed",
+  modelType: 'embed',
   modelConfig: {
-    splitMode: "layer",
-    tensorSplit: "1,1",
-    mainGpu: 0,
-  },
-});
+    splitMode: 'layer',
+    tensorSplit: '1,1',
+    mainGpu: 0
+  }
+})
 ```
 
 ### Whisper VAD and end-of-turn events on `transcribeStream`
@@ -1192,23 +1187,24 @@ voice-activity probabilities and turn boundaries, so apps can build push-to-talk
 or barge-in UX without poll-the-text hacks.
 
 ```typescript
-import { transcribeStream } from "@qvac/sdk";
+import { transcribeStream } from '@qvac/sdk'
 
 const session = await transcribeStream({
-  modelId: "whisper-base",
+  modelId: 'whisper-base',
   emitVadEvents: true,
   endOfTurnSilenceMs: 800,
-  vadRunIntervalMs: 100,
-});
+  vadRunIntervalMs: 100
+})
 
 for await (const event of session) {
-  if (event.type === "vad") console.log("speaking:", event.speaking, event.probability);
-  else if (event.type === "endOfTurn") console.log("turn ended after", event.silenceDurationMs, "ms");
-  else if (event.type === "text") process.stdout.write(event.text);
+  if (event.type === 'vad') console.log('speaking:', event.speaking, event.probability)
+  else if (event.type === 'endOfTurn')
+    console.log('turn ended after', event.silenceDurationMs, 'ms')
+  else if (event.type === 'text') process.stdout.write(event.text)
 }
 
-session.write(audioChunk);
-session.end();
+session.write(audioChunk)
+session.end()
 ```
 
 `TranscribeStreamEvent`, `VadStateEvent`, `EndOfTurnEvent`, and
@@ -1227,20 +1223,20 @@ const session = await transcribeStream({
   modelId,
   parakeetStreamingConfig: {
     chunkMs: 1000,
-    emitPartials: true,
-  },
-});
+    emitPartials: true
+  }
+})
 
-ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
+ffmpeg.stdout.on('data', (chunk: Buffer) => session.write(chunk))
 
 for await (const event of session) {
   switch (event.type) {
-    case "text":
-      process.stdout.write(event.text);
-      break;
-    case "endOfTurn":
-      console.log("\n[endOfTurn] turn boundary detected\n");
-      break;
+    case 'text':
+      process.stdout.write(event.text)
+      break
+    case 'endOfTurn':
+      console.log('\n[endOfTurn] turn boundary detected\n')
+      break
   }
 }
 ```
@@ -1264,16 +1260,16 @@ framing; Gemma4 covers the native
 `<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>` framing.
 
 ```typescript
-import { completion, type ToolDialect } from "@qvac/sdk";
+import { completion, type ToolDialect } from '@qvac/sdk'
 
 const result = completion({
-  modelId,                         // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
+  modelId, // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
   history,
   tools,
-  toolDialect: "harmony",          // optional explicit override
-});
+  toolDialect: 'harmony' // optional explicit override
+})
 
-const dialect: ToolDialect = "harmony";
+const dialect: ToolDialect = 'harmony'
 ```
 
 Qwen3.5 / Qwen3.6 and Gemma4 are auto-detected from the model name; the parsers
@@ -1289,19 +1285,19 @@ unrestricted, `0` = disabled. The SDK exposes it both as a load-time default on
 `LlmConfig` and as a per-request override on `GenerationParams`.
 
 ```typescript
-import { loadModel, completion } from "@qvac/sdk";
+import { loadModel, completion } from '@qvac/sdk'
 
 const modelId = await loadModel({
-  modelSrc: "/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf",
-  modelType: "llm",
-  modelConfig: { ctx_size: 4096, reasoning_budget: -1 },
-});
+  modelSrc: '/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf',
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, reasoning_budget: -1 }
+})
 
 const run = completion({
   modelId,
-  history: [{ role: "user", content: "Think step by step." }],
-  generationParams: { reasoning_budget: 0 }, // override per-request
-});
+  history: [{ role: 'user', content: 'Think step by step.' }],
+  generationParams: { reasoning_budget: 0 } // override per-request
+})
 ```
 
 The same bump fixes a regression where `system_prompt` (a JS-only
@@ -1319,26 +1315,26 @@ per-call `lora` field that takes an absolute filesystem path. A new load-time
 model or applied per-call (`"auto" | "immediately" | "at_runtime"`).
 
 ```typescript
-const refA = fs.readFileSync("scientist-a.jpg");
-const refB = fs.readFileSync("scientist-b.jpg");
+const refA = fs.readFileSync('scientist-a.jpg')
+const refB = fs.readFileSync('scientist-b.jpg')
 const { outputs } = diffusion({
   modelId,
-  prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
+  prompt: 'a portrait using most visual traits from @image1 and the eyes from @image2',
   init_images: [refA, refB],
   width: 768,
-  height: 768,
-});
+  height: 768
+})
 
 const { outputs: loraOutputs } = diffusion({
   modelId,
-  prompt: "a watercolor cat",
-  lora: "/home/user/loras/watercolor.safetensors",
-});
+  prompt: 'a watercolor cat',
+  lora: '/home/user/loras/watercolor.safetensors'
+})
 
 await loadModel(modelSrc, {
-  modelType: "diffusion",
-  modelConfig: { prediction: "flux2_flow", lora_apply_mode: "immediately" },
-});
+  modelType: 'diffusion',
+  modelConfig: { prediction: 'flux2_flow', lora_apply_mode: 'immediately' }
+})
 ```
 
 Relative LoRA paths are rejected: the SDK runs across processes with differing
@@ -1357,46 +1353,47 @@ without standing up a full diffusion pipeline.
 // Post-step upscale during diffusion
 const modelId = await loadModel({
   modelSrc: SD_V2_1_1B_Q8_0,
-  modelType: "diffusion",
+  modelType: 'diffusion',
   modelConfig: {
-    prediction: "v",
+    prediction: 'v',
     upscaler: {
-      type: "esrgan",
-      model_src: "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
-      tile_size: 128,
-    },
-  },
-});
+      type: 'esrgan',
+      model_src:
+        'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth',
+      tile_size: 128
+    }
+  }
+})
 
 const { outputs } = diffusion({
   modelId,
-  prompt: "an illustrated red fox portrait",
+  prompt: 'an illustrated red fox portrait',
   width: 128,
   height: 128,
-  upscale: { repeats: 2 },
-});
+  upscale: { repeats: 2 }
+})
 ```
 
 ```typescript
 // Standalone upscale — no diffusion model required
-import { upscale, loadModel, REALESRGAN_X4PLUS_ANIME_6B } from "@qvac/sdk";
+import { upscale, loadModel, REALESRGAN_X4PLUS_ANIME_6B } from '@qvac/sdk'
 
 const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
-  modelType: "diffusion",
+  modelType: 'diffusion',
   modelConfig: {
-    mode: "upscale",
-    upscaler: { tile_size: 128 },
-  },
-});
+    mode: 'upscale',
+    upscaler: { tile_size: 128 }
+  }
+})
 
 const { outputs, stats } = upscale({
   modelId,
-  image: pngBytes,        // Uint8Array (PNG/JPEG)
-  repeats: 1,             // each pass multiplies dims by the model's native scale factor
-});
+  image: pngBytes, // Uint8Array (PNG/JPEG)
+  repeats: 1 // each pass multiplies dims by the model's native scale factor
+})
 
-const [upscaledPng] = await outputs;
-console.log(await stats); // { upscaleMs, totalUpscaleMs, width, height, totalPixels, repeats, ... }
+const [upscaledPng] = await outputs
+console.log(await stats) // { upscaleMs, totalUpscaleMs, width, height, totalPixels, repeats, ... }
 ```
 
 Calling `upscale()` against a model that wasn't loaded with `mode: "upscale"`
@@ -1547,10 +1544,10 @@ The DHT routing table is still populated lazily as `dht.connect()` issues lookup
 
 Local benchmarks (10 consumer↔provider runs each, against the published v0.10.1 baseline):
 
-| Build              | Mean connection time | p50    | p95    |
-| ------------------ | -------------------- | ------ | ------ |
-| v0.10.1 (baseline) | 3.82s                | 3.71s  | 4.94s  |
-| v0.10.2 (this fix) | 1.18s                | 1.12s  | 1.49s  |
+| Build              | Mean connection time | p50   | p95   |
+| ------------------ | -------------------- | ----- | ----- |
+| v0.10.1 (baseline) | 3.82s                | 3.71s | 4.94s |
+| v0.10.2 (this fix) | 1.18s                | 1.12s | 1.49s |
 
 That's ~3.2× faster on average and brings cold delegated `loadModel` back below the v0.9.0 numbers.
 
@@ -1569,16 +1566,16 @@ This patch release adds a new tool-call dialect for OpenAI's `gpt-oss` (Harmony)
 `completion()` now supports a fourth tool-call dialect, `"harmony"`, used by OpenAI's `gpt-oss` family of models. The new dialect is wired into the same streaming/event surface as the existing dialects (`hermes`, `pythonic`, `json`), so tool calls emitted in Harmony frames are parsed and surfaced through the standard `CompletionEvent` stream. `gpt-oss-20b-Q4_K_M` auto-routes to the Harmony dialect; the `toolDialect` parameter is available as an explicit override on any model.
 
 ```typescript
-import { completion, type ToolDialect } from "@qvac/sdk";
+import { completion, type ToolDialect } from '@qvac/sdk'
 
 const run = completion({
-  modelId,                 // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
+  modelId, // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
   history,
   tools,
-  toolDialect: "harmony",  // optional explicit override
-});
+  toolDialect: 'harmony' // optional explicit override
+})
 
-const dialect: ToolDialect = "harmony";
+const dialect: ToolDialect = 'harmony'
 // ToolDialect is now "hermes" | "pythonic" | "json" | "harmony"
 ```
 
@@ -1677,20 +1674,22 @@ captured thinking and structured tool framing.
 **Before:**
 
 ```typescript
-const result = completion({ modelId, history, stream: true });
-for await (const token of result.tokenStream) { /* ... */ }
-const stats = await result.stats;
+const result = completion({ modelId, history, stream: true })
+for await (const token of result.tokenStream) {
+  /* ... */
+}
+const stats = await result.stats
 ```
 
 **After:**
 
 ```typescript
-const run = completion({ modelId, history, stream: true, captureThinking: true });
+const run = completion({ modelId, history, stream: true, captureThinking: true })
 for await (const event of run.events) {
-  if (event.type === "contentDelta") process.stdout.write(event.text);
-  if (event.type === "toolCall") console.log(event.call.name);
+  if (event.type === 'contentDelta') process.stdout.write(event.text)
+  if (event.type === 'toolCall') console.log(event.call.name)
 }
-const result = await run.final;
+const result = await run.final
 // result.contentText, result.thinkingText, result.toolCalls, result.stats, result.raw.fullText
 ```
 
@@ -1712,35 +1711,35 @@ and `pluginInvokeStream` paths still surface `PLUGIN_HANDLER_NOT_FOUND` as befor
 **Before:**
 
 ```typescript
-import type { LoadModelOptions } from "@qvac/sdk";
+import type { LoadModelOptions } from '@qvac/sdk'
 
 const opts: LoadModelOptions = {
-  modelSrc: "/path/foo",
-  modelType: "my-custom-plugin",
-  modelConfig: { whatever: 1 },
-};
-await loadModel(opts);
+  modelSrc: '/path/foo',
+  modelType: 'my-custom-plugin',
+  modelConfig: { whatever: 1 }
+}
+await loadModel(opts)
 ```
 
 **After:**
 
 ```typescript
-import type { LoadCustomPluginModelOptions } from "@qvac/sdk";
+import type { LoadCustomPluginModelOptions } from '@qvac/sdk'
 
-const opts: LoadCustomPluginModelOptions<"my-custom-plugin"> = {
-  modelSrc: "/path/foo",
-  modelType: "my-custom-plugin",
-  modelConfig: { whatever: 1 },
-};
-await loadModel(opts);
+const opts: LoadCustomPluginModelOptions<'my-custom-plugin'> = {
+  modelSrc: '/path/foo',
+  modelType: 'my-custom-plugin',
+  modelConfig: { whatever: 1 }
+}
+await loadModel(opts)
 // Or just drop the annotation — TS picks the right overload.
 ```
 
 ```typescript
-import { SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
+import { SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
 
 try {
-  await transcribe({ modelId: llmModelId /* ... */ });
+  await transcribe({ modelId: llmModelId /* ... */ })
 } catch (e) {
   if ((e as { code?: number })?.code === SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED) {
     // Includes requested operation, loaded model type, supported operations,
@@ -1760,7 +1759,9 @@ the field name changed.
 ```typescript
 onProgress: (progress) => {
   if (progress.onnxInfo) {
-    console.log(`[${progress.onnxInfo.currentFile}] ${progress.onnxInfo.overallPercentage.toFixed(1)}%`);
+    console.log(
+      `[${progress.onnxInfo.currentFile}] ${progress.onnxInfo.overallPercentage.toFixed(1)}%`
+    )
   }
 }
 ```
@@ -1770,7 +1771,9 @@ onProgress: (progress) => {
 ```typescript
 onProgress: (progress) => {
   if (progress.fileSetInfo) {
-    console.log(`[${progress.fileSetInfo.currentFile}] ${progress.fileSetInfo.overallPercentage.toFixed(1)}%`);
+    console.log(
+      `[${progress.fileSetInfo.currentFile}] ${progress.fileSetInfo.overallPercentage.toFixed(1)}%`
+    )
   }
 }
 ```
@@ -1800,12 +1803,12 @@ delegated models defer to the provider. Useful for preflighting a built-in SDK c
 before issuing the RPC.
 
 ```typescript
-import { getLoadedModelInfo, transcribe } from "@qvac/sdk";
+import { getLoadedModelInfo, transcribe } from '@qvac/sdk'
 
-const info = await getLoadedModelInfo({ modelId });
+const info = await getLoadedModelInfo({ modelId })
 
-if (info.isDelegated || info.handlers.includes("transcribeStream")) {
-  await transcribe({ modelId /* ... */ });
+if (info.isDelegated || info.handlers.includes('transcribeStream')) {
+  await transcribe({ modelId /* ... */ })
 }
 ```
 
@@ -1817,31 +1820,31 @@ schema-valid JSON. The output is guaranteed to parse against the supplied JSON S
 ```typescript
 const run = completion({
   modelId,
-  history: [{ role: "user", content: "Extract: I'm Alice, 30, data engineer." }],
+  history: [{ role: 'user', content: "Extract: I'm Alice, 30, data engineer." }],
   stream: true,
   responseFormat: {
-    type: "json_schema",
+    type: 'json_schema',
     json_schema: {
-      name: "Person",
+      name: 'Person',
       schema: {
-        type: "object",
+        type: 'object',
         properties: {
-          name: { type: "string" },
-          age: { type: "integer" },
-          occupation: { type: "string" },
+          name: { type: 'string' },
+          age: { type: 'integer' },
+          occupation: { type: 'string' }
         },
-        required: ["name", "age", "occupation"],
-        additionalProperties: false,
-      },
-    },
-  },
-});
+        required: ['name', 'age', 'occupation'],
+        additionalProperties: false
+      }
+    }
+  }
+})
 
 for await (const event of run.events) {
-  if (event.type === "contentDelta") process.stdout.write(event.text);
+  if (event.type === 'contentDelta') process.stdout.write(event.text)
 }
-const final = await run.final;
-JSON.parse(final.contentText); // schema-valid
+const final = await run.final
+JSON.parse(final.contentText) // schema-valid
 ```
 
 ### Dynamic tools mode
@@ -1852,29 +1855,35 @@ addon trims the previous tool block from the KV cache so rotation is free — no
 invalidate the cache or pin the tool set per-session.
 
 ```typescript
-import { loadModel, completion, TOOLS_MODE, QWEN3_1_7B_INST_Q4 } from "@qvac/sdk";
+import { loadModel, completion, TOOLS_MODE, QWEN3_1_7B_INST_Q4 } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: QWEN3_1_7B_INST_Q4,
-  modelType: "llm",
+  modelType: 'llm',
   modelConfig: {
     ctx_size: 4096,
     tools: true,
-    toolsMode: TOOLS_MODE.dynamic,
-  },
-});
+    toolsMode: TOOLS_MODE.dynamic
+  }
+})
 
 // Turn 1 — weather tools.
 const turn1 = completion({
-  modelId, history, kvCache, stream: true,
-  tools: [{ name: "get_weather", description: "...", parameters: weatherSchema }],
-});
+  modelId,
+  history,
+  kvCache,
+  stream: true,
+  tools: [{ name: 'get_weather', description: '...', parameters: weatherSchema }]
+})
 
 // Turn 2 — same kvCache, different tools. Free rotation.
 const turn2 = completion({
-  modelId, history, kvCache, stream: true,
-  tools: [{ name: "get_horoscope", description: "...", parameters: horoscopeSchema }],
-});
+  modelId,
+  history,
+  kvCache,
+  stream: true,
+  tools: [{ name: 'get_horoscope', description: '...', parameters: horoscopeSchema }]
+})
 ```
 
 ### Tool-call dialect routing
@@ -1886,12 +1895,15 @@ fine-tunes that emit native pythonic headers, which the auto-router defaults to 
 for empirical reasons.
 
 ```typescript
-import { completion, type ToolDialect } from "@qvac/sdk";
+import { completion, type ToolDialect } from '@qvac/sdk'
 
 const result = completion({
-  modelId, history, tools, stream: true,
-  toolDialect: "pythonic", // "hermes" | "pythonic" | "json"
-});
+  modelId,
+  history,
+  tools,
+  stream: true,
+  toolDialect: 'pythonic' // "hermes" | "pythonic" | "json"
+})
 ```
 
 ### img2img for diffusion models
@@ -1901,13 +1913,13 @@ SD/SDXL, and in-context conditioning on FLUX.2. `strength` controls how much of 
 source is preserved on SD/SDXL; FLUX.2 ignores it (the path is purely conditional).
 
 ```typescript
-const initImage = new Uint8Array(fs.readFileSync("input.png"));
+const initImage = new Uint8Array(fs.readFileSync('input.png'))
 const { outputs } = diffusion({
   modelId,
-  prompt: "oil painting style, vibrant colors",
+  prompt: 'oil painting style, vibrant colors',
   init_image: initImage,
-  strength: 0.5, // 0 = keep source, 1 = ignore source
-});
+  strength: 0.5 // 0 = keep source, 1 = ignore source
+})
 ```
 
 ### Sentence-level TTS streaming
@@ -1920,22 +1932,22 @@ exposes the int16 PCM samples plus the source sentence and chunk index.
 ```typescript
 const session = await textToSpeechStream({
   modelId: ttsModelId,
-  inputType: "text",
+  inputType: 'text',
   accumulateSentences: true,
-  sentenceDelimiterPreset: "latin", // "latin" | "cjk" | "multilingual"
-  flushAfterMs: 400,
-});
+  sentenceDelimiterPreset: 'latin', // "latin" | "cjk" | "multilingual"
+  flushAfterMs: 400
+})
 
-(async () => {
+;(async () => {
   for await (const delta of completion({ modelId: llmModelId /* ... */ }).tokenStream) {
-    session.write(delta);
+    session.write(delta)
   }
-  session.end();
-})();
+  session.end()
+})()
 
 for await (const chunk of session) {
   // chunk.buffer / chunk.chunkIndex / chunk.sentenceChunk
-  if (chunk.done) break;
+  if (chunk.done) break
 }
 ```
 
@@ -1947,9 +1959,9 @@ flag — enabling proper subtitle generation and timeline alignment instead of r
 concatenation.
 
 ```typescript
-const segments = await transcribe({ modelId, audioChunk: audioFilePath, metadata: true });
+const segments = await transcribe({ modelId, audioChunk: audioFilePath, metadata: true })
 for (const s of segments) {
-  console.log(`[${s.startMs}ms → ${s.endMs}ms] id=${s.id} append=${s.append} ${s.text}`);
+  console.log(`[${s.startMs}ms → ${s.endMs}ms] id=${s.id} append=${s.append} ${s.text}`)
 }
 ```
 
@@ -1960,12 +1972,12 @@ suspend/resume races. A new `state()` API reports the current lifecycle phase:
 `active`, `suspending`, `suspended`, or `resuming`.
 
 ```typescript
-import { state, suspend, resume, type LifecycleState } from "@qvac/sdk";
+import { state, suspend, resume, type LifecycleState } from '@qvac/sdk'
 
-await suspend();
-const current: LifecycleState = await state();
-if (current !== "active") {
-  await resume();
+await suspend()
+const current: LifecycleState = await state()
+if (current !== 'active') {
+  await resume()
 }
 ```
 
@@ -1976,12 +1988,12 @@ Two new SDK config knobs cover slow/unstable links: `registryDownloadMaxRetries`
 extends the per-block stream timeout beyond the default 60s.
 
 ```typescript
-import { setSDKConfig } from "@qvac/sdk";
+import { setSDKConfig } from '@qvac/sdk'
 
 setSDKConfig({
   registryDownloadMaxRetries: 5,
-  registryStreamTimeoutMs: 180_000,
-});
+  registryStreamTimeoutMs: 180_000
+})
 ```
 
 ### Auto KV-cache: replay the canonical assistant turn
@@ -1993,14 +2005,16 @@ guarantee a cache hit. Tool-call turns aren't auto-cached today and omit the fie
 fall back to `final.contentText` in that case.
 
 ```typescript
-const run = completion({ modelId, history, kvCache: true });
-for await (const _ of run.tokenStream) { /* stream */ }
-const final = await run.final;
+const run = completion({ modelId, history, kvCache: true })
+for await (const _ of run.tokenStream) {
+  /* stream */
+}
+const final = await run.final
 const nextHistory = [
   ...history,
-  { role: "assistant", content: final.cacheableAssistantContent ?? final.contentText },
-  { role: "user", content: "follow-up question" },
-];
+  { role: 'assistant', content: final.cacheableAssistantContent ?? final.contentText },
+  { role: 'user', content: 'follow-up question' }
+]
 ```
 
 ### LLM-addon cache API plumbed through SDK
@@ -2149,22 +2163,22 @@ The `ping()` API has been replaced by `heartbeat()`, which supports both local a
 **Before:**
 
 ```typescript
-import { ping } from "@qvac/sdk";
-const pong = await ping();
+import { ping } from '@qvac/sdk'
+const pong = await ping()
 ```
 
 **After:**
 
 ```typescript
-import { heartbeat } from "@qvac/sdk";
+import { heartbeat } from '@qvac/sdk'
 
 // Local heartbeat (replaces ping)
-await heartbeat();
+await heartbeat()
 
 // Delegated heartbeat — check if a remote provider is alive
 await heartbeat({
-  delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
-});
+  delegate: { topic: 'topicHex', providerPublicKey: 'peerHex', timeout: 3000 }
+})
 ```
 
 ---
@@ -2176,22 +2190,22 @@ await heartbeat({
 The SDK now supports LoRA finetuning of loaded LLM models. Training runs can be started, paused, resumed, cancelled, and inspected — all through a single `finetune()` function. Progress streams provide real-time loss and step metrics.
 
 ```typescript
-import { finetune } from "@qvac/sdk";
+import { finetune } from '@qvac/sdk'
 
 const handle = finetune({
   modelId,
   options: {
-    trainDatasetDir: "./dataset/train",
-    validation: { type: "dataset", path: "./dataset/eval" },
-    outputParametersDir: "./artifacts/lora",
-    numberOfEpochs: 2,
-  },
-});
+    trainDatasetDir: './dataset/train',
+    validation: { type: 'dataset', path: './dataset/eval' },
+    outputParametersDir: './artifacts/lora',
+    numberOfEpochs: 2
+  }
+})
 
 for await (const progress of handle.progressStream) {
-  console.log(progress.global_steps, progress.loss);
+  console.log(progress.global_steps, progress.loss)
 }
-const result = await handle.result;
+const result = await handle.result
 ```
 
 Operations: `start`, `resume`, `pause`, `cancel`, `getState`. Omit `operation` to let the addon auto-detect whether to start fresh or resume.
@@ -2201,26 +2215,26 @@ Operations: `start`, `resume`, `pause`, `cancel`, `getState`. Omit `operation` t
 Stable Diffusion models are now integrated as a first-class SDK capability. Load a diffusion model and generate images with step-by-step progress tracking.
 
 ```typescript
-import { loadModel, diffusion, SD_V2_1_1B_Q8_0 } from "@qvac/sdk";
+import { loadModel, diffusion, SD_V2_1_1B_Q8_0 } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: SD_V2_1_1B_Q8_0,
-  modelType: "diffusion",
-  modelConfig: { prediction: "v" },
-});
+  modelType: 'diffusion',
+  modelConfig: { prediction: 'v' }
+})
 
 const { progressStream, outputs, stats } = diffusion({
   modelId,
-  prompt: "a cat sitting on a windowsill",
+  prompt: 'a cat sitting on a windowsill',
   width: 512,
   height: 512,
-  steps: 20,
-});
+  steps: 20
+})
 
 for await (const { step, totalSteps } of progressStream) {
-  console.log(`${step}/${totalSteps}`);
+  console.log(`${step}/${totalSteps}`)
 }
-const buffers = await outputs;
+const buffers = await outputs
 ```
 
 ### Duplex Streaming Transcription (`transcribeStream`)
@@ -2228,16 +2242,16 @@ const buffers = await outputs;
 A new bidirectional streaming API lets you feed audio incrementally and receive transcription segments as speech is detected, enabling real-time voice interfaces.
 
 ```typescript
-import { transcribeStream } from "@qvac/sdk";
+import { transcribeStream } from '@qvac/sdk'
 
-const session = await transcribeStream({ modelId });
-session.write(audioChunk);
-session.end();
+const session = await transcribeStream({ modelId })
+session.write(audioChunk)
+session.end()
 
 for await (const text of session) {
-  console.log(text);
+  console.log(text)
 }
-session.destroy();
+session.destroy()
 ```
 
 The previous single-shot `transcribeStream({ modelId, audioChunk })` pattern still works but logs a deprecation warning — use `transcribe()` for batch transcription.
@@ -2247,10 +2261,10 @@ The previous single-shot `transcribeStream({ modelId, audioChunk })` pattern sti
 Mobile and desktop apps can now cleanly suspend and resume SDK operations when the app enters the background or foreground, preventing resource leaks and stale state.
 
 ```typescript
-import { suspend, resume } from "@qvac/sdk";
+import { suspend, resume } from '@qvac/sdk'
 
-await suspend(); // app going to background
-await resume();  // app returning to foreground
+await suspend() // app going to background
+await resume() // app returning to foreground
 ```
 
 ### Delegated Cancellation
@@ -2258,15 +2272,15 @@ await resume();  // app returning to foreground
 Remote inference and downloads running on a delegation provider can now be cancelled from the consumer side.
 
 ```typescript
-import { cancel } from "@qvac/sdk";
+import { cancel } from '@qvac/sdk'
 
-await cancel({ operation: "inference", modelId: "delegated-model-id" });
+await cancel({ operation: 'inference', modelId: 'delegated-model-id' })
 
 await cancel({
-  operation: "downloadAsset",
-  downloadKey: "download-key",
-  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
-});
+  operation: 'downloadAsset',
+  downloadKey: 'download-key',
+  delegate: { topic: 'topicHex', providerPublicKey: 'peerHex' }
+})
 ```
 
 ### Delegation Health Check Timeout
@@ -2276,14 +2290,14 @@ A new `healthCheckTimeout` option on the delegate config lets you control how lo
 ```typescript
 await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  modelType: "llm",
+  modelType: 'llm',
   delegate: {
     topic: topicHex,
     providerPublicKey,
     timeout: 30_000,
-    healthCheckTimeout: 2000,
-  },
-});
+    healthCheckTimeout: 2000
+  }
+})
 ```
 
 ### Addon Stats Across All Operations
@@ -2291,8 +2305,8 @@ await loadModel({
 All inference operations now return detailed performance stats from the underlying addons. Completion, transcription, translation, TTS, and embedding responses all include stats like `tokensPerSecond`, `timeToFirstToken`, `audioDuration`, and the new `backendDevice` field (`"cpu"` or `"gpu"`).
 
 ```typescript
-const { embedding, stats } = await embed({ modelId, text: "hello" });
-console.log(stats?.backendDevice); // "cpu" | "gpu"
+const { embedding, stats } = await embed({ modelId, text: 'hello' })
+console.log(stats?.backendDevice) // "cpu" | "gpu"
 ```
 
 ---
@@ -2415,22 +2429,22 @@ The `ping()` function has been replaced by `heartbeat()`, which extends health c
 **Before:**
 
 ```typescript
-import { ping } from "@qvac/sdk";
-const pong = await ping();
+import { ping } from '@qvac/sdk'
+const pong = await ping()
 ```
 
 **After:**
 
 ```typescript
-import { heartbeat } from "@qvac/sdk";
+import { heartbeat } from '@qvac/sdk'
 
 // Local heartbeat (replaces ping)
-await heartbeat();
+await heartbeat()
 
 // Delegated heartbeat — verify a remote provider is reachable
 await heartbeat({
-  delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
-});
+  delegate: { topic: 'topicHex', providerPublicKey: 'peerHex', timeout: 3000 }
+})
 ```
 
 ---
@@ -2444,14 +2458,14 @@ Delegated model loading now supports an optional `healthCheckTimeout` parameter.
 ```typescript
 await loadModel({
   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-  modelType: "llm",
+  modelType: 'llm',
   delegate: {
     topic: topicHex,
     providerPublicKey,
     timeout: 30_000,
-    healthCheckTimeout: 2000, // optional, defaults to 1500ms
-  },
-});
+    healthCheckTimeout: 2000 // optional, defaults to 1500ms
+  }
+})
 ```
 
 ### Delegated Cancellation
@@ -2460,14 +2474,14 @@ Cancel operations now route automatically to remote providers when the target mo
 
 ```typescript
 // Cancel delegated inference (routes automatically via model registry)
-await cancel({ operation: "inference", modelId: "delegated-model-id" });
+await cancel({ operation: 'inference', modelId: 'delegated-model-id' })
 
 // Cancel delegated remote download
 await cancel({
-  operation: "downloadAsset",
-  downloadKey: "download-key",
-  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
-});
+  operation: 'downloadAsset',
+  downloadKey: 'download-key',
+  delegate: { topic: 'topicHex', providerPublicKey: 'peerHex' }
+})
 ```
 
 ---
@@ -2512,11 +2526,11 @@ The embedding addon no longer accepts the raw tab-delimited config string. Use t
 ```typescript
 await loadModel({
   modelSrc: EMBEDDINGS_NOMIC_EMBED_TEXT_V1_5,
-  modelType: "embeddings",
+  modelType: 'embeddings',
   modelConfig: {
-    rawConfig: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024",
-  },
-});
+    rawConfig: '-ngl\t99\n-dev\tgpu\n--batch_size\t1024'
+  }
+})
 ```
 
 **After:**
@@ -2524,13 +2538,13 @@ await loadModel({
 ```typescript
 await loadModel({
   modelSrc: EMBEDDINGS_NOMIC_EMBED_TEXT_V1_5,
-  modelType: "embeddings",
+  modelType: 'embeddings',
   modelConfig: {
     gpuLayers: 99,
-    device: "gpu",
-    batchSize: 1024,
-  },
-});
+    device: 'gpu',
+    batchSize: 1024
+  }
+})
 ```
 
 ### Companion Model Sources Moved Into `modelConfig`
@@ -2541,76 +2555,76 @@ Top-level companion source fields (`projectionModelSrc`, `vadModelSrc`, `srcVoca
 
 ```typescript
 await loadModel({
-  modelType: "llm",
-  modelSrc: ".../model.gguf",
-  projectionModelSrc: ".../mmproj.gguf",
-});
+  modelType: 'llm',
+  modelSrc: '.../model.gguf',
+  projectionModelSrc: '.../mmproj.gguf'
+})
 
 await loadModel({
-  modelType: "whisper",
-  modelSrc: ".../model.bin",
-  vadModelSrc: ".../vad.bin",
-});
+  modelType: 'whisper',
+  modelSrc: '.../model.bin',
+  vadModelSrc: '.../vad.bin'
+})
 
 await loadModel({
-  modelType: "nmt",
-  modelSrc: ".../model.intgemm.alphas.bin",
-  srcVocabSrc: ".../srcvocab.spm",
-  dstVocabSrc: ".../trgvocab.spm",
-});
+  modelType: 'nmt',
+  modelSrc: '.../model.intgemm.alphas.bin',
+  srcVocabSrc: '.../srcvocab.spm',
+  dstVocabSrc: '.../trgvocab.spm'
+})
 ```
 
 **After:**
 
 ```typescript
 await loadModel({
-  modelType: "llm",
-  modelSrc: ".../model.gguf",
+  modelType: 'llm',
+  modelSrc: '.../model.gguf',
   modelConfig: {
-    projectionModelSrc: ".../mmproj.gguf",
-  },
-});
+    projectionModelSrc: '.../mmproj.gguf'
+  }
+})
 
 await loadModel({
-  modelType: "whisper",
-  modelSrc: ".../model.bin",
+  modelType: 'whisper',
+  modelSrc: '.../model.bin',
   modelConfig: {
-    vadModelSrc: ".../vad.bin",
-  },
-});
+    vadModelSrc: '.../vad.bin'
+  }
+})
 
 await loadModel({
-  modelType: "nmt",
-  modelSrc: ".../model.intgemm.alphas.bin",
+  modelType: 'nmt',
+  modelSrc: '.../model.intgemm.alphas.bin',
   modelConfig: {
-    srcVocabSrc: ".../srcvocab.spm",
-    dstVocabSrc: ".../trgvocab.spm",
-  },
-});
+    srcVocabSrc: '.../srcvocab.spm',
+    dstVocabSrc: '.../trgvocab.spm'
+  }
+})
 ```
 
 Additionally, custom plugins must now provide a `loadConfigSchema`. For plugins that accept any config, use a passthrough schema:
 
 ```typescript
 const myPlugin: QvacPlugin = {
-  modelType: "my-plugin",
-  displayName: "My Plugin",
-  addonPackage: "@my/addon",
+  modelType: 'my-plugin',
+  displayName: 'My Plugin',
+  addonPackage: '@my/addon',
   loadConfigSchema: z.object({}).catchall(z.unknown()),
   createModel: (params) => ({ model, loader }),
-  handlers: {},
-};
+  handlers: {}
+}
 ```
 
 ### Parakeet Model Constants Renamed
 
 All existing Parakeet model constants now include a variant prefix (`TDT_`) to distinguish them from the new CTC and Sortformer variants. This is a find-and-replace migration:
 
-| Old Constant | New Constant |
-|---|---|
-| `PARAKEET_ENCODER_*` | `PARAKEET_TDT_ENCODER_*` |
-| `PARAKEET_DECODER_*` | `PARAKEET_TDT_DECODER_*` |
-| `PARAKEET_VOCAB` | `PARAKEET_TDT_VOCAB` |
+| Old Constant              | New Constant                  |
+| ------------------------- | ----------------------------- |
+| `PARAKEET_ENCODER_*`      | `PARAKEET_TDT_ENCODER_*`      |
+| `PARAKEET_DECODER_*`      | `PARAKEET_TDT_DECODER_*`      |
+| `PARAKEET_VOCAB`          | `PARAKEET_TDT_VOCAB`          |
 | `PARAKEET_PREPROCESSOR_*` | `PARAKEET_TDT_PREPROCESSOR_*` |
 
 ---
@@ -2627,24 +2641,24 @@ import {
   PARAKEET_TDT_ENCODER_DATA_FP32,
   PARAKEET_TDT_DECODER_FP32,
   PARAKEET_TDT_VOCAB,
-  PARAKEET_TDT_PREPROCESSOR_FP32,
-} from "@qvac/sdk";
+  PARAKEET_TDT_PREPROCESSOR_FP32
+} from '@qvac/sdk'
 
 const modelId = await loadModel({
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelSrc: PARAKEET_TDT_ENCODER_FP32,
   modelConfig: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
     parakeetEncoderDataSrc: PARAKEET_TDT_ENCODER_DATA_FP32,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
     parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
-  },
-});
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32
+  }
+})
 
-const stream = transcribeStream({ modelId, audioInput: "./audio.mp3" });
+const stream = transcribeStream({ modelId, audioInput: './audio.mp3' })
 for await (const chunk of stream) {
-  process.stdout.write(chunk);
+  process.stdout.write(chunk)
 }
 ```
 
@@ -2657,21 +2671,21 @@ Translate between language pairs that don't have a direct model by chaining thro
 ```typescript
 await loadModel({
   modelSrc: BERGAMOT_ES_EN,
-  modelType: "nmt",
+  modelType: 'nmt',
   modelConfig: {
-    engine: "Bergamot",
-    from: "es",
-    to: "it",
+    engine: 'Bergamot',
+    from: 'es',
+    to: 'it',
     pivotModel: {
       modelSrc: BERGAMOT_EN_IT,
       beamsize: 4,
       temperature: 0.3,
       topk: 100,
       normalize: 1,
-      lengthpenalty: 1.2,
-    },
-  },
-});
+      lengthpenalty: 1.2
+    }
+  }
+})
 ```
 
 ### SDK Profiler
@@ -2679,28 +2693,25 @@ await loadModel({
 A built-in profiler lets you measure SDK operation performance at runtime. Enable it globally or on a per-call basis:
 
 ```typescript
-import { profiler } from "@qvac/sdk";
+import { profiler } from '@qvac/sdk'
 
 profiler.enable({
-  mode: "verbose",
-  includeServerBreakdown: true,
-});
+  mode: 'verbose',
+  includeServerBreakdown: true
+})
 
 // Run operations, then export results
-console.log(profiler.exportSummary());
-console.log(profiler.exportTable());
-console.log(profiler.exportJSON({ includeRecentEvents: true }));
+console.log(profiler.exportSummary())
+console.log(profiler.exportTable())
+console.log(profiler.exportJSON({ includeRecentEvents: true }))
 
-profiler.disable();
+profiler.disable()
 ```
 
 Per-call profiling control is also available on `embed`, `completion`, `transcribe`, `translate`, `ragSearch`, and `invokePlugin`:
 
 ```typescript
-await embed(
-  { modelId, text: "hello" },
-  { profiling: { enabled: true } },
-);
+await embed({ modelId, text: 'hello' }, { profiling: { enabled: true } })
 ```
 
 ---
@@ -2716,15 +2727,15 @@ The SDK now supports two additional Parakeet model variants beyond the existing 
 ```typescript
 const modelId = await loadModel({
   modelSrc: PARAKEET_CTC_FP32_1,
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelConfig: {
-    modelType: "ctc",
+    modelType: 'ctc',
     parakeetCtcModelSrc: PARAKEET_CTC_FP32_1,
     parakeetCtcModelDataSrc: PARAKEET_CTC_DATA_FP32_1,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
-  },
-});
-const text = await transcribe({ modelId, audioChunk: "/path/to/audio.wav" });
+    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER
+  }
+})
+const text = await transcribe({ modelId, audioChunk: '/path/to/audio.wav' })
 ```
 
 **Sortformer diarization** for speaker identification:
@@ -2732,13 +2743,13 @@ const text = await transcribe({ modelId, audioChunk: "/path/to/audio.wav" });
 ```typescript
 const modelId = await loadModel({
   modelSrc: PARAKEET_SORTFORMER_FP32,
-  modelType: "parakeet",
+  modelType: 'parakeet',
   modelConfig: {
-    modelType: "sortformer",
-    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
-  },
-});
-const diarization = await transcribe({ modelId, audioChunk: "/path/to/audio.wav" });
+    modelType: 'sortformer',
+    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32
+  }
+})
+const diarization = await transcribe({ modelId, audioChunk: '/path/to/audio.wav' })
 // Returns: "Speaker 0: 0.00s - 4.24s\nSpeaker 1: 4.65s - 14.32s\n..."
 ```
 
@@ -2767,20 +2778,24 @@ The profiler now captures detailed load/download metrics and stream profiling da
 ### Added Models
 
 **OCR:**
+
 - `OCR_DETECTOR_DB_MOBILENET_V3_LARGE`
 - `OCR_DETECTOR_DB_RESNET50`
 - `OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL`
 - `OCR_RECOGNIZER_PARSEQ`
 
 **Parakeet (CTC):**
+
 - `PARAKEET_CTC_FP32`, `PARAKEET_CTC_DATA_FP32`, `PARAKEET_CTC_VOCAB`, `PARAKEET_CTC_INT8`, `PARAKEET_CTC_CONFIG`
 - `PARAKEET_CTC_FP32_1`, `PARAKEET_CTC_DATA_FP32_1`, `PARAKEET_CTC_TOKENIZER`
 
 **Parakeet (Sortformer / EOU):**
+
 - `PARAKEET_SORTFORMER_FP32`
 - `PARAKEET_EOU_ENCODER_FP32`, `PARAKEET_EOU_DECODER_FP32`, `PARAKEET_EOU_TOKENIZER`
 
 **Parakeet (TDT — renamed from unprefixed):**
+
 - `PARAKEET_TDT_ENCODER_FP32`, `PARAKEET_TDT_ENCODER_DATA_FP32`, `PARAKEET_TDT_DECODER_FP32`, `PARAKEET_TDT_VOCAB`, `PARAKEET_TDT_PREPROCESSOR_FP32`
 - `PARAKEET_TDT_ENCODER_INT8`, `PARAKEET_TDT_DECODER_INT8`, `PARAKEET_TDT_PREPROCESSOR_INT8`
 
@@ -2822,30 +2837,30 @@ Model constant names have been normalized for consistency. If your code referenc
 
 ```typescript
 // Before
-import { BERGAMOT_AREN } from "@qvac/sdk";
+import { BERGAMOT_AREN } from '@qvac/sdk'
 
 // After
-import { BERGAMOT_AR_EN } from "@qvac/sdk";
+import { BERGAMOT_AR_EN } from '@qvac/sdk'
 ```
 
 **Whisper models** have simplified names without author/repo prefixes:
 
 ```typescript
 // Before
-import { WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16 } from "@qvac/sdk";
+import { WHISPER_ENGLISH_BASE_OPENAI_WHISPER_BASE_F16 } from '@qvac/sdk'
 
 // After
-import { WHISPER_EN_BASE_Q0F16 } from "@qvac/sdk";
+import { WHISPER_EN_BASE_Q0F16 } from '@qvac/sdk'
 ```
 
 **LLM models** have normalized version prefixes:
 
 ```typescript
 // Before
-import { QWEN_3_1_7B_INST_Q4 } from "@qvac/sdk";
+import { QWEN_3_1_7B_INST_Q4 } from '@qvac/sdk'
 
 // After
-import { QWEN3_1_7B_INST_Q4 } from "@qvac/sdk";
+import { QWEN3_1_7B_INST_Q4 } from '@qvac/sdk'
 ```
 
 ### HyperdriveItem Type Renamed to RegistryItem
@@ -2854,10 +2869,10 @@ The model metadata type has been renamed and restructured to support the new reg
 
 ```typescript
 // Before
-import type { HyperdriveItem } from "@qvac/sdk";
+import type { HyperdriveItem } from '@qvac/sdk'
 
 // After
-import type { RegistryItem } from "@qvac/sdk";
+import type { RegistryItem } from '@qvac/sdk'
 ```
 
 The shape has also changed: `hyperdriveKey` and `hyperbeeKey` fields are replaced by `registryPath`, `registrySource`, `blobCoreKey`, and new metadata fields (`engine`, `quantization`, `params`).
@@ -2871,26 +2886,22 @@ The shape has also changed: `hyperdriveKey` and `hyperbeeKey` fields are replace
 Discover and search models directly through the SDK without needing a separate registry client package.
 
 ```typescript
-import {
-  modelRegistryList,
-  modelRegistrySearch,
-  modelRegistryGetModel,
-} from "@qvac/sdk";
+import { modelRegistryList, modelRegistrySearch, modelRegistryGetModel } from '@qvac/sdk'
 
 // List all available models
-const models = await modelRegistryList();
+const models = await modelRegistryList()
 
 // Search by engine type
-const llmModels = await modelRegistrySearch({ engine: "@qvac/llm-llamacpp" });
+const llmModels = await modelRegistrySearch({ engine: '@qvac/llm-llamacpp' })
 
 // Search by text filter
-const whisperModels = await modelRegistrySearch({ filter: "whisper" });
+const whisperModels = await modelRegistrySearch({ filter: 'whisper' })
 
 // Search by quantization
-const q4Models = await modelRegistrySearch({ quantization: "q4" });
+const q4Models = await modelRegistrySearch({ quantization: 'q4' })
 
 // Get a specific model by path
-const model = await modelRegistryGetModel(registryPath, registrySource);
+const model = await modelRegistryGetModel(registryPath, registrySource)
 ```
 
 ### Plugin System
@@ -2898,22 +2909,22 @@ const model = await modelRegistryGetModel(registryPath, registrySource);
 Build custom model integrations with the new plugin architecture. Plugins support both request/reply and streaming patterns.
 
 ```typescript
-import { invokePlugin, invokePluginStream, definePlugin, defineHandler } from "@qvac/sdk";
+import { invokePlugin, invokePluginStream, definePlugin, defineHandler } from '@qvac/sdk'
 
 // Invoke a plugin handler
 const result = await invokePlugin<MyResponse>({
   modelId,
-  handler: "myHandler",
-  params: { key: "value" },
-});
+  handler: 'myHandler',
+  params: { key: 'value' }
+})
 
 // Stream responses from a plugin
 for await (const chunk of invokePluginStream<MyStreamResponse>({
   modelId,
-  handler: "myStreamHandler",
-  params: { key: "value" },
+  handler: 'myStreamHandler',
+  params: { key: 'value' }
 })) {
-  console.log(chunk.result);
+  console.log(chunk.result)
 }
 ```
 
@@ -2924,25 +2935,25 @@ Clone voices from reference audio samples with the new Chatterbox engine.
 ```typescript
 const modelId = await loadModel({
   modelSrc,
-  modelType: "tts",
+  modelType: 'tts',
   modelConfig: {
-    ttsEngine: "chatterbox",
-    language: "en",
+    ttsEngine: 'chatterbox',
+    language: 'en',
     ttsTokenizerSrc,
     ttsSpeechEncoderSrc,
     ttsEmbedTokensSrc,
     ttsConditionalDecoderSrc,
     ttsLanguageModelSrc,
-    referenceAudioSrc, // Your voice sample
-  },
-});
+    referenceAudioSrc // Your voice sample
+  }
+})
 
 const audio = await textToSpeech({
   modelId,
-  text: "Hello in a cloned voice!",
-  inputType: "text",
-  stream: false,
-});
+  text: 'Hello in a cloned voice!',
+  inputType: 'text',
+  stream: false
+})
 ```
 
 ### Supertonic TTS Engine (General Purpose)
@@ -2952,19 +2963,19 @@ High-quality text-to-speech with adjustable speed and inference steps.
 ```typescript
 const modelId = await loadModel({
   modelSrc,
-  modelType: "tts",
+  modelType: 'tts',
   modelConfig: {
-    ttsEngine: "supertonic",
-    language: "en",
+    ttsEngine: 'supertonic',
+    language: 'en',
     ttsTokenizerSrc,
     ttsTextEncoderSrc,
     ttsLatentDenoiserSrc,
     ttsVoiceDecoderSrc,
     ttsVoiceSrc,
-    ttsSpeed: 1.0,           // Playback speed
-    ttsNumInferenceSteps: 5, // Quality vs speed tradeoff
-  },
-});
+    ttsSpeed: 1.0, // Playback speed
+    ttsNumInferenceSteps: 5 // Quality vs speed tradeoff
+  }
+})
 ```
 
 ### CLI SDK Path Option
@@ -2988,10 +2999,10 @@ Model downloads now use `downloadBlob` for more efficient direct registry fetchi
 The `close()` function is now properly async and awaitable for clean shutdown:
 
 ```typescript
-import { close } from "@qvac/sdk";
+import { close } from '@qvac/sdk'
 
 // Now returns a Promise
-await close();
+await close()
 ```
 
 ### Engine-Addon Mapping Utilities
@@ -2999,10 +3010,10 @@ await close();
 Map between engine names and addon types:
 
 ```typescript
-import { resolveCanonicalEngine, getAddonFromEngine } from "@qvac/sdk";
+import { resolveCanonicalEngine, getAddonFromEngine } from '@qvac/sdk'
 
-const engine = resolveCanonicalEngine("@qvac/llm-llamacpp"); // "llamacpp-completion"
-const addon = getAddonFromEngine("llamacpp-completion");     // "llm"
+const engine = resolveCanonicalEngine('@qvac/llm-llamacpp') // "llamacpp-completion"
+const addon = getAddonFromEngine('llamacpp-completion') // "llm"
 ```
 
 ---
@@ -3081,9 +3092,9 @@ The RAG system has been restructured for better control and flexibility. The mai
 ```typescript
 await ragSaveEmbeddings({
   modelId,
-  documents: ["Doc 1", "Doc 2"],
-  chunk: false,
-});
+  documents: ['Doc 1', 'Doc 2'],
+  chunk: false
+})
 ```
 
 **After:**
@@ -3104,6 +3115,7 @@ await ragSaveEmbeddings({
 ```
 
 Other RAG changes:
+
 - `ragSaveEmbeddings` no longer returns `droppedIndices`
 - `ragDeleteEmbeddings` now returns `void` instead of `boolean` (throws on failure)
 - `ragDeleteEmbeddings` no longer requires `modelId` (uses cached workspace)
@@ -3117,35 +3129,35 @@ No more string-based config! Use typed properties for embedding model configurat
 
 ```typescript
 await loadModel({
-  modelSrc: "embed-model.gguf",
-  modelType: "embeddings",
+  modelSrc: 'embed-model.gguf',
+  modelType: 'embeddings',
   modelConfig: {
-    config: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024",
-  },
-});
+    config: '-ngl\t99\n-dev\tgpu\n--batch_size\t1024'
+  }
+})
 ```
 
 **After:**
 
 ```typescript
 await loadModel({
-  modelSrc: "embed-model.gguf",
-  modelType: "embeddings",
+  modelSrc: 'embed-model.gguf',
+  modelType: 'embeddings',
   modelConfig: {
     gpuLayers: 99,
-    device: "gpu",
-    batchSize: 1024,
-  },
-});
+    device: 'gpu',
+    batchSize: 1024
+  }
+})
 
 // Escape hatch for advanced CLI control
 await loadModel({
-  modelSrc: "embed-model.gguf",
-  modelType: "embeddings",
+  modelSrc: 'embed-model.gguf',
+  modelType: 'embeddings',
   modelConfig: {
-    rawConfig: "-ngl\t99\n-dev\tgpu\n--batch_size\t1024",
-  },
-});
+    rawConfig: '-ngl\t99\n-dev\tgpu\n--batch_size\t1024'
+  }
+})
 ```
 
 ### Translation Engine Must Be Specified
@@ -3157,9 +3169,9 @@ Loading translation models now requires an explicit `engine` field for type-safe
 ```typescript
 const modelId = await loadModel({
   modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
-  modelType: "nmt",
-  modelConfig: { from: "en", to: "it" },
-});
+  modelType: 'nmt',
+  modelConfig: { from: 'en', to: 'it' }
+})
 ```
 
 **After:**
@@ -3167,13 +3179,13 @@ const modelId = await loadModel({
 ```typescript
 const modelId = await loadModel({
   modelSrc: MARIAN_OPUS_EN_IT_Q0F32,
-  modelType: "nmt",
+  modelType: 'nmt',
   modelConfig: {
-    engine: "Opus",  // Required: "Opus" | "Bergamot" | "IndicTrans"
-    from: "en",
-    to: "it",
-  },
-});
+    engine: 'Opus', // Required: "Opus" | "Bergamot" | "IndicTrans"
+    from: 'en',
+    to: 'it'
+  }
+})
 ```
 
 ---
@@ -3185,28 +3197,28 @@ const modelId = await loadModel({
 A new translation engine option with support for batch translation and automatic vocabulary file derivation.
 
 ```typescript
-import { loadModel, translate, BERGAMOT_ENFR } from "@qvac/sdk";
+import { loadModel, translate, BERGAMOT_ENFR } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: BERGAMOT_ENFR,
-  modelType: "nmt",
+  modelType: 'nmt',
   modelConfig: {
-    engine: "Bergamot",
-    from: "en",
-    to: "fr",
-    normalize: 1,  // Bergamot-specific option
-  },
-});
+    engine: 'Bergamot',
+    from: 'en',
+    to: 'fr',
+    normalize: 1 // Bergamot-specific option
+  }
+})
 
 // Batch translation
 const result = translate({
   modelId,
-  text: ["Hello world", "How are you?"],
-  modelType: "nmt",
-  stream: false,
-});
+  text: ['Hello world', 'How are you?'],
+  modelType: 'nmt',
+  stream: false
+})
 
-const translated = await result.text;
+const translated = await result.text
 // "Bonjour le monde\nComment allez-vous?"
 ```
 
@@ -3223,23 +3235,23 @@ The SDK now uses import maps internally, improving compatibility across Node.js,
 Extract text from images with bounding boxes and confidence scores.
 
 ```typescript
-import { loadModel, ocr, OCR_CRAFT_LATIN_RECOGNIZER } from "@qvac/sdk";
+import { loadModel, ocr, OCR_CRAFT_LATIN_RECOGNIZER } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: OCR_CRAFT_LATIN_RECOGNIZER,
-  modelType: "ocr",
-  modelConfig: { langList: ["en"] },
-});
+  modelType: 'ocr',
+  modelConfig: { langList: ['en'] }
+})
 
 // Get all text blocks at once
-const { blocks, done } = ocr({ modelId, image: "/path/to/image.png" });
-const result = await blocks;
-await done;
+const { blocks, done } = ocr({ modelId, image: '/path/to/image.png' })
+const result = await blocks
+await done
 
 // Or stream blocks as they're detected
-const { blockStream, done } = ocr({ modelId, image: imageBuffer, stream: true });
+const { blockStream, done } = ocr({ modelId, image: imageBuffer, stream: true })
 for await (const blocks of blockStream) {
-  console.log(blocks);
+  console.log(blocks)
   // [{ text: "Hello", bbox: [10, 20, 100, 50], confidence: 0.95 }]
 }
 ```
@@ -3251,15 +3263,15 @@ Load large models split across multiple files, from URLs or archives.
 ```typescript
 // Pattern-based sharded URLs (auto-detects shard pattern)
 await loadModel({
-  modelSrc: "https://huggingface.co/user/model/resolve/main/model-00001-of-00003.gguf",
-  modelType: "llm",
-});
+  modelSrc: 'https://huggingface.co/user/model/resolve/main/model-00001-of-00003.gguf',
+  modelType: 'llm'
+})
 
 // Archive-based shards (.tar.gz, .tar, .tgz)
 await loadModel({
-  modelSrc: "https://huggingface.co/user/model/resolve/main/model.tar.gz",
-  modelType: "llm",
-});
+  modelSrc: 'https://huggingface.co/user/model/resolve/main/model.tar.gz',
+  modelType: 'llm'
+})
 ```
 
 ### Device-Specific Model Configuration
@@ -3336,13 +3348,13 @@ The SDK now uses a config file instead of the `setConfig()` API. This simplifies
 **Before:**
 
 ```typescript
-import { setConfig, loadModel } from "@qvac/sdk";
+import { setConfig, loadModel } from '@qvac/sdk'
 
 await setConfig({
-  cacheDirectory: "/custom/cache/path",
-});
+  cacheDirectory: '/custom/cache/path'
+})
 
-await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: 'llama' })
 ```
 
 **After:**
@@ -3356,10 +3368,10 @@ await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
 ```
 
 ```typescript
-import { loadModel } from "@qvac/sdk";
+import { loadModel } from '@qvac/sdk'
 
 // Config automatically loaded at initialization!
-await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: "llama" });
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelType: 'llama' })
 ```
 
 #### Config Resolution Order
@@ -3372,31 +3384,31 @@ The SDK searches for configuration in this order:
 
 #### Supported Formats
 
-| Format     | Filename           | Notes                        |
-| ---------- | ------------------ | ---------------------------- |
-| JSON       | `qvac.config.json` | Simplest option              |
-| JavaScript | `qvac.config.js`   | Use `export default`         |
+| Format     | Filename           | Notes                         |
+| ---------- | ------------------ | ----------------------------- |
+| JSON       | `qvac.config.json` | Simplest option               |
+| JavaScript | `qvac.config.js`   | Use `export default`          |
 | TypeScript | `qvac.config.ts`   | Fully typed with `QvacConfig` |
 
 **TypeScript example:**
 
 ```typescript
 // qvac.config.ts
-import type { QvacConfig } from "@qvac/sdk";
+import type { QvacConfig } from '@qvac/sdk'
 
 const config: QvacConfig = {
-  cacheDirectory: "/custom/cache/path",
-  swarmRelays: ["relay-key-1", "relay-key-2"],
-};
+  cacheDirectory: '/custom/cache/path',
+  swarmRelays: ['relay-key-1', 'relay-key-2']
+}
 
-export default config;
+export default config
 ```
 
 #### Migration Steps
 
 1. Remove all `setConfig()` calls from your code
 2. Create a config file in your project root
-3. *(Optional)* For non-standard locations, set `QVAC_CONFIG_PATH` before importing the SDK
+3. _(Optional)_ For non-standard locations, set `QVAC_CONFIG_PATH` before importing the SDK
 
 ---
 
@@ -3406,14 +3418,14 @@ Some model constants have been renamed for clarity, and duplicate constants have
 
 **Changes:**
 
-| Before                     | After                                             |
-| -------------------------- | ------------------------------------------------- |
-| `WHISPER_SMALL`            | `WHISPER_SMALL_Q8`                                |
-| `WHISPER_NORWEGIAN_TINY_1` | *(removed — use `WHISPER_NORWEGIAN_TINY`)*        |
-| `WHISPER_TINY_SILERO`      | *(removed — use `WHISPER_TINY`)*                  |
-| `MARIAN_OPUS_EN_FR_Q4_0_1` | *(removed — use `MARIAN_OPUS_EN_FR_Q4_0`)*        |
-| `MARIAN_OPUS_FR_EN_Q4_0_1` | *(removed — use `MARIAN_OPUS_FR_EN_Q4_0`)*        |
-| `MARIAN_OPUS_IT_EN`        | *(removed — use `MARIAN_OPUS_EN_IT`)*             |
+| Before                     | After                                      |
+| -------------------------- | ------------------------------------------ |
+| `WHISPER_SMALL`            | `WHISPER_SMALL_Q8`                         |
+| `WHISPER_NORWEGIAN_TINY_1` | _(removed — use `WHISPER_NORWEGIAN_TINY`)_ |
+| `WHISPER_TINY_SILERO`      | _(removed — use `WHISPER_TINY`)_           |
+| `MARIAN_OPUS_EN_FR_Q4_0_1` | _(removed — use `MARIAN_OPUS_EN_FR_Q4_0`)_ |
+| `MARIAN_OPUS_FR_EN_Q4_0_1` | _(removed — use `MARIAN_OPUS_FR_EN_Q4_0`)_ |
+| `MARIAN_OPUS_IT_EN`        | _(removed — use `MARIAN_OPUS_EN_IT`)_      |
 
 All model metadata and hyperdrive keys remain unchanged—only the constant names were affected.
 
@@ -3429,7 +3441,7 @@ The logging stream API has been simplified with consistent naming.
 
 ```typescript
 for await (const log of loggingStream({ modelId: myModelId })) {
-  console.log(log.message);
+  console.log(log.message)
 }
 ```
 
@@ -3437,7 +3449,7 @@ for await (const log of loggingStream({ modelId: myModelId })) {
 
 ```typescript
 for await (const log of loggingStream({ id: myModelId })) {
-  console.log(log.message);
+  console.log(log.message)
 }
 ```
 
@@ -3468,17 +3480,17 @@ You can now update a model's configuration without unloading it. Pass the existi
 ```typescript
 // Load model with initial config
 const modelId = await loadModel({
-  modelSrc: "pear://.../whisper.gguf",
-  modelType: "whisper",
-  modelConfig: { language: "en" },
-});
+  modelSrc: 'pear://.../whisper.gguf',
+  modelType: 'whisper',
+  modelConfig: { language: 'en' }
+})
 
 // Hot-reload with new config (same modelId, no reload delay)
 await loadModel({
   modelId,
-  modelType: "whisper",
-  modelConfig: { language: "es" },
-});
+  modelType: 'whisper',
+  modelConfig: { language: 'es' }
+})
 ```
 
 ---
@@ -3490,51 +3502,51 @@ The SDK now supports the Model Context Protocol (MCP) for tool integration. Pass
 **Using MCP clients:**
 
 ```typescript
-import { completion } from "@qvac/sdk";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { completion } from '@qvac/sdk'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 
 // Create and connect your MCP client
-const mcpClient = new Client({ name: "my-app", version: "1.0.0" });
-await mcpClient.connect(transport);
+const mcpClient = new Client({ name: 'my-app', version: '1.0.0' })
+await mcpClient.connect(transport)
 
 // Pass MCP clients to completion
 const result = completion({
   modelId,
   history,
-  mcp: [{ client: mcpClient }],
-});
+  mcp: [{ client: mcpClient }]
+})
 
 // Execute tool calls
 for (const toolCall of await result.toolCalls) {
-  const response = await toolCall.call();
+  const response = await toolCall.call()
 }
 
 // Clean up when done
-await mcpClient.close();
+await mcpClient.close()
 ```
 
 **Using inline tools with handlers:**
 
 ```typescript
-import { z } from "zod";
+import { z } from 'zod'
 
 const result = completion({
   modelId,
   history,
   tools: [
     {
-      name: "get_weather",
-      description: "Get weather for a city",
+      name: 'get_weather',
+      description: 'Get weather for a city',
       parameters: z.object({ city: z.string() }),
       handler: async (args) => {
-        return await fetchWeather(args.city);
-      },
-    },
-  ],
-});
+        return await fetchWeather(args.city)
+      }
+    }
+  ]
+})
 
 for (const toolCall of await result.toolCalls) {
-  const response = await toolCall.call(); // Executes your handler
+  const response = await toolCall.call() // Executes your handler
 }
 ```
 
@@ -3546,10 +3558,10 @@ The `embed()` function now accepts arrays, enabling efficient batch processing. 
 
 ```typescript
 // Single text → returns number[]
-const embedding = await embed({ modelId, text: "hello" });
+const embedding = await embed({ modelId, text: 'hello' })
 
 // Batch texts → returns number[][]
-const embeddings = await embed({ modelId, text: ["a", "b", "c"] });
+const embeddings = await embed({ modelId, text: ['a', 'b', 'c'] })
 ```
 
 Batch processing uses a default batch size of 1024 for optimal throughput.

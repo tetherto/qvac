@@ -76,6 +76,11 @@ on:
         type: string
         required: false
         default: ""
+      device_model_operator:
+        description: "Optional MODEL filter operator for device_model: CONTAINS (any model containing the value; Device Farm picks by availability) or EQUALS (exact model only — variants like 'Pixel 9 Pro XL' for 'Pixel 9' can never be substituted). Default '' = CONTAINS, unchanged for existing callers."
+        type: string
+        required: false
+        default: ""
       device_env:
         description: "Optional semicolon-separated KEY=VALUE pairs pushed to the on-device test app (qvacPerfConfig.txt channel; each key is os.setEnv()'d before the tests load). Default '' = nothing extra."
         type: string
@@ -208,6 +213,12 @@ jobs:
           # pinned version is requested (baseline leg), skip the artifact so it can't pick
           # up a candidate prebuild from the same run, and pull that exact version from npm.
           prebuild-artifact-prefix: ${{ inputs.addon_npm_version == '' && 'llama-cpp-' || '' }}
+          # Baseline leg (pinned version): force the npm prebuild and ignore ALL
+          # CI artifacts. Without this the merged `prebuilds` artifact (built from
+          # the candidate in this same run) is pulled in when the per-matrix
+          # artifact is absent, so the baseline session would silently run the
+          # candidate binary. See run-mobile-integration-tests/setup.
+          force-npm-prebuild: ${{ inputs.addon_npm_version != '' && 'true' || 'false' }}
           package-version: ${{ inputs.addon_npm_version }}
           pat-token: ${{ secrets.PAT_TOKEN }}
 
@@ -334,6 +345,7 @@ jobs:
           ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
           scheduling-mode: ${{ inputs.device_model != '' && 'single-device' || 'dual-flagship' }}
           device-model: ${{ inputs.device_model }}
+          device-model-operator: ${{ inputs.device_model_operator }}
           device-manufacturer: ${{ inputs.device_manufacturer }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}

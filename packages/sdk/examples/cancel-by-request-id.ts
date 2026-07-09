@@ -41,78 +41,73 @@ import {
   loadModel,
   unloadModel,
   InferenceCancelledError,
-  QWEN3_600M_INST_Q4,
-} from "@qvac/sdk";
+  QWEN3_600M_INST_Q4
+} from '@qvac/sdk'
 
 try {
   const modelId = await loadModel({
     modelSrc: QWEN3_600M_INST_Q4,
-    modelConfig: { ctx_size: 4096 },
-  });
+    modelConfig: { ctx_size: 4096 }
+  })
 
   const run = completion({
     modelId,
     history: [
       {
-        role: "user",
-        content:
-          "Write a long, detailed essay about the history of the Roman Empire.",
-      },
+        role: 'user',
+        content: 'Write a long, detailed essay about the history of the Roman Empire.'
+      }
     ],
-    stream: true,
-  });
+    stream: true
+  })
 
-  console.log(`▸ requestId: ${run.requestId}`);
+  console.log(`▸ requestId: ${run.requestId}`)
 
   // Cancel after a short delay so we exercise the cancel-mid-decode path.
   setTimeout(() => {
-    void cancel({ requestId: run.requestId });
-    console.log("▸ cancel issued");
-  }, 250);
+    void cancel({ requestId: run.requestId })
+    console.log('▸ cancel issued')
+  }, 250)
 
   // Channel 1: the events stream ends normally on cancel. The
   // `completionDone` event's `stopReason` tells you why the loop is
   // about to exit ("eos" | "length" | "cancelled" | "error" | ...).
-  let tokenCount = 0;
-  let endReason: string | undefined;
+  let tokenCount = 0
+  let endReason: string | undefined
   for await (const event of run.events) {
-    if (event.type === "contentDelta") {
-      tokenCount++;
-      process.stdout.write(event.text);
-    } else if (event.type === "completionDone") {
-      endReason = event.stopReason;
+    if (event.type === 'contentDelta') {
+      tokenCount++
+      process.stdout.write(event.text)
+    } else if (event.type === 'completionDone') {
+      endReason = event.stopReason
     }
   }
-  console.log(
-    `\n\n▸ streamed ${tokenCount} content deltas, stopReason=${endReason}`,
-  );
+  console.log(`\n\n▸ streamed ${tokenCount} content deltas, stopReason=${endReason}`)
 
   // Channel 2: promise-aggregates reject with InferenceCancelledError
   // on cancel. The accumulated state up to the cancel point is preserved
   // on `err.partial`.
   try {
-    const text = await run.text;
-    console.log(`▸ completed normally (${text.length} chars)`);
+    const text = await run.text
+    console.log(`▸ completed normally (${text.length} chars)`)
   } catch (err) {
     if (err instanceof InferenceCancelledError) {
-      console.log(`▸ run.text rejected: cancelled (requestId=${err.requestId})`);
-      console.log(`▸ partial text length: ${(err.partial.text ?? "").length}`);
+      console.log(`▸ run.text rejected: cancelled (requestId=${err.requestId})`)
+      console.log(`▸ partial text length: ${(err.partial.text ?? '').length}`)
       if (err.partial.stats?.tokensPerSecond !== undefined) {
-        console.log(
-          `▸ partial stats: ${err.partial.stats.tokensPerSecond.toFixed(1)} tok/s`,
-        );
+        console.log(`▸ partial stats: ${err.partial.stats.tokensPerSecond.toFixed(1)} tok/s`)
       }
       if (err.partial.toolCalls && err.partial.toolCalls.length > 0) {
-        console.log(`▸ partial tool calls: ${err.partial.toolCalls.length}`);
+        console.log(`▸ partial tool calls: ${err.partial.toolCalls.length}`)
       }
     } else {
-      throw err;
+      throw err
     }
   }
 
-  await unloadModel({ modelId });
-  process.exit(0);
+  await unloadModel({ modelId })
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

@@ -23,7 +23,13 @@ const skipStress = !forceStress && !isLinuxX64
 const CTX_SIZE = 8192
 const N_DISCARDED = 1024
 const PREFILL_PRESSURE_OVERSHOOT = 64
-const PREFILL_CANCEL_DELAY_MS = 1500
+// Cancel has to land while prefill is still running. Multimodal prefill of one
+// image + a short text turn completes in well under a second on Linux x64 GPU
+// (where this suite primarily runs), so a 1500ms delay let prefill finish first
+// and the cancel never fired. 150ms is short enough to land mid-prefill on fast
+// GPU runners and is still tiny compared to multi-second prefill on slower CPU
+// or mobile hosts where this test is occasionally forced via env override.
+const PREFILL_CANCEL_DELAY_MS = 150
 const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 
 const QWEN35_MODEL = {
@@ -205,7 +211,9 @@ async function cancelResponse (addon, response) {
 
 async function runAndCancelDuringPrefill (addon, prompt, runOptions = {}) {
   const response = await addon.run(prompt, runOptions)
+  let cancelFired = false
   const cancelTimer = setTimeout(() => {
+    cancelFired = true
     cancelResponse(addon, response).catch(err => {
       console.error('cancel during prefill failed:', err)
     })
@@ -217,7 +225,7 @@ async function runAndCancelDuringPrefill (addon, prompt, runOptions = {}) {
   } finally {
     clearTimeout(cancelTimer)
   }
-  return response.stats || {}
+  return { stats: response.stats || {}, cancelFired }
 }
 
 async function runAndCancelAfterFirstChunk (addon, prompt, runOptions = {}) {
@@ -257,15 +265,22 @@ function assertCachedStats (t, stats, label) {
   t.ok(cacheTokens <= CTX_SIZE, `${label}: CacheTokens should stay within ctx (${cacheTokens} <= ${CTX_SIZE})`)
 }
 
-function assertCanceledPrefillKeptTokens (t, beforeStats, afterStats) {
+function assertCanceledPrefillRolledBack (t, beforeStats, cancelResult) {
+  // Cancel = "request never happened": prefill cancel must roll the
+  // cache back to the pre-request cursor, modulo any context slides
+  // that fired before cancel landed. We therefore expect the cache
+  // size to match the pre-cancel baseline (minus slide discards) and
+  // never to exceed it.
+  const { stats: afterStats, cancelFired } = cancelResult
+  t.ok(cancelFired, 'cancel timer fired before prefill completed (test harness sanity check)')
   const beforeCacheTokens = toNumber(beforeStats.CacheTokens)
   const afterCacheTokens = toNumber(afterStats.CacheTokens)
   const slideDiscard = toNumber(afterStats.contextSlides) * N_DISCARDED
-  const baselineAfterSlides = beforeCacheTokens - slideDiscard
+  const baselineAfterSlides = Math.max(beforeCacheTokens - slideDiscard, 0)
 
   t.ok(
-    afterCacheTokens > baselineAfterSlides,
-    'cancel during prefill keeps evaluated tokens in cache after slide adjustment ' +
+    afterCacheTokens <= baselineAfterSlides + 1,
+    'cancel during prefill rolls cache back to pre-request cursor ' +
     `(${beforeCacheTokens} - ${slideDiscard} -> ${afterCacheTokens}, slides=${afterStats.contextSlides || 0})`
   )
 }
@@ -353,7 +368,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
   assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
   await runNoCacheSeparator(t, addon, 'after prefill stress run')
 
-  const canceledPrefillStats = await runAndCancelDuringPrefill(
+  const canceledPrefillResult = await runAndCancelDuringPrefill(
     addon,
     makeCancelPrefillTurn(imageBytes),
     {
@@ -361,7 +376,7 @@ safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
       prefill: true
     }
   )
-  assertCanceledPrefillKeptTokens(t, prefillSlide.stats, canceledPrefillStats)
+  assertCanceledPrefillRolledBack(t, prefillSlide.stats, canceledPrefillResult)
   await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
   const afterPrefillCancel = await runAndCollect(

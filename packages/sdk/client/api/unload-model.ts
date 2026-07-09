@@ -1,14 +1,11 @@
-import { isBare } from "which-runtime";
-import { type UnloadModelRequest, type UnloadModelParams } from "@/schemas";
-import { send, close } from "@/client/rpc/rpc-client";
-import { stopLoggingStreamForModel } from "@/client/logging-stream-registry";
-import {
-  InvalidResponseError,
-  ModelUnloadFailedError,
-} from "@/utils/errors-client";
-import { getClientLogger } from "@/logging";
+import { isBare } from 'which-runtime'
+import { type UnloadModelRequest, type UnloadModelParams } from '@/schemas'
+import { send, close } from '@/client/rpc/rpc-client'
+import { stopLoggingStreamForModel } from '@/client/logging-stream-registry'
+import { InvalidResponseError, ModelUnloadFailedError } from '@/utils/errors-client'
+import { getClientLogger } from '@/logging'
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
 /**
  * Unloads a previously loaded model from the server.
@@ -27,31 +24,29 @@ const logger = getClientLogger();
  */
 export async function unloadModel(params: UnloadModelParams) {
   const request: UnloadModelRequest = {
-    type: "unloadModel",
+    type: 'unloadModel',
     modelId: params.modelId,
-    clearStorage: params.clearStorage ?? false,
-  };
+    clearStorage: params.clearStorage ?? false
+  }
 
-  const response = await send(request);
-  if (response.type !== "unloadModel") {
-    throw new InvalidResponseError("unloadModel");
+  const response = await send(request)
+  if (response.type !== 'unloadModel') {
+    throw new InvalidResponseError('unloadModel')
   }
 
   if (!response.success) {
-    throw new ModelUnloadFailedError(params.modelId);
+    throw new ModelUnloadFailedError(params.modelId)
   }
 
-  stopLoggingStreamForModel(params.modelId);
+  stopLoggingStreamForModel(params.modelId)
 
-  const shouldAutoClose = params.autoClose ?? !isBare;
+  const shouldAutoClose = params.autoClose ?? !isBare
   if (
     shouldAutoClose &&
     response.hasActiveModels === false &&
     response.hasActiveProviders === false
   ) {
-    logger.info(
-      "🧹 No models or providers active, automatically closing RPC connection...",
-    );
-    await close();
+    logger.info('🧹 No models or providers active, automatically closing RPC connection...')
+    await close()
   }
 }

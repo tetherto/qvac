@@ -180,6 +180,37 @@ const config = {
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
+| cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
+| cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
+| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+
+
+#### Multimodal projector (mmproj) backend & auto-default
+
+For vision (VLM) models, the projector / image-encoder backend is auto-selected per device class when
+`mmproj-use-gpu` is unset (QVAC-21867):
+
+- **Desktop & iOS:** GPU.
+- **Android, Adreno 800+ GPUs and other non-Mali Android GPUs:** GPU.
+- **Android, Arm Mali GPUs:** **CPU** — the projector encode is slower on the Mali GPU than on CPU
+  (QVAC-21257 benchmarks), so the LLM layers run on the GPU while the projector stays on CPU.
+- **Android, Adreno < 800 GPUs:** **CPU** — these weaker tiers were not covered by the QVAC-21257
+  projector-on-GPU benchmarks, so the default is conservative; this may be relaxed once they are
+  benchmarked.
+
+An explicit `mmproj-use-gpu` value always wins over the auto-default, in either direction. When the model
+itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
+projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
+`[LlamaModel] multimodal projector backend: …`.
+
+
+#### KV-cache type & auto-default
+
+The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unset, and validates any explicit choice per backend:
+
+- **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
+- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts / cache management (sliding context, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
+- **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)
 
 
 #### IGPU/GPU  selection logic:

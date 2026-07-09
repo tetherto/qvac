@@ -1,72 +1,75 @@
 # diffusion-cpp
 
-Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 2.x / XL / 3** and **FLUX.2 [klein]**.
+Native C++ addon for image, video, and ESRGAN inference through
+[qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp),
+built for the Bare Runtime.
+
+The package exposes three JS entry points:
+
+| API | Entry point | Use case |
+|---|---|---|
+| `ImgStableDiffusion` | `@qvac/diffusion-cpp` | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
+| `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video |
+| `EsrganUpscaler` | named export from `@qvac/diffusion-cpp` | Standalone PNG/JPEG upscaling |
 
 ## Table of Contents
 
-- [diffusion-cpp](#diffusion-cpp)
-  - [Table of Contents](#table-of-contents)
-  - [Supported platforms](#supported-platforms)
-  - [Building from Source](#building-from-source)
-  - [Downloading Model Files](#downloading-model-files)
-    - [Why these specific files?](#why-these-specific-files)
-    - [Disk and RAM requirements](#disk-and-ram-requirements)
-  - [Running the Example](#running-the-example)
-    - [Load / unload only](#load--unload-only)
-    - [Text-to-image generation](#text-to-image-generation)
-  - [Other Examples](#other-examples)
-  - [Usage](#usage)
-    - [1. Import the Model Class](#1-import-the-model-class)
-    - [2. Create the `args` object](#2-create-the-args-object)
-    - [3. Configure the native backend (`args.config`)](#3-configure-the-native-backend-argsconfig)
-    - [4. Create a Model Instance](#4-create-a-model-instance)
-    - [5. Load the Model](#5-load-the-model)
-    - [6. Run Inference](#6-run-inference)
-      - [Text-to-image (`model.run`)](#text-to-image-modelrun)
-      - [Image-to-image (`init_image`)](#image-to-image-init_image)
-      - [Multi-reference fusion (`init_images`) — FLUX.2 only](#multi-reference-fusion-init_images--flux2-only)
-    - [7. Release Resources](#7-release-resources)
-  - [Standalone ESRGAN Upscaler](#standalone-esrgan-upscaler)
-  - [Model File Reference](#model-file-reference)
-    - [FLUX.2 \[klein\] 4B (recommended for 16 GB machines)](#flux2-klein-4b-recommended-for-16-gb-machines)
-    - [Stable Diffusion 2.x / SDXL / SD3](#stable-diffusion-2x--sdxl--sd3)
-  - [FLUX.2 Implementation Notes](#flux2-implementation-notes)
-    - [1. Metal GPU backend not activated (macOS)](#1-metal-gpu-backend-not-activated-macos)
-    - [2. Noise output instead of image — wrong prediction type default](#2-noise-output-instead-of-image--wrong-prediction-type-default)
-    - [3. Noise output — wrong flow\_shift default](#3-noise-output--wrong-flow_shift-default)
-    - [4. Wrong sampler default bypassing auto-detection](#4-wrong-sampler-default-bypassing-auto-detection)
-    - [5. Wrong RNG default](#5-wrong-rng-default)
-    - [Summary of default alignment](#summary-of-default-alignment)
-  - [Credits](#credits)
-    - [Test Images](#test-images)
-  - [License](#license)
+- [Supported Models](#supported-models)
+- [Supported Platforms](#supported-platforms)
+- [Building From Source](#building-from-source)
+- [Downloading Models](#downloading-models)
+- [Examples](#examples)
+- [Image API](#image-api)
+  - [Constructor Files](#constructor-files)
+  - [Image Config](#image-config)
+  - [Image Generation Parameters](#image-generation-parameters)
+- [Image-to-Image and FLUX.2 Fusion](#image-to-image-and-flux2-fusion)
+- [Video API](#video-api)
+  - [Video Files](#video-files)
+  - [Video Parameters](#video-parameters)
+- [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
+- [ESRGAN Upscaler](#esrgan-upscaler)
+- [Response Streams and Stats](#response-streams-and-stats)
+- [Cancellation and Unload](#cancellation-and-unload)
+- [Operational Notes](#operational-notes)
+- [Credits](#credits)
+  - [Test Images](#test-images)
+- [License](#license)
 
----
+## Supported Models
 
-## Supported platforms
+| Family | Mode | Notes |
+|---|---|---|
+| SD1.x / SD2.x | image | All-in-one checkpoints through `files.model` |
+| SDXL | image | All-in-one checkpoints or split encoders when required |
+| SD3 | image | Supports split CLIP-L / CLIP-G / T5-XXL inputs |
+| FLUX.2 [klein] | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE |
+| Wan 2.1 | text-to-video, image-to-video | Single diffusion expert; I2V requires CLIP vision |
+| Wan 2.2 | video | API/native MoE plumbing for low-noise + high-noise expert layouts; no bundled example/download script yet |
+| LTX-2 / LTXAV | text-to-video + audio | Gemma text encoder, video VAE, audio VAE, embedding connectors |
+| ESRGAN | upscale | Standalone or post-generation image upscale |
 
-| Platform | Architecture | Status | GPU Backend |
-|----------|-------------|--------|-------------|
-| macOS | arm64 | ✅ Tier 1 | Metal |
-| macOS | x64 | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | ✅ Tier 1 | Vulkan |
-| Android | arm64 | ✅ Tier 1 | Vulkan, OpenCL |
-| iOS | arm64 | ✅ Tier 1 | Metal |
-| Windows | x64 | ✅ Tier 1 | Vulkan |
+## Supported Platforms
 
-**Dependencies:**
+| Platform | Architecture | Status | GPU backend |
+|---|---|---|---|
+| macOS | arm64, x64 | Tier 1 | Metal |
+| Linux | arm64, x64 | Tier 1 | Vulkan |
+| Android | arm64 | Tier 1 | Vulkan, OpenCL |
+| iOS | arm64 | Tier 1 | Metal |
+| Windows | x64 | Tier 1 | Vulkan |
+
+Dependencies:
+
 - `qvac-ext-stable-diffusion.cpp`
 - `ggml`
-- Bare Runtime ≥ 1.24.0
-- CMake ≥ 3.25 and a C++20-capable compiler
+- Bare Runtime >= 1.24.0
+- CMake >= 3.25 and a C++20-capable compiler
 
----
+## Building From Source
 
-## Building from Source
-
-See [build.md](./build.md) for prerequisites, platform-specific setup, cross-compilation, and troubleshooting.
-
-Quick start:
+See [build.md](./build.md) for prerequisites, platform setup, cross-compilation,
+and troubleshooting.
 
 ```bash
 npm install -g bare bare-make
@@ -74,392 +77,386 @@ npm install
 npm run build
 ```
 
----
-
-## Downloading Model Files
-
-A download script is provided that fetches all required files for **FLUX.2 [klein] 4B**:
+CUDA builds can be generated explicitly:
 
 ```bash
-./scripts/download-model.sh
+npm run build:cuda
 ```
 
-This downloads three files into the `models/` directory:
+## Downloading Models
 
-| File | Size | Description |
-|------|------|-------------|
-| `flux-2-klein-4b-Q8_0.gguf` | ~4.0 GB | FLUX.2 [klein] 4B diffusion model (Q8_0 quantised) |
-| `Qwen3-4B-Q4_K_M.gguf` | ~2.5 GB | Qwen3 4B text encoder (Q4_K_M quantised) |
-| `flux2-vae.safetensors` | ~321 MB | VAE decoder |
+Download scripts populate `packages/diffusion-cpp/models/` with the files used
+by the examples.
 
-> **Note:** Downloads can be resumed if interrupted — the script uses `curl -C -` for resumable transfers.
+| Script | Model set |
+|---|---|
+| `./scripts/download-model.sh` | FLUX.2 [klein] 4B image model |
+| `./scripts/download-model-sd2.sh` | SD2.x example model |
+| `./scripts/download-model-sd3.sh` | SD3 example files |
+| `./scripts/download-model-sdxl.sh` | SDXL example files |
+| `./scripts/download-model-wan.sh` | Wan 2.1 T2V 1.3B |
+| `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant |
+| `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
+| `./scripts/download-model-ltx.sh` | LTX-2.3 video + audio files |
 
-### Why these specific files?
+The FLUX.2 [klein] default image example uses:
 
-FLUX.2 [klein] uses a split model layout. Three separate components are required:
+| Role | File |
+|---|---|
+| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` |
+| Text encoder | `Qwen3-4B-Q4_K_M.gguf` |
+| VAE | `flux2-vae.safetensors` |
 
-- **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer. This GGUF has no SD metadata KV pairs so it must be loaded via `diffusion_model_path` internally, not `model_path`.
-- **Text encoder** (`Qwen3-4B-Q4_K_M.gguf`) — Qwen3 4B in standard GGML Q4_K_M format.
-- **VAE** (`flux2-vae.safetensors`) — standard safetensors format, compatible as-is.
+LTX-2.3 requires more companion files:
 
-### Disk and RAM requirements
+| Role | Default file |
+|---|---|
+| Diffusion model | `LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf` |
+| Text encoder | `gemma-3-12b-it-UD-Q4_K_XL.gguf` |
+| Video VAE | `ltx-2.3-22b-distilled_video_vae.safetensors` |
+| Audio VAE | `ltx-2.3-22b-distilled_audio_vae.safetensors` |
+| Embedding connectors | `ltx-2.3-22b-distilled_embeddings_connectors.safetensors` |
 
-| Component | Disk | RAM at runtime |
-|-----------|------|----------------|
-| Diffusion model (Q8_0) | 4.0 GB | ~4.1 GB |
-| Text encoder (Q4_K_M) | 2.5 GB | ~4.3 GB |
-| VAE | 321 MB | ~95 MB |
-| **Total** | **~6.8 GB** | **~8.5 GB** |
+Downloads are resumable where supported by the script.
 
-A machine with **16 GB of unified memory** (e.g. MacBook Air M-series) can run this model.
+## Examples
 
----
+| Command | Description |
+|---|---|
+| `npm run example` | Load/unload the default FLUX.2 model |
+| `npm run generate` | FLUX.2 text-to-image |
+| `npm run generate:sd2` | SD2.x text-to-image |
+| `npm run generate:sd3` | SD3 text-to-image |
+| `npm run generate:sdxl` | SDXL text-to-image |
+| `bare examples/generate-fusion.js` | FLUX.2 multi-reference fusion |
+| `bare examples/img2img-flux2.js` | FLUX.2 single-reference img2img |
+| `bare examples/img2img-sd3.js` | SD3 SDEdit img2img |
+| `bare examples/generate-video-wan.js` | Wan 2.1 text-to-video |
+| `bare examples/img2vid-wan.js` | Wan 2.1 image-to-video |
+| `npm run generate:video` | Wan text-to-video |
+| `npm run generate:ltx` | LTX-2.3 text-to-video with audio |
+| `npm run generate:esrgan` | Image generation followed by ESRGAN upscale |
+| `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale |
 
-## Running the Example
+Outputs are written to `packages/diffusion-cpp/output/`.
 
-Two runnable examples are provided.
-
-### Load / unload only
-
-Verifies the model loads and releases cleanly without running inference:
-
-```bash
-npm run example
-```
-
-Expected output:
-
-```
-FLUX.2 [klein] 4B — load/unload example
-========================================
-Model loaded in 12.0s
-Model is ready. (No inference in this example.)
-Done — all resources released.
-```
-
-Source: [`examples/load-model.js`](./examples/load-model.js)
-
-### Text-to-image generation
-
-Generates a 512 × 512 PNG with a 20-step FLUX.2 run, saves it to `output/`:
-
-```bash
-npm run generate
-```
-
-Expected output:
-
-```
-FLUX.2 [klein] 4B — text-to-image inference
-============================================
-Loaded in 15.2s
-
-Starting generation...
-  [████████████████████] 20/20 steps
-
-Generated in 610.0s
-Got 1 image(s)
-Saved → .../output/output_seed42_0.png
-```
-
-Source: [`examples/generate-image.js`](./examples/generate-image.js)
-
-> **Performance note:** On an M1 MacBook Air (16 GB) with Metal enabled, loading takes ~15 s and 20 steps at 512 × 512 take ~10 minutes. Reduce `STEPS` to 4 for quick tests — FLUX.2's distilled model is designed for low step counts.
-
-## Other Examples
-
--   [Quickstart](./examples/quickstart.js) – Minimal text-to-image generation with SD2.1.
--   [Generate Image (SD2.1)](./examples/generate-image-sd2.js) – Text-to-image with an SD2.1 all-in-one GGUF model.
--   [Generate Image (SD3)](./examples/generate-image-sd3.js) – Text-to-image with SD3 Medium (safetensors, diffusion + CLIP encoders).
--   [Generate Image (SDXL)](./examples/generate-image-sdxl.js) – Text-to-image with an SDXL base all-in-one GGUF model.
--   [Post-generation ESRGAN Upscale](./examples/generate-image-esrgan-upscale.js) – Text-to-image with SD2.1 followed by one or two ESRGAN upscale passes.
--   [Standalone ESRGAN Upscale](./examples/standalone-esrgan-upscale.js) – Upscale an existing PNG/JPEG without loading a diffusion model (named export `EsrganUpscaler`).
--   [Runtime Stats](./examples/runtime-stats-sd2.js) – Run SD2.1 inference and report runtime statistics.
--   [img2img FLUX2](./examples/img2img-flux2.js) – Transform an image with FLUX2-klein (Q8_0, in-context conditioning).
--   [img2img FLUX2 F16](./examples/img2img-flux2-f16.js) – Transform an image with FLUX2-klein (F16 full precision).
--   [img2img SD3](./examples/img2img-sd3.js) – Transform an image with SD3 Medium (SDEdit, flow-matching).
-
----
-
-## Usage
-
-### 1. Import the Model Class
-
-```js
-const ImgStableDiffusion = require('@qvac/diffusion-cpp')
-```
-
-### 2. Create the `args` object
+## Image API
 
 ```js
 const path = require('bare-path')
+const ImgStableDiffusion = require('@qvac/diffusion-cpp')
 
 const MODELS_DIR = path.resolve(__dirname, './models')
-const args = {
-  logger: console,
+
+const model = new ImgStableDiffusion({
   files: {
     model: path.join(MODELS_DIR, 'flux-2-klein-4b-Q8_0.gguf'),
-    llm:   path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),   // Qwen3 text encoder for FLUX.2 [klein]
-    vae:   path.join(MODELS_DIR, 'flux2-vae.safetensors')
+    llm: path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),
+    vae: path.join(MODELS_DIR, 'flux2-vae.safetensors')
   },
-  config: { threads: 8 },
-  opts: { stats: true }
-}
-```
+  config: {
+    threads: 4,
+    device: 'gpu',
+    diffusion_fa: true
+  },
+  opts: { stats: true },
+  logger: console
+})
 
-| Property | Required | Description |
-|----------|----------|-------------|
-| `files` | ✅ | Object of absolute paths to model files (see below) |
-| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD2.x; diffusion-only GGUF for FLUX.2) |
-| `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
-| `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
-| `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
-| `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
-| `files.vae` | — | Absolute path to separate VAE file |
-| `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
-| `config` | — | Native backend configuration object (see next section) |
-| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`) |
-| `opts` | — | Additional options (e.g. `{ stats: true }`) |
-
-Native C++ logs are process-global. Configure native log routing once with `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
-
-### 3. Configure the native backend (`args.config`)
-
-`config` is a field on the `args` object built in step 2 — there is no separate constructor argument. The native backend reads it during `load()`.
-
-```js
-args.config = {
-  threads: 8  // CPU threads for tensor operations (Metal handles GPU automatically)
-}
-```
-
-Config values are coerced to strings internally. Generation parameters (prompt, steps, seed, etc.) are JSON-serialized with their native types preserved.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `threads` | number | auto | Number of CPU threads for model loading and CPU ops |
-| `type` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
-| `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
-| `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
-| `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
-| `flash_attn` | `true` \| `false` | `false` | Enable flash attention for all components (text encoder, diffusion model, VAE) |
-| `diffusion_fa` | `true` \| `false` | `true` | Enable flash attention for the diffusion model only. FLUX2 requires this to avoid materialising the full Q·Kᵀ matrix in VRAM. Safe for all model families — falls back to standard attention on backends that don't support it. Opt out with `false`. |
-| `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
-
-### 4. Create a Model Instance
-
-```js
-const model = new ImgStableDiffusion(args)
-```
-
-The constructor takes a single object containing `files`, `config`, `logger`, and `opts`. It stores configuration only — no memory is allocated yet.
-
-### 5. Load the Model
-
-```js
 await model.load()
-```
-
-This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must be passed as absolute paths via the `files` object.
-
-### 6. Run Inference
-
-#### Text-to-image (`model.run`)
-
-The primary API. Returns a `QvacResponse` that streams step-progress ticks and the final PNG:
-
-```js
-const images = []
 
 const response = await model.run({
   prompt: 'a majestic red fox in a snowy forest, golden light, photorealistic',
-  steps: 20,
   width: 512,
   height: 512,
-  guidance: 3.5,   // distilled guidance scale — FLUX.2 specific
+  steps: 20,
+  guidance: 3.5,
   seed: 42
 })
 
+const images = []
 await response
-  .onUpdate(data => {
-    if (data instanceof Uint8Array) {
-      images.push(data)  // PNG-encoded output image
-    } else if (typeof data === 'string') {
-      try {
-        const tick = JSON.parse(data)
-        if ('step' in tick) process.stdout.write(`\rStep ${tick.step}/${tick.total}`)
-      } catch (_) {}
-    }
+  .onUpdate((data) => {
+    if (data instanceof Uint8Array) images.push(data) // PNG bytes
   })
   .await()
 
 require('bare-fs').writeFileSync('output.png', images[0])
-```
-
-**Generation parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `prompt` | string | — | Text prompt |
-| `negative_prompt` | string | `''` | Things to avoid in the output |
-| `width` | number | `512` (FLUX img2img: `1024`) | Output width in pixels (multiple of 8) |
-| `height` | number | `512` (FLUX img2img: `1024`) | Output height in pixels (multiple of 8) |
-| `steps` | number | `20` | Number of diffusion steps |
-| `guidance` | number | `3.5` | Distilled guidance scale (FLUX.2) |
-| `cfg_scale` | number | `7.0` | Classifier-free guidance scale (SD2.x / SDXL / SD3) |
-| `sampling_method` | string | auto | Sampler name; auto-selects `euler` for FLUX.2, `euler_a` for SD2.x |
-| `scheduler` | string | auto | Scheduler; auto-selected per model family |
-| `seed` | number | `-1` | Random seed (-1 for random) |
-| `batch_count` | number | `1` | Number of images to generate |
-| `vae_tiling` | boolean | `false` | Enable VAE tiling (required for large images on 16 GB) |
-| `cache_preset` | string | — | Step-caching preset: `slow`, `medium`, `fast`, `ultra` |
-| `upscale` | boolean \| `{ repeats?: number }` | `false` | Post-generation ESRGAN upscale. Requires `files.esrgan`; `repeats` defaults to `1` |
-
-> **Sampler note:** Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
-
-#### Image-to-image (`init_image`)
-
-Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) to transform an existing image with a text prompt. For SDEdit models (SD2.x / SDXL / SD3) `width` and `height` default to the input image's pixel dimensions (rounded up to the next multiple of 8). For FLUX.2 models the output size is independent of the reference image — omit `width`/`height` to get the default 1024×1024 output, or supply them explicitly.
-
-The addon automatically selects the correct img2img strategy based on the model's prediction type:
-
-| Model family | Prediction type | Strategy | How it works |
-|-------------|----------------|----------|-------------|
-| FLUX.2 | `flux2_flow` | In-context conditioning (`ref_images`) | Input image is VAE-encoded into separate latent tokens; the transformer attends to them via joint attention with distinct RoPE positions. The target starts from pure noise, so the model preserves features while generating a fully new image. |
-| SD2.x / SDXL / SD3 | All others | SDEdit (`init_image`) | Input image is noised according to `strength` (0.0–1.0), then denoised with the text prompt. Lower strength preserves more of the original; higher strength allows more creative freedom. |
-
-**FLUX.2 example (in-context conditioning):**
-
-```js
-const fs = require('bare-fs')
-
-const inputImage = fs.readFileSync('assets/von-neumann.jpg')
-
-const response = await model.run({
-  prompt: 'a modern tech CEO version of this person, professional headshot',
-  init_image: inputImage,
-  cfg_scale: 1.0,
-  steps: 20,
-  guidance: 9.0,
-  seed: 42
-})
-```
-
-**SD3 example (SDEdit):**
-
-```js
-const inputImage = fs.readFileSync('headshot.jpeg')
-
-const response = await model.run({
-  prompt: 'anime portrait, same pose, studio ghibli style, soft cel shading',
-  negative_prompt: 'photorealistic, blurry, low quality',
-  init_image: inputImage,
-  cfg_scale: 4.5,
-  steps: 30,
-  strength: 0.75,
-  sampling_method: 'euler',
-  seed: 42
-})
-```
-
-> **SDEdit img2img limitations:**
->
-> - **Black-and-white input images** produce weaker results because the model must hallucinate all color information. Consider colorizing the image before feeding it in.
-> - **Low-resolution images** (below ~512×512) give the model less detail to preserve identity. Upscaling beforehand helps.
-> - **High `strength` values** (≥ 0.7) allow the model to deviate significantly from the input, including changing facial features, gender, or ethnicity. Use `strength` 0.35–0.55 for identity-preserving edits.
-> - **Style prompts** like "anime" or "studio ghibli" carry training-data biases that can alter the subject's appearance. Anchor the prompt with terms like "same person, same face" and use the negative prompt to block unwanted changes.
-> - **Non-multiple-of-8 images** are automatically aligned (nearest-neighbor resize to the next multiple of 8) before processing. For best quality, provide images with dimensions that are already multiples of 8.
-
-The bundled test image (`assets/von-neumann.jpg`) is a 1956 portrait of John von Neumann sourced from the U.S. Department of Energy (Public Domain). See the [Credits](#credits) section for details.
-
-#### Multi-reference fusion (`init_images`) — FLUX.2 only
-
-**FLUX.2-klein only.** Pass `init_images` (an array of `Uint8Array` PNG/JPEG buffers) to blend multiple reference images into a single output via in-context conditioning. All references share one RoPE coordinate space (the library default, `increase_ref_index: false`), so their visual features blend via attention — this is the "fusion" behavior.
-
-This differs from single-image `init_image` in three ways:
-- **Parameter:** `init_images` (array) instead of `init_image` (single buffer)
-- **Target:** Generated from **pure noise** (not a noisy version of a single input), so the model creates a new composition attending to all references
-- **Text encoder behavior:** FLUX2-klein's Qwen3 does **not** receive vision tokens for the references. The `@imageN` tags in the prompt are purely **prose labels** for the model — the actual visual fusion is learned via attention in the DiT. Use them to anchor the prompt semantically (e.g. "use @image1 and @image2 as the two scientists").
-
-**Setup:**
-
-```js
-const fs = require('bare-fs')
-
-const refImage1 = fs.readFileSync('assets/von-neumann.jpg')
-const refImage2 = fs.readFileSync('assets/claude-shannon.jpg')
-
-const response = await model.run({
-  prompt: 'two scientists in @image1 and @image2 shaking hands in a lab, use @image1 and @image2 as the two scientists, black studio background, colorized.',
-  init_images: [refImage1, refImage2],
-  width: 624,
-  height: 624,
-  sample_method: 'euler',
-  cfg_scale: 1.0,
-  guidance: 3.5,
-  steps: 10,
-  seed: 42
-})
-```
-
-**`@imageN` tag conventions:**
-
-- **Optional but recommended:** Tags like `@image1`, `@image2`, … in your prompt help anchor the semantic meaning of each reference
-- **Not vision tokens:** Qwen3 on FLUX2-klein sees these as plain text; they don't bypass the text-only constraint
-- **Naming:** Use consistent, meaningful labels (e.g. `@person1`, `@background`, `@style_ref` if semantically clearer for your use case)
-- **Example prompts:**
-  - `"blend the faces of @image1 and @image2 into one person"` — fusion
-  - `"use the style of @image1 and the subject of @image2 together"` — style blending
-  - `"@image1 in the setting of @image2"` — composition blending
-
-**Parameters (specific to `init_images`):**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `init_images` | `Uint8Array[]` | — | Array of PNG/JPEG reference image buffers (mutually exclusive with `init_image`) |
-| `increase_ref_index` | boolean | `false` | If `false` (default), all refs share one RoPE coordinate slot → visual fusion via attention. If `true`, each ref gets its own RoPE index → typically makes one ref dominate (not recommended for FLUX2-klein) |
-| `auto_resize_ref_image` | boolean | `true` | Auto-resize all reference images to match `width`/`height` before VAE encoding. Disable only if you've pre-resized the buffers |
-
-**Tips for best results:**
-
-- **Similar aspect ratios:** References with differing aspect ratios may not blend as smoothly. Pre-resize to the target aspect ratio if possible
-- **Image quality matters:** Low-quality or heavily compressed references produce weaker fusion. Use PNG or high-quality JPEG
-- **Prompt anchoring:** Use the `@imageN` tags in your prompt to help the model understand the intent (even though it's text-only)
-- **Guidance & steps:** Lower guidance (`cfg_scale: 1.0`) and moderate steps (8–20) work well for fusion; too much guidance can collapse the blending to one dominant reference
-- **Identity preservation:** For portrait fusion, add phrases like "blend the features of @image1 and @image2" or "same pose, fused appearance"
-
-**Example walkthrough:**
-
-See `examples/generate-fusion.js` for a complete working example that fuses two scientists (von Neumann + Shannon) into a handshake scene.
-
-### 7. Release Resources
-
-```js
 await model.unload()
 ```
 
-`unload()` calls `free_sd_ctx` which releases all GPU and CPU memory. The JS object can be safely garbage collected afterwards.
+### Constructor Files
 
----
+All file paths must be absolute.
 
-## Standalone ESRGAN Upscaler
+| Key | Required | Description |
+|---|---:|---|
+| `files.model` | yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
+| `files.clipL` | no | CLIP-L text encoder for SD3 / split layouts |
+| `files.clipG` | no | CLIP-G text encoder for SDXL / SD3 |
+| `files.t5Xxl` | no | T5-XXL text encoder for SD3 / FLUX.1 |
+| `files.llm` | no | Qwen3 LLM text encoder for FLUX.2 [klein] |
+| `files.vae` | no | Separate VAE |
+| `files.esrgan` | no | ESRGAN model for post-generation upscale |
+| `files.highNoiseDiffusionModel` | no | Wan 2.2 high-noise expert path; normally used by `VideoStableDiffusion` |
 
-The package also exports `EsrganUpscaler` for upscaling existing PNG/JPEG images
-without loading a diffusion model. Useful for post-processing pre-existing assets
-(screenshots, photos, third-party generated images).
+Passing any separate text encoder (`llm`, `t5Xxl`, `clipL`, `clipG`) makes the
+wrapper route `files.model` to stable-diffusion.cpp's `diffusion_model_path`.
+All-in-one checkpoints are routed to `model_path`.
+
+### Image Config
+
+`config` is part of the constructor object. There is no second constructor
+argument.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `threads` | number | auto | CPU threads for loading / CPU ops |
+| `device` | `'gpu' | 'cpu'` | `'gpu'` | Prefer GPU backends or force CPU |
+| `main-gpu` | number \| `'integrated'` \| `'dedicated'` | unset | Pin the GPU selected by stable-diffusion.cpp |
+| `type` | weight type | auto | Override weight quantization |
+| `rng` | `'cpu' | 'cuda' | 'std_default'` | `'cuda'` | Context RNG; `cuda` means Philox and is not GPU-specific |
+| `sampler_rng` | RNG type | auto | Sampler RNG override |
+| `clip_on_cpu` | boolean | `false` | Force CLIP/text encoder to CPU |
+| `vae_on_cpu` | boolean | `false` | Force VAE to CPU |
+| `vae_tiling` | boolean | `false` | Tile VAE decode to reduce peak VRAM |
+| `flash_attn` | boolean | `false` | Enable flash attention globally |
+| `diffusion_fa` | boolean | `true` | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
+| `mmap` | boolean | backend default | Memory-map weights when supported |
+| `offload_to_cpu` | boolean | backend default | Keep weights on CPU/offload as supported by backend |
+| `prediction` | prediction type | auto | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2 |
+| `flow_shift` | number | model default | Flow-matching noise schedule shift |
+| `diffusion_conv_direct` | boolean | `true` | Use direct convolution in diffusion model |
+| `vae_conv_direct` | boolean | `true` | Use direct convolution in VAE |
+| `backendsDir` | string | package prebuilds | Custom ggml backend directory |
+| `lora_apply_mode` | string | auto | LoRA application mode |
+| `upscaler_tile_size` | number | `128` | ESRGAN tile size |
+
+`main-gpu` is resolved against the addon's own ggml device enumeration and then
+pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
+satisfied (`'integrated'` with no integrated GPU, `'dedicated'` with no discrete
+GPU, or an out-of-range index), the addon falls back to CPU instead of silently
+choosing another GPU. Mobile targets reject `main-gpu` because they are
+single-GPU devices.
+
+### Image Generation Parameters
+
+| Key | Type | Description |
+|---|---|---|
+| `prompt` | string | Required non-empty prompt |
+| `negative_prompt` | string | Negative prompt |
+| `width`, `height` | number | Positive multiples of 8; FLUX img2img defaults omitted axes to 1024 |
+| `steps` | number | Diffusion step count |
+| `cfg_scale` | number | Classifier-free guidance for SD/SDXL/SD3 and FLUX img2img examples |
+| `guidance` | number | Distilled guidance for FLUX.2 |
+| `sampling_method` / `sampler` | string | Sampler name; omit for auto-selection |
+| `scheduler` | string | Scheduler name; omit for auto-selection |
+| `seed` | number | `-1` for random |
+| `batch_count` | number | Number of images |
+| `lora` | string | Absolute path to a LoRA adapter |
+| `upscale` | boolean \| object | Post-generation ESRGAN upscale; requires `files.esrgan` |
+| `vae_tiling` | boolean | Per-job VAE tiling |
+| `vae_tile_size` | number \| string | VAE tile size, e.g. `512` or `'512x512'` |
+| `vae_tile_overlap` | number | Tile overlap fraction |
+| `cache_mode` | string | Step-caching algorithm |
+| `cache_preset` | string | Cache preset: `slow`, `medium`, `fast`, `ultra` |
+| `cache_threshold` | number | Cache reuse threshold |
+| `eta` | number | DDIM/TCD stochasticity |
+| `clip_skip` | number | Skip last N CLIP layers |
+
+Do not force `sampling_method: 'euler_a'` for FLUX.2 models. Leave the sampler
+unset unless you know the model family requires an override.
+
+## Image-to-Image and FLUX.2 Fusion
+
+`init_image` accepts PNG/JPEG bytes and selects image-to-image mode.
+
+- FLUX.2 uses in-context conditioning: the reference image is VAE-encoded into
+  separate latent tokens and the target starts from pure noise.
+- SD1.x / SD2.x / SDXL / SD3 use SDEdit: the input is noised according to
+  `strength` and denoised with the prompt.
+
+For FLUX.2 img2img, load the context with `files.llm` and
+`config.prediction: 'flux2_flow'`.
+
+```js
+const inputImage = require('bare-fs').readFileSync('assets/source.jpg')
+
+const response = await model.run({
+  prompt: 'a cinematic portrait of the same person, professional lighting',
+  init_image: inputImage,
+  width: 1024,
+  height: 1024,
+  cfg_scale: 1.0,
+  guidance: 3.5,
+  steps: 20,
+  seed: 42
+})
+```
+
+FLUX.2 multi-reference fusion uses `init_images`, an array of PNG/JPEG buffers.
+It is mutually exclusive with `init_image` and requires
+`config.prediction: 'flux2_flow'`.
+
+```js
+const response = await model.run({
+  prompt: 'blend @image1 and @image2 into one scientist in a black studio',
+  init_images: [image1Bytes, image2Bytes],
+  width: 624,
+  height: 624,
+  cfg_scale: 1.0,
+  guidance: 3.5,
+  steps: 10,
+  seed: 10
+})
+```
+
+`@image1`, `@image2`, etc. are prose anchors for the text encoder. The FLUX.2
+Qwen3 text encoder does not receive vision tokens; visual fusion happens in the
+DiT through attention over reference latents. Keep `increase_ref_index` unset or
+`false` for FLUX.2-klein fusion.
+
+## Video API
+
+```js
+const path = require('bare-path')
+const fs = require('bare-fs')
+const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
+
+const MODELS_DIR = path.resolve(__dirname, './models')
+
+const model = new VideoStableDiffusion({
+  files: {
+    model: path.join(MODELS_DIR, 'wan2.1_t2v_1.3B_fp16.safetensors'),
+    t5Xxl: path.join(MODELS_DIR, 'umt5_xxl_fp16.safetensors'),
+    vae: path.join(MODELS_DIR, 'wan_2.1_vae.safetensors')
+  },
+  config: {
+    threads: 4,
+    device: 'gpu',
+    diffusion_fa: true,
+    offload_to_cpu: true,
+    vae_tiling: true
+  },
+  logger: console
+})
+
+await model.load()
+
+const response = await model.run({
+  mode: 'txt2vid',
+  prompt: 'a colorful bird flapping its wings',
+  negative_prompt: 'blurry, low quality, static, jittery, watermark',
+  width: 480,
+  height: 832,
+  video_frames: 81,
+  fps: 16,
+  steps: 30,
+  cfg_scale: 6.0,
+  flow_shift: 3.0,
+  seed: 42
+})
+
+let avi = null
+await response
+  .onUpdate((data) => {
+    if (data instanceof Uint8Array) avi = data // MJPG AVI bytes
+  })
+  .await()
+
+fs.writeFileSync('wan_t2v_seed42.avi', avi)
+await model.unload()
+```
+
+The default export from `@qvac/diffusion-cpp/video` and the named
+`VideoStableDiffusion` export from `@qvac/diffusion-cpp` are the same class.
+
+### Video Files
+
+| Key | Model family | Description |
+|---|---|---|
+| `files.model` | all video | Wan single/low-noise expert or LTX diffusion transformer |
+| `files.highNoiseDiffusionModel` | Wan 2.2 | High-noise expert for MoE generation |
+| `files.t5Xxl` | Wan | UMT5-XXL text encoder |
+| `files.vae` | Wan / LTX | Wan VAE or LTX video VAE |
+| `files.clipVision` | Wan I2V | OpenCLIP ViT-H/14; required for `mode: 'img2vid'` on Wan |
+| `files.llm` | LTX | Gemma text encoder |
+| `files.audioVae` | LTX | Audio VAE decoder for synchronized audio |
+| `files.embeddingsConnectors` | LTX | Text-embedding connector weights; also marks the context as LTX |
+
+### Video Parameters
+
+| Key | Description |
+|---|---|
+| `mode` | Required: `'txt2vid'` or `'img2vid'` |
+| `prompt`, `negative_prompt` | Text conditioning |
+| `width`, `height` | Wan: multiples of 16. LTX: multiples of 32 |
+| `video_frames` | Wan: `(4*k + 1)`. LTX: `(8*k + 1)`, max 257 |
+| `fps` | AVI framerate metadata, default 16 for Wan examples and 24 for LTX |
+| `steps`, `cfg_scale`, `sampling_method`, `scheduler`, `seed` | Sampling controls |
+| `flow_shift` | Per-job flow-shift override; Wan 2.1 T2V 1.3B works well at `3.0` |
+| `high_noise_steps`, `high_noise_sampler`, `high_noise_scheduler`, `high_noise_cfg_scale`, `high_noise_flow_shift`, `moe_boundary` | Wan 2.2 high-noise expert controls |
+| `init_image` | First frame for `img2vid`; required by that mode |
+| `control_frames`, `vace_strength` | Optional VACE guidance |
+| `temporal_tiling` | LTX-only temporal VAE tiling to reduce peak VRAM |
+| `cache_mode`, `cache_preset`, `cache_threshold` | Step-cache controls |
+
+Video output is a single MJPG AVI `Uint8Array`. For LTX-2 models loaded with
+`audioVae`, the AVI also contains a second IEEE-float PCM stream at 48 kHz.
+VLC handles these files well.
+
+## LTX-2 Text-to-Video With Audio
+
+```js
+const model = new VideoStableDiffusion({
+  files: {
+    model: path.join(MODELS_DIR, 'LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf'),
+    llm: path.join(MODELS_DIR, 'gemma-3-12b-it-UD-Q4_K_XL.gguf'),
+    vae: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_video_vae.safetensors'),
+    audioVae: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_audio_vae.safetensors'),
+    embeddingsConnectors: path.join(MODELS_DIR, 'ltx-2.3-22b-distilled_embeddings_connectors.safetensors')
+  },
+  config: {
+    threads: 4,
+    device: 'gpu',
+    diffusion_fa: true,
+    vae_tiling: true,
+    vae_conv_direct: true
+  },
+  opts: { stats: true },
+  logger: console
+})
+
+const response = await model.run({
+  mode: 'txt2vid',
+  prompt: 'a claymation cat playing jazz on a piano',
+  negative_prompt: 'blurry, low quality, static, jittery, watermark, distorted audio',
+  width: 512,
+  height: 320,
+  video_frames: 241,
+  fps: 24,
+  steps: 10,
+  cfg_scale: 1.0,
+  temporal_tiling: true,
+  seed: 42
+})
+```
+
+LTX distilled variants are designed for low step counts and low CFG values.
+For full dev weights, use higher steps and a larger CFG.
+
+## ESRGAN Upscaler
 
 ```js
 const { EsrganUpscaler } = require('@qvac/diffusion-cpp')
-const { setLogger, releaseLogger } = require('@qvac/diffusion-cpp/addonLogging')
 const fs = require('bare-fs')
-
-setLogger((priority, message) => console.log(`[C++] ${message}`))
 
 const upscaler = new EsrganUpscaler({
   files: {
     esrgan: '/absolute/path/to/RealESRGAN_x4plus_anime_6B.pth'
   },
   config: {
+    device: 'gpu',
     upscaler_tile_size: 128
   },
   logger: console
@@ -467,179 +464,66 @@ const upscaler = new EsrganUpscaler({
 
 await upscaler.load()
 
-const inputBytes = fs.readFileSync('/path/to/source.png')
-const response = await upscaler.upscale(inputBytes, { repeats: 1 })
+const response = await upscaler.upscale(fs.readFileSync('input.png'), {
+  repeats: 1
+})
 
 const images = []
 await response
-  .onUpdate(data => {
+  .onUpdate((data) => {
     if (data instanceof Uint8Array) images.push(data)
   })
   .await()
 
+fs.writeFileSync('upscaled.png', images[0])
 await upscaler.unload()
-releaseLogger()
 ```
 
-**Constructor args**
+`repeats` controls how many ESRGAN passes are applied. One pass typically scales
+by 4x; two passes scale by 16x.
 
-| Property | Required | Description |
-|----------|----------|-------------|
-| `files.esrgan` | ✅ | Absolute path to ESRGAN upscaler model (`.pth`) |
-| `config.upscaler_tile_size` | — | Tile size used during inference (default `128`) |
-| `config.upscaler_threads` | — | CPU threads for the upscaler (`-1` = auto) |
-| `config.upscaler_direct` | — | Use direct convolution (default `false`) |
-| `config.upscaler_offload_params_to_cpu` | — | Keep weights on CPU and offload during compute (default `false`) |
-| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`). Native C++ logs are configured separately via `addonLogging.setLogger()` |
+## Response Streams and Stats
 
-**`upscale(imageBytes, options?)`**
+All three wrappers return a `QvacResponse`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `repeats` | number | `1` | Number of ESRGAN passes. Each pass multiplies output dimensions by the model's scale factor (typically 4×), so `repeats: 2` produces a 16× upscale |
+- Progress updates are JSON strings like `{"step":1,"total":20,"elapsed_ms":...}`.
+- Image generation and ESRGAN emit PNG `Uint8Array` values.
+- Video generation emits one MJPG AVI `Uint8Array`.
+- If `opts.stats` is enabled, a `stats` event is emitted before completion.
 
-Cancellation works the same as `ImgStableDiffusion`: call `upscaler.cancel()` to interrupt an in-flight upscale (honored between repeat passes).
+Image stats include load time, generation time, cumulative steps/images/pixels,
+dimensions, and seed. Video stats additionally include cumulative videos,
+frames, `fps`, `hasAudio`, and `audioSampleRate`. ESRGAN stats include upscale
+timing, output dimensions, repeats, and the backend device actually used.
 
-For a complete runnable example, see [`examples/standalone-esrgan-upscale.js`](./examples/standalone-esrgan-upscale.js).
+## Cancellation and Unload
 
----
+Each wrapper has `cancel()` and `unload()` methods. Only one job may run per
+model instance at a time; overlapping `run()` calls fail with a busy error.
 
-## Model File Reference
-
-### FLUX.2 [klein] 4B (recommended for 16 GB machines)
-
-| Role | File | Source |
-|------|------|--------|
-| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | [leejet/FLUX.2-klein-4B-GGUF](https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF) |
-| Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
-| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
-
-### Stable Diffusion 2.x / SDXL / SD3
-
-Pass an all-in-one checkpoint absolute path as `files.model`. No separate encoders needed.
-
----
-
-## FLUX.2 Implementation Notes
-
-This section documents non-obvious issues encountered integrating FLUX.2 [klein] into the addon and how each was resolved. These serve as a reference if the underlying `qvac-ext-stable-diffusion.cpp` version is upgraded.
-
-### 1. Metal GPU backend not activated (macOS)
-
-**Symptom:** Generation ran entirely on CPU at 700%+ CPU usage; 20 steps at 512 × 512 never completed.
-
-**Root cause:** The vcpkg port passed `-DGGML_METAL=ON` to CMake, which compiled the ggml Metal library (`libggml-metal.a`). However, `qvac-ext-stable-diffusion.cpp` internally guards `ggml_backend_metal_init()` behind its own `SD_USE_METAL` preprocessor define, which is only set when `-DSD_METAL=ON` is passed — a separate flag from `GGML_METAL`.
-
-**Fix:** Changed the `stable-diffusion-cpp` registry port from:
-
-```cmake
--DGGML_METAL=${SD_GGML_METAL}
+```js
+const response = await model.run({ prompt: '...', steps: 30 })
+await model.cancel()
+await response.await().catch(() => {})
+await model.unload()
 ```
 
-to:
+During ESRGAN upscale, cancellation is honored between repeat passes.
 
-```cmake
--DSD_METAL=${SD_GGML_METAL}
-```
+## Operational Notes
 
-`-DSD_METAL=ON` causes `qvac-ext-stable-diffusion.cpp`'s own `CMakeLists.txt` to set `GGML_METAL=ON` *and* emit `-DSD_USE_METAL`, which activates `ggml_backend_metal_init()` at runtime.
-
-**Verification:** After the fix, CPU usage dropped from ~700% to ~0.5% during generation, confirming the GPU is handling the compute.
-
----
-
-### 2. Noise output instead of image — wrong prediction type default
-
-**Symptom:** Generation completed all 20 steps and produced a PNG, but the image was pure coloured noise (TV static).
-
-**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `qvac-ext-stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
-
-**Fix:** Changed the default in `addon/src/handlers/SdCtxHandlers.hpp`:
-
-```cpp
-// Before
-prediction_t prediction = EPS_PRED;
-
-// After
-prediction_t prediction = PREDICTION_COUNT;  // auto-detect from GGUF metadata
-```
-
----
-
-### 3. Noise output — wrong flow_shift default
-
-**Symptom:** Same noise output as above (compounded with fix 2).
-
-**Root cause:** `SdCtxConfig::flowShift` defaulted to `0.0f`. For FLUX.2, `qvac-ext-stable-diffusion.cpp` expects `INFINITY` as the sentinel meaning "use the model's embedded flow-shift value". A value of `0.0f` disabled flow-shifting entirely, breaking the entire noise schedule.
-
-**Fix:**
-
-```cpp
-// Before
-float flowShift = 0.0f;
-
-// After
-float flowShift = std::numeric_limits<float>::infinity();  // use model's embedded value
-```
-
----
-
-### 4. Wrong sampler default bypassing auto-detection
-
-**Symptom:** Even with fixes 1–3, the wrong sampler could be selected if passed explicitly.
-
-**Root cause:** `SdGenConfig::sampleMethod` defaulted to `EULER_A_SAMPLE_METHOD`. The `generate_image()` function in `qvac-ext-stable-diffusion.cpp` only runs its auto-detection (`sd_get_default_sample_method()`) when `sample_method == SAMPLE_METHOD_COUNT`. Since we always passed `EULER_A` explicitly, FLUX.2 (a DiT flow-matching model that needs `EULER`) got the ancestral euler sampler instead, producing garbage.
-
-**Fix:** Changed the default in `addon/src/handlers/SdGenHandlers.hpp`:
-
-```cpp
-// Before
-sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
-scheduler_t     scheduler    = DISCRETE_SCHEDULER;
-
-// After
-sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;  // auto (euler for FLUX, euler_a for SD2.x)
-scheduler_t     scheduler    = SCHEDULER_COUNT;      // auto
-```
-
-With these sentinel values, `qvac-ext-stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD2.x automatically.
-
----
-
-### 5. Wrong RNG default
-
-**Symptom:** Minor correctness difference vs reference CLI output.
-
-**Root cause:** `SdCtxConfig` defaulted to `rngType = CPU_RNG` (Mersenne Twister). `sd_ctx_params_init()` in `qvac-ext-stable-diffusion.cpp` sets `CUDA_RNG` (the philox RNG — named `CUDA_RNG` for historical reasons but not GPU-specific). The philox RNG is the expected default across all platforms.
-
-**Fix:**
-
-```cpp
-// Before
-rng_type_t rngType        = CPU_RNG;
-rng_type_t samplerRngType = CPU_RNG;
-
-// After
-rng_type_t rngType        = CUDA_RNG;       // philox RNG — matches sd_ctx_params_init default
-rng_type_t samplerRngType = RNG_TYPE_COUNT; // auto
-```
-
----
-
-### Summary of default alignment
-
-The underlying pattern across all these fixes is the same: our C++ config structs had concrete default values that *overrode* `qvac-ext-stable-diffusion.cpp`'s own sentinel-based auto-detection. The correct approach is to use the same sentinel values that `sd_ctx_params_init()` and `sd_sample_params_init()` set, and only pass concrete values when the caller explicitly requests them.
-
-| Field | Wrong default | Correct default | Effect of wrong value |
-|-------|--------------|-----------------|----------------------|
-| `prediction` | `EPS_PRED` | `PREDICTION_COUNT` | Forces epsilon denoiser on FLUX.2 → noise |
-| `flow_shift` | `0.0f` | `INFINITY` | Disables flow-shifting → broken noise schedule |
-| `sample_method` | `EULER_A_SAMPLE_METHOD` | `SAMPLE_METHOD_COUNT` | Wrong sampler for flow-matching models → noise |
-| `scheduler` | `DISCRETE_SCHEDULER` | `SCHEDULER_COUNT` | Wrong schedule for FLUX.2 |
-| `rng_type` | `CPU_RNG` | `CUDA_RNG` | Different noise seed generation vs reference |
-| `ggml_metal` cmake flag | `-DGGML_METAL=ON` | `-DSD_METAL=ON` | Metal library compiled but never initialised |
-
----
+- Native C++ logs are process-global. Configure them once with
+  `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
+- Leave sampler and scheduler unset for normal use; the addon preserves
+  stable-diffusion.cpp auto-detection for model-specific defaults.
+- `diffusion_fa` defaults to true and is important for FLUX/LTX memory use.
+- For FLUX.2 img2img/fusion, set `config.prediction: 'flux2_flow'` so the JS
+  wrapper and native layer select the in-context conditioning path.
+- Wan I2V requires `files.clipVision`; LTX img2vid does not.
+- Wan dimensions must be multiples of 16; LTX dimensions must be multiples of
+  32.
+- Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
+- LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
 
 ## Credits
 
@@ -654,8 +538,6 @@ Source: Bell Labs / [Wikimedia Commons](https://commons.wikimedia.org/wiki/Categ
 Licensed under **Creative Commons Attribution-ShareAlike (CC BY-SA)**.
 Attribution must be preserved; any redistribution of this image or a derivative
 must be released under a compatible CC BY-SA license.
-
----
 
 ## License
 

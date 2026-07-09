@@ -27,6 +27,10 @@ test('catalog ids are unique and stay lowercase/models.dev-shaped', () => {
 
 test('resolveModelConstant maps a public id to its constant', () => {
   assert.equal(resolveModelConstant('qwen3.5-9b'), 'QWEN3_5_9B_MULTIMODAL_Q4_K_M')
+  assert.equal(resolveModelConstant('qwen3.6-27b'), 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL')
+  assert.equal(resolveModelConstant('qwen3.6-35b-a3b'), 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M')
+  assert.equal(resolveModelConstant('gpt-oss-20b'), 'GPT_OSS_20B_INST_Q4_K_M')
+  assert.equal(resolveModelConstant('gemma4-31b'), 'GEMMA4_31B_MULTIMODAL_Q4_K_M')
 })
 
 test('resolveModelConstant passes a bare constant through unchanged', () => {
@@ -44,8 +48,15 @@ test('findCatalogEntry resolves by id or by constant to the same entry', () => {
   assert.equal(findCatalogEntry('nope'), undefined)
 })
 
+test('findCatalogEntry includes larger agent-friendly model families', () => {
+  assert.equal(findCatalogEntry('gpt-oss-20b')?.name, 'GPT-OSS 20B')
+  assert.equal(findCatalogEntry('gemma4-31b')?.name, 'Gemma4 31B')
+})
+
 test('isCatalogId is true only for public ids, not constants', () => {
   assert.equal(isCatalogId('qwen3.5-9b'), true)
+  assert.equal(isCatalogId('gpt-oss-20b'), true)
+  assert.equal(isCatalogId('gemma4-31b'), true)
   assert.equal(isCatalogId('QWEN3_5_9B_MULTIMODAL_Q4_K_M'), false)
   assert.equal(isCatalogId('nope'), false)
 })

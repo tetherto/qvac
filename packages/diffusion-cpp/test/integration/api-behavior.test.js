@@ -20,14 +20,15 @@ const isWindows = os.platform() === 'win32'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 
-// Windows Vulkan backend is slower, increase timeout
+// Windows Vulkan and mobile GPU backends are much slower (e.g. Mali-G715 on
+// Vulkan is ~24s/step), so give them a larger timeout to avoid tripping the
+// harness ("Can't comment after end") on a single slow generation.
 const BASE_TIMEOUT = 600000
-const testTimeout = isWindows ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const testTimeout = (isWindows || isAndroid || os.platform() === 'ios') ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 // Smallest model for fast behavior tests
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
@@ -53,8 +54,7 @@ async function setupModel (t) {
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
+    modelName: MODEL.name
   })
 
   const model = new ImgStableDiffusion({
@@ -227,8 +227,7 @@ safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, a
 
 safeTest('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
   const [, modelDir] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
+    modelName: MODEL.name
   })
 
   const model = new ImgStableDiffusion({

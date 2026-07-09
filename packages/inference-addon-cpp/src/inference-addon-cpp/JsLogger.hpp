@@ -60,10 +60,33 @@ namespace qvac_lib_inference_addon_cpp::logger {
             delete handle;
           });
         });
+
+        // Tie cleanup to the env lifetime. If the runtime tears this env down
+        // without releaseLogger() being called first (e.g. a worker/runtime
+        // teardown), onEnvTeardown fires while the env is being destroyed but
+        // BEFORE its JS context is disposed, disarming the logger so the
+        // teardown's final uv_run cannot dispatch asyncCallback against a dead
+        // context.
+        JS(js_add_teardown_callback(env, &JsLogger::onEnvTeardown, nullptr));
       }
 
       auto oldState = storeState(newState);
-      if (oldState) {
+      if (oldState && oldState->env == env) {
+        // Only delete the previous callback ref when it belongs to THIS env.
+        //
+        // The logger state is a process-global singleton, so it assumes a
+        // single live env owns it at a time. The supported flow is sequential
+        // worklet teardown / soft-reload (QVAC-21544): the previous env has
+        // already been (or is being) torn down, its V8 global handles are gone,
+        // and js_delete_reference on it would crash in GlobalHandles::Release —
+        // so when oldState->env != env we drop the stale ref instead of freeing
+        // it here (it dies with its env / its onEnvTeardown).
+        //
+        // NOTE: concurrent *live* envs (e.g. two worklets/bare-thread workers
+        // logging at once) are NOT supported by this singleton — the second
+        // setLogger would leak the first's live ref and leave logger_async_ on
+        // the wrong loop. Supporting that needs per-js_env_t*-keyed state; see
+        // follow-up ticket.
         releaseJsRefs((oldState->env), oldState->cb);
       }
 
@@ -72,7 +95,12 @@ namespace qvac_lib_inference_addon_cpp::logger {
 
     static auto releaseLogger(js_env_t *env, js_callback_info_t * /*info*/) -> js_value_t* try {
       auto oldState = storeState(nullptr);
-      if (oldState) {
+      if (oldState && oldState->env == env) {
+        // Same env-liveness guard as setLogger: only drop the teardown hook and
+        // delete the callback ref when the stored state belongs to THIS live
+        // env, never a torn-down/reloaded one (deleting a dead env's ref crashes
+        // in GlobalHandles::Release).
+        js_remove_teardown_callback((oldState->env), &JsLogger::onEnvTeardown, nullptr);
         releaseJsRefs((oldState->env), oldState->cb);
       }
       if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
@@ -143,6 +171,20 @@ namespace qvac_lib_inference_addon_cpp::logger {
         catch (...) {
           std::cerr << "ERROR: Caught unknown exception\n";
         }
+    }
+
+    // Invoked by the runtime while this env is being torn down, BEFORE its JS
+    // context is disposed. Disarms the logger so a pending uv_async_send that
+    // the teardown's final uv_run would otherwise drain cannot dispatch
+    // asyncCallback against a dead context: nulling the shared state makes any
+    // such callback early-return, and closing the handle stops it firing at all.
+    static void onEnvTeardown(void * /*data*/) {
+      storeState(nullptr);
+      if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
+        uv_close(reinterpret_cast<uv_handle_t*>(logger_async_), [](uv_handle_t* handle) {
+          delete handle;
+        });
+      }
     }
 
     static void log(int priority, const std::string &message) {

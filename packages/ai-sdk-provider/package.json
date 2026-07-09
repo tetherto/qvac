@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ai-sdk-provider",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Vercel AI SDK provider for the QVAC local AI runtime (chat, embeddings, transcription, translation, speech, OCR, image)",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -60,21 +60,20 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
-    "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "lunte",
-    "lint:fix": "lunte --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "typecheck": "tsc -p tsconfig.test.json",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "update-models": "tsx ./models/update-models/index.ts",
-    "check": "npm run lint && npm run format && npm run typecheck",
     "test:unit": "tsx --test test/*.test.ts",
     "test:e2e": "npm run test:integration",
     "test:integration": "tsx --test test/managed-integration.test.ts"
   },
   "peerDependencies": {
     "@ai-sdk/openai-compatible": "^2.0",
-    "@qvac/cli": "^0.6.0 || ^0.7.0",
+    "@qvac/cli": "^0.6.0 || ^0.7.0 || ^0.8.0",
     "ai": "^6.0"
   },
   "peerDependenciesMeta": {
@@ -88,7 +87,7 @@
     "@types/node": "^24.2.1",
     "ai": "^6.0",
     "lunte": "^1.8.2",
-    "prettier": "^3.8.4",
+    "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

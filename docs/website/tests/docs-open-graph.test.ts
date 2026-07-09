@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isArchivedPage,
   isArchivedVersionSlug,
+  isReleaseNotesPage,
   buildCanonicalDocsUrl,
   buildPageCanonicalUrl,
   DOCS_SITE_ORIGIN,
@@ -44,8 +45,10 @@ describe('isArchivedPage', () => {
     // Each archived release-notes series is a unique historical document
     // describing what changed in that minor line — no duplicate-content
     // problem, and excluding them would make "what changed in v0.8.x?"
-    // undiscoverable. Kept in sitemap.xml, llms.txt, and llms-full.txt.
-    // (Per-page `.md` is no longer gated by `isArchivedPage` — see
+    // undiscoverable. Kept in sitemap.xml and llms.txt. (They ARE dropped
+    // from the llms-full.txt bulk dump, but via the separate
+    // `isReleaseNotesPage` filter — see QVAC-21379 — not by `isArchivedPage`.
+    // Per-page `.md` is likewise no longer gated by `isArchivedPage` — see
     // `src/app/llm-md-manifest.json/route.ts` for the rationale.)
     expect(isArchivedPage(page('/reference/release-notes/v0.10.x'))).toBe(false);
     expect(isArchivedPage(page('/reference/release-notes/v0.8.x'))).toBe(false);
@@ -90,6 +93,30 @@ describe('isArchivedVersionSlug', () => {
   it('returns true for legacy bundle slugs', () => {
     expect(isArchivedVersionSlug(['v0.7.0'])).toBe(true);
     expect(isArchivedVersionSlug(['v0.7.0', 'anything'])).toBe(true);
+  });
+});
+
+describe('isReleaseNotesPage', () => {
+  it('returns true for the latest release-notes page', () => {
+    expect(isReleaseNotesPage(page('/reference/release-notes'))).toBe(true);
+  });
+
+  it('returns true for archived release-notes series', () => {
+    // These are excluded from the llms-full.txt bulk dump to reduce token
+    // consumption (QVAC-21379), while staying indexed elsewhere.
+    expect(isReleaseNotesPage(page('/reference/release-notes/v0.13.x'))).toBe(true);
+    expect(isReleaseNotesPage(page('/reference/release-notes/v0.8.x'))).toBe(true);
+  });
+
+  it('returns false for non-release-notes pages', () => {
+    expect(isReleaseNotesPage(page('/'))).toBe(false);
+    expect(isReleaseNotesPage(page('/quickstart'))).toBe(false);
+    expect(isReleaseNotesPage(page('/reference/api'))).toBe(false);
+    expect(isReleaseNotesPage(page('/reference/api/v0.10.x'))).toBe(false);
+  });
+
+  it('does not match a look-alike sibling path (prefix guard)', () => {
+    expect(isReleaseNotesPage(page('/reference/release-notes-guide'))).toBe(false);
   });
 });
 
