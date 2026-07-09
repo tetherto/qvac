@@ -7,8 +7,16 @@ const os = require('bare-os')
 const GGMLBert = require('../../index.js')
 
 const TRANSIENT_ERROR_CODES = new Set([
-  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  // DNS / name resolution
+  'EAI_NODATA', 'EAI_AGAIN', 'EAI_FAIL', 'ENOTFOUND',
+  // connectivity — these dominate mobile Device Farm flakiness: a transient
+  // network drop surfaces as ENETUNREACH/EHOSTUNREACH and MUST be retried.
+  'ENETUNREACH', 'EHOSTUNREACH', 'ECONNREFUSED',
+  // mid-transfer / timeout
+  'ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE',
+  // post-transfer: request "resolved" but the .part is missing/short or could
+  // not be finalized (truncated/interrupted) — retry instead of hard-failing.
+  'EINCOMPLETE'
 ])
 
 function isTransientError (err) {
@@ -105,13 +113,26 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
     try {
       await downloadFileOnce(url, partPath, downloadOpts)
 
-      const stat = fs.statSync(partPath)
-      if (stat.size < minBytes) {
-        fs.unlinkSync(partPath)
-        throw Object.assign(new Error(`Downloaded file is empty from ${host}`), { code: 'ESIZE' })
+      // A "resolved" download whose .part is missing or short means the
+      // transfer was truncated/interrupted — surface it as EINCOMPLETE so the
+      // loop RETRIES instead of hard-failing on a fatal ENOENT from statSync.
+      let size = -1
+      try { size = fs.statSync(partPath).size } catch (_) { size = -1 }
+      if (size < minBytes) {
+        throw Object.assign(
+          new Error(`Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`),
+          { code: 'EINCOMPLETE' }
+        )
       }
 
-      fs.renameSync(partPath, dest)
+      try {
+        fs.renameSync(partPath, dest)
+      } catch (err) {
+        throw Object.assign(
+          new Error(`Failed to finalize download from ${host}: ${err.code || err.message}`),
+          { code: 'EINCOMPLETE' }
+        )
+      }
       return
     } catch (err) {
       try { fs.unlinkSync(partPath) } catch (_) {}
@@ -167,6 +188,26 @@ function getModelConfig (modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
+// Android Device Farm pre-staging: the device's network to huggingface.co is
+// unreliable, but the Device Farm HOST has solid network. The test-spec
+// pre_test phase downloads each model on the host and `adb push`es it here; when
+// a model is already staged we skip the on-device download entirely.
+//
+// /data/local/tmp is the one location that is both adb-writable from the host
+// AND readable by the app process (the harness already pushes testFilter.txt
+// here). The app's own scoped dirs reject adb access on Android 11+, so they
+// cannot be used for host pre-staging.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function prestagedModelDir (modelName) {
+  if (os.platform() !== 'android') return null
+  try {
+    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+  } catch (_) {}
+  return null
+}
+
 /**
  * Ensures the model file exists, downloading it if necessary
  * @param {string} modelName - The model name to ensure
@@ -189,6 +230,23 @@ async function ensureModel (modelName) {
     }
     console.log(`[download] Removing zero-byte cached file: ${modelName}`)
     fs.unlinkSync(modelPath)
+  }
+
+  // Pre-staged path (Android): copy the host-staged model from the read-only
+  // staging dir into the normal (writable) modelDir, then return. The copy is a
+  // fast local operation (no network). Returning a writable dir matters —
+  // load() writes sibling files next to the model (e.g. openclCacheDir).
+  const staged = prestagedModelDir(modelName)
+  if (staged) {
+    fs.mkdirSync(modelDir, { recursive: true })
+    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
+    fs.copyFileSync(path.join(staged, modelName), modelPath)
+    const stat = fs.statSync(modelPath)
+    if (stat.size === 0) {
+      fs.unlinkSync(modelPath)
+      throw new Error(`[prestage] copied model ${modelName} is empty`)
+    }
+    return [modelName, modelDir]
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
