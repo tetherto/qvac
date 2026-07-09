@@ -42,8 +42,14 @@ The label-gated addon PR workflows use a shared **[`ci-router`](../../.github/ac
 - `on-pr-transcription-parakeet.yml`
 - `on-pr-translation-nmtcpp.yml`
 - `on-pr-transcription-whispercpp.yml`
+- `on-pr-classification-ggml.yml`
+- `on-pr-bci-whispercpp.yml`
+- `on-pr-ocr-onnx.yml`
+- `on-pr-onnx.yml`
+- `on-pr-decoder-audio.yml`
+- `on-pr-fabric.yml`
 
-**Being migrated onto the same shared composites** (run their prior CI until then): `ocr-onnx`, `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `onnx`.
+All active addon PR workflows are now wired onto the shared composites. Two shapes intentionally wire only a subset of stages: `onnx` and `fabric` are prebuild-only libraries (no integration-test stages), and `decoder-audio` has no native build so it wires routing only (no `prebuilds` / native-change / reuse stages).
 
 > **Security invariant** — every stage below *also* requires `verified` (the trust gate). A granular label on its own — without `verified` — triggers **nothing**, so an untrusted contributor can never self-route into a secret-bearing job. `verified` alone authorises the PR and runs the baseline verified checks (`sanity-checks`, `cpp-lint`, and `ts-checks` where present), but no longer runs the full pipeline.
 
