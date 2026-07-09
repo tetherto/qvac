@@ -87,8 +87,10 @@ Core resolves a `qvac.config.js` or `qvac.config.json` from the current working 
 import { close, unloadModel } from '@qvac/core'
 
 await unloadModel({ modelId })
-await close() // release the swarm, registry client, and storage-root lock
+await close() // release the swarm, registry client, storage-root lock, and registered plugins
 ```
+
+`close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.
 
 ## Custom plugins
 
