@@ -28,7 +28,7 @@ const { matrix, PARAMETER_SWEEP } = require('./_benchmark-matrix.js')
 // Inlined from benchmarks/performance/math.js + case-runner.js so this runner
 // stays self-contained for the mobile Device Farm bundler (which only bundles
 // test/integration). Kept byte-identical in behavior to the desktop copies.
-function cosineSimilarity (a, b) {
+function cosineSimilarity(a, b) {
   if (a.length !== b.length) {
     throw new Error(`Vector length mismatch: ${a.length} vs ${b.length}`)
   }
@@ -45,14 +45,14 @@ function cosineSimilarity (a, b) {
   return dotProduct / denominator
 }
 
-function average (values) {
+function average(values) {
   if (!values.length) return null
   let sum = 0
   for (const value of values) sum += value
   return sum / values.length
 }
 
-function stddev (values) {
+function stddev(values) {
   if (!values.length) return null
   if (values.length === 1) return 0
   const avg = average(values)
@@ -71,14 +71,14 @@ function stddev (values) {
 // the desktop case-runner.
 const MIN_RELIABLE_PREFILL_MS = 1
 
-function reliablePrefillMs (prefillMs) {
+function reliablePrefillMs(prefillMs) {
   return prefillMs != null && prefillMs >= MIN_RELIABLE_PREFILL_MS ? prefillMs : null
 }
 
 // Prefill throughput (ppTPS) from this repeat's own token count and prefill time.
 // The addon's tokens_per_second is derived from cumulative counters (see the
 // delta handling in the run loop) and is not per-call, so it is not used here.
-function prefillTokensPerSecond (deltaTokens, prefillMs) {
+function prefillTokensPerSecond(deltaTokens, prefillMs) {
   if (deltaTokens == null || deltaTokens <= 0 || prefillMs == null || prefillMs <= 0) return null
   return (deltaTokens * 1000) / prefillMs
 }
@@ -90,11 +90,11 @@ function prefillTokensPerSecond (deltaTokens, prefillMs) {
 const PERF_RUNS = 3
 const PERF_WARMUP_RUNS = 1
 
-function meanOf (values) {
+function meanOf(values) {
   return values.length ? average(values) : null
 }
 
-function stdOf (values) {
+function stdOf(values) {
   return values.length > 1 ? stddev(values) : null
 }
 
@@ -104,7 +104,7 @@ const isLinuxArm64 = platform === 'linux' && os.arch() === 'arm64'
 
 // darwin-x64 and linux-arm64 sweep CPU only, matching the integration suite's
 // device list; everything else sweeps both.
-const DEVICES = (isDarwinX64 || isLinuxArm64) ? ['cpu'] : PARAMETER_SWEEP.device
+const DEVICES = isDarwinX64 || isLinuxArm64 ? ['cpu'] : PARAMETER_SWEEP.device
 
 // Synthetic filler sized to the batch, so batch size is a real scaled-work
 // throughput axis rather than a fixed tiny input in a bigger buffer. This is a
@@ -122,13 +122,13 @@ const TOKEN_SAFETY_MARGIN = 16
 const FILLER_HEAD = 'Some input. '
 const FILLER_UNIT = 'Some more input. '
 
-function buildFiller (targetChars) {
+function buildFiller(targetChars) {
   let s = FILLER_HEAD
   while (s.length < Math.max(1, targetChars)) s += FILLER_UNIT
   return s.slice(0, Math.max(1, targetChars))
 }
 
-function inputForBatch (batchSize, charsPerToken) {
+function inputForBatch(batchSize, charsPerToken) {
   return buildFiller(Math.round(Math.max(1, batchSize - TOKEN_SAFETY_MARGIN) * charsPerToken))
 }
 
@@ -138,19 +138,21 @@ function inputForBatch (batchSize, charsPerToken) {
 // conservative default ratio so it stays under the batch/ctx (the model is loaded
 // with ctx_size = batchSize); it is the first run on the model, so total_tokens is
 // exactly the probe's token count. Returns the fallback on failure.
-async function measureCharsPerToken (addon, batchSize) {
+async function measureCharsPerToken(addon, batchSize) {
   try {
     const probe = inputForBatch(batchSize, DEFAULT_CHARS_PER_TOKEN)
     const r = await addon.run(probe)
     await r.await()
     const tokens = r.stats && r.stats.total_tokens
-    return typeof tokens === 'number' && tokens > 0 ? probe.length / tokens : DEFAULT_CHARS_PER_TOKEN
+    return typeof tokens === 'number' && tokens > 0
+      ? probe.length / tokens
+      : DEFAULT_CHARS_PER_TOKEN
   } catch (_) {
     return DEFAULT_CHARS_PER_TOKEN
   }
 }
 
-function modelSpec (modelName, quant) {
+function modelSpec(modelName, quant) {
   const cell = matrix().find((c) => c.model === modelName && c.quant === quant)
   if (!cell) throw new Error(`No benchmark matrix cell for model "${modelName}" quant "${quant}"`)
   // One exact URL per cell (cell.file is the pinned HF filename). A wrong guess
@@ -164,7 +166,7 @@ function modelSpec (modelName, quant) {
 // The mobile framework patches utils.js's model dir to global.testDir (the
 // app's writable Documents/files dir); __dirname here is the read-only bundle,
 // so resolve the same writable location the regular tests use instead.
-async function ensureBenchmarkModel (spec) {
+async function ensureBenchmarkModel(spec) {
   const modelDir = path.join(global.testDir || os.tmpdir(), 'test', 'model')
   const modelPath = path.join(modelDir, spec.name)
   if (fs.existsSync(modelPath)) {
@@ -180,7 +182,7 @@ async function ensureBenchmarkModel (spec) {
   return modelPath
 }
 
-function buildConfig (device, batchSize, flashAttn, modelDir) {
+function buildConfig(device, batchSize, flashAttn, modelDir) {
   const config = {
     batch_size: String(batchSize),
     // Cap the context to the batch (the addon further caps to the trained ctx).
@@ -199,22 +201,24 @@ function buildConfig (device, batchSize, flashAttn, modelDir) {
   return config
 }
 
-function normalizeEmbeddings (raw) {
-  if (!Array.isArray(raw) || !Array.isArray(raw[0])) throw new Error('Invalid embedding response structure')
+function normalizeEmbeddings(raw) {
+  if (!Array.isArray(raw) || !Array.isArray(raw[0]))
+    throw new Error('Invalid embedding response structure')
   return raw[0].map((vector) => Array.from(vector))
 }
 
 // avg cosine similarity of each sequence's embedding vs the baseline's, matching
 // the desktop similarityStats.avg. Baseline is the first successful config in the
 // shard, so it reads ~1.0 by construction.
-function avgCosine (baseline, candidate) {
-  if (!baseline || !candidate || baseline.length !== candidate.length || baseline.length === 0) return null
+function avgCosine(baseline, candidate) {
+  if (!baseline || !candidate || baseline.length !== candidate.length || baseline.length === 0)
+    return null
   let sum = 0
   for (let i = 0; i < baseline.length; i++) sum += cosineSimilarity(baseline[i], candidate[i])
   return sum / baseline.length
 }
 
-function labelFor (spec, device, batchSize, flashAttn) {
+function labelFor(spec, device, batchSize, flashAttn) {
   return `[${spec.id} q=${spec.quant}] [${device}] [bs=${batchSize}] [fa=${flashAttn}]`
 }
 
@@ -224,7 +228,7 @@ function labelFor (spec, device, batchSize, flashAttn) {
 // session after its placeholder is written still leaves a Crashed row. A
 // successful run records the real metrics afterwards, superseding the
 // placeholder.
-function recordCrashedPlaceholder (label, device, model) {
+function recordCrashedPlaceholder(label, device, model) {
   recordPerformance(label, { deviceId: device, status: 'crashed', model })
 }
 
@@ -236,147 +240,167 @@ function recordCrashedPlaceholder (label, device, model) {
 // A config that fails to load or run is caught and reported as Crashed rather
 // than aborting the sweep (a filled large batch that OOMs a tight device simply
 // leaves a legitimate Crashed row for that config).
-function benchmarkModel (modelName, quant, batchSize, flashAttn) {
+function benchmarkModel(modelName, quant, batchSize, flashAttn) {
   const spec = modelSpec(modelName, quant)
-  safeTest(`Mobile perf benchmark: ${spec.id} q=${quant} bs=${batchSize} fa=${flashAttn} (ppTPS / latency / cosine)`, {
-    timeout: 1_800_000,
-    skip: !isMobile
-  }, async (t) => {
-    const specLogger = attachSpecLogger({ forwardToConsole: true })
-    try {
-      const modelPath = await ensureBenchmarkModel(spec)
-      const modelDir = path.dirname(modelPath)
+  safeTest(
+    `Mobile perf benchmark: ${spec.id} q=${quant} bs=${batchSize} fa=${flashAttn} (ppTPS / latency / cosine)`,
+    {
+      timeout: 1_800_000,
+      skip: !isMobile
+    },
+    async (t) => {
+      const specLogger = attachSpecLogger({ forwardToConsole: true })
+      try {
+        const modelPath = await ensureBenchmarkModel(spec)
+        const modelDir = path.dirname(modelPath)
 
-      // Once the model is downloaded, write a Crashed placeholder for EVERY
-      // config before any load/run, so a hard native crash mid-sweep still
-      // leaves rows for the rest. Real metrics supersede these. A download
-      // failure throws above this loop and leaves no rows for this shard.
-      for (const device of DEVICES) {
-        recordCrashedPlaceholder(labelFor(spec, device, batchSize, flashAttn), device, `${spec.id}-${quant}`)
-      }
-
-      // Cosine baseline: the first successful config's embeddings (reads ~1.0
-      // against itself); later configs compare their embeddings to it.
-      let baselineEmbeddings = null
-      // chars/token is a tokenizer (model) property, so measure it once per shard
-      // on the first successful load and reuse it across devices.
-      let charsPerToken = null
-
-      for (const device of DEVICES) {
-        let addon = null
-        try {
-          addon = new GGMLBert({
-            files: { model: [modelPath] },
-            config: buildConfig(device, batchSize, flashAttn, modelDir),
-            logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} },
-            opts: { stats: true }
-          })
-          await addon.load()
-        } catch (loadErr) {
-          t.comment(`[${spec.id} q=${quant}] [${device}] [bs=${batchSize}] [fa=${flashAttn}] load failed (reported as Crashed): ${loadErr && loadErr.message ? loadErr.message : loadErr}`)
-          await (addon && addon.unload && addon.unload().catch(() => {}))
-          continue
+        // Once the model is downloaded, write a Crashed placeholder for EVERY
+        // config before any load/run, so a hard native crash mid-sweep still
+        // leaves rows for the rest. Real metrics supersede these. A download
+        // failure throws above this loop and leaves no rows for this shard.
+        for (const device of DEVICES) {
+          recordCrashedPlaceholder(
+            labelFor(spec, device, batchSize, flashAttn),
+            device,
+            `${spec.id}-${quant}`
+          )
         }
 
-        if (charsPerToken == null) charsPerToken = await measureCharsPerToken(addon, batchSize)
+        // Cosine baseline: the first successful config's embeddings (reads ~1.0
+        // against itself); later configs compare their embeddings to it.
+        let baselineEmbeddings = null
+        // chars/token is a tokenizer (model) property, so measure it once per shard
+        // on the first successful load and reuse it across devices.
+        let charsPerToken = null
 
-        const label = labelFor(spec, device, batchSize, flashAttn)
-        try {
-          // total_time_ms / total_tokens are CUMULATIVE for the loaded model's
-          // lifetime (llama_perf_context, never reset between run() calls), so
-          // each measured rep must report the delta since the previous run, not
-          // the raw counter. These span the warmup and the measured reps because
-          // they share one loaded model.
-          let prevCumulativeMs = 0
-          let prevCumulativeTokens = 0
-
-          // Input is sized to fill the batch, so batch size measures real
-          // scaled work (single run per config, matching the desktop sweep).
-          const input = inputForBatch(batchSize, charsPerToken)
-
-          // Warm up per loaded backend (discarded, never a measured rep) to
-          // prime GPU kernels/caches so rep 1 isn't a cold-start outlier, and
-          // seed the cumulative baseline so the first measured delta excludes it.
+        for (const device of DEVICES) {
+          let addon = null
           try {
-            for (let warm = 1; warm <= PERF_WARMUP_RUNS; warm++) {
-              const w = await addon.run(input)
-              await w.await()
-              const ws = w.stats || {}
-              if (ws.total_time_ms != null) prevCumulativeMs = ws.total_time_ms
-              if (ws.total_tokens != null) prevCumulativeTokens = ws.total_tokens
-              t.comment(`[${spec.id} q=${quant}] [${device}] warmup ${warm}/${PERF_WARMUP_RUNS} - perf NOT recorded`)
-            }
-          } catch (warmErr) {
-            t.comment(`[${spec.id} q=${quant}] [${device}] warmup failed: ${warmErr && warmErr.message ? warmErr.message : warmErr}`)
+            addon = new GGMLBert({
+              files: { model: [modelPath] },
+              config: buildConfig(device, batchSize, flashAttn, modelDir),
+              logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} },
+              opts: { stats: true }
+            })
+            await addon.load()
+          } catch (loadErr) {
+            t.comment(
+              `[${spec.id} q=${quant}] [${device}] [bs=${batchSize}] [fa=${flashAttn}] load failed (reported as Crashed): ${loadErr && loadErr.message ? loadErr.message : loadErr}`
+            )
+            await (addon && addon.unload && addon.unload().catch(() => {}))
+            continue
           }
 
+          if (charsPerToken == null) charsPerToken = await measureCharsPerToken(addon, batchSize)
+
+          const label = labelFor(spec, device, batchSize, flashAttn)
           try {
-            const ppTpsValues = []
-            const latencyValues = []
-            let firstEmbeddings = null
-            let inputTokens = null
-            for (let rep = 1; rep <= PERF_RUNS; rep++) {
-              const response = await addon.run(input)
-              const raw = await response.await()
-              const stats = response.stats || {}
-              // Per-call cost = delta of the cumulative counters since the
-              // previous run (warmup or prior rep). Advance the baseline BEFORE
-              // validating embeddings: the addon counter advanced regardless of
-              // validation, so a throw must not leave the next rep double-counting
-              // this run.
-              const cumulativeMs = stats.total_time_ms
-              const cumulativeTokens = stats.total_tokens
-              const deltaMs = cumulativeMs != null ? cumulativeMs - prevCumulativeMs : null
-              const deltaTokens = cumulativeTokens != null ? cumulativeTokens - prevCumulativeTokens : null
-              if (cumulativeMs != null) prevCumulativeMs = cumulativeMs
-              if (cumulativeTokens != null) prevCumulativeTokens = cumulativeTokens
-              const embeddings = normalizeEmbeddings(raw)
-              if (!firstEmbeddings) firstEmbeddings = embeddings
-              if (inputTokens == null && deltaTokens != null) inputTokens = deltaTokens
-              const latencyMs = reliablePrefillMs(deltaMs)
-              const ppTps = latencyMs != null ? prefillTokensPerSecond(deltaTokens, latencyMs) : null
-              if (ppTps != null) ppTpsValues.push(ppTps)
-              if (latencyMs != null) latencyValues.push(latencyMs)
+            // total_time_ms / total_tokens are CUMULATIVE for the loaded model's
+            // lifetime (llama_perf_context, never reset between run() calls), so
+            // each measured rep must report the delta since the previous run, not
+            // the raw counter. These span the warmup and the measured reps because
+            // they share one loaded model.
+            let prevCumulativeMs = 0
+            let prevCumulativeTokens = 0
+
+            // Input is sized to fill the batch, so batch size measures real
+            // scaled work (single run per config, matching the desktop sweep).
+            const input = inputForBatch(batchSize, charsPerToken)
+
+            // Warm up per loaded backend (discarded, never a measured rep) to
+            // prime GPU kernels/caches so rep 1 isn't a cold-start outlier, and
+            // seed the cumulative baseline so the first measured delta excludes it.
+            try {
+              for (let warm = 1; warm <= PERF_WARMUP_RUNS; warm++) {
+                const w = await addon.run(input)
+                await w.await()
+                const ws = w.stats || {}
+                if (ws.total_time_ms != null) prevCumulativeMs = ws.total_time_ms
+                if (ws.total_tokens != null) prevCumulativeTokens = ws.total_tokens
+                t.comment(
+                  `[${spec.id} q=${quant}] [${device}] warmup ${warm}/${PERF_WARMUP_RUNS} - perf NOT recorded`
+                )
+              }
+            } catch (warmErr) {
+              t.comment(
+                `[${spec.id} q=${quant}] [${device}] warmup failed: ${warmErr && warmErr.message ? warmErr.message : warmErr}`
+              )
             }
 
-            // Cosine baseline is the first successful config's first-rep
-            // embeddings; reps of the same config are numerically identical, so
-            // one rep's embeddings suffice for the comparison.
-            let cosine = null
-            if (!baselineEmbeddings) {
-              baselineEmbeddings = firstEmbeddings
-              cosine = 1
-            } else {
-              cosine = avgCosine(baselineEmbeddings, firstEmbeddings)
-            }
+            try {
+              const ppTpsValues = []
+              const latencyValues = []
+              let firstEmbeddings = null
+              let inputTokens = null
+              for (let rep = 1; rep <= PERF_RUNS; rep++) {
+                const response = await addon.run(input)
+                const raw = await response.await()
+                const stats = response.stats || {}
+                // Per-call cost = delta of the cumulative counters since the
+                // previous run (warmup or prior rep). Advance the baseline BEFORE
+                // validating embeddings: the addon counter advanced regardless of
+                // validation, so a throw must not leave the next rep double-counting
+                // this run.
+                const cumulativeMs = stats.total_time_ms
+                const cumulativeTokens = stats.total_tokens
+                const deltaMs = cumulativeMs != null ? cumulativeMs - prevCumulativeMs : null
+                const deltaTokens =
+                  cumulativeTokens != null ? cumulativeTokens - prevCumulativeTokens : null
+                if (cumulativeMs != null) prevCumulativeMs = cumulativeMs
+                if (cumulativeTokens != null) prevCumulativeTokens = cumulativeTokens
+                const embeddings = normalizeEmbeddings(raw)
+                if (!firstEmbeddings) firstEmbeddings = embeddings
+                if (inputTokens == null && deltaTokens != null) inputTokens = deltaTokens
+                const latencyMs = reliablePrefillMs(deltaMs)
+                const ppTps =
+                  latencyMs != null ? prefillTokensPerSecond(deltaTokens, latencyMs) : null
+                if (ppTps != null) ppTpsValues.push(ppTps)
+                if (latencyMs != null) latencyValues.push(latencyMs)
+              }
 
-            t.comment(recordPerformance(label, {
-              deviceId: device,
-              ppTps: meanOf(ppTpsValues),
-              ppTpsStd: stdOf(ppTpsValues),
-              latencyMs: meanOf(latencyValues),
-              latencyMsStd: stdOf(latencyValues),
-              cosine,
-              inputTokens,
-              // Richest series: ppTPS can be null on a zero-prefill-time
-              // edge while latency is still valid, so don't let it under-
-              // report the sample count.
-              sampleCount: Math.max(ppTpsValues.length, latencyValues.length),
-              status: 'ok',
-              model: `${spec.id}-${quant}`
-            }))
-            t.ok(firstEmbeddings.length > 0, `${label} produced embeddings`)
-          } catch (runErr) {
-            t.comment(`${label} run failed (reported as Crashed): ${runErr && runErr.message ? runErr.message : runErr}`)
+              // Cosine baseline is the first successful config's first-rep
+              // embeddings; reps of the same config are numerically identical, so
+              // one rep's embeddings suffice for the comparison.
+              let cosine = null
+              if (!baselineEmbeddings) {
+                baselineEmbeddings = firstEmbeddings
+                cosine = 1
+              } else {
+                cosine = avgCosine(baselineEmbeddings, firstEmbeddings)
+              }
+
+              t.comment(
+                recordPerformance(label, {
+                  deviceId: device,
+                  ppTps: meanOf(ppTpsValues),
+                  ppTpsStd: stdOf(ppTpsValues),
+                  latencyMs: meanOf(latencyValues),
+                  latencyMsStd: stdOf(latencyValues),
+                  cosine,
+                  inputTokens,
+                  // Richest series: ppTPS can be null on a zero-prefill-time
+                  // edge while latency is still valid, so don't let it under-
+                  // report the sample count.
+                  sampleCount: Math.max(ppTpsValues.length, latencyValues.length),
+                  status: 'ok',
+                  model: `${spec.id}-${quant}`
+                })
+              )
+              t.ok(firstEmbeddings.length > 0, `${label} produced embeddings`)
+            } catch (runErr) {
+              t.comment(
+                `${label} run failed (reported as Crashed): ${runErr && runErr.message ? runErr.message : runErr}`
+              )
+            }
+          } finally {
+            await addon.unload().catch(() => {})
           }
-        } finally {
-          await addon.unload().catch(() => {})
         }
+      } finally {
+        specLogger.release()
       }
-    } finally {
-      specLogger.release()
     }
-  })
+  )
 }
 
 module.exports = { benchmarkModel, modelSpec }

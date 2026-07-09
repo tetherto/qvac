@@ -7,11 +7,17 @@ const os = require('bare-os')
 const GGMLBert = require('../../index.js')
 
 const TRANSIENT_ERROR_CODES = new Set([
-  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  'EAI_NODATA',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'ESIZE'
 ])
 
-function isTransientError (err) {
+function isTransientError(err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
   if (err.statusCode) {
     const s = err.statusCode
@@ -20,31 +26,54 @@ function isTransientError (err) {
   return false
 }
 
-function urlHost (url) {
-  try { return new URL(url).host } catch (_) { return url }
+function urlHost(url) {
+  try {
+    return new URL(url).host
+  } catch (_) {
+    return url
+  }
 }
 
-async function downloadFileOnce (url, dest, opts = {}) {
+async function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let resolved = false
-    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
 
     const file = fs.createWriteStream(dest)
-    file.on('error', (err) => { file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
 
     const reqTimer = setTimeout(() => {
-      req.destroy(Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), { code: 'ETIMEDOUT' }))
+      req.destroy(
+        Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), {
+          code: 'ETIMEDOUT'
+        })
+      )
     }, timeoutMs)
 
-    const req = https.request(url, response => {
+    const req = https.request(url, (response) => {
       clearTimeout(reqTimer)
 
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
         if (_redirectCount >= maxRedirects) {
-          fs.unlink(dest, () => safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`)))
+          fs.unlink(dest, () =>
+            safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`))
+          )
           return
         }
         fs.unlink(dest, (unlinkErr) => {
@@ -71,10 +100,12 @@ async function downloadFileOnce (url, dest, opts = {}) {
       const resetIdle = () => {
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
-          response.destroy(Object.assign(
-            new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
-            { code: 'ETIMEDOUT' }
-          ))
+          response.destroy(
+            Object.assign(
+              new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+              { code: 'ETIMEDOUT' }
+            )
+          )
         }, idleTimeoutMs)
       }
       resetIdle()
@@ -86,15 +117,22 @@ async function downloadFileOnce (url, dest, opts = {}) {
       })
 
       response.pipe(file)
-      file.on('close', () => { if (idleTimer) clearTimeout(idleTimer); safeResolve() })
+      file.on('close', () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        safeResolve()
+      })
     })
 
-    req.on('error', err => { clearTimeout(reqTimer); file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    req.on('error', (err) => {
+      clearTimeout(reqTimer)
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
     req.end()
   })
 }
 
-async function downloadFileWithRetries (urls, dest, opts = {}) {
+async function downloadFileWithRetries(urls, dest, opts = {}) {
   const { retries = 3, minBytes = 1, ...downloadOpts } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
   const partPath = dest + '.part'
@@ -114,17 +152,23 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
       fs.renameSync(partPath, dest)
       return
     } catch (err) {
-      try { fs.unlinkSync(partPath) } catch (_) {}
+      try {
+        fs.unlinkSync(partPath)
+      } catch (_) {}
 
       const attemptsLeft = retries - attempt
       if (!isTransientError(err) || attemptsLeft === 0) {
-        console.error(`[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`)
+        console.error(
+          `[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`
+        )
         throw err
       }
 
       const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
-      console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
-      await new Promise(resolve => setTimeout(resolve, delay))
+      console.log(
+        `[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
 }
@@ -136,12 +180,14 @@ const downloadFile = downloadFileWithRetries
  */
 const MODEL_CONFIGS = {
   'embeddinggemma-300M-Q8_0.gguf': {
-    downloadUrl: 'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf',
+    downloadUrl:
+      'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf',
     embeddingDimension: 768,
     maxContextSize: 2048
   },
   'gte-large_fp16.gguf': {
-    downloadUrl: 'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
+    downloadUrl:
+      'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf',
     embeddingDimension: 1024,
     maxContextSize: 512
   }
@@ -151,7 +197,7 @@ const MODEL_CONFIGS = {
  * Gets all available model configurations
  * @returns {Array<{modelName: string, config: Object}>}
  */
-function getModelConfigs () {
+function getModelConfigs() {
   return Object.entries(MODEL_CONFIGS).map(([modelName, config]) => ({
     modelName,
     config
@@ -163,7 +209,7 @@ function getModelConfigs () {
  * @param {string} modelName - The model name
  * @returns {Object|null} The model configuration or null if not found
  */
-function getModelConfig (modelName) {
+function getModelConfig(modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
@@ -172,7 +218,7 @@ function getModelConfig (modelName) {
  * @param {string} modelName - The model name to ensure
  * @returns {Promise<[string, string]>} Returns [modelName, modelDir]
  */
-async function ensureModel (modelName) {
+async function ensureModel(modelName) {
   const modelDir = path.resolve(__dirname, '../model')
   const modelConfig = getModelConfig(modelName)
 
@@ -206,19 +252,19 @@ async function ensureModel (modelName) {
  * Simple test logger that outputs to console
  */
 class TestLogger {
-  error (...msgs) {
+  error(...msgs) {
     console.error(msgs)
   }
 
-  warn (...msgs) {
+  warn(...msgs) {
     console.warn(msgs)
   }
 
-  debug (...msgs) {
+  debug(...msgs) {
     console.log(msgs)
   }
 
-  info (...msgs) {
+  info(...msgs) {
     console.log(msgs)
   }
 }
@@ -232,7 +278,13 @@ class TestLogger {
  * @param {string} batchSize - Batch size (default: '1024')
  * @returns {Promise<{inference: GGMLBert}>}
  */
-async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
+async function createEmbeddingsTestInstance(
+  t,
+  modelName,
+  device = 'gpu',
+  gpuLayers = null,
+  batchSize = '1024'
+) {
   const [, modelDir] = await ensureModel(modelName)
   const modelPath = path.join(modelDir, modelName)
 
@@ -247,7 +299,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: darwin-x64, forcing device to CPU')
   }
 
-  const actualGpuLayers = gpuLayers !== null ? gpuLayers : (device === 'cpu' ? '0' : '999')
+  const actualGpuLayers = gpuLayers !== null ? gpuLayers : device === 'cpu' ? '0' : '999'
 
   const config = {
     gpu_layers: actualGpuLayers,
@@ -284,7 +336,7 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
  * @param {Error|Object} error - The error object
  * @returns {string} The error message
  */
-function extractErrorMessage (error) {
+function extractErrorMessage(error) {
   if (!error) {
     return ''
   }
@@ -292,7 +344,9 @@ function extractErrorMessage (error) {
   // Error may be wrapped in EventEmitterError with the actual error in cause
   // error.cause can be a string or an Error object
   if (error?.cause) {
-    return typeof error.cause === 'string' ? error.cause : error.cause.message || String(error.cause)
+    return typeof error.cause === 'string'
+      ? error.cause
+      : error.cause.message || String(error.cause)
   }
 
   return error?.message || error?.toString() || String(error)
@@ -303,7 +357,7 @@ function extractErrorMessage (error) {
  * @param {Object} response - The inference response object
  * @returns {Promise<Array>} The generated embeddings
  */
-async function waitForCompletion (response) {
+async function waitForCompletion(response) {
   return await response._finishPromise
 }
 
@@ -312,7 +366,7 @@ async function waitForCompletion (response) {
  * @param {Object} response - The inference response object
  * @param {Function} errorHandler - The error handler function
  */
-function setupErrorHandlers (response, errorHandler) {
+function setupErrorHandlers(response, errorHandler) {
   response.on('error', errorHandler)
   response.on('failed', errorHandler)
 }
@@ -321,7 +375,7 @@ function setupErrorHandlers (response, errorHandler) {
  * Removes error handlers from a response object
  * @param {Object} response - The inference response object
  */
-function removeErrorHandlers (response) {
+function removeErrorHandlers(response) {
   response.removeAllListeners('error')
   response.removeAllListeners('failed')
 }
@@ -331,13 +385,13 @@ function removeErrorHandlers (response) {
  * @param {Object} inference - The inference instance
  * @returns {Promise<void>}
  */
-async function cleanupResources (inference) {
+async function cleanupResources(inference) {
   await inference.unload()
 }
 
 const test = require('brittle')
 
-function safeTest (name, opts, fn) {
+function safeTest(name, opts, fn) {
   test(name, opts, async (t) => {
     try {
       await fn(t)
