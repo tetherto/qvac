@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "qvac-fabric",
-      "version>=": "9341.1.5",
+      "version>=": "9341.1.6",
       "default-features": false,
       "features": [
         "gpu-backends"
