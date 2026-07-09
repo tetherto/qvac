@@ -17,7 +17,7 @@ const path = require('path')
 const utilsPath = path.resolve(__dirname, '../test/integration/utils.js')
 
 // Parse MODEL_CONFIGS entries: "'<name>.gguf': { downloadUrl: '<url>' ... }".
-function extractModelConfigs (src) {
+function extractModelConfigs(src) {
   const re = /'([^']+\.gguf)':\s*\{\s*downloadUrl:\s*'(https?:\/\/[^']+)'/g
   const out = []
   const seen = new Set()
@@ -33,7 +33,7 @@ function extractModelConfigs (src) {
 }
 
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
-function buildScript (models) {
+function buildScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
@@ -53,14 +53,16 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
-function main () {
+function main() {
   const src = fs.readFileSync(utilsPath, 'utf8')
   const models = extractModelConfigs(src)
   if (models.length === 0) {
     console.error('[prestage] no models found in MODEL_CONFIGS')
     process.exit(1)
   }
-  console.error(`[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`)
+  console.error(
+    `[prestage] staging ${models.length} model(s): ${models.map((m) => m.name).join(', ')}`
+  )
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
   const body = buildScript(models)
