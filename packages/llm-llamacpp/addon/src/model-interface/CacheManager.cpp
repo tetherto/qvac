@@ -82,6 +82,32 @@ bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
   return size != 0;
 }
 
+bool CacheManager::isFileMissingOrEmpty(const std::filesystem::path& path) {
+  std::error_code directoryErrorCode;
+  if (std::filesystem::is_directory(path, directoryErrorCode)) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  auto size = std::filesystem::file_size(path, errorCode);
+  if (!errorCode) {
+    return size == 0;
+  }
+  return errorCode == std::errc::no_such_file_or_directory ||
+         errorCode == std::errc::not_a_directory;
+}
+
+bool CacheManager::isParentDirectoryMissing(const std::filesystem::path& path) {
+  const auto parent = path.parent_path();
+  if (parent.empty()) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const bool exists = std::filesystem::exists(parent, errorCode);
+  return !errorCode && !exists;
+}
+
 bool CacheManager::handleCache(
     ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
     std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
@@ -97,24 +123,20 @@ bool CacheManager::handleCache(
               "%s: No cacheKey provided, clearing existing cache '%s'\n",
               __func__,
               sessionPath_.c_str()));
-      try {
-        saveCache();
-      } catch (...) {
-        resetStateCallback_(true);
-        invalidate();
-        throw;
-      }
-      resetStateCallback_(true);
-      sessionPath_.clear();
-      cacheDisabled_ = true;
+      saveActiveCacheForTransition();
+      invalidate();
     }
     cacheUsedInLastPrompt_ = false;
     return false;
   }
 
   if (!cacheDisabled_ && sessionPath_ == cacheKey) {
-    cacheUsedInLastPrompt_ = true;
-    return false;
+    if (discardActiveCacheIfBackingStoreMissing()) {
+      cacheUsedInLastPrompt_ = false;
+    } else {
+      cacheUsedInLastPrompt_ = true;
+      return false;
+    }
   }
 
   if (hasActiveCache() && sessionPath_ != cacheKey) {
@@ -125,16 +147,11 @@ bool CacheManager::handleCache(
             __func__,
             sessionPath_.c_str(),
             cacheKey.c_str()));
-    try {
-      saveCache();
-    } catch (...) {
-      resetStateCallback_(true);
-      invalidate();
-      throw;
-    }
+    saveActiveCacheForTransition();
+  } else {
+    resetStateCallback_(true);
   }
 
-  resetStateCallback_(true);
   cacheUsedInLastPrompt_ = false;
 
   sessionPath_ = cacheKey;
@@ -147,6 +164,7 @@ bool CacheManager::handleCache(
 
   try {
     bool loaded = loadCache();
+    activeCacheSavedToDisk_ = loaded;
     if (!loaded) {
       resetStateCallback_(true);
     }
@@ -301,6 +319,49 @@ void CacheManager::saveCache() {
         ADDON_ID, toString(InvalidInputFormat), errorMsg);
   }
   writeCacheFile(sessionPath_);
+  activeCacheSavedToDisk_ = true;
+}
+
+void CacheManager::saveActiveCacheForTransition() {
+  if (discardActiveCacheIfBackingStoreMissing()) {
+    return;
+  }
+
+  try {
+    saveCache();
+    resetStateCallback_(true);
+  } catch (...) {
+    if (discardActiveCacheIfBackingStoreMissing()) {
+      return;
+    }
+    resetStateCallback_(true);
+    invalidate();
+    throw;
+  }
+}
+
+bool CacheManager::discardActiveCacheIfBackingStoreMissing() {
+  if (!hasActiveCache()) {
+    return false;
+  }
+  const bool parentMissing =
+      activeCacheSavedToDisk_ && isParentDirectoryMissing(sessionPath_);
+  const bool persistedFileMissing =
+      activeCacheSavedToDisk_ && isFileMissingOrEmpty(sessionPath_);
+  if (!parentMissing && !persistedFileMissing) {
+    return false;
+  }
+
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "%s: active cache backing store was removed, dropping stale cache "
+          "'%s'\n",
+          __func__,
+          sessionPath_.c_str()));
+  resetStateCallback_(true);
+  invalidate();
+  return true;
 }
 
 void CacheManager::writeCacheFile(const std::string& path) {
@@ -332,6 +393,20 @@ void CacheManager::writeCacheFile(const std::string& path) {
 
 void CacheManager::atomicPromoteFile(
     const std::string& from, const std::string& to) {
+  std::error_code directoryEc;
+  if (std::filesystem::is_directory(to, directoryEc)) {
+    std::error_code removeEc;
+    std::filesystem::remove(from, removeEc);
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        string_format(
+            "%s: failed to promote tmp file to '%s': destination is a "
+            "directory\n",
+            __func__,
+            to.c_str()));
+  }
+
 #ifdef _WIN32
   // MoveFileExW atomically replaces the destination on NTFS — unlike
   // delete-then-rename, the old canonical file is preserved if promotion fails.
@@ -378,6 +453,7 @@ void CacheManager::invalidate() {
   sessionPath_.clear();
   cacheDisabled_ = true;
   cacheUsedInLastPrompt_ = false;
+  activeCacheSavedToDisk_ = false;
 }
 
 bool CacheManager::isCacheDisabled() const { return cacheDisabled_; }
