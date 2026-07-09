@@ -63,7 +63,9 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
 
     if (isResponseSerializationError(err)) {
-      req.log.error({ err }, 'response_serialization_error')
+      req.server.qvac.logger.error(
+        formatServerError('response_serialization_error', req.method, req.url, err)
+      )
       reply.code(500).send({
         error: {
           message: 'Response serialization failed.',
@@ -88,7 +90,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       return
     }
 
-    req.log.error({ err }, 'unhandled')
+    req.server.qvac.logger.error(formatServerError('unhandled', req.method, req.url, err))
     reply.code(500).send({
       error: {
         message: 'An internal error occurred.',
@@ -130,6 +132,11 @@ const ZOD_PATH_TO_CODE: Record<string, string> = {
   mask: 'mask_not_supported',
   size: 'invalid_size',
   seconds: 'invalid_seconds'
+}
+
+function formatServerError(label: string, method: string, url: string, err: FastifyError): string {
+  const stack = err.stack ?? `${err.name}: ${err.message}`
+  return `${label} ${method} ${url}\n${stack}`
 }
 
 function headFromInstancePath(instancePath: string | undefined): string {
