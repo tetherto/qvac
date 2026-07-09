@@ -31,7 +31,7 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 /// JS event-name baked into batch payloads; must match `addon.js`
 /// (`rawData.type === 'batch_output'`). Namespace-scope with linkage is
 /// required to use it as a `const char*` template arg in `PayloadHandler`.
-inline constexpr char kBatchOutputTypeName[] = "batch_output";
+inline constexpr char BATCH_OUTPUT_TYPE_NAME[] = "batch_output";
 
 inline LlamaModel*
 tryGetLlamaModel(qvac_lib_inference_addon_cpp::AddonCpp& addonCpp) {
@@ -498,7 +498,7 @@ inline std::vector<LlamaModel::Prompt> parseBatchInputs(
     // fires and enqueues a `finished` event so the JS handler runs
     // `PayloadHandler::release` on the JS thread.
     shared_ptr<js_ref_t> handle(
-        PayloadHandler::allocate<kBatchOutputTypeName>(env, id),
+        PayloadHandler::allocate<BATCH_OUTPUT_TYPE_NAME>(env, id),
         [queue](js_ref_t* h) {
           BatchTokenOutput evt;
           evt.payloadHandle = h;
