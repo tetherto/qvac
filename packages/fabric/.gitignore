@@ -1,0 +1,12 @@
+.idea/
+.vs/
+build/
+prebuilds/
+node_modules/
+dist/
+package-lock.json
+
+# Added by lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp

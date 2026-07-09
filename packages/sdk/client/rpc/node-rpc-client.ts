@@ -234,6 +234,38 @@ export function getWorkerLifeSignal(): AbortSignal | null {
   return workerLifeController?.signal ?? null
 }
 
+// Called by the RPC layer when it detects the channel closed out from under
+// an in-flight call (bare-rpc's own teardown beat the child `'exit'` event
+// we normally rely on). Tears down immediately rather than waiting on that
+// slower signal, so the next call respawns instead of reusing the dead
+// connection. A no-op if the life signal already aborted — e.g. the real
+// exit handler got there first, or a concurrent caller already tore down.
+export function notifyChannelClosed(): void {
+  const controller = workerLifeController
+  if (!controller || controller.signal.aborted) return
+
+  const { workerToClose, serverToClose, socketPathToClose } = snapshotAndResetState()
+
+  if (workerToClose) {
+    try {
+      workerToClose.kill('SIGTERM')
+    } catch (error) {
+      logger.debug('Failed to kill bare worker after channel close', { error })
+    }
+  }
+
+  if (serverToClose) {
+    try {
+      serverToClose.close()
+    } catch (error) {
+      logger.debug('Failed to close IPC server after channel close', { error })
+    }
+  }
+
+  bestEffortUnlinkSocket(socketPathToClose)
+  controller.abort(new WorkerCrashedError(null, null))
+}
+
 interface SpawnResources {
   controller: AbortController
   server: ReturnType<typeof createServer>

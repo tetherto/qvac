@@ -491,6 +491,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
     if (stopGeneration_.load()) {
+      // A prior chunk's llama_decode may have queued GPU work whose logits are
+      // never read on the cancel path. Finish it before rolling KV back.
+      llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
       if (rollbackState_.hasPrefillEntry()) {
         // Recurrent / hybrid path: full-state restore is the only way
@@ -1056,6 +1059,10 @@ bool TextLlmContext::onCancel(
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
+  // If cancellation lands after llama_decode() but before the next sampler
+  // read, the implicit sampler-side synchronize is skipped. Finish any queued
+  // backend work before mutating KV/recurrent state during rollback.
+  llama_synchronize(modelCtx_.lctx);
   flushPendingUtf8ToCallback(outputCallback);
 
   const bool rollbackOk = rollbackCancelledRequest({
@@ -1636,6 +1643,8 @@ void TextLlmContext::resetState(bool resetStats) {
     userVisiblePerf_.reset();
   }
 
+  // Finish queued backend work before mutating KV/recurrent memory.
+  llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
 
   // Reset performance metrics
@@ -1645,9 +1654,6 @@ void TextLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
-
-  // Synchronize to ensure all operations are complete
-  llama_synchronize(modelCtx_.lctx);
 }
 
 llama_context* TextLlmContext::getCtx() { return modelCtx_.lctx; }
