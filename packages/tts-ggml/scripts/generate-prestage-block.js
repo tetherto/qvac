@@ -10,7 +10,11 @@ if (!fs.existsSync(manifestPath)) {
 }
 
 const variantRaw = (process.env.TTS_GGML_MOBILE_BENCHMARK_VARIANT || 'q4').toLowerCase()
-const variant = variantRaw === 'q8' ? 'q8' : 'q4'
+const allowedVariants = ['q4', 'q8']
+if (!allowedVariants.includes(variantRaw)) {
+  throw new Error(`Unsupported variant "${variantRaw}". Expected one of: ${allowedVariants.join(', ')}`)
+}
+const variant = variantRaw
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 const entries = Array.isArray(manifest[variant]) ? manifest[variant] : []

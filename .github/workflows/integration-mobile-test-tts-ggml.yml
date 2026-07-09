@@ -79,7 +79,7 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q8"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"}]}') }}
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -114,7 +114,7 @@ jobs:
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
       - name: Configure AWS credentials via OIDC
-        if: ${{ inputs.run_rtf_benchmarks }}
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -123,7 +123,7 @@ jobs:
       # Benchmark runs pre-sign q4/q8 model URLs and store a local manifest
       # consumed by generate-prestage-block.js below.
       - name: Generate TTS-GGML mobile model manifest
-        if: ${{ inputs.run_rtf_benchmarks }}
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
