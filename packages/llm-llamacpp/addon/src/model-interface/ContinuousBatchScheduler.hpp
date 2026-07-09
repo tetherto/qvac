@@ -329,6 +329,7 @@ private:
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;
     bool saveCacheToDisk = false;
+    bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
   };
 
@@ -402,7 +403,7 @@ private:
   std::function<void(const std::string&)>
   getOutputCallback(SlotState& slot, uint32_t seqId);
   std::function<bool(const Request&)> hasValidDriverF() const;
-  void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
+  void saveCacheForSlot(uint32_t seqId, SlotState& slot);
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
   LlmModelContext shared_;

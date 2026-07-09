@@ -9,6 +9,7 @@
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 #include <unordered_set>
 #include <utility>
@@ -55,6 +56,36 @@ void logTeardownFailureNoexcept(const char* what) noexcept {
     QLOG_IF(Priority::WARNING, std::string("[ContinuousBatch] ") + what);
   } catch (...) {
   }
+}
+
+bool isFileMissingOrEmpty(const std::filesystem::path& path) {
+  std::error_code directoryErrorCode;
+  if (std::filesystem::is_directory(path, directoryErrorCode)) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const auto size = std::filesystem::file_size(path, errorCode);
+  if (!errorCode) {
+    return size == 0;
+  }
+  return errorCode == std::errc::no_such_file_or_directory ||
+         errorCode == std::errc::not_a_directory;
+}
+
+bool isParentDirectoryMissing(const std::filesystem::path& path) {
+  const auto parent = path.parent_path();
+  if (parent.empty()) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const bool exists = std::filesystem::exists(parent, errorCode);
+  return !errorCode && !exists;
+}
+
+bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
+  return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
 }
 
 /// Partition the whole-context KV pool uniformly across slots. Mirrors
@@ -457,6 +488,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .group = std::move(queued.group),
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
+          .activeCacheSavedToDisk = isCacheLoaded,
           .prefillOnly = request.prefill});
   cacheGuard.dismiss();
   return seqId;
@@ -1195,12 +1227,24 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
 }
 
 void ContinuousBatchScheduler::saveCacheForSlot(
-    uint32_t seqId, const SlotState& slot) {
+    uint32_t seqId, SlotState& slot) {
   if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.driver) {
     return;
   }
-  (void)seqId;
+  if (slot.activeCacheSavedToDisk &&
+      persistedCacheBackingStoreMissing(slot.cacheKey)) {
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "ContinuousBatchScheduler::saveCacheForSlot: active cache backing "
+            "store was removed, dropping stale cache '%s' for seqId %u\n",
+            slot.cacheKey.c_str(),
+            seqId));
+    slot.activeCacheSavedToDisk = false;
+    return;
+  }
   slot.driver->saveCache(slot.cacheKey);
+  slot.activeCacheSavedToDisk = true;
 }
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
