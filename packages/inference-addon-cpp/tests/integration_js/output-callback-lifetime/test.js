@@ -5,8 +5,8 @@ const addon = require('.')
 // regular run may pass, especially on linux-x64, so this test package should be
 // run with AddressSanitizer to reliably catch the heap-use-after-free.
 
-function nextTick () {
-  return new Promise(resolve => setTimeout(resolve, 0))
+function nextTick() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 test('destroying addon with pending JS output callback does not crash', async (t) => {
