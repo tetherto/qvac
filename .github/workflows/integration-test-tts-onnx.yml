@@ -150,10 +150,10 @@ jobs:
           - {os: ubuntu-22.04, runner: qvac-ubuntu2204-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u22}
           - {os: ubuntu-24.04, runner: qvac-ubuntu2404-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u24}
           - {os: ubuntu-24.04-arm, variant: q4, platform: linux, arch: arm64, os_version: u24}
-          - {os: macos-14-xlarge, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, runner: qvac-macos26-arm64-gpu, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, runner: qvac-macos26-arm64-gpu, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, runner: qvac-macos26-arm64-gpu, variant: q4, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, runner: qvac-macos26-arm64-gpu, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
           - {os: windows-2025, runner: qvac-win25-x64-gpu, variant: q4, platform: win32, arch: x64, os_version: w25,}
 
@@ -265,7 +265,7 @@ jobs:
   run-supertonic-desktop-benchmarks:
     if: ${{ inputs.run_supertonic_desktop_benchmarks == true }}
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     timeout-minutes: 180
     name: supertonic-${{ matrix.runner_label }}-${{ matrix.backend }}
@@ -323,6 +323,7 @@ jobs:
             run_python: false
             round_trip_test: true
           - os: macos-14-xlarge
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
             runner_label: macos-14-xlarge
@@ -332,6 +333,7 @@ jobs:
             run_python: false
             round_trip_test: true
           - os: macos-14-xlarge
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
             runner_label: macos-14-xlarge
@@ -499,12 +501,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: macOS - install benchmark client dependencies
-        if: ${{ matrix.platform == 'darwin' }}
-        shell: bash
-        run: |
-          brew install ffmpeg pkg-config
 
       - name: Install benchmark server dependencies
         working-directory: ${{ inputs.workdir }}/benchmarks/server
