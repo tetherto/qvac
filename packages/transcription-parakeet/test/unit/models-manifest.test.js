@@ -7,7 +7,7 @@
 //
 // It fails loudly if:
 //   - the manifest schema drifts (missing s3Path / malformed sha256 / bytes),
-//   - the staged set no longer matches the expected 12 desktop GGUFs, or
+//   - the staged set no longer matches the expected 13 desktop GGUFs, or
 //   - a manifest filename or its S3 date prefix is not referenced by
 //     test/integration/helpers.js (i.e. the manifest and the runtime model
 //     config have drifted apart).
@@ -20,7 +20,9 @@ const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'models.manifest
 const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'helpers.js')
 
 // The desktop quant sweep staged by integration-test-transcription-parakeet.yml
-// (f16 + q8_0 for all four model types, q4_0 for tdt/ctc/eou/sortformer).
+// (f16 + q8_0 for all four model types, q4_0 for tdt/ctc/eou/sortformer), plus
+// the Sortformer-Streaming v2.1 q8_0 GGUF that sortformer-aosc-streaming.test.js
+// loads via MODEL_CONFIGS.sortformerStreaming.
 const EXPECTED_FILES = [
   'parakeet-tdt-0.6b-v3.f16.gguf',
   'parakeet-ctc-0.6b.f16.gguf',
@@ -33,16 +35,17 @@ const EXPECTED_FILES = [
   'sortformer-4spk-v1.q8_0.gguf',
   'parakeet-tdt-0.6b-v3.q4_0.gguf',
   'parakeet-eou-120m-v1.q4_0.gguf',
-  'sortformer-4spk-v1.q4_0.gguf'
+  'sortformer-4spk-v1.q4_0.gguf',
+  'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'
 ]
 
-const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27']
+const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27', '2026-05-20']
 
 function loadManifest () {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
 }
 
-test('manifest: staged set matches the expected 12 desktop GGUFs', (t) => {
+test('manifest: staged set matches the expected 13 desktop GGUFs', (t) => {
   const manifest = loadManifest()
   t.ok(manifest.models && typeof manifest.models === 'object', 'has models object')
   const names = Object.keys(manifest.models).sort()
