@@ -25,8 +25,10 @@ import {
   type ResolveResult,
   type SdcppConfig
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
+import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
 import { ModelLoadFailedError } from '@/utils/errors-server'
+import { isMobile } from '@/server/bare/registry/runtime-context-registry'
+import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 import { diffusion } from './ops/diffusion'
 import { video } from './ops/video'
 import { upscale } from './ops/upscale'
@@ -206,6 +208,16 @@ export const diffusionPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const { modelId, modelPath, modelConfig, artifacts } = params
     const config = (modelConfig ?? {}) as SdcppConfig
+
+    // no multi-gpu on mobile
+    if (isMobile()) {
+      const stripped = stripMultiGpuKeys(config)
+      if (stripped.length > 0) {
+        getServerLogger().warn(
+          `[${ModelType.sdcppGeneration}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+        )
+      }
+    }
 
     // In diffusion mode the ESRGAN file (when post-generation upscale is
     // wanted) must come from upscaler.model_src — the primary modelPath is

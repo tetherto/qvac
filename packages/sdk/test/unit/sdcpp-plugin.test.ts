@@ -72,6 +72,34 @@ test('sdcppConfigSchema: rejects invalid device', (t) => {
   t.is(result.success, false)
 })
 
+test('sdcppConfigSchema: accepts main-gpu as a device index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ device: 'gpu', 'main-gpu': 1 })
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data['main-gpu'], 1)
+  }
+})
+
+test("sdcppConfigSchema: accepts main-gpu 'integrated' and 'dedicated'", (t) => {
+  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'integrated' }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ 'main-gpu': 'dedicated' }).success, true)
+})
+
+test('sdcppConfigSchema: rejects negative main-gpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': -1 })
+  t.is(result.success, false)
+})
+
+test('sdcppConfigSchema: rejects non-integer main-gpu index', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 0.5 })
+  t.is(result.success, false)
+})
+
+test('sdcppConfigSchema: rejects unknown main-gpu string', (t) => {
+  const result = sdcppConfigSchema.safeParse({ 'main-gpu': 'discrete' })
+  t.is(result.success, false)
+})
+
 test('sdcppConfigSchema: rejects invalid prediction type', (t) => {
   const result = sdcppConfigSchema.safeParse({ prediction: 'unknown' })
   t.is(result.success, false)
