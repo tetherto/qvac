@@ -10,18 +10,16 @@ const path = require('bare-path')
  * @param {*} rawError
  * @returns {{ type: string, data: *, error: * } | null}
  */
-function mapAddonEvent (rawEvent, rawData, rawError) {
+function mapAddonEvent(rawEvent, rawData, rawError) {
   // RuntimeStats detected structurally (any of the known stats keys).
   const isStatsData =
     rawData &&
     typeof rawData === 'object' &&
-    (
-      'tokens_per_second' in rawData ||
+    ('tokens_per_second' in rawData ||
       'total_tokens' in rawData ||
       'total_time_ms' in rawData ||
       'batch_size' in rawData ||
-      'context_size' in rawData
-    )
+      'context_size' in rawData)
   if (isStatsData) {
     const stats = { ...rawData }
     if (stats.backendDevice === 0) {
@@ -50,7 +48,7 @@ class BertInterface {
    * @param {Object} configurationParams - all the required configuration for inference setup
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
    */
-  constructor (binding, configurationParams, outputCb) {
+  constructor(binding, configurationParams, outputCb) {
     this._binding = binding
 
     if (!configurationParams.backendsDir) {
@@ -63,7 +61,7 @@ class BertInterface {
   /**
    * Cancel current inference process. Resolves when the job has stopped.
    */
-  async cancel () {
+  async cancel() {
     if (!this._handle) return
     await this._binding.cancel(this._handle)
   }
@@ -75,7 +73,7 @@ class BertInterface {
    * @param {String|Array<String>} data.input - Input text (for 'text') or array of texts (for 'sequences')
    * @returns {Promise<bool>} true if the job was accepted, false if busy
    */
-  async runJob (data) {
+  async runJob(data) {
     return this._binding.runJob(this._handle, data)
   }
 
@@ -85,21 +83,21 @@ class BertInterface {
    * @param {Uint8Array|null} data.chunk
    * @param {Boolean} data.completed
    */
-  async loadWeights (data) {
+  async loadWeights(data) {
     return this._binding.loadWeights(this._handle, data)
   }
 
   /**
    * Activates the model to start processing the queue
    */
-  async activate () {
+  async activate() {
     return this._binding.activate(this._handle)
   }
 
   /**
    * Stops addon process and clears resources (including memory).
    */
-  async unload () {
+  async unload() {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)
     this._handle = null
