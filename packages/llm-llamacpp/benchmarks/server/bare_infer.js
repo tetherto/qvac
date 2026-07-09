@@ -20,7 +20,7 @@ const maxTokens = args[3] || '256'
 const modelName = path.basename(ggufPath)
 const diskPath = path.dirname(ggufPath)
 
-async function main () {
+async function main() {
   const prompts = JSON.parse(fs.readFileSync(promptsFile, 'utf-8'))
   console.log(`Loaded ${prompts.length} prompts`)
 
@@ -60,7 +60,9 @@ async function main () {
 
     const chunks = []
     await response
-      .onUpdate(data => { chunks.push(data) })
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
       .await()
 
     const output = chunks.join('').split('\n')[0].trim()
@@ -74,7 +76,7 @@ async function main () {
   await model.unload()
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error('Fatal error:', error.message || error)
   process.exit(1)
 })
