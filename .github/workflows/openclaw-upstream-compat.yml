@@ -1,0 +1,126 @@
+name: OpenClaw Upstream Compatibility
+
+# Scheduled tripwire for the published OpenClaw integration. This installs the
+# latest public OpenClaw and QVAC plugin packages in a fresh project so upstream
+# localService, config, model-catalog, and agent-run drift is caught early.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/openclaw-upstream-compat.yml"
+      - "scripts/ci/openclaw-upstream-compat-smoke.sh"
+  schedule:
+    - cron: "30 7 * * *" # daily 07:30 UTC, after the OpenCode compatibility smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openclaw-upstream-compat
+  cancel-in-progress: false
+
+env:
+  QVAC_SMOKE_MODEL: qwen3.5-0.8b
+  QVAC_READY_TIMEOUT_MS: "1800000"
+  OPENCLAW_AGENT_TIMEOUT: 45m
+
+jobs:
+  smoke:
+    name: openclaw@latest + @qvac/openclaw-plugin@latest
+    runs-on: ubuntu-latest
+    # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
+    # install + plugin setup; scheduled/dispatch runs exercise the full agent
+    # turn and need headroom for the readyTimeoutMs wait (30m) + agent timeout (45m).
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 75 }}
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run OpenClaw through QVAC plugin
+        env:
+          SMOKE_DIR: ${{ runner.temp }}/openclaw-compat-smoke
+          ARTIFACT_DIR: ${{ runner.temp }}/openclaw-compat-artifacts
+          QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
+          QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
+          OPENCLAW_AGENT_TIMEOUT: ${{ env.OPENCLAW_AGENT_TIMEOUT }}
+          SKIP_OPENCLAW_AGENT: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+        run: bash scripts/ci/openclaw-upstream-compat-smoke.sh
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: openclaw-upstream-compat
+          path: ${{ runner.temp }}/openclaw-compat-artifacts
+          if-no-files-found: error
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: smoke
+    # Manual runs are for debugging this workflow. Scheduled failures are the
+    # unattended signal that should create team-visible follow-up.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'OpenClaw upstream compatibility smoke failing';
+            const label = 'github_actions';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Scheduled OpenClaw upstream compatibility smoke failed.`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- Artifact: \`openclaw-upstream-compat\``,
+              `- Triage: inspect package versions, \`openclaw-onboard.stderr\`, \`openclaw-models-status.stdout\`, \`openclaw-agent.stdout\`, and \`openclaw-agent.stderr\` from the artifact.`,
+              `- Likely cause: latest \`openclaw\` changed plugin setup, localService lifecycle, config schema, model catalog, message content handling, or agent JSON output in a way that the latest published \`@qvac/openclaw-plugin\` no longer satisfies.`,
+            ].join('\n');
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => issue.pull_request === undefined && issue.title === title);
+
+            if (existing !== undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }

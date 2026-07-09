@@ -83,7 +83,7 @@ const shutdown = async () => {
   // Clean up database locks on shutdown
   cleanupDatabaseLocks()
 
-  server.close(err => {
+  server.close((err) => {
     if (err) {
       logger.error('Error during shutdown', err)
       process.exit(1)

@@ -50,7 +50,8 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
+    bool* outIsMaliGpu = nullptr);
 
 /// @brief Choose the backend to use for the model based on GPU device and
 /// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
@@ -65,10 +66,15 @@ std::pair<BackendType, std::string> chooseBackend(
 /// Adreno:
 ///   - Adreno 800+: prefer Vulkan
 ///   - Adreno <800: CPU
+///
+/// @p outIsMaliGpu (optional) is set to true when any considered GPU device
+/// is an Arm Mali (QVAC-21867: used to pick the per-device-class default for
+/// the multimodal projector backend).
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false);
+    std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
+    bool* outIsMaliGpu = nullptr);
 
 /// @brief Count GPU devices available for multi-GPU split mode.
 /// Returns the number of discrete GPUs when any are present; otherwise

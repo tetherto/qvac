@@ -1482,21 +1482,99 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    bool isMaliGpu = false;
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackend,
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        pendingFinetuneOverrides_.active);
+        pendingFinetuneOverrides_.active,
+        &isMaliGpu);
+
+    // QVAC-21257: optional runtime override for the multimodal projector
+    // (mmproj / vision encoder) backend. The default is auto-selected per
+    // device class (QVAC-21867): desktop / iOS -> GPU; Android -> GPU except
+    // Mali, whose projector encode is slower on GPU than CPU -> CPU. The key
+    // lets callers force either backend without recompiling.
+    // Accepts true/on/1 and false/off/0 (case-insensitive). Erased from
+    // configFilemap so it is never forwarded to llama.cpp's argument parser
+    // by the passthrough loop.
+    std::optional<bool> mmprojUseGpuOverride;
+    {
+      auto hMmproj = configFilemap.find("mmproj-use-gpu");
+      auto uMmproj = configFilemap.find("mmproj_use_gpu");
+      if (hMmproj != configFilemap.end() && uMmproj != configFilemap.end()) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: both 'mmproj-use-gpu' and 'mmproj_use_gpu' are present; "
+                "use one or the other.\n",
+                __func__));
+      }
+      if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
+          it != configFilemap.end()) {
+        std::string val = it->second;
+        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+        if (val == "true" || val == "on" || val == "1") {
+          mmprojUseGpuOverride = true;
+        } else if (val == "false" || val == "off" || val == "0") {
+          mmprojUseGpuOverride = false;
+        } else {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              string_format(
+                  "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
+                  "'false'/'off'/'0'.\n",
+                  __func__,
+                  it->second.c_str()));
+        }
+        configFilemap.erase(it);
+      }
+    }
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
 #ifdef __ANDROID__
-      params.mmproj_use_gpu = false;
+      // QVAC-21867: auto-default the projector backend by GPU class.
+      // Only Adreno 800+ is benchmarked (QVAC-21257) to encode the projector
+      // faster on the mobile GPU than on CPU, so it is the only Android class
+      // that defaults to GPU. Every other Android GPU class defaults to CPU
+      // (the LLM layers still run on the GPU):
+      //   - Mali: the projector encode is slower on the Mali GPU than on CPU
+      //     (QVAC-21257 benchmarks).
+      //   - Adreno < 800: materially weaker tiers the QVAC-21257
+      //     projector-on-GPU benchmarks did not cover (conservative).
+      //   - Any GPU whose Adreno tier can't be detected: conservative default.
+      // Relax per class once those tiers are benchmarked. The mmproj-use-gpu
+      // key overrides this either way.
+      constexpr int kAdrenoMmprojGpuThreshold = 800;
+      const bool isAdreno800Plus =
+          outAdrenoVersion.has_value() &&
+          outAdrenoVersion.value() >= kAdrenoMmprojGpuThreshold;
+      bool mmprojUseGpu = isAdreno800Plus;
+      const char* mmprojDefaultReason =
+          isAdreno800Plus
+              ? "auto-default, Adreno 800+"
+              : (isMaliGpu ? "auto-default, Mali GPU"
+                           : (outAdrenoVersion.has_value()
+                                  ? "auto-default, Adreno <800"
+                                  : "auto-default, non-Adreno-800+ GPU"));
 #else
-      params.mmproj_use_gpu = true;
+      bool mmprojUseGpu = true;
+      const char* mmprojDefaultReason = "auto-default";
 #endif
+      if (mmprojUseGpuOverride.has_value()) {
+        mmprojUseGpu = mmprojUseGpuOverride.value();
+      }
+      QLOG_IF(
+          Priority::INFO,
+          string_format(
+              "[LlamaModel] multimodal projector backend: %s (%s)\n",
+              mmprojUseGpu ? "GPU" : "CPU",
+              mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
+                                               : mmprojDefaultReason));
+      params.mmproj_use_gpu = mmprojUseGpu;
       params.split_mode = splitMode;
       runtimeBackendDevice_ = 1;
 
@@ -1513,6 +1591,12 @@ void LlamaModel::commonParamsParse(
       }
     } else if (chosenBackend.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;
+      if (mmprojUseGpuOverride.value_or(false)) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
+            "running the multimodal projector on CPU\n");
+      }
       runtimeBackendDevice_ = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
