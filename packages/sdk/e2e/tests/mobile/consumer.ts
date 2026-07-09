@@ -67,6 +67,7 @@ import { DelegatedInferenceExecutor } from '../shared/executors/delegated-infere
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'mobile',
@@ -167,6 +168,12 @@ resources.define('classification', {
   config: async () => ({
     modelPath: await resolveClassificationWeightsPath()
   })
+})
+
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {
@@ -589,7 +596,8 @@ export const executor = createExecutor({
     new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
-    new MobileCancellationExecutor(resources)
+    new MobileCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

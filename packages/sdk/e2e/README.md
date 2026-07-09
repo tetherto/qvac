@@ -81,6 +81,41 @@ packaged worker lock.
 `classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
 weights; no registry model pre-download is required.
 
+### Custom plugin bundling
+
+[`fixtures/echo-plugin/`](./fixtures/echo-plugin) is a pure-JS custom plugin (no native addon) used to exercise
+the SDK plugin system end-to-end: `qvac.config.*` → `bundleSdk` → worker registration → `invokePlugin` /
+`invokePluginStream`. It's declared as a `custom-echo-plugin` dependency (`file:./fixtures/echo-plugin`) and
+listed in the `plugins` array of both `fixtures/qvac.config.e2e.json` and `fixtures/qvac.config.electron.json`,
+the same way a real app would add a third-party or in-repo custom plugin. `PluginExecutor`
+([`tests/shared/executors/plugin-executor.ts`](./tests/shared/executors/plugin-executor.ts)) calls the plugin's
+own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
+use a custom plugin rather than calling `invokePlugin` directly.
+
+Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
+or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
+plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
+would silently drop LLM/whisper/OCR/etc. plugin registration from the workers. The Electron config intentionally
+omits `sdcpp-generation` and `ggml-vla` (these addons are skipped when running on Electron).
+
+Each platform bundles the worker with the plugin included through its normal build path:
+
+- **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
+  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
+  `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
+- **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
+  `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
+  `electron-forge package`.
+- **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.json`.
+  `qvac-test build:consumer:mobile` copies that file into the generated Expo project root as `qvac.config.json`
+  before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
+  set as desktop.
+
+**Local sequencing:** desktop and Electron share `qvac/worker.entry.mjs` (and `qvac.config.json`) at the project
+root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
+`postPackage`, so `run:local:desktop` and `run:local:electron` can run in any order without clobbering each
+other's bundle.
+
 ## Running in CI
 
 ### Label-triggered on PRs

@@ -40,6 +40,7 @@ import { wrongModelTests } from './wrong-model-tests.js'
 import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
+import { pluginTests } from './plugin-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -321,6 +322,9 @@ export const tests = [
   // (see mobile/consumer.ts) because the GGUFs are too large for the
   // Device Farm infra (see note there).
   ...vlaTests,
+
+  // Custom plugin system tests (custom-echo-plugin, error paths)
+  ...pluginTests,
 
   // Additional model tests
   modelSwitchLlm,
