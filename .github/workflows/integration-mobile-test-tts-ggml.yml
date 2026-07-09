@@ -66,11 +66,12 @@ jobs:
   # merge today.  Tighten once the Device Farm provisioning + signing
   # + runner pool is stable.
   build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+    name: Build ${{ matrix.platform }} (${{ matrix.variant }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
     continue-on-error: true
+    if: ${{ inputs.run_rtf_benchmarks || matrix.variant == 'q4' }}
     permissions:
       contents: read
       packages: read
@@ -83,9 +84,19 @@ jobs:
           - platform: Android
             os: ubuntu-24.04
             runner: qvac-ubuntu2404-x64
+            variant: q4
+          - platform: Android
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
+            variant: q8
           - platform: iOS
             os: macos-14
             runner: macos-14
+            variant: q4
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+            variant: q8
 
     steps:
       - name: Checkout composite action source
@@ -132,6 +143,7 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         env:
           PLATFORM: ${{ matrix.platform }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
           cat > test/mobile/inject-env.cjs <<NODE
@@ -141,7 +153,8 @@ jobs:
             if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
-            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-q4'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$VARIANT'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_VARIANT') return '$VARIANT'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
@@ -248,8 +261,8 @@ jobs:
           filter: ''
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }})'
-          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ github.run_number }}
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.variant }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.variant }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()
