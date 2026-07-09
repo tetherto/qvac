@@ -117,17 +117,18 @@ const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => {
   return gpuSupported && !noGpu
 })
 
-function getConfig (device, modelConfig) {
+function getConfig (device, modelConfig, extraConfig = {}) {
   return {
     gpu_layers: '98',
     temp: '0.0',
     verbosity: '2',
     device,
-    ctx_size: modelConfig.ctx_size
+    ctx_size: modelConfig.ctx_size,
+    ...extraConfig
   }
 }
 
-async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
+async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG, extraConfig = {}) {
   const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
   t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
 
@@ -137,7 +138,7 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   const modelPath = path.join(dirPath, modelName)
   const inference = new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
-    config: getConfig(device, modelConfig),
+    config: getConfig(device, modelConfig, extraConfig),
     logger: console,
     opts: { stats: true }
   })

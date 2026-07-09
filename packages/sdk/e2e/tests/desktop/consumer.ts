@@ -81,6 +81,7 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -189,6 +190,12 @@ resources.define('vla-pi05', {
 // so no registry constant / pre-download is required.
 resources.define('classification', {
   type: 'ggml-classification'
+})
+
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {
@@ -560,7 +567,8 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
-    new NodeCancellationExecutor(resources)
+    new NodeCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

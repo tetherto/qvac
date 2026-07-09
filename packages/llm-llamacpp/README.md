@@ -182,6 +182,26 @@ const config = {
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
+| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+
+
+#### Multimodal projector (mmproj) backend & auto-default
+
+For vision (VLM) models, the projector / image-encoder backend is auto-selected per device class when
+`mmproj-use-gpu` is unset (QVAC-21867):
+
+- **Desktop & iOS:** GPU.
+- **Android, Adreno 800+ GPUs and other non-Mali Android GPUs:** GPU.
+- **Android, Arm Mali GPUs:** **CPU** — the projector encode is slower on the Mali GPU than on CPU
+  (QVAC-21257 benchmarks), so the LLM layers run on the GPU while the projector stays on CPU.
+- **Android, Adreno < 800 GPUs:** **CPU** — these weaker tiers were not covered by the QVAC-21257
+  projector-on-GPU benchmarks, so the default is conservative; this may be relaxed once they are
+  benchmarked.
+
+An explicit `mmproj-use-gpu` value always wins over the auto-default, in either direction. When the model
+itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
+projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
+`[LlamaModel] multimodal projector backend: …`.
 
 
 #### KV-cache type & auto-default
