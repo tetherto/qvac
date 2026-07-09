@@ -51,11 +51,14 @@ inputs:
     default: "main"
   package-version:
     description: |
-      NPM dist-tag or version pulled when the consumer triggers via
-      workflow_dispatch (e.g. "1.4.0", "@my-tag", "latest"). Defaults to
-      "latest" when empty. Whisper / TTS / Parakeet wire their dispatch
-      `version` (or `package_spec`) input through here so manual runs can
-      pin a specific published version.
+      NPM dist-tag / version, OR a full scoped package spec pulled when the
+      consumer pins a published build (e.g. "1.4.0", "latest", or
+      "@qvac/transcription-parakeet@1.0.0"). A value starting with "@scope/" is
+      treated as a complete name@version spec and passed to `npm pack` verbatim;
+      a bare version/tag is prefixed with `addon-npm-name`. Defaults to "latest"
+      when empty. Whisper / TTS / Parakeet / benchmark callers wire their
+      dispatch `version` or `prebuild_package` input through here so runs can pin
+      a specific published version.
     required: false
     default: ""
   force-npm-prebuild:
@@ -213,11 +216,21 @@ runs:
             exit 0
           fi
         fi
-        VERSION="${PACKAGE_VERSION:-latest}"
-        echo "No prebuilds from artifacts — downloading $ADDON_NPM_NAME@$VERSION from npm..."
-        if ! npm pack "$ADDON_NPM_NAME@$VERSION"; then
-          echo "ERROR: Failed to download version $VERSION from npm"
-          echo "Please check that the version exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
+        # package-version may be either a bare version / dist-tag (e.g. "1.4.0",
+        # "latest") OR a full scoped package spec (e.g.
+        # "@qvac/transcription-parakeet@1.0.0") — the desktop benchmark leg forwards
+        # the same `prebuild_package` name@version spec here. A full scoped spec
+        # always starts with "@scope/"; a bare version/tag never contains "/", so
+        # detect the spec form and pass it verbatim instead of re-prefixing the name.
+        case "$PACKAGE_VERSION" in
+          @*/*) SPEC="$PACKAGE_VERSION" ;;
+          "")   SPEC="$ADDON_NPM_NAME@latest" ;;
+          *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
+        esac
+        echo "No prebuilds from artifacts — downloading $SPEC from npm..."
+        if ! npm pack "$SPEC"; then
+          echo "ERROR: Failed to download $SPEC from npm"
+          echo "Please check that it exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
           exit 1
         fi
         tar -xzf *.tgz
@@ -229,13 +242,27 @@ runs:
         # tarball IS that version before its prebuilds are used. npm pack of an
         # exact spec cannot legitimately resolve elsewhere, so a mismatch means the
         # pin was not honored — fail loudly instead of measuring the wrong binary.
+        # The pin may arrive as a bare version or a full name@version spec; the
+        # version to assert against is the segment after the last '@' in either
+        # form ("@qvac/foo@1.0.0" -> "1.0.0", "1.0.0" -> "1.0.0"). Only assert
+        # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
+        # ^1.2.0) legitimately resolves to a different concrete version, so
+        # comparing the packed version to the tag string would false-fail.
         if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
-          PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
-          if [ "$PACKED_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $PACKAGE_VERSION"
-            exit 1
-          fi
-          echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+          EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
+          case "$EXPECTED_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*)
+              PACKED_VERSION=$(node -p "require('./package/package.json').version" 2>/dev/null || echo "unknown")
+              if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
+                echo "ERROR: forced npm prebuild resolved to $ADDON_NPM_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
+                exit 1
+              fi
+              echo "Verified: prebuilds come from $ADDON_NPM_NAME@$PACKED_VERSION (pinned)"
+              ;;
+            *)
+              echo "package-version '$EXPECTED_VERSION' is a dist-tag/range; skipping exact-version provenance assertion"
+              ;;
+          esac
         fi
         mv package/prebuilds ./prebuilds
         rm -rf package *.tgz
