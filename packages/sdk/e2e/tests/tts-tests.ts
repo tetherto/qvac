@@ -93,6 +93,48 @@ export const ttsSupertonicSentenceStream: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-supertonic', estimatedDurationMs: 45000 }
 }
 
+// LavaSR outputSampleRate: proves the runtime `outputSampleRate` config actually
+// resamples end to end. Runs the same text through the native-rate Supertonic
+// (44.1 kHz) and an 8 kHz resource; sample count scales with the rate, so the
+// native run must produce far more samples (~5.5x). The executor gates on the
+// ratio and only emits `outputSampleRate-verified` on the happy path. The SDK's
+// public TTS result exposes only the PCM buffer (no sampleRate/stats), so a
+// relative sample-count comparison is the strongest available assertion.
+export const ttsSupertonicOutputSampleRate: TestDefinition = {
+  testId: 'tts-supertonic-output-sample-rate',
+  params: {
+    text: 'This is a test of the output sample rate configuration for speech synthesis.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['outputSampleRate-verified', 'samples']
+  },
+  metadata: {
+    category: 'tts',
+    dependency: 'tts-supertonic+tts-supertonic-8k',
+    estimatedDurationMs: 90000
+  }
+}
+
+// LavaSR denoiser + enhancer: proves the two-stage LavaSR chain wires up,
+// downloads its GGUFs, and produces valid audio end to end. The enhancer forces
+// 48 kHz internally, but that rate isn't observable through the public TTS
+// result, so this asserts a non-empty buffer (the executor fails on 0 samples).
+export const ttsSupertonicEnhanced: TestDefinition = {
+  testId: 'tts-supertonic-enhanced',
+  params: {
+    text: 'This is a test of the LavaSR speech enhancer and denoiser.',
+    stream: false
+  },
+  expectation: { validation: 'contains-all', contains: ['enhanced', 'samples'] },
+  metadata: {
+    category: 'tts',
+    dependency: 'tts-supertonic-enhanced',
+    estimatedDurationMs: 60000
+  }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -103,5 +145,7 @@ export const ttsTests = [
   ttsSupertonicStreaming,
   ttsSupertonicEmptyTextError,
   ttsSupertonicMultilingualText,
-  ttsSupertonicSentenceStream
+  ttsSupertonicSentenceStream,
+  ttsSupertonicOutputSampleRate,
+  ttsSupertonicEnhanced
 ]

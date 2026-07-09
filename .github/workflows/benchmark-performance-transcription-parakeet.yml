@@ -11,6 +11,10 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/transcription-parakeet@1.0.0). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
       run_desktop:
         description: "Run desktop (CPU/GPU) RTF benchmarks"
         required: false
@@ -82,7 +86,7 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
   desktop-benchmarks:
     needs:
       - context
@@ -97,10 +101,11 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
       run_integration_tests: false
       run_rtf_benchmarks: true
 
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
   mobile-benchmarks:
     needs:
       - context
@@ -116,8 +121,9 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
 
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
   summarize:
     needs:
       - context

@@ -16219,6 +16219,86 @@ export const models = [
     params: '123M'
   },
   {
+    name: 'PARAKEET_CTC_0_6B_F16',
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2199878,
+    blobBlockLength: 20931,
+    blobByteOffset: 144155091746,
+    modelId: 'parakeet-ctc-0.6b.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1371674432,
+    sha256Checksum: 'b4e813c1b6057c4c005e9996a0724b02aedc339f5d1b7c9c0c5a8b4ebdeb75cf',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '0.6B'
+  },
+  {
+    name: 'PARAKEET_CTC_0_6B_Q4_0',
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2220809,
+    blobBlockLength: 5946,
+    blobByteOffset: 145526766178,
+    modelId: 'parakeet-ctc-0.6b.q4_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 389648768,
+    sha256Checksum: '2b7fce0479f6f18e90a0ff50d644bc9cee6b2382fddf8fca88364bbf729343da',
+    engine: 'parakeet-transcription',
+    quantization: 'q4_0',
+    params: '0.6B'
+  },
+  {
+    name: 'PARAKEET_EOU_120M_V1_F16',
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2226755,
+    blobBlockLength: 3936,
+    blobByteOffset: 145916414946,
+    modelId: 'parakeet-eou-120m-v1.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 257939840,
+    sha256Checksum: 'd474dacc63ad8df1a9003f888bcb48c476d7dadec3e2ef5106a75f426e47cb63',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '120M'
+  },
+  {
+    name: 'PARAKEET_TDT_0_6B_V3_F16',
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2230691,
+    blobBlockLength: 21478,
+    blobByteOffset: 146174354786,
+    modelId: 'parakeet-tdt-0.6b-v3.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1407544256,
+    sha256Checksum: '896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '0.6B'
+  },
+  {
+    name: 'PARAKEET_SORTFORMER_4SPK_V1_F16',
+    registryPath: 'qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2252169,
+    blobBlockLength: 4207,
+    blobByteOffset: 147581899042,
+    modelId: 'sortformer-4spk-v1.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 275697312,
+    sha256Checksum: 'c6206e62af54a4ebb2fb07847dc6e6b58c3938a210fabfd81a1e1f21a9362b76',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '123M'
+  },
+  {
     name: 'PARAKEET_TDT_DECODER_INT8',
     registryPath:
       'qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx',
@@ -17221,7 +17301,86 @@ export const models = [
     sha256Checksum: '81bba502ae48fa005a374819f15e44452eb68086a8b323ec20a044d514400832',
     engine: 'tts-ggml',
     quantization: '',
-    params: ''
+    params: '',
+    companionSet: {
+      setKey: '672e74b49c8592c0',
+      primaryKey: 'mecabDictPath',
+      files: [
+        {
+          key: 'mecabDictPath',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+          registrySource: 's3',
+          targetName: 'char.bin',
+          expectedSize: 262496,
+          sha256Checksum: '81bba502ae48fa005a374819f15e44452eb68086a8b323ec20a044d514400832',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093023,
+          blobBlockLength: 5,
+          blobByteOffset: 137162353845,
+          primary: true
+        },
+        {
+          key: 'mecab:dicrc',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/dicrc',
+          registrySource: 's3',
+          targetName: 'dicrc',
+          expectedSize: 693,
+          sha256Checksum: 'add6bb131a75e69478961ea59712541ace3779f7c5daa4da80d281f097c9d4d1',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093028,
+          blobBlockLength: 1,
+          blobByteOffset: 137162616341
+        },
+        {
+          key: 'mecab:matrix.bin',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/matrix.bin',
+          registrySource: 's3',
+          targetName: 'matrix.bin',
+          expectedSize: 3463716,
+          sha256Checksum: 'ee44d7350cdcb680ebd699f83e121be1dc63310f8832d55bcb537a068177611a',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093029,
+          blobBlockLength: 53,
+          blobByteOffset: 137162617034
+        },
+        {
+          key: 'mecab:mecabrc',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/mecabrc',
+          registrySource: 's3',
+          targetName: 'mecabrc',
+          expectedSize: 123,
+          sha256Checksum: '7d7446bf89bbf5f0ae18ba108e265a3ca5ece1447cce34e2f37e318d925e7276',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093082,
+          blobBlockLength: 1,
+          blobByteOffset: 137166080750
+        },
+        {
+          key: 'mecab:sys.dic',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/sys.dic',
+          registrySource: 's3',
+          targetName: 'sys.dic',
+          expectedSize: 49198251,
+          sha256Checksum: '7b912bfe6d67824dd378187737c9c2c09254cf07a072e65349ff1585ea348432',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093083,
+          blobBlockLength: 751,
+          blobByteOffset: 137166080873
+        },
+        {
+          key: 'mecab:unk.dic',
+          registryPath: 'qvac_models_compiled/chatterbox/mecab-ipadic/unk.dic',
+          registrySource: 's3',
+          targetName: 'unk.dic',
+          expectedSize: 5690,
+          sha256Checksum: '6903ccc5b0bc4dceeaa53b005da1b5b6c60636b581ce4aa6b9c41997d958e473',
+          blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+          blobBlockOffset: 2093834,
+          blobBlockLength: 1,
+          blobByteOffset: 137215279124
+        }
+      ]
+    }
   },
   {
     name: 'TTS_MECAB_IPADIC_CHATTERBOX_1',
@@ -17496,6 +17655,86 @@ export const models = [
     params: ''
   },
   {
+    name: 'TTS_CANGJIE_ZH_CHATTERBOX',
+    registryPath: 'qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv',
+    registrySource: 's3',
+    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
+    blobBlockOffset: 2109859,
+    blobBlockLength: 21,
+    blobByteOffset: 138265160462,
+    modelId: 'Cangjie5_TC.tsv',
+    addon: 'tts',
+    expectedSize: 1337109,
+    sha256Checksum: '23369fd6c6587f185a5c2a0dfe3fffb0a4d14eb09510dc72a8b2682680267905',
+    engine: 'tts-ggml',
+    quantization: '',
+    params: ''
+  },
+  {
+    name: 'TTS_ENHANCER_LAVASR_FP16',
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4340403,
+    blobBlockLength: 429,
+    blobByteOffset: 284440571850,
+    modelId: 'lavasr-enhancer-f16.gguf',
+    addon: 'tts',
+    expectedSize: 28051008,
+    sha256Checksum: '81349380fa62c654b1c5df99f57efb04cb8600bb810f17654e4b64237bc9f554',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: ''
+  },
+  {
+    name: 'TTS_ENHANCER_LAVASR_FP32',
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 4340832,
+    blobBlockLength: 854,
+    blobByteOffset: 284468622858,
+    modelId: 'lavasr-enhancer-f32.gguf',
+    addon: 'tts',
+    expectedSize: 55946816,
+    sha256Checksum: '602eca4250ce60f7edc9a0a21402112ca33fe8f2350296a8a66360ff4d688c2e',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: ''
+  },
+  {
+    name: 'TTS_DENOISER_LAVASR_FP16',
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2256376,
+    blobBlockLength: 8,
+    blobByteOffset: 147857596354,
+    modelId: 'lavasr-denoiser-f16.gguf',
+    addon: 'tts',
+    expectedSize: 505696,
+    sha256Checksum: '8de76a6e0e494fc71c779f25736506535bdce984d2313d5e1637e9bac383955b',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: ''
+  },
+  {
+    name: 'TTS_DENOISER_LAVASR_FP32',
+    registryPath: 'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2256384,
+    blobBlockLength: 12,
+    blobByteOffset: 147858102050,
+    modelId: 'lavasr-denoiser-f32.gguf',
+    addon: 'tts',
+    expectedSize: 722528,
+    sha256Checksum: 'b46a16dcf14fefdbc33b4a993541440a3d6f8c90a3ee2b77e15d5405950935a5',
+    engine: 'tts-ggml',
+    quantization: 'fp32',
+    params: ''
+  },
+  {
     name: 'TTS_EN_SUPERTONIC_Q4_0',
     registryPath: 'qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf',
     registrySource: 's3',
@@ -17592,22 +17831,6 @@ export const models = [
     params: ''
   },
   {
-    name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
-    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf',
-    registrySource: 's3',
-    blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
-    blobBlockOffset: 2095769,
-    blobBlockLength: 1229,
-    blobByteOffset: 137342030606,
-    modelId: 'supertonic3-q4_0.gguf',
-    addon: 'tts',
-    expectedSize: 80489664,
-    sha256Checksum: '638f70ddc308abbe591d1967d21e4ff6302e78265f03c41e4251bb6739484d6f',
-    engine: 'tts-ggml',
-    quantization: 'q4_0',
-    params: ''
-  },
-  {
     name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
     registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf',
     registrySource: 's3',
@@ -17624,7 +17847,23 @@ export const models = [
     params: ''
   },
   {
-    name: 'TTS_DENOISER_LAVASR_FP32',
+    name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
+    registryPath: 'qvac_models_compiled/ggml/supertonic/2026-06-24/supertonic3-q4_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 2198586,
+    blobBlockLength: 1292,
+    blobByteOffset: 144070433378,
+    modelId: 'supertonic3-q4_0.gguf',
+    addon: 'tts',
+    expectedSize: 84658368,
+    sha256Checksum: 'e3f3edc816b3fb4d8dae0067b2cc7e3dbeaac1e78e21293c803bd57011425fb7',
+    engine: 'tts-ggml',
+    quantization: 'q4_0',
+    params: ''
+  },
+  {
+    name: 'TTS_DENOISER_LAVASR_FP32_1',
     registryPath: 'qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
@@ -25495,8 +25734,8 @@ export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0 = {
   params: models[594].params
 } as const
 
-export const PARAKEET_TDT_DECODER_INT8 = {
-  name: 'PARAKEET_TDT_DECODER_INT8',
+export const PARAKEET_CTC_0_6B_F16 = {
+  name: 'PARAKEET_CTC_0_6B_F16',
   src: `registry://${models[595].registrySource}/${models[595].registryPath}`,
   registryPath: models[595].registryPath,
   registrySource: models[595].registrySource,
@@ -25513,8 +25752,8 @@ export const PARAKEET_TDT_DECODER_INT8 = {
   params: models[595].params
 } as const
 
-export const PARAKEET_TDT_ENCODER_INT8 = {
-  name: 'PARAKEET_TDT_ENCODER_INT8',
+export const PARAKEET_CTC_0_6B_Q4_0 = {
+  name: 'PARAKEET_CTC_0_6B_Q4_0',
   src: `registry://${models[596].registrySource}/${models[596].registryPath}`,
   registryPath: models[596].registryPath,
   registrySource: models[596].registrySource,
@@ -25531,8 +25770,8 @@ export const PARAKEET_TDT_ENCODER_INT8 = {
   params: models[596].params
 } as const
 
-export const PARAKEET_TDT_PREPROCESSOR_INT8 = {
-  name: 'PARAKEET_TDT_PREPROCESSOR_INT8',
+export const PARAKEET_EOU_120M_V1_F16 = {
+  name: 'PARAKEET_EOU_120M_V1_F16',
   src: `registry://${models[597].registrySource}/${models[597].registryPath}`,
   registryPath: models[597].registryPath,
   registrySource: models[597].registrySource,
@@ -25549,8 +25788,8 @@ export const PARAKEET_TDT_PREPROCESSOR_INT8 = {
   params: models[597].params
 } as const
 
-export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32 = {
-  name: 'TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32',
+export const PARAKEET_TDT_0_6B_V3_F16 = {
+  name: 'PARAKEET_TDT_0_6B_V3_F16',
   src: `registry://${models[598].registrySource}/${models[598].registryPath}`,
   registryPath: models[598].registryPath,
   registrySource: models[598].registrySource,
@@ -25567,8 +25806,26 @@ export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32 = {
   params: models[598].params
 } as const
 
-export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32 = {
-  name: 'TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32',
+export const PARAKEET_SORTFORMER_4SPK_V1_F16 = {
+  name: 'PARAKEET_SORTFORMER_4SPK_V1_F16',
+  src: `registry://${models[599].registrySource}/${models[599].registryPath}`,
+  registryPath: models[599].registryPath,
+  registrySource: models[599].registrySource,
+  blobCoreKey: models[599].blobCoreKey,
+  blobBlockOffset: models[599].blobBlockOffset,
+  blobBlockLength: models[599].blobBlockLength,
+  blobByteOffset: models[599].blobByteOffset,
+  modelId: models[599].modelId,
+  expectedSize: models[599].expectedSize,
+  sha256Checksum: models[599].sha256Checksum,
+  addon: models[599].addon,
+  engine: models[599].engine,
+  quantization: models[599].quantization,
+  params: models[599].params
+} as const
+
+export const PARAKEET_TDT_DECODER_INT8 = {
+  name: 'PARAKEET_TDT_DECODER_INT8',
   src: `registry://${models[600].registrySource}/${models[600].registryPath}`,
   registryPath: models[600].registryPath,
   registrySource: models[600].registrySource,
@@ -25585,8 +25842,26 @@ export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32 = {
   params: models[600].params
 } as const
 
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16 = {
-  name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16',
+export const PARAKEET_TDT_ENCODER_INT8 = {
+  name: 'PARAKEET_TDT_ENCODER_INT8',
+  src: `registry://${models[601].registrySource}/${models[601].registryPath}`,
+  registryPath: models[601].registryPath,
+  registrySource: models[601].registrySource,
+  blobCoreKey: models[601].blobCoreKey,
+  blobBlockOffset: models[601].blobBlockOffset,
+  blobBlockLength: models[601].blobBlockLength,
+  blobByteOffset: models[601].blobByteOffset,
+  modelId: models[601].modelId,
+  expectedSize: models[601].expectedSize,
+  sha256Checksum: models[601].sha256Checksum,
+  addon: models[601].addon,
+  engine: models[601].engine,
+  quantization: models[601].quantization,
+  params: models[601].params
+} as const
+
+export const PARAKEET_TDT_PREPROCESSOR_INT8 = {
+  name: 'PARAKEET_TDT_PREPROCESSOR_INT8',
   src: `registry://${models[602].registrySource}/${models[602].registryPath}`,
   registryPath: models[602].registryPath,
   registrySource: models[602].registrySource,
@@ -25603,98 +25878,98 @@ export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16 = {
   params: models[602].params
 } as const
 
+export const TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32 = {
+  name: 'TTS_MULTILINGUAL_CONDITIONAL_DECODER_CHATTERBOX_FP32',
+  src: `registry://${models[603].registrySource}/${models[603].registryPath}`,
+  registryPath: models[603].registryPath,
+  registrySource: models[603].registrySource,
+  blobCoreKey: models[603].blobCoreKey,
+  blobBlockOffset: models[603].blobBlockOffset,
+  blobBlockLength: models[603].blobBlockLength,
+  blobByteOffset: models[603].blobByteOffset,
+  modelId: models[603].modelId,
+  expectedSize: models[603].expectedSize,
+  sha256Checksum: models[603].sha256Checksum,
+  addon: models[603].addon,
+  engine: models[603].engine,
+  quantization: models[603].quantization,
+  params: models[603].params
+} as const
+
+export const TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32 = {
+  name: 'TTS_MULTILINGUAL_EMBED_TOKENS_CHATTERBOX_FP32',
+  src: `registry://${models[605].registrySource}/${models[605].registryPath}`,
+  registryPath: models[605].registryPath,
+  registrySource: models[605].registrySource,
+  blobCoreKey: models[605].blobCoreKey,
+  blobBlockOffset: models[605].blobBlockOffset,
+  blobBlockLength: models[605].blobBlockLength,
+  blobByteOffset: models[605].blobByteOffset,
+  modelId: models[605].modelId,
+  expectedSize: models[605].expectedSize,
+  sha256Checksum: models[605].sha256Checksum,
+  addon: models[605].addon,
+  engine: models[605].engine,
+  quantization: models[605].quantization,
+  params: models[605].params
+} as const
+
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16 = {
+  name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP16',
+  src: `registry://${models[607].registrySource}/${models[607].registryPath}`,
+  registryPath: models[607].registryPath,
+  registrySource: models[607].registrySource,
+  blobCoreKey: models[607].blobCoreKey,
+  blobBlockOffset: models[607].blobBlockOffset,
+  blobBlockLength: models[607].blobBlockLength,
+  blobByteOffset: models[607].blobByteOffset,
+  modelId: models[607].modelId,
+  expectedSize: models[607].expectedSize,
+  sha256Checksum: models[607].sha256Checksum,
+  addon: models[607].addon,
+  engine: models[607].engine,
+  quantization: models[607].quantization,
+  params: models[607].params
+} as const
+
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4 = {
   name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_Q4',
-  src: `registry://${models[604].registrySource}/${models[604].registryPath}`,
-  registryPath: models[604].registryPath,
-  registrySource: models[604].registrySource,
-  blobCoreKey: models[604].blobCoreKey,
-  blobBlockOffset: models[604].blobBlockOffset,
-  blobBlockLength: models[604].blobBlockLength,
-  blobByteOffset: models[604].blobByteOffset,
-  modelId: models[604].modelId,
-  expectedSize: models[604].expectedSize,
-  sha256Checksum: models[604].sha256Checksum,
-  addon: models[604].addon,
-  engine: models[604].engine,
-  quantization: models[604].quantization,
-  params: models[604].params
+  src: `registry://${models[609].registrySource}/${models[609].registryPath}`,
+  registryPath: models[609].registryPath,
+  registrySource: models[609].registrySource,
+  blobCoreKey: models[609].blobCoreKey,
+  blobBlockOffset: models[609].blobBlockOffset,
+  blobBlockLength: models[609].blobBlockLength,
+  blobByteOffset: models[609].blobByteOffset,
+  modelId: models[609].modelId,
+  expectedSize: models[609].expectedSize,
+  sha256Checksum: models[609].sha256Checksum,
+  addon: models[609].addon,
+  engine: models[609].engine,
+  quantization: models[609].quantization,
+  params: models[609].params
 } as const
 
 export const TTS_EN_ES_CHATTERBOX_Q4F16 = {
   name: 'TTS_EN_ES_CHATTERBOX_Q4F16',
-  src: `registry://${models[606].registrySource}/${models[606].registryPath}`,
-  registryPath: models[606].registryPath,
-  registrySource: models[606].registrySource,
-  blobCoreKey: models[606].blobCoreKey,
-  blobBlockOffset: models[606].blobBlockOffset,
-  blobBlockLength: models[606].blobBlockLength,
-  blobByteOffset: models[606].blobByteOffset,
-  modelId: models[606].modelId,
-  expectedSize: models[606].expectedSize,
-  sha256Checksum: models[606].sha256Checksum,
-  addon: models[606].addon,
-  engine: models[606].engine,
-  quantization: models[606].quantization,
-  params: models[606].params
+  src: `registry://${models[611].registrySource}/${models[611].registryPath}`,
+  registryPath: models[611].registryPath,
+  registrySource: models[611].registrySource,
+  blobCoreKey: models[611].blobCoreKey,
+  blobBlockOffset: models[611].blobBlockOffset,
+  blobBlockLength: models[611].blobBlockLength,
+  blobByteOffset: models[611].blobByteOffset,
+  modelId: models[611].modelId,
+  expectedSize: models[611].expectedSize,
+  sha256Checksum: models[611].sha256Checksum,
+  addon: models[611].addon,
+  engine: models[611].engine,
+  quantization: models[611].quantization,
+  params: models[611].params
 } as const
 
 export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32 = {
   name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX_FP32',
-  src: `registry://${models[608].registrySource}/${models[608].registryPath}`,
-  registryPath: models[608].registryPath,
-  registrySource: models[608].registrySource,
-  blobCoreKey: models[608].blobCoreKey,
-  blobBlockOffset: models[608].blobBlockOffset,
-  blobBlockLength: models[608].blobBlockLength,
-  blobByteOffset: models[608].blobByteOffset,
-  modelId: models[608].modelId,
-  expectedSize: models[608].expectedSize,
-  sha256Checksum: models[608].sha256Checksum,
-  addon: models[608].addon,
-  engine: models[608].engine,
-  quantization: models[608].quantization,
-  params: models[608].params
-} as const
-
-export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32 = {
-  name: 'TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32',
-  src: `registry://${models[610].registrySource}/${models[610].registryPath}`,
-  registryPath: models[610].registryPath,
-  registrySource: models[610].registrySource,
-  blobCoreKey: models[610].blobCoreKey,
-  blobBlockOffset: models[610].blobBlockOffset,
-  blobBlockLength: models[610].blobBlockLength,
-  blobByteOffset: models[610].blobByteOffset,
-  modelId: models[610].modelId,
-  expectedSize: models[610].expectedSize,
-  sha256Checksum: models[610].sha256Checksum,
-  addon: models[610].addon,
-  engine: models[610].engine,
-  quantization: models[610].quantization,
-  params: models[610].params
-} as const
-
-export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX = {
-  name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX',
-  src: `registry://${models[612].registrySource}/${models[612].registryPath}`,
-  registryPath: models[612].registryPath,
-  registrySource: models[612].registrySource,
-  blobCoreKey: models[612].blobCoreKey,
-  blobBlockOffset: models[612].blobBlockOffset,
-  blobBlockLength: models[612].blobBlockLength,
-  blobByteOffset: models[612].blobByteOffset,
-  modelId: models[612].modelId,
-  expectedSize: models[612].expectedSize,
-  sha256Checksum: models[612].sha256Checksum,
-  addon: models[612].addon,
-  engine: models[612].engine,
-  quantization: models[612].quantization,
-  params: models[612].params
-} as const
-
-export const TTS_LATENT_DENOISER_SUPERTONIC_FP32 = {
-  name: 'TTS_LATENT_DENOISER_SUPERTONIC_FP32',
   src: `registry://${models[613].registrySource}/${models[613].registryPath}`,
   registryPath: models[613].registryPath,
   registrySource: models[613].registrySource,
@@ -25711,8 +25986,8 @@ export const TTS_LATENT_DENOISER_SUPERTONIC_FP32 = {
   params: models[613].params
 } as const
 
-export const TTS_TEXT_ENCODER_SUPERTONIC_FP32 = {
-  name: 'TTS_TEXT_ENCODER_SUPERTONIC_FP32',
+export const TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32 = {
+  name: 'TTS_MULTILINGUAL_SPEECH_ENCODER_CHATTERBOX_FP32',
   src: `registry://${models[615].registrySource}/${models[615].registryPath}`,
   registryPath: models[615].registryPath,
   registrySource: models[615].registrySource,
@@ -25729,8 +26004,8 @@ export const TTS_TEXT_ENCODER_SUPERTONIC_FP32 = {
   params: models[615].params
 } as const
 
-export const TTS_VOICE_DECODER_SUPERTONIC_FP32 = {
-  name: 'TTS_VOICE_DECODER_SUPERTONIC_FP32',
+export const TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX = {
+  name: 'TTS_MULTILINGUAL_LANGUAGE_MODEL_CHATTERBOX',
   src: `registry://${models[617].registrySource}/${models[617].registryPath}`,
   registryPath: models[617].registryPath,
   registrySource: models[617].registrySource,
@@ -25747,26 +26022,26 @@ export const TTS_VOICE_DECODER_SUPERTONIC_FP32 = {
   params: models[617].params
 } as const
 
-export const TTS_TOKENIZER_SUPERTONIC = {
-  name: 'TTS_TOKENIZER_SUPERTONIC',
-  src: `registry://${models[619].registrySource}/${models[619].registryPath}`,
-  registryPath: models[619].registryPath,
-  registrySource: models[619].registrySource,
-  blobCoreKey: models[619].blobCoreKey,
-  blobBlockOffset: models[619].blobBlockOffset,
-  blobBlockLength: models[619].blobBlockLength,
-  blobByteOffset: models[619].blobByteOffset,
-  modelId: models[619].modelId,
-  expectedSize: models[619].expectedSize,
-  sha256Checksum: models[619].sha256Checksum,
-  addon: models[619].addon,
-  engine: models[619].engine,
-  quantization: models[619].quantization,
-  params: models[619].params
+export const TTS_LATENT_DENOISER_SUPERTONIC_FP32 = {
+  name: 'TTS_LATENT_DENOISER_SUPERTONIC_FP32',
+  src: `registry://${models[618].registrySource}/${models[618].registryPath}`,
+  registryPath: models[618].registryPath,
+  registrySource: models[618].registrySource,
+  blobCoreKey: models[618].blobCoreKey,
+  blobBlockOffset: models[618].blobBlockOffset,
+  blobBlockLength: models[618].blobBlockLength,
+  blobByteOffset: models[618].blobByteOffset,
+  modelId: models[618].modelId,
+  expectedSize: models[618].expectedSize,
+  sha256Checksum: models[618].sha256Checksum,
+  addon: models[618].addon,
+  engine: models[618].engine,
+  quantization: models[618].quantization,
+  params: models[618].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC',
+export const TTS_TEXT_ENCODER_SUPERTONIC_FP32 = {
+  name: 'TTS_TEXT_ENCODER_SUPERTONIC_FP32',
   src: `registry://${models[620].registrySource}/${models[620].registryPath}`,
   registryPath: models[620].registryPath,
   registrySource: models[620].registrySource,
@@ -25783,26 +26058,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC = {
   params: models[620].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_1 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_1',
-  src: `registry://${models[621].registrySource}/${models[621].registryPath}`,
-  registryPath: models[621].registryPath,
-  registrySource: models[621].registrySource,
-  blobCoreKey: models[621].blobCoreKey,
-  blobBlockOffset: models[621].blobBlockOffset,
-  blobBlockLength: models[621].blobBlockLength,
-  blobByteOffset: models[621].blobByteOffset,
-  modelId: models[621].modelId,
-  expectedSize: models[621].expectedSize,
-  sha256Checksum: models[621].sha256Checksum,
-  addon: models[621].addon,
-  engine: models[621].engine,
-  quantization: models[621].quantization,
-  params: models[621].params
-} as const
-
-export const TTS_VOICE_STYLE_SUPERTONIC_2 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_2',
+export const TTS_VOICE_DECODER_SUPERTONIC_FP32 = {
+  name: 'TTS_VOICE_DECODER_SUPERTONIC_FP32',
   src: `registry://${models[622].registrySource}/${models[622].registryPath}`,
   registryPath: models[622].registryPath,
   registrySource: models[622].registrySource,
@@ -25819,26 +26076,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_2 = {
   params: models[622].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_3 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_3',
-  src: `registry://${models[623].registrySource}/${models[623].registryPath}`,
-  registryPath: models[623].registryPath,
-  registrySource: models[623].registrySource,
-  blobCoreKey: models[623].blobCoreKey,
-  blobBlockOffset: models[623].blobBlockOffset,
-  blobBlockLength: models[623].blobBlockLength,
-  blobByteOffset: models[623].blobByteOffset,
-  modelId: models[623].modelId,
-  expectedSize: models[623].expectedSize,
-  sha256Checksum: models[623].sha256Checksum,
-  addon: models[623].addon,
-  engine: models[623].engine,
-  quantization: models[623].quantization,
-  params: models[623].params
-} as const
-
-export const TTS_VOICE_STYLE_SUPERTONIC_4 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_4',
+export const TTS_TOKENIZER_SUPERTONIC = {
+  name: 'TTS_TOKENIZER_SUPERTONIC',
   src: `registry://${models[624].registrySource}/${models[624].registryPath}`,
   registryPath: models[624].registryPath,
   registrySource: models[624].registrySource,
@@ -25855,8 +26094,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_4 = {
   params: models[624].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_5 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_5',
+export const TTS_VOICE_STYLE_SUPERTONIC = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC',
   src: `registry://${models[625].registrySource}/${models[625].registryPath}`,
   registryPath: models[625].registryPath,
   registrySource: models[625].registrySource,
@@ -25873,8 +26112,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_5 = {
   params: models[625].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_6 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_6',
+export const TTS_VOICE_STYLE_SUPERTONIC_1 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_1',
   src: `registry://${models[626].registrySource}/${models[626].registryPath}`,
   registryPath: models[626].registryPath,
   registrySource: models[626].registrySource,
@@ -25891,8 +26130,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_6 = {
   params: models[626].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_7 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_7',
+export const TTS_VOICE_STYLE_SUPERTONIC_2 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_2',
   src: `registry://${models[627].registrySource}/${models[627].registryPath}`,
   registryPath: models[627].registryPath,
   registrySource: models[627].registrySource,
@@ -25909,8 +26148,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_7 = {
   params: models[627].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_8 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_8',
+export const TTS_VOICE_STYLE_SUPERTONIC_3 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_3',
   src: `registry://${models[628].registrySource}/${models[628].registryPath}`,
   registryPath: models[628].registryPath,
   registrySource: models[628].registrySource,
@@ -25927,8 +26166,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_8 = {
   params: models[628].params
 } as const
 
-export const TTS_VOICE_STYLE_SUPERTONIC_9 = {
-  name: 'TTS_VOICE_STYLE_SUPERTONIC_9',
+export const TTS_VOICE_STYLE_SUPERTONIC_4 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_4',
   src: `registry://${models[629].registrySource}/${models[629].registryPath}`,
   registryPath: models[629].registryPath,
   registrySource: models[629].registrySource,
@@ -25945,8 +26184,8 @@ export const TTS_VOICE_STYLE_SUPERTONIC_9 = {
   params: models[629].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX',
+export const TTS_VOICE_STYLE_SUPERTONIC_5 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_5',
   src: `registry://${models[630].registrySource}/${models[630].registryPath}`,
   registryPath: models[630].registryPath,
   registrySource: models[630].registrySource,
@@ -25963,8 +26202,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
   params: models[630].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX',
+export const TTS_VOICE_STYLE_SUPERTONIC_6 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_6',
   src: `registry://${models[631].registrySource}/${models[631].registryPath}`,
   registryPath: models[631].registryPath,
   registrySource: models[631].registrySource,
@@ -25981,8 +26220,8 @@ export const TTS_S3GEN_EN_CHATTERBOX = {
   params: models[631].params
 } as const
 
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_FP16',
+export const TTS_VOICE_STYLE_SUPERTONIC_7 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_7',
   src: `registry://${models[632].registrySource}/${models[632].registryPath}`,
   registryPath: models[632].registryPath,
   registrySource: models[632].registrySource,
@@ -25999,8 +26238,8 @@ export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
   params: models[632].params
 } as const
 
-export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_FP16',
+export const TTS_VOICE_STYLE_SUPERTONIC_8 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_8',
   src: `registry://${models[633].registrySource}/${models[633].registryPath}`,
   registryPath: models[633].registryPath,
   registrySource: models[633].registrySource,
@@ -26017,8 +26256,8 @@ export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
   params: models[633].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX',
+export const TTS_VOICE_STYLE_SUPERTONIC_9 = {
+  name: 'TTS_VOICE_STYLE_SUPERTONIC_9',
   src: `registry://${models[634].registrySource}/${models[634].registryPath}`,
   registryPath: models[634].registryPath,
   registrySource: models[634].registrySource,
@@ -26035,8 +26274,8 @@ export const TTS_MECAB_IPADIC_CHATTERBOX = {
   params: models[634].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX_1 = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX_1',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX',
   src: `registry://${models[635].registrySource}/${models[635].registryPath}`,
   registryPath: models[635].registryPath,
   registrySource: models[635].registrySource,
@@ -26053,8 +26292,8 @@ export const TTS_MECAB_IPADIC_CHATTERBOX_1 = {
   params: models[635].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX_2 = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX_2',
+export const TTS_S3GEN_EN_CHATTERBOX = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX',
   src: `registry://${models[636].registrySource}/${models[636].registryPath}`,
   registryPath: models[636].registryPath,
   registrySource: models[636].registrySource,
@@ -26071,8 +26310,8 @@ export const TTS_MECAB_IPADIC_CHATTERBOX_2 = {
   params: models[636].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX_3 = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX_3',
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_FP16',
   src: `registry://${models[637].registrySource}/${models[637].registryPath}`,
   registryPath: models[637].registryPath,
   registrySource: models[637].registrySource,
@@ -26089,8 +26328,8 @@ export const TTS_MECAB_IPADIC_CHATTERBOX_3 = {
   params: models[637].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX_4 = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX_4',
+export const TTS_T3_TURBO_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_FP16',
   src: `registry://${models[638].registrySource}/${models[638].registryPath}`,
   registryPath: models[638].registryPath,
   registrySource: models[638].registrySource,
@@ -26107,8 +26346,8 @@ export const TTS_MECAB_IPADIC_CHATTERBOX_4 = {
   params: models[638].params
 } as const
 
-export const TTS_MECAB_IPADIC_CHATTERBOX_5 = {
-  name: 'TTS_MECAB_IPADIC_CHATTERBOX_5',
+export const TTS_MECAB_IPADIC_CHATTERBOX = {
+  name: 'TTS_MECAB_IPADIC_CHATTERBOX',
   src: `registry://${models[639].registrySource}/${models[639].registryPath}`,
   registryPath: models[639].registryPath,
   registrySource: models[639].registrySource,
@@ -26127,96 +26366,6 @@ export const TTS_MECAB_IPADIC_CHATTERBOX_5 = {
 
 export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0 = {
   name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0',
-  src: `registry://${models[640].registrySource}/${models[640].registryPath}`,
-  registryPath: models[640].registryPath,
-  registrySource: models[640].registrySource,
-  blobCoreKey: models[640].blobCoreKey,
-  blobBlockOffset: models[640].blobBlockOffset,
-  blobBlockLength: models[640].blobBlockLength,
-  blobByteOffset: models[640].blobByteOffset,
-  modelId: models[640].modelId,
-  expectedSize: models[640].expectedSize,
-  sha256Checksum: models[640].sha256Checksum,
-  addon: models[640].addon,
-  engine: models[640].engine,
-  quantization: models[640].quantization,
-  params: models[640].params
-} as const
-
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0',
-  src: `registry://${models[641].registrySource}/${models[641].registryPath}`,
-  registryPath: models[641].registryPath,
-  registrySource: models[641].registrySource,
-  blobCoreKey: models[641].blobCoreKey,
-  blobBlockOffset: models[641].blobBlockOffset,
-  blobBlockLength: models[641].blobBlockLength,
-  blobByteOffset: models[641].blobByteOffset,
-  modelId: models[641].modelId,
-  expectedSize: models[641].expectedSize,
-  sha256Checksum: models[641].sha256Checksum,
-  addon: models[641].addon,
-  engine: models[641].engine,
-  quantization: models[641].quantization,
-  params: models[641].params
-} as const
-
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q4_0',
-  src: `registry://${models[642].registrySource}/${models[642].registryPath}`,
-  registryPath: models[642].registryPath,
-  registrySource: models[642].registrySource,
-  blobCoreKey: models[642].blobCoreKey,
-  blobBlockOffset: models[642].blobBlockOffset,
-  blobBlockLength: models[642].blobBlockLength,
-  blobByteOffset: models[642].blobByteOffset,
-  modelId: models[642].modelId,
-  expectedSize: models[642].expectedSize,
-  sha256Checksum: models[642].sha256Checksum,
-  addon: models[642].addon,
-  engine: models[642].engine,
-  quantization: models[642].quantization,
-  params: models[642].params
-} as const
-
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
-  src: `registry://${models[643].registrySource}/${models[643].registryPath}`,
-  registryPath: models[643].registryPath,
-  registrySource: models[643].registrySource,
-  blobCoreKey: models[643].blobCoreKey,
-  blobBlockOffset: models[643].blobBlockOffset,
-  blobBlockLength: models[643].blobBlockLength,
-  blobByteOffset: models[643].blobByteOffset,
-  modelId: models[643].modelId,
-  expectedSize: models[643].expectedSize,
-  sha256Checksum: models[643].sha256Checksum,
-  addon: models[643].addon,
-  engine: models[643].engine,
-  quantization: models[643].quantization,
-  params: models[643].params
-} as const
-
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0',
-  src: `registry://${models[644].registrySource}/${models[644].registryPath}`,
-  registryPath: models[644].registryPath,
-  registrySource: models[644].registrySource,
-  blobCoreKey: models[644].blobCoreKey,
-  blobBlockOffset: models[644].blobBlockOffset,
-  blobBlockLength: models[644].blobBlockLength,
-  blobByteOffset: models[644].blobByteOffset,
-  modelId: models[644].modelId,
-  expectedSize: models[644].expectedSize,
-  sha256Checksum: models[644].sha256Checksum,
-  addon: models[644].addon,
-  engine: models[644].engine,
-  quantization: models[644].quantization,
-  params: models[644].params
-} as const
-
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0',
   src: `registry://${models[645].registrySource}/${models[645].registryPath}`,
   registryPath: models[645].registryPath,
   registrySource: models[645].registrySource,
@@ -26233,8 +26382,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
   params: models[645].params
 } as const
 
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
-  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0',
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0',
   src: `registry://${models[646].registrySource}/${models[646].registryPath}`,
   registryPath: models[646].registryPath,
   registrySource: models[646].registrySource,
@@ -26251,8 +26400,8 @@ export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
   params: models[646].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q4_0',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q4_0',
   src: `registry://${models[647].registrySource}/${models[647].registryPath}`,
   registryPath: models[647].registryPath,
   registrySource: models[647].registrySource,
@@ -26269,8 +26418,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
   params: models[647].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q5_0',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q8_0',
   src: `registry://${models[648].registrySource}/${models[648].registryPath}`,
   registryPath: models[648].registryPath,
   registrySource: models[648].registrySource,
@@ -26287,8 +26436,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
   params: models[648].params
 } as const
 
-export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
-  name: 'TTS_S3GEN_EN_CHATTERBOX_Q8_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0',
   src: `registry://${models[649].registrySource}/${models[649].registryPath}`,
   registryPath: models[649].registryPath,
   registrySource: models[649].registrySource,
@@ -26305,8 +26454,8 @@ export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
   params: models[649].params
 } as const
 
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
-  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0',
   src: `registry://${models[650].registrySource}/${models[650].registryPath}`,
   registryPath: models[650].registryPath,
   registrySource: models[650].registrySource,
@@ -26323,8 +26472,8 @@ export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
   params: models[650].params
 } as const
 
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
-  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q5_0',
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0 = {
+  name: 'TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0',
   src: `registry://${models[651].registrySource}/${models[651].registryPath}`,
   registryPath: models[651].registryPath,
   registrySource: models[651].registrySource,
@@ -26341,8 +26490,8 @@ export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
   params: models[651].params
 } as const
 
-export const TTS_EN_SUPERTONIC_Q4_0 = {
-  name: 'TTS_EN_SUPERTONIC_Q4_0',
+export const TTS_S3GEN_EN_CHATTERBOX_Q4_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q4_0',
   src: `registry://${models[652].registrySource}/${models[652].registryPath}`,
   registryPath: models[652].registryPath,
   registrySource: models[652].registrySource,
@@ -26359,8 +26508,8 @@ export const TTS_EN_SUPERTONIC_Q4_0 = {
   params: models[652].params
 } as const
 
-export const TTS_EN_SUPERTONIC_Q8_0 = {
-  name: 'TTS_EN_SUPERTONIC_Q8_0',
+export const TTS_S3GEN_EN_CHATTERBOX_Q5_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q5_0',
   src: `registry://${models[653].registrySource}/${models[653].registryPath}`,
   registryPath: models[653].registryPath,
   registrySource: models[653].registrySource,
@@ -26377,8 +26526,8 @@ export const TTS_EN_SUPERTONIC_Q8_0 = {
   params: models[653].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q4_0',
+export const TTS_S3GEN_EN_CHATTERBOX_Q8_0 = {
+  name: 'TTS_S3GEN_EN_CHATTERBOX_Q8_0',
   src: `registry://${models[654].registrySource}/${models[654].registryPath}`,
   registryPath: models[654].registryPath,
   registrySource: models[654].registrySource,
@@ -26395,8 +26544,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
   params: models[654].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q8_0',
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0 = {
+  name: 'TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0',
   src: `registry://${models[655].registrySource}/${models[655].registryPath}`,
   registryPath: models[655].registryPath,
   registrySource: models[655].registrySource,
@@ -26413,8 +26562,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
   params: models[655].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP16',
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0 = {
+  name: 'TTS_T3_TURBO_EN_CHATTERBOX_Q5_0',
   src: `registry://${models[656].registrySource}/${models[656].registryPath}`,
   registryPath: models[656].registryPath,
   registrySource: models[656].registrySource,
@@ -26431,8 +26580,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
   params: models[656].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP32',
+export const TTS_CANGJIE_ZH_CHATTERBOX = {
+  name: 'TTS_CANGJIE_ZH_CHATTERBOX',
   src: `registry://${models[657].registrySource}/${models[657].registryPath}`,
   registryPath: models[657].registryPath,
   registrySource: models[657].registrySource,
@@ -26449,8 +26598,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
   params: models[657].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
+export const TTS_ENHANCER_LAVASR_FP16 = {
+  name: 'TTS_ENHANCER_LAVASR_FP16',
   src: `registry://${models[658].registrySource}/${models[658].registryPath}`,
   registryPath: models[658].registryPath,
   registrySource: models[658].registrySource,
@@ -26467,8 +26616,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
   params: models[658].params
 } as const
 
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
-  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
+export const TTS_ENHANCER_LAVASR_FP32 = {
+  name: 'TTS_ENHANCER_LAVASR_FP32',
   src: `registry://${models[659].registrySource}/${models[659].registryPath}`,
   registryPath: models[659].registryPath,
   registrySource: models[659].registrySource,
@@ -26485,8 +26634,8 @@ export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
   params: models[659].params
 } as const
 
-export const TTS_DENOISER_LAVASR_FP32 = {
-  name: 'TTS_DENOISER_LAVASR_FP32',
+export const TTS_DENOISER_LAVASR_FP16 = {
+  name: 'TTS_DENOISER_LAVASR_FP16',
   src: `registry://${models[660].registrySource}/${models[660].registryPath}`,
   registryPath: models[660].registryPath,
   registrySource: models[660].registrySource,
@@ -26503,8 +26652,8 @@ export const TTS_DENOISER_LAVASR_FP32 = {
   params: models[660].params
 } as const
 
-export const TTS_ENHANCER_BACKBONE_LAVASR_FP32 = {
-  name: 'TTS_ENHANCER_BACKBONE_LAVASR_FP32',
+export const TTS_DENOISER_LAVASR_FP32 = {
+  name: 'TTS_DENOISER_LAVASR_FP32',
   src: `registry://${models[661].registrySource}/${models[661].registryPath}`,
   registryPath: models[661].registryPath,
   registrySource: models[661].registrySource,
@@ -26521,8 +26670,26 @@ export const TTS_ENHANCER_BACKBONE_LAVASR_FP32 = {
   params: models[661].params
 } as const
 
-export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32 = {
-  name: 'TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32',
+export const TTS_EN_SUPERTONIC_Q4_0 = {
+  name: 'TTS_EN_SUPERTONIC_Q4_0',
+  src: `registry://${models[662].registrySource}/${models[662].registryPath}`,
+  registryPath: models[662].registryPath,
+  registrySource: models[662].registrySource,
+  blobCoreKey: models[662].blobCoreKey,
+  blobBlockOffset: models[662].blobBlockOffset,
+  blobBlockLength: models[662].blobBlockLength,
+  blobByteOffset: models[662].blobByteOffset,
+  modelId: models[662].modelId,
+  expectedSize: models[662].expectedSize,
+  sha256Checksum: models[662].sha256Checksum,
+  addon: models[662].addon,
+  engine: models[662].engine,
+  quantization: models[662].quantization,
+  params: models[662].params
+} as const
+
+export const TTS_EN_SUPERTONIC_Q8_0 = {
+  name: 'TTS_EN_SUPERTONIC_Q8_0',
   src: `registry://${models[663].registrySource}/${models[663].registryPath}`,
   registryPath: models[663].registryPath,
   registrySource: models[663].registrySource,
@@ -26539,8 +26706,26 @@ export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32 = {
   params: models[663].params
 } as const
 
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16',
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q4_0',
+  src: `registry://${models[664].registrySource}/${models[664].registryPath}`,
+  registryPath: models[664].registryPath,
+  registrySource: models[664].registrySource,
+  blobCoreKey: models[664].blobCoreKey,
+  blobBlockOffset: models[664].blobBlockOffset,
+  blobBlockLength: models[664].blobBlockLength,
+  blobByteOffset: models[664].blobByteOffset,
+  modelId: models[664].modelId,
+  expectedSize: models[664].expectedSize,
+  sha256Checksum: models[664].sha256Checksum,
+  addon: models[664].addon,
+  engine: models[664].engine,
+  quantization: models[664].quantization,
+  params: models[664].params
+} as const
+
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC2_Q8_0',
   src: `registry://${models[665].registrySource}/${models[665].registryPath}`,
   registryPath: models[665].registryPath,
   registrySource: models[665].registrySource,
@@ -26557,8 +26742,26 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16 = {
   params: models[665].params
 } as const
 
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4 = {
-  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4',
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP16 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP16',
+  src: `registry://${models[666].registrySource}/${models[666].registryPath}`,
+  registryPath: models[666].registryPath,
+  registrySource: models[666].registrySource,
+  blobCoreKey: models[666].blobCoreKey,
+  blobBlockOffset: models[666].blobBlockOffset,
+  blobBlockLength: models[666].blobBlockLength,
+  blobByteOffset: models[666].blobByteOffset,
+  modelId: models[666].modelId,
+  expectedSize: models[666].expectedSize,
+  sha256Checksum: models[666].sha256Checksum,
+  addon: models[666].addon,
+  engine: models[666].engine,
+  quantization: models[666].quantization,
+  params: models[666].params
+} as const
+
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP32 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_FP32',
   src: `registry://${models[667].registrySource}/${models[667].registryPath}`,
   registryPath: models[667].registryPath,
   registrySource: models[667].registrySource,
@@ -26575,8 +26778,26 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4 = {
   params: models[667].params
 } as const
 
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16 = {
-  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16',
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q8_0',
+  src: `registry://${models[668].registrySource}/${models[668].registryPath}`,
+  registryPath: models[668].registryPath,
+  registrySource: models[668].registrySource,
+  blobCoreKey: models[668].blobCoreKey,
+  blobBlockOffset: models[668].blobBlockOffset,
+  blobBlockLength: models[668].blobBlockLength,
+  blobByteOffset: models[668].blobByteOffset,
+  modelId: models[668].modelId,
+  expectedSize: models[668].expectedSize,
+  sha256Checksum: models[668].sha256Checksum,
+  addon: models[668].addon,
+  engine: models[668].engine,
+  quantization: models[668].quantization,
+  params: models[668].params
+} as const
+
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0 = {
+  name: 'TTS_MULTILINGUAL_SUPERTONIC3_Q4_0',
   src: `registry://${models[669].registrySource}/${models[669].registryPath}`,
   registryPath: models[669].registryPath,
   registrySource: models[669].registrySource,
@@ -26593,8 +26814,26 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16 = {
   params: models[669].params
 } as const
 
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED = {
-  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED',
+export const TTS_DENOISER_LAVASR_FP32_1 = {
+  name: 'TTS_DENOISER_LAVASR_FP32_1',
+  src: `registry://${models[670].registrySource}/${models[670].registryPath}`,
+  registryPath: models[670].registryPath,
+  registrySource: models[670].registrySource,
+  blobCoreKey: models[670].blobCoreKey,
+  blobBlockOffset: models[670].blobBlockOffset,
+  blobBlockLength: models[670].blobBlockLength,
+  blobByteOffset: models[670].blobByteOffset,
+  modelId: models[670].modelId,
+  expectedSize: models[670].expectedSize,
+  sha256Checksum: models[670].sha256Checksum,
+  addon: models[670].addon,
+  engine: models[670].engine,
+  quantization: models[670].quantization,
+  params: models[670].params
+} as const
+
+export const TTS_ENHANCER_BACKBONE_LAVASR_FP32 = {
+  name: 'TTS_ENHANCER_BACKBONE_LAVASR_FP32',
   src: `registry://${models[671].registrySource}/${models[671].registryPath}`,
   registryPath: models[671].registryPath,
   registrySource: models[671].registrySource,
@@ -26611,8 +26850,8 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED = {
   params: models[671].params
 } as const
 
-export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32 = {
-  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32',
+export const TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32 = {
+  name: 'TTS_ENHANCER_SPEC_HEAD_LAVASR_FP32',
   src: `registry://${models[673].registrySource}/${models[673].registryPath}`,
   registryPath: models[673].registryPath,
   registrySource: models[673].registrySource,
@@ -26629,8 +26868,8 @@ export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32 = {
   params: models[673].params
 } as const
 
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16',
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP16',
   src: `registry://${models[675].registrySource}/${models[675].registryPath}`,
   registryPath: models[675].registryPath,
   registrySource: models[675].registrySource,
@@ -26647,8 +26886,8 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16 = {
   params: models[675].params
 } as const
 
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4 = {
-  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4',
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4 = {
+  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4',
   src: `registry://${models[677].registrySource}/${models[677].registryPath}`,
   registryPath: models[677].registryPath,
   registrySource: models[677].registrySource,
@@ -26665,8 +26904,8 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4 = {
   params: models[677].params
 } as const
 
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16 = {
-  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16',
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16 = {
+  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_Q4F16',
   src: `registry://${models[679].registrySource}/${models[679].registryPath}`,
   registryPath: models[679].registryPath,
   registrySource: models[679].registrySource,
@@ -26683,8 +26922,8 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16 = {
   params: models[679].params
 } as const
 
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED = {
-  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED',
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED = {
+  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_QUANTIZED',
   src: `registry://${models[681].registrySource}/${models[681].registryPath}`,
   registryPath: models[681].registryPath,
   registrySource: models[681].registrySource,
@@ -26701,8 +26940,8 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED = {
   params: models[681].params
 } as const
 
-export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32 = {
-  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32',
+export const TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32 = {
+  name: 'TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32',
   src: `registry://${models[683].registrySource}/${models[683].registryPath}`,
   registryPath: models[683].registryPath,
   registrySource: models[683].registrySource,
@@ -26719,8 +26958,8 @@ export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32 = {
   params: models[683].params
 } as const
 
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16',
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP16',
   src: `registry://${models[685].registrySource}/${models[685].registryPath}`,
   registryPath: models[685].registryPath,
   registrySource: models[685].registrySource,
@@ -26737,8 +26976,8 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16 = {
   params: models[685].params
 } as const
 
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4 = {
-  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4',
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4 = {
+  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4',
   src: `registry://${models[687].registrySource}/${models[687].registryPath}`,
   registryPath: models[687].registryPath,
   registrySource: models[687].registrySource,
@@ -26755,8 +26994,8 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4 = {
   params: models[687].params
 } as const
 
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16 = {
-  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16',
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16 = {
+  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_Q4F16',
   src: `registry://${models[689].registrySource}/${models[689].registryPath}`,
   registryPath: models[689].registryPath,
   registrySource: models[689].registrySource,
@@ -26773,8 +27012,8 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16 = {
   params: models[689].params
 } as const
 
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED = {
-  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED',
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED = {
+  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_QUANTIZED',
   src: `registry://${models[691].registrySource}/${models[691].registryPath}`,
   registryPath: models[691].registryPath,
   registrySource: models[691].registrySource,
@@ -26791,8 +27030,8 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED = {
   params: models[691].params
 } as const
 
-export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32 = {
-  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32',
+export const TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32 = {
+  name: 'TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32',
   src: `registry://${models[693].registrySource}/${models[693].registryPath}`,
   registryPath: models[693].registryPath,
   registrySource: models[693].registrySource,
@@ -26809,8 +27048,8 @@ export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32 = {
   params: models[693].params
 } as const
 
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16 = {
-  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16',
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP16',
   src: `registry://${models[695].registrySource}/${models[695].registryPath}`,
   registryPath: models[695].registryPath,
   registrySource: models[695].registrySource,
@@ -26827,8 +27066,8 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16 = {
   params: models[695].params
 } as const
 
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4 = {
-  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4',
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4 = {
+  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4',
   src: `registry://${models[697].registrySource}/${models[697].registryPath}`,
   registryPath: models[697].registryPath,
   registrySource: models[697].registrySource,
@@ -26845,8 +27084,8 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4 = {
   params: models[697].params
 } as const
 
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16 = {
-  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16',
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16 = {
+  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_Q4F16',
   src: `registry://${models[699].registrySource}/${models[699].registryPath}`,
   registryPath: models[699].registryPath,
   registrySource: models[699].registrySource,
@@ -26863,8 +27102,8 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16 = {
   params: models[699].params
 } as const
 
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED = {
-  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED',
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED = {
+  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_QUANTIZED',
   src: `registry://${models[701].registrySource}/${models[701].registryPath}`,
   registryPath: models[701].registryPath,
   registrySource: models[701].registrySource,
@@ -26881,8 +27120,8 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED = {
   params: models[701].params
 } as const
 
-export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32 = {
-  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32',
+export const TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32 = {
+  name: 'TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32',
   src: `registry://${models[703].registrySource}/${models[703].registryPath}`,
   registryPath: models[703].registryPath,
   registrySource: models[703].registrySource,
@@ -26899,8 +27138,8 @@ export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32 = {
   params: models[703].params
 } as const
 
-export const TTS_TOKENIZER_EN_CHATTERBOX = {
-  name: 'TTS_TOKENIZER_EN_CHATTERBOX',
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16 = {
+  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP16',
   src: `registry://${models[705].registrySource}/${models[705].registryPath}`,
   registryPath: models[705].registryPath,
   registrySource: models[705].registrySource,
@@ -26917,26 +27156,8 @@ export const TTS_TOKENIZER_EN_CHATTERBOX = {
   params: models[705].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
-  src: `registry://${models[706].registrySource}/${models[706].registryPath}`,
-  registryPath: models[706].registryPath,
-  registrySource: models[706].registrySource,
-  blobCoreKey: models[706].blobCoreKey,
-  blobBlockOffset: models[706].blobBlockOffset,
-  blobBlockLength: models[706].blobBlockLength,
-  blobByteOffset: models[706].blobByteOffset,
-  modelId: models[706].modelId,
-  expectedSize: models[706].expectedSize,
-  sha256Checksum: models[706].sha256Checksum,
-  addon: models[706].addon,
-  engine: models[706].engine,
-  quantization: models[706].quantization,
-  params: models[706].params
-} as const
-
-export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4 = {
+  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4',
   src: `registry://${models[707].registrySource}/${models[707].registryPath}`,
   registryPath: models[707].registryPath,
   registrySource: models[707].registrySource,
@@ -26953,26 +27174,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
   params: models[707].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE',
-  src: `registry://${models[708].registrySource}/${models[708].registryPath}`,
-  registryPath: models[708].registryPath,
-  registrySource: models[708].registrySource,
-  blobCoreKey: models[708].blobCoreKey,
-  blobBlockOffset: models[708].blobBlockOffset,
-  blobBlockLength: models[708].blobBlockLength,
-  blobByteOffset: models[708].blobByteOffset,
-  modelId: models[708].modelId,
-  expectedSize: models[708].expectedSize,
-  sha256Checksum: models[708].sha256Checksum,
-  addon: models[708].addon,
-  engine: models[708].engine,
-  quantization: models[708].quantization,
-  params: models[708].params
-} as const
-
-export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32',
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16 = {
+  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_Q4F16',
   src: `registry://${models[709].registrySource}/${models[709].registryPath}`,
   registryPath: models[709].registryPath,
   registrySource: models[709].registrySource,
@@ -26989,26 +27192,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32 = {
   params: models[709].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
-  src: `registry://${models[710].registrySource}/${models[710].registryPath}`,
-  registryPath: models[710].registryPath,
-  registrySource: models[710].registrySource,
-  blobCoreKey: models[710].blobCoreKey,
-  blobBlockOffset: models[710].blobBlockOffset,
-  blobBlockLength: models[710].blobBlockLength,
-  blobByteOffset: models[710].blobByteOffset,
-  modelId: models[710].modelId,
-  expectedSize: models[710].expectedSize,
-  sha256Checksum: models[710].sha256Checksum,
-  addon: models[710].addon,
-  engine: models[710].engine,
-  quantization: models[710].quantization,
-  params: models[710].params
-} as const
-
-export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32',
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED = {
+  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_QUANTIZED',
   src: `registry://${models[711].registrySource}/${models[711].registryPath}`,
   registryPath: models[711].registryPath,
   registrySource: models[711].registrySource,
@@ -27025,26 +27210,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32 = {
   params: models[711].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE',
-  src: `registry://${models[712].registrySource}/${models[712].registryPath}`,
-  registryPath: models[712].registryPath,
-  registrySource: models[712].registrySource,
-  blobCoreKey: models[712].blobCoreKey,
-  blobBlockOffset: models[712].blobBlockOffset,
-  blobBlockLength: models[712].blobBlockLength,
-  blobByteOffset: models[712].blobByteOffset,
-  modelId: models[712].modelId,
-  expectedSize: models[712].expectedSize,
-  sha256Checksum: models[712].sha256Checksum,
-  addon: models[712].addon,
-  engine: models[712].engine,
-  quantization: models[712].quantization,
-  params: models[712].params
-} as const
-
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
+export const TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32 = {
+  name: 'TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32',
   src: `registry://${models[713].registrySource}/${models[713].registryPath}`,
   registryPath: models[713].registryPath,
   registrySource: models[713].registrySource,
@@ -27061,26 +27228,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
   params: models[713].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
-  src: `registry://${models[714].registrySource}/${models[714].registryPath}`,
-  registryPath: models[714].registryPath,
-  registrySource: models[714].registrySource,
-  blobCoreKey: models[714].blobCoreKey,
-  blobBlockOffset: models[714].blobBlockOffset,
-  blobBlockLength: models[714].blobBlockLength,
-  blobByteOffset: models[714].blobByteOffset,
-  modelId: models[714].modelId,
-  expectedSize: models[714].expectedSize,
-  sha256Checksum: models[714].sha256Checksum,
-  addon: models[714].addon,
-  engine: models[714].engine,
-  quantization: models[714].quantization,
-  params: models[714].params
-} as const
-
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
+export const TTS_TOKENIZER_EN_CHATTERBOX = {
+  name: 'TTS_TOKENIZER_EN_CHATTERBOX',
   src: `registry://${models[715].registrySource}/${models[715].registryPath}`,
   registryPath: models[715].registryPath,
   registrySource: models[715].registrySource,
@@ -27097,8 +27246,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
   params: models[715].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
+export const TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
   src: `registry://${models[716].registrySource}/${models[716].registryPath}`,
   registryPath: models[716].registryPath,
   registrySource: models[716].registrySource,
@@ -27115,8 +27264,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
   params: models[716].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
+export const TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
   src: `registry://${models[717].registrySource}/${models[717].registryPath}`,
   registryPath: models[717].registryPath,
   registrySource: models[717].registrySource,
@@ -27133,8 +27282,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
   params: models[717].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
+export const TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE',
   src: `registry://${models[718].registrySource}/${models[718].registryPath}`,
   registryPath: models[718].registryPath,
   registrySource: models[718].registrySource,
@@ -27151,8 +27300,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
   params: models[718].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
+export const TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32',
   src: `registry://${models[719].registrySource}/${models[719].registryPath}`,
   registryPath: models[719].registryPath,
   registrySource: models[719].registrySource,
@@ -27169,8 +27318,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
   params: models[719].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
+export const TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
   src: `registry://${models[720].registrySource}/${models[720].registryPath}`,
   registryPath: models[720].registryPath,
   registrySource: models[720].registrySource,
@@ -27187,8 +27336,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
   params: models[720].params
 } as const
 
-export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
-  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
+export const TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32',
   src: `registry://${models[721].registrySource}/${models[721].registryPath}`,
   registryPath: models[721].registryPath,
   registrySource: models[721].registrySource,
@@ -27205,8 +27354,8 @@ export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
   params: models[721].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE',
   src: `registry://${models[722].registrySource}/${models[722].registryPath}`,
   registryPath: models[722].registryPath,
   registrySource: models[722].registrySource,
@@ -27223,8 +27372,8 @@ export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32 = {
   params: models[722].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
   src: `registry://${models[723].registrySource}/${models[723].registryPath}`,
   registryPath: models[723].registryPath,
   registrySource: models[723].registrySource,
@@ -27241,8 +27390,8 @@ export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
   params: models[723].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
   src: `registry://${models[724].registrySource}/${models[724].registryPath}`,
   registryPath: models[724].registryPath,
   registrySource: models[724].registrySource,
@@ -27259,8 +27408,8 @@ export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE = {
   params: models[724].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
   src: `registry://${models[725].registrySource}/${models[725].registryPath}`,
   registryPath: models[725].registryPath,
   registrySource: models[725].registrySource,
@@ -27277,8 +27426,8 @@ export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE = {
   params: models[725].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
   src: `registry://${models[726].registrySource}/${models[726].registryPath}`,
   registryPath: models[726].registryPath,
   registrySource: models[726].registrySource,
@@ -27295,8 +27444,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32 = {
   params: models[726].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
   src: `registry://${models[727].registrySource}/${models[727].registryPath}`,
   registryPath: models[727].registryPath,
   registrySource: models[727].registrySource,
@@ -27313,8 +27462,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE = {
   params: models[727].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
   src: `registry://${models[728].registrySource}/${models[728].registryPath}`,
   registryPath: models[728].registryPath,
   registrySource: models[728].registrySource,
@@ -27331,8 +27480,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
   params: models[728].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
   src: `registry://${models[729].registrySource}/${models[729].registryPath}`,
   registryPath: models[729].registryPath,
   registrySource: models[729].registrySource,
@@ -27349,8 +27498,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2 = {
   params: models[729].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
   src: `registry://${models[730].registrySource}/${models[730].registryPath}`,
   registryPath: models[730].registryPath,
   registrySource: models[730].registrySource,
@@ -27367,8 +27516,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
   params: models[730].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
+export const TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
+  name: 'TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
   src: `registry://${models[731].registrySource}/${models[731].registryPath}`,
   registryPath: models[731].registryPath,
   registrySource: models[731].registrySource,
@@ -27385,8 +27534,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
   params: models[731].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
+export const TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32',
   src: `registry://${models[732].registrySource}/${models[732].registryPath}`,
   registryPath: models[732].registryPath,
   registrySource: models[732].registrySource,
@@ -27403,8 +27552,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
   params: models[732].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
+export const TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32',
   src: `registry://${models[733].registrySource}/${models[733].registryPath}`,
   registryPath: models[733].registryPath,
   registrySource: models[733].registrySource,
@@ -27421,8 +27570,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
   params: models[733].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
+export const TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_TTS_CONFIG_SUPERTONE',
   src: `registry://${models[734].registrySource}/${models[734].registryPath}`,
   registryPath: models[734].registryPath,
   registrySource: models[734].registrySource,
@@ -27439,8 +27588,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
   params: models[734].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
+export const TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_UNICODE_INDEXER_SUPERTONE',
   src: `registry://${models[735].registrySource}/${models[735].registryPath}`,
   registryPath: models[735].registryPath,
   registrySource: models[735].registrySource,
@@ -27457,8 +27606,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
   params: models[735].params
 } as const
 
-export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
-  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
+export const TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32',
   src: `registry://${models[736].registrySource}/${models[736].registryPath}`,
   registryPath: models[736].registryPath,
   registrySource: models[736].registrySource,
@@ -27475,8 +27624,8 @@ export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
   params: models[736].params
 } as const
 
-export const PI05_BASE_Q_AGGRESSIVE = {
-  name: 'PI05_BASE_Q_AGGRESSIVE',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE',
   src: `registry://${models[737].registrySource}/${models[737].registryPath}`,
   registryPath: models[737].registryPath,
   registrySource: models[737].registrySource,
@@ -27493,8 +27642,8 @@ export const PI05_BASE_Q_AGGRESSIVE = {
   params: models[737].params
 } as const
 
-export const SMOLVLA_LIBERO_VISION_Q8 = {
-  name: 'SMOLVLA_LIBERO_VISION_Q8',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_1',
   src: `registry://${models[738].registrySource}/${models[738].registryPath}`,
   registryPath: models[738].registryPath,
   registrySource: models[738].registrySource,
@@ -27511,8 +27660,8 @@ export const SMOLVLA_LIBERO_VISION_Q8 = {
   params: models[738].params
 } as const
 
-export const WHISPER_BASE_Q8_0 = {
-  name: 'WHISPER_BASE_Q8_0',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_2',
   src: `registry://${models[739].registrySource}/${models[739].registryPath}`,
   registryPath: models[739].registryPath,
   registrySource: models[739].registrySource,
@@ -27529,8 +27678,8 @@ export const WHISPER_BASE_Q8_0 = {
   params: models[739].params
 } as const
 
-export const WHISPER_BASE_Q0F16 = {
-  name: 'WHISPER_BASE_Q0F16',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_3',
   src: `registry://${models[740].registrySource}/${models[740].registryPath}`,
   registryPath: models[740].registryPath,
   registrySource: models[740].registrySource,
@@ -27547,8 +27696,8 @@ export const WHISPER_BASE_Q0F16 = {
   params: models[740].params
 } as const
 
-export const WHISPER_EN_BASE_Q8_0 = {
-  name: 'WHISPER_EN_BASE_Q8_0',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_4',
   src: `registry://${models[741].registrySource}/${models[741].registryPath}`,
   registryPath: models[741].registryPath,
   registrySource: models[741].registrySource,
@@ -27565,8 +27714,8 @@ export const WHISPER_EN_BASE_Q8_0 = {
   params: models[741].params
 } as const
 
-export const WHISPER_EN_BASE_Q0F16 = {
-  name: 'WHISPER_EN_BASE_Q0F16',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_5',
   src: `registry://${models[742].registrySource}/${models[742].registryPath}`,
   registryPath: models[742].registryPath,
   registrySource: models[742].registrySource,
@@ -27583,8 +27732,8 @@ export const WHISPER_EN_BASE_Q0F16 = {
   params: models[742].params
 } as const
 
-export const WHISPER_LARGE_V3_TURBO = {
-  name: 'WHISPER_LARGE_V3_TURBO',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_6',
   src: `registry://${models[743].registrySource}/${models[743].registryPath}`,
   registryPath: models[743].registryPath,
   registrySource: models[743].registrySource,
@@ -27601,8 +27750,8 @@ export const WHISPER_LARGE_V3_TURBO = {
   params: models[743].params
 } as const
 
-export const WHISPER_SMALL_Q8_0 = {
-  name: 'WHISPER_SMALL_Q8_0',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_7',
   src: `registry://${models[744].registrySource}/${models[744].registryPath}`,
   registryPath: models[744].registryPath,
   registrySource: models[744].registrySource,
@@ -27619,8 +27768,8 @@ export const WHISPER_SMALL_Q8_0 = {
   params: models[744].params
 } as const
 
-export const WHISPER_SMALL_Q0F16 = {
-  name: 'WHISPER_SMALL_Q0F16',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_8',
   src: `registry://${models[745].registrySource}/${models[745].registryPath}`,
   registryPath: models[745].registryPath,
   registrySource: models[745].registrySource,
@@ -27637,8 +27786,8 @@ export const WHISPER_SMALL_Q0F16 = {
   params: models[745].params
 } as const
 
-export const WHISPER_EN_SMALL_Q8_0 = {
-  name: 'WHISPER_EN_SMALL_Q8_0',
+export const TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9 = {
+  name: 'TTS_SUPERTONIC_OFFICIAL_VOICE_STYLE_SUPERTONE_9',
   src: `registry://${models[746].registrySource}/${models[746].registryPath}`,
   registryPath: models[746].registryPath,
   registrySource: models[746].registrySource,
@@ -27655,8 +27804,8 @@ export const WHISPER_EN_SMALL_Q8_0 = {
   params: models[746].params
 } as const
 
-export const WHISPER_EN_SMALL_Q0F16 = {
-  name: 'WHISPER_EN_SMALL_Q0F16',
+export const PI05_BASE_Q_AGGRESSIVE = {
+  name: 'PI05_BASE_Q_AGGRESSIVE',
   src: `registry://${models[747].registrySource}/${models[747].registryPath}`,
   registryPath: models[747].registryPath,
   registrySource: models[747].registrySource,
@@ -27673,8 +27822,8 @@ export const WHISPER_EN_SMALL_Q0F16 = {
   params: models[747].params
 } as const
 
-export const WHISPER_TINY_Q8_0 = {
-  name: 'WHISPER_TINY_Q8_0',
+export const SMOLVLA_LIBERO_VISION_Q8 = {
+  name: 'SMOLVLA_LIBERO_VISION_Q8',
   src: `registry://${models[748].registrySource}/${models[748].registryPath}`,
   registryPath: models[748].registryPath,
   registrySource: models[748].registrySource,
@@ -27691,8 +27840,8 @@ export const WHISPER_TINY_Q8_0 = {
   params: models[748].params
 } as const
 
-export const WHISPER_TINY = {
-  name: 'WHISPER_TINY',
+export const WHISPER_BASE_Q8_0 = {
+  name: 'WHISPER_BASE_Q8_0',
   src: `registry://${models[749].registrySource}/${models[749].registryPath}`,
   registryPath: models[749].registryPath,
   registrySource: models[749].registrySource,
@@ -27709,8 +27858,8 @@ export const WHISPER_TINY = {
   params: models[749].params
 } as const
 
-export const WHISPER_EN_TINY_Q8_0 = {
-  name: 'WHISPER_EN_TINY_Q8_0',
+export const WHISPER_BASE_Q0F16 = {
+  name: 'WHISPER_BASE_Q0F16',
   src: `registry://${models[750].registrySource}/${models[750].registryPath}`,
   registryPath: models[750].registryPath,
   registrySource: models[750].registrySource,
@@ -27727,8 +27876,8 @@ export const WHISPER_EN_TINY_Q8_0 = {
   params: models[750].params
 } as const
 
-export const WHISPER_EN_TINY_Q0F16 = {
-  name: 'WHISPER_EN_TINY_Q0F16',
+export const WHISPER_EN_BASE_Q8_0 = {
+  name: 'WHISPER_EN_BASE_Q8_0',
   src: `registry://${models[751].registrySource}/${models[751].registryPath}`,
   registryPath: models[751].registryPath,
   registrySource: models[751].registrySource,
@@ -27745,8 +27894,8 @@ export const WHISPER_EN_TINY_Q0F16 = {
   params: models[751].params
 } as const
 
-export const VAD_SILERO_5_1_2 = {
-  name: 'VAD_SILERO_5_1_2',
+export const WHISPER_EN_BASE_Q0F16 = {
+  name: 'WHISPER_EN_BASE_Q0F16',
   src: `registry://${models[752].registrySource}/${models[752].registryPath}`,
   registryPath: models[752].registryPath,
   registrySource: models[752].registrySource,
@@ -27763,8 +27912,8 @@ export const VAD_SILERO_5_1_2 = {
   params: models[752].params
 } as const
 
-export const WHISPER_FRENCH_BASE_F16 = {
-  name: 'WHISPER_FRENCH_BASE_F16',
+export const WHISPER_LARGE_V3_TURBO = {
+  name: 'WHISPER_LARGE_V3_TURBO',
   src: `registry://${models[753].registrySource}/${models[753].registryPath}`,
   registryPath: models[753].registryPath,
   registrySource: models[753].registrySource,
@@ -27781,8 +27930,8 @@ export const WHISPER_FRENCH_BASE_F16 = {
   params: models[753].params
 } as const
 
-export const WHISPER_FRENCH_BASE_Q8_0 = {
-  name: 'WHISPER_FRENCH_BASE_Q8_0',
+export const WHISPER_SMALL_Q8_0 = {
+  name: 'WHISPER_SMALL_Q8_0',
   src: `registry://${models[754].registrySource}/${models[754].registryPath}`,
   registryPath: models[754].registryPath,
   registrySource: models[754].registrySource,
@@ -27799,8 +27948,8 @@ export const WHISPER_FRENCH_BASE_Q8_0 = {
   params: models[754].params
 } as const
 
-export const WHISPER_FRENCH_TINY_F16 = {
-  name: 'WHISPER_FRENCH_TINY_F16',
+export const WHISPER_SMALL_Q0F16 = {
+  name: 'WHISPER_SMALL_Q0F16',
   src: `registry://${models[755].registrySource}/${models[755].registryPath}`,
   registryPath: models[755].registryPath,
   registrySource: models[755].registrySource,
@@ -27817,8 +27966,8 @@ export const WHISPER_FRENCH_TINY_F16 = {
   params: models[755].params
 } as const
 
-export const WHISPER_FRENCH_TINY_Q8_0 = {
-  name: 'WHISPER_FRENCH_TINY_Q8_0',
+export const WHISPER_EN_SMALL_Q8_0 = {
+  name: 'WHISPER_EN_SMALL_Q8_0',
   src: `registry://${models[756].registrySource}/${models[756].registryPath}`,
   registryPath: models[756].registryPath,
   registrySource: models[756].registrySource,
@@ -27835,8 +27984,8 @@ export const WHISPER_FRENCH_TINY_Q8_0 = {
   params: models[756].params
 } as const
 
-export const WHISPER_GERMAN_BASE_F16 = {
-  name: 'WHISPER_GERMAN_BASE_F16',
+export const WHISPER_EN_SMALL_Q0F16 = {
+  name: 'WHISPER_EN_SMALL_Q0F16',
   src: `registry://${models[757].registrySource}/${models[757].registryPath}`,
   registryPath: models[757].registryPath,
   registrySource: models[757].registrySource,
@@ -27853,8 +28002,8 @@ export const WHISPER_GERMAN_BASE_F16 = {
   params: models[757].params
 } as const
 
-export const WHISPER_GERMAN_BASE_Q8_0 = {
-  name: 'WHISPER_GERMAN_BASE_Q8_0',
+export const WHISPER_TINY_Q8_0 = {
+  name: 'WHISPER_TINY_Q8_0',
   src: `registry://${models[758].registrySource}/${models[758].registryPath}`,
   registryPath: models[758].registryPath,
   registrySource: models[758].registrySource,
@@ -27871,8 +28020,8 @@ export const WHISPER_GERMAN_BASE_Q8_0 = {
   params: models[758].params
 } as const
 
-export const WHISPER_GERMAN_TINY_F16 = {
-  name: 'WHISPER_GERMAN_TINY_F16',
+export const WHISPER_TINY = {
+  name: 'WHISPER_TINY',
   src: `registry://${models[759].registrySource}/${models[759].registryPath}`,
   registryPath: models[759].registryPath,
   registrySource: models[759].registrySource,
@@ -27889,8 +28038,8 @@ export const WHISPER_GERMAN_TINY_F16 = {
   params: models[759].params
 } as const
 
-export const WHISPER_GERMAN_TINY_Q8_0 = {
-  name: 'WHISPER_GERMAN_TINY_Q8_0',
+export const WHISPER_EN_TINY_Q8_0 = {
+  name: 'WHISPER_EN_TINY_Q8_0',
   src: `registry://${models[760].registrySource}/${models[760].registryPath}`,
   registryPath: models[760].registryPath,
   registrySource: models[760].registrySource,
@@ -27907,8 +28056,8 @@ export const WHISPER_GERMAN_TINY_Q8_0 = {
   params: models[760].params
 } as const
 
-export const WHISPER_ITALIAN_BASE_F16 = {
-  name: 'WHISPER_ITALIAN_BASE_F16',
+export const WHISPER_EN_TINY_Q0F16 = {
+  name: 'WHISPER_EN_TINY_Q0F16',
   src: `registry://${models[761].registrySource}/${models[761].registryPath}`,
   registryPath: models[761].registryPath,
   registrySource: models[761].registrySource,
@@ -27925,8 +28074,8 @@ export const WHISPER_ITALIAN_BASE_F16 = {
   params: models[761].params
 } as const
 
-export const WHISPER_ITALIAN_BASE_Q8_0 = {
-  name: 'WHISPER_ITALIAN_BASE_Q8_0',
+export const VAD_SILERO_5_1_2 = {
+  name: 'VAD_SILERO_5_1_2',
   src: `registry://${models[762].registrySource}/${models[762].registryPath}`,
   registryPath: models[762].registryPath,
   registrySource: models[762].registrySource,
@@ -27943,8 +28092,8 @@ export const WHISPER_ITALIAN_BASE_Q8_0 = {
   params: models[762].params
 } as const
 
-export const WHISPER_ITALIAN_TINY_F16 = {
-  name: 'WHISPER_ITALIAN_TINY_F16',
+export const WHISPER_FRENCH_BASE_F16 = {
+  name: 'WHISPER_FRENCH_BASE_F16',
   src: `registry://${models[763].registrySource}/${models[763].registryPath}`,
   registryPath: models[763].registryPath,
   registrySource: models[763].registrySource,
@@ -27961,8 +28110,8 @@ export const WHISPER_ITALIAN_TINY_F16 = {
   params: models[763].params
 } as const
 
-export const WHISPER_ITALIAN_TINY_Q8_0 = {
-  name: 'WHISPER_ITALIAN_TINY_Q8_0',
+export const WHISPER_FRENCH_BASE_Q8_0 = {
+  name: 'WHISPER_FRENCH_BASE_Q8_0',
   src: `registry://${models[764].registrySource}/${models[764].registryPath}`,
   registryPath: models[764].registryPath,
   registrySource: models[764].registrySource,
@@ -27979,8 +28128,8 @@ export const WHISPER_ITALIAN_TINY_Q8_0 = {
   params: models[764].params
 } as const
 
-export const WHISPER_JAPANESE_BASE_F16 = {
-  name: 'WHISPER_JAPANESE_BASE_F16',
+export const WHISPER_FRENCH_TINY_F16 = {
+  name: 'WHISPER_FRENCH_TINY_F16',
   src: `registry://${models[765].registrySource}/${models[765].registryPath}`,
   registryPath: models[765].registryPath,
   registrySource: models[765].registrySource,
@@ -27997,8 +28146,8 @@ export const WHISPER_JAPANESE_BASE_F16 = {
   params: models[765].params
 } as const
 
-export const WHISPER_JAPANESE_BASE_Q8_0 = {
-  name: 'WHISPER_JAPANESE_BASE_Q8_0',
+export const WHISPER_FRENCH_TINY_Q8_0 = {
+  name: 'WHISPER_FRENCH_TINY_Q8_0',
   src: `registry://${models[766].registrySource}/${models[766].registryPath}`,
   registryPath: models[766].registryPath,
   registrySource: models[766].registrySource,
@@ -28015,8 +28164,8 @@ export const WHISPER_JAPANESE_BASE_Q8_0 = {
   params: models[766].params
 } as const
 
-export const WHISPER_JAPANESE_TINY_F16 = {
-  name: 'WHISPER_JAPANESE_TINY_F16',
+export const WHISPER_GERMAN_BASE_F16 = {
+  name: 'WHISPER_GERMAN_BASE_F16',
   src: `registry://${models[767].registrySource}/${models[767].registryPath}`,
   registryPath: models[767].registryPath,
   registrySource: models[767].registrySource,
@@ -28033,8 +28182,8 @@ export const WHISPER_JAPANESE_TINY_F16 = {
   params: models[767].params
 } as const
 
-export const WHISPER_JAPANESE_TINY_Q8_0 = {
-  name: 'WHISPER_JAPANESE_TINY_Q8_0',
+export const WHISPER_GERMAN_BASE_Q8_0 = {
+  name: 'WHISPER_GERMAN_BASE_Q8_0',
   src: `registry://${models[768].registrySource}/${models[768].registryPath}`,
   registryPath: models[768].registryPath,
   registrySource: models[768].registrySource,
@@ -28051,8 +28200,8 @@ export const WHISPER_JAPANESE_TINY_Q8_0 = {
   params: models[768].params
 } as const
 
-export const WHISPER_NORWEGIAN_TINY = {
-  name: 'WHISPER_NORWEGIAN_TINY',
+export const WHISPER_GERMAN_TINY_F16 = {
+  name: 'WHISPER_GERMAN_TINY_F16',
   src: `registry://${models[769].registrySource}/${models[769].registryPath}`,
   registryPath: models[769].registryPath,
   registrySource: models[769].registrySource,
@@ -28069,8 +28218,8 @@ export const WHISPER_NORWEGIAN_TINY = {
   params: models[769].params
 } as const
 
-export const WHISPER_PORTUGUESE_BASE_F16 = {
-  name: 'WHISPER_PORTUGUESE_BASE_F16',
+export const WHISPER_GERMAN_TINY_Q8_0 = {
+  name: 'WHISPER_GERMAN_TINY_Q8_0',
   src: `registry://${models[770].registrySource}/${models[770].registryPath}`,
   registryPath: models[770].registryPath,
   registrySource: models[770].registrySource,
@@ -28087,8 +28236,8 @@ export const WHISPER_PORTUGUESE_BASE_F16 = {
   params: models[770].params
 } as const
 
-export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
-  name: 'WHISPER_PORTUGUESE_BASE_Q8_0',
+export const WHISPER_ITALIAN_BASE_F16 = {
+  name: 'WHISPER_ITALIAN_BASE_F16',
   src: `registry://${models[771].registrySource}/${models[771].registryPath}`,
   registryPath: models[771].registryPath,
   registrySource: models[771].registrySource,
@@ -28105,8 +28254,8 @@ export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
   params: models[771].params
 } as const
 
-export const WHISPER_PORTUGUESE_TINY_F16 = {
-  name: 'WHISPER_PORTUGUESE_TINY_F16',
+export const WHISPER_ITALIAN_BASE_Q8_0 = {
+  name: 'WHISPER_ITALIAN_BASE_Q8_0',
   src: `registry://${models[772].registrySource}/${models[772].registryPath}`,
   registryPath: models[772].registryPath,
   registrySource: models[772].registrySource,
@@ -28123,8 +28272,8 @@ export const WHISPER_PORTUGUESE_TINY_F16 = {
   params: models[772].params
 } as const
 
-export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
-  name: 'WHISPER_PORTUGUESE_TINY_Q8_0',
+export const WHISPER_ITALIAN_TINY_F16 = {
+  name: 'WHISPER_ITALIAN_TINY_F16',
   src: `registry://${models[773].registrySource}/${models[773].registryPath}`,
   registryPath: models[773].registryPath,
   registrySource: models[773].registrySource,
@@ -28141,8 +28290,8 @@ export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
   params: models[773].params
 } as const
 
-export const WHISPER_RUSSIAN_BASE_F16 = {
-  name: 'WHISPER_RUSSIAN_BASE_F16',
+export const WHISPER_ITALIAN_TINY_Q8_0 = {
+  name: 'WHISPER_ITALIAN_TINY_Q8_0',
   src: `registry://${models[774].registrySource}/${models[774].registryPath}`,
   registryPath: models[774].registryPath,
   registrySource: models[774].registrySource,
@@ -28159,8 +28308,8 @@ export const WHISPER_RUSSIAN_BASE_F16 = {
   params: models[774].params
 } as const
 
-export const WHISPER_RUSSIAN_BASE_Q8_0 = {
-  name: 'WHISPER_RUSSIAN_BASE_Q8_0',
+export const WHISPER_JAPANESE_BASE_F16 = {
+  name: 'WHISPER_JAPANESE_BASE_F16',
   src: `registry://${models[775].registrySource}/${models[775].registryPath}`,
   registryPath: models[775].registryPath,
   registrySource: models[775].registrySource,
@@ -28177,8 +28326,8 @@ export const WHISPER_RUSSIAN_BASE_Q8_0 = {
   params: models[775].params
 } as const
 
-export const WHISPER_RUSSIAN_TINY_F16 = {
-  name: 'WHISPER_RUSSIAN_TINY_F16',
+export const WHISPER_JAPANESE_BASE_Q8_0 = {
+  name: 'WHISPER_JAPANESE_BASE_Q8_0',
   src: `registry://${models[776].registrySource}/${models[776].registryPath}`,
   registryPath: models[776].registryPath,
   registrySource: models[776].registrySource,
@@ -28195,8 +28344,8 @@ export const WHISPER_RUSSIAN_TINY_F16 = {
   params: models[776].params
 } as const
 
-export const WHISPER_RUSSIAN_TINY_Q8_0 = {
-  name: 'WHISPER_RUSSIAN_TINY_Q8_0',
+export const WHISPER_JAPANESE_TINY_F16 = {
+  name: 'WHISPER_JAPANESE_TINY_F16',
   src: `registry://${models[777].registrySource}/${models[777].registryPath}`,
   registryPath: models[777].registryPath,
   registrySource: models[777].registrySource,
@@ -28213,8 +28362,8 @@ export const WHISPER_RUSSIAN_TINY_Q8_0 = {
   params: models[777].params
 } as const
 
-export const WHISPER_SPANISH_TINY_F16 = {
-  name: 'WHISPER_SPANISH_TINY_F16',
+export const WHISPER_JAPANESE_TINY_Q8_0 = {
+  name: 'WHISPER_JAPANESE_TINY_Q8_0',
   src: `registry://${models[778].registrySource}/${models[778].registryPath}`,
   registryPath: models[778].registryPath,
   registrySource: models[778].registrySource,
@@ -28231,8 +28380,8 @@ export const WHISPER_SPANISH_TINY_F16 = {
   params: models[778].params
 } as const
 
-export const WHISPER_SPANISH_TINY_Q8_0 = {
-  name: 'WHISPER_SPANISH_TINY_Q8_0',
+export const WHISPER_NORWEGIAN_TINY = {
+  name: 'WHISPER_NORWEGIAN_TINY',
   src: `registry://${models[779].registrySource}/${models[779].registryPath}`,
   registryPath: models[779].registryPath,
   registrySource: models[779].registrySource,
@@ -28249,8 +28398,8 @@ export const WHISPER_SPANISH_TINY_Q8_0 = {
   params: models[779].params
 } as const
 
-export const WHISPER_Q8_0 = {
-  name: 'WHISPER_Q8_0',
+export const WHISPER_PORTUGUESE_BASE_F16 = {
+  name: 'WHISPER_PORTUGUESE_BASE_F16',
   src: `registry://${models[780].registrySource}/${models[780].registryPath}`,
   registryPath: models[780].registryPath,
   registrySource: models[780].registrySource,
@@ -28267,8 +28416,8 @@ export const WHISPER_Q8_0 = {
   params: models[780].params
 } as const
 
-export const WHISPER_Q8_0_1 = {
-  name: 'WHISPER_Q8_0_1',
+export const WHISPER_PORTUGUESE_BASE_Q8_0 = {
+  name: 'WHISPER_PORTUGUESE_BASE_Q8_0',
   src: `registry://${models[781].registrySource}/${models[781].registryPath}`,
   registryPath: models[781].registryPath,
   registrySource: models[781].registrySource,
@@ -28283,6 +28432,186 @@ export const WHISPER_Q8_0_1 = {
   engine: models[781].engine,
   quantization: models[781].quantization,
   params: models[781].params
+} as const
+
+export const WHISPER_PORTUGUESE_TINY_F16 = {
+  name: 'WHISPER_PORTUGUESE_TINY_F16',
+  src: `registry://${models[782].registrySource}/${models[782].registryPath}`,
+  registryPath: models[782].registryPath,
+  registrySource: models[782].registrySource,
+  blobCoreKey: models[782].blobCoreKey,
+  blobBlockOffset: models[782].blobBlockOffset,
+  blobBlockLength: models[782].blobBlockLength,
+  blobByteOffset: models[782].blobByteOffset,
+  modelId: models[782].modelId,
+  expectedSize: models[782].expectedSize,
+  sha256Checksum: models[782].sha256Checksum,
+  addon: models[782].addon,
+  engine: models[782].engine,
+  quantization: models[782].quantization,
+  params: models[782].params
+} as const
+
+export const WHISPER_PORTUGUESE_TINY_Q8_0 = {
+  name: 'WHISPER_PORTUGUESE_TINY_Q8_0',
+  src: `registry://${models[783].registrySource}/${models[783].registryPath}`,
+  registryPath: models[783].registryPath,
+  registrySource: models[783].registrySource,
+  blobCoreKey: models[783].blobCoreKey,
+  blobBlockOffset: models[783].blobBlockOffset,
+  blobBlockLength: models[783].blobBlockLength,
+  blobByteOffset: models[783].blobByteOffset,
+  modelId: models[783].modelId,
+  expectedSize: models[783].expectedSize,
+  sha256Checksum: models[783].sha256Checksum,
+  addon: models[783].addon,
+  engine: models[783].engine,
+  quantization: models[783].quantization,
+  params: models[783].params
+} as const
+
+export const WHISPER_RUSSIAN_BASE_F16 = {
+  name: 'WHISPER_RUSSIAN_BASE_F16',
+  src: `registry://${models[784].registrySource}/${models[784].registryPath}`,
+  registryPath: models[784].registryPath,
+  registrySource: models[784].registrySource,
+  blobCoreKey: models[784].blobCoreKey,
+  blobBlockOffset: models[784].blobBlockOffset,
+  blobBlockLength: models[784].blobBlockLength,
+  blobByteOffset: models[784].blobByteOffset,
+  modelId: models[784].modelId,
+  expectedSize: models[784].expectedSize,
+  sha256Checksum: models[784].sha256Checksum,
+  addon: models[784].addon,
+  engine: models[784].engine,
+  quantization: models[784].quantization,
+  params: models[784].params
+} as const
+
+export const WHISPER_RUSSIAN_BASE_Q8_0 = {
+  name: 'WHISPER_RUSSIAN_BASE_Q8_0',
+  src: `registry://${models[785].registrySource}/${models[785].registryPath}`,
+  registryPath: models[785].registryPath,
+  registrySource: models[785].registrySource,
+  blobCoreKey: models[785].blobCoreKey,
+  blobBlockOffset: models[785].blobBlockOffset,
+  blobBlockLength: models[785].blobBlockLength,
+  blobByteOffset: models[785].blobByteOffset,
+  modelId: models[785].modelId,
+  expectedSize: models[785].expectedSize,
+  sha256Checksum: models[785].sha256Checksum,
+  addon: models[785].addon,
+  engine: models[785].engine,
+  quantization: models[785].quantization,
+  params: models[785].params
+} as const
+
+export const WHISPER_RUSSIAN_TINY_F16 = {
+  name: 'WHISPER_RUSSIAN_TINY_F16',
+  src: `registry://${models[786].registrySource}/${models[786].registryPath}`,
+  registryPath: models[786].registryPath,
+  registrySource: models[786].registrySource,
+  blobCoreKey: models[786].blobCoreKey,
+  blobBlockOffset: models[786].blobBlockOffset,
+  blobBlockLength: models[786].blobBlockLength,
+  blobByteOffset: models[786].blobByteOffset,
+  modelId: models[786].modelId,
+  expectedSize: models[786].expectedSize,
+  sha256Checksum: models[786].sha256Checksum,
+  addon: models[786].addon,
+  engine: models[786].engine,
+  quantization: models[786].quantization,
+  params: models[786].params
+} as const
+
+export const WHISPER_RUSSIAN_TINY_Q8_0 = {
+  name: 'WHISPER_RUSSIAN_TINY_Q8_0',
+  src: `registry://${models[787].registrySource}/${models[787].registryPath}`,
+  registryPath: models[787].registryPath,
+  registrySource: models[787].registrySource,
+  blobCoreKey: models[787].blobCoreKey,
+  blobBlockOffset: models[787].blobBlockOffset,
+  blobBlockLength: models[787].blobBlockLength,
+  blobByteOffset: models[787].blobByteOffset,
+  modelId: models[787].modelId,
+  expectedSize: models[787].expectedSize,
+  sha256Checksum: models[787].sha256Checksum,
+  addon: models[787].addon,
+  engine: models[787].engine,
+  quantization: models[787].quantization,
+  params: models[787].params
+} as const
+
+export const WHISPER_SPANISH_TINY_F16 = {
+  name: 'WHISPER_SPANISH_TINY_F16',
+  src: `registry://${models[788].registrySource}/${models[788].registryPath}`,
+  registryPath: models[788].registryPath,
+  registrySource: models[788].registrySource,
+  blobCoreKey: models[788].blobCoreKey,
+  blobBlockOffset: models[788].blobBlockOffset,
+  blobBlockLength: models[788].blobBlockLength,
+  blobByteOffset: models[788].blobByteOffset,
+  modelId: models[788].modelId,
+  expectedSize: models[788].expectedSize,
+  sha256Checksum: models[788].sha256Checksum,
+  addon: models[788].addon,
+  engine: models[788].engine,
+  quantization: models[788].quantization,
+  params: models[788].params
+} as const
+
+export const WHISPER_SPANISH_TINY_Q8_0 = {
+  name: 'WHISPER_SPANISH_TINY_Q8_0',
+  src: `registry://${models[789].registrySource}/${models[789].registryPath}`,
+  registryPath: models[789].registryPath,
+  registrySource: models[789].registrySource,
+  blobCoreKey: models[789].blobCoreKey,
+  blobBlockOffset: models[789].blobBlockOffset,
+  blobBlockLength: models[789].blobBlockLength,
+  blobByteOffset: models[789].blobByteOffset,
+  modelId: models[789].modelId,
+  expectedSize: models[789].expectedSize,
+  sha256Checksum: models[789].sha256Checksum,
+  addon: models[789].addon,
+  engine: models[789].engine,
+  quantization: models[789].quantization,
+  params: models[789].params
+} as const
+
+export const WHISPER_Q8_0 = {
+  name: 'WHISPER_Q8_0',
+  src: `registry://${models[790].registrySource}/${models[790].registryPath}`,
+  registryPath: models[790].registryPath,
+  registrySource: models[790].registrySource,
+  blobCoreKey: models[790].blobCoreKey,
+  blobBlockOffset: models[790].blobBlockOffset,
+  blobBlockLength: models[790].blobBlockLength,
+  blobByteOffset: models[790].blobByteOffset,
+  modelId: models[790].modelId,
+  expectedSize: models[790].expectedSize,
+  sha256Checksum: models[790].sha256Checksum,
+  addon: models[790].addon,
+  engine: models[790].engine,
+  quantization: models[790].quantization,
+  params: models[790].params
+} as const
+
+export const WHISPER_Q8_0_1 = {
+  name: 'WHISPER_Q8_0_1',
+  src: `registry://${models[791].registrySource}/${models[791].registryPath}`,
+  registryPath: models[791].registryPath,
+  registrySource: models[791].registrySource,
+  blobCoreKey: models[791].blobCoreKey,
+  blobBlockOffset: models[791].blobBlockOffset,
+  blobBlockLength: models[791].blobBlockLength,
+  blobByteOffset: models[791].blobByteOffset,
+  modelId: models[791].modelId,
+  expectedSize: models[791].expectedSize,
+  sha256Checksum: models[791].sha256Checksum,
+  addon: models[791].addon,
+  engine: models[791].engine,
+  quantization: models[791].quantization,
+  params: models[791].params
 } as const
 
 /**

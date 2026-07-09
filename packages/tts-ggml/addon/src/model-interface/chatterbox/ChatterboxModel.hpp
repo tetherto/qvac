@@ -140,10 +140,10 @@ private:
   // take a cheap local copy under the lock and then work outside it.
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::chatterbox::Engine> engine_;
-  // LavaSR enhancer (QVAC-16579): loaded alongside the engine when
+  // LavaSR enhancer: loaded alongside the engine when
   // cfg_.enhancerGgufPath is set; null disables enhancement.
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
-  // LavaSR denoiser (QVAC-16579 follow-up): runs before the enhancer
+  // LavaSR denoiser (follow-up): runs before the enhancer
   // (rate-preserving); loaded when cfg_.denoiserGgufPath is set; null disables
   // it. The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
   // PR #78; denoiser + native chunk streaming is rejected in validateConfig
@@ -166,6 +166,14 @@ private:
   int backendId_ = 0;
   bool gpuUnsupported_ = false;
   std::string backendName_ = "CPU";
+
+  // LavaSR enhancer backend, surfaced in runtimeStats so a host / GPU smoke
+  // test can confirm the enhancer network actually engaged the GPU (it uses the
+  // same useGPU/nGpuLayers switch as the engine).  Device: -1 = no enhancer
+  // loaded, 0 = CPU, 1 = GPU.  The id mirrors backendId_ and uses the same map
+  // as backendIdFromName() in BackendUtils.hpp (-1 = no enhancer loaded).
+  int enhancerBackendDevice_ = -1;
+  int enhancerBackendId_ = -1;
 
   mutable std::atomic_bool cancelRequested_{false};
 };

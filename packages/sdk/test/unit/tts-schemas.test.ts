@@ -20,6 +20,58 @@ test('ttsConfigSchema: accepts GGML chatterbox load config', (t) => {
   t.is(r.success, true)
 })
 
+test('ttsConfigSchema: accepts Chatterbox multilingual tokenizer assets', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'ja',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    mecabDictSrc: {
+      src: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
+      name: 'TTS_MECAB_IPADIC_CHATTERBOX'
+    },
+    cangjieTsvSrc: {
+      src: 'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv',
+      name: 'TTS_CANGJIE_ZH_CHATTERBOX'
+    }
+  })
+
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: requires MeCab dictionary for Chatterbox Japanese', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'ja',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  })
+
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'mecabDictSrc')
+    t.is(
+      r.error.issues[0]?.message,
+      'mecabDictSrc is required when Chatterbox language is "ja".'
+    )
+  }
+})
+
+test('ttsConfigSchema: requires Cangjie TSV for Chatterbox Chinese', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'zh',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  })
+
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'cangjieTsvSrc')
+    t.is(
+      r.error.issues[0]?.message,
+      'cangjieTsvSrc is required when Chatterbox language is "zh".'
+    )
+  }
+})
+
 test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'chatterbox',
@@ -64,6 +116,68 @@ test('ttsConfigSchema: rejects invalid Chatterbox constructor option ranges', (t
   }
 })
 
+test('ttsConfigSchema: accepts LavaSR enhancer/denoiser (chatterbox)', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
+    lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf'
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: rejects outputSampleRate for chatterbox (supertonic-only)', (t) => {
+  // Chatterbox does not resample its output yet, so the field is not part of
+  // its schema and .strict() must reject it.
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    outputSampleRate: 48000
+  })
+  t.is(r.success, false, 'chatterbox must reject outputSampleRate')
+})
+
+test('ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supertonic)', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'supertonic',
+    language: 'en',
+    lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
+    lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf',
+    outputSampleRate: 24000
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.outputSampleRate, 24000)
+  }
+})
+
+test('ttsConfigSchema: rejects outputSampleRate outside 8000-192000', (t) => {
+  for (const outputSampleRate of [7999, 192001, 44100.5]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: 'supertonic',
+      language: 'en',
+      outputSampleRate
+    })
+    t.is(r.success, false, `outputSampleRate ${outputSampleRate} must be rejected`)
+  }
+})
+
+test('ttsConfigSchema: accepts inclusive outputSampleRate boundaries', (t) => {
+  for (const outputSampleRate of [8000, 192000]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: 'supertonic',
+      language: 'en',
+      outputSampleRate
+    })
+    t.is(r.success, true, `outputSampleRate ${outputSampleRate} must be accepted`)
+    if (r.success) {
+      t.is(r.data.outputSampleRate, outputSampleRate)
+    }
+  }
+})
+
 test('ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic', (t) => {
   const r = ttsConfigSchema.safeParse({
     ttsEngine: 'supertonic',
@@ -82,14 +196,15 @@ test('ttsConfigSchema: accepts GGML supertonic load config', (t) => {
   t.is(r.success, true)
 })
 
-test('TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages', (t) => {
-  t.is(TTS_CHATTERBOX_LANGUAGES.length, 22)
+test('TTS_CHATTERBOX_LANGUAGES: exposes all 23 supported languages', (t) => {
+  t.is(TTS_CHATTERBOX_LANGUAGES.length, 23)
   const expected = [
     'en',
     'es',
     'fr',
     'de',
     'it',
+    'ja',
     'pt',
     'nl',
     'pl',
@@ -111,7 +226,7 @@ test('TTS_CHATTERBOX_LANGUAGES: exposes all 22 supported languages', (t) => {
   t.alike([...TTS_CHATTERBOX_LANGUAGES], expected)
 })
 
-test('ttsChatterboxRuntimeConfigSchema: accepts all 22 chatterbox languages', (t) => {
+test('ttsChatterboxRuntimeConfigSchema: accepts all 23 chatterbox languages', (t) => {
   for (const language of TTS_CHATTERBOX_LANGUAGES) {
     const r = ttsChatterboxRuntimeConfigSchema.safeParse({
       ttsEngine: 'chatterbox',

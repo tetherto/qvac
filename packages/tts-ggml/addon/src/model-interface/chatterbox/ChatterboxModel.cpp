@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <tts-cpp/chatterbox/engine.h>
@@ -17,6 +18,7 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/StreamingEnhancer.hpp"
 #include "model-interface/chatterbox/TimeStretch.hpp"
@@ -35,7 +37,7 @@ namespace general_error = qvac_errors::general_error;
 // n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
 // up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
 // (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
-// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the f16
+// ~3.1 GB peak footprint and into jetsam. With the f16
 // default KV dtype below, 4096 tokens (~160 s of generated audio per
 // synthesize() call; T3 speech tokens run at 25 Hz) cost ~390 MB of KV —
 // still well under f32@4096 (~780 MB) AND double the context.  (The prior
@@ -52,7 +54,7 @@ constexpr int DEFAULT_N_CTX = 4096;
 // and the ggml-speech Metal backend only supports a q8_0-source CONT to
 // f32/f16 (not q8_0->q8_0), so a q8_0 KV cache hard-aborts that path with
 // GGML_ABORT("unsupported op 'CONT'").  q8_0 had been the default since
-// 0.3.2 (QVAC-19557, iOS peak-memory) — it stores the cache at ~27% of
+// 0.3.2 (iOS peak-memory) — it stores the cache at ~27% of
 // f32 and decodes 20-30% faster on Metal — but it only works where the
 // backend implements the q8_0 CONT (CPU, CUDA), so it is now opt-in via
 // kvCacheType:"q8_0".  Upstream validation on real GGUFs
@@ -336,20 +338,20 @@ void ChatterboxModel::loadLocked() {
       engine_->gpu_unsupported() ||
       (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
 
-  // LavaSR enhancer: load when a GGUF path is set (the path is the on switch).
-  // CPU-only neural post-process; empty path = disabled.
-  if (!cfg_.enhancerGgufPath.empty()) {
-    try {
-      enhancer_ = tts_cpp::lavasr::Enhancer::load(cfg_.enhancerGgufPath);
-    } catch (const std::exception& e) {
-      enhancer_.reset();
-      throw createTTSError(
-          TTSErrorCode::InitializationFailed,
-          std::string("ChatterboxModel::load: lavasr enhancer: ") + e.what());
-    }
-  } else {
-    enhancer_.reset();
-  }
+  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
+  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
+  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
+  // Pass the engine's *resolved* device, not the requested switch: if the
+  // engine fell back to CPU (gpu_unsupported / off-allowlist), keep the
+  // enhancer on CPU too instead of forcing it onto the GPU. Shared with
+  // Supertonic via loadEnhancer so the two loaders can't drift.
+  LoadedEnhancer loaded = loadEnhancer(
+      cfg_.enhancerGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "ChatterboxModel::load: lavasr enhancer: ");
+  enhancer_ = std::move(loaded.enhancer);
+  enhancerBackendDevice_ = loaded.backendDevice;
+  enhancerBackendId_ = loaded.backendId;
 
   // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
   // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
@@ -665,6 +667,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
+  stats.emplace_back(
+      "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
   return stats;
 }
 

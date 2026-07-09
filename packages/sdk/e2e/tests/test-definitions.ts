@@ -1,5 +1,6 @@
 // Real SDK tests
 import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
@@ -39,6 +40,7 @@ import { wrongModelTests } from './wrong-model-tests.js'
 import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
+import { pluginTests } from './plugin-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -209,6 +211,7 @@ export const tests = [
 
   // Completion tests
   ...completionTests,
+  ...batchCompletionTests,
 
   // Transcription tests
   ...transcriptionTests,
@@ -319,6 +322,9 @@ export const tests = [
   // (see mobile/consumer.ts) because the GGUFs are too large for the
   // Device Farm infra (see note there).
   ...vlaTests,
+
+  // Custom plugin system tests (custom-echo-plugin, error paths)
+  ...pluginTests,
 
   // Additional model tests
   modelSwitchLlm,
