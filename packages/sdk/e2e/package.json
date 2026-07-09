@@ -8,8 +8,9 @@
   "scripts": {
     "prepare:sdk": "cd .. && (bun i && bun run build); cd e2e",
     "build": "npm run clean && tsc",
+    "bundle:sdk": "node scripts/bundle-sdk.mjs",
     "install:build": "npm install --install-links && npm run build",
-    "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build",
+    "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build && npm run bundle:sdk",
     "package:electron": "electron-forge package",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
@@ -19,7 +20,8 @@
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "^0.8.0",
+    "custom-echo-plugin": "file:./fixtures/echo-plugin",
+    "@tetherto/qvac-test-suite": "^0.8.1",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",
     "react-native-bare-kit": "^0.14.0"
