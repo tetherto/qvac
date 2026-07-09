@@ -23,7 +23,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [transcription-whispercpp](https://github.com/tetherto/transcription-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
-- [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
+- [tts-ggml](https://github.com/tetherto/tts-ggml) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/inference-addon-onnx-ocr-fasttext) - OCR
 
@@ -334,7 +334,7 @@ Production addons built on this library:
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [transcription-whispercpp](https://github.com/tetherto/transcription-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
-- [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
+- [tts-ggml](https://github.com/tetherto/tts-ggml) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/inference-addon-onnx-ocr-fasttext) - OCR
 
