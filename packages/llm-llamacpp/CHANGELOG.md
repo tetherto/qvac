@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
+## [0.35.2] - 2026-07-08
+
+### Fixed
+
+- KV-cache stale backing-store handling now only discards active cache state for caches that were actually persisted before. Unsaved RAM-only cache paths with missing parents, cache paths replaced by directories, or other save-path failures continue to surface `UnableToSaveSessionFile` through the existing throw-and-invalidate path.
+
+### Pull Requests
+
+- [#3121](https://github.com/tetherto/qvac/pull/3121) - QVAC-21302 fix: preserve KV cache save failures after stale-cache handling
+
 ## [0.35.1] - 2026-07-08
 
 ### Fixed

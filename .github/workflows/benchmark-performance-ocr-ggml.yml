@@ -11,6 +11,10 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/ocr-ggml@1.0.0). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
       qvac_perf_runs:
         description: "QVAC_PERF_RUNS — counted iterations per perf test"
         required: false
@@ -77,7 +81,7 @@ jobs:
     needs:
       - context
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
     permissions:
       contents: write
       packages: write
@@ -94,7 +98,7 @@ jobs:
       - context
       - prebuild
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -104,6 +108,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
 
   mobile-benchmarks:
@@ -111,7 +116,7 @@ jobs:
       - context
       - prebuild
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -122,6 +127,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
 
   summarize:
