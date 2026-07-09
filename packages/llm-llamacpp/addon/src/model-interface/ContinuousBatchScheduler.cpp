@@ -9,6 +9,7 @@
 #include <optional>
 #include <ranges>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 #include <unordered_set>
 #include <utility>
@@ -57,6 +58,36 @@ void logTeardownFailureNoexcept(const char* what) noexcept {
   }
 }
 
+bool isFileMissingOrEmpty(const std::filesystem::path& path) {
+  std::error_code directoryErrorCode;
+  if (std::filesystem::is_directory(path, directoryErrorCode)) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const auto size = std::filesystem::file_size(path, errorCode);
+  if (!errorCode) {
+    return size == 0;
+  }
+  return errorCode == std::errc::no_such_file_or_directory ||
+         errorCode == std::errc::not_a_directory;
+}
+
+bool isParentDirectoryMissing(const std::filesystem::path& path) {
+  const auto parent = path.parent_path();
+  if (parent.empty()) {
+    return false;
+  }
+
+  std::error_code errorCode;
+  const bool exists = std::filesystem::exists(parent, errorCode);
+  return !errorCode && !exists;
+}
+
+bool persistedCacheBackingStoreMissing(const std::string& cacheKey) {
+  return isParentDirectoryMissing(cacheKey) || isFileMissingOrEmpty(cacheKey);
+}
+
 /// Partition the whole-context KV pool uniformly across slots. Mirrors
 /// llama.cpp's `server` example which uses `n_ctx_slot = n_ctx /
 /// n_parallel` as the per-sequence hard ceiling.
@@ -101,6 +132,20 @@ bool generationBudgetExceeded(
          budgetSize + static_cast<unsigned>(nPredict) > perSeqMaxTokens;
 }
 
+TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize) {
+  const auto decodeStart = std::chrono::steady_clock::now();
+  const int rc = decode(ctx, batch);
+  synchronize(ctx);
+
+  TimedDecodeResult result;
+  result.rc = rc;
+  result.duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::steady_clock::now() - decodeStart);
+  return result;
+}
+
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
@@ -115,9 +160,8 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize), decodeFunc_([](llama_context* ctx, llama_batch& b) {
-        return llama_decode(ctx, b);
-      }),
+      slots_(batchSize), decodeFunc_(llama_decode),
+      synchronizeFunc_(llama_synchronize),
       evalMediaFunc_(
           [](SequenceDriver& driver, size_t mediaIndex, llama_pos pos) {
             return driver.evalMediaSegment(mediaIndex, pos);
@@ -457,6 +501,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .group = std::move(queued.group),
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
+          .activeCacheSavedToDisk = isCacheLoaded,
           .prefillOnly = request.prefill});
   cacheGuard.dismiss();
   return seqId;
@@ -651,8 +696,25 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
     try {
       newPos =
           evalMediaFunc_(driver, awaiting->mediaIndex, awaiting->currentPos);
+      // Media eval can run embedded llama_decode work without a logits read.
+      // Synchronize before stopping the timer and before deferred teardown can
+      // reacquire the context, matching the main decode-step boundary.
+      synchronizeFunc_(shared_.lctx);
     } catch (...) {
       error = std::current_exception();
+      try {
+        synchronizeFunc_(shared_.lctx);
+      } catch (const std::exception& e) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            e.what());
+      } catch (...) {
+        logTeardownFailureNoexcept(
+            "media eval error-path synchronize failed",
+            awaiting->seqId,
+            nullptr);
+      }
     }
     evalDuration = std::chrono::steady_clock::now() - evalStart;
   }
@@ -724,9 +786,10 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   std::chrono::steady_clock::duration decodeDuration{};
   {
     StepUnlockGuard unlockGuard(*this, lock);
-    const auto decodeStart = std::chrono::steady_clock::now();
-    decodeRc = decodeFunc_(shared_.lctx, *batch_);
-    decodeDuration = std::chrono::steady_clock::now() - decodeStart;
+    const TimedDecodeResult decodeTiming =
+        timeDecodeStep(shared_.lctx, *batch_, decodeFunc_, synchronizeFunc_);
+    decodeRc = decodeTiming.rc;
+    decodeDuration = decodeTiming.duration;
   }
 
   if (decodeRc != 0) {
@@ -1195,12 +1258,24 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
 }
 
 void ContinuousBatchScheduler::saveCacheForSlot(
-    uint32_t seqId, const SlotState& slot) {
+    uint32_t seqId, SlotState& slot) {
   if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.driver) {
     return;
   }
-  (void)seqId;
+  if (slot.activeCacheSavedToDisk &&
+      persistedCacheBackingStoreMissing(slot.cacheKey)) {
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "ContinuousBatchScheduler::saveCacheForSlot: active cache backing "
+            "store was removed, dropping stale cache '%s' for seqId %u\n",
+            slot.cacheKey.c_str(),
+            seqId));
+    slot.activeCacheSavedToDisk = false;
+    return;
+  }
   slot.driver->saveCache(slot.cacheKey);
+  slot.activeCacheSavedToDisk = true;
 }
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
