@@ -132,7 +132,9 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac/.github/actions/yamlfmt@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
         continue-on-error: true
 
       - name: Check for disallowed dependencies
