@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
 ## [0.36.0] - 2026-07-08
 
 ### Added
