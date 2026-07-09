@@ -410,9 +410,9 @@ function parseArgs () {
  * three per-image groups on Android / iOS). The default behaviour of
  * keeping only the largest report would drop two of the three groups.
  *
- * Deduping by `(test, output, metrics snapshot)` keeps the reporter's
- * repeated lightweight flushes from inflating the row count — those
- * flushes emit cumulative snapshots, so the same (test, iteration)
+ * Deduping by `(test, execution_provider, status, metrics)` keeps the
+ * reporter's repeated lightweight flushes from inflating the row count —
+ * those flushes emit cumulative snapshots, so the same (test, iteration)
  * can appear in many payloads from one group.
  */
 function mergeDeviceReports (reports) {
@@ -427,15 +427,17 @@ function mergeDeviceReports (reports) {
       // typically appears in many payloads. Dedupe on a stable
       // fingerprint that ignores the output text (may be trimmed in
       // lightweight emits) and focuses on the measured metrics.
-      const m = row.metrics || {}
+      // Key on the FULL metrics object plus status, not a fixed LLM-metric list.
+      // An addon whose metrics differ from the LLM set (embed uses pp_tps /
+      // latency_ms / emb_per_sec and never tps / total_time_ms) would otherwise
+      // produce an identical all-empty key for its crashed placeholder and the
+      // real `ok` row of the same (test, provider) — collapsing them so the
+      // first-seen placeholder wins and every measurement is silently dropped.
       const key = [
         row.test || '',
         row.execution_provider || '',
-        m.total_time_ms != null ? m.total_time_ms : '',
-        m.prefill_time_ms != null ? m.prefill_time_ms : '',
-        m.decode_time_ms != null ? m.decode_time_ms : '',
-        m.generated_tokens != null ? m.generated_tokens : '',
-        m.tps != null ? m.tps : ''
+        row.status || '',
+        JSON.stringify(row.metrics || {})
       ].join('|')
       if (seen.has(key)) continue
       seen.add(key)

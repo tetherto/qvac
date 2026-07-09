@@ -11,6 +11,10 @@ on:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/tts-onnx@1.0.0). When set, the prebuild job is skipped and the desktop matrix pulls prebuilds from this package."
+        required: false
+        type: string
       max_samples:
         description: "Maximum samples per language (0 = full dataset)"
         required: false
@@ -125,13 +129,13 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-    if: needs.label-gate.outputs.authorised == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
   desktop-benchmarks:
     needs:
       - context
       - prebuild
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false')
+    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     runs-on: ${{ matrix.os }}
     environment: release
     timeout-minutes: 180
@@ -279,11 +283,75 @@ jobs:
         run: |
           npm install -g --force bare bare-make
 
+      # Artifact path: used when the prebuild job ran (no prebuild_package pin).
       - name: Download merged prebuilds
+        if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
           path: packages/tts-onnx/prebuilds
+
+      # Pinned-package path: the prebuild job was skipped, so pull the prebuilds
+      # from the published npm package instead. prebuild_package is a full
+      # name@version spec passed straight to `npm pack`.
+      - name: Download prebuilds from package (Unix)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: packages/tts-onnx
+        shell: bash
+        run: |
+          PACKAGE="${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+          if ! npm pack $PACKAGE; then
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          fi
+          tar -xzf *.tgz
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          fi
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+          echo "Prebuilds downloaded from npm successfully"
+          ls -la prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: packages/tts-onnx
+        shell: powershell
+        run: |
+          $PACKAGE = "${{ inputs.prebuild_package }}"
+
+          echo "Downloading $PACKAGE from npm..."
+
+          npm pack $PACKAGE
+          if ($LASTEXITCODE -ne 0) {
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          }
+
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) {
+            echo "ERROR: Could not find downloaded tarball"
+            exit 1
+          }
+
+          echo "Extracting $TARBALL..."
+          tar -xzf $TARBALL
+
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          }
+
+          Move-Item package/prebuilds ./prebuilds
+
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
 
       - name: Linux - install runtime dependencies
         if: ${{ matrix.platform == 'linux' }}
