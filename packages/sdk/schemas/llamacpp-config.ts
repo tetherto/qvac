@@ -91,10 +91,11 @@ export const llmConfigBaseSchema = z.object({
    * Run the multimodal projector (mmproj / vision encoder) on the GPU
    * (multimodal models only). `true` forces GPU, `false` forces CPU. When
    * unset, the llm-llamacpp addon auto-selects the backend per device class:
-   * GPU on desktop/iOS, Android Adreno 800+ and other non-Mali Android GPUs;
-   * CPU on Android Mali GPUs (slower on the GPU than the CPU there) and Android
-   * Adreno <800 (weaker tiers not yet benchmarked). Only honoured when the
-   * model itself runs on a GPU backend — ignored with a warning on CPU.
+   * GPU on desktop/iOS and positively-detected Android Adreno 800+ GPUs; CPU on
+   * every other Android GPU — Mali, Adreno <800, and any tier that can't be
+   * detected (only Adreno 800+ is benchmarked to encode the projector faster on
+   * the GPU than the CPU). Only honoured when the model itself runs on a GPU
+   * backend — ignored with a warning on CPU.
    */
   'mmproj-use-gpu': z.boolean().optional()
 })
