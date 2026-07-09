@@ -191,12 +191,12 @@ For vision (VLM) models, the projector / image-encoder backend is auto-selected 
 `mmproj-use-gpu` is unset (QVAC-21867):
 
 - **Desktop & iOS:** GPU.
-- **Android, Adreno 800+ GPUs and other non-Mali Android GPUs:** GPU.
-- **Android, Arm Mali GPUs:** **CPU** — the projector encode is slower on the Mali GPU than on CPU
-  (QVAC-21257 benchmarks), so the LLM layers run on the GPU while the projector stays on CPU.
-- **Android, Adreno < 800 GPUs:** **CPU** — these weaker tiers were not covered by the QVAC-21257
-  projector-on-GPU benchmarks, so the default is conservative; this may be relaxed once they are
-  benchmarked.
+- **Android, Adreno 800+ GPUs** (e.g. Adreno 830): GPU — the only mobile GPU class
+  benchmarked (QVAC-21257) to encode the projector faster than on CPU.
+- **All other Android GPUs** — Arm Mali, Adreno < 800 (e.g. Adreno 740), and any GPU
+  whose Adreno tier can't be detected: **CPU**. The LLM layers still run on the GPU
+  while the projector stays on CPU. Mali is measurably slower on-GPU (QVAC-21257) and
+  the remaining tiers are not yet benchmarked; this may be relaxed per class once they are.
 
 An explicit `mmproj-use-gpu` value always wins over the auto-default, in either direction. When the model
 itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
