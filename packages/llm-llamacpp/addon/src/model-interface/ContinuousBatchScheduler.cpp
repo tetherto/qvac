@@ -511,6 +511,12 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .prefillOnly = request.prefill,
           .enqueuedAt = request.enqueuedAt});
   cacheGuard.dismiss();
+  // A true return means the caller already holds a cancel for this request:
+  // tear the slot down before it ever decodes.
+  if (slots_[seqId]->streams.onAdmitted &&
+      slots_[seqId]->streams.onAdmitted(seqId)) {
+    cancelSlotLocked(seqId);
+  }
   return seqId;
 }
 

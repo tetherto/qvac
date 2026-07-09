@@ -32,6 +32,7 @@
 #include "inference-addon-cpp/Logger.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "utils/JobCancelRegistry.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
 
@@ -143,8 +144,10 @@ public:
   std::any
   process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id) final;
 
-  /// Cancel the in-flight job admitted under @p id by cancelling its scheduler
-  /// slot. No-op when @p id is unknown (already finished or never admitted).
+  /// Cancel the in-flight job admitted under @p id: a concurrent job by
+  /// cancelling its scheduler slot, a single-path job (prefill-only, or no
+  /// scheduler) by stopping the single-prompt context. No-op when @p id is
+  /// unknown (already finished or never admitted).
   void cancelById(qvac_lib_inference_addon_cpp::JobId id) const final;
 
   /// The complete terminal snapshot for a finished concurrent run (see
@@ -242,11 +245,19 @@ private:
   std::string processPromptImpl(const Prompt& prompt);
 
   /// Observes the scheduler `seqId` each request is admitted on, in input
-  /// order, the first time that slot streams. Lets the concurrent path bind a
-  /// job id to its slot without the single-prompt batch callers paying for it.
+  /// order, at slot admission — before the slot decodes anything. Runs on the
+  /// scheduler's worker thread with the scheduler lock held, so it must not
+  /// call back into the scheduler; returning true instead makes the scheduler
+  /// tear the slot down before it decodes (a cancel that arrived before the
+  /// slot existed). Lets the concurrent path bind a job id to its slot without
+  /// the single-prompt batch callers paying for it.
+  using SeqAssignedObserver =
+      std::function<bool(size_t requestIndex, uint32_t seqId)>;
+  /// Observes the slot's end (fired from onDone, any outcome).
   using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
   batching::BatchResult processPromptBatchImpl(
-      const std::vector<Prompt>& prompts, const SeqObserver& onSeqAssigned = {},
+      const std::vector<Prompt>& prompts,
+      const SeqAssignedObserver& onSeqAssigned = {},
       const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
 
@@ -414,15 +425,12 @@ private:
   mutable std::atomic<unsigned> activeBatchJobs_{0};
   int64_t runtimeBackendDevice_ = 0;
 
-  /// Maps an in-flight concurrent job id to its scheduler `seqId` so
-  /// `cancelById` can cancel exactly that slot. Guarded by `jobSeqMtx_`;
-  /// entries live only for the duration of the run. A cancel arriving before
-  /// the slot is recorded simply finds no entry and is a no-op — in practice
-  /// the slot is assigned before any token streams, so a self-cancel on first
-  /// output always lands.
-  mutable std::mutex jobSeqMtx_;
-  mutable std::unordered_map<qvac_lib_inference_addon_cpp::JobId, uint32_t>
-      jobToSeq_;
+  /// Live tagged jobs and each one's cancel action: a concurrent job binds
+  /// its scheduler-slot teardown at slot admission (see SeqAssignedObserver),
+  /// a single-path job (prefill-only, or no scheduler) arms the single-prompt
+  /// context stop on entry. Finetune jobs are never registered — they keep
+  /// the whole-model cancel semantics.
+  mutable JobCancelRegistry liveJobs_;
 
   /// Observed stats a finished concurrent job leaves behind for
   /// consumeJobStats(). Guarded by `jobStatsMtx_`. Bounded by the job

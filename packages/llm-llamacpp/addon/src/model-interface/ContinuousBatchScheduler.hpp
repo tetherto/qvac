@@ -89,11 +89,18 @@ struct ObservedRequestStats {
 [[nodiscard]] ObservedRequestStats
 aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
 
-/// Per-request streaming sinks. Both are optional; missing callbacks
+/// Per-request streaming sinks. All are optional; missing callbacks
 /// are no-ops.
 struct StreamCallbacks {
   std::function<void(uint32_t seqId, const std::string& text)> onToken;
   std::function<void(uint32_t seqId)> onDone;
+  /// Fired once when the request is admitted into a slot, before that slot
+  /// decodes anything. Runs with the scheduler lock held (on the worker
+  /// thread once it is driving), so it must not call back into the
+  /// scheduler. Returning true means the caller already holds a cancel for
+  /// this request — the scheduler tears the slot down before it ever
+  /// decodes.
+  std::function<bool(uint32_t seqId)> onAdmitted;
 };
 
 struct SubmitRequest {
