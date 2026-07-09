@@ -72,6 +72,15 @@ export interface LlamaConfig {
   'tensor-split'?: string
   'cache-type-k'?: string
   'cache-type-v'?: string
+  /**
+   * Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts
+   * 'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected
+   * per device class: GPU on desktop/iOS, Android Adreno 800+ and other non-Mali
+   * Android GPUs; CPU on Android Mali GPUs (slower on the Mali GPU than CPU) and
+   * Android Adreno <800 (weaker tiers not yet benchmarked). Only honoured when a
+   * GPU backend is selected (ignored with a warning on CPU).
+   */
+  'mmproj-use-gpu'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
   /**

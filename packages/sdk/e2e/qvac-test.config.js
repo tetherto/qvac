@@ -52,6 +52,7 @@ export default {
       include: ['./dist/tests/**'],
       dependencies: 'auto',
       metroConfig: './metro.config.js',
+      qvacConfig: './fixtures/qvac.config.e2e.json',
       expoPlugins: ['@qvac/sdk/expo-plugin'],
       assets: {
         patterns: [
