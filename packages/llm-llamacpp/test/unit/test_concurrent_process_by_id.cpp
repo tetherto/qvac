@@ -419,3 +419,48 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdStopsSinglePathPrefill) {
       << "cancelled prefill must roll the cache back to the pre-request "
          "cursor";
 }
+
+/// A cancel that lands after a concurrent job is admitted but before it
+/// streams its first token (i.e. during prefill) must not be lost: the
+/// job -> seq binding may not rely on the first streamed token. The test
+/// fires cancels only while nothing has streamed, so a binding established
+/// at first-token time can never rescue the run.
+TEST_F(ConcurrentProcessByIdTest, CancelByIdBeforeFirstTokenCancelsJob) {
+  REQUIRE_MODEL(model_);
+  // Per-seq KV share = ctx_size / parallel = 1024: prompt + n_predict fit,
+  // while the prompt's prefill still spans several batches.
+  config_["ctx_size"] = "4096";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  constexpr JobId kJobId = 41;
+  std::atomic<size_t> pieces = 0;
+  auto prompt = makePrompt(
+      "Summarize this long note in one sentence. " + repeatWord("detail", 700));
+  prompt.outputCallback = [&pieces](const std::string&) {
+    pieces.fetch_add(1);
+  };
+
+  std::atomic<bool> done = false;
+  auto future = std::async(std::launch::async, [&model, &prompt, &done] {
+    std::any out = model->process(std::any(prompt), kJobId);
+    done.store(true);
+    return std::any_cast<std::string>(out);
+  });
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!done.load() && pieces.load() == 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    model->cancelById(kJobId);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  const std::string out = future.get();
+
+  EXPECT_EQ(pieces.load(), 0u)
+      << "a cancel issued before the first token was lost; the job went on "
+         "to stream its full generation";
+  EXPECT_TRUE(out.empty()) << out;
+}
