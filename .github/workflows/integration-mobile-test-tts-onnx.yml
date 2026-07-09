@@ -15,6 +15,11 @@ name: Mobile Integration Tests (TTS ONNX)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/tts-onnx@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref to checkout"
         type: string
@@ -110,6 +115,8 @@ jobs:
           addon-npm-name: '@qvac/tts-onnx'
           prebuild-artifact-prefix: 'onnx-tts-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
       # Patches addon's test/mobile/integration-runtime.cjs to stub
       # `bare-os.getEnv` so the on-device test code reads

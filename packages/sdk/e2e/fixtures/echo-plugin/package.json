@@ -1,0 +1,17 @@
+{
+  "name": "custom-echo-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Pure-JS echo plugin for e2e testing of QVAC SDK plugin system",
+  "exports": {
+    "./plugin": "./plugin.js",
+    "./client": {
+      "types": "./client.d.ts",
+      "default": "./client.js"
+    }
+  },
+  "peerDependencies": {
+    "@qvac/sdk": "*",
+    "zod": "*"
+  }
+}
