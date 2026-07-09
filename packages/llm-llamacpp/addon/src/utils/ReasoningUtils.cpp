@@ -41,6 +41,7 @@ bool initializeReasoningState(
   state.forcedOpenTokenCount = 0;
   state.cached_close_tag_token = LLAMA_TOKEN_NULL;
   state.cached_newline_token = LLAMA_TOKEN_NULL;
+  state.close_is_single_token = false;
 
   if (lctx == nullptr || tags.open.empty() || tags.close.empty()) {
     return false;
@@ -77,6 +78,25 @@ bool initializeReasoningState(
   if (closeTokens.size() == 1) {
     state.cached_close_tag_token = closeTokens[0];
   }
+
+  // The recurrent replay seeds `postReasoningTokens_` with
+  // `cached_close_tag_token` (populated just above when
+  // `closeTokens.size() == 1`) so the SSM restores with a balanced
+  // `<think>...</think>` span; a multi-piece close would leave only
+  // a tail piece to seed, which cannot re-balance the opener.
+  //
+  // Gate on the tokenisation of the *canonical* close marker
+  // (`closeTagForEosRecovery`, which strips the chat template's
+  // surrounding whitespace for Qwen3-family) — tokenising the raw
+  // `tags.close` here would misclassify Qwen3 templates like
+  // `"\n</think>\n\n"` as multi-token even though `</think>` itself
+  // is a single vocab token. The corollary — that the string-search
+  // detector in `updateReasoningBuffer` flips on the padded
+  // `tags.close` and so the sampled token at the flip site is often
+  // a trailing padding piece, not the canonical close — is why
+  // `TextLlmContext` / `MtmdLlmContext` seed the replay buffer with
+  // `cached_close_tag_token` rather than the sampled token id.
+  state.close_is_single_token = (closeTokens.size() == 1);
 
   std::vector<llama_token> newlineTokens =
       common_tokenize(lctx, "\n", false, true);

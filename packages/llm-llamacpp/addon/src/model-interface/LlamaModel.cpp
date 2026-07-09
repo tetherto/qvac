@@ -875,6 +875,15 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     hasKvCacheContext = true;
   }
 
+  auto resetAndInvalidateActiveCache = [this]() {
+    resetState(false);
+    if (state_->cacheManager_.has_value()) {
+      state_->cacheManager_->invalidate();
+    }
+  };
+
+  bool shouldSaveCache = false;
+  bool shouldResetAfterInference = false;
   state_->llmContext_->validatePromptPolicy(
       resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
@@ -885,54 +894,94 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
-  ScopeGuard paramsGuard([&] { restore(); });
 
-  bool evalOk =
-      resolved.tools.empty()
-          ? state_->llmContext_->evalMessage(
-                resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
-          : state_->llmContext_->evalMessageWithTools(
-                resolved.chatMsgs,
-                resolved.tools,
-                resolved.isCacheLoaded,
-                prompt.prefill);
+  try {
+    ScopeGuard paramsGuard([&] { restore(); });
 
-  if (!evalOk) {
-    QLOG_IF(
-        Priority::DEBUG,
-        "Inference was interrupted during prompt evaluation\n");
-    return out;
+    const LlmContext::EvalMessageResult evalResult =
+        resolved.tools.empty()
+            ? state_->llmContext_->evalMessage(
+                  resolved.chatMsgs, resolved.isCacheLoaded, prompt.prefill)
+            : state_->llmContext_->evalMessageWithTools(
+                  resolved.chatMsgs,
+                  resolved.tools,
+                  resolved.isCacheLoaded,
+                  prompt.prefill);
+
+    if (!evalResult.ok) {
+      QLOG_IF(
+          Priority::DEBUG,
+          "Inference was interrupted during prompt evaluation\n");
+      if (!evalResult.rollbackOk) {
+        resetAndInvalidateActiveCache();
+      }
+      return out;
+    }
+
+    if (prompt.prefill) {
+      // On prefill, no logits are accessed so llama.cpp's synchronize() is
+      // never triggered. Force it here so t_p_eval_ms is committed to the perf
+      // context before the caller reads runtimeStats().
+      llama_synchronize(state_->llmContext_->getCtx());
+      shouldSaveCache = true;
+    } else {
+      std::ostringstream oss;
+      auto callback = prompt.outputCallback;
+      if (!prompt.outputCallback) {
+        callback = [&](const std::string& token) { oss << token; };
+      }
+
+      const LlmContext::GenerateResponseResult generationResult =
+          state_->llmContext_->generateResponse(callback);
+      if (!generationResult.ok) {
+        resetState();
+        std::string errorMsg =
+            string_format("%s: context overflow\n", __func__);
+        throw qvac_errors::StatusError(
+            ADDON_ID, toString(ContextOverflow), errorMsg);
+      }
+
+      if (!prompt.outputCallback) {
+        out = oss.str();
+      }
+
+      if (generationResult.rollbackOk) {
+        shouldSaveCache = true;
+        shouldResetAfterInference = resolved.shouldResetAfterInference;
+      } else {
+        // The driver could not prove the live recurrent state was rolled back
+        // to the pre-request cursor. Skipping this prompt's save protects the
+        // file immediately, but the active cache session must also be dropped:
+        // otherwise a later same-key prompt could reuse dirty live state, or a
+        // cache-key transition could save that dirty state under the old key.
+        resetAndInvalidateActiveCache();
+      }
+    }
+  } catch (...) {
+    // Once `handleCache()` has activated or loaded a cache session, any thrown
+    // eval / generation failure must leave no active session behind. In
+    // particular, strict `remove_thinking_from_context` compaction failures
+    // throw after local rollback/wipe; keeping the old cacheKey active would
+    // let a later prompt reuse or auto-save that recovery state over the last
+    // known-good on-disk cache. Do not catch policy-validation failures before
+    // admission; explicit save failures below have their own cleanup gate.
+    resetAndInvalidateActiveCache();
+    throw;
   }
 
-  if (prompt.prefill) {
-    // On prefill, no logits are accessed so llama.cpp's synchronize() is never
-    // triggered. Force it here so t_p_eval_ms is committed to the perf context
-    // before the caller reads runtimeStats().
-    llama_synchronize(state_->llmContext_->getCtx());
-    maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
-    return out;
+  if (shouldSaveCache) {
+    try {
+      maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
+    } catch (...) {
+      // The request completed, but the active cache key could not be flushed.
+      // Drop both live state and the active cache session so the next prompt
+      // does not retry the same failing path or keep using an unsaved session.
+      resetAndInvalidateActiveCache();
+      throw;
+    }
   }
 
-  std::ostringstream oss;
-  auto callback = prompt.outputCallback;
-  if (!prompt.outputCallback) {
-    callback = [&](const std::string& token) { oss << token; };
-  }
-
-  if (!state_->llmContext_->generateResponse(callback)) {
-    resetState();
-    std::string errorMsg = string_format("%s: context overflow\n", __func__);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextOverflow), errorMsg);
-  }
-
-  if (!prompt.outputCallback) {
-    out = oss.str();
-  }
-
-  maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
-
-  if (resolved.shouldResetAfterInference) {
+  if (shouldResetAfterInference) {
     resetState(false);
   }
   return out;
@@ -1083,14 +1132,14 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // in-flight batches without LlamaModel having to cache state.
   const batching::RuntimeStatsSnapshot stats =
       state_->batchScheduler_->runtimeStats();
-  // TTFT comes from `llama_perf_context` to match legacy single-prompt
-  // semantics; the scheduler does not yet expose a batch-aware TTFT.
-  // Reset the perf counters so the next single-prompt run sees a clean
-  // slate.
-  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
+  // TTFT comes from the scheduler's prefill-step timer rather than
+  // `llama_perf_context().t_p_eval_ms`, which would include the
+  // recurrent replay decode run by `compactThinkSpan` in
+  // `onGenerationFinished`. We still reset the live counters so they
+  // can't leak into the next single-prompt run.
   llama_perf_context_reset(state_->llmContext_->getCtx());
   return {
-      {"TTFT", perfData.t_p_eval_ms},
+      {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},
       {"ppTPS", stats.prefillTokensPerSecond()},
       {"CacheTokens", stats.cacheTokens},
@@ -1107,7 +1156,16 @@ LlamaModel::batchRuntimeStatsLocked() const {
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::singleRuntimeStatsLocked() const {
-  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
+  // Prefer the per-inference snapshot taken at the start of
+  // `compactThinkSpan`. That snapshot is the user-visible cutoff, BEFORE
+  // any recurrent replay decode rolled extra `llama_decode` calls into
+  // `n_p_eval` / `t_p_eval_ms`. When no snapshot exists (pure-attention
+  // models, prefill-only requests, or `runtimeStats()` called between
+  // turns) we fall back to a live `llama_perf_context()` read — same as
+  // the legacy behaviour.
+  auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot();
+  auto perfData =
+      snapshot.value_or(llama_perf_context(state_->llmContext_->getCtx()));
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill = state_->lastRun_.wasPrefill;
   const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
@@ -1424,21 +1482,92 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    bool isMaliGpu = false;
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackend,
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        pendingFinetuneOverrides_.active);
+        pendingFinetuneOverrides_.active,
+        &isMaliGpu);
+
+    // QVAC-21257: optional runtime override for the multimodal projector
+    // (mmproj / vision encoder) backend. The default is auto-selected per
+    // device class (QVAC-21867): desktop / iOS -> GPU; Android -> GPU except
+    // Mali, whose projector encode is slower on GPU than CPU -> CPU. The key
+    // lets callers force either backend without recompiling.
+    // Accepts true/on/1 and false/off/0 (case-insensitive). Erased from
+    // configFilemap so it is never forwarded to llama.cpp's argument parser
+    // by the passthrough loop.
+    std::optional<bool> mmprojUseGpuOverride;
+    {
+      auto hMmproj = configFilemap.find("mmproj-use-gpu");
+      auto uMmproj = configFilemap.find("mmproj_use_gpu");
+      if (hMmproj != configFilemap.end() && uMmproj != configFilemap.end()) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: both 'mmproj-use-gpu' and 'mmproj_use_gpu' are present; "
+                "use one or the other.\n",
+                __func__));
+      }
+      if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
+          it != configFilemap.end()) {
+        std::string val = it->second;
+        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+        if (val == "true" || val == "on" || val == "1") {
+          mmprojUseGpuOverride = true;
+        } else if (val == "false" || val == "off" || val == "0") {
+          mmprojUseGpuOverride = false;
+        } else {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              string_format(
+                  "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
+                  "'false'/'off'/'0'.\n",
+                  __func__,
+                  it->second.c_str()));
+        }
+        configFilemap.erase(it);
+      }
+    }
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
 #ifdef __ANDROID__
-      params.mmproj_use_gpu = false;
+      // QVAC-21867: auto-default the projector backend by GPU class.
+      //   - Mali: the projector encode is slower on the Mali GPU than on CPU
+      //     (QVAC-21257 benchmarks) -> CPU.
+      //   - Adreno < 800: materially weaker tiers that the QVAC-21257
+      //     projector-on-GPU benchmarks did not cover -> CPU (conservative).
+      //     Relax this once those tiers are benchmarked.
+      //   - Adreno 800+ and other Android GPUs -> GPU.
+      // The mmproj-use-gpu key overrides this either way.
+      constexpr int kAdrenoMmprojGpuThreshold = 800;
+      const bool adrenoBelowThreshold =
+          outAdrenoVersion.has_value() &&
+          outAdrenoVersion.value() < kAdrenoMmprojGpuThreshold;
+      bool mmprojUseGpu = !isMaliGpu && !adrenoBelowThreshold;
+      const char* mmprojDefaultReason =
+          isMaliGpu ? "auto-default, Mali GPU"
+                    : (adrenoBelowThreshold ? "auto-default, Adreno <800"
+                                            : "auto-default");
 #else
-      params.mmproj_use_gpu = true;
+      bool mmprojUseGpu = true;
+      const char* mmprojDefaultReason = "auto-default";
 #endif
+      if (mmprojUseGpuOverride.has_value()) {
+        mmprojUseGpu = mmprojUseGpuOverride.value();
+      }
+      QLOG_IF(
+          Priority::INFO,
+          string_format(
+              "[LlamaModel] multimodal projector backend: %s (%s)\n",
+              mmprojUseGpu ? "GPU" : "CPU",
+              mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
+                                               : mmprojDefaultReason));
+      params.mmproj_use_gpu = mmprojUseGpu;
       params.split_mode = splitMode;
       runtimeBackendDevice_ = 1;
 
@@ -1455,6 +1584,12 @@ void LlamaModel::commonParamsParse(
       }
     } else if (chosenBackend.first == BackendType::CPU) {
       params.mmproj_use_gpu = false;
+      if (mmprojUseGpuOverride.value_or(false)) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
+            "running the multimodal projector on CPU\n");
+      }
       runtimeBackendDevice_ = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;

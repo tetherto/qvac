@@ -102,7 +102,13 @@ std::string LlamaFinetuner::finetune(
     std::shared_lock lock(model_.stateMtx_);
     if (model_.state_->cacheManager_.has_value() &&
         model_.state_->cacheManager_->hasActiveCache()) {
-      model_.state_->cacheManager_->saveCache();
+      try {
+        model_.state_->cacheManager_->saveCache();
+      } catch (...) {
+        model_.resetState(false);
+        model_.state_->cacheManager_->invalidate();
+        throw;
+      }
     }
   }
 

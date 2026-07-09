@@ -264,15 +264,19 @@ jobs:
               model_op=EQUALS
               base="$dev"
               case "$dev" in *any) model_op=CONTAINS; base="${dev%any}" ;; esac
-              # model = exact Device Farm MODEL string (EQUALS); family = the subfamily
-              # substring used by the '<token>any' variants (CONTAINS).
+              # model = exact Device Farm MODEL string (EQUALS). NOTE: DF's MODEL
+              # attribute is the FULL display name INCLUDING the manufacturer prefix
+              # ("Google Pixel 9", not "Pixel 9") — an EQUALS filter with the stripped
+              # form matches zero fleet devices and DF completes the run as SKIPPED
+              # while the leg stays green (continue-on-error), so get this exactly
+              # right. family = the subfamily substring for '<token>any' (CONTAINS).
               case "$base" in
-                s26)         platform=Android; manufacturer=Samsung; model="Galaxy S26 Ultra"; family="Galaxy S26" ;;
-                s25)         platform=Android; manufacturer=Samsung; model="Galaxy S25 Ultra"; family="Galaxy S25" ;;
-                pixel9)      platform=Android; manufacturer=Google;  model="Pixel 9";          family="Pixel 9" ;;
-                iphone16)    platform=iOS;     manufacturer=Apple;   model="iPhone 16";        family="iPhone 16" ;;
-                iphone17)    platform=iOS;     manufacturer=Apple;   model="iPhone 17";        family="iPhone 17" ;;
-                iphone17pro) platform=iOS;     manufacturer=Apple;   model="iPhone 17 Pro";    family="iPhone 17 Pro" ;;
+                s26)         platform=Android; manufacturer=Samsung; model="Samsung Galaxy S26 Ultra"; family="Galaxy S26" ;;
+                s25)         platform=Android; manufacturer=Samsung; model="Samsung Galaxy S25 Ultra"; family="Galaxy S25" ;;
+                pixel9)      platform=Android; manufacturer=Google;  model="Google Pixel 9";           family="Pixel 9" ;;
+                iphone16)    platform=iOS;     manufacturer=Apple;   model="Apple iPhone 16";          family="iPhone 16" ;;
+                iphone17)    platform=iOS;     manufacturer=Apple;   model="Apple iPhone 17";          family="iPhone 17" ;;
+                iphone17pro) platform=iOS;     manufacturer=Apple;   model="Apple iPhone 17 Pro";      family="iPhone 17 Pro" ;;
                 *) echo "::warning::Unknown matrix_mobile device '$dev' (known: s26, s25, pixel9, iphone16, iphone17, iphone17pro — each also accepts an 'any' suffix, e.g. pixel9any)"; continue ;;
               esac
               if [[ "$model_op" == "CONTAINS" ]]; then model="$family"; fi
@@ -707,7 +711,7 @@ jobs:
           {
             echo "**${{ matrix.host }} · ${{ matrix.backend }}** (runner \`${{ matrix.runner }}\`)"
             echo "- addon: \`@qvac/llm-llamacpp@${ADDON_VERSION:-?}\` (published prebuild)"
-            echo "- git: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
+            echo "- benchmark code: \`${{ needs.context.outputs.head_sha }}\` (ref \`${{ needs.context.outputs.ref }}\`)"
             echo "- node: $(node -v 2>/dev/null) · bare: $(bare --version 2>/dev/null || echo n/a)"
             if [ "${{ matrix.host }}" = "macos" ] || [ "${{ matrix.host }}" = "macmini" ]; then
               echo "- os: $(sw_vers -productName 2>/dev/null) $(sw_vers -productVersion 2>/dev/null) $(uname -m)"

@@ -8,7 +8,8 @@
     "@qvac/sdk/nmtcpp-translation/plugin",
     "@qvac/sdk/tts-ggml/plugin",
     "@qvac/sdk/ggml-ocr/plugin",
-    "@qvac/sdk/ggml-classification/plugin"
+    "@qvac/sdk/ggml-classification/plugin",
+    "custom-echo-plugin/plugin"
   ],
   "loggerLevel": "debug",
   "loggerConsoleOutput": true

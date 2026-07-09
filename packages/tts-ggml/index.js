@@ -278,6 +278,7 @@ class TTSGgml {
       denoiser,
       backendsDir,
       openclCacheDir,
+      vulkanCacheDir,
       mecabDictDir,
       mecabDictPath,
       cangjieTsvPath,
@@ -426,6 +427,14 @@ class TTSGgml {
     this._openclCacheDir = firstNonEmpty(
       openclCacheDir,
       this._config?.openclCacheDir
+    )
+    // Persistent Vulkan pipeline cache dir. Forwarded to the addon, which
+    // sets GGML_VK_PIPELINE_CACHE_DIR so the Vulkan backend's first-dispatch
+    // pipeline-compile cost is paid once per install instead of once per
+    // process. Host-provided (must be app-writable); empty -> no cache.
+    this._vulkanCacheDir = firstNonEmpty(
+      vulkanCacheDir,
+      this._config?.vulkanCacheDir
     )
 
     // Run the conflict check before any engine-specific GPU policy so a
@@ -945,6 +954,7 @@ class TTSGgml {
     }
     if (this._backendsDir) params.backendsDir = this._backendsDir
     if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
+    if (this._vulkanCacheDir) params.vulkanCacheDir = this._vulkanCacheDir
     return params
   }
 

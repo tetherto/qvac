@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
+## [0.35.2] - 2026-07-08
+
+### Fixed
+
+- KV-cache stale backing-store handling now only discards active cache state for caches that were actually persisted before. Unsaved RAM-only cache paths with missing parents, cache paths replaced by directories, or other save-path failures continue to surface `UnableToSaveSessionFile` through the existing throw-and-invalidate path.
+
+### Pull Requests
+
+- [#3121](https://github.com/tetherto/qvac/pull/3121) - QVAC-21302 fix: preserve KV cache save failures after stale-cache handling
+
+## [0.35.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.35.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion, GPU mmproj-encode ~1.46× → ~1.28× of same-device CPU on Pixel 9 Pro — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.34.1] - 2026-07-08
+
+### Fixed
+
+- `test/mobile/integration.auto.cjs` was stale since `qwen3-5-image-tile-mode-tokens.test.js` was added (#2887, 2026-06-29) — the generated dispatch file was never regenerated, so `runQwen35ImageTileModeTokensTest` silently never ran on Android or iOS despite being listed in `test-groups.json`. Regenerated via `npm run test:mobile:generate`; desktop CI was unaffected (it regenerates its own runner list fresh every run).
+
+## [0.34.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking into the i8mm/AVX2 buffer, ~1807ms → ~1114ms CPU vision-encode on Pixel 9 Pro; no API change for this package).
+
+
+## [0.33.0] - 2026-07-07
+
+This release extends reasoning-block KV compaction to hybrid and recurrent SSM models such as Qwen3.5. It also makes reasoning compaction the default behavior for reasoning-capable models, with stricter failure handling so callers do not accidentally continue from cache state that still contains internal thinking traces.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` now defaults to `true`. Callers that intentionally want later turns to attend to previous reasoning can still pass `false` per request.
+- Hybrid and recurrent SSM models are now supported when their reasoning close marker tokenizes to a single vocab token. The addon snapshots the sequence state at the end of prefill, restores it after generation, and replays the generated opener seed, canonical close marker, and visible answer tail so KV and recurrent state stay coherent.
+
+### Fixed
+
+- Reasoning compaction failures now surface as `StatusError` instead of silently preserving reasoning in cache. The affected sequence is rolled back or cleared before the error escapes, and batch cache saves are skipped on unsafe cancel or compaction-failure paths to preserve the last known-good on-disk cache.
+- Qwen3.5 multimodal cache metadata is verified against restored llama memory before a cache file is accepted, preventing stale or partial cache files from desynchronizing `nPast`, physical KV-cell counts, and live memory.
+- Context sliding during generation now invalidates tracked reasoning spans and recurrent boundary snapshots, so compaction hard-fails instead of using stale coordinates after the cache window shifts.
+
+### Changed
+
+- The reasoning compaction implementation was split into shared helpers for span tracking, context shifting, recurrent snapshots, rollback state, and snapshot policy. Text and multimodal generation now use the same compaction contract across single-prompt and continuous-batch paths.
+- Cache persistence for per-slot batch saves now writes through a temporary file and atomically promotes it into place, matching the single-prompt `CacheManager` behavior.
+- Runtime stats preserve user-visible prompt and generation counters across recurrent replay, so maintenance decode work does not inflate throughput or time-to-first-token measurements.
+
+### Pull Requests
+
+- [#2813](https://github.com/tetherto/qvac/pull/2813) - QVAC-21250 Support reasoning compaction on hybrid SSM models
+
 ## [0.32.0] - 2026-07-06
 
 ### Changed
