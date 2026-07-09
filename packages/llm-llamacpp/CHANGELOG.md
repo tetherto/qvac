@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.36.2] - 2026-07-09
+
+This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
+
+### Fixed
+
+- Continuous-batch `tokensPerSecond`, `ppTPS`, and TTFT timing now include the explicit `llama_synchronize()` boundary after `llama_decode()` and multimodal media evaluation, preventing GPU backends from reporting launch-time-only throughput.
+- Text and multimodal cancellation paths now synchronize before rolling back prefill or generation state when cancellation bypasses the usual sampler-side synchronization.
+- Reset and deferred teardown paths now synchronize before clearing llama memory, including decode/media error paths that can run while a deferred scheduler clear is pending.
+
+### Changed
+
+- Batch and cancellation regression tests were hardened to assert scheduler-owned timing invariants and prefill cancellation rollback without relying on fragile cross-run wall-clock comparisons.
+
+### Pull Requests
+
+- [#3159](https://github.com/tetherto/qvac/pull/3159) - fix: synchronize async llama decode completion
+
 ## [0.36.1] - 2026-07-09
 
 ### Fixed
