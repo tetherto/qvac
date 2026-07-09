@@ -80,6 +80,28 @@ test('Supertonic: ttsParams shape passes voice/steps/speed/seed/threads/useGPU',
   t.absent(params.s3genModelPath, 'no s3gen path leaked into supertonic params')
 })
 
+test('Supertonic: vulkanCacheDir (config) plumbs into ttsParams', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { config: { language: 'en', useGPU: true, vulkanCacheDir: '/data/vk' } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.vulkanCacheDir, '/data/vk', 'config.vulkanCacheDir reaches params')
+})
+
+test('Supertonic: vulkanCacheDir (top-level option) plumbs into ttsParams', (t) => {
+  const model = createMockedSupertonicModel({
+    extra: { vulkanCacheDir: '/data/vk-top' }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.vulkanCacheDir, '/data/vk-top', 'top-level vulkanCacheDir reaches params')
+})
+
+test('Supertonic: vulkanCacheDir omitted leaves params key absent', (t) => {
+  const model = createMockedSupertonicModel()
+  const params = model._buildTtsParams()
+  t.absent(params.vulkanCacheDir, 'no vulkanCacheDir key when unset')
+})
+
 test('Supertonic: voice option also accepts voiceName for ONNX-tts cross-compat', (t) => {
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
