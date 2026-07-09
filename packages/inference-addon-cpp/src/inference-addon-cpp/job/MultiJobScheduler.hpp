@@ -133,26 +133,32 @@ class MultiJobScheduler final : public IJobScheduler {
       inFlight_.insert(job.id);
       lock.unlock();
 
-      try {
-        std::any output = multiprocessor_->process(job.input, job.id);
-        runResult(std::move(output), job.id);
-      } catch (const std::exception& exception) {
-        outputQueue_->queueException(exception, job.id);
-      } catch (...) {
-        outputQueue_->queueException(
-            std::runtime_error("Unknown exception in processing loop"), job.id);
-      }
-
-      {
+      // Release the slot, in-flight entry and exclusivity BEFORE publishing
+      // the job's terminal events: a consumer reacting to jobEnded (the JS
+      // run loop) may immediately admit a follow-up job, and a stale admitted
+      // count would refuse it as busy. process() has fully returned or thrown
+      // by the time this runs, so a stuck exclusive flag can never wedge
+      // admission if an exclusive job (finetune) fails.
+      const auto releaseSlot = [this, &job] {
         std::lock_guard relock(mtx_);
         --admittedCount_;
         inFlight_.erase(job.id);
-        // Release exclusivity here, after process() has fully returned or
-        // thrown, so a stuck flag can never wedge admission if an exclusive job
-        // (finetune) fails.
         if (job.exclusive) {
           exclusiveActive_ = false;
         }
+      };
+
+      try {
+        std::any output = multiprocessor_->process(job.input, job.id);
+        releaseSlot();
+        runResult(std::move(output), job.id);
+      } catch (const std::exception& exception) {
+        releaseSlot();
+        outputQueue_->queueException(exception, job.id);
+      } catch (...) {
+        releaseSlot();
+        outputQueue_->queueException(
+            std::runtime_error("Unknown exception in processing loop"), job.id);
       }
     }
   }
