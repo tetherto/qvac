@@ -1,5 +1,6 @@
-import { type ProvideParams, type ProvideRequest } from '../schemas'
+import { provideParamsSchema, type ProvideParams, type ProvideRequest } from '../schemas'
 import { send } from '../dispatch'
+import { parseClientInput } from './parse-input'
 import { InvalidResponseError, ProviderStartFailedError } from '../errors'
 
 /**
@@ -19,9 +20,10 @@ import { InvalidResponseError, ProviderStartFailedError } from '../errors'
  * @throws {QvacErrorBase} When the response type is not "provide" or the request fails
  */
 export async function startQVACProvider(params: ProvideParams = {}) {
+  const parsed = parseClientInput(provideParamsSchema, params)
   const request: ProvideRequest = {
     type: 'provide',
-    firewall: params.firewall
+    firewall: parsed.firewall
   }
 
   const response = await send(request)
