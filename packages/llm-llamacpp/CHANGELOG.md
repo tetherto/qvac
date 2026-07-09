@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.36.2] - 2026-07-09
+
+### Changed
+
+- Android multimodal-projector (mmproj / vision encoder) auto-default narrowed: with `mmproj-use-gpu` unset the projector now defaults to the GPU **only** on positively-detected Adreno 800+ GPUs. All other Android GPU classes — Arm Mali, Adreno < 800, and any GPU whose Adreno tier can't be detected — default to CPU (the LLM layers still run on the GPU). Only Adreno 800+ was benchmarked (QVAC-21257) to encode the projector faster on the mobile GPU than on CPU, so defaulting to GPU on unbenchmarked/undetectable classes was optimistic. Desktop and iOS continue to default to GPU, and an explicit `mmproj-use-gpu` value still overrides the default in either direction.
+
+### Pull Requests
+
+- [#3168](https://github.com/tetherto/qvac/pull/3168) - fix: default Android mmproj projector to GPU only on Adreno 800+
+
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
 ## [0.35.2] - 2026-07-08
 
 ### Fixed

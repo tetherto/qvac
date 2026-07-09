@@ -20,8 +20,20 @@
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml::supertonic {
+
+void detail::applyVulkanPipelineCache(
+    tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg) {
+  if (opts.n_gpu_layers <= 0 || cfg.vulkanCacheDir.empty())
+    return;
+  opts.vulkan_env_overrides[detail::VULKAN_PIPELINE_CACHE_DIR_ENV] =
+      cfg.vulkanCacheDir;
+  if (opts.prewarm_text.empty()) {
+    opts.prewarm_text = detail::VULKAN_PREWARM_TEXT;
+  }
+}
 
 namespace {
 
@@ -73,6 +85,8 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
     opts.backends_dir = backendsDirPath.string();
   }
   opts.opencl_cache_dir = cfg.openclCacheDir;
+
+  detail::applyVulkanPipelineCache(opts, cfg);
   return opts;
 }
 
