@@ -23,9 +23,9 @@ QVAC SDK is distributed as the npm package `@qvac/sdk` for JavaScript/TypeScript
 |----------|-------------|-----|-----|-------|
 | macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
 | iOS | 17.0+ | arm64 | Metal | Requires Expo |
-| Linux | Ubuntu 22+ | arm64, x64 | Vulkan | Vulkan 1.3+ for GPU acceleration; CPU inference runs without it |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan $\geq$ 1.4 | Vulkan is required for GPU inference. If not available, it falls back to CPU. |
 | Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
-| Windows | 10+ | x64 | Vulkan | Vulkan 1.3+ runtime required, currently even for CPU inference |
+| Windows | 10+ | x64 | Vulkan $\geq$ 1.4 | Vulkan is required even for CPU-only inference |
 
 ## Installation
 
@@ -40,13 +40,9 @@ npm i @qvac/sdk
 Requirements:
 
 - Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) $\geq$ 13. 
-- Vulkan runtime (Vulkan 1.3 or newer): the Vulkan loader plus a GPU driver that supports Vulkan 1.3. This is needed for GPU acceleration. Drivers older than 1.3 are missing two functions the GPU backend uses (`vkGetDeviceBufferMemoryRequirements` and `vkGetDeviceImageMemoryRequirements`, both added in Vulkan 1.3).
+- Vulkan runtime $\geq$ 1.4: Vulkan loader + a GPU driver with Vulkan support.
 
 On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
-
-<Callout type="info">
-On Linux, the SDK loads the GPU and CPU backends on demand, so `device: 'cpu'` inference runs even when Vulkan is missing or older than 1.3. On Linux, Vulkan 1.3+ only affects GPU acceleration.
-</Callout>
 
 <Callout type="info">
 On PCs, the Vulkan runtime is usually installed along with the GPU drivers. In other words, _if you've installed the correct driver for your GPU (with Vulkan support), you typically don't need to install anything else._
@@ -161,14 +157,10 @@ npx expo run:android --device
 ### Windows
 
 Requirement:
-- Vulkan runtime (Vulkan 1.3 or newer): the Vulkan loader plus a GPU driver that supports Vulkan 1.3
+- Vulkan runtime $\geq$ 1.4: Vulkan loader + a GPU driver with Vulkan support.
 
 This requirement is typically satisfied out of the box after installing the correct GPU vendor drivers. To verify it, [install Vulkan SDK](https://vulkan.lunarg.com) and run:
 
 ```powershell
 vulkaninfo --summary
 ```
-
-<Callout type="warn">
-On Windows, the inference addon loads the Vulkan library even when you set `device: 'cpu'`. If the Vulkan runtime is missing or older than 1.3, the SDK fails to load (for example, a missing `vulkan-1.dll` export such as `vkGetDeviceBufferMemoryRequirements`) instead of falling back to CPU. Update your GPU vendor driver to one that provides Vulkan 1.3 or newer, then confirm the reported version with `vulkaninfo --summary`.
-</Callout>
