@@ -251,8 +251,14 @@ Third-Party Model Licenses
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
   parakeet-ctc-0.6b-ONNX
     https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
+  parakeet-ctc-0.6b.f16
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-ctc-0.6b.q4_0
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
   parakeet-ctc-0.6b.q8_0
     https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-eou-120m-v1.f16
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-eou-120m-v1.q4_0
     https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-eou-120m-v1.q8_0
@@ -261,12 +267,16 @@ Third-Party Model Licenses
     https://huggingface.co/altunenes/parakeet-rs
   parakeet-tdt-0.6b-v3-onnx
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  parakeet-tdt-0.6b-v3.f16
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q4_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   parakeet-tdt-0.6b-v3.q8_0
     https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   preprocessor
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  sortformer-4spk-v1.f16
+    https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q4_0
     https://huggingface.co/nvidia/diar_sortformer_4spk-v1
   sortformer-4spk-v1.q8_0
@@ -301,6 +311,8 @@ Third-Party Model Licenses
     https://huggingface.co/1bitLLM/bitnet_b1_58-large
   bitnet_b1_58-xl-TQ2_0
     https://huggingface.co/1bitLLM/bitnet_b1_58-xl
+  Cangjie5_TC
+    https://github.com/Jackchows/Cangjie5
   chatterbox-multilingual-ONNX
     https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX
   chatterbox-s3gen
@@ -343,6 +355,10 @@ Third-Party Model Licenses
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
+  lavasr-denoiser-f16
+    https://huggingface.co/spaces/YatharthS
+  lavasr-enhancer-f16
+    https://huggingface.co/spaces/YatharthS
   pt-tiny-ggml-model-f16
     https://huggingface.co/DavyCosta701/whisper-tiny-pt-bpra
   tiny_acft_q8_0
