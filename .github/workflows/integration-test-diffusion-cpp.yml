@@ -3,6 +3,10 @@ name: Integration Tests (Stable Diffusion)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/diffusion-cpp@1.0.0)"
+        type: string
+        required: false
       ref:
         description: "ref"
         type: string
@@ -52,6 +56,15 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/diffusion-cpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
+      # Enables the LTX-2.3 video smoke test to download its (lightest-quant)
+      # weights into the cached test/model dir and run. Only set on backends
+      # where the LTX op set is supported (Metal); elsewhere the LTX test skips.
+      LTX_DOWNLOAD: ${{ matrix.ltx || 'false' }}
+      # Pin the LTX text encoder to the smallest Gemma-3-12b quant (~4.9 GB).
+      # UD-Q4_K_XL expands to a ~10 GB single GPU offload that OOMs the M4's
+      # unified memory; pinning here also bypasses a heavier quant that may
+      # already be in the model cache from an earlier run.
+      LTX_LLM_FILE: gemma-3-12b-it-UD-Q2_K_XL.gguf
     permissions:
       contents: read
       packages: read
@@ -81,7 +94,8 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
+            ltx: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64

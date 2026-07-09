@@ -24,18 +24,15 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const FLUX2_MODEL = {
-  name: 'flux-2-klein-4b-Q8_0.gguf',
-  url: 'https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf'
+  name: 'flux-2-klein-4b-Q8_0.gguf'
 }
 
 const QWEN3_MODEL = {
-  name: 'Qwen3-4B-Q4_K_M.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf'
+  name: 'Qwen3-4B-Q4_K_M.gguf'
 }
 
 const VAE_MODEL = {
-  name: 'flux2-vae.safetensors',
-  url: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors'
+  name: 'flux2-vae.safetensors'
 }
 
 const STEPS = 10
@@ -48,18 +45,15 @@ safeTest('FLUX2-klein fusion — fuses multiple reference images', { timeout: 18
   let model = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: FLUX2_MODEL.name,
-      downloadUrl: FLUX2_MODEL.url
+      modelName: FLUX2_MODEL.name
     })
 
     const [qwenName] = await ensureModel({
-      modelName: QWEN3_MODEL.name,
-      downloadUrl: QWEN3_MODEL.url
+      modelName: QWEN3_MODEL.name
     })
 
     const [vaeName] = await ensureModel({
-      modelName: VAE_MODEL.name,
-      downloadUrl: VAE_MODEL.url
+      modelName: VAE_MODEL.name
     })
 
     console.log('\n' + '='.repeat(60))

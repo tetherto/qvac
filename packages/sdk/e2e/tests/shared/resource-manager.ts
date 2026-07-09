@@ -1,15 +1,15 @@
-import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
-import type { ModelConstant } from "@qvac/sdk";
+import { loadModel, downloadAsset, unloadModel, cancel } from '@qvac/sdk'
+import type { ModelConstant } from '@qvac/sdk'
 import {
   resolveBootstrapDownloadConcurrency,
   resolveBootstrapRetryConcurrency,
   runBootstrapDownloads,
   type BootstrapDownloadItem,
-  type BootstrapDownloadTarget,
-} from "./bootstrap-downloads.js";
+  type BootstrapDownloadTarget
+} from './bootstrap-downloads.js'
 
-type ModelConfig = Record<string, unknown>;
-type ModelConfigResolver = () => Promise<ModelConfig>;
+type ModelConfig = Record<string, unknown>
+type ModelConfigResolver = () => Promise<ModelConfig>
 
 interface ModelDefinition {
   /**
@@ -17,22 +17,24 @@ interface ModelDefinition {
    * weights inside the package (`@qvac/classification-ggml`) — `loadModel`
    * is then invoked without `modelSrc` and `skipPreDownload` is implied.
    */
-  constant?: ModelConstant;
-  type: string;
+  constant?: ModelConstant
+  /** Raw `modelSrc` for custom plugin types with no registry constant. */
+  modelSrc?: string
+  type: string
   /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
-  config?: ModelConfig | ModelConfigResolver;
-  skipPreDownload?: boolean;
+  config?: ModelConfig | ModelConfigResolver
+  skipPreDownload?: boolean
 }
 
 function isModelConstant(value: unknown): value is ModelConstant {
-  if (value == null || typeof value !== "object") return false;
-  const v = value as Record<string, unknown>;
+  if (value == null || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
   return (
-    typeof v.name === "string" &&
-    typeof v.src === "string" &&
-    typeof v.modelId === "string" &&
-    typeof v.sha256Checksum === "string"
-  );
+    typeof v.name === 'string' &&
+    typeof v.src === 'string' &&
+    typeof v.modelId === 'string' &&
+    typeof v.sha256Checksum === 'string'
+  )
 }
 
 /**
@@ -45,28 +47,28 @@ function isModelConstant(value: unknown): value is ModelConstant {
 function collectModelConstants(
   value: unknown,
   out: Map<string, ModelConstant>,
-  seen: WeakSet<object>,
+  seen: WeakSet<object>
 ): void {
-  if (value == null || typeof value !== "object") return;
+  if (value == null || typeof value !== 'object') return
   if (isModelConstant(value)) {
-    if (!out.has(value.modelId)) out.set(value.modelId, value);
-    return;
+    if (!out.has(value.modelId)) out.set(value.modelId, value)
+    return
   }
-  if (seen.has(value)) return;
-  seen.add(value);
+  if (seen.has(value)) return
+  seen.add(value)
   if (Array.isArray(value)) {
-    for (const item of value) collectModelConstants(item, out, seen);
-    return;
+    for (const item of value) collectModelConstants(item, out, seen)
+    return
   }
   for (const inner of Object.values(value as Record<string, unknown>)) {
-    collectModelConstants(inner, out, seen);
+    collectModelConstants(inner, out, seen)
   }
 }
 
 interface TrackedModel {
-  modelId: string;
-  dep: string;
-  lastUsedAtTest: number;
+  modelId: string
+  dep: string
+  lastUsedAtTest: number
 }
 
 export interface ResourceManagerOptions {
@@ -86,35 +88,35 @@ export interface ResourceManagerOptions {
    *
    * Default 0 (off).
    */
-  unloadSettleMs?: number;
-  downloadTarget?: BootstrapDownloadTarget;
+  unloadSettleMs?: number
+  downloadTarget?: BootstrapDownloadTarget
 }
 
 export class ResourceManager {
-  private definitions = new Map<string, ModelDefinition>();
-  private resolvedConfigs = new Map<string, ModelConfig>();
-  private models = new Map<string, TrackedModel>();
-  private testCount = 0;
-  private downloaded = false;
-  private readonly unloadSettleMs: number;
-  private readonly downloadTarget: BootstrapDownloadTarget;
+  private definitions = new Map<string, ModelDefinition>()
+  private resolvedConfigs = new Map<string, ModelConfig>()
+  private models = new Map<string, TrackedModel>()
+  private testCount = 0
+  private downloaded = false
+  private readonly unloadSettleMs: number
+  private readonly downloadTarget: BootstrapDownloadTarget
 
   constructor(options: ResourceManagerOptions = {}) {
-    this.unloadSettleMs = options.unloadSettleMs ?? 0;
-    this.downloadTarget = options.downloadTarget ?? "desktop";
+    this.unloadSettleMs = options.unloadSettleMs ?? 0
+    this.downloadTarget = options.downloadTarget ?? 'desktop'
   }
 
   private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
-    if (typeof def.config !== "function") return def.config;
-    const cached = this.resolvedConfigs.get(dep);
-    if (cached) return cached;
-    const resolved = await def.config();
-    this.resolvedConfigs.set(dep, resolved);
-    return resolved;
+    if (typeof def.config !== 'function') return def.config
+    const cached = this.resolvedConfigs.get(dep)
+    if (cached) return cached
+    const resolved = await def.config()
+    this.resolvedConfigs.set(dep, resolved)
+    return resolved
   }
 
   define(dep: string, definition: ModelDefinition) {
-    this.definitions.set(dep, definition);
+    this.definitions.set(dep, definition)
   }
 
   /**
@@ -135,28 +137,28 @@ export class ResourceManager {
    */
   async downloadAllOnce(
     log?: (msg: string) => void,
-    options: { allowedDeps?: ReadonlySet<string> } = {},
+    options: { allowedDeps?: ReadonlySet<string> } = {}
   ): Promise<void> {
-    if (this.downloaded) return;
-    this.downloaded = true;
+    if (this.downloaded) return
+    this.downloaded = true
 
-    const allowed = options.allowedDeps;
-    const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep);
+    const allowed = options.allowedDeps
+    const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep)
 
-    const allDefinitions = Array.from(this.definitions.entries());
+    const allDefinitions = Array.from(this.definitions.entries())
 
     if (allowed !== undefined) {
-      const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length;
+      const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length
       log?.(
-        `🎯 Bootstrap dep-filter active: keeping ${allowed.size} dep(s); ${filteredOut} of ${allDefinitions.length} defined excluded`,
-      );
+        `🎯 Bootstrap dep-filter active: keeping ${allowed.size} dep(s); ${filteredOut} of ${allDefinitions.length} defined excluded`
+      )
     }
 
-    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep));
+    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep))
     if (skipped.length > 0) {
       log?.(
-        `⏭️  Skipping ${skipped.length} def(s) marked skipPreDownload: ${skipped.map(([dep]) => dep).join(", ")}`,
-      );
+        `⏭️  Skipping ${skipped.length} def(s) marked skipPreDownload: ${skipped.map(([dep]) => dep).join(', ')}`
+      )
     }
 
     // Discover every constant referenced by every contributing def, keyed
@@ -164,172 +166,179 @@ export class ResourceManager {
     // listed both as the root `constant` and inside `config`) is only
     // downloaded once.
     const contributors = allDefinitions.filter(
-      ([dep, def]) => !def.skipPreDownload && isAllowed(dep),
-    );
-    const constants = new Map<string, ModelConstant>();
-    const owners = new Map<string, string[]>();
+      ([dep, def]) => !def.skipPreDownload && isAllowed(dep)
+    )
+    const constants = new Map<string, ModelConstant>()
+    const owners = new Map<string, string[]>()
     const addConstant = (c: ModelConstant, dep: string) => {
-      if (!constants.has(c.modelId)) constants.set(c.modelId, c);
-      const list = owners.get(c.modelId) ?? [];
-      if (!list.includes(dep)) list.push(dep);
-      owners.set(c.modelId, list);
-    };
+      if (!constants.has(c.modelId)) constants.set(c.modelId, c)
+      const list = owners.get(c.modelId) ?? []
+      if (!list.includes(dep)) list.push(dep)
+      owners.set(c.modelId, list)
+    }
 
     for (const [dep, def] of contributors) {
-      if (def.constant) addConstant(def.constant, dep);
-      const cfg = await this.resolveConfig(dep, def);
+      if (def.constant) addConstant(def.constant, dep)
+      const cfg = await this.resolveConfig(dep, def)
       if (cfg) {
-        const found = new Map<string, ModelConstant>();
-        collectModelConstants(cfg, found, new WeakSet<object>());
-        for (const c of found.values()) addConstant(c, dep);
+        const found = new Map<string, ModelConstant>()
+        collectModelConstants(cfg, found, new WeakSet<object>())
+        for (const c of found.values()) addConstant(c, dep)
       }
     }
 
-    const downloadList = Array.from(constants.values());
-    const env = typeof process !== "undefined" ? process.env : {};
-    const concurrency = resolveBootstrapDownloadConcurrency(
-      env,
-      this.downloadTarget,
-    );
-    const retryConcurrency = resolveBootstrapRetryConcurrency(concurrency);
+    const downloadList = Array.from(constants.values())
+    const env = typeof process !== 'undefined' ? process.env : {}
+    const concurrency = resolveBootstrapDownloadConcurrency(env, this.downloadTarget)
+    const retryConcurrency = resolveBootstrapRetryConcurrency(concurrency)
     log?.(
       `📥 Pre-downloading ${downloadList.length} unique model constant(s) from ${contributors.length} def(s) ` +
-      `(concurrency=${concurrency}, retryConcurrency=${retryConcurrency})...`,
-    );
+        `(concurrency=${concurrency}, retryConcurrency=${retryConcurrency})...`
+    )
 
     const downloadItems: BootstrapDownloadItem[] = downloadList.map((constant) => ({
       id: constant.modelId,
       name: constant.name,
-      ownerLabel: (owners.get(constant.modelId) ?? []).join(",") || "?",
+      ownerLabel: (owners.get(constant.modelId) ?? []).join(',') || '?',
       run: async () => {
         await downloadAsset({
           assetSrc: constant as never,
-          onProgress: () => {},
-        });
-      },
-    }));
+          onProgress: () => {}
+        })
+      }
+    }))
 
     const result = await runBootstrapDownloads(downloadItems, {
       concurrency,
       retryConcurrency,
-      log,
-    });
+      log
+    })
 
     log?.(
-      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${result.maxConcurrent})`,
-    );
+      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${result.maxConcurrent})`
+    )
   }
 
   setTestCount(n: number) {
-    this.testCount = n;
+    this.testCount = n
   }
 
   incrementTestCount() {
-    this.testCount++;
+    this.testCount++
   }
 
   async ensureLoaded(dep: string): Promise<string> {
-    const existing = this.models.get(dep);
+    const existing = this.models.get(dep)
     if (existing) {
-      existing.lastUsedAtTest = this.testCount;
-      return existing.modelId;
+      existing.lastUsedAtTest = this.testCount
+      return existing.modelId
     }
 
-    const def = this.definitions.get(dep);
-    if (!def) throw new Error(`Unknown dependency: ${dep}`);
+    const def = this.definitions.get(dep)
+    if (!def) throw new Error(`Unknown dependency: ${dep}`)
+
+    const modelSrcOpts = def.constant
+      ? { modelSrc: def.constant as never }
+      : def.modelSrc !== undefined
+        ? { modelSrc: def.modelSrc }
+        : {}
 
     const modelId = await loadModel({
-      ...(def.constant ? { modelSrc: def.constant as never } : {}),
+      ...modelSrcOpts,
       modelType: def.type as never,
-      modelConfig: await this.resolveConfig(dep, def),
-    } as never);
+      modelConfig: await this.resolveConfig(dep, def)
+    } as never)
 
     this.models.set(dep, {
       modelId,
       dep,
-      lastUsedAtTest: this.testCount,
-    });
+      lastUsedAtTest: this.testCount
+    })
 
-    return modelId;
+    return modelId
   }
 
   /**
    * Register a model with the resource manager. To be called after loadModel has been called.
    */
   register(dep: string, modelId: string) {
-    this.models.set(dep, { modelId, dep, lastUsedAtTest: this.testCount });
+    this.models.set(dep, { modelId, dep, lastUsedAtTest: this.testCount })
   }
 
   /**
    * Unregister a model from the resource manager. To be called after unloadModel has been called.
    */
   unregister(modelId: string): void {
-    const matches = Array.from(this.models.entries()).filter(([_, entry]) => entry.modelId === modelId);
+    const matches = Array.from(this.models.entries()).filter(
+      ([_, entry]) => entry.modelId === modelId
+    )
     for (const [dep] of matches) {
-      this.models.delete(dep);
+      this.models.delete(dep)
     }
   }
 
   getModelId(dep: string): string | null {
-    return this.models.get(dep)?.modelId ?? null;
+    return this.models.get(dep)?.modelId ?? null
   }
 
   async evictExcept(keep: string[]): Promise<string[]> {
-    const keepSet = new Set(keep);
-    const evicted: string[] = [];
+    const keepSet = new Set(keep)
+    const evicted: string[] = []
     for (const dep of this.models.keys()) {
       if (!keepSet.has(dep)) {
-        await this.evict(dep);
-        evicted.push(dep);
+        await this.evict(dep)
+        evicted.push(dep)
       }
     }
-    return evicted;
+    return evicted
   }
 
   async evictStale(threshold: number): Promise<string[]> {
-    console.info(`🧹 Evicting stale models (test count: ${this.testCount}, threshold: ${threshold})`);
-    const evicted: string[] = [];
+    console.info(
+      `🧹 Evicting stale models (test count: ${this.testCount}, threshold: ${threshold})`
+    )
+    const evicted: string[] = []
     for (const [dep, entry] of this.models) {
       if (this.testCount - entry.lastUsedAtTest >= threshold) {
-        await this.evict(dep);
-        evicted.push(dep);
+        await this.evict(dep)
+        evicted.push(dep)
       }
     }
-    return evicted;
+    return evicted
   }
 
   async evict(dep: string): Promise<void> {
-    const entry = this.models.get(dep);
+    const entry = this.models.get(dep)
     if (entry) {
-      console.info(`🧹 Evicting model ${dep} (test count: ${this.testCount}, last used at test: ${entry.lastUsedAtTest})`);
+      console.info(
+        `🧹 Evicting model ${dep} (test count: ${this.testCount}, last used at test: ${entry.lastUsedAtTest})`
+      )
       try {
-        await cancel({ operation: "inference", modelId: entry.modelId });
+        await cancel({ operation: 'inference', modelId: entry.modelId })
       } catch (error) {
-        console.debug(`Error canceling inference ${dep}: ${error}`);
+        console.debug(`Error canceling inference ${dep}: ${error}`)
       }
       try {
-        await unloadModel({ modelId: entry.modelId });
+        await unloadModel({ modelId: entry.modelId })
         // Optionally yield so the OS can reclaim pages before the next
         // load starts allocating. See `unloadSettleMs` docs above. Only
         // wait when the unload actually succeeded; on failure there's
         // nothing to settle.
         if (this.unloadSettleMs > 0) {
-          await new Promise<void>((resolve) =>
-            setTimeout(resolve, this.unloadSettleMs),
-          );
+          await new Promise<void>((resolve) => setTimeout(resolve, this.unloadSettleMs))
         }
       } catch (error) {
-        console.warn(`Error unloading model ${dep}: ${error}`);
+        console.warn(`Error unloading model ${dep}: ${error}`)
       }
 
-      this.models.delete(dep);
+      this.models.delete(dep)
     }
   }
 
   async evictAll(): Promise<void> {
     for (const dep of this.models.keys()) {
-      await this.evict(dep);
+      await this.evict(dep)
     }
-    this.models.clear();
+    this.models.clear()
   }
 }

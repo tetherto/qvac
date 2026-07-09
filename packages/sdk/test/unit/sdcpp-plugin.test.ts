@@ -1,5 +1,5 @@
-import test from "brittle";
-import { z } from "zod";
+import test from 'brittle'
+import { z } from 'zod'
 import {
   sdcppConfigSchema,
   diffusionRequestSchema,
@@ -11,106 +11,103 @@ import {
   ModelType,
   SDK_SERVER_ERROR_CODES,
   type DiffusionStreamResponse,
-  type PluginInvokeStreamResponse,
-} from "@/schemas";
-import {
-  loadModelSrcRequestSchema,
-  loadModelOptionsBaseSchema,
-} from "@/schemas/load-model";
-import { clearPlugins, registerPlugin, hasPlugin } from "@/server/plugins";
+  type PluginInvokeStreamResponse
+} from '@/schemas'
+import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '@/schemas/load-model'
+import { clearPlugins, registerPlugin, hasPlugin } from '@/server/plugins'
 import {
   registerModel,
   unregisterModel,
-  type AnyModel,
-} from "@/server/bare/registry/model-registry";
-import { handlePluginInvokeStream } from "@/server/rpc/handlers/plugin-invoke";
+  type AnyModel
+} from '@/server/bare/registry/model-registry'
+import { handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
 import {
   PluginResponseValidationFailedError,
-  PluginRequestValidationFailedError,
-} from "@/utils/errors-server";
-import { diffusion as diffusionOp } from "@/server/bare/plugins/sdcpp-generation/ops/diffusion";
+  PluginRequestValidationFailedError
+} from '@/utils/errors-server'
+import { diffusion as diffusionOp } from '@/server/bare/plugins/sdcpp-generation/ops/diffusion'
 
 // ============================================
 // sdcppConfigSchema
 // ============================================
 
-test("sdcppConfigSchema: accepts empty config", (t) => {
-  const result = sdcppConfigSchema.safeParse({});
-  t.is(result.success, true);
-});
+test('sdcppConfigSchema: accepts empty config', (t) => {
+  const result = sdcppConfigSchema.safeParse({})
+  t.is(result.success, true)
+})
 
-test("sdcppConfigSchema: accepts valid full config", (t) => {
+test('sdcppConfigSchema: accepts valid full config', (t) => {
   const result = sdcppConfigSchema.safeParse({
     threads: 4,
-    device: "gpu",
-    prediction: "flow",
-    type: "q8_0",
-    rng: "cpu",
-    sampler_rng: "std_default",
+    device: 'gpu',
+    prediction: 'flow',
+    type: 'q8_0',
+    rng: 'cpu',
+    sampler_rng: 'std_default',
     clip_on_cpu: true,
     vae_on_cpu: false,
     vae_tiling: true,
     flash_attn: true,
     diffusion_fa: true,
     upscaler: {
-      type: "esrgan",
+      type: 'esrgan',
       tile_size: 128,
       direct: false,
       offload_params_to_cpu: true,
       threads: -1,
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth'
     },
     verbosity: 2,
-    clipLModelSrc: "clip-l.safetensors",
-    clipGModelSrc: "clip-g.safetensors",
-    t5XxlModelSrc: "t5xxl.safetensors",
-    llmModelSrc: "qwen3.gguf",
-    vaeModelSrc: "vae.safetensors",
-  });
-  t.is(result.success, true);
-});
+    clipLModelSrc: 'clip-l.safetensors',
+    clipGModelSrc: 'clip-g.safetensors',
+    t5XxlModelSrc: 't5xxl.safetensors',
+    llmModelSrc: 'qwen3.gguf',
+    vaeModelSrc: 'vae.safetensors'
+  })
+  t.is(result.success, true)
+})
 
-test("sdcppConfigSchema: rejects invalid device", (t) => {
-  const result = sdcppConfigSchema.safeParse({ device: "tpu" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects invalid device', (t) => {
+  const result = sdcppConfigSchema.safeParse({ device: 'tpu' })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects invalid prediction type", (t) => {
-  const result = sdcppConfigSchema.safeParse({ prediction: "unknown" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects invalid prediction type', (t) => {
+  const result = sdcppConfigSchema.safeParse({ prediction: 'unknown' })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects removed flux_flow prediction value", (t) => {
-  const result = sdcppConfigSchema.safeParse({ prediction: "flux_flow" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects removed flux_flow prediction value', (t) => {
+  const result = sdcppConfigSchema.safeParse({ prediction: 'flux_flow' })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects non-boolean diffusion_fa", (t) => {
-  const result = sdcppConfigSchema.safeParse({ diffusion_fa: "yes" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects non-boolean diffusion_fa', (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusion_fa: 'yes' })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: preserves diffusion_fa: false through parsing", (t) => {
-  const result = sdcppConfigSchema.safeParse({ diffusion_fa: false });
-  t.is(result.success, true);
-  t.is(result.data?.diffusion_fa, false);
-});
+test('sdcppConfigSchema: preserves diffusion_fa: false through parsing', (t) => {
+  const result = sdcppConfigSchema.safeParse({ diffusion_fa: false })
+  t.is(result.success, true)
+  t.is(result.data?.diffusion_fa, false)
+})
 
-test("sdcppConfigSchema: rejects invalid type", (t) => {
-  const result = sdcppConfigSchema.safeParse({ type: "q3_0" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects invalid type', (t) => {
+  const result = sdcppConfigSchema.safeParse({ type: 'q3_0' })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema.strict(): rejects unknown keys", (t) => {
-  const result = sdcppConfigSchema.strict().safeParse({ unknownKey: true });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema.strict(): rejects unknown keys', (t) => {
+  const result = sdcppConfigSchema.strict().safeParse({ unknownKey: true })
+  t.is(result.success, false)
+})
 
 // ============================================
 // diffusionStatsSchema
 // ============================================
 
-test("diffusionStatsSchema: accepts all C++ RuntimeStats fields", (t) => {
+test('diffusionStatsSchema: accepts all C++ RuntimeStats fields', (t) => {
   const result = diffusionStatsSchema.safeParse({
     modelLoadMs: 500,
     generationMs: 1234,
@@ -122,740 +119,740 @@ test("diffusionStatsSchema: accepts all C++ RuntimeStats fields", (t) => {
     totalPixels: 262144,
     width: 512,
     height: 512,
-    seed: 42,
-  });
-  t.is(result.success, true);
-});
+    seed: 42
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionStatsSchema: accepts empty stats", (t) => {
-  const result = diffusionStatsSchema.safeParse({});
-  t.is(result.success, true);
-});
+test('diffusionStatsSchema: accepts empty stats', (t) => {
+  const result = diffusionStatsSchema.safeParse({})
+  t.is(result.success, true)
+})
 
-test("diffusionStatsSchema: strips unknown fields (no passthrough)", (t) => {
+test('diffusionStatsSchema: strips unknown fields (no passthrough)', (t) => {
   const result = diffusionStatsSchema.safeParse({
     modelLoadMs: 100,
-    unknownField: "should-be-stripped",
-  });
-  t.is(result.success, true);
+    unknownField: 'should-be-stripped'
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.modelLoadMs, 100);
-    t.absent((result.data as Record<string, unknown>)["unknownField"]);
+    t.is(result.data.modelLoadMs, 100)
+    t.absent((result.data as Record<string, unknown>)['unknownField'])
   }
-});
+})
 
 // ============================================
 // diffusionRequestSchema
 // ============================================
 
-test("diffusionRequestSchema: accepts minimal txt2img request", (t) => {
+test('diffusionRequestSchema: accepts minimal txt2img request', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat sitting on a windowsill",
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat sitting on a windowsill'
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts full txt2img request", (t) => {
+test('diffusionRequestSchema: accepts full txt2img request', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    negative_prompt: "ugly",
+    modelId: 'model-1',
+    prompt: 'a cat',
+    negative_prompt: 'ugly',
     width: 512,
     height: 768,
     steps: 20,
     cfg_scale: 7.0,
     guidance: 3.5,
-    sampling_method: "euler_a",
-    scheduler: "karras",
+    sampling_method: 'euler_a',
+    scheduler: 'karras',
     seed: 42,
     batch_count: 2,
     vae_tiling: true,
-    cache_preset: "fast",
-  });
-  t.is(result.success, true);
-});
+    cache_preset: 'fast'
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: applies img_cfg_scale default of -1 when omitted", (t) => {
+test('diffusionRequestSchema: applies img_cfg_scale default of -1 when omitted', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-  });
-  t.is(result.success, true);
+    modelId: 'model-1',
+    prompt: 'a cat'
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.img_cfg_scale, -1);
+    t.is(result.data.img_cfg_scale, -1)
   }
-});
+})
 
-test("diffusionRequestSchema: preserves explicit img_cfg_scale value", (t) => {
+test('diffusionRequestSchema: preserves explicit img_cfg_scale value', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    img_cfg_scale: 4.5,
-  });
-  t.is(result.success, true);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    img_cfg_scale: 4.5
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.img_cfg_scale, 4.5);
+    t.is(result.data.img_cfg_scale, 4.5)
   }
-});
+})
 
-test("diffusionRequestSchema: rejects missing modelId", (t) => {
+test('diffusionRequestSchema: rejects missing modelId', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    prompt: "a cat",
-  });
-  t.is(result.success, false);
-});
+    prompt: 'a cat'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects missing prompt", (t) => {
+test('diffusionRequestSchema: rejects missing prompt', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects width not multiple of 8", (t) => {
+test('diffusionRequestSchema: rejects width not multiple of 8', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    width: 513,
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    width: 513
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects negative steps", (t) => {
+test('diffusionRequestSchema: rejects negative steps', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    steps: -1,
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    steps: -1
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects invalid sampling_method", (t) => {
+test('diffusionRequestSchema: rejects invalid sampling_method', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    sampling_method: "ddpm",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    sampling_method: 'ddpm'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects invalid scheduler", (t) => {
+test('diffusionRequestSchema: rejects invalid scheduler', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    scheduler: "default",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    scheduler: 'default'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: accepts img2img request with init_image and strength", (t) => {
+test('diffusionRequestSchema: accepts img2img request with init_image and strength', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "oil painting style",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-    strength: 0.7,
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'oil painting style',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
+    strength: 0.7
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts img2img request with init_image only (no strength)", (t) => {
+test('diffusionRequestSchema: accepts img2img request with init_image only (no strength)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "watercolor",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'watercolor',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg=='
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: rejects strength below 0", (t) => {
+test('diffusionRequestSchema: rejects strength below 0', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    strength: -0.1,
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    strength: -0.1
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects strength above 1", (t) => {
+test('diffusionRequestSchema: rejects strength above 1', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    strength: 1.5,
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    strength: 1.5
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects empty init_image", (t) => {
+test('diffusionRequestSchema: rejects empty init_image', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: ''
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects init_image with invalid base64 characters", (t) => {
+test('diffusionRequestSchema: rejects init_image with invalid base64 characters', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "not valid base64!!!",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'not valid base64!!!'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects init_image with base64url characters (-, _)", (t) => {
+test('diffusionRequestSchema: rejects init_image with base64url characters (-, _)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "iVBORw0KGgoAAAANSUhE-_==",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'iVBORw0KGgoAAAANSUhE-_=='
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects init_image with embedded whitespace", (t) => {
+test('diffusionRequestSchema: rejects init_image with embedded whitespace', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "iVBORw0KGgo\nAAAANSUhEUg==",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'iVBORw0KGgo\nAAAANSUhEUg=='
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects init_image with length not a multiple of 4", (t) => {
+test('diffusionRequestSchema: rejects init_image with length not a multiple of 4', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "iVBORw0KGgoAAAANSUhEUg",
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg'
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: accepts strength at boundaries (0 and 1)", (t) => {
+test('diffusionRequestSchema: accepts strength at boundaries (0 and 1)', (t) => {
   const resultZero = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    strength: 0,
-  });
-  t.is(resultZero.success, true);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    strength: 0
+  })
+  t.is(resultZero.success, true)
 
   const resultOne = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    strength: 1,
-  });
-  t.is(resultOne.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    strength: 1
+  })
+  t.is(resultOne.success, true)
+})
 
 // ---- LoRA + multi-reference fusion (FLUX.2) ----
 
-test("diffusionRequestSchema: accepts lora as POSIX absolute path", (t) => {
+test('diffusionRequestSchema: accepts lora as POSIX absolute path', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "/home/user/loras/watercolor.safetensors",
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: '/home/user/loras/watercolor.safetensors'
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts lora as Windows drive-letter path", (t) => {
+test('diffusionRequestSchema: accepts lora as Windows drive-letter path', (t) => {
   const resultBackslash = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "C:\\models\\loras\\watercolor.safetensors",
-  });
-  t.is(resultBackslash.success, true);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: 'C:\\models\\loras\\watercolor.safetensors'
+  })
+  t.is(resultBackslash.success, true)
 
   const resultForwardSlash = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "C:/models/loras/watercolor.safetensors",
-  });
-  t.is(resultForwardSlash.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: 'C:/models/loras/watercolor.safetensors'
+  })
+  t.is(resultForwardSlash.success, true)
+})
 
-test("diffusionRequestSchema: accepts lora as Windows UNC path", (t) => {
+test('diffusionRequestSchema: accepts lora as Windows UNC path', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "\\\\server\\share\\loras\\watercolor.safetensors",
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: '\\\\server\\share\\loras\\watercolor.safetensors'
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: rejects lora as bare filename", (t) => {
+test('diffusionRequestSchema: rejects lora as bare filename', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "my-lora.safetensors",
-  });
-  t.is(result.success, false);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: 'my-lora.safetensors'
+  })
+  t.is(result.success, false)
   if (!result.success) {
     t.ok(
       /must be an absolute path/.test(result.error.issues[0]!.message),
-      "error message explains lora must be absolute",
-    );
+      'error message explains lora must be absolute'
+    )
   }
-});
+})
 
-test("diffusionRequestSchema: rejects lora as relative path", (t) => {
+test('diffusionRequestSchema: rejects lora as relative path', (t) => {
   const resultDot = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "./loras/watercolor.safetensors",
-  });
-  t.is(resultDot.success, false);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: './loras/watercolor.safetensors'
+  })
+  t.is(resultDot.success, false)
 
   const resultParent = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "../loras/watercolor.safetensors",
-  });
-  t.is(resultParent.success, false);
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: '../loras/watercolor.safetensors'
+  })
+  t.is(resultParent.success, false)
 
   const resultSubdir = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    lora: "loras/watercolor.safetensors",
-  });
-  t.is(resultSubdir.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    lora: 'loras/watercolor.safetensors'
+  })
+  t.is(resultSubdir.success, false)
+})
 
-test("diffusionRequestSchema: accepts init_images with multiple base64 buffers", (t) => {
+test('diffusionRequestSchema: accepts init_images with multiple base64 buffers', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "blend @image1 and @image2",
-    init_images: ["iVBORw0KGgoAAAANSUhEUg==", "/9j/4AAQSkZJRgABAQEASABIAAA="],
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'blend @image1 and @image2',
+    init_images: ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts increase_ref_index boolean", (t) => {
+test('diffusionRequestSchema: accepts increase_ref_index boolean', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
-    increase_ref_index: true,
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_images: ['iVBORw0KGgoAAAANSUhEUg=='],
+    increase_ref_index: true
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts auto_resize_ref_image boolean", (t) => {
+test('diffusionRequestSchema: accepts auto_resize_ref_image boolean', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-    auto_resize_ref_image: false,
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
+    auto_resize_ref_image: false
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: rejects when init_image and init_images are both set", (t) => {
+test('diffusionRequestSchema: rejects when init_image and init_images are both set', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "blend two refs",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-    init_images: ["iVBORw0KGgoAAAANSUhEUg==", "/9j/4AAQSkZJRgABAQEASABIAAA="],
-  });
-  t.is(result.success, false);
+    modelId: 'model-1',
+    prompt: 'blend two refs',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
+    init_images: ['iVBORw0KGgoAAAANSUhEUg==', '/9j/4AAQSkZJRgABAQEASABIAAA=']
+  })
+  t.is(result.success, false)
   if (!result.success) {
-    const messages = result.error.issues.map((i) => i.message).join(" | ");
+    const messages = result.error.issues.map((i) => i.message).join(' | ')
     t.ok(
-      messages.includes("mutually exclusive"),
-      `expected mutual-exclusion message, got: ${messages}`,
-    );
+      messages.includes('mutually exclusive'),
+      `expected mutual-exclusion message, got: ${messages}`
+    )
   }
-});
+})
 
-test("diffusionRequestSchema: accepts init_image alone (mutual exclusion not triggered)", (t) => {
+test('diffusionRequestSchema: accepts init_image alone (mutual exclusion not triggered)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "img2img",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'img2img',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg=='
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts init_images alone (mutual exclusion not triggered)", (t) => {
+test('diffusionRequestSchema: accepts init_images alone (mutual exclusion not triggered)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "fusion",
-    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'fusion',
+    init_images: ['iVBORw0KGgoAAAANSUhEUg==']
+  })
+  t.is(result.success, true)
+})
 
 // ---- diffusionStreamRequestSchema ----
 
-test("diffusionStreamRequestSchema: accepts a valid stream request with type literal", (t) => {
+test('diffusionStreamRequestSchema: accepts a valid stream request with type literal', (t) => {
   const result = diffusionStreamRequestSchema.safeParse({
-    type: "diffusionStream",
-    modelId: "model-1",
-    prompt: "a cat",
-  });
-  t.is(result.success, true);
-});
+    type: 'diffusionStream',
+    modelId: 'model-1',
+    prompt: 'a cat'
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionStreamRequestSchema: rejects when init_image and init_images are both set", (t) => {
+test('diffusionStreamRequestSchema: rejects when init_image and init_images are both set', (t) => {
   const result = diffusionStreamRequestSchema.safeParse({
-    type: "diffusionStream",
-    modelId: "model-1",
-    prompt: "a cat",
-    init_image: "iVBORw0KGgoAAAANSUhEUg==",
-    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
-  });
-  t.is(result.success, false);
+    type: 'diffusionStream',
+    modelId: 'model-1',
+    prompt: 'a cat',
+    init_image: 'iVBORw0KGgoAAAANSUhEUg==',
+    init_images: ['iVBORw0KGgoAAAANSUhEUg==']
+  })
+  t.is(result.success, false)
   if (!result.success) {
-    const messages = result.error.issues.map((i) => i.message).join(" | ");
+    const messages = result.error.issues.map((i) => i.message).join(' | ')
     t.ok(
-      messages.includes("mutually exclusive"),
-      `expected mutual-exclusion message, got: ${messages}`,
-    );
+      messages.includes('mutually exclusive'),
+      `expected mutual-exclusion message, got: ${messages}`
+    )
   }
-});
+})
 
 // ---- sdcppConfigSchema: lora_apply_mode ----
 
-test("sdcppConfigSchema: accepts lora_apply_mode", (t) => {
-  const result = sdcppConfigSchema.safeParse({ lora_apply_mode: "auto" });
-  t.is(result.success, true);
-});
+test('sdcppConfigSchema: accepts lora_apply_mode', (t) => {
+  const result = sdcppConfigSchema.safeParse({ lora_apply_mode: 'auto' })
+  t.is(result.success, true)
+})
 
 // ---- sdcppConfigSchema: ESRGAN upscaler ----
 
-test("sdcppConfigSchema: accepts upscaler config with all tuning fields", (t) => {
+test('sdcppConfigSchema: accepts upscaler config with all tuning fields', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      type: "esrgan",
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      type: 'esrgan',
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
       tile_size: 128,
       direct: true,
       offload_params_to_cpu: false,
-      threads: -1,
-    },
-  });
-  t.is(result.success, true);
-});
+      threads: -1
+    }
+  })
+  t.is(result.success, true)
+})
 
 // `upscaler.model_src` is optional at the schema level so the same block
 // shape can be reused for standalone-upscaler mode (modelConfig.mode =
 // "upscale") where the primary modelSrc itself is the ESRGAN file. The
 // diffusion plugin enforces "model_src required in diffusion mode" at
 // createModel time — see the corresponding plugin test below.
-test("sdcppConfigSchema: accepts upscaler block without model_src (validated at plugin layer)", (t) => {
+test('sdcppConfigSchema: accepts upscaler block without model_src (validated at plugin layer)', (t) => {
   const result = sdcppConfigSchema.safeParse({
-    upscaler: { tile_size: 128 },
-  });
-  t.is(result.success, true);
-});
+    upscaler: { tile_size: 128 }
+  })
+  t.is(result.success, true)
+})
 
 test("sdcppConfigSchema: accepts mode: 'upscale' for standalone ESRGAN", (t) => {
   const result = sdcppConfigSchema.safeParse({
-    mode: "upscale",
-    upscaler: { tile_size: 128, threads: -1 },
-  });
-  t.is(result.success, true);
-});
+    mode: 'upscale',
+    upscaler: { tile_size: 128, threads: -1 }
+  })
+  t.is(result.success, true)
+})
 
-test("sdcppConfigSchema: rejects invalid mode value", (t) => {
-  const result = sdcppConfigSchema.safeParse({ mode: "img2vid" });
-  t.is(result.success, false);
-});
+test('sdcppConfigSchema: rejects invalid mode value', (t) => {
+  const result = sdcppConfigSchema.safeParse({ mode: 'img2vid' })
+  t.is(result.success, false)
+})
 
 test("sdcppConfigSchema: rejects upscaler.type other than 'esrgan'", (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      type: "swinir",
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
-    },
-  });
-  t.is(result.success, false);
-});
+      type: 'swinir',
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth'
+    }
+  })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects upscaler with unknown keys (strict)", (t) => {
+test('sdcppConfigSchema: rejects upscaler with unknown keys (strict)', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
-      tileSize: 128,
-    },
-  });
-  t.is(result.success, false);
-});
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
+      tileSize: 128
+    }
+  })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects non-positive upscaler.tile_size", (t) => {
+test('sdcppConfigSchema: rejects non-positive upscaler.tile_size', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
-      tile_size: 0,
-    },
-  });
-  t.is(result.success, false);
-});
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
+      tile_size: 0
+    }
+  })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: rejects non-integer upscaler.tile_size", (t) => {
+test('sdcppConfigSchema: rejects non-integer upscaler.tile_size', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
-      tile_size: 64.5,
-    },
-  });
-  t.is(result.success, false);
-});
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
+      tile_size: 64.5
+    }
+  })
+  t.is(result.success, false)
+})
 
-test("sdcppConfigSchema: accepts upscaler.threads = -1 (auto) and positive integers", (t) => {
-  const ms = "RealESRGAN_x4plus_anime_6B.pth";
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -1 } }).success, true);
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 4 } }).success, true);
-});
+test('sdcppConfigSchema: accepts upscaler.threads = -1 (auto) and positive integers', (t) => {
+  const ms = 'RealESRGAN_x4plus_anime_6B.pth'
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -1 } }).success, true)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 4 } }).success, true)
+})
 
-test("sdcppConfigSchema: rejects upscaler.threads = 0 and negative values other than -1", (t) => {
-  const ms = "RealESRGAN_x4plus_anime_6B.pth";
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 0 } }).success, false);
-  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -2 } }).success, false);
-});
+test('sdcppConfigSchema: rejects upscaler.threads = 0 and negative values other than -1', (t) => {
+  const ms = 'RealESRGAN_x4plus_anime_6B.pth'
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 0 } }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -2 } }).success, false)
+})
 
-test("sdcppConfigSchema: rejects non-integer upscaler.threads", (t) => {
+test('sdcppConfigSchema: rejects non-integer upscaler.threads', (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: {
-      model_src: "RealESRGAN_x4plus_anime_6B.pth",
-      threads: 2.5,
-    },
-  });
-  t.is(result.success, false);
-});
+      model_src: 'RealESRGAN_x4plus_anime_6B.pth',
+      threads: 2.5
+    }
+  })
+  t.is(result.success, false)
+})
 
 // ---- diffusionRequestSchema: upscale ----
 
-test("diffusionRequestSchema: accepts upscale: true", (t) => {
+test('diffusionRequestSchema: accepts upscale: true', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: true,
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: true
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts upscale: false (no-op)", (t) => {
+test('diffusionRequestSchema: accepts upscale: false (no-op)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: false,
-  });
-  t.is(result.success, true);
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: false
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.upscale, false);
+    t.is(result.data.upscale, false)
   }
-});
+})
 
-test("diffusionRequestSchema: accepts upscale object with repeats", (t) => {
+test('diffusionRequestSchema: accepts upscale object with repeats', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: { repeats: 2 },
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: { repeats: 2 }
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: accepts empty upscale object (repeats optional, equivalent to upscale: true)", (t) => {
+test('diffusionRequestSchema: accepts empty upscale object (repeats optional, equivalent to upscale: true)', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: {},
-  });
-  t.is(result.success, true);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: {}
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionRequestSchema: rejects upscale.repeats <= 0", (t) => {
+test('diffusionRequestSchema: rejects upscale.repeats <= 0', (t) => {
   const resultZero = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: { repeats: 0 },
-  });
-  t.is(resultZero.success, false);
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: { repeats: 0 }
+  })
+  t.is(resultZero.success, false)
 
   const resultNegative = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: { repeats: -1 },
-  });
-  t.is(resultNegative.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: { repeats: -1 }
+  })
+  t.is(resultNegative.success, false)
+})
 
-test("diffusionRequestSchema: rejects non-integer upscale.repeats", (t) => {
+test('diffusionRequestSchema: rejects non-integer upscale.repeats', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: { repeats: 1.5 },
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: { repeats: 1.5 }
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects unknown keys on upscale object", (t) => {
+test('diffusionRequestSchema: rejects unknown keys on upscale object', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: { repeats: 2, unknown: true },
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: { repeats: 2, unknown: true }
+  })
+  t.is(result.success, false)
+})
 
-test("diffusionRequestSchema: rejects non-boolean / non-object upscale", (t) => {
+test('diffusionRequestSchema: rejects non-boolean / non-object upscale', (t) => {
   const result = diffusionRequestSchema.safeParse({
-    modelId: "model-1",
-    prompt: "a fox",
-    upscale: 4,
-  });
-  t.is(result.success, false);
-});
+    modelId: 'model-1',
+    prompt: 'a fox',
+    upscale: 4
+  })
+  t.is(result.success, false)
+})
 
 // ============================================
 // diffusionStreamResponseSchema
 // ============================================
 
-test("diffusionStreamResponseSchema: accepts progress tick", (t) => {
+test('diffusionStreamResponseSchema: accepts progress tick', (t) => {
   const result = diffusionStreamResponseSchema.safeParse({
-    type: "diffusionStream",
+    type: 'diffusionStream',
     step: 5,
     totalSteps: 20,
-    elapsedMs: 1234,
-  });
-  t.is(result.success, true);
-});
+    elapsedMs: 1234
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionStreamResponseSchema: accepts output data chunk", (t) => {
+test('diffusionStreamResponseSchema: accepts output data chunk', (t) => {
   const result = diffusionStreamResponseSchema.safeParse({
-    type: "diffusionStream",
-    data: "iVBORw0KGgoAAAANSUhEUg==",
-    outputIndex: 0,
-  });
-  t.is(result.success, true);
-});
+    type: 'diffusionStream',
+    data: 'iVBORw0KGgoAAAANSUhEUg==',
+    outputIndex: 0
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionStreamResponseSchema: accepts final done chunk with stats", (t) => {
+test('diffusionStreamResponseSchema: accepts final done chunk with stats', (t) => {
   const result = diffusionStreamResponseSchema.safeParse({
-    type: "diffusionStream",
+    type: 'diffusionStream',
     done: true,
     stats: {
       generationMs: 1234,
       totalSteps: 20,
       width: 512,
       height: 512,
-      seed: 42,
-    },
-  });
-  t.is(result.success, true);
-});
+      seed: 42
+    }
+  })
+  t.is(result.success, true)
+})
 
-test("diffusionStreamResponseSchema: rejects wrong type literal", (t) => {
+test('diffusionStreamResponseSchema: rejects wrong type literal', (t) => {
   const result = diffusionStreamResponseSchema.safeParse({
-    type: "completionStream",
-    step: 1,
-  });
-  t.is(result.success, false);
-});
+    type: 'completionStream',
+    step: 1
+  })
+  t.is(result.success, false)
+})
 
 // ============================================
 // loadModelSrcRequestSchema — diffusion entries
 // ============================================
 
-test("loadModelSrcRequestSchema: accepts diffusion request with canonical type", (t) => {
+test('loadModelSrcRequestSchema: accepts diffusion request with canonical type', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
-    type: "loadModel",
+    type: 'loadModel',
     modelType: ModelType.sdcppGeneration,
-    modelSrc: "model.safetensors",
-    modelConfig: { device: "gpu", threads: 4 },
-  });
-  t.is(result.success, true);
+    modelSrc: 'model.safetensors',
+    modelConfig: { device: 'gpu', threads: 4 }
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.modelType, ModelType.sdcppGeneration);
+    t.is(result.data.modelType, ModelType.sdcppGeneration)
   }
-});
+})
 
-test("loadModelSrcRequestSchema: accepts diffusion request with no modelConfig", (t) => {
+test('loadModelSrcRequestSchema: accepts diffusion request with no modelConfig', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
-    type: "loadModel",
+    type: 'loadModel',
     modelType: ModelType.sdcppGeneration,
-    modelSrc: "model.safetensors",
-  });
-  t.is(result.success, true);
-});
+    modelSrc: 'model.safetensors'
+  })
+  t.is(result.success, true)
+})
 
-test("loadModelSrcRequestSchema: rejects diffusion request with unknown top-level key", (t) => {
+test('loadModelSrcRequestSchema: rejects diffusion request with unknown top-level key', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
-    type: "loadModel",
+    type: 'loadModel',
     modelType: ModelType.sdcppGeneration,
-    modelSrc: "model.safetensors",
-    extraField: true,
-  });
-  t.is(result.success, false);
-});
+    modelSrc: 'model.safetensors',
+    extraField: true
+  })
+  t.is(result.success, false)
+})
 
-test("loadModelSrcRequestSchema: accepts diffusion config with companion sources", (t) => {
+test('loadModelSrcRequestSchema: accepts diffusion config with companion sources', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
-    type: "loadModel",
+    type: 'loadModel',
     modelType: ModelType.sdcppGeneration,
-    modelSrc: "flux2-klein.gguf",
+    modelSrc: 'flux2-klein.gguf',
     modelConfig: {
-      device: "gpu",
-      clipLModelSrc: "clip-l.safetensors",
-      vaeModelSrc: "vae.safetensors",
-      llmModelSrc: "qwen3.gguf",
-    },
-  });
-  t.is(result.success, true);
-});
+      device: 'gpu',
+      clipLModelSrc: 'clip-l.safetensors',
+      vaeModelSrc: 'vae.safetensors',
+      llmModelSrc: 'qwen3.gguf'
+    }
+  })
+  t.is(result.success, true)
+})
 
-test("loadModelSrcRequestSchema: accepts diffusion config with upscaler and upscaler tuning", (t) => {
+test('loadModelSrcRequestSchema: accepts diffusion config with upscaler and upscaler tuning', (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
-    type: "loadModel",
+    type: 'loadModel',
     modelType: ModelType.sdcppGeneration,
-    modelSrc: "stable-diffusion-v2-1-Q8_0.gguf",
+    modelSrc: 'stable-diffusion-v2-1-Q8_0.gguf',
     modelConfig: {
-      prediction: "v",
+      prediction: 'v',
       upscaler: {
-        type: "esrgan",
-        model_src: "RealESRGAN_x4plus_anime_6B.pth",
+        type: 'esrgan',
+        model_src: 'RealESRGAN_x4plus_anime_6B.pth',
         tile_size: 128,
-        threads: 4,
-      },
-    },
-  });
-  t.is(result.success, true);
-});
+        threads: 4
+      }
+    }
+  })
+  t.is(result.success, true)
+})
 
 // ============================================
 // loadModelOptionsBaseSchema — diffusion entries
 // ============================================
 
-test("loadModelOptionsBaseSchema: accepts diffusion with alias", (t) => {
+test('loadModelOptionsBaseSchema: accepts diffusion with alias', (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
-    modelSrc: "model.safetensors",
-    modelType: "diffusion",
-    modelConfig: { device: "cpu" },
-  });
-  t.is(result.success, true);
-});
+    modelSrc: 'model.safetensors',
+    modelType: 'diffusion',
+    modelConfig: { device: 'cpu' }
+  })
+  t.is(result.success, true)
+})
 
-test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (strict)", (t) => {
+test('loadModelOptionsBaseSchema: rejects diffusion with unknown config key (strict)', (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
-    modelSrc: "model.safetensors",
-    modelType: "sdcpp-generation",
-    modelConfig: { device: "gpu", notAField: true },
-  });
-  t.is(result.success, false);
-});
+    modelSrc: 'model.safetensors',
+    modelType: 'sdcpp-generation',
+    modelConfig: { device: 'gpu', notAField: true }
+  })
+  t.is(result.success, false)
+})
 
 test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standalone ESRGAN)", (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
-    modelSrc: "RealESRGAN_x4plus_anime_6B.pth",
-    modelType: "sdcpp-generation",
+    modelSrc: 'RealESRGAN_x4plus_anime_6B.pth',
+    modelType: 'sdcpp-generation',
     modelConfig: {
-      mode: "upscale",
-      upscaler: { tile_size: 128 },
-    },
-  });
-  t.is(result.success, true);
-});
+      mode: 'upscale',
+      upscaler: { tile_size: 128 }
+    }
+  })
+  t.is(result.success, true)
+})
 
 // ============================================
 // Plugin registration & handler dispatch
@@ -866,164 +863,164 @@ test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standa
 // tears everything down (even if `body` throws).
 async function withMockDiffusionPlugin<T>(
   handler: (request: unknown) => AsyncGenerator<unknown>,
-  body: (modelId: string) => Promise<T>,
+  body: (modelId: string) => Promise<T>
 ): Promise<T> {
-  clearPlugins();
-  const modelId = `test-diffusion-mock-${Math.random().toString(36).slice(2, 10)}`;
+  clearPlugins()
+  const modelId = `test-diffusion-mock-${Math.random().toString(36).slice(2, 10)}`
   const mockPlugin = {
     modelType: ModelType.sdcppGeneration,
-    displayName: "Image Generation (stable-diffusion.cpp)",
-    addonPackage: "@qvac/diffusion-cpp",
+    displayName: 'Image Generation (stable-diffusion.cpp)',
+    addonPackage: '@qvac/diffusion-cpp',
     loadConfigSchema: sdcppConfigSchema,
     createModel: function () {
-      return { model: { load: async function () {} } };
+      return { model: { load: async function () {} } }
     },
     handlers: {
       diffusionStream: {
         requestSchema: diffusionRequestSchema as z.ZodType,
         responseSchema: diffusionStreamResponseSchema as z.ZodType,
         streaming: true,
-        handler,
-      },
-    },
-  };
+        handler
+      }
+    }
+  }
   try {
-    registerPlugin(mockPlugin);
+    registerPlugin(mockPlugin)
     registerModel(modelId, {
       model: {} as unknown as AnyModel,
-      path: "/tmp/model.safetensors",
+      path: '/tmp/model.safetensors',
       config: {},
-      modelType: ModelType.sdcppGeneration,
-    });
-    return await body(modelId);
+      modelType: ModelType.sdcppGeneration
+    })
+    return await body(modelId)
   } finally {
-    unregisterModel(modelId);
-    clearPlugins();
+    unregisterModel(modelId)
+    clearPlugins()
   }
 }
 
-test("diffusion plugin: registers and dispatches diffusionStream", async function (t) {
+test('diffusion plugin: registers and dispatches diffusionStream', async function (t) {
   await withMockDiffusionPlugin(
     async function* () {
       yield {
-        type: "diffusionStream" as const,
+        type: 'diffusionStream' as const,
         step: 1,
         totalSteps: 2,
-        elapsedMs: 100,
-      };
+        elapsedMs: 100
+      }
       yield {
-        type: "diffusionStream" as const,
-        data: "iVBORw0KGgo=",
-        outputIndex: 0,
-      };
+        type: 'diffusionStream' as const,
+        data: 'iVBORw0KGgo=',
+        outputIndex: 0
+      }
       yield {
-        type: "diffusionStream" as const,
+        type: 'diffusionStream' as const,
         done: true,
-        stats: { generationMs: 200, totalSteps: 2, width: 512, height: 512 },
-      };
+        stats: { generationMs: 200, totalSteps: 2, width: 512, height: 512 }
+      }
     },
     async (modelId) => {
-      t.ok(hasPlugin(ModelType.sdcppGeneration));
+      t.ok(hasPlugin(ModelType.sdcppGeneration))
 
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { modelId, prompt: "a cat" },
-      });
+        handler: 'diffusionStream',
+        params: { modelId, prompt: 'a cat' }
+      })
 
-      const chunks = [];
+      const chunks = []
       for await (const chunk of stream) {
-        chunks.push(chunk);
+        chunks.push(chunk)
       }
 
-      t.is(chunks.length, 4);
+      t.is(chunks.length, 4)
 
-      t.is(chunks[0]!.done, false);
-      const progressData = chunks[0]!.result as Record<string, unknown>;
-      t.is(progressData.step, 1);
-      t.is(progressData.totalSteps, 2);
+      t.is(chunks[0]!.done, false)
+      const progressData = chunks[0]!.result as Record<string, unknown>
+      t.is(progressData.step, 1)
+      t.is(progressData.totalSteps, 2)
 
-      const outputData = chunks[1]!.result as Record<string, unknown>;
-      t.ok(typeof outputData.data === "string");
-      t.is(outputData.outputIndex, 0);
+      const outputData = chunks[1]!.result as Record<string, unknown>
+      t.ok(typeof outputData.data === 'string')
+      t.is(outputData.outputIndex, 0)
 
-      const finalData = chunks[2]!.result as Record<string, unknown>;
-      t.is(finalData.done, true);
-      t.ok(finalData.stats);
-      const stats = finalData.stats as Record<string, unknown>;
-      t.is(stats.generationMs, 200);
-      t.is(stats.totalSteps, 2);
+      const finalData = chunks[2]!.result as Record<string, unknown>
+      t.is(finalData.done, true)
+      t.ok(finalData.stats)
+      const stats = finalData.stats as Record<string, unknown>
+      t.is(stats.generationMs, 200)
+      t.is(stats.totalSteps, 2)
 
-      t.is(chunks[3]!.done, true);
-      t.is(chunks[3]!.result, null);
-    },
-  );
-});
+      t.is(chunks[3]!.done, true)
+      t.is(chunks[3]!.result, null)
+    }
+  )
+})
 
-test("diffusion plugin: img2img request reaches handler verbatim after safeParse (init_image, strength, img_cfg_scale default)", async function (t) {
-  const initImageBase64 = "iVBORw0KGgoAAAANSUhEUg==";
-  let observedRequest: unknown = undefined;
+test('diffusion plugin: img2img request reaches handler verbatim after safeParse (init_image, strength, img_cfg_scale default)', async function (t) {
+  const initImageBase64 = 'iVBORw0KGgoAAAANSUhEUg=='
+  let observedRequest: unknown = undefined
 
   await withMockDiffusionPlugin(
     async function* (request: unknown) {
-      observedRequest = request;
-      yield { type: "diffusionStream" as const, done: true };
+      observedRequest = request
+      yield { type: 'diffusionStream' as const, done: true }
     },
     async (modelId) => {
       const requestParams = {
         modelId,
-        prompt: "oil painting",
+        prompt: 'oil painting',
         init_image: initImageBase64,
-        strength: 0.65,
-      };
+        strength: 0.65
+      }
 
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: requestParams,
-      });
+        handler: 'diffusionStream',
+        params: requestParams
+      })
 
       // Drain so the handler runs and observedRequest gets populated.
       for await (const _ of stream) {
         // no-op
       }
 
-      t.alike(observedRequest, { ...requestParams, img_cfg_scale: -1 });
-    },
-  );
-});
+      t.alike(observedRequest, { ...requestParams, img_cfg_scale: -1 })
+    }
+  )
+})
 
-test("diffusion plugin: upscale request reaches handler verbatim after safeParse (true / false / { repeats })", async function (t) {
+test('diffusion plugin: upscale request reaches handler verbatim after safeParse (true / false / { repeats })', async function (t) {
   const cases: Array<{ name: string; upscale: unknown }> = [
-    { name: "upscale: true", upscale: true },
-    { name: "upscale: false", upscale: false },
-    { name: "upscale: {}", upscale: {} },
-    { name: "upscale: { repeats: 2 }", upscale: { repeats: 2 } },
-  ];
+    { name: 'upscale: true', upscale: true },
+    { name: 'upscale: false', upscale: false },
+    { name: 'upscale: {}', upscale: {} },
+    { name: 'upscale: { repeats: 2 }', upscale: { repeats: 2 } }
+  ]
 
   for (const { name, upscale } of cases) {
-    let observedRequest: unknown = undefined;
+    let observedRequest: unknown = undefined
 
     await withMockDiffusionPlugin(
       async function* (request: unknown) {
-        observedRequest = request;
-        yield { type: "diffusionStream" as const, done: true };
+        observedRequest = request
+        yield { type: 'diffusionStream' as const, done: true }
       },
       async (modelId) => {
         const requestParams = {
           modelId,
-          prompt: "a fox",
-          upscale,
-        };
+          prompt: 'a fox',
+          upscale
+        }
 
         const stream = handlePluginInvokeStream({
-          type: "pluginInvokeStream",
+          type: 'pluginInvokeStream',
           modelId,
-          handler: "diffusionStream",
-          params: requestParams,
-        });
+          handler: 'diffusionStream',
+          params: requestParams
+        })
 
         for await (const _ of stream) {
           // no-op
@@ -1032,152 +1029,152 @@ test("diffusion plugin: upscale request reaches handler verbatim after safeParse
         t.alike(
           observedRequest,
           { ...requestParams, img_cfg_scale: -1 },
-          `${name} reaches handler verbatim`,
-        );
-      },
-    );
+          `${name} reaches handler verbatim`
+        )
+      }
+    )
   }
-});
+})
 
-test("diffusion plugin: dispatcher forwards interleaved multi-tick + multi-output stream verbatim", async function (t) {
+test('diffusion plugin: dispatcher forwards interleaved multi-tick + multi-output stream verbatim', async function (t) {
   const yieldedChunks: DiffusionStreamResponse[] = [
-    { type: "diffusionStream", step: 7, totalSteps: 23, elapsedMs: 110 },
-    { type: "diffusionStream", step: 14, totalSteps: 23, elapsedMs: 220 },
-    { type: "diffusionStream", step: 21, totalSteps: 23, elapsedMs: 330 },
-    { type: "diffusionStream", data: "AAAAQUFBQQ==", outputIndex: 0 },
-    { type: "diffusionStream", data: "BBBBQkJCQg==", outputIndex: 1 },
+    { type: 'diffusionStream', step: 7, totalSteps: 23, elapsedMs: 110 },
+    { type: 'diffusionStream', step: 14, totalSteps: 23, elapsedMs: 220 },
+    { type: 'diffusionStream', step: 21, totalSteps: 23, elapsedMs: 330 },
+    { type: 'diffusionStream', data: 'AAAAQUFBQQ==', outputIndex: 0 },
+    { type: 'diffusionStream', data: 'BBBBQkJCQg==', outputIndex: 1 },
     {
-      type: "diffusionStream",
+      type: 'diffusionStream',
       done: true,
       stats: {
         generationMs: 419,
         totalSteps: 23,
         width: 768,
         height: 512,
-        seed: 13,
-      },
-    },
-  ];
+        seed: 13
+      }
+    }
+  ]
 
   await withMockDiffusionPlugin(
     async function* () {
       for (const chunk of yieldedChunks) {
-        yield chunk;
+        yield chunk
       }
     },
     async (modelId) => {
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { modelId, prompt: "anything" },
-      });
+        handler: 'diffusionStream',
+        params: { modelId, prompt: 'anything' }
+      })
 
-      const chunks: PluginInvokeStreamResponse[] = [];
+      const chunks: PluginInvokeStreamResponse[] = []
       for await (const chunk of stream) {
-        chunks.push(chunk);
+        chunks.push(chunk)
       }
 
       for (let i = 0; i < yieldedChunks.length; i++) {
         t.alike(chunks[i], {
-          type: "pluginInvokeStream",
+          type: 'pluginInvokeStream',
           result: yieldedChunks[i],
-          done: false,
-        });
+          done: false
+        })
       }
-    },
-  );
-});
+    }
+  )
+})
 
-test("diffusion plugin: appends { result: null, done: true } sentinel after handler completes", async function (t) {
+test('diffusion plugin: appends { result: null, done: true } sentinel after handler completes', async function (t) {
   const yieldedChunks: DiffusionStreamResponse[] = [
-    { type: "diffusionStream", step: 1, totalSteps: 1, elapsedMs: 50 },
-  ];
+    { type: 'diffusionStream', step: 1, totalSteps: 1, elapsedMs: 50 }
+  ]
 
   await withMockDiffusionPlugin(
     async function* () {
       for (const chunk of yieldedChunks) {
-        yield chunk;
+        yield chunk
       }
     },
     async (modelId) => {
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { modelId, prompt: "anything" },
-      });
+        handler: 'diffusionStream',
+        params: { modelId, prompt: 'anything' }
+      })
 
-      const chunks: PluginInvokeStreamResponse[] = [];
+      const chunks: PluginInvokeStreamResponse[] = []
       for await (const chunk of stream) {
-        chunks.push(chunk);
+        chunks.push(chunk)
       }
 
-      t.is(chunks.length, yieldedChunks.length + 1);
+      t.is(chunks.length, yieldedChunks.length + 1)
       t.alike(chunks[chunks.length - 1], {
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         result: null,
-        done: true,
-      });
-    },
-  );
-});
+        done: true
+      })
+    }
+  )
+})
 
-test("diffusion plugin: rejects invalid request schema", async function (t) {
+test('diffusion plugin: rejects invalid request schema', async function (t) {
   await withMockDiffusionPlugin(
     async function* () {
-      yield { type: "diffusionStream" as const, done: true };
+      yield { type: 'diffusionStream' as const, done: true }
     },
     async (modelId) => {
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { noModelId: true, noPrompt: true },
-      });
+        handler: 'diffusionStream',
+        params: { noModelId: true, noPrompt: true }
+      })
 
       try {
-        await stream.next();
-        t.fail("Expected request validation to throw");
+        await stream.next()
+        t.fail('Expected request validation to throw')
       } catch (error) {
-        t.ok(error instanceof PluginRequestValidationFailedError);
+        t.ok(error instanceof PluginRequestValidationFailedError)
         t.is(
           (error as PluginRequestValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED,
-        );
+          SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED
+        )
       }
-    },
-  );
-});
+    }
+  )
+})
 
-test("diffusion plugin: rejects invalid response from handler", async function (t) {
+test('diffusion plugin: rejects invalid response from handler', async function (t) {
   await withMockDiffusionPlugin(
     async function* () {
-      yield { type: "wrongType", badField: 123 };
+      yield { type: 'wrongType', badField: 123 }
     },
     async (modelId) => {
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { modelId, prompt: "a cat" },
-      });
+        handler: 'diffusionStream',
+        params: { modelId, prompt: 'a cat' }
+      })
 
       try {
-        await stream.next();
-        t.fail("Expected response validation to throw");
+        await stream.next()
+        t.fail('Expected response validation to throw')
       } catch (error) {
-        t.ok(error instanceof PluginResponseValidationFailedError);
+        t.ok(error instanceof PluginResponseValidationFailedError)
         t.is(
           (error as PluginResponseValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED,
-        );
+          SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+        )
       }
-    },
-  );
-});
+    }
+  )
+})
 
-test("diffusion plugin: stats with all RuntimeStats fields passes response validation", async function (t) {
+test('diffusion plugin: stats with all RuntimeStats fields passes response validation', async function (t) {
   const fullStats = {
     modelLoadMs: 500,
     generationMs: 1234,
@@ -1189,49 +1186,49 @@ test("diffusion plugin: stats with all RuntimeStats fields passes response valid
     totalPixels: 262144,
     width: 512,
     height: 512,
-    seed: 42,
-  };
+    seed: 42
+  }
 
   await withMockDiffusionPlugin(
     async function* () {
       yield {
-        type: "diffusionStream" as const,
+        type: 'diffusionStream' as const,
         done: true,
-        stats: fullStats,
-      };
+        stats: fullStats
+      }
     },
     async (modelId) => {
       const stream = handlePluginInvokeStream({
-        type: "pluginInvokeStream",
+        type: 'pluginInvokeStream',
         modelId,
-        handler: "diffusionStream",
-        params: { modelId, prompt: "a cat" },
-      });
+        handler: 'diffusionStream',
+        params: { modelId, prompt: 'a cat' }
+      })
 
-      const chunks = [];
+      const chunks = []
       for await (const chunk of stream) {
-        chunks.push(chunk);
+        chunks.push(chunk)
       }
 
-      t.is(chunks.length, 2);
+      t.is(chunks.length, 2)
 
-      const statsChunk = chunks[0]!.result as Record<string, unknown>;
-      const receivedStats = statsChunk.stats as Record<string, unknown>;
+      const statsChunk = chunks[0]!.result as Record<string, unknown>
+      const receivedStats = statsChunk.stats as Record<string, unknown>
 
-      t.is(receivedStats.modelLoadMs, 500);
-      t.is(receivedStats.generationMs, 1234);
-      t.is(receivedStats.totalGenerationMs, 1234);
-      t.is(receivedStats.totalWallMs, 1734);
-      t.is(receivedStats.totalSteps, 20);
-      t.is(receivedStats.totalGenerations, 1);
-      t.is(receivedStats.totalImages, 1);
-      t.is(receivedStats.totalPixels, 262144);
-      t.is(receivedStats.width, 512);
-      t.is(receivedStats.height, 512);
-      t.is(receivedStats.seed, 42);
-    },
-  );
-});
+      t.is(receivedStats.modelLoadMs, 500)
+      t.is(receivedStats.generationMs, 1234)
+      t.is(receivedStats.totalGenerationMs, 1234)
+      t.is(receivedStats.totalWallMs, 1734)
+      t.is(receivedStats.totalSteps, 20)
+      t.is(receivedStats.totalGenerations, 1)
+      t.is(receivedStats.totalImages, 1)
+      t.is(receivedStats.totalPixels, 262144)
+      t.is(receivedStats.width, 512)
+      t.is(receivedStats.height, 512)
+      t.is(receivedStats.seed, 42)
+    }
+  )
+})
 
 // ============================================
 // modelInfoSchema — addon enum includes "diffusion"
@@ -1239,111 +1236,102 @@ test("diffusion plugin: stats with all RuntimeStats fields passes response valid
 
 test("modelInfoSchema: accepts addon 'diffusion'", (t) => {
   const result = modelInfoSchema.safeParse({
-    name: "flux2-klein",
-    modelId: "flux2-klein-q4_0",
+    name: 'flux2-klein',
+    modelId: 'flux2-klein-q4_0',
     expectedSize: 1000000,
-    sha256Checksum: "abc123",
-    addon: "diffusion",
+    sha256Checksum: 'abc123',
+    addon: 'diffusion',
     isCached: true,
     isLoaded: false,
-    cacheFiles: [],
-  });
-  t.is(result.success, true);
-});
+    cacheFiles: []
+  })
+  t.is(result.success, true)
+})
 
-test("modelInfoSchema: rejects addon not in enum", (t) => {
+test('modelInfoSchema: rejects addon not in enum', (t) => {
   const result = modelInfoSchema.safeParse({
-    name: "test",
-    modelId: "test-id",
+    name: 'test',
+    modelId: 'test-id',
     expectedSize: 1000,
-    sha256Checksum: "abc",
-    addon: "nonexistent",
+    sha256Checksum: 'abc',
+    addon: 'nonexistent',
     isCached: false,
     isLoaded: false,
-    cacheFiles: [],
-  });
-  t.is(result.success, false);
-});
+    cacheFiles: []
+  })
+  t.is(result.success, false)
+})
 
 // ============================================
 // resolveConfig — companion source extraction
 // ============================================
 
-test("sdcppConfigSchema: companion source fields are valid modelSrcInput", (t) => {
+test('sdcppConfigSchema: companion source fields are valid modelSrcInput', (t) => {
   const configs = [
-    { clipLModelSrc: "clip-l.safetensors" },
-    { clipGModelSrc: "registry://clip-g" },
-    { t5XxlModelSrc: "t5xxl.gguf" },
-    { llmModelSrc: "qwen3-8b.gguf" },
-    { vaeModelSrc: "vae.safetensors" },
-    { upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" } },
+    { clipLModelSrc: 'clip-l.safetensors' },
+    { clipGModelSrc: 'registry://clip-g' },
+    { t5XxlModelSrc: 't5xxl.gguf' },
+    { llmModelSrc: 'qwen3-8b.gguf' },
+    { vaeModelSrc: 'vae.safetensors' },
+    { upscaler: { model_src: 'RealESRGAN_x4plus_anime_6B.pth' } },
     {
-      clipLModelSrc: "clip-l.safetensors",
-      clipGModelSrc: "clip-g.safetensors",
-      t5XxlModelSrc: "t5xxl.gguf",
-      llmModelSrc: "qwen3.gguf",
-      vaeModelSrc: "vae.safetensors",
-      upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" },
-    },
-  ];
+      clipLModelSrc: 'clip-l.safetensors',
+      clipGModelSrc: 'clip-g.safetensors',
+      t5XxlModelSrc: 't5xxl.gguf',
+      llmModelSrc: 'qwen3.gguf',
+      vaeModelSrc: 'vae.safetensors',
+      upscaler: { model_src: 'RealESRGAN_x4plus_anime_6B.pth' }
+    }
+  ]
 
   for (const cfg of configs) {
-    const result = sdcppConfigSchema.safeParse(cfg);
-    t.is(result.success, true, `Failed for: ${JSON.stringify(cfg)}`);
+    const result = sdcppConfigSchema.safeParse(cfg)
+    t.is(result.success, true, `Failed for: ${JSON.stringify(cfg)}`)
   }
-});
+})
 
-test("sdcppConfigSchema: companion sources are stripped from config by resolveConfig contract", (t) => {
+test('sdcppConfigSchema: companion sources are stripped from config by resolveConfig contract', (t) => {
   const input = {
     threads: 4,
-    device: "gpu" as const,
-    clipLModelSrc: "clip-l.safetensors",
-    vaeModelSrc: "vae.safetensors",
-  };
+    device: 'gpu' as const,
+    clipLModelSrc: 'clip-l.safetensors',
+    vaeModelSrc: 'vae.safetensors'
+  }
 
-  const result = sdcppConfigSchema.safeParse(input);
-  t.is(result.success, true);
+  const result = sdcppConfigSchema.safeParse(input)
+  t.is(result.success, true)
 
   if (result.success) {
-    t.is(result.data.threads, 4);
-    t.is(result.data.device, "gpu");
-    t.ok("clipLModelSrc" in result.data);
-    t.ok("vaeModelSrc" in result.data);
+    t.is(result.data.threads, 4)
+    t.is(result.data.device, 'gpu')
+    t.ok('clipLModelSrc' in result.data)
+    t.ok('vaeModelSrc' in result.data)
   }
-});
+})
 
 // ============================================
 // upscaleStatsSchema — backendDevice round-trip
 // ============================================
 
 test("upscaleStatsSchema: accepts backendDevice 'cpu' / 'gpu'", (t) => {
-  t.is(
-    upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: "cpu" }).success,
-    true,
-  );
-  t.is(
-    upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: "gpu" }).success,
-    true,
-  );
-});
+  t.is(upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: 'cpu' }).success, true)
+  t.is(upscaleStatsSchema.safeParse({ upscaleMs: 100, backendDevice: 'gpu' }).success, true)
+})
 
-test("upscaleStatsSchema: rejects unknown backendDevice values", (t) => {
-  t.is(
-    upscaleStatsSchema.safeParse({ backendDevice: "tpu" }).success,
-    false,
-  );
-});
+test('upscaleStatsSchema: rejects unknown backendDevice values', (t) => {
+  t.is(upscaleStatsSchema.safeParse({ backendDevice: 'tpu' }).success, false)
+})
 
-test("upscaleStatsSchema: preserves backendDevice through parse (no passthrough strip)", (t) => {
+test('upscaleStatsSchema: preserves backendDevice through parse (no passthrough strip)', (t) => {
   const result = upscaleStatsSchema.safeParse({
     upscaleMs: 42,
-    backendDevice: "cpu",
-  });
-  t.is(result.success, true);
+    backendDevice: 'cpu'
+  })
+  t.is(result.success, true)
   if (result.success) {
-    t.is(result.data.backendDevice, "cpu");
+    t.is(result.data.backendDevice, 'cpu')
   }
-});
+})
 
 // ============================================
 // diffusion op — upscale forwarding
@@ -1354,149 +1342,147 @@ test("upscaleStatsSchema: preserves backendDevice through parse (no passthrough 
 
 async function withRegisteredDiffusionModel<T>(
   options: {
-    runImpl?: (params: unknown) => Promise<unknown>;
+    runImpl?: (params: unknown) => Promise<unknown>
   },
-  body: (modelId: string) => Promise<T>,
+  body: (modelId: string) => Promise<T>
 ): Promise<T> {
-  const modelId = `test-diffusion-${Math.random().toString(36).slice(2, 10)}`;
+  const modelId = `test-diffusion-${Math.random().toString(36).slice(2, 10)}`
   const fakeModel = {
     load: async function () {},
-    run: options.runImpl ?? (async function () {
-      return {
-        iterate: async function* () {
-          return;
-        },
-      };
-    }),
-  } as unknown as AnyModel;
+    run:
+      options.runImpl ??
+      async function () {
+        return {
+          iterate: async function* () {
+            return
+          }
+        }
+      }
+  } as unknown as AnyModel
 
   try {
     registerModel(modelId, {
       model: fakeModel,
-      path: "/tmp/model.safetensors",
+      path: '/tmp/model.safetensors',
       config: {},
-      modelType: ModelType.sdcppGeneration,
-    });
-    return await body(modelId);
+      modelType: ModelType.sdcppGeneration
+    })
+    return await body(modelId)
   } finally {
-    unregisterModel(modelId);
+    unregisterModel(modelId)
   }
 }
 
-test("diffusion op: upscale: true forwards verbatim to model.run (addon owns missing-companion failure)", async function (t) {
-  let observed: { upscale?: unknown } | undefined;
+test('diffusion op: upscale: true forwards verbatim to model.run (addon owns missing-companion failure)', async function (t) {
+  let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
       runImpl: async function (params: unknown) {
-        observed = params as { upscale?: unknown };
+        observed = params as { upscale?: unknown }
         return {
           iterate: async function* () {
-            return;
-          },
-        };
-      },
+            return
+          }
+        }
+      }
     },
     async (modelId) => {
       const stream = diffusionOp({
         modelId,
-        prompt: "a fox",
+        prompt: 'a fox',
         img_cfg_scale: -1,
-        upscale: true,
-      });
+        upscale: true
+      })
       for await (const _ of stream) {
-        void _;
+        void _
       }
-      t.ok(observed, "model.run was called");
-      t.is(observed?.upscale, true);
-    },
-  );
-});
+      t.ok(observed, 'model.run was called')
+      t.is(observed?.upscale, true)
+    }
+  )
+})
 
-test("diffusion op: upscale: { repeats } forwards verbatim to model.run", async function (t) {
-  let observed: { upscale?: unknown } | undefined;
+test('diffusion op: upscale: { repeats } forwards verbatim to model.run', async function (t) {
+  let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
       runImpl: async function (params: unknown) {
-        observed = params as { upscale?: unknown };
+        observed = params as { upscale?: unknown }
         return {
           iterate: async function* () {
-            return;
-          },
-        };
-      },
+            return
+          }
+        }
+      }
     },
     async (modelId) => {
       const stream = diffusionOp({
         modelId,
-        prompt: "a fox",
+        prompt: 'a fox',
         img_cfg_scale: -1,
-        upscale: { repeats: 2 },
-      });
+        upscale: { repeats: 2 }
+      })
       for await (const _ of stream) {
-        void _;
+        void _
       }
-      t.alike(observed?.upscale, { repeats: 2 });
-    },
-  );
-});
+      t.alike(observed?.upscale, { repeats: 2 })
+    }
+  )
+})
 
-test("diffusion op: upscale: false is normalized to undefined before reaching the addon", async function (t) {
-  let observed: { upscale?: unknown } | undefined;
+test('diffusion op: upscale: false is normalized to undefined before reaching the addon', async function (t) {
+  let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
       runImpl: async function (params: unknown) {
-        observed = params as { upscale?: unknown };
+        observed = params as { upscale?: unknown }
         return {
           iterate: async function* () {
-            return;
-          },
-        };
-      },
+            return
+          }
+        }
+      }
     },
     async (modelId) => {
       const stream = diffusionOp({
         modelId,
-        prompt: "a fox",
+        prompt: 'a fox',
         img_cfg_scale: -1,
-        upscale: false,
-      });
+        upscale: false
+      })
       for await (const _ of stream) {
-        void _;
+        void _
       }
-      t.ok(observed, "model.run was called");
-      t.is(
-        observed?.upscale,
-        undefined,
-        "upscale: false normalizes to undefined",
-      );
-    },
-  );
-});
+      t.ok(observed, 'model.run was called')
+      t.is(observed?.upscale, undefined, 'upscale: false normalizes to undefined')
+    }
+  )
+})
 
-test("diffusion op: upscale omitted forwards undefined to the addon", async function (t) {
-  let observed: { upscale?: unknown } | undefined;
+test('diffusion op: upscale omitted forwards undefined to the addon', async function (t) {
+  let observed: { upscale?: unknown } | undefined
   await withRegisteredDiffusionModel(
     {
       runImpl: async function (params: unknown) {
-        observed = params as { upscale?: unknown };
+        observed = params as { upscale?: unknown }
         return {
           iterate: async function* () {
-            return;
-          },
-        };
-      },
+            return
+          }
+        }
+      }
     },
     async (modelId) => {
       const stream = diffusionOp({
         modelId,
-        prompt: "a fox",
-        img_cfg_scale: -1,
-      });
+        prompt: 'a fox',
+        img_cfg_scale: -1
+      })
       for await (const _ of stream) {
-        void _;
+        void _
       }
-      t.ok(observed, "model.run was called");
-      t.is(observed?.upscale, undefined);
-    },
-  );
-});
+      t.ok(observed, 'model.run was called')
+      t.is(observed?.upscale, undefined)
+    }
+  )
+})

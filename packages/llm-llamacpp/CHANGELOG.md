@@ -1,4 +1,157 @@
 # Changelog
+
+## [0.36.3] - 2026-07-09
+
+This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
+
+### Fixed
+
+- Continuous-batch `tokensPerSecond`, `ppTPS`, and TTFT timing now include the explicit `llama_synchronize()` boundary after `llama_decode()` and multimodal media evaluation, preventing GPU backends from reporting launch-time-only throughput.
+- Text and multimodal cancellation paths now synchronize before rolling back prefill or generation state when cancellation bypasses the usual sampler-side synchronization.
+- Reset and deferred teardown paths now synchronize before clearing llama memory, including decode/media error paths that can run while a deferred scheduler clear is pending.
+
+### Changed
+
+- Batch and cancellation regression tests were hardened to assert scheduler-owned timing invariants and prefill cancellation rollback without relying on fragile cross-run wall-clock comparisons.
+
+### Pull Requests
+
+- [#3159](https://github.com/tetherto/qvac/pull/3159) - fix: synchronize async llama decode completion
+
+
+## [0.36.2] - 2026-07-09
+
+### Changed
+
+- Android multimodal-projector (mmproj / vision encoder) auto-default narrowed: with `mmproj-use-gpu` unset the projector now defaults to the GPU **only** on positively-detected Adreno 800+ GPUs. All other Android GPU classes — Arm Mali, Adreno < 800, and any GPU whose Adreno tier can't be detected — default to CPU (the LLM layers still run on the GPU). Only Adreno 800+ was benchmarked (QVAC-21257) to encode the projector faster on the mobile GPU than on CPU, so defaulting to GPU on unbenchmarked/undetectable classes was optimistic. Desktop and iOS continue to default to GPU, and an explicit `mmproj-use-gpu` value still overrides the default in either direction.
+
+### Pull Requests
+
+- [#3168](https://github.com/tetherto/qvac/pull/3168) - fix: default Android mmproj projector to GPU only on Adreno 800+
+
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
+## [0.35.2] - 2026-07-08
+
+### Fixed
+
+- KV-cache stale backing-store handling now only discards active cache state for caches that were actually persisted before. Unsaved RAM-only cache paths with missing parents, cache paths replaced by directories, or other save-path failures continue to surface `UnableToSaveSessionFile` through the existing throw-and-invalidate path.
+
+### Pull Requests
+
+- [#3121](https://github.com/tetherto/qvac/pull/3121) - QVAC-21302 fix: preserve KV cache save failures after stale-cache handling
+
+## [0.35.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.35.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion, GPU mmproj-encode ~1.46× → ~1.28× of same-device CPU on Pixel 9 Pro — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.34.1] - 2026-07-08
+
+### Fixed
+
+- `test/mobile/integration.auto.cjs` was stale since `qwen3-5-image-tile-mode-tokens.test.js` was added (#2887, 2026-06-29) — the generated dispatch file was never regenerated, so `runQwen35ImageTileModeTokensTest` silently never ran on Android or iOS despite being listed in `test-groups.json`. Regenerated via `npm run test:mobile:generate`; desktop CI was unaffected (it regenerates its own runner list fresh every run).
+
+## [0.34.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking into the i8mm/AVX2 buffer, ~1807ms → ~1114ms CPU vision-encode on Pixel 9 Pro; no API change for this package).
+
+
+## [0.33.0] - 2026-07-07
+
+This release extends reasoning-block KV compaction to hybrid and recurrent SSM models such as Qwen3.5. It also makes reasoning compaction the default behavior for reasoning-capable models, with stricter failure handling so callers do not accidentally continue from cache state that still contains internal thinking traces.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` now defaults to `true`. Callers that intentionally want later turns to attend to previous reasoning can still pass `false` per request.
+- Hybrid and recurrent SSM models are now supported when their reasoning close marker tokenizes to a single vocab token. The addon snapshots the sequence state at the end of prefill, restores it after generation, and replays the generated opener seed, canonical close marker, and visible answer tail so KV and recurrent state stay coherent.
+
+### Fixed
+
+- Reasoning compaction failures now surface as `StatusError` instead of silently preserving reasoning in cache. The affected sequence is rolled back or cleared before the error escapes, and batch cache saves are skipped on unsafe cancel or compaction-failure paths to preserve the last known-good on-disk cache.
+- Qwen3.5 multimodal cache metadata is verified against restored llama memory before a cache file is accepted, preventing stale or partial cache files from desynchronizing `nPast`, physical KV-cell counts, and live memory.
+- Context sliding during generation now invalidates tracked reasoning spans and recurrent boundary snapshots, so compaction hard-fails instead of using stale coordinates after the cache window shifts.
+
+### Changed
+
+- The reasoning compaction implementation was split into shared helpers for span tracking, context shifting, recurrent snapshots, rollback state, and snapshot policy. Text and multimodal generation now use the same compaction contract across single-prompt and continuous-batch paths.
+- Cache persistence for per-slot batch saves now writes through a temporary file and atomically promotes it into place, matching the single-prompt `CacheManager` behavior.
+- Runtime stats preserve user-visible prompt and generation counters across recurrent replay, so maintenance decode work does not inflate throughput or time-to-first-token measurements.
+
+### Pull Requests
+
+- [#2813](https://github.com/tetherto/qvac/pull/2813) - QVAC-21250 Support reasoning compaction on hybrid SSM models
+
+## [0.32.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.0` → `9341.1.3` (Gemma-4 E2B vision-encoder Arm Mali/Vulkan attention speedup + encoder token-count fix; no API change for this package).
+
+### Pull Requests
+
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+
+## [0.31.2] - 2026-07-06
+
+### Added
+
+- KV-cache auto-default: when the caller does not set `cache-type-k`/`cache-type-v`, both now default to `q8_0` on Metal and Vulkan GPUs (with flash attention on) — quality-neutral vs `f16` and ~47% smaller KV cache. CPU and OpenCL (Adreno) keep the `f16` default (ARM CPU `q8_0` has a measured quality/throughput cost; quantized KV-cache shifts abort on Adreno). Skipped for finetuning, when flash attention is off, and on Adreno+Vulkan. An explicit user cache type is always respected on CPU/Vulkan/Metal.
+- Mixed/asymmetric K≠V warning: when `cache-type-k` and `cache-type-v` differ and at least one side is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty for no quality benefit) but proceeds.
+- Adreno 800+ Vulkan guard: quantized KV with flash attention on an Adreno Vulkan backend is rejected with a clean `StatusError` instead of a native abort (defensive — Adreno selects OpenCL by default).
+
+### Changed
+
+- OpenCL (Adreno) KV-cache rejection now carries an actionable message: only `f32`/`f16`/`bf16` are accepted, and any quantized type (`q8_0`, `q4_0`, …) throws a `StatusError` explaining that a quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts (ggml-opencl has no `F32→quantized` requantize kernel; CI-confirmed for both `q8_0` and `q4_0`).
+- The KV-cache guards read flash-attention state from both the `flash-attn` and `flash_attn` config keys, so the underscore variant arms the auto-default and the Adreno guard.
+- README documents the KV-cache type policy (`cache-type-k`/`cache-type-v` rows + the auto-default, OpenCL allowlist, and mixed-K/V warning).
+
+### Pull Requests
+
+- [#2921](https://github.com/tetherto/qvac/pull/2921) - QVAC-21318 feat: default KV-cache to q8_0 on GPU backends except OpenCL
+
+## [0.31.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
 ## [0.31.0] - 2026-06-30
 
 ### Added

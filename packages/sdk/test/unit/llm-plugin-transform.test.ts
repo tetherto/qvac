@@ -1,64 +1,83 @@
-import test from "brittle";
-import { transformLlmConfig } from "@/server/bare/plugins/llamacpp-completion/transform";
-import { llmConfigSchema } from "@/schemas/llamacpp-config";
+import test from 'brittle'
+import { transformLlmConfig } from '@/server/bare/plugins/llamacpp-completion/transform'
+import { llmConfigSchema } from '@/schemas/llamacpp-config'
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
-  return llmConfigSchema.parse(overrides);
+  return llmConfigSchema.parse(overrides)
 }
 
-test("transformLlmConfig: system_prompt is never forwarded to C++", (t) => {
-  const config = makeConfig({ system_prompt: "You are a helpful assistant." });
-  const result = transformLlmConfig(config);
-  t.absent(
-    "system_prompt" in result,
-    "system_prompt must not appear in C++ arg map",
-  );
-  t.absent(
-    "system-prompt" in result,
-    "hyphenated system-prompt must not appear in C++ arg map",
-  );
-});
+test('transformLlmConfig: system_prompt is never forwarded to C++', (t) => {
+  const config = makeConfig({ system_prompt: 'You are a helpful assistant.' })
+  const result = transformLlmConfig(config)
+  t.absent('system_prompt' in result, 'system_prompt must not appear in C++ arg map')
+  t.absent('system-prompt' in result, 'hyphenated system-prompt must not appear in C++ arg map')
+})
 
-test("transformLlmConfig: modelType is never forwarded to C++", (t) => {
-  const config = makeConfig({});
-  const result = transformLlmConfig(config);
-  t.absent("modelType" in result, "modelType must not appear in C++ arg map");
-  t.absent("model_type" in result);
-});
+test('transformLlmConfig: modelType is never forwarded to C++', (t) => {
+  const config = makeConfig({})
+  const result = transformLlmConfig(config)
+  t.absent('modelType' in result, 'modelType must not appear in C++ arg map')
+  t.absent('model_type' in result)
+})
 
-test("transformLlmConfig: reasoning_budget survives as underscore key", (t) => {
-  const config = makeConfig({ reasoning_budget: 0 });
-  const result = transformLlmConfig(config);
-  t.is(result["reasoning_budget"], "0", "reasoning_budget=0 must be forwarded as string '0'");
-});
+test('transformLlmConfig: reasoning_budget survives as underscore key', (t) => {
+  const config = makeConfig({ reasoning_budget: 0 })
+  const result = transformLlmConfig(config)
+  t.is(result['reasoning_budget'], '0', "reasoning_budget=0 must be forwarded as string '0'")
+})
 
-test("transformLlmConfig: reasoning_budget=-1 survives", (t) => {
-  const config = makeConfig({ reasoning_budget: -1 });
-  const result = transformLlmConfig(config);
-  t.is(result["reasoning_budget"], "-1");
-});
+test('transformLlmConfig: reasoning_budget=-1 survives', (t) => {
+  const config = makeConfig({ reasoning_budget: -1 })
+  const result = transformLlmConfig(config)
+  t.is(result['reasoning_budget'], '-1')
+})
 
-test("transformLlmConfig: positive reasoning_budget survives as string token cap", (t) => {
-  const config = makeConfig({ reasoning_budget: 128 });
-  const result = transformLlmConfig(config);
+test('transformLlmConfig: positive reasoning_budget survives as string token cap', (t) => {
+  const config = makeConfig({ reasoning_budget: 128 })
+  const result = transformLlmConfig(config)
   t.is(
-    result["reasoning_budget"],
-    "128",
-    "positive reasoning_budget must be forwarded as string '128'",
-  );
-});
+    result['reasoning_budget'],
+    '128',
+    "positive reasoning_budget must be forwarded as string '128'"
+  )
+})
 
-test("transformLlmConfig: stop_sequences is renamed to reverse_prompt", (t) => {
-  const config = makeConfig({ stop_sequences: ["</s>", "<|im_end|>"] });
-  const result = transformLlmConfig(config);
-  t.absent("stop_sequences" in result);
-  t.is(result["reverse_prompt"], "</s>, <|im_end|>");
-});
+test('transformLlmConfig: stop_sequences is renamed to reverse_prompt', (t) => {
+  const config = makeConfig({ stop_sequences: ['</s>', '<|im_end|>'] })
+  const result = transformLlmConfig(config)
+  t.absent('stop_sequences' in result)
+  t.is(result['reverse_prompt'], '</s>, <|im_end|>')
+})
 
-test("transformLlmConfig: numeric fields are stringified", (t) => {
-  const config = makeConfig({ ctx_size: 4096, gpu_layers: 99, temp: 0.7 });
-  const result = transformLlmConfig(config);
-  t.is(result["ctx_size"], "4096");
-  t.is(result["gpu_layers"], "99");
-  t.is(result["temp"], "0.7");
-});
+test('transformLlmConfig: numeric fields are stringified', (t) => {
+  const config = makeConfig({ ctx_size: 4096, gpu_layers: 99, temp: 0.7 })
+  const result = transformLlmConfig(config)
+  t.is(result['ctx_size'], '4096')
+  t.is(result['gpu_layers'], '99')
+  t.is(result['temp'], '0.7')
+})
+
+test('transformLlmConfig: parallel is forwarded as a string', (t) => {
+  const config = makeConfig({ parallel: 4 })
+  const result = transformLlmConfig(config)
+  t.is(result['parallel'], '4')
+})
+
+test('transformLlmConfig: mmproj-use-gpu=true is forwarded as string "true"', (t) => {
+  const config = makeConfig({ 'mmproj-use-gpu': true })
+  const result = transformLlmConfig(config)
+  t.is(result['mmproj-use-gpu'], 'true')
+  t.absent('mmproj_use_gpu' in result, 'hyphenated key must not be snake_cased')
+})
+
+test('transformLlmConfig: mmproj-use-gpu=false is forwarded as string "false"', (t) => {
+  const config = makeConfig({ 'mmproj-use-gpu': false })
+  const result = transformLlmConfig(config)
+  t.is(result['mmproj-use-gpu'], 'false')
+})
+
+test('transformLlmConfig: mmproj-use-gpu is omitted when unset', (t) => {
+  const config = makeConfig({})
+  const result = transformLlmConfig(config)
+  t.absent('mmproj-use-gpu' in result, 'unset key must not be forwarded so the addon auto-defaults')
+})

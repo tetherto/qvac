@@ -4,20 +4,24 @@
 //
 // Real-GGUF round-trip is gated behind QVAC_TEST_SUPERTONIC_GGUF.
 
-#include <gtest/gtest.h>
-
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <string>
 
-#include "model-interface/supertonic/SupertonicConfig.hpp"
-#include "model-interface/supertonic/SupertonicModel.hpp"
+#include <gtest/gtest.h>
+
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/supertonic/SupertonicConfig.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
+#include "model-interface/supertonic/SupertonicModel.hpp"
 
 using qvac::ttsggml::supertonic::SupertonicConfig;
 using qvac::ttsggml::supertonic::SupertonicModel;
+using qvac::ttsggml::supertonic::detail::applyVulkanPipelineCache;
+using qvac::ttsggml::supertonic::detail::VULKAN_PIPELINE_CACHE_DIR_ENV;
+using qvac::ttsggml::supertonic::detail::VULKAN_PREWARM_TEXT;
 using qvac_errors::StatusError;
 
 namespace {
@@ -144,6 +148,61 @@ TEST(SupertonicValidate, ConfigDefaultsAreCpuFriendly) {
   EXPECT_FALSE(cfg.nGpuLayers.has_value());
   EXPECT_FALSE(cfg.steps.has_value());
   EXPECT_FALSE(cfg.speed.has_value());
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Vulkan pipeline-cache opt-in mapping (config -> EngineOptions).
+// ─────────────────────────────────────────────────────────────────────
+
+TEST(SupertonicVulkanCache, GpuWithDirSetsEnvAndPrewarm) {
+  tts_cpp::supertonic::EngineOptions opts;
+  opts.n_gpu_layers = 99;
+  SupertonicConfig cfg;
+  cfg.vulkanCacheDir = "/data/vk";
+
+  applyVulkanPipelineCache(opts, cfg);
+
+  ASSERT_EQ(opts.vulkan_env_overrides.count(VULKAN_PIPELINE_CACHE_DIR_ENV), 1u);
+  EXPECT_EQ(
+      opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
+  EXPECT_EQ(opts.prewarm_text, VULKAN_PREWARM_TEXT);
+}
+
+TEST(SupertonicVulkanCache, CpuIgnoresCacheDir) {
+  tts_cpp::supertonic::EngineOptions opts;
+  opts.n_gpu_layers = 0;
+  SupertonicConfig cfg;
+  cfg.vulkanCacheDir = "/data/vk";
+
+  applyVulkanPipelineCache(opts, cfg);
+
+  EXPECT_TRUE(opts.vulkan_env_overrides.empty());
+  EXPECT_TRUE(opts.prewarm_text.empty());
+}
+
+TEST(SupertonicVulkanCache, GpuWithoutDirIsNoop) {
+  tts_cpp::supertonic::EngineOptions opts;
+  opts.n_gpu_layers = 99;
+  SupertonicConfig cfg; // vulkanCacheDir left empty
+
+  applyVulkanPipelineCache(opts, cfg);
+
+  EXPECT_TRUE(opts.vulkan_env_overrides.empty());
+  EXPECT_TRUE(opts.prewarm_text.empty());
+}
+
+TEST(SupertonicVulkanCache, DoesNotOverwriteCallerPrewarm) {
+  tts_cpp::supertonic::EngineOptions opts;
+  opts.n_gpu_layers = 99;
+  opts.prewarm_text = "caller sentence";
+  SupertonicConfig cfg;
+  cfg.vulkanCacheDir = "/data/vk";
+
+  applyVulkanPipelineCache(opts, cfg);
+
+  EXPECT_EQ(
+      opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
+  EXPECT_EQ(opts.prewarm_text, "caller sentence");
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -27,7 +27,7 @@ export interface LocalServiceServeConfig {
   }
 }
 
-function readOption (argv: readonly string[], name: string): string | undefined {
+function readOption(argv: readonly string[], name: string): string | undefined {
   const index = argv.indexOf(name)
   if (index === -1) return undefined
   const value = argv[index + 1]
@@ -35,27 +35,31 @@ function readOption (argv: readonly string[], name: string): string | undefined 
   return value
 }
 
-function parseNumberOption (name: string, value: string | undefined, fallback: number): number {
+function parseNumberOption(name: string, value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback
   const n = Number(value)
   if (!Number.isFinite(n)) throw new TypeError(`${name} must be a finite number`)
   return n
 }
 
-function parseBooleanOption (name: string, value: string | undefined, fallback: boolean): boolean {
+function parseBooleanOption(name: string, value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback
   if (value === 'true' || value === '1') return true
   if (value === 'false' || value === '0') return false
   throw new TypeError(`${name} must be a boolean`)
 }
 
-export function parseLocalServiceArgs (argv: readonly string[]): LocalServiceOptions {
+export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOptions {
   return {
     qvacCommand: readOption(argv, '--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
     model: readOption(argv, '--model') ?? DEFAULT_OPTIONS.model,
     host: readOption(argv, '--host') ?? DEFAULT_OPTIONS.host,
     port: parseNumberOption('--port', readOption(argv, '--port'), DEFAULT_OPTIONS.port),
-    ctxSize: parseNumberOption('--ctx-size', readOption(argv, '--ctx-size'), DEFAULT_OPTIONS.ctxSize),
+    ctxSize: parseNumberOption(
+      '--ctx-size',
+      readOption(argv, '--ctx-size'),
+      DEFAULT_OPTIONS.ctxSize
+    ),
     reasoningBudget: parseNumberOption(
       '--reasoning-budget',
       readOption(argv, '--reasoning-budget'),
@@ -65,23 +69,27 @@ export function parseLocalServiceArgs (argv: readonly string[]): LocalServiceOpt
   }
 }
 
-export function createLocalServiceServeConfig (options: LocalServiceOptions): LocalServiceServeConfig {
+export function createLocalServiceServeConfig(
+  options: LocalServiceOptions
+): LocalServiceServeConfig {
   return {
     serve: {
-      models: createQvacServeModels(resolveOptions({
-        model: options.model,
-        host: options.host,
-        port: options.port,
-        qvacCommand: options.qvacCommand,
-        ctxSize: options.ctxSize,
-        reasoningBudget: options.reasoningBudget,
-        tools: options.tools
-      }))
+      models: createQvacServeModels(
+        resolveOptions({
+          model: options.model,
+          host: options.host,
+          port: options.port,
+          qvacCommand: options.qvacCommand,
+          ctxSize: options.ctxSize,
+          reasoningBudget: options.reasoningBudget,
+          tools: options.tools
+        })
+      )
     }
   }
 }
 
-export function buildQvacServeArgs (options: LocalServiceOptions, configPath: string): string[] {
+export function buildQvacServeArgs(options: LocalServiceOptions, configPath: string): string[] {
   return [
     'serve',
     'openai',
@@ -96,7 +104,7 @@ export function buildQvacServeArgs (options: LocalServiceOptions, configPath: st
   ]
 }
 
-export function resolveLocalServiceExitCode (
+export function resolveLocalServiceExitCode(
   code: number | null,
   signal: NodeJS.Signals | null,
   stopping: boolean
@@ -105,10 +113,16 @@ export function resolveLocalServiceExitCode (
   return code ?? 1
 }
 
-async function writeConfig (options: LocalServiceOptions): Promise<{ configPath: string, cleanup: () => Promise<void> }> {
+async function writeConfig(
+  options: LocalServiceOptions
+): Promise<{ configPath: string; cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), 'qvac-openclaw-'))
   const configPath = join(dir, 'qvac.config.json')
-  await writeFile(configPath, `${JSON.stringify(createLocalServiceServeConfig(options), null, 2)}\n`, 'utf8')
+  await writeFile(
+    configPath,
+    `${JSON.stringify(createLocalServiceServeConfig(options), null, 2)}\n`,
+    'utf8'
+  )
 
   return {
     configPath,
@@ -118,7 +132,7 @@ async function writeConfig (options: LocalServiceOptions): Promise<{ configPath:
   }
 }
 
-async function main (): Promise<void> {
+async function main(): Promise<void> {
   const options = parseLocalServiceArgs(process.argv.slice(2))
   const generated = await writeConfig(options)
   const child = spawn(options.qvacCommand, buildQvacServeArgs(options, generated.configPath), {
@@ -126,7 +140,7 @@ async function main (): Promise<void> {
   })
 
   let stopping = false
-  async function stop (signal: NodeJS.Signals): Promise<void> {
+  async function stop(signal: NodeJS.Signals): Promise<void> {
     if (stopping) return
     stopping = true
     child.kill(signal)

@@ -4,8 +4,8 @@
 #include <string>
 #include <unordered_map>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <picojson/picojson.h>
 #include <stable-diffusion.h>
 
 namespace qvac_lib_inference_addon_sd {

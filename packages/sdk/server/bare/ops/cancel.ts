@@ -1,14 +1,11 @@
-import { getModel } from "@/server/bare/registry/model-registry";
-import {
-  type CancelInferenceBaseParams,
-  cancelInferenceBaseSchema,
-} from "@/schemas";
-import { ModelNotLoadedError } from "@/utils/errors-server";
-import { getRequestRegistry } from "@/server/bare/runtime";
-import type { RequestKind } from "@/server/bare/runtime";
-import { getServerLogger } from "@/logging";
+import { getModel } from '@/server/bare/registry/model-registry'
+import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '@/schemas'
+import { ModelNotLoadedError } from '@/utils/errors-server'
+import { getRequestRegistry } from '@/server/bare/runtime'
+import type { RequestKind } from '@/server/bare/runtime'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 /**
  * Broad cancel: abort every in-flight request matching `modelId` (and
@@ -33,29 +30,26 @@ const logger = getServerLogger();
  * once every handler had been migrated onto the registry; the function
  * now does exactly one thing — a registry walk.
  */
-export function cancel(
-  params: CancelInferenceBaseParams,
-  opts?: { kind?: RequestKind },
-): number {
-  const { modelId } = cancelInferenceBaseSchema.parse(params);
-  const model = getModel(modelId);
+export function cancel(params: CancelInferenceBaseParams, opts?: { kind?: RequestKind }): number {
+  const { modelId } = cancelInferenceBaseSchema.parse(params)
+  const model = getModel(modelId)
 
   if (!model) {
-    throw new ModelNotLoadedError(modelId);
+    throw new ModelNotLoadedError(modelId)
   }
 
-  const registry = getRequestRegistry();
-  const target = opts?.kind ? { modelId, kind: opts.kind } : { modelId };
-  const cancelled = registry.cancel(target);
+  const registry = getRequestRegistry()
+  const target = opts?.kind ? { modelId, kind: opts.kind } : { modelId }
+  const cancelled = registry.cancel(target)
 
   if (cancelled === 0) {
     // Callers (workbench "Stop" button, app shutdown sweeps) often
     // fire-and-forget; log so operators can see when a broad cancel
     // landed against a registry with nothing in flight on this model.
     logger.debug(
-      `[cancel] no in-flight request matched modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""}`,
-    );
+      `[cancel] no in-flight request matched modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ''}`
+    )
   }
 
-  return cancelled;
+  return cancelled
 }

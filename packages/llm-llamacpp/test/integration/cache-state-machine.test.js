@@ -7,9 +7,15 @@ const { cleanupIntegrationCacheFiles, ensureModel, safeTest: integrationTest } =
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
-const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
-const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const platform = os.platform()
+const arch = os.arch()
+const isDarwinX64 = platform === 'darwin' && arch === 'x64'
+const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isDesktopRunner = platform !== 'ios' && platform !== 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
+const isGpuDesktopRunner = isDesktopRunner && !useCpu
+const prefillCancelSegments = isGpuDesktopRunner ? 2500 : isDesktopRunner ? 1880 : 640
+const prefillCancelCtxSize = isGpuDesktopRunner ? '32768' : isDesktopRunner ? '24576' : '8192'
 
 function safeTest (name, opts, fn) {
   integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
@@ -43,6 +49,11 @@ const STOP_PROMPT = [
   SYSTEM_MESSAGE,
   { role: 'user', content: 'Tell a long story.' }
 ]
+
+const LONG_PREFILL_TEXT = Array.from(
+  { length: prefillCancelSegments },
+  (_, index) => `prefill segment ${index} keeps the decoder busy before cancellation.`
+).join(' ')
 
 const isCancellationError = err => {
   if (!err) return false
@@ -80,8 +91,14 @@ function buildPrompt (options = {}) {
   return [...BASE_PROMPT]
 }
 
-function buildStoppingPrompt () {
-  return [...STOP_PROMPT]
+function buildLongPrefillPrompt () {
+  return [
+    SYSTEM_MESSAGE,
+    {
+      role: 'user',
+      content: `Read the following text and cache it without generating a reply. ${LONG_PREFILL_TEXT}`
+    }
+  ]
 }
 
 function cacheOpts (sessionName, extra = {}) {
@@ -175,21 +192,35 @@ async function runAndCancelAfterFirstToken (model, prompt, runOptions) {
   return normalizeStats(response.stats, { _chunkCount: chunkCount })
 }
 
-async function runWithTimeoutCancellation (model, prompt, runOptions) {
-  cleanupRunOptionsCache(runOptions)
-  const response = await model.run(prompt, runOptions)
-  await model.cancel()
-  return normalizeStats(response.stats, { _chunkCount: 0 })
+async function waitForActiveResponse (model) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const response = model._job?.active
+    if (response) return response
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  return null
 }
 
-/** Cancels via QvacResponse (one test keeps coverage of response.cancel()). */
-async function runWithTimeoutCancellationViaResponse (model, prompt, runOptions) {
+async function runWithPrefillCancellation (model, prompt, runOptions, cancelViaResponse = false) {
   cleanupRunOptionsCache(runOptions)
-  const response = await model.run(prompt, runOptions)
-  if (typeof response.cancel === 'function') {
-    await response.cancel()
+  const responsePromise = model.run(prompt, { ...runOptions, prefill: true })
+  const activeResponse = await waitForActiveResponse(model)
+  const cancelRequested = activeResponse?._status === 'running'
+  if (cancelRequested) {
+    if (cancelViaResponse) {
+      await activeResponse.cancel()
+    } else {
+      await model.cancel()
+    }
   }
-  return normalizeStats(response.stats, { _chunkCount: 0 })
+
+  const response = await responsePromise
+  try {
+    await response.await()
+  } catch (err) {
+    if (!isCancellationError(err)) throw err
+  }
+  return normalizeStats(response.stats, { _chunkCount: 0, _cancelRequested: cancelRequested })
 }
 
 safeTest('CacheTokens remain zero without cacheKey', { timeout: 600_000 }, async t => {
@@ -223,9 +254,11 @@ safeTest('Cancelling after first token keeps cache growth bounded', { timeout: 6
   const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
   const stats = await runAndCancelAfterFirstToken(model, buildPrompt(), cacheOpts(sessionName))
   const delta = toNumber(stats.CacheTokens) - toNumber(warmStats.CacheTokens)
-  // Cache delta may be off by 1 due to BOS/EOS token handling
-  const expectedDelta = stats.promptTokens + stats.generatedTokens
-  t.ok(Math.abs(delta - expectedDelta) <= 1, `cache delta (${delta}) approximately equals tracked tokens (${expectedDelta})`)
+  // Cancel = "request never happened": cache is rolled back to the
+  // pre-request cursor, so delta versus the warm baseline must be ~0
+  // (allow ±1 for BOS/EOS bookkeeping). Prompt / generated counters
+  // still reflect work the model performed.
+  t.ok(Math.abs(delta) <= 1, `cache delta (${delta}) ~0 after cancel rollback`)
   const threshold = 20
   t.ok(stats.generatedTokens > 0, `at least one token generated before cancellation (generatedTokens=${stats.generatedTokens} > 0)`)
   t.ok(stats.generatedTokens < threshold, `generatedTokens (${stats.generatedTokens}) should be less than threshold (${threshold})`)
@@ -254,28 +287,39 @@ safeTest('Cancelling after first token only stores one generation chunk', { time
   )
 })
 
-safeTest('Timeout cancellation before first token keeps cache/timing stats at zero (via model.cancel())', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
+safeTest('Cancelling prefill-only request rolls back cache (via model.cancel())', { timeout: 600_000 }, async t => {
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: prefillCancelCtxSize, batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt.bin')
-  const stats = await runWithTimeoutCancellation(model, buildStoppingPrompt(), cacheOpts(sessionName))
-  // Small delay between cancel request and actually stopped
-  const threshold = 45
-  t.is(stats._chunkCount, 0, 'timeout prevented any chunk emission')
-  t.ok(stats.promptTokens < threshold)
+  const stats = await runWithPrefillCancellation(
+    model,
+    buildLongPrefillPrompt(),
+    cacheOpts(sessionName, { saveCacheToDisk: true })
+  )
+  t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
+  t.is(stats._chunkCount, 0, 'prefill-only cancellation emits no chunks')
+  t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
+  t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
+  t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+  t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
+  t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
 })
 
-safeTest('Timeout cancellation before first token keeps cache/timing stats at zero (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
-  const { model, dirPath } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
+safeTest('Cancelling prefill-only request rolls back cache (via QvacResponse.cancel)', { timeout: 600_000 }, async t => {
+  const { model, dirPath } = await setupModel(t, { n_predict: '1', ctx_size: prefillCancelCtxSize, batch_size: '8' })
   const sessionName = path.join(dirPath, 'cache-preempt-qvacresponse.bin')
-  const stats = await runWithTimeoutCancellationViaResponse(
+  const stats = await runWithPrefillCancellation(
     model,
-    buildStoppingPrompt(),
-    cacheOpts(sessionName)
+    buildLongPrefillPrompt(),
+    cacheOpts(sessionName, { saveCacheToDisk: true }),
+    true
   )
-  // Small delay between cancel request and actually stopped
-  const threshold = 45
-  t.is(stats._chunkCount, 0, 'timeout prevented any chunk emission')
-  t.ok(stats.promptTokens < threshold)
+  t.ok(stats._cancelRequested, 'cancel requested while prefill response was still active')
+  t.is(stats._chunkCount, 0, 'prefill-only cancellation emits no chunks')
+  t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
+  t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
+  t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+  t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
+  t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
 })
 
 safeTest('Cache cleared when prompt without cacheKey follows cached inference', { timeout: 600_000 }, async t => {
@@ -353,7 +397,7 @@ safeTest('Cache to no-cache to cache transition works correctly', { timeout: 600
 })
 
 safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_000 }, async t => {
-  const { model } = await setupModel(t, { n_predict: '1024', ctx_size: '4096' })
+  const { model } = await setupModel(t, { n_predict: '1024', ctx_size: '4096', batch_size: '32' })
 
   // Use prompt without session so cache is not used and n_past starts from prompt only
   const noCachePrompt = [...STOP_PROMPT]
@@ -363,9 +407,6 @@ safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_00
 
   // Run and cancel after first token
   const cancelAfterFirstStats = await runAndCancelAfterFirstToken(model, noCachePrompt)
-
-  // Run with timeout cancellation
-  const timeoutStats = await runWithTimeoutCancellation(model, noCachePrompt)
 
   // Verify cancel-after-first-token stats are smaller than full run
   // On Windows compare <= due to less responsive threads, which can lead to timeout false positives in CI
@@ -388,29 +429,6 @@ safeTest('Canceled runs produce smaller stats than full runs', { timeout: 600_00
   t.ok(
     cancelAfterFirstStats._chunkCount <= fullStats._chunkCount,
     `cancel-after-first chunkCount (${cancelAfterFirstStats._chunkCount}) <= full run (${fullStats._chunkCount})`
-  )
-
-  // Verify timeout stats are smaller than full run stats
-  // On Windows compare <= due to less responsive threads, which can lead to timeout false positives in CI
-  // since we are testing asynchronously, the timeout may not have been able to cancel the run in time, leading to false positives.
-  if (os.platform() === 'win32') {
-    t.ok(
-      timeoutStats.generatedTokens <= fullStats.generatedTokens,
-      `timeout generatedTokens (${timeoutStats.generatedTokens}) <= full run (${fullStats.generatedTokens}) [Windows CI flaky]`
-    )
-  } else {
-    t.ok(
-      timeoutStats.generatedTokens < fullStats.generatedTokens,
-      `timeout generatedTokens (${timeoutStats.generatedTokens}) < full run (${fullStats.generatedTokens})`
-    )
-  }
-  t.ok(
-    timeoutStats.CacheTokens <= fullStats.CacheTokens,
-    `timeout CacheTokens (${timeoutStats.CacheTokens}) <= full run (${fullStats.CacheTokens})`
-  )
-  t.ok(
-    timeoutStats._chunkCount <= fullStats._chunkCount,
-    `timeout chunkCount (${timeoutStats._chunkCount}) <= full run (${fullStats._chunkCount})`
   )
 })
 

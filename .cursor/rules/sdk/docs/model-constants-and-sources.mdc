@@ -27,7 +27,7 @@ console.log(WHISPER_TINY.params);       // "39M"
 
 Each constant includes: `name`, `src`, `registryPath`, `registrySource`, `blobCoreKey`, `blobBlockOffset`, `blobBlockLength`, `blobByteOffset`, `modelId`, `expectedSize`, `sha256Checksum`, `addon`, `engine`, `quantization`, `params`.
 
-The `ModelConstant` type is defined in `models/registry/models.ts`. Sharded models also include `shardMetadata`.
+The `ModelConstant` type is defined in `models/registry/models.ts`. The internal `RegistryItem` catalog entries may also include `shardMetadata` for split models or `companionSet` metadata for multi-file assets that must be downloaded into one cache folder.
 
 ## Model Source Union Type
 
@@ -72,6 +72,7 @@ The `models/update-models` module generates `models/registry/models.ts`:
 - Fetches model entries from the registry
 - Generates unique names via `models/update-models/naming.ts` from path, engine, quantization, and params
 - Converts to uppercase with underscores, adds counter suffix for duplicates
+- Groups known multi-file families into companion sets, such as ONNX `.onnx_data` pairs, Bergamot translation assets, BCI embedder files, and Chatterbox MeCab/IPAdic dictionaries
 - Exports individual constants and a `models` array
 - Also exports `getModelByName()` and `getModelByPath()` helpers
 

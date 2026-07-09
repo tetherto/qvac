@@ -53,23 +53,24 @@ const ERR_CODES = Object.freeze({
 const codeToContent = {
   [ERR_CODES.UNKNOWN_ERROR_CODE]: {
     name: 'UNKNOWN_ERROR_CODE',
-    message: code => `Unknown QVAC error code: ${code}`
+    message: (code) => `Unknown QVAC error code: ${code}`
   },
   [ERR_CODES.INVALID_CODE_DEFINITION]: {
     name: 'INVALID_CODE_DEFINITION',
-    message: code => `Invalid definition for error code: ${code}`
+    message: (code) => `Invalid definition for error code: ${code}`
   },
   [ERR_CODES.ERROR_CODE_ALREADY_EXISTS]: {
     name: 'ERROR_CODE_ALREADY_EXISTS',
-    message: code => `Error code already exists: ${code}`
+    message: (code) => `Error code already exists: ${code}`
   },
   [ERR_CODES.MISSING_ERROR_DEFINITION]: {
     name: 'MISSING_ERROR_DEFINITION',
-    message: code => `Missing name or message for error code: ${code}`
+    message: (code) => `Missing name or message for error code: ${code}`
   },
   [ERR_CODES.PACKAGE_VERSION_CONFLICT]: {
     name: 'PACKAGE_VERSION_CONFLICT',
-    message: (pkg, existingVer, newVer) => `Package ${pkg} version conflict: existing ${existingVer}, attempted ${newVer}`
+    message: (pkg, existingVer, newVer) =>
+      `Package ${pkg} version conflict: existing ${existingVer}, attempted ${newVer}`
   },
   [ERR_CODES.INVALID_PACKAGE_INFO]: {
     name: 'INVALID_PACKAGE_INFO',
@@ -89,7 +90,7 @@ const packageRegistry = new Map()
  * @param {string} version2
  * @returns {number} -1 if v1 < v2, 0 if equal, 1 if v1 > v2
  */
-function compareVersions (version1, version2) {
+function compareVersions(version1, version2) {
   const v1Parts = version1.split('.').map(Number)
   const v2Parts = version2.split('.').map(Number)
 
@@ -122,7 +123,7 @@ class QvacErrorBase extends Error {
    * Creates a new QVAC error
    * @param {QvacErrorOptions} [options] - Error options
    */
-  constructor (options = {}) {
+  constructor(options = {}) {
     const { code, adds, cause } = options
     let msgContent = ''
     /** @type {number} */
@@ -169,7 +170,7 @@ class QvacErrorBase extends Error {
    * Serializes the error to a plain object
    * @returns {SerializedError}
    */
-  toJSON () {
+  toJSON() {
     return {
       name: this.name,
       code: this.code,
@@ -186,7 +187,7 @@ class QvacErrorBase extends Error {
  * @param {PackageInfo} [packageInfo] - Optional package information for collision management
  * @throws {QvacErrorBase} If there are conflicts or invalid definitions
  */
-function addCodes (codes, packageInfo) {
+function addCodes(codes, packageInfo) {
   // If no package info provided, use legacy behavior
   if (!packageInfo) {
     for (const [code, def] of Object.entries(codes)) {
@@ -241,7 +242,10 @@ function addCodes (codes, packageInfo) {
     const numericCode = Number(code)
 
     // Check if code is already registered by another package
-    if (codeToContent[numericCode] && (!existingPackage || !existingPackage.codes.includes(numericCode))) {
+    if (
+      codeToContent[numericCode] &&
+      (!existingPackage || !existingPackage.codes.includes(numericCode))
+    ) {
       throw new QvacErrorBase({ code: ERR_CODES.ERROR_CODE_ALREADY_EXISTS, adds: numericCode })
     }
 
@@ -272,7 +276,7 @@ function addCodes (codes, packageInfo) {
  * Gets all registered error codes and their definitions
  * @returns {ErrorCodesMap}
  */
-function getRegisteredCodes () {
+function getRegisteredCodes() {
   return JSON.parse(JSON.stringify(codeToContent))
 }
 
@@ -281,7 +285,7 @@ function getRegisteredCodes () {
  * @param {number} code - The error code to check
  * @returns {boolean} True if the code is already registered
  */
-function isCodeRegistered (code) {
+function isCodeRegistered(code) {
   return !!codeToContent[code]
 }
 

@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { ModelSrcInput } from "./model-src-utils";
+import { z } from 'zod'
+import type { ModelSrcInput } from './model-src-utils'
 
 /**
  * Granularity at which the addon can cancel.
@@ -8,15 +8,15 @@ import type { ModelSrcInput } from "./model-src-utils";
  *  - `"none"` — no addon cancel surface; SDK falls back to soft-cancel
  *    (stop yielding, drop result; the C++ work runs to completion).
  */
-export type PluginHandlerCancelScope = "request" | "model" | "none";
+export type PluginHandlerCancelScope = 'request' | 'model' | 'none'
 
 export interface PluginHandlerCancel {
-  scope: PluginHandlerCancelScope;
+  scope: PluginHandlerCancelScope
   /**
    * `true` — `addon.cancel()` interrupts compute; otherwise it's
    * best-effort. Only meaningful for `scope: "model" | "request"`.
    */
-  hard?: boolean;
+  hard?: boolean
 }
 
 /**
@@ -25,25 +25,22 @@ export interface PluginHandlerCancel {
  */
 export interface PluginHandlerDefinition<
   TRequest extends z.ZodType = z.ZodType,
-  TResponse extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType
 > {
-  requestSchema: TRequest;
-  responseSchema: TResponse;
-  streaming: boolean;
-  duplex?: boolean;
+  requestSchema: TRequest
+  responseSchema: TResponse
+  streaming: boolean
+  duplex?: boolean
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (
-          request: I,
-          inputStream?: AsyncIterable<Buffer>,
-        ) => Promise<O> | AsyncGenerator<O>
+      ? (request: I, inputStream?: AsyncIterable<Buffer>) => Promise<O> | AsyncGenerator<O>
       : never
-    : never;
+    : never
   /**
    * Cancel surface this handler advertises. Omitting is equivalent
    * to `{ scope: "none" }` (soft-cancel fallback).
    */
-  cancel?: PluginHandlerCancel;
+  cancel?: PluginHandlerCancel
 }
 
 /**
@@ -52,22 +49,19 @@ export interface PluginHandlerDefinition<
  */
 export interface DuplexPluginHandlerDefinition<
   TRequest extends z.ZodType = z.ZodType,
-  TResponse extends z.ZodType = z.ZodType,
+  TResponse extends z.ZodType = z.ZodType
 > {
-  requestSchema: TRequest;
-  responseSchema: TResponse;
-  streaming: true;
-  duplex: true;
+  requestSchema: TRequest
+  responseSchema: TResponse
+  streaming: true
+  duplex: true
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (
-          request: I,
-          inputStream: AsyncIterable<Buffer>,
-        ) => AsyncGenerator<O>
+      ? (request: I, inputStream: AsyncIterable<Buffer>) => AsyncGenerator<O>
       : never
-    : never;
+    : never
   /** See `PluginHandlerDefinition.cancel`. */
-  cancel?: PluginHandlerCancel;
+  cancel?: PluginHandlerCancel
 }
 
 /**
@@ -80,22 +74,21 @@ export interface DuplexPluginHandlerDefinition<
  * Built-in artifact keys:
  * - `projectionModelPath` - LLM multimodal projection model
  * - `vadModelPath` - Whisper voice activity detection model
- * - `tokenizerPath`, `speechEncoderPath`, `embedTokensPath`, `conditionalDecoderPath`, `languageModelPath` - TTS (Chatterbox) model files
- * - `referenceAudioPath` - TTS (Chatterbox) path to reference WAV file for voice cloning
- * - `tokenizerPath`, `textEncoderPath`, `latentDenoiserPath`, `voiceDecoderPath` - TTS (Supertonic) model files
- * - `voicePath` - TTS (Supertonic) path to voice .bin file (e.g. voices/M1.bin)
- * - `speed`, `numInferenceSteps` - TTS (Supertonic) options
+ * - `s3genPath` - TTS (Chatterbox GGML) S3Gen + HiFT GGUF
+ * - `referenceAudioPath` - TTS (Chatterbox GGML) path to reference WAV file for voice cloning
+ * - `lavasrEnhancerPath` - TTS (GGML) optional LavaSR enhancer GGUF (48 kHz bandwidth extension; both engines)
+ * - `lavasrDenoiserPath` - TTS (GGML) optional LavaSR denoiser GGUF (runs before the enhancer; both engines)
  * - `detectorModelPath` - OCR detector model
  * - `embedderPath` - BCI whisper.cpp embedder weights
  *
  * Custom plugins can define their own artifact keys.
  */
 export interface CreateModelParams {
-  modelId: string;
-  modelPath: string;
-  modelConfig?: Record<string, unknown> | undefined;
-  modelName?: string | undefined;
-  artifacts?: Record<string, string> | undefined;
+  modelId: string
+  modelPath: string
+  modelConfig?: Record<string, unknown> | undefined
+  modelName?: string | undefined
+  artifacts?: Record<string, string> | undefined
 }
 
 /**
@@ -103,61 +96,58 @@ export interface CreateModelParams {
  * All models must implement `load()`. `unload()` is optional.
  */
 export interface PluginModel {
-  load(force?: boolean): Promise<void>;
-  unload?(): void | Promise<void>;
+  load(force?: boolean): Promise<void>
+  unload?(): void | Promise<void>
 }
 
 export interface PluginModelResult {
-  model: PluginModel;
+  model: PluginModel
 }
 
 export interface PluginLogging {
-  module: unknown;
-  namespace: string;
+  module: unknown
+  namespace: string
 }
 
 /**
  * Function to resolve a model source (URL or path) to a local file path.
  * Passed to resolveConfig hook to allow plugins to resolve their artifacts.
  */
-export type ResolveModelPath = (src: ModelSrcInput) => Promise<string>;
+export type ResolveModelPath = (src: ModelSrcInput) => Promise<string>
 
 /**
  * Context passed to plugin resolveConfig hook.
  * Provides resolution utilities and request metadata.
  */
 export interface ResolveContext {
-  resolveModelPath: ResolveModelPath;
-  modelSrc: string;
-  modelType: string;
-  modelName?: string;
+  resolveModelPath: ResolveModelPath
+  modelSrc: string
+  modelType: string
+  modelName?: string
 }
 
 /**
  * Result from plugin resolveConfig hook.
  * Contains transformed config and optional resolved artifacts.
  */
-export interface ResolveResult<
-  TConfig = Record<string, unknown>,
-  K extends string = string,
-> {
-  config: TConfig;
-  artifacts?: Partial<Record<K, string>>;
+export interface ResolveResult<TConfig = Record<string, unknown>, K extends string = string> {
+  config: TConfig
+  artifacts?: Partial<Record<K, string>>
 }
 
 export interface QvacPlugin<
   TConfig = Record<string, unknown>,
-  TArtifactKeys extends string = string,
+  TArtifactKeys extends string = string
 > {
-  modelType: string;
-  displayName: string;
-  addonPackage: string;
-  loadConfigSchema: z.ZodType;
-  createModel: (params: CreateModelParams) => PluginModelResult;
-  handlers: Record<string, PluginHandlerDefinition>;
-  logging?: PluginLogging | undefined;
+  modelType: string
+  displayName: string
+  addonPackage: string
+  loadConfigSchema: z.ZodType
+  createModel: (params: CreateModelParams) => PluginModelResult
+  handlers: Record<string, PluginHandlerDefinition>
+  logging?: PluginLogging | undefined
   /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */
-  skipPrimaryModelPathValidation?: boolean;
+  skipPrimaryModelPathValidation?: boolean
   /**
    * Optional hook to resolve model sources in modelConfig to local paths.
    * Called before createModel if the plugin needs to download/resolve artifacts.
@@ -165,45 +155,41 @@ export interface QvacPlugin<
    */
   resolveConfig?: (
     modelConfig: TConfig,
-    ctx: ResolveContext,
-  ) => Promise<ResolveResult<TConfig, TArtifactKeys>>;
+    ctx: ResolveContext
+  ) => Promise<ResolveResult<TConfig, TArtifactKeys>>
 }
 
 // Non-streaming plugin invoke
 export const pluginInvokeRequestSchema = z.object({
-  type: z.literal("pluginInvoke"),
+  type: z.literal('pluginInvoke'),
   modelId: z.string(),
   handler: z.string(),
-  params: z.unknown(),
-});
+  params: z.unknown()
+})
 
 export const pluginInvokeResponseSchema = z.object({
-  type: z.literal("pluginInvoke"),
-  result: z.unknown(),
-});
+  type: z.literal('pluginInvoke'),
+  result: z.unknown()
+})
 
 // Streaming plugin invoke
 export const pluginInvokeStreamRequestSchema = z.object({
-  type: z.literal("pluginInvokeStream"),
+  type: z.literal('pluginInvokeStream'),
   modelId: z.string(),
   handler: z.string(),
-  params: z.unknown(),
-});
+  params: z.unknown()
+})
 
 export const pluginInvokeStreamResponseSchema = z.object({
-  type: z.literal("pluginInvokeStream"),
+  type: z.literal('pluginInvokeStream'),
   result: z.unknown(),
-  done: z.boolean().optional(),
-});
+  done: z.boolean().optional()
+})
 
-export type PluginInvokeRequest = z.infer<typeof pluginInvokeRequestSchema>;
-export type PluginInvokeResponse = z.infer<typeof pluginInvokeResponseSchema>;
-export type PluginInvokeStreamRequest = z.infer<
-  typeof pluginInvokeStreamRequestSchema
->;
-export type PluginInvokeStreamResponse = z.infer<
-  typeof pluginInvokeStreamResponseSchema
->;
+export type PluginInvokeRequest = z.infer<typeof pluginInvokeRequestSchema>
+export type PluginInvokeResponse = z.infer<typeof pluginInvokeResponseSchema>
+export type PluginInvokeStreamRequest = z.infer<typeof pluginInvokeStreamRequestSchema>
+export type PluginInvokeStreamResponse = z.infer<typeof pluginInvokeStreamResponseSchema>
 
 // ============================================
 // Type Helpers
@@ -221,7 +207,7 @@ export type PluginInvokeStreamResponse = z.infer<
  * @returns The same `plugin` value, typed as the caller's `T`.
  */
 export function definePlugin<T extends QvacPlugin>(plugin: T): T {
-  return plugin;
+  return plugin
 }
 
 /**
@@ -235,13 +221,10 @@ export function definePlugin<T extends QvacPlugin>(plugin: T): T {
  * @param definition - The plugin handler definition (request/response schemas and handler function).
  * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
  */
-export function defineHandler<
-  TRequest extends z.ZodType,
-  TResponse extends z.ZodType,
->(
-  definition: PluginHandlerDefinition<TRequest, TResponse>,
+export function defineHandler<TRequest extends z.ZodType, TResponse extends z.ZodType>(
+  definition: PluginHandlerDefinition<TRequest, TResponse>
 ): PluginHandlerDefinition<TRequest, TResponse> {
-  return definition;
+  return definition
 }
 
 /**
@@ -255,15 +238,12 @@ export function defineHandler<
  * @param definition - The duplex plugin handler definition (request/response schemas and streaming handler function).
  * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
  */
-export function defineDuplexHandler<
-  TRequest extends z.ZodType,
-  TResponse extends z.ZodType,
->(
-  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>,
+export function defineDuplexHandler<TRequest extends z.ZodType, TResponse extends z.ZodType>(
+  definition: DuplexPluginHandlerDefinition<TRequest, TResponse>
 ): PluginHandlerDefinition<TRequest, TResponse> {
   // The duplex flag guarantees inputStream is always
   // provided at call time; the cast bridges TS function-param contravariance.
-  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>;
+  return definition as unknown as PluginHandlerDefinition<TRequest, TResponse>
 }
 
 // ============================================
@@ -271,60 +251,60 @@ export function defineDuplexHandler<
 // ============================================
 
 const functionRuntimeSchema = z.instanceof(Function, {
-  error: "must be a function",
-});
+  error: 'must be a function'
+})
 
 const zodSchemaLikeRuntimeSchema = z
   .object({
-    safeParse: functionRuntimeSchema,
+    safeParse: functionRuntimeSchema
   })
-  .catchall(z.unknown());
+  .catchall(z.unknown())
 
 const pluginHandlerCancelRuntimeSchema = z
   .object({
-    scope: z.enum(["request", "model", "none"], {
-      error: "cancel.scope must be 'request', 'model', or 'none'",
+    scope: z.enum(['request', 'model', 'none'], {
+      error: "cancel.scope must be 'request', 'model', or 'none'"
     }),
-    hard: z.boolean().optional(),
+    hard: z.boolean().optional()
   })
-  .catchall(z.unknown());
+  .catchall(z.unknown())
 
 export const pluginHandlerDefinitionRuntimeSchema = z
   .object({
     requestSchema: zodSchemaLikeRuntimeSchema,
     responseSchema: zodSchemaLikeRuntimeSchema,
-    streaming: z.boolean({ error: "streaming must be a boolean" }),
+    streaming: z.boolean({ error: 'streaming must be a boolean' }),
     duplex: z.boolean().optional(),
     handler: functionRuntimeSchema,
-    cancel: pluginHandlerCancelRuntimeSchema.optional(),
+    cancel: pluginHandlerCancelRuntimeSchema.optional()
   })
-  .catchall(z.unknown());
+  .catchall(z.unknown())
 
 export const pluginDefinitionRuntimeSchema = z
   .object({
     modelType: z
-      .string({ error: "modelType must be a string" })
-      .min(1, "modelType must be a non-empty string"),
+      .string({ error: 'modelType must be a string' })
+      .min(1, 'modelType must be a non-empty string'),
     displayName: z
-      .string({ error: "displayName must be a string" })
-      .min(1, "displayName must be a non-empty string"),
+      .string({ error: 'displayName must be a string' })
+      .min(1, 'displayName must be a non-empty string'),
     addonPackage: z
-      .string({ error: "addonPackage must be a string" })
-      .min(1, "addonPackage must be a non-empty string"),
+      .string({ error: 'addonPackage must be a string' })
+      .min(1, 'addonPackage must be a non-empty string'),
     loadConfigSchema: zodSchemaLikeRuntimeSchema,
     createModel: functionRuntimeSchema,
     handlers: z.record(z.string(), pluginHandlerDefinitionRuntimeSchema),
     logging: z
       .object({
         module: z.unknown().optional(),
-        namespace: z.string().optional(),
+        namespace: z.string().optional()
       })
       .catchall(z.unknown())
       .optional(),
     resolveConfig: functionRuntimeSchema.optional(),
-    skipPrimaryModelPathValidation: z.boolean().optional(),
+    skipPrimaryModelPathValidation: z.boolean().optional()
   })
-  .catchall(z.unknown());
+  .catchall(z.unknown())
 
 // ============================================
 // Built-in Plugins
@@ -334,59 +314,55 @@ export const pluginDefinitionRuntimeSchema = z
  * LLM text completion plugin (llama.cpp).
  * Provides: completion, streaming chat, tool calling.
  */
-export const PLUGIN_LLM = "@qvac/sdk/llamacpp-completion/plugin" as const;
+export const PLUGIN_LLM = '@qvac/sdk/llamacpp-completion/plugin' as const
 
 /**
  * Text embedding plugin (llama.cpp).
  * Provides: vector embeddings for RAG and semantic search.
  */
-export const PLUGIN_EMBEDDING = "@qvac/sdk/llamacpp-embedding/plugin" as const;
+export const PLUGIN_EMBEDDING = '@qvac/sdk/llamacpp-embedding/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (whisper.cpp).
  * Provides: audio transcription, language detection.
  */
-export const PLUGIN_WHISPER =
-  "@qvac/sdk/whispercpp-transcription/plugin" as const;
+export const PLUGIN_WHISPER = '@qvac/sdk/whispercpp-transcription/plugin' as const
 
 /**
  * Brain-Computer Interface neural-signal transcription plugin
  * (whisper.cpp). Provides: transcription of neural signals to text.
  */
-export const PLUGIN_BCI =
-  "@qvac/sdk/bci-whispercpp-transcription/plugin" as const;
+export const PLUGIN_BCI = '@qvac/sdk/bci-whispercpp-transcription/plugin' as const
 
 /**
  * Speech-to-text transcription plugin (Parakeet ONNX).
  * Provides: audio transcription using NVIDIA Parakeet models.
  */
-export const PLUGIN_PARAKEET =
-  "@qvac/sdk/parakeet-transcription/plugin" as const;
+export const PLUGIN_PARAKEET = '@qvac/sdk/parakeet-transcription/plugin' as const
 
 /**
  * Neural machine translation plugin (nmt.cpp).
  * Provides: text translation between languages.
  */
-export const PLUGIN_NMT = "@qvac/sdk/nmtcpp-translation/plugin" as const;
+export const PLUGIN_NMT = '@qvac/sdk/nmtcpp-translation/plugin' as const
 
 /**
  * Text-to-speech synthesis plugin (GGML).
  * Provides: speech synthesis from text.
  */
-export const PLUGIN_TTS = "@qvac/sdk/tts-ggml/plugin" as const;
+export const PLUGIN_TTS = '@qvac/sdk/tts-ggml/plugin' as const
 
 /**
  * Optical character recognition plugin (GGML).
  * Provides: text extraction from images.
  */
-export const PLUGIN_OCR = "@qvac/sdk/ggml-ocr/plugin" as const;
+export const PLUGIN_OCR = '@qvac/sdk/ggml-ocr/plugin' as const
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
  * Provides: text-to-image generation and standalone ESRGAN image upscaling.
  */
-export const PLUGIN_DIFFUSION =
-  "@qvac/sdk/sdcpp-generation/plugin" as const;
+export const PLUGIN_DIFFUSION = '@qvac/sdk/sdcpp-generation/plugin' as const
 
 /**
  * Vision-Language-Action plugin (ggml). Supports SmolVLA and π₀.₅ (pi05),
@@ -394,14 +370,13 @@ export const PLUGIN_DIFFUSION =
  * Provides: robot-action inference from one or more camera frames (2 for
  * SmolVLA, 3 for π₀.₅) and a natural-language instruction.
  */
-export const PLUGIN_VLA = "@qvac/sdk/ggml-vla/plugin" as const;
+export const PLUGIN_VLA = '@qvac/sdk/ggml-vla/plugin' as const
 
 /**
  * Image classification plugin (GGML / MobileNetV3-Small).
  * Provides: image classification with bundled 3-class model (food / report / other).
  */
-export const PLUGIN_CLASSIFICATION =
-  "@qvac/sdk/ggml-classification/plugin" as const;
+export const PLUGIN_CLASSIFICATION = '@qvac/sdk/ggml-classification/plugin' as const
 
 /**
  * All built-in SDK plugins.
@@ -423,44 +398,44 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
   PLUGIN_VLA,
-  PLUGIN_CLASSIFICATION,
-] as const;
+  PLUGIN_CLASSIFICATION
+] as const
 
-export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];
+export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number]
 
 // ============================================
 // Addon Packages
 // ============================================
 
 /** Native addon package for LLM completion (llama.cpp) */
-export const ADDON_LLM = "@qvac/llm-llamacpp" as const;
+export const ADDON_LLM = '@qvac/llm-llamacpp' as const
 
 /** Native addon package for text embeddings (llama.cpp) */
-export const ADDON_EMBEDDING = "@qvac/embed-llamacpp" as const;
+export const ADDON_EMBEDDING = '@qvac/embed-llamacpp' as const
 
 /** Native addon package for Whisper transcription (whisper.cpp) */
-export const ADDON_WHISPER = "@qvac/transcription-whispercpp" as const;
+export const ADDON_WHISPER = '@qvac/transcription-whispercpp' as const
 
 /** Native addon package for BCI neural-signal transcription (whisper.cpp) */
-export const ADDON_BCI = "@qvac/bci-whispercpp" as const;
+export const ADDON_BCI = '@qvac/bci-whispercpp' as const
 
 /** Native addon package for Parakeet transcription (ONNX) */
-export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
+export const ADDON_PARAKEET = '@qvac/transcription-parakeet' as const
 
 /** Native addon package for NMT translation (nmt.cpp) */
-export const ADDON_NMT = "@qvac/translation-nmtcpp" as const;
+export const ADDON_NMT = '@qvac/translation-nmtcpp' as const
 
 /** Native addon package for TTS (GGML) */
-export const ADDON_TTS = "@qvac/tts-ggml" as const;
+export const ADDON_TTS = '@qvac/tts-ggml' as const
 
 /** Native addon package for OCR (GGML) */
-export const ADDON_OCR = "@qvac/ocr-ggml" as const;
+export const ADDON_OCR = '@qvac/ocr-ggml' as const
 
 /** Native addon package for image generation (stable-diffusion.cpp) */
-export const ADDON_DIFFUSION = "@qvac/diffusion-cpp" as const;
+export const ADDON_DIFFUSION = '@qvac/diffusion-cpp' as const
 
 /** Native addon package for vision-language-action inference (SmolVLA / π₀.₅ on ggml) */
-export const ADDON_VLA = "@qvac/vla-ggml" as const;
+export const ADDON_VLA = '@qvac/vla-ggml' as const
 
 /** Native addon package for image classification (GGML / MobileNetV3) */
-export const ADDON_CLASSIFICATION = "@qvac/classification-ggml" as const;
+export const ADDON_CLASSIFICATION = '@qvac/classification-ggml' as const

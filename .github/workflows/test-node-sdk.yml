@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "mac-mini-m4-gpu"])'
+        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "qvac-macos26-arm64-gpu"])'
         required: true
         type: string
       consumer-timeout:
@@ -262,6 +262,11 @@ jobs:
       - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
+
+      - name: Bundle SDK worker (custom plugins)
+        if: inputs.consumer == 'desktop'
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run bundle:sdk
 
       - name: Configure SDK cache directory
         shell: node {0}

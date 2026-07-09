@@ -1,84 +1,82 @@
-import type { ModelProgressUpdate } from "@/schemas";
-import type { QVACModelEntry, QVACBlobBinding } from "@qvac/registry-client";
-import { promises as fsPromises } from "bare-fs";
-import type { AbortSignal } from "bare-abort-controller";
+import type { ModelProgressUpdate } from '@/schemas'
+import type { QVACModelEntry, QVACBlobBinding } from '@qvac/registry-client'
+import { promises as fsPromises } from 'bare-fs'
+import type { AbortSignal } from 'bare-abort-controller'
 import {
   generateShortHash,
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
   extractTensorsFromShards,
-  calculatePercentage,
-} from "@/server/utils";
-import { getSingleFileCachePath } from "@/server/utils/cache/paths";
-import { getModelByPath, type RegistryItem } from "@/models/registry";
-import { getRegistryClient } from "@/server/bare/registry/registry-client";
+  calculatePercentage
+} from '@/server/utils'
+import { getSingleFileCachePath } from '@/server/utils/cache/paths'
+import { getModelByPath, type RegistryItem } from '@/models/registry'
+import { getRegistryClient } from '@/server/bare/registry/registry-client'
 import {
   createRegistryDownloadKey,
   startOrJoinDownload,
-  applyJoinedDownloadStats,
-} from "@/server/rpc/handlers/load-model/download-manager";
+  applyJoinedDownloadStats
+} from '@/server/rpc/handlers/load-model/download-manager'
 import {
   buildBlobBinding,
   validateCachedFile,
-  downloadSingleFileFromRegistry,
-} from "@/server/rpc/handlers/load-model/registry-download-utils";
-import { downloadCompanionSetFromRegistry } from "@/server/rpc/handlers/load-model/registry-companion-set";
+  downloadSingleFileFromRegistry
+} from '@/server/rpc/handlers/load-model/registry-download-utils'
+import { downloadCompanionSetFromRegistry } from '@/server/rpc/handlers/load-model/registry-companion-set'
 import {
   DownloadCancelledError,
   ModelNotFoundError,
-  RegistryDownloadFailedError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import type { DownloadHooks } from "./types";
+  RegistryDownloadFailedError
+} from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import type { DownloadHooks } from './types'
+import { resolveRegistryDownloadMetadata, type ExplicitRegistryMetadata } from './registry-metadata'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 /**
  * Find all shards for a model using path prefix query.
  */
 async function findModelShards(
-  registryPath: string,
+  registryPath: string
 ): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
-  const client = await getRegistryClient();
+  const client = await getRegistryClient()
 
-  const shardInfo = detectShardedModel(registryPath.split("/").pop() || "");
+  const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
   if (!shardInfo.isSharded) {
-    throw new RegistryDownloadFailedError(`Not a sharded model path: ${registryPath}`);
+    throw new RegistryDownloadFailedError(`Not a sharded model path: ${registryPath}`)
   }
 
-  const pathPrefix = registryPath.replace(/-\d{5}-of-\d{5}\./, ".");
-  const basePath = pathPrefix.substring(0, pathPrefix.lastIndexOf("."));
+  const pathPrefix = registryPath.replace(/-\d{5}-of-\d{5}\./, '.')
+  const basePath = pathPrefix.substring(0, pathPrefix.lastIndexOf('.'))
 
-  logger.info(`🔍 Finding shards with prefix: ${basePath}`);
+  logger.info(`🔍 Finding shards with prefix: ${basePath}`)
 
   const shards: QVACModelEntry[] = await client.findModels({
     gte: { path: basePath },
-    lte: { path: basePath + "\uffff" },
-  });
+    lte: { path: basePath + '\uffff' }
+  })
 
   const sortedShards = shards
     .filter((s) => {
-      const info = detectShardedModel(s.path.split("/").pop() || "");
-      return info.isSharded;
+      const info = detectShardedModel(s.path.split('/').pop() || '')
+      return info.isSharded
     })
     .sort((a, b) => {
-      const aInfo = detectShardedModel(a.path.split("/").pop() || "");
-      const bInfo = detectShardedModel(b.path.split("/").pop() || "");
-      return (aInfo.currentShard || 0) - (bInfo.currentShard || 0);
+      const aInfo = detectShardedModel(a.path.split('/').pop() || '')
+      const bInfo = detectShardedModel(b.path.split('/').pop() || '')
+      return (aInfo.currentShard || 0) - (bInfo.currentShard || 0)
     })
     .map((s) => ({
       path: s.path,
       source: s.source,
       size: s.blobBinding?.byteLength || 0,
-      checksum:
-        (s.blobBinding as unknown as Record<string, string>)?.["sha256"] ||
-        s.sha256 ||
-        "",
-    }));
+      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || ''
+    }))
 
-  logger.info(`📦 Found ${sortedShards.length} shards`);
-  return sortedShards;
+  logger.info(`📦 Found ${sortedShards.length} shards`)
+  return sortedShards
 }
 
 /**
@@ -92,22 +90,22 @@ async function downloadShardedFilesFromRegistry(
   cacheKey: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
-  localShardMetadata?: RegistryItem["shardMetadata"],
-  hooks?: DownloadHooks,
+  localShardMetadata?: RegistryItem['shardMetadata'],
+  hooks?: DownloadHooks
 ): Promise<string> {
   if (signal?.aborted) {
-    throw new DownloadCancelledError();
+    throw new DownloadCancelledError()
   }
 
   type ShardEntry = {
-    filename: string;
-    size: number;
-    checksum: string;
-    path: string;
-    source: string;
-    blobBinding?: QVACBlobBinding;
-  };
-  let shards: ShardEntry[];
+    filename: string
+    size: number
+    checksum: string
+    path: string
+    source: string
+    blobBinding?: QVACBlobBinding
+  }
+  let shards: ShardEntry[]
 
   if (localShardMetadata?.length) {
     shards = localShardMetadata.map((shard) => ({
@@ -116,69 +114,65 @@ async function downloadShardedFilesFromRegistry(
       checksum: shard.sha256Checksum,
       path: registryPath,
       source: registrySource,
-      blobBinding: buildBlobBinding(shard),
-    }));
+      blobBinding: buildBlobBinding(shard)
+    }))
   } else {
-    const filename = registryPath.split("/").pop() || registryPath;
-    const shardInfo = detectShardedModel(filename);
+    const filename = registryPath.split('/').pop() || registryPath
+    const shardInfo = detectShardedModel(filename)
     if (!shardInfo.isSharded || !shardInfo.totalShards) {
-      throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`);
+      throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`)
     }
 
-    const remoteShards = await findModelShards(registryPath);
+    const remoteShards = await findModelShards(registryPath)
 
     if (remoteShards.length === 0) {
-      throw new ModelNotFoundError(`No shards found for ${registryPath}`);
+      throw new ModelNotFoundError(`No shards found for ${registryPath}`)
     }
 
     if (remoteShards.length !== shardInfo.totalShards) {
-      logger.warn(
-        `⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`,
-      );
+      logger.warn(`⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`)
     }
 
     shards = remoteShards.map((s) => ({
-      filename: s.path.split("/").pop() || "",
+      filename: s.path.split('/').pop() || '',
       size: s.size,
       checksum: s.checksum,
       path: s.path,
-      source: s.source,
-    }));
+      source: s.source
+    }))
   }
 
-  const shardDir = getShardedModelCacheDir(cacheKey);
-  const downloadKey = createRegistryDownloadKey(registrySource, registryPath);
+  const shardDir = getShardedModelCacheDir(cacheKey)
+  const downloadKey = createRegistryDownloadKey(registrySource, registryPath)
 
-  logger.info(
-    `📥 Downloading sharded model: ${shards.length} shards to ${shardDir}`,
-  );
+  logger.info(`📥 Downloading sharded model: ${shards.length} shards to ${shardDir}`)
 
-  const overallTotal = shards.reduce((sum, s) => sum + s.size, 0);
-  let overallDownloaded = 0;
+  const overallTotal = shards.reduce((sum, s) => sum + s.size, 0)
+  let overallDownloaded = 0
 
   for (let i = 0; i < shards.length; i++) {
     if (signal?.aborted) {
-      throw new DownloadCancelledError();
+      throw new DownloadCancelledError()
     }
 
-    const shard = shards[i]!;
-    const shardPath = getShardPath(cacheKey, shard.filename);
+    const shard = shards[i]!
+    const shardPath = getShardPath(cacheKey, shard.filename)
 
     const cachedPath = await validateCachedFile(
       shardPath,
       shard.filename,
       shard.size,
       shard.checksum,
-      hooks,
-    );
+      hooks
+    )
 
     if (cachedPath) {
-      logger.debug(`✅ Shard ${i + 1}/${shards.length} already cached`);
-      overallDownloaded += shard.size;
+      logger.debug(`✅ Shard ${i + 1}/${shards.length} already cached`)
+      overallDownloaded += shard.size
 
       if (progressCallback) {
         progressCallback({
-          type: "modelProgress",
+          type: 'modelProgress',
           downloaded: shard.size,
           total: shard.size,
           percentage: 100,
@@ -189,23 +183,18 @@ async function downloadShardedFilesFromRegistry(
             shardName: shard.filename,
             overallDownloaded,
             overallTotal,
-            overallPercentage: calculatePercentage(
-              overallDownloaded,
-              overallTotal,
-            ),
-          },
-        });
+            overallPercentage: calculatePercentage(overallDownloaded, overallTotal)
+          }
+        })
       }
-      continue;
+      continue
     }
 
-    logger.info(
-      `📥 Downloading shard ${i + 1}/${shards.length}: ${shard.filename}`,
-    );
+    logger.info(`📥 Downloading shard ${i + 1}/${shards.length}: ${shard.filename}`)
 
     const shardProgressCallback = progressCallback
       ? (progress: ModelProgressUpdate) => {
-          const currentOverall = overallDownloaded + progress.downloaded;
+          const currentOverall = overallDownloaded + progress.downloaded
           progressCallback({
             ...progress,
             downloadKey,
@@ -215,14 +204,11 @@ async function downloadShardedFilesFromRegistry(
               shardName: shard.filename,
               overallDownloaded: currentOverall,
               overallTotal,
-              overallPercentage: calculatePercentage(
-                currentOverall,
-                overallTotal,
-              ),
-            },
-          });
+              overallPercentage: calculatePercentage(currentOverall, overallTotal)
+            }
+          })
         }
-      : undefined;
+      : undefined
 
     await downloadSingleFileFromRegistry(
       shard.path,
@@ -235,20 +221,20 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks,
-    );
+      hooks
+    )
 
-    overallDownloaded += shard.size;
-    logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`);
+    overallDownloaded += shard.size
+    logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`)
   }
 
-  const firstShardFilename = shards[0]!.filename;
-  await extractTensorsFromShards(shardDir, firstShardFilename);
+  const firstShardFilename = shards[0]!.filename
+  await extractTensorsFromShards(shardDir, firstShardFilename)
 
   if (progressCallback) {
-    const lastShard = shards[shards.length - 1]!;
+    const lastShard = shards[shards.length - 1]!
     progressCallback({
-      type: "modelProgress",
+      type: 'modelProgress',
       downloaded: overallTotal,
       total: overallTotal,
       percentage: 100,
@@ -259,12 +245,12 @@ async function downloadShardedFilesFromRegistry(
         shardName: lastShard.filename,
         overallDownloaded: overallTotal,
         overallTotal,
-        overallPercentage: 100,
-      },
-    });
+        overallPercentage: 100
+      }
+    })
   }
 
-  return getShardPath(cacheKey, firstShardFilename);
+  return getShardPath(cacheKey, firstShardFilename)
 }
 
 export async function downloadModelFromRegistry(
@@ -273,52 +259,50 @@ export async function downloadModelFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   expectedChecksum?: string,
   hooks?: DownloadHooks,
+  explicitMetadata?: ExplicitRegistryMetadata
 ): Promise<string> {
-  const downloadKey = createRegistryDownloadKey(registrySource, registryPath);
-  hooks?.onDownloadKey?.(downloadKey);
-  const filename = registryPath.split("/").pop() || registryPath;
-  const shardInfo = detectShardedModel(filename);
+  const downloadKey = createRegistryDownloadKey(registrySource, registryPath)
+  hooks?.onDownloadKey?.(downloadKey)
+  const filename = registryPath.split('/').pop() || registryPath
+  const shardInfo = detectShardedModel(filename)
 
   // Look up model metadata from our generated models.ts
-  const modelMetadata = getModelByPath(registryPath);
+  const modelMetadata = getModelByPath(registryPath)
 
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
       if (shardInfo.isSharded) {
-        const cacheKey = generateShortHash(registryPath);
-        const localShardMeta = modelMetadata?.shardMetadata;
+        const cacheKey = generateShortHash(registryPath)
+        const localShardMeta = modelMetadata?.shardMetadata
 
         // FS pre-check for known models: if all shards cached, return immediately
         if (localShardMeta?.length) {
-          let allCached = true;
+          let allCached = true
           for (const shard of localShardMeta) {
-            const shardPath = getShardPath(cacheKey, shard.filename);
+            const shardPath = getShardPath(cacheKey, shard.filename)
             const cached = await validateCachedFile(
               shardPath,
               shard.filename,
               shard.expectedSize,
               shard.sha256Checksum,
-              hooks,
-            );
+              hooks
+            )
             if (!cached) {
-              allCached = false;
-              break;
+              allCached = false
+              break
             }
           }
 
           if (allCached) {
-            const firstShardFilename = localShardMeta[0]!.filename;
-            logger.info(`✅ All ${localShardMeta.length} shards cached`);
-            hooks?.markCacheHit?.();
-            ctx.setCacheHit(true);
+            const firstShardFilename = localShardMeta[0]!.filename
+            logger.info(`✅ All ${localShardMeta.length} shards cached`)
+            hooks?.markCacheHit?.()
+            ctx.setCacheHit(true)
 
-            const overallTotal = localShardMeta.reduce(
-              (sum, s) => sum + s.expectedSize,
-              0,
-            );
+            const overallTotal = localShardMeta.reduce((sum, s) => sum + s.expectedSize, 0)
             ctx.broadcastProgress({
-              type: "modelProgress",
+              type: 'modelProgress',
               downloaded: overallTotal,
               total: overallTotal,
               percentage: 100,
@@ -329,16 +313,16 @@ export async function downloadModelFromRegistry(
                 shardName: firstShardFilename,
                 overallDownloaded: overallTotal,
                 overallTotal,
-                overallPercentage: 100,
-              },
-            });
+                overallPercentage: 100
+              }
+            })
 
-            return getShardPath(cacheKey, firstShardFilename);
+            return getShardPath(cacheKey, firstShardFilename)
           }
         }
 
-        hooks?.markCacheMiss?.();
-        ctx.setCacheHit(false);
+        hooks?.markCacheMiss?.()
+        ctx.setCacheHit(false)
         try {
           return await downloadShardedFilesFromRegistry(
             registryPath,
@@ -347,26 +331,23 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks,
-          );
+            hooks
+          )
         } catch (error) {
-          if (
-            error instanceof DownloadCancelledError &&
-            ctx.shouldClearCache()
-          ) {
+          if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
             try {
               await fsPromises.rm(getShardedModelCacheDir(cacheKey), {
                 recursive: true,
-                force: true,
-              });
+                force: true
+              })
             } catch (cleanupError) {
-              logger.debug("Failed to delete shard cache dir during cleanup", {
+              logger.debug('Failed to delete shard cache dir during cleanup', {
                 cacheKey,
-                error: cleanupError,
-              });
+                error: cleanupError
+              })
             }
           }
-          throw error;
+          throw error
         }
       }
 
@@ -375,62 +356,62 @@ export async function downloadModelFromRegistry(
         const companionHooks: DownloadHooks = {
           ...hooks,
           markCacheHit: () => {
-            hooks?.markCacheHit?.();
-            ctx.setCacheHit(true);
+            hooks?.markCacheHit?.()
+            ctx.setCacheHit(true)
           },
           markCacheMiss: () => {
-            hooks?.markCacheMiss?.();
-            ctx.setCacheHit(false);
-          },
-        };
+            hooks?.markCacheMiss?.()
+            ctx.setCacheHit(false)
+          }
+        }
 
         return await downloadCompanionSetFromRegistry({
           companionSet: modelMetadata.companionSet,
           downloadKey,
-          allowLegacyFlatCache: modelMetadata.addon === "nmt",
+          allowLegacyFlatCache: modelMetadata.addon === 'nmt',
           progressCallback: ctx.broadcastProgress,
           signal: ctx.signal,
           hooks: companionHooks,
-          shouldClearCache: ctx.shouldClearCache,
-        });
+          shouldClearCache: ctx.shouldClearCache
+        })
       }
 
-      const modelPath = getSingleFileCachePath(registryPath);
+      const modelPath = getSingleFileCachePath(registryPath)
 
-      const expectedSize = modelMetadata?.expectedSize || 0;
-      const checksum =
-        expectedChecksum || modelMetadata?.sha256Checksum || "";
+      const { expectedSize, checksum } = resolveRegistryDownloadMetadata(
+        modelMetadata,
+        explicitMetadata,
+        expectedChecksum
+      )
 
       const cachedPath = await validateCachedFile(
         modelPath,
         filename,
         expectedSize,
         checksum,
-        hooks,
-      );
+        hooks
+      )
 
       if (cachedPath) {
-        logger.info(`✅ Using cached model: ${cachedPath}`);
-        hooks?.markCacheHit?.();
-        ctx.setCacheHit(true);
+        logger.info(`✅ Using cached model: ${cachedPath}`)
+        hooks?.markCacheHit?.()
+        ctx.setCacheHit(true)
 
         ctx.broadcastProgress({
-          type: "modelProgress",
+          type: 'modelProgress',
           downloaded: expectedSize,
           total: expectedSize,
           percentage: 100,
-          downloadKey,
-        });
+          downloadKey
+        })
 
-        return cachedPath;
+        return cachedPath
       }
 
-      const blobBinding = modelMetadata
-        ? buildBlobBinding(modelMetadata)
-        : undefined;
+      const blobBinding = modelMetadata ? buildBlobBinding(modelMetadata) : undefined
 
-      hooks?.markCacheMiss?.();
-      ctx.setCacheHit(false);
+      hooks?.markCacheMiss?.()
+      ctx.setCacheHit(false)
       try {
         await downloadSingleFileFromRegistry(
           registryPath,
@@ -443,30 +424,27 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks,
-        );
+          hooks
+        )
       } catch (error) {
-        if (
-          error instanceof DownloadCancelledError &&
-          ctx.shouldClearCache()
-        ) {
+        if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
           try {
-            await fsPromises.unlink(modelPath);
+            await fsPromises.unlink(modelPath)
           } catch (cleanupError) {
-            logger.debug("Failed to delete model file during cleanup", {
+            logger.debug('Failed to delete model file during cleanup', {
               path: modelPath,
-              error: cleanupError,
-            });
+              error: cleanupError
+            })
           }
         }
-        throw error;
+        throw error
       }
 
-      return modelPath;
+      return modelPath
     },
     progressCallback,
-    hooks?.requestBinding,
-  );
+    hooks?.requestBinding
+  )
 
-  return applyJoinedDownloadStats(result, hooks);
+  return applyJoinedDownloadStats(result, hooks)
 }

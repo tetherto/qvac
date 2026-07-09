@@ -34,15 +34,13 @@ const STANDALONE_CANCEL_DELAY = 250
 const CANCEL_ERROR_RE = /cancel|aborted|stopp?ed/i
 
 const SD21_MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 const ESRGAN_MODEL = {
-  name: 'RealESRGAN_x4plus_anime_6B.pth',
   // Real-ESRGAN: https://github.com/xinntao/Real-ESRGAN
   // The .pth model is downloaded on demand for tests; it is not bundled.
-  url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
+  name: 'RealESRGAN_x4plus_anime_6B.pth'
 }
 
 const SOURCE_WIDTH = 64
@@ -191,16 +189,14 @@ async function expectCancelRejection (t, promise, label) {
 
 async function ensureEsrganModelPath () {
   const [esrganName, modelDir] = await ensureModel({
-    modelName: ESRGAN_MODEL.name,
-    downloadUrl: ESRGAN_MODEL.url
+    modelName: ESRGAN_MODEL.name
   })
   return { esrganPath: path.join(modelDir, esrganName), modelDir }
 }
 
 async function ensureSdAndEsrganPaths () {
   const [modelName, modelDir] = await ensureModel({
-    modelName: SD21_MODEL.name,
-    downloadUrl: SD21_MODEL.url
+    modelName: SD21_MODEL.name
   })
   const { esrganPath } = await ensureEsrganModelPath()
   return {
@@ -251,8 +247,7 @@ test('ESRGAN post-generation upscale — emits expected PNG dimensions', { timeo
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: SD21_MODEL.name,
-    downloadUrl: SD21_MODEL.url
+    modelName: SD21_MODEL.name
   })
   const { esrganPath } = await ensureEsrganModelPath()
 
@@ -442,8 +437,7 @@ test('ESRGAN post-generation upscale — cancel rejects without emitted image', 
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: SD21_MODEL.name,
-    downloadUrl: SD21_MODEL.url
+    modelName: SD21_MODEL.name
   })
   const { esrganPath } = await ensureEsrganModelPath()
 
@@ -503,8 +497,7 @@ test('ESRGAN standalone upscaler and diffusion model can coexist', { timeout: te
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: SD21_MODEL.name,
-    downloadUrl: SD21_MODEL.url
+    modelName: SD21_MODEL.name
   })
   const { esrganPath } = await ensureEsrganModelPath()
 

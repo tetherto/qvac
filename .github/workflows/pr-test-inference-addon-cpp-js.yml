@@ -119,8 +119,11 @@ jobs:
         name: Setup CMake on Windows
         run: |
           cd ..
+          # Persistent runners keep this parent dir between jobs (only $GITHUB_WORKSPACE
+          # is wiped), so a leftover extraction makes a bare `unzip` prompt and fail.
+          rm -rf cmake-3.31.6-windows-x86_64 cmake-3.31.6-windows-x86_64.zip
           curl -L https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-windows-x86_64.zip -o cmake-3.31.6-windows-x86_64.zip
-          unzip cmake-3.31.6-windows-x86_64.zip
+          unzip -q cmake-3.31.6-windows-x86_64.zip
           echo "$PWD/cmake-3.31.6-windows-x86_64/bin" >> "$GITHUB_PATH"
 
       - if: ${{ matrix.platform == 'darwin' || matrix.platform == 'ios' }}
@@ -162,7 +165,7 @@ jobs:
               bare-make build
               bare-make install
               if [ "${{ matrix.run_tests }}" = "true" ]; then
-                bare test.js
+                npm test
               fi
             ); then
               echo "$package_name passed"
@@ -200,9 +203,9 @@ jobs:
               bare-make build
               bare-make install
               if [ "${{ matrix.run_tests }}" = "true" ]; then
-                LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8 \
+                LD_PRELOAD="$(cc -print-file-name=libasan.so)" \
                 ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:alloc_dealloc_mismatch=0 \
-                bare test.js
+                npm test
               fi
             ); then
               echo "$package_name ASAN passed"

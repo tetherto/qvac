@@ -1,4 +1,4 @@
-import { send, stream } from "@/client/rpc/rpc-client";
+import { send, stream } from '@/client/rpc/rpc-client'
 import type {
   RagRequest,
   RagChunkParams,
@@ -18,8 +18,8 @@ import type {
   RagWorkspaceInfo,
   RagCloseWorkspaceParams,
   RagDeleteWorkspaceParams,
-  RPCOptions,
-} from "@/schemas";
+  RPCOptions
+} from '@/schemas'
 import {
   InvalidResponseError,
   InvalidOperationError,
@@ -29,10 +29,10 @@ import {
   RAGSearchFailedError,
   RAGDeleteFailedError,
   RAGCloseWorkspaceFailedError,
-  RAGListWorkspacesFailedError,
-} from "@/utils/errors-client";
-import { generateClientRequestId } from "@/client/api/client-request-id";
-import { decoratePromise } from "@/utils/decorate-promise";
+  RAGListWorkspacesFailedError
+} from '@/utils/errors-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
+import { decoratePromise } from '@/utils/decorate-promise'
 
 // ============== Chunk ==============
 
@@ -59,31 +59,28 @@ import { decoratePromise } from "@/utils/decorate-promise";
  * });
  * ```
  */
-export async function ragChunk(
-  params: RagChunkParams,
-  options?: RPCOptions,
-): Promise<RagDoc[]> {
+export async function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "chunk",
-    ...params,
-  };
+    type: 'rag',
+    operation: 'chunk',
+    ...params
+  }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGChunkFailedError(response.error);
+    throw new RAGChunkFailedError(response.error)
   }
 
-  if (response.operation !== "chunk") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'chunk') {
+    throw new InvalidOperationError()
   }
 
-  return response.chunks;
+  return response.chunks
 }
 
 // ============== Ingest ==============
@@ -129,76 +126,72 @@ export async function ragChunk(
  */
 export function ragIngest(
   params: RagIngestParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> & {
-  requestId: string;
+  requestId: string
 } {
-  const requestId = generateClientRequestId();
-  const inner = runRagIngest(params, requestId, options);
-  return decoratePromise(inner, { requestId });
+  const requestId = generateClientRequestId()
+  const inner = runRagIngest(params, requestId, options)
+  return decoratePromise(inner, { requestId })
 }
 
 async function runRagIngest(
   params: RagIngestParams,
   requestId: string,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> {
-  const { onProgress, ...requestParams } = params;
+  const { onProgress, ...requestParams } = params
 
   const request: RagRequest = {
-    type: "rag",
-    operation: "ingest",
+    type: 'rag',
+    operation: 'ingest',
     ...requestParams,
     chunk: requestParams.chunk ?? true,
     withProgress: onProgress ? true : undefined,
-    requestId,
-  };
+    requestId
+  }
 
   if (onProgress) {
     // Use streaming for progress updates
     for await (const event of stream(request, options)) {
-      if (event.type === "rag:progress" && event.operation === "ingest") {
-        const progress: RagProgressUpdate = event;
-        onProgress(
-          progress.stage as RagIngestStage,
-          progress.current,
-          progress.total,
-        );
-        continue;
+      if (event.type === 'rag:progress' && event.operation === 'ingest') {
+        const progress: RagProgressUpdate = event
+        onProgress(progress.stage as RagIngestStage, progress.current, progress.total)
+        continue
       }
 
-      if (event.type === "rag" && event.operation === "ingest") {
+      if (event.type === 'rag' && event.operation === 'ingest') {
         if (!event.success) {
-          throw new RAGSaveFailedError(event.error);
+          throw new RAGSaveFailedError(event.error)
         }
 
         return {
           processed: event.processed,
-          droppedIndices: event.droppedIndices,
-        };
+          droppedIndices: event.droppedIndices
+        }
       }
     }
 
-    throw new StreamEndedError();
+    throw new StreamEndedError()
   }
 
-  const response = await send(request, options);
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  const response = await send(request, options)
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGSaveFailedError(response.error);
+    throw new RAGSaveFailedError(response.error)
   }
 
-  if (response.operation !== "ingest") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'ingest') {
+    throw new InvalidOperationError()
   }
 
   return {
     processed: response.processed,
-    droppedIndices: response.droppedIndices,
-  };
+    droppedIndices: response.droppedIndices
+  }
 }
 
 // ============== SaveEmbeddings ==============
@@ -238,70 +231,63 @@ async function runRagIngest(
  */
 export function ragSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<RagSaveEmbeddingsResult[]> & { requestId: string } {
-  const requestId = generateClientRequestId();
-  const inner = runRagSaveEmbeddings(params, requestId, options);
-  return decoratePromise(inner, { requestId });
+  const requestId = generateClientRequestId()
+  const inner = runRagSaveEmbeddings(params, requestId, options)
+  return decoratePromise(inner, { requestId })
 }
 
 async function runRagSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
   requestId: string,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<RagSaveEmbeddingsResult[]> {
-  const { onProgress, ...requestParams } = params;
+  const { onProgress, ...requestParams } = params
 
   const request: RagRequest = {
-    type: "rag",
-    operation: "saveEmbeddings",
+    type: 'rag',
+    operation: 'saveEmbeddings',
     ...requestParams,
     withProgress: onProgress ? true : undefined,
-    requestId,
-  };
+    requestId
+  }
 
   if (onProgress) {
     for await (const event of stream(request, options)) {
-      if (
-        event.type === "rag:progress" &&
-        event.operation === "saveEmbeddings"
-      ) {
-        const progress: RagProgressUpdate = event;
-        onProgress(
-          progress.stage as RagSaveStage,
-          progress.current,
-          progress.total,
-        );
-        continue;
+      if (event.type === 'rag:progress' && event.operation === 'saveEmbeddings') {
+        const progress: RagProgressUpdate = event
+        onProgress(progress.stage as RagSaveStage, progress.current, progress.total)
+        continue
       }
 
-      if (event.type === "rag" && event.operation === "saveEmbeddings") {
+      if (event.type === 'rag' && event.operation === 'saveEmbeddings') {
         if (!event.success) {
-          throw new RAGSaveFailedError(event.error);
+          throw new RAGSaveFailedError(event.error)
         }
 
-        return event.processed;
+        return event.processed
       }
     }
 
-    throw new StreamEndedError();
+    throw new StreamEndedError()
   }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGSaveFailedError(response.error);
+    throw new RAGSaveFailedError(response.error)
   }
 
-  if (response.operation !== "saveEmbeddings") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'saveEmbeddings') {
+    throw new InvalidOperationError()
   }
 
-  return response.processed;
+  return response.processed
 }
 
 // ============== Search ==============
@@ -334,30 +320,30 @@ async function runRagSaveEmbeddings(
  */
 export async function ragSearch(
   params: RagSearchParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<RagSearchResult[]> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "search",
+    type: 'rag',
+    operation: 'search',
     ...params,
     topK: params.topK ?? 5,
-    n: params.n ?? 3,
-  };
+    n: params.n ?? 3
+  }
 
-  const response = await send(request, options);
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  const response = await send(request, options)
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGSearchFailedError(response.error);
+    throw new RAGSearchFailedError(response.error)
   }
 
-  if (response.operation !== "search") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'search') {
+    throw new InvalidOperationError()
   }
 
-  return response.results;
+  return response.results
 }
 
 // ============== Delete Embeddings ==============
@@ -383,25 +369,25 @@ export async function ragSearch(
  */
 export async function ragDeleteEmbeddings(
   params: RagDeleteEmbeddingsParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<void> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "deleteEmbeddings",
-    ...params,
-  };
+    type: 'rag',
+    operation: 'deleteEmbeddings',
+    ...params
+  }
 
-  const response = await send(request, options);
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  const response = await send(request, options)
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGDeleteFailedError(response.error);
+    throw new RAGDeleteFailedError(response.error)
   }
 
-  if (response.operation !== "deleteEmbeddings") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'deleteEmbeddings') {
+    throw new InvalidOperationError()
   }
 }
 
@@ -448,67 +434,63 @@ export async function ragDeleteEmbeddings(
  */
 export function ragReindex(
   params: RagReindexParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<RagReindexResult> & { requestId: string } {
-  const requestId = generateClientRequestId();
-  const inner = runRagReindex(params, requestId, options);
-  return decoratePromise(inner, { requestId });
+  const requestId = generateClientRequestId()
+  const inner = runRagReindex(params, requestId, options)
+  return decoratePromise(inner, { requestId })
 }
 
 async function runRagReindex(
   params: RagReindexParams,
   requestId: string,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<RagReindexResult> {
-  const { onProgress, ...requestParams } = params;
+  const { onProgress, ...requestParams } = params
 
   const request: RagRequest = {
-    type: "rag",
-    operation: "reindex",
+    type: 'rag',
+    operation: 'reindex',
     ...requestParams,
     withProgress: onProgress ? true : undefined,
-    requestId,
-  };
+    requestId
+  }
 
   if (onProgress) {
     for await (const event of stream(request, options)) {
-      if (event.type === "rag:progress" && event.operation === "reindex") {
-        const progress: RagProgressUpdate = event;
-        onProgress(
-          progress.stage as RagReindexStage,
-          progress.current,
-          progress.total,
-        );
-        continue;
+      if (event.type === 'rag:progress' && event.operation === 'reindex') {
+        const progress: RagProgressUpdate = event
+        onProgress(progress.stage as RagReindexStage, progress.current, progress.total)
+        continue
       }
 
-      if (event.type === "rag" && event.operation === "reindex") {
+      if (event.type === 'rag' && event.operation === 'reindex') {
         if (!event.success) {
-          throw new RAGSaveFailedError(event.error);
+          throw new RAGSaveFailedError(event.error)
         }
 
-        return event.result;
+        return event.result
       }
     }
 
-    throw new StreamEndedError();
+    throw new StreamEndedError()
   }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGSaveFailedError(response.error);
+    throw new RAGSaveFailedError(response.error)
   }
 
-  if (response.operation !== "reindex") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'reindex') {
+    throw new InvalidOperationError()
   }
 
-  return response.result;
+  return response.result
 }
 
 // ============== List Workspaces ==============
@@ -530,29 +512,27 @@ async function runRagReindex(
  * // [{ name: "default", open: true }, { name: "my-docs", open: false }]
  * ```
  */
-export async function ragListWorkspaces(
-  options?: RPCOptions,
-): Promise<RagWorkspaceInfo[]> {
+export async function ragListWorkspaces(options?: RPCOptions): Promise<RagWorkspaceInfo[]> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "listWorkspaces",
-  };
+    type: 'rag',
+    operation: 'listWorkspaces'
+  }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGListWorkspacesFailedError(response.error);
+    throw new RAGListWorkspacesFailedError(response.error)
   }
 
-  if (response.operation !== "listWorkspaces") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'listWorkspaces') {
+    throw new InvalidOperationError()
   }
 
-  return response.workspaces;
+  return response.workspaces
 }
 
 // ============== Close Workspace ==============
@@ -581,26 +561,26 @@ export async function ragListWorkspaces(
  */
 export async function ragCloseWorkspace(
   params?: RagCloseWorkspaceParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<void> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "closeWorkspace",
-    ...params,
-  };
+    type: 'rag',
+    operation: 'closeWorkspace',
+    ...params
+  }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGCloseWorkspaceFailedError(response.error);
+    throw new RAGCloseWorkspaceFailedError(response.error)
   }
 
-  if (response.operation !== "closeWorkspace") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'closeWorkspace') {
+    throw new InvalidOperationError()
   }
 }
 
@@ -622,25 +602,25 @@ export async function ragCloseWorkspace(
  */
 export async function ragDeleteWorkspace(
   params: RagDeleteWorkspaceParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<void> {
   const request: RagRequest = {
-    type: "rag",
-    operation: "deleteWorkspace",
-    ...params,
-  };
+    type: 'rag',
+    operation: 'deleteWorkspace',
+    ...params
+  }
 
-  const response = await send(request, options);
+  const response = await send(request, options)
 
-  if (response.type !== "rag") {
-    throw new InvalidResponseError("rag");
+  if (response.type !== 'rag') {
+    throw new InvalidResponseError('rag')
   }
 
   if (!response.success) {
-    throw new RAGDeleteFailedError(response.error);
+    throw new RAGDeleteFailedError(response.error)
   }
 
-  if (response.operation !== "deleteWorkspace") {
-    throw new InvalidOperationError();
+  if (response.operation !== 'deleteWorkspace') {
+    throw new InvalidOperationError()
   }
 }

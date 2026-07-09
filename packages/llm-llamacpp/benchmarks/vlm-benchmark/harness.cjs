@@ -386,7 +386,9 @@ function runModel (spec) {
             decode_tps: st.TPS != null ? st.TPS : null,
             ttft_ms: st.TTFT != null ? st.TTFT : null,
             gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
-            prompt_tokens: st.promptTokens != null ? st.promptTokens : null
+            prompt_tokens: st.promptTokens != null ? st.promptTokens : null,
+            vision_enc_ms: st.visionEncodeMs != null ? st.visionEncodeMs : null,
+            vision_enc_tiles: st.visionEncodeTiles != null ? st.visionEncodeTiles : null
           }, 0))
         } catch (e) {
           emitRow(stamp(null, { rss_mb: peakRssMb(), cell: axis, source: SOURCE, model: spec.label, device, rep: w, task: item.task, id: item.id, metric: item.metric, error: String((e && e.message) || e) }, 0))
@@ -434,7 +436,9 @@ function runModel (spec) {
               decode_tps: st.TPS != null ? st.TPS : null,
               ttft_ms: st.TTFT != null ? st.TTFT : null,
               gen_tokens: st.generatedTokens != null ? st.generatedTokens : null,
-              prompt_tokens: st.promptTokens != null ? st.promptTokens : null
+              prompt_tokens: st.promptTokens != null ? st.promptTokens : null,
+              vision_enc_ms: st.visionEncodeMs != null ? st.visionEncodeMs : null,
+              vision_enc_tiles: st.visionEncodeTiles != null ? st.visionEncodeTiles : null
             }))
             ok++
           } catch (e) {

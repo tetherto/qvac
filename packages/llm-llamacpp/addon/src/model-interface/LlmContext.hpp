@@ -43,11 +43,13 @@ struct GenerationParams {
   // restored on completion.
   std::optional<int> reasoning_budget;
   // Per-request override for the post-generation thinking-block KV
-  // cache compaction. Default-off at the context level; passing `true`
-  // here opts in for this request, `false` leaves the reasoning block
-  // in the cache. Throws `StatusError(InvalidArgument)` when set to
-  // `true` on a model with recurrent memory (SSM / hybrid SSM such as
-  // Qwen3.5). Restored at end-of-request.
+  // cache compaction. Default-on at the context level; passing
+  // `false` here opts out for this request (keeps the reasoning block
+  // in the cache), `true` re-affirms the default. Supported on both
+  // pure-attention and recurrent / hybrid-SSM models — recurrent /
+  // hybrid takes the snapshot + restore + replay path documented on
+  // `TextLlmContext::needsRecurrentSnapshot_`; pure-attention takes
+  // the `seq_rm + seq_add` path. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
@@ -194,15 +196,24 @@ public:
    */
   virtual ~LlmContext() = default;
 
+  struct EvalMessageResult {
+    bool ok = true;
+    bool cancelled = false;
+    bool rollbackOk = true;
+  };
+
   /**
    * The eval message method. It evaluates the message and updates the context.
    *
    * @param chatMsgs - chat messages.
    * @param isCacheLoaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - ok=false when inference is stopped during prefill;
+   * cancelled=true when stopped by user cancellation; rollbackOk=false when a
+   * cancellation could not restore the pre-request recurrent state and callers
+   * must reset live state and invalidate cache persistence for this request.
    */
-  virtual bool evalMessage(
+  virtual EvalMessageResult evalMessage(
       const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
       bool prefill) = 0;
 
@@ -214,20 +225,29 @@ public:
    * @param tools - tools.
    * @param isCacheLoaded - whether the cache is loaded.
    * @param prefill - whether to only prefill context without generation setup.
-   * @return - true if successful, false if inference is stopped.
+   * @return - eval result (success / cancellation / rollback status).
    */
-  virtual bool evalMessageWithTools(
+  virtual EvalMessageResult evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
       bool prefill) = 0;
+
+  struct GenerateResponseResult {
+    bool ok = true;
+    bool cancelled = false;
+    bool rollbackOk = true;
+  };
 
   /**
    * The generate response method. It generates the response token by token.
    *
    * @param outputCallback - the output callback.
-   * @return - true if successful, false if context overflow.
+   * @return - ok=false for context overflow; cancelled=true when generation
+   * was stopped by user cancellation; rollbackOk=false when a cancellation
+   * could not restore the pre-request recurrent state and callers must skip
+   * cache persistence for this request.
    */
-  virtual bool generateResponse(
+  virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
 
   /**
@@ -332,6 +352,50 @@ public:
    */
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
   virtual void resetThinkingBlockDiscards() {}
+
+  /**
+   * Consume the per-inference user-visible `llama_perf_context` snapshot
+   * if one was captured (currently only by contexts that may run a
+   * recurrent replay decode during thinking-block compaction). Returns
+   * `std::nullopt` when no snapshot was taken, in which case the caller
+   * should fall back to a live `llama_perf_context()` read.
+   *
+   * Snapshot rationale: the recurrent / hybrid thinking-block compactor
+   * replays the post-reasoning tail through `llama_decode`, which
+   * accumulates into `n_p_eval` / `t_p_eval_ms` (and therefore inflates
+   * `promptTokens`, `ppTPS`, and `TTFT`). Those tokens were already
+   * delivered to the caller, so the replay must not be counted as new
+   * user-visible work. Capturing perf just before the replay, and
+   * reporting that snapshot from `runtimeStats()`, preserves accurate
+   * stats while still letting the replay update the cache state.
+   *
+   * Idempotent: returning the snapshot also clears the internal slot so
+   * subsequent calls (until the next inference) see `nullopt`.
+   */
+  [[nodiscard]] virtual std::optional<llama_perf_context_data>
+  takeUserVisiblePerfSnapshot() {
+    return std::nullopt;
+  }
+
+  /**
+   * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
+   * forward + projection) during the most recent inference. 0 for
+   * text-only contexts, which never run a vision encoder.
+   */
+  [[nodiscard]] virtual double getVisionEncodeMs() const { return 0.0; }
+
+  /**
+   * Number of vision-encode slices (image chunks encoded) in the most recent
+   * inference — the `tiles` the report shows next to the encode time. 0 for
+   * text-only contexts.
+   */
+  [[nodiscard]] virtual int32_t getVisionEncodeTiles() const { return 0; }
+
+  /**
+   * Reset the vision-encode accumulators (ms + slice count) to zero. Called at
+   * the start of each inference. No-op for text-only contexts.
+   */
+  virtual void resetVisionEncodeMs() {}
 
   /**
    * The load media method. It loads the media from memory buffer.

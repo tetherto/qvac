@@ -1,10 +1,10 @@
-import { getClientLogger, SDK_ALL_LOG_ID } from "@/logging";
-import { loggingStream } from "./logging-stream";
-import type { LoggingStreamResponse } from "@/schemas/logging-stream";
+import { getClientLogger, SDK_ALL_LOG_ID } from '@/logging'
+import { loggingStream } from './logging-stream'
+import type { LoggingStreamResponse } from '@/schemas/logging-stream'
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
-export type ServerLogHandler = (log: LoggingStreamResponse) => void;
+export type ServerLogHandler = (log: LoggingStreamResponse) => void
 
 /**
  * Subscribes to every server-side log through a single stream: SDK server logs,
@@ -31,19 +31,19 @@ export type ServerLogHandler = (log: LoggingStreamResponse) => void;
  * ```
  */
 export function subscribeServerLogs(handler: ServerLogHandler) {
-  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID });
+  const streamIterator = loggingStream({ id: SDK_ALL_LOG_ID })
 
   void (async () => {
     try {
       for await (const log of streamIterator) {
-        handler(log);
+        handler(log)
       }
     } catch (error) {
-      logger.error("Server log stream error:", error);
+      logger.error('Server log stream error:', error)
     }
-  })();
+  })()
 
   return () => {
-    void streamIterator.return(undefined);
-  };
+    void streamIterator.return(undefined)
+  }
 }
