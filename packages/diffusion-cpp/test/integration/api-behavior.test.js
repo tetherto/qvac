@@ -30,7 +30,8 @@ const testTimeout = (isWindows || isMobileDevice) ? BASE_TIMEOUT * 2 : BASE_TIME
 
 // Smallest model for fast behavior tests
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
@@ -65,7 +66,8 @@ async function setupModel (t) {
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: MODEL.name
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
   })
 
   const model = new ImgStableDiffusion({
@@ -240,7 +242,8 @@ safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, a
 
 safeTest('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
   const [, modelDir] = await ensureModel({
-    modelName: MODEL.name
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
   })
 
   const model = new ImgStableDiffusion({
