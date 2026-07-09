@@ -1,24 +1,29 @@
 import { send, stream } from '../dispatch'
-import type {
-  RagRequest,
-  RagChunkParams,
-  RagDoc,
-  RagIngestParams,
-  RagSaveEmbeddingsParams,
-  RagSaveEmbeddingsResult,
-  RagSearchParams,
-  RagSearchResult,
-  RagDeleteEmbeddingsParams,
-  RagReindexParams,
-  RagReindexResult,
-  RagIngestStage,
-  RagReindexStage,
-  RagSaveStage,
-  RagProgressUpdate,
-  RagWorkspaceInfo,
-  RagCloseWorkspaceParams,
-  RagDeleteWorkspaceParams,
-  RPCOptions
+import {
+  ragChunkParamsSchema,
+  ragSearchParamsSchema,
+  ragDeleteEmbeddingsParamsSchema,
+  ragCloseWorkspaceParamsSchema,
+  ragDeleteWorkspaceParamsSchema,
+  type RagRequest,
+  type RagChunkParams,
+  type RagDoc,
+  type RagIngestParams,
+  type RagSaveEmbeddingsParams,
+  type RagSaveEmbeddingsResult,
+  type RagSearchParams,
+  type RagSearchResult,
+  type RagDeleteEmbeddingsParams,
+  type RagReindexParams,
+  type RagReindexResult,
+  type RagIngestStage,
+  type RagReindexStage,
+  type RagSaveStage,
+  type RagProgressUpdate,
+  type RagWorkspaceInfo,
+  type RagCloseWorkspaceParams,
+  type RagDeleteWorkspaceParams,
+  type RPCOptions
 } from '../schemas'
 import {
   InvalidResponseError,
@@ -33,6 +38,7 @@ import {
 } from '../errors'
 import { generateRequestId } from '../runtime/request-id'
 import { decoratePromise } from '../utils/decorate-promise'
+import { parseClientInput } from './parse-input'
 
 // ============== Chunk ==============
 
@@ -60,10 +66,11 @@ import { decoratePromise } from '../utils/decorate-promise'
  * ```
  */
 export async function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]> {
+  const parsed = parseClientInput(ragChunkParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'chunk',
-    ...params
+    ...parsed
   }
 
   const response = await send(request, options)
@@ -322,12 +329,11 @@ export async function ragSearch(
   params: RagSearchParams,
   options?: RPCOptions
 ): Promise<RagSearchResult[]> {
+  const parsed = parseClientInput(ragSearchParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'search',
-    ...params,
-    topK: params.topK ?? 5,
-    n: params.n ?? 3
+    ...parsed
   }
 
   const response = await send(request, options)
@@ -371,10 +377,11 @@ export async function ragDeleteEmbeddings(
   params: RagDeleteEmbeddingsParams,
   options?: RPCOptions
 ): Promise<void> {
+  const parsed = parseClientInput(ragDeleteEmbeddingsParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'deleteEmbeddings',
-    ...params
+    ...parsed
   }
 
   const response = await send(request, options)
@@ -563,10 +570,11 @@ export async function ragCloseWorkspace(
   params?: RagCloseWorkspaceParams,
   options?: RPCOptions
 ): Promise<void> {
+  const parsed = parseClientInput(ragCloseWorkspaceParamsSchema, params ?? {})
   const request: RagRequest = {
     type: 'rag',
     operation: 'closeWorkspace',
-    ...params
+    ...parsed
   }
 
   const response = await send(request, options)
@@ -604,10 +612,11 @@ export async function ragDeleteWorkspace(
   params: RagDeleteWorkspaceParams,
   options?: RPCOptions
 ): Promise<void> {
+  const parsed = parseClientInput(ragDeleteWorkspaceParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'deleteWorkspace',
-    ...params
+    ...parsed
   }
 
   const response = await send(request, options)

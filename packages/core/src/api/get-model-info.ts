@@ -1,6 +1,11 @@
-import { type GetModelInfoRequest, type GetModelInfoParams } from '../schemas'
+import {
+  getModelInfoParamsSchema,
+  type GetModelInfoRequest,
+  type GetModelInfoParams
+} from '../schemas'
 import { send } from '../dispatch'
 import { InvalidResponseError } from '../errors'
+import { parseClientInput } from './parse-input'
 
 /**
  * Returns status information for a catalog model, including cache state and loaded instances.
@@ -11,9 +16,10 @@ import { InvalidResponseError } from '../errors'
  * @throws {QvacErrorBase} When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
  */
 export async function getModelInfo(params: GetModelInfoParams) {
+  const parsed = parseClientInput(getModelInfoParamsSchema, params)
   const request: GetModelInfoRequest = {
     type: 'getModelInfo',
-    name: params.name
+    name: parsed.name
   }
 
   const response = await send(request)

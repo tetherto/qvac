@@ -1,8 +1,13 @@
-import { type UnloadModelRequest, type UnloadModelParams } from '../schemas'
+import {
+  unloadModelParamsSchema,
+  type UnloadModelRequest,
+  type UnloadModelParams
+} from '../schemas'
 import { send, close } from '../dispatch'
 import { stopLoggingStreamForModel } from './logging-stream-registry'
 import { InvalidResponseError, ModelUnloadFailedError } from '../errors'
 import { getAppLogger } from '../logging'
+import { parseClientInput } from './parse-input'
 
 const logger = getAppLogger()
 
@@ -22,10 +27,11 @@ const logger = getAppLogger()
  * @throws {QvacErrorBase} When the response type is invalid or when the unload operation fails
  */
 export async function unloadModel(params: UnloadModelParams) {
+  const parsed = parseClientInput(unloadModelParamsSchema, params)
   const request: UnloadModelRequest = {
     type: 'unloadModel',
-    modelId: params.modelId,
-    clearStorage: params.clearStorage ?? false
+    modelId: parsed.modelId,
+    clearStorage: parsed.clearStorage
   }
 
   const response = await send(request)
@@ -34,12 +40,12 @@ export async function unloadModel(params: UnloadModelParams) {
   }
 
   if (!response.success) {
-    throw new ModelUnloadFailedError(params.modelId)
+    throw new ModelUnloadFailedError(parsed.modelId)
   }
 
-  stopLoggingStreamForModel(params.modelId)
+  stopLoggingStreamForModel(parsed.modelId)
 
-  const shouldAutoClose = params.autoClose ?? false
+  const shouldAutoClose = parsed.autoClose ?? false
   if (
     shouldAutoClose &&
     response.hasActiveModels === false &&

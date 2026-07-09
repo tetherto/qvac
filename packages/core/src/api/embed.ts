@@ -1,7 +1,14 @@
 import { send } from '../dispatch'
-import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '../schemas'
+import {
+  embedParamsSchema,
+  type EmbedParams,
+  type EmbedRequest,
+  type EmbedStats,
+  type RPCOptions
+} from '../schemas'
 import { InvalidResponseError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
+import { parseClientInput } from './parse-input'
 import { generateRequestId } from '../runtime/request-id'
 
 /**
@@ -59,9 +66,10 @@ async function runEmbed(
   requestId: string,
   options?: RPCOptions
 ): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> {
+  const parsed = parseClientInput(embedParamsSchema, params)
   const request: EmbedRequest = {
     type: 'embed',
-    ...params,
+    ...parsed,
     requestId
   }
 
