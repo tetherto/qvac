@@ -1537,22 +1537,29 @@ void LlamaModel::commonParamsParse(
       params.mmproj_backend = chosenBackend.second;
 #ifdef __ANDROID__
       // QVAC-21867: auto-default the projector backend by GPU class.
+      // Only Adreno 800+ is benchmarked (QVAC-21257) to encode the projector
+      // faster on the mobile GPU than on CPU, so it is the only Android class
+      // that defaults to GPU. Every other Android GPU class defaults to CPU
+      // (the LLM layers still run on the GPU):
       //   - Mali: the projector encode is slower on the Mali GPU than on CPU
-      //     (QVAC-21257 benchmarks) -> CPU.
-      //   - Adreno < 800: materially weaker tiers that the QVAC-21257
-      //     projector-on-GPU benchmarks did not cover -> CPU (conservative).
-      //     Relax this once those tiers are benchmarked.
-      //   - Adreno 800+ and other Android GPUs -> GPU.
-      // The mmproj-use-gpu key overrides this either way.
+      //     (QVAC-21257 benchmarks).
+      //   - Adreno < 800: materially weaker tiers the QVAC-21257
+      //     projector-on-GPU benchmarks did not cover (conservative).
+      //   - Any GPU whose Adreno tier can't be detected: conservative default.
+      // Relax per class once those tiers are benchmarked. The mmproj-use-gpu
+      // key overrides this either way.
       constexpr int kAdrenoMmprojGpuThreshold = 800;
-      const bool adrenoBelowThreshold =
+      const bool isAdreno800Plus =
           outAdrenoVersion.has_value() &&
-          outAdrenoVersion.value() < kAdrenoMmprojGpuThreshold;
-      bool mmprojUseGpu = !isMaliGpu && !adrenoBelowThreshold;
+          outAdrenoVersion.value() >= kAdrenoMmprojGpuThreshold;
+      bool mmprojUseGpu = isAdreno800Plus;
       const char* mmprojDefaultReason =
-          isMaliGpu ? "auto-default, Mali GPU"
-                    : (adrenoBelowThreshold ? "auto-default, Adreno <800"
-                                            : "auto-default");
+          isAdreno800Plus
+              ? "auto-default, Adreno 800+"
+              : (isMaliGpu ? "auto-default, Mali GPU"
+                           : (outAdrenoVersion.has_value()
+                                  ? "auto-default, Adreno <800"
+                                  : "auto-default, non-Adreno-800+ GPU"));
 #else
       bool mmprojUseGpu = true;
       const char* mmprojDefaultReason = "auto-default";
