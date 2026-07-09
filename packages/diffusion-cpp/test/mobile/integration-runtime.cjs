@@ -12,11 +12,17 @@ let _integrationFatalError = null
 if (typeof Bare !== 'undefined' && typeof Bare.on === 'function') {
   Bare.on('unhandledRejection', (reason) => {
     if (!_integrationFatalError) _integrationFatalError = reason || new Error('unhandledRejection')
-    console.error('[integration-runner] Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+    console.error(
+      '[integration-runner] Unhandled rejection:',
+      reason instanceof Error ? reason.stack : reason
+    )
   })
   Bare.on('uncaughtException', (err) => {
     if (!_integrationFatalError) _integrationFatalError = err || new Error('uncaughtException')
-    console.error('[integration-runner] Uncaught exception:', err instanceof Error ? err.stack : err)
+    console.error(
+      '[integration-runner] Uncaught exception:',
+      err instanceof Error ? err.stack : err
+    )
   })
   Bare.on('beforeExit', () => {
     if (!_integrationFatalError) return
@@ -30,7 +36,7 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const { pathToFileURL } = require('bare-url')
 
-async function runIntegrationModule (relativeModulePath, options = {}) {
+async function runIntegrationModule(relativeModulePath, options = {}) {
   const modulePath = path.join(__dirname, relativeModulePath)
 
   if (!fs.existsSync(modulePath)) {
