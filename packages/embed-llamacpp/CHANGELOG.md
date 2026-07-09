@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.26.2] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (clip flash-attention AUTO fallback on non-coopmat GPUs + bounded ggml-opencl driver submissions — fixes Android vision-encoder crashes on very large encodes; no API change for this package).
+
 ## [0.26.1] - 2026-07-08
 
 ### Fixed
