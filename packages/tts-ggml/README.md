@@ -322,6 +322,13 @@ table above.  Hosts must pass `backendsDir: path.join(__dirname,
 so the runtime knows where to look.  `openclCacheDir` is also
 Android-specific; setting it to a writable path lets the OpenCL
 backend persist its compiled program cache across launches.
+`vulkanCacheDir` is the Vulkan analogue (Supertonic + `useGPU: true`):
+setting it to a writable path persists the compiled pipeline cache
+(`GGML_VK_PIPELINE_CACHE_DIR`) across launches and enables a load-time
+pre-warm, so the one-time first-dispatch shader-compile cost (seconds
+on Mali) is paid once per install rather than on the first `run()` of
+every process.  Both are fully opt-in: unset means behaviour is
+unchanged.
 
 ## API overview
 
@@ -344,6 +351,7 @@ backend persist its compiled program cache across launches.
 | `cfmSteps`                | number     | 2          | 1 = faster (halved CFM cost) |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
+| `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for both engines on GPU-capable hosts, including Android, where `tts-cpp` selects the GPU backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali) |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |

@@ -263,6 +263,11 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      - name: Bundle SDK worker (custom plugins)
+        if: inputs.consumer == 'desktop'
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run bundle:sdk
+
       - name: Configure SDK cache directory
         shell: node {0}
         run: |
