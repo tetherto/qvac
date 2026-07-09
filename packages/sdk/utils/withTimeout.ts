@@ -1,10 +1,21 @@
 /**
+ * Distinguishes a legitimate per-call timeout from a transport failure (e.g.
+ * a worker crash) for callers racing this against other rejection sources.
+ */
+export class OperationTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Operation timeout after ${timeoutMs}ms`)
+    this.name = 'OperationTimeoutError'
+  }
+}
+
+/**
  * Creates a timeout promise that rejects after the specified duration
  */
 function createTimeoutPromise(timeoutMs: number): Promise<never> {
   return new Promise<never>((_, reject) => {
     setTimeout(() => {
-      reject(new Error(`Operation timeout after ${timeoutMs}ms`))
+      reject(new OperationTimeoutError(timeoutMs))
     }, timeoutMs)
   })
 }
