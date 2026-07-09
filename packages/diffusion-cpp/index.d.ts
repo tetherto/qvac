@@ -117,6 +117,8 @@ export interface SdConfig {
   clip_on_cpu?: boolean
   /** Run VAE decoder on CPU even when GPU is available */
   vae_on_cpu?: boolean
+  /** Load only VAE decoder weights. Defaults to false so img2img/fusion can encode input images. */
+  vae_decode_only?: boolean
   /** Enable VAE tiling to reduce VRAM usage */
   vae_tiling?: boolean
   /** Enable flash attention for memory efficiency */

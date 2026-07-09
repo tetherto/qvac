@@ -180,10 +180,6 @@ void SdModel::load() {
   sd_ctx_params_t params{};
   sd_ctx_params_init(&params);
 
-  // NOTE: upstream's master backend refactor dropped sd_ctx_params_t's
-  // vae_decode_only flag; the VAE encoder graph is now always available, so
-  // img2img (encode -> denoise -> decode) works without an explicit opt-in.
-
   // -- Model paths ------------------------------------------------------------
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
   // version metadata KV pairs, so we must use diffusion_model_path.
@@ -220,6 +216,7 @@ void SdModel::load() {
 
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
+  params.vae_decode_only = config_.vaeDecodeOnly;
 
   // Keep reusable ctx semantics explicit. sd.cpp defaults may free parameter
   // buffers after a generation, but this addon runs many jobs through one
