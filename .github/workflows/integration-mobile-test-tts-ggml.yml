@@ -10,6 +10,11 @@ name: Mobile Integration Tests (TTS GGML)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/tts-ggml@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref to checkout"
         type: string
@@ -111,6 +116,8 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
       # Benchmark opt-in (run_rtf_benchmarks=true): patch the addon's
       # test/mobile/integration-runtime.cjs to stub `bare-os.getEnv` so the
