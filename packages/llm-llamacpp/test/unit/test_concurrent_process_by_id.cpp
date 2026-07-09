@@ -24,6 +24,16 @@ namespace {
 
 using qvac_lib_inference_addon_cpp::JobId;
 
+std::string repeatWord(const std::string& word, size_t count) {
+  std::string out;
+  out.reserve((word.size() + 1) * count);
+  for (size_t i = 0; i < count; ++i) {
+    out += word;
+    out += ' ';
+  }
+  return out;
+}
+
 bool containsCaseInsensitive(
     const std::string& haystack, const std::string& needle) {
   auto toLower = [](unsigned char c) {
@@ -362,4 +372,50 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
       << cancelled << "', kept-size=" << kept.size();
   EXPECT_GT(keepPieces.load(), 1u)
       << "untargeted job produced no real generation";
+}
+
+/// cancelById(id) must also stop a tagged job that runs on the single-prompt
+/// path: a prefill-only prompt is not concurrent-eligible (see
+/// isConcurrentEligible) yet arrives with a job id like any other run. Cancel
+/// semantics are "request never happened": an interrupted prefill rolls the
+/// KV cache back to the pre-request cursor — here, an empty cache.
+TEST_F(ConcurrentProcessByIdTest, CancelByIdStopsSinglePathPrefill) {
+  REQUIRE_MODEL(model_);
+  // The KV pool is split per sequence (ctx_size / parallel = 1024), and the
+  // single path prefills into one sequence: the prompt must fit that share
+  // while still spanning several prefill batches so a cancel can land mid-run.
+  config_["ctx_size"] = "4096";
+  auto model = loadModel();
+
+  constexpr JobId kPrefillId = 31;
+  auto prompt = makePrompt(
+      "Store this long note in the cached conversation. " +
+      repeatWord("detail", 700));
+  prompt.prefill = true;
+  prompt.cacheKey = "cancel-prefill-cache.bin";
+
+  std::atomic<bool> done = false;
+  auto future = std::async(std::launch::async, [&model, &prompt, &done] {
+    std::any out = model->process(std::any(prompt), kPrefillId);
+    done.store(true);
+    return std::any_cast<std::string>(out);
+  });
+
+  // Poll-cancel until the run returns: the prompt spans many prefill
+  // iterations, so at least one cancel lands while it is in flight.
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+    model->cancelById(kPrefillId);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(done.load()) << "prefill run never returned";
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  EXPECT_EQ(future.get(), "");
+
+  EXPECT_DOUBLE_EQ(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0.0)
+      << "cancelled prefill must roll the cache back to the pre-request "
+         "cursor";
 }
