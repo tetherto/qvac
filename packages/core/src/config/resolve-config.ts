@@ -6,6 +6,7 @@ import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
 import env from 'bare-env'
+import { pathToFileURL } from 'bare-url'
 import { validateConfig, type QvacConfig } from './config-utils'
 import { ConfigFileInvalidError, ConfigFileParseFailedError } from '../errors'
 import { getAppLogger } from '../logging'
@@ -35,7 +36,7 @@ function assertBareConfigExtension(filePath: string) {
 async function loadConfigFromPath(filePath: string): Promise<QvacConfig> {
   assertBareConfigExtension(filePath)
   try {
-    const mod = (await import('file://' + filePath)) as { default?: unknown }
+    const mod = (await import(pathToFileURL(filePath).href)) as { default?: unknown }
     return validateConfig(mod.default ?? mod)
   } catch (error) {
     throw new ConfigFileParseFailedError(
