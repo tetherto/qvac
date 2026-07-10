@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ImageClassifier = void 0;
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
 const env = require("bare-env");
 const QvacLogger = require("@qvac/logging");
+/* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
 const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
@@ -88,12 +90,13 @@ class ImageClassifier {
             try {
                 await this.addon?.unload?.();
             }
-            catch (_) { }
+            catch { }
             this.addon = null;
             throw loadError;
         }
     }
     createAddon(configurationParams, opts) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
         const binding = require("./binding");
         return new addon_1.ClassificationInterface(binding, configurationParams, this.addonOutputCallback.bind(this), this.logger, opts);
     }
@@ -185,7 +188,7 @@ class ImageClassifier {
                 if (this.addon?.cancel)
                     await this.addon.cancel();
             }
-            catch (_) { }
+            catch { }
             if (this.job.active) {
                 this.job.fail(new Error("Model was unloaded"));
             }
@@ -204,5 +207,6 @@ class ImageClassifier {
 }
 exports.ImageClassifier = ImageClassifier;
 exports.default = ImageClassifier;
-module.exports = ImageClassifier;
-module.exports.ImageClassifier = ImageClassifier;
+const cjsExports = ImageClassifier;
+cjsExports.ImageClassifier = ImageClassifier;
+module.exports = cjsExports;

@@ -1,11 +1,9 @@
 /**
  * Canonical labels emitted by the bundled 3-class MobileNetV3-Small model.
- * The trailing `string` keeps the type permissive for future fine-tunes
- * that ship different class names via the GGUF `mobilenet.class_N`
- * metadata, so narrowing at call sites remains additive / backward
- * compatible.
+ * Kept permissive for future fine-tunes that ship different class names
+ * via the GGUF `mobilenet.class_N` metadata.
  */
-export type ClassificationLabel = "food" | "report" | "other" | string;
+export type ClassificationLabel = string;
 export interface ClassificationResult {
     /** Human-readable class label, sourced from the GGUF metadata (`mobilenet.class_N`). */
     label: ClassificationLabel;

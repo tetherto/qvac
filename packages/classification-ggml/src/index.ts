@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 import fs = require("bare-fs");
 import path = require("bare-path");
 import env = require("bare-env");
 import QvacLogger = require("@qvac/logging");
+/* eslint-enable @typescript-eslint/no-require-imports */
 import { createJobHandler, exclusiveRunQueue, type JobHandler } from "@qvac/infer-base";
 import {
   ClassificationInterface,
@@ -14,12 +16,10 @@ import {
 
 /**
  * Canonical labels emitted by the bundled 3-class MobileNetV3-Small model.
- * The trailing `string` keeps the type permissive for future fine-tunes
- * that ship different class names via the GGUF `mobilenet.class_N`
- * metadata, so narrowing at call sites remains additive / backward
- * compatible.
+ * Kept permissive for future fine-tunes that ship different class names
+ * via the GGUF `mobilenet.class_N` metadata.
  */
-export type ClassificationLabel = "food" | "report" | "other" | string;
+export type ClassificationLabel = string;
 
 export interface ClassificationResult {
   /** Human-readable class label, sourced from the GGUF metadata (`mobilenet.class_N`). */
@@ -163,7 +163,7 @@ export class ImageClassifier {
       this.logger.error?.("Error during model load:", loadError);
       try {
         await this.addon?.unload?.();
-      } catch (_) {}
+      } catch {}
       this.addon = null;
       throw loadError;
     }
@@ -173,6 +173,7 @@ export class ImageClassifier {
     configurationParams: ClassificationConfigurationParams,
     opts: ClassificationInterfaceOptions,
   ): ClassificationInterface {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
     const binding = require("./binding") as ClassificationBinding;
     return new ClassificationInterface(
       binding,
@@ -234,7 +235,7 @@ export class ImageClassifier {
     }
 
     this.hasActiveResponse = true;
-    const collected = await response.await().finally(() => {
+    const collected: unknown = await response.await().finally(() => {
       this.hasActiveResponse = false;
     });
     // QvacResponse collects each Output event into an array; classify
@@ -286,7 +287,7 @@ export class ImageClassifier {
     return this.runExclusive(async () => {
       try {
         if (this.addon?.cancel) await this.addon.cancel();
-      } catch (_) {}
+      } catch {}
       if (this.job.active) {
         this.job.fail(new Error("Model was unloaded"));
       }
@@ -307,6 +308,9 @@ export class ImageClassifier {
 
 export default ImageClassifier;
 
-module.exports = ImageClassifier;
-module.exports.ImageClassifier = ImageClassifier;
+const cjsExports = ImageClassifier as typeof ImageClassifier & {
+  ImageClassifier?: typeof ImageClassifier;
+};
+cjsExports.ImageClassifier = ImageClassifier;
+module.exports = cjsExports;
 

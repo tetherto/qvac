@@ -7,7 +7,7 @@ export interface AddonLogger {
 type NativeLoggerCallback = (priority: number, message: string) => void;
 export interface ClassificationBinding {
     setLogger(callback: NativeLoggerCallback): void;
-    createInstance(owner: ClassificationInterface, configurationParams: ClassificationConfigurationParams, outputCallback: ClassificationOutputCallback): unknown;
+    createInstance(owner: ClassificationInterface, configurationParams: ClassificationConfigurationParams, outputCallback: ClassificationOutputCallback): object;
     activate(handle: unknown): void;
     runJob(handle: unknown, input: ClassificationJob): Promise<boolean>;
     cancel(handle: unknown): Promise<void>;
@@ -48,7 +48,7 @@ export type MappedAddonEvent = {
     data: unknown[];
     error: null;
 } | {
-    type: unknown;
+    type: string;
     data: unknown;
     error: unknown;
 };

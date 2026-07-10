@@ -20,7 +20,7 @@ function ensureLoggerInstalled(binding) {
             try {
                 write(message);
             }
-            catch (_) { }
+            catch { }
         }
     });
     loggerInstalled = true;
@@ -60,7 +60,11 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     if (rawData && typeof rawData === "object") {
         return { type: "JobEnded", data: rawData, error: null };
     }
-    return { type: rawEvent, data: rawData, error: rawError };
+    return {
+        type: typeof rawEvent === "string" ? rawEvent : "Unknown",
+        data: rawData,
+        error: rawError,
+    };
 }
 /**
  * Thin JS-to-native bridge owning one bare C++ instance handle. Lifecycle
@@ -84,10 +88,11 @@ class ClassificationInterface {
         }
         this.handle = this.binding.createInstance(this, configurationParams, outputCallback);
     }
-    async activate() {
+    activate() {
         if (!this.handle)
             throw new Error("Classification addon is not initialized");
         this.binding.activate(this.handle);
+        return Promise.resolve();
     }
     async runJob(input) {
         if (!this.handle)
@@ -99,9 +104,9 @@ class ClassificationInterface {
             return;
         await this.binding.cancel(this.handle);
     }
-    async unload() {
+    unload() {
         if (this.handle === null)
-            return;
+            return Promise.resolve();
         if (this.logger)
             clearActiveLoggerSink(this.logger);
         try {
@@ -110,6 +115,7 @@ class ClassificationInterface {
         finally {
             this.handle = null;
         }
+        return Promise.resolve();
     }
 }
 exports.ClassificationInterface = ClassificationInterface;

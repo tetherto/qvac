@@ -10,8 +10,12 @@
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js index.d.ts addon.d.ts",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
-    "lint": "standard --ignore \"addon/**\"",
-    "lint:fix": "standard --ignore \"addon/**\" --fix",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",
+    "lint:js": "standard --ignore \"addon/**\"",
+    "lint:js:fix": "standard --ignore \"addon/**\" --fix",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run test:types && npm run test:integration",
@@ -68,8 +72,12 @@
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "standard": "^17.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.4.0",

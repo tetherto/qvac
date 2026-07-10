@@ -13,7 +13,7 @@ export interface ClassificationBinding {
     owner: ClassificationInterface,
     configurationParams: ClassificationConfigurationParams,
     outputCallback: ClassificationOutputCallback,
-  ): unknown;
+  ): object;
   activate(handle: unknown): void;
   runJob(handle: unknown, input: ClassificationJob): Promise<boolean>;
   cancel(handle: unknown): Promise<void>;
@@ -69,7 +69,7 @@ export type MappedAddonEvent =
       error: null;
     }
   | {
-      type: unknown;
+      type: string;
       data: unknown;
       error: unknown;
     };
@@ -90,7 +90,7 @@ function ensureLoggerInstalled(binding: ClassificationBinding): void {
     if (typeof write === "function") {
       try {
         write(message);
-      } catch (_) {}
+      } catch {}
     }
   });
   loggerInstalled = true;
@@ -136,7 +136,11 @@ export function mapAddonEvent(
   if (rawData && typeof rawData === "object") {
     return { type: "JobEnded", data: rawData, error: null };
   }
-  return { type: rawEvent, data: rawData, error: rawError };
+  return {
+    type: typeof rawEvent === "string" ? rawEvent : "Unknown",
+    data: rawData,
+    error: rawError,
+  };
 }
 
 /**
@@ -149,7 +153,7 @@ export function mapAddonEvent(
  */
 export class ClassificationInterface {
   private readonly binding: ClassificationBinding;
-  private handle: unknown | null;
+  private handle: object | null;
   private readonly logger: AddonLogger | null;
 
   constructor(
@@ -175,9 +179,10 @@ export class ClassificationInterface {
     );
   }
 
-  async activate(): Promise<void> {
+  activate(): Promise<void> {
     if (!this.handle) throw new Error("Classification addon is not initialized");
     this.binding.activate(this.handle);
+    return Promise.resolve();
   }
 
   async runJob(input: ClassificationJob): Promise<boolean> {
@@ -190,14 +195,15 @@ export class ClassificationInterface {
     await this.binding.cancel(this.handle);
   }
 
-  async unload(): Promise<void> {
-    if (this.handle === null) return;
+  unload(): Promise<void> {
+    if (this.handle === null) return Promise.resolve();
     if (this.logger) clearActiveLoggerSink(this.logger);
     try {
       this.binding.destroyInstance(this.handle);
     } finally {
       this.handle = null;
     }
+    return Promise.resolve();
   }
 }
 
