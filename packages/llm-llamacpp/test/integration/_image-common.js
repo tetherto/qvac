@@ -38,7 +38,8 @@ const {
 
 // Bare doesn't define `process` as a global at module-init time, so
 // guard the Node-style fallback with `typeof process !== 'undefined'`.
-const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
+const noGpuEnv =
+  (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
   (typeof process !== 'undefined' && process.env ? process.env.NO_GPU : '')
 const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 
@@ -48,11 +49,13 @@ const useCpu = isDarwinX64 || isLinuxArm64
 const MULTIMODAL_MODEL_CONFIG = {
   llmModel: {
     modelName: 'SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
+    downloadUrl:
+      'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
   },
   projModel: {
     modelName: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
+    downloadUrl:
+      'https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf'
   },
   ctx_size: '2048'
 }
@@ -60,11 +63,13 @@ const MULTIMODAL_MODEL_CONFIG = {
 const LARGE_MULTIMODAL_CONFIG = {
   llmModel: {
     modelName: 'Qwen3VL-2B-Instruct-Q4_K_M.gguf',
-    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf'
+    downloadUrl:
+      'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf'
   },
   projModel: {
     modelName: 'mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf'
+    downloadUrl:
+      'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf'
   },
   ctx_size: '7046'
 }
@@ -89,7 +94,7 @@ const TEST_CONSTANTS = {
 // Read env via bare-os (Bare doesn't define `process` as a global at
 // module-init time), with a guarded `process.env` fallback for
 // Node code paths that import this file.
-function _envInt (key, fallback) {
+function _envInt(key, fallback) {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
   if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
@@ -105,29 +110,35 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'gpu', device: 'gpu' }
 ]
 
-const gpuSupported = !useCpu && (
-  isMobile ||
-  (platform === 'darwin' && arch === 'arm64') ||
-  (platform === 'linux' && arch === 'x64') ||
-  (platform === 'win32' && arch === 'x64')
-)
+const gpuSupported =
+  !useCpu &&
+  (isMobile ||
+    (platform === 'darwin' && arch === 'arm64') ||
+    (platform === 'linux' && arch === 'x64') ||
+    (platform === 'win32' && arch === 'x64'))
 
-const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => {
+const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter((c) => {
   if (c.id === 'cpu') return true
   return gpuSupported && !noGpu
 })
 
-function getConfig (device, modelConfig) {
+function getConfig(device, modelConfig, extraConfig = {}) {
   return {
     gpu_layers: '98',
     temp: '0.0',
     verbosity: '2',
     device,
-    ctx_size: modelConfig.ctx_size
+    ctx_size: modelConfig.ctx_size,
+    ...extraConfig
   }
 }
 
-async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
+async function setupMultimodalInference(
+  t,
+  device = 'gpu',
+  modelConfig = MULTIMODAL_MODEL_CONFIG,
+  extraConfig = {}
+) {
   const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
   t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
 
@@ -137,7 +148,7 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   const modelPath = path.join(dirPath, modelName)
   const inference = new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
-    config: getConfig(device, modelConfig),
+    config: getConfig(device, modelConfig, extraConfig),
     logger: console,
     opts: { stats: true }
   })
@@ -155,7 +166,7 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   return { inference, modelName: modelName.replace(/\.gguf$/i, '') }
 }
 
-async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
+async function describeImage(inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
@@ -169,11 +180,13 @@ async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.
   const generatedText = []
   let error = null
 
-  response.onUpdate(data => {
-    generatedText.push(data)
-  }).onError(err => {
-    error = err
-  })
+  response
+    .onUpdate((data) => {
+      generatedText.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   await response.await()
 
@@ -189,7 +202,7 @@ async function describeImage (inference, imageFilePath, prompt = TEST_CONSTANTS.
   }
 }
 
-async function describeMultipleImages (inference, imageFilePaths, prompt) {
+async function describeMultipleImages(inference, imageFilePaths, prompt) {
   const messages = [
     { role: 'system', content: 'You are a helpful, respectful and honest assistant.' }
   ]
@@ -204,11 +217,13 @@ async function describeMultipleImages (inference, imageFilePaths, prompt) {
   const generatedText = []
   let error = null
 
-  response.onUpdate(data => {
-    generatedText.push(data)
-  }).onError(err => {
-    error = err
-  })
+  response
+    .onUpdate((data) => {
+      generatedText.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   await response.await()
 
@@ -224,7 +239,11 @@ async function describeMultipleImages (inference, imageFilePaths, prompt) {
   }
 }
 
-async function describeImageByPath (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
+async function describeImageByPath(
+  inference,
+  imageFilePath,
+  prompt = TEST_CONSTANTS.defaultPrompt
+) {
   const messages = [
     { role: 'system', content: 'You are a helpful assistant.' },
     { role: 'user', type: 'media', content: imageFilePath },
@@ -235,11 +254,13 @@ async function describeImageByPath (inference, imageFilePath, prompt = TEST_CONS
   const generatedText = []
   let error = null
 
-  response.onUpdate(data => {
-    generatedText.push(data)
-  }).onError(err => {
-    error = err
-  })
+  response
+    .onUpdate((data) => {
+      generatedText.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   await response.await()
 
@@ -250,8 +271,8 @@ async function describeImageByPath (inference, imageFilePath, prompt = TEST_CONS
   return generatedText.join('')
 }
 
-function checkKeywordsInText (text, keywords) {
-  const foundKeywords = keywords.filter(keyword => {
+function checkKeywordsInText(text, keywords) {
+  const foundKeywords = keywords.filter((keyword) => {
     const regex = new RegExp(`\\b${keyword}\\b`, 'i')
     return regex.test(text)
   })
@@ -272,12 +293,12 @@ function checkKeywordsInText (text, keywords) {
  * (which groups by result.test) produces `count=PERF_RUNS, mean, std`
  * per cell — same shape OCR's doctr-*.test.js produces.
  */
-function runImageRecognitionTest (testCase, deviceConfig) {
+function runImageRecognitionTest(testCase, deviceConfig) {
   const backendTag = deviceConfig.id.toUpperCase()
   const label = `[${testCase.name}] [${backendTag}]`
   const testName = `llama addon can recognize ${testCase.name} in an image [${backendTag}]`
 
-  test(testName, { timeout: PERF_TEST_TIMEOUT }, async t => {
+  test(testName, { timeout: PERF_TEST_TIMEOUT }, async (t) => {
     const { inference, modelName } = await setupMultimodalInference(t, deviceConfig.device)
 
     const imageFilePath = getMediaPath(testCase.imageFile)
@@ -305,19 +326,17 @@ function runImageRecognitionTest (testCase, deviceConfig) {
         const warmupPath = getMediaPath(testCase.iosWarmupImage)
         if (fs.existsSync(warmupPath)) {
           t.comment(
-            `${label} iOS pre-warmup with ${testCase.iosWarmupImage} ` +
-            '(perf NOT recorded)'
+            `${label} iOS pre-warmup with ${testCase.iosWarmupImage} ` + '(perf NOT recorded)'
           )
           const w = await describeImage(inference, warmupPath, TEST_CONSTANTS.defaultPrompt)
           t.comment(
             `${label} iOS pre-warmup done in ${w.endTime - w.startTime}ms ` +
-            `(${w.generatedText.length} chars)`
+              `(${w.generatedText.length} chars)`
           )
           iosPreWarmupRan = true
         } else {
           t.comment(
-            `${label} iOS pre-warmup image not found at ${warmupPath} ` +
-            '— skipping pre-warmup'
+            `${label} iOS pre-warmup image not found at ${warmupPath} ` + '— skipping pre-warmup'
           )
         }
       } catch (err) {
@@ -327,17 +346,20 @@ function runImageRecognitionTest (testCase, deviceConfig) {
 
     if (!iosPreWarmupRan) {
       for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
-        const { generatedText, startTime, endTime } =
-          await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+        const { generatedText, startTime, endTime } = await describeImage(
+          inference,
+          imageFilePath,
+          TEST_CONSTANTS.defaultPrompt
+        )
         t.comment(
           `${label} warmup ${w}/${PERF_WARMUP_RUNS} (${endTime - startTime}ms, ` +
-          `${generatedText.length} chars) - perf NOT recorded`
+            `${generatedText.length} chars) - perf NOT recorded`
         )
       }
     } else {
       t.comment(
         `${label} skipping standard warmup — iOS pre-warmup with ` +
-        `${testCase.iosWarmupImage} already exercised the multimodal pipeline`
+          `${testCase.iosWarmupImage} already exercised the multimodal pipeline`
       )
     }
 
@@ -353,33 +375,39 @@ function runImageRecognitionTest (testCase, deviceConfig) {
     // QVAC_PERF_RUNS, so the benchmark workflow doesn't OOM iPhone.
     // Desktop + Android always honour PERF_RUNS; on PR runs (default
     // PERF_RUNS=1) the override is a no-op.
-    const countedRuns = (platform === 'ios' && Number.isFinite(testCase.iosPerfRuns))
-      ? testCase.iosPerfRuns
-      : PERF_RUNS
+    const countedRuns =
+      platform === 'ios' && Number.isFinite(testCase.iosPerfRuns) ? testCase.iosPerfRuns : PERF_RUNS
 
     let lastGeneratedText = ''
     for (let run = 1; run <= countedRuns; run++) {
-      const { generatedText, startTime, endTime, stats } =
-        await describeImage(inference, imageFilePath, TEST_CONSTANTS.defaultPrompt)
+      const { generatedText, startTime, endTime, stats } = await describeImage(
+        inference,
+        imageFilePath,
+        TEST_CONSTANTS.defaultPrompt
+      )
       const totalTime = endTime - startTime
       lastGeneratedText = generatedText
 
       t.comment(`${label} run ${run}/${countedRuns} Generated text: ${generatedText}`)
-      t.comment(recordPerformance(label, totalTime, {
-        _output: generatedText,
-        stats,
-        deviceId: deviceConfig.device,
-        scenario: 'image',
-        model: modelName
-      }))
+      t.comment(
+        recordPerformance(label, totalTime, {
+          _output: generatedText,
+          stats,
+          deviceId: deviceConfig.device,
+          scenario: 'image',
+          model: modelName
+        })
+      )
     }
 
     t.ok(lastGeneratedText.length > 0, `${label} Should generate some text output for the image`)
     const { foundKeywords, hasMatch } = checkKeywordsInText(lastGeneratedText, testCase.keywords)
-    t.ok(hasMatch,
+    t.ok(
+      hasMatch,
       `${label} Output should contain at least one ${testCase.keywordType} word as a whole word. ` +
-      `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
-      `Full output: "${lastGeneratedText}"`)
+        `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
+        `Full output: "${lastGeneratedText}"`
+    )
   })
 }
 
@@ -388,7 +416,7 @@ function runImageRecognitionTest (testCase, deviceConfig) {
  * configured backend (CPU + GPU on GPU-capable platforms, CPU only
  * on the rest). Used by the image-<name>.test.js entry points.
  */
-function runPerImageBackendTests (testCase) {
+function runPerImageBackendTests(testCase) {
   for (const deviceConfig of DEVICE_CONFIGS) {
     runImageRecognitionTest(testCase, deviceConfig)
   }

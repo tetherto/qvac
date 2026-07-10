@@ -99,6 +99,20 @@ struct SubmitRequest {
   StreamCallbacks streams;
 };
 
+using SchedulerDecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+using SchedulerSynchronizeFunc = std::function<void(llama_context*)>;
+
+struct TimedDecodeResult {
+  int rc = 0;
+  std::chrono::nanoseconds duration{};
+};
+
+/// Time one scheduler decode step through backend completion: llama_decode can
+/// run asynchronously, so synchronize before recording time or mutating state.
+[[nodiscard]] TimedDecodeResult timeDecodeStep(
+    llama_context* ctx, llama_batch& batch, const SchedulerDecodeFunc& decode,
+    const SchedulerSynchronizeFunc& synchronize);
+
 /// Aggregated per-scheduler runtime stats. `avgConcurrentSeq`/`elapsedMs`
 /// are derived getters computed from live state, not stored.
 struct RuntimeStatsSnapshot {
@@ -257,16 +271,18 @@ public:
   /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
-  /// Decode function used by stepLocked() (defaults to llama_decode) and the
-  /// media-segment eval used by serviceNextMediaSegmentLocked() (defaults to
-  /// driver.evalMediaSegment()). Unit tests override them through
-  /// ContinuousBatchSchedulerTestPeer to inject failing/blocking stubs.
-  using DecodeFunc = std::function<int(llama_context*, llama_batch&)>;
+  /// Decode function used by stepLocked() (defaults to llama_decode), context
+  /// synchronization used before recording decode/media step time (defaults to
+  /// llama_synchronize), and media-segment eval used by
+  /// serviceNextMediaSegmentLocked() (defaults to driver.evalMediaSegment()).
+  /// Unit tests override decode/media through ContinuousBatchSchedulerTestPeer.
+  using DecodeFunc = SchedulerDecodeFunc;
+  using SynchronizeFunc = SchedulerSynchronizeFunc;
   using EvalMediaFunc =
       std::function<llama_pos(SequenceDriver&, size_t, llama_pos)>;
 
 private:
-  // Test peer (global namespace) sets decodeFunc_/evalMediaFunc_ directly.
+  // Test peer (global namespace) sets decodeFunc_ and evalMediaFunc_ directly.
   // See test_internal_peers.hpp.
   friend class ::ContinuousBatchSchedulerTestPeer;
 
@@ -329,6 +345,7 @@ private:
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;
     bool saveCacheToDisk = false;
+    bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
   };
 
@@ -402,7 +419,7 @@ private:
   std::function<void(const std::string&)>
   getOutputCallback(SlotState& slot, uint32_t seqId);
   std::function<bool(const Request&)> hasValidDriverF() const;
-  void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
+  void saveCacheForSlot(uint32_t seqId, SlotState& slot);
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
   LlmModelContext shared_;
@@ -437,6 +454,10 @@ private:
   /// stub can be injected via
   /// ContinuousBatchSchedulerTestPeer::setDecodeFunc().
   DecodeFunc decodeFunc_;
+
+  /// Context synchronization used after a successful decode/media eval and
+  /// before recording step time. Defaults to llama_synchronize.
+  SynchronizeFunc synchronizeFunc_;
 
   /// Media-segment eval used in serviceNextMediaSegmentLocked(). Defaults to
   /// driver.evalMediaSegment(); a test stub can be injected via

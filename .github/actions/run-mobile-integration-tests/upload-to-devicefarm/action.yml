@@ -503,7 +503,7 @@ runs:
           #
           # Rules:
           #   - If the addon is NOT sharded (single "default" group), respect
-          #     the global ENABLES_PERF as-is (addons like tts-onnx, whisper,
+          #     the global ENABLES_PERF as-is (addons like tts-ggml, whisper,
           #     nmtcpp emit perf from their single shard).
           #   - If the addon IS sharded (multiple groups), only enable perf
           #     for groups whose name contains "perf" (case-insensitive).

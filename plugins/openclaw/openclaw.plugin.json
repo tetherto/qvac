@@ -2,7 +2,7 @@
   "id": "qvac",
   "name": "QVAC",
   "description": "Local QVAC provider for OpenClaw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "providers": ["qvac"],
   "modelSupport": {
     "modelPrefixes": ["qwen3.5-", "qwen3.6-", "gpt-oss-", "gemma4-"]
