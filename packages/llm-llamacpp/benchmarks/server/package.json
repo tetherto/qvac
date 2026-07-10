@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "bare index.js",
-    "lint": "standard",
-    "lint:fix": "standard --fix"
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\""
   },
   "files": [
     "src"
@@ -14,7 +14,9 @@
   "author": "Tether",
   "license": "Apache-2.0",
   "devDependencies": {
-    "standard": "^17.1.2"
+    "lunte": "^1.8.4",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
     "@qvac/llm-llamacpp": "file:../../",

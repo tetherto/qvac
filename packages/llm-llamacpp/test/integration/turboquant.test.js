@@ -35,9 +35,10 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
-const skipReason = (isVulkanHappyPath || isMetalRejectPath)
-  ? false
-  : `no clear TBQ assertion on ${platform}-${arch} (LLVMpipe Vulkan or unsupported)`
+const skipReason =
+  isVulkanHappyPath || isMetalRejectPath
+    ? false
+    : `no clear TBQ assertion on ${platform}-${arch} (LLVMpipe Vulkan or unsupported)`
 
 // Keep this functional sweep on the smaller head_dim=64 model; the larger
 // head_dim=128 benchmark path is covered by quantized-kvcache.test.js.
@@ -67,7 +68,7 @@ const PROMPT = [
   { role: 'user', content: 'What is the capital of France?' }
 ]
 
-function makeConfig (kv) {
+function makeConfig(kv) {
   return {
     device: 'gpu',
     gpu_layers: '999',
@@ -86,9 +87,13 @@ function makeConfig (kv) {
   }
 }
 
-async function collectResponse (response) {
+async function collectResponse(response) {
   const chunks = []
-  await response.onUpdate(data => { chunks.push(data) }).await()
+  await response
+    .onUpdate((data) => {
+      chunks.push(data)
+    })
+    .await()
   return chunks.join('').trim()
 }
 
@@ -97,7 +102,7 @@ async function collectResponse (response) {
 test(
   'Metal/iOS rejects TBQ cache types at model.load()',
   { skip: !isMetalRejectPath, timeout: 60_000 },
-  async t => {
+  async (t) => {
     const kv = KV_COMBOS[0]
     const [modelName, dirPath] = await ensureModel({
       modelName: MODEL.name,
@@ -129,59 +134,55 @@ test(
 for (const kv of KV_COMBOS) {
   const label = `TBQ inference: ${MODEL.id} (head_dim=${MODEL.headDim}) K=${kv.k} V=${kv.v}`
 
-  test(
-    label,
-    { skip: skipReason || isMetalRejectPath, timeout: 600_000 },
-    async t => {
-      const [modelName, dirPath] = await ensureModel({
-        modelName: MODEL.name,
-        downloadUrl: MODEL.url
-      })
+  test(label, { skip: skipReason || isMetalRejectPath, timeout: 600_000 }, async (t) => {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
+    })
 
-      const specLogger = attachSpecLogger({ forwardToConsole: true })
-      const llm = new LlmLlamacpp({
-        files: { model: [path.join(dirPath, modelName)] },
-        config: makeConfig(kv),
-        logger: console,
-        opts: { stats: true }
-      })
+    const specLogger = attachSpecLogger({ forwardToConsole: true })
+    const llm = new LlmLlamacpp({
+      files: { model: [path.join(dirPath, modelName)] },
+      config: makeConfig(kv),
+      logger: console,
+      opts: { stats: true }
+    })
 
-      t.teardown(async () => {
-        await llm.unload().catch(() => {})
-        specLogger.release()
-      })
+    t.teardown(async () => {
+      await llm.unload().catch(() => {})
+      specLogger.release()
+    })
 
-      try {
-        await llm.load()
-      } catch (err) {
-        // Android GPU drivers that don't expose Vulkan as the chosen
-        // backend (e.g. Adreno 830 preferring OpenCL) will hit the
-        // addon's TBQ guard. Treat that as a clean skip rather than
-        // a test failure — the guard itself is exercised on the
-        // Metal/iOS path above.
-        if (isAndroid && /TurboQuant.*not supported/i.test(err.message)) {
-          t.comment(`Android backend does not support TBQ: ${err.message}`)
-          t.pass('addon rejected TBQ on this Android backend (likely OpenCL)')
-          return
-        }
-        t.fail(`unexpected load error: ${err.message}`)
+    try {
+      await llm.load()
+    } catch (err) {
+      // Android GPU drivers that don't expose Vulkan as the chosen
+      // backend (e.g. Adreno 830 preferring OpenCL) will hit the
+      // addon's TBQ guard. Treat that as a clean skip rather than
+      // a test failure — the guard itself is exercised on the
+      // Metal/iOS path above.
+      if (isAndroid && /TurboQuant.*not supported/i.test(err.message)) {
+        t.comment(`Android backend does not support TBQ: ${err.message}`)
+        t.pass('addon rejected TBQ on this Android backend (likely OpenCL)')
         return
       }
-
-      const response = await llm.run(PROMPT)
-      const output = await collectResponse(response)
-      const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
-
-      t.comment(`output: ${JSON.stringify(output.slice(0, 200))}`)
-      t.ok(output.length > 0, `output non-empty (${output.length} chars)`)
-      t.ok(generatedTokens > 0, `generated tokens > 0 (got ${generatedTokens})`)
-      // Llama 3.2 Instruct does not enter a <think> CoT preamble like
-      // Qwen3, but the relaxed regex still tolerates models that say
-      // "France" repeatedly before converging on "Paris".
-      t.ok(
-        /paris|france/i.test(output),
-        `output mentions "Paris" or "France" (got ${JSON.stringify(output.slice(0, 200))})`
-      )
+      t.fail(`unexpected load error: ${err.message}`)
+      return
     }
-  )
+
+    const response = await llm.run(PROMPT)
+    const output = await collectResponse(response)
+    const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
+
+    t.comment(`output: ${JSON.stringify(output.slice(0, 200))}`)
+    t.ok(output.length > 0, `output non-empty (${output.length} chars)`)
+    t.ok(generatedTokens > 0, `generated tokens > 0 (got ${generatedTokens})`)
+    // Llama 3.2 Instruct does not enter a <think> CoT preamble like
+    // Qwen3, but the relaxed regex still tolerates models that say
+    // "France" repeatedly before converging on "Paris".
+    t.ok(
+      /paris|france/i.test(output),
+      `output mentions "Paris" or "France" (got ${JSON.stringify(output.slice(0, 200))})`
+    )
+  })
 }

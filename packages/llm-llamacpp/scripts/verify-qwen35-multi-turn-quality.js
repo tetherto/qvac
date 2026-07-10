@@ -35,8 +35,8 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const LlmLlamacpp = require('../index.js')
 
-const MODEL_PATH = process.env.QWEN_MODEL ||
-    path.resolve(__dirname, '../test/model/Qwen3.5-0.8B-Q8_0.gguf')
+const MODEL_PATH =
+  process.env.QWEN_MODEL || path.resolve(__dirname, '../test/model/Qwen3.5-0.8B-Q8_0.gguf')
 
 if (!fs.existsSync(MODEL_PATH)) {
   console.error(`[verify] Qwen3.5 model not cached at ${MODEL_PATH}`)
@@ -60,7 +60,7 @@ const CHAIN = [
   }
 ]
 
-function makeInference () {
+function makeInference() {
   return new LlmLlamacpp({
     files: { model: [MODEL_PATH] },
     config: {
@@ -79,7 +79,7 @@ function makeInference () {
   })
 }
 
-async function runChain (label, removeThinking) {
+async function runChain(label, removeThinking) {
   const inference = makeInference()
   await inference.load()
 
@@ -94,9 +94,12 @@ async function runChain (label, removeThinking) {
   // turn N affects what's in the cache at the start of turn N+1).
   const cacheKey = path.resolve(
     __dirname,
-    `../test/model/qwen35-multi-turn-${label.toLowerCase()}-${Date.now()}.bin`)
+    `../test/model/qwen35-multi-turn-${label.toLowerCase()}-${Date.now()}.bin`
+  )
   // Best-effort cleanup of any stale cache from a prior run.
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
 
   for (let i = 0; i < CHAIN.length; i++) {
     const { prompt, expected } = CHAIN[i]
@@ -109,7 +112,11 @@ async function runChain (label, removeThinking) {
       generationParams: { remove_thinking_from_context: removeThinking }
     })
     let response = ''
-    await result.onUpdate(token => { response += token }).await()
+    await result
+      .onUpdate((token) => {
+        response += token
+      })
+      .await()
     const elapsedMs = Date.now() - t0
     const stats = result.stats || {}
 
@@ -121,8 +128,7 @@ async function runChain (label, removeThinking) {
     // body.
     const closedReasoning = /<\/think>/.test(response)
     const visible = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-    const containsExpected =
-        closedReasoning && new RegExp(`\\b${expected}\\b`).test(visible)
+    const containsExpected = closedReasoning && new RegExp(`\\b${expected}\\b`).test(visible)
 
     conversation.push({ role: 'assistant', content: response })
 
@@ -137,33 +143,39 @@ async function runChain (label, removeThinking) {
       containsExpected
     })
 
-    console.log(`[${label}] turn ${i + 1}: expected="${expected}" got_visible="${visible.slice(0, 80)}" ` +
-      `correct=${containsExpected} discards=${stats.thinkingBlockDiscards || 0} ` +
-      `(${elapsedMs}ms)`)
+    console.log(
+      `[${label}] turn ${i + 1}: expected="${expected}" got_visible="${visible.slice(0, 80)}" ` +
+        `correct=${containsExpected} discards=${stats.thinkingBlockDiscards || 0} ` +
+        `(${elapsedMs}ms)`
+    )
   }
 
   await inference.unload()
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
   return turns
 }
 
-function summarise (label, turns) {
+function summarise(label, turns) {
   console.log(`\n=== ${label} ===`)
   let allCorrect = true
   for (const t of turns) {
     const discards = Number(t.stats.thinkingBlockDiscards || 0)
     const tps = t.stats.TPS || 0
-    console.log(`  turn ${t.idx}: correct=${t.containsExpected} ` +
-      `discards=${discards} ` +
-      `tokens=${t.stats.generatedTokens || '?'} tps=${tps.toFixed?.(1) || tps} ` +
-      `(${t.elapsedMs}ms)`)
+    console.log(
+      `  turn ${t.idx}: correct=${t.containsExpected} ` +
+        `discards=${discards} ` +
+        `tokens=${t.stats.generatedTokens || '?'} tps=${tps.toFixed?.(1) || tps} ` +
+        `(${t.elapsedMs}ms)`
+    )
     console.log(`           visible: "${t.visible.slice(0, 120)}"`)
     if (!t.containsExpected) allCorrect = false
   }
   return { allCorrect }
 }
 
-async function main () {
+async function main() {
   console.log('[verify] running 3-turn arithmetic chain TWICE: once with compaction ON, once OFF\n')
 
   console.log('--- Phase 1: remove_thinking_from_context = true (rollback active) ---')
@@ -183,10 +195,14 @@ async function main () {
     exitCode = 1
   }
   if (!offSummary.allCorrect) {
-    console.warn('[WARN] OFF baseline also got at least one turn wrong — model may be too weak for this chain')
+    console.warn(
+      '[WARN] OFF baseline also got at least one turn wrong — model may be too weak for this chain'
+    )
   }
   if (onSummary.allCorrect && offSummary.allCorrect) {
-    console.log('[OK]   ON and OFF paths both got every turn correct — no degradation introduced by compaction')
+    console.log(
+      '[OK]   ON and OFF paths both got every turn correct — no degradation introduced by compaction'
+    )
   } else if (onSummary.allCorrect && !offSummary.allCorrect) {
     console.log('[OK]   ON path got everything correct (better than baseline!)')
   }
@@ -199,7 +215,7 @@ async function main () {
   process.exit(exitCode)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[verify] fatal:', err)
   process.exit(3)
 })

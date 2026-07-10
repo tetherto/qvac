@@ -17,7 +17,8 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 // pattern as _image-common.js.
 // Bare doesn't define `process` as a global at module-init time, so
 // the fallback to `process.env` is guarded with `typeof process`.
-const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
+const noGpuEnv =
+  (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
   (typeof process !== 'undefined' && process.env ? process.env.NO_GPU : '')
 const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 const useCpu = isLinuxArm64 || noGpu
@@ -50,7 +51,11 @@ const prompt1Base = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Query' },
-        category: { type: 'string', enum: ['electronics', 'clothing', 'books'], description: 'Category' },
+        category: {
+          type: 'string',
+          enum: ['electronics', 'clothing', 'books'],
+          description: 'Category'
+        },
         maxPrice: { type: 'number', minimum: 0, description: 'Max price' }
       },
       required: ['query']
@@ -103,25 +108,26 @@ const prompt1Base = [
   },
   {
     role: 'user',
-    content: 'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
+    content:
+      'Search laptops under $1000 and add 2 with ID "laptop-123" to cart. Also, query users table age > 25 limit 50 with metadata.'
   }
 ]
 
-function clonePrompt () {
+function clonePrompt() {
   return JSON.parse(JSON.stringify(prompt1Base))
 }
 
-function buildPrompt2 (assistantOutput) {
+function buildPrompt2(assistantOutput) {
   const prompt = clonePrompt()
   prompt.push({ role: 'assistant', content: assistantOutput })
   prompt.push({ role: 'user', content: 'Search tv above $2000' })
   return prompt
 }
 
-async function collectResponse (response) {
+async function collectResponse(response) {
   const chunks = []
   await response
-    .onUpdate(data => {
+    .onUpdate((data) => {
       chunks.push(data)
     })
     .await()
@@ -134,7 +140,7 @@ async function collectResponse (response) {
   }
 }
 
-async function createToolModel (modelVariant) {
+async function createToolModel(modelVariant) {
   const [modelName, dirPath] = await ensureModel({
     modelName: modelVariant.modelName,
     downloadUrl: modelVariant.downloadUrl
@@ -165,14 +171,14 @@ async function createToolModel (modelVariant) {
 
   return {
     model,
-    async release () {
+    async release() {
       await model.unload().catch(() => {})
       releaseLogger()
     }
   }
 }
 
-async function runPrompt (model, prompt) {
+async function runPrompt(model, prompt) {
   const startTime = Date.now()
   const response = await model.run(prompt)
   const collected = await collectResponse(response)
@@ -186,7 +192,7 @@ async function runPrompt (model, prompt) {
 const epTag = useCpu ? 'CPU' : 'GPU'
 const deviceId = useCpu ? 'cpu' : 'gpu'
 
-safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
+safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async (t) => {
   for (const modelVariant of TOOL_MODEL_VARIANTS) {
     let release = null
     try {
@@ -205,25 +211,29 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
       const perfLabel1 = `[tools batch] [${modelVariant.id}] [${epTag}]`
-      t.comment(recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
-        _output: firstRun.text,
-        stats: firstRun.stats,
-        deviceId,
-        scenario: 'tool-calling',
-        model: modelVariant.modelName.replace(/\.gguf$/i, '')
-      }))
+      t.comment(
+        recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
+          _output: firstRun.text,
+          stats: firstRun.stats,
+          deviceId,
+          scenario: 'tool-calling',
+          model: modelVariant.modelName.replace(/\.gguf$/i, '')
+        })
+      )
 
       const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
       const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
-      t.comment(recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
-        _output: secondRun.text,
-        stats: secondRun.stats,
-        deviceId,
-        scenario: 'tool-calling',
-        model: modelVariant.modelName.replace(/\.gguf$/i, '')
-      }))
+      t.comment(
+        recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
+          _output: secondRun.text,
+          stats: secondRun.stats,
+          deviceId,
+          scenario: 'tool-calling',
+          model: modelVariant.modelName.replace(/\.gguf$/i, '')
+        })
+      )
     } finally {
       if (release) await release()
     }
