@@ -158,10 +158,10 @@ jobs:
             platform: linux
             arch: arm64
             no_gpu: 'true'
-          - os: macos-14-xlarge
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
-            no_gpu: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -325,12 +325,18 @@ jobs:
           # quant x model-type x backend product stays readable and consistent.
           MODEL_TYPES="tdt ctc eou sortformer"
           QUANTS="f16 q8_0 q4_0"
+          # macOS GPU legs use the Metal backend; other platforms use Vulkan.
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            GPU_BACKEND="metal"
+          else
+            GPU_BACKEND="vulkan"
+          fi
           entries=""
           for t in $MODEL_TYPES; do
             for q in $QUANTS; do
               entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":false},"
               if [ "${{ matrix.no_gpu || 'false' }}" != "true" ]; then
-                entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":true,\"backendHint\":\"vulkan\"},"
+                entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":true,\"backendHint\":\"${GPU_BACKEND}\"},"
               fi
             done
           done

@@ -102,11 +102,12 @@ jobs:
             no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"}]
-          - os: macos-14-xlarge
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"coreml"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"coreml"}]
+              [{"modelFile":"ggml-base.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q5_1.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-small-q8_0.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-base.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-base-q8_0.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q5_1.bin","useGPU":true,"backendHint":"metal"},{"modelFile":"ggml-small-q8_0.bin","useGPU":true,"backendHint":"metal"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -228,12 +229,6 @@ jobs:
           sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
           # Add whisper.cpp dependencies for integration tests
           sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
-
-      - name: macOS - install whisper dependencies
-        if: matrix.platform == 'darwin'
-        shell: bash
-        run: |
-          brew install --quiet openblas lapack fftw
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025

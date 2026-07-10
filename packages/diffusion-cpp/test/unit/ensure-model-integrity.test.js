@@ -16,27 +16,27 @@ const GOOD = 'qvac-integrity-fixture-GOOD-content-0123456789'
 const BAD_SAME_LEN = 'qvac-integrity-fixture-BADD-content-0123456789'
 const BAD_SHORT = 'too-short'
 
-function mkTmpDir () {
+function mkTmpDir() {
   const base = (typeof os.tmpdir === 'function' && os.tmpdir()) || '/tmp'
   const dir = path.join(base, `qvac-integrity-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
 
-function writeModel (dir, name, content) {
+function writeModel(dir, name, content) {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, name), content)
 }
 
 // Returns a fake downloader that writes `content` to dest and records calls.
-function fakeDownloader (content, spy) {
+function fakeDownloader(content, spy) {
   return async function (_urls, dest) {
     spy.calls++
     fs.writeFileSync(dest, content)
   }
 }
 
-async function buildManifest (modelName) {
+async function buildManifest(modelName) {
   // Compute the real sha256 of GOOD via the same helper the code uses, so the
   // manifest's pinned value is authoritative and the test exercises the real
   // hashing path.
@@ -179,13 +179,20 @@ test('missing file downloads then verifies', async function (t) {
 
 test('entry without pinned integrity skips verification (keeps a non-zero cached file)', async function (t) {
   const name = 'unpinned.bin'
-  const manifest = { models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } } }
+  const manifest = {
+    models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } }
+  }
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
     writeModel(dir, name, BAD_SAME_LEN) // any non-zero content is accepted when unpinned
     resetDownloadCount()
-    await ensureModel({ modelName: name, modelDir: dir, manifest, download: fakeDownloader(GOOD, spy) })
+    await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
     t.is(spy.calls, 0, 'no download when an unpinned file already exists and is non-zero')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
