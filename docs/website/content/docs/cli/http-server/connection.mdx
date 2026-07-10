@@ -9,7 +9,9 @@ tocMaxDepth: 3
 
 For OpenCode, use the published [`@qvac/opencode-plugin`](https://www.npmjs.com/package/@qvac/opencode-plugin). The plugin starts a local managed QVAC server for the project, registers the `qvac` provider, selects the default local model, and cleans up when OpenCode exits.
 
-Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for OpenCode users who want to run `qvac serve openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
+For OpenClaw, use the published [`@qvac/openclaw-plugin`](https://www.npmjs.com/package/@qvac/openclaw-plugin). The plugin registers the `qvac` provider, exposes the QVAC model catalog, and uses OpenClaw's `localService` support to start `qvac serve openai` when the local provider is used.
+
+Manual HTTP-server setup is still available for other OpenAI-compatible tools, or for users who want to run `qvac serve openai` themselves. In that mode, the model name requested by the tool must match an alias declared in `serve.models`, and the tool's base URL must point to the running server (`http://localhost:11434/v1` by default).
 
 ## OpenCode quickstart
 
@@ -39,6 +41,143 @@ The plugin uses `qvac/qwen3.5-9b` by default. Use that for the best friendly-id 
 
 See the [`@qvac/opencode-plugin` README](https://www.npmjs.com/package/@qvac/opencode-plugin) for friendly model ids, raw QVAC constants such as GPT-OSS and Gemma4, and advanced options.
 
+## OpenClaw quickstart
+
+Install OpenClaw, the QVAC OpenClaw plugin, and the QVAC CLI:
+
+```bash
+npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
+openclaw plugins install @qvac/openclaw-plugin
+openclaw plugins enable qvac
+openclaw config set plugins.allow '["qvac"]' --strict-json
+```
+
+The explicit `@qvac/sdk` install keeps SDK model constants available to the `qvac` command that OpenClaw starts through `localService`.
+
+Then let the plugin create the QVAC provider entry in OpenClaw:
+
+```bash
+QVAC_BIN="$(which qvac)"
+
+openclaw config set plugins.entries.qvac.config \
+  "{\"model\":\"qwen3.5-9b\",\"qvacCommand\":\"$QVAC_BIN\",\"port\":11434}" \
+  --strict-json
+
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --mode local \
+  --auth-choice qvac \
+  --skip-search \
+  --skip-health
+
+openclaw config validate
+```
+
+The setup command registers `qvac`, selects `qvac/qwen3.5-9b`, and enables OpenClaw's local-model mode. You do not need to create a `qvac.config.json` file for the plugin path; the plugin generates the temporary QVAC serve config when OpenClaw starts the local service.
+
+Check that OpenClaw can see the QVAC model:
+
+```bash
+openclaw models list --all --provider qvac
+openclaw models status
+```
+
+Run a local agent smoke test:
+
+```bash
+openclaw agent --local \
+  --model qvac/qwen3.5-9b \
+  --message "Reply with exactly: pong" \
+  --thinking off \
+  --json
+```
+
+The first run may download model files before the answer appears. Use `qwen3.5-9b` for real agent work; smaller models can answer simple prompts but are less reliable with tool-heavy agent sessions.
+
+### Use a different OpenClaw model
+
+The OpenClaw plugin config uses the **catalog id without the `qvac/` prefix**. OpenClaw commands and model pickers use the same id with the provider prefix:
+
+| Where | Format | Example |
+| --- | --- | --- |
+| Plugin config | `<catalog-id>` | `qwen3.5-4b` |
+| OpenClaw model name | `qvac/<catalog-id>` | `qvac/qwen3.5-4b` |
+
+The OpenClaw plugin model picker shows the friendly ids that are published in QVAC's provider catalog:
+
+| Catalog id | Use it for |
+| --- | --- |
+| `qwen3.5-9b` | Recommended local agent default. |
+| `qwen3.5-4b` | Smaller machines and lighter prompts. |
+| `qwen3.5-2b` | Smoke tests or very constrained machines. |
+| `qwen3.5-0.8b` | Connectivity checks only; not recommended for agent work. |
+| `qwen3.6-27b` | Larger Qwen3.6 multimodal model for stronger local agents. |
+| `qwen3.6-35b-a3b` | Larger Qwen3.6 mixture-of-experts model; needs more memory. |
+| `gpt-oss-20b` | Larger local text/code model with Harmony tool-call support. |
+| `gemma4-31b` | Larger Gemma4 model; needs a machine with enough memory. |
+
+To switch models, update `plugins.entries.qvac.config.model`, then run OpenClaw onboarding again so it rewrites the provider defaults:
+
+```bash
+QVAC_BIN="$(which qvac)"
+
+openclaw config set plugins.entries.qvac.config \
+  "{\"model\":\"qwen3.5-4b\",\"qvacCommand\":\"$QVAC_BIN\",\"ctxSize\":32768,\"tools\":true}" \
+  --strict-json
+
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --mode local \
+  --auth-choice qvac \
+  --skip-search \
+  --skip-health
+```
+
+Advanced plugin options use camelCase because they configure the plugin, not `qvac.config.json` directly. The plugin converts them into the temporary QVAC serve config that OpenClaw starts through `localService`.
+
+| Plugin option | What it controls | Default |
+| --- | --- | --- |
+| `model` | QVAC catalog id to preload and select. | `qwen3.5-9b` |
+| `qvacCommand` | Command or absolute path for the `qvac` binary. | `qvac` |
+| `ctxSize` | Context window written as `ctx_size` in the generated serve config. | `32768` |
+| `reasoningBudget` | QVAC reasoning budget; `0` disables reasoning and `-1` enables the model default. | `-1` |
+| `tools` | Enables QVAC tool-call formatting for agent use. | `true` |
+| `port` | Local HTTP server port. | `11434` |
+
+If you need a model that is not in the OpenClaw plugin catalog yet, use the manual HTTP-server path below. In that path, `qvac.config.json` can expose any supported SDK model constant under the alias you choose, and OpenClaw points at that alias through a custom OpenAI-compatible provider.
+
+For models outside the plugin catalog, the model format changes by layer:
+
+| Layer | Format | Example |
+| --- | --- | --- |
+| QVAC serve config value | SDK constant | `GEMMA4_2B_MULTIMODAL_Q4_K_M` |
+| QVAC serve alias | Your chosen alias | `gemma4-2b` |
+| OpenClaw model name | `qvac/<alias>` | `qvac/gemma4-2b` |
+
+For example:
+
+```json title="qvac.config.json"
+{
+  "serve": {
+    "models": {
+      "gemma4-2b": {
+        "model": "GEMMA4_2B_MULTIMODAL_Q4_K_M",
+        "preload": true,
+        "config": {
+          "ctx_size": 32768,
+          "reasoning_budget": 0,
+          "tools": true
+        }
+      }
+    }
+  }
+}
+```
+
+Start `qvac serve openai` with that config, register an OpenClaw custom provider whose model id is `gemma4-2b`, and select `qvac/gemma4-2b` in OpenClaw. The raw SDK constant belongs in `qvac.config.json`; the OpenClaw-facing model name should use the alias.
+
 ## Compatible tools
 
 The following tools have been verified to work as drop-in replacements by pointing their base URL to the HTTP server:
@@ -53,10 +192,11 @@ The following tools have been verified to work as drop-in replacements by pointi
 | [Roo Code](https://roomote.dev) | `/v1/chat/completions` (streaming, tool calls) |
 | [Aider](https://aider.chat) | `/v1/chat/completions` (streaming) |
 | [OpenCode](https://opencode.ai) | `/v1/chat/completions` (streaming, tool calls) |
+| [OpenClaw](https://openclaw.ai) | `/v1/chat/completions` (streaming, tool calls), `/v1/models` |
 
 ## Configure the HTTP server
 
-Skip this section if you are using the OpenCode plugin above.
+Skip this section if you are using the OpenCode or OpenClaw plugin above.
 
 The only QVAC-specific setting for connecting an AI tool is the `serve.models` block in `qvac.config.json`, where you declare the models the server exposes. _Each key is a **model alias** that you reference when configuring the tool_. Coding agents need a larger context window than the server default, so set `ctx_size` explicitly:
 
@@ -84,7 +224,7 @@ See [HTTP server](/cli/http-server) for how to install it, run it, and the other
 
 ## Configure the tool
 
-Skip this section if you are using the OpenCode plugin above.
+Skip this section if you are using the OpenCode or OpenClaw plugin above.
 
 On the tool side, register QVAC as a custom OpenAI-compatible provider. The exact file and fields differ per tool, but every setup needs the same three things:
 
