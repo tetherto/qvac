@@ -1,0 +1,13 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+test/unit/all.js
+test/integration/all.js
+test/results
+examples
+addon
+*.d.ts
