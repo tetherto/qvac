@@ -206,7 +206,7 @@ jobs:
       - context
       - ci-router
       - label-gate
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true'
     permissions:
       contents: read
       packages: read
@@ -228,7 +228,7 @@ jobs:
       - context
       - ci-router
       - label-gate
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:

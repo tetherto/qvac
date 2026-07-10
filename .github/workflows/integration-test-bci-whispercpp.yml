@@ -116,7 +116,6 @@ jobs:
             platform: darwin
             arch: arm64
             runner: qvac-macos26-arm64-gpu
-            no_gpu: 'true'
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"}]
           - os: macos-15-large
