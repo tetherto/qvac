@@ -221,9 +221,26 @@ let _manifestCache
 // Loads and caches the model manifest (single source of truth for model
 // URLs + sha256/bytes integrity values). Returns null when absent so callers
 // can fall back to an explicitly-passed downloadUrl.
+//
+// The default path is loaded via a literal require() rather than
+// fs.readFileSync. Mobile builds pack this file into a single bundle via
+// bare-pack, which resolves its module graph by statically following
+// require()/import calls (bare-module-traverse) — a dynamic fs.readFileSync
+// call is invisible to that resolution and silently drops the manifest from
+// the bundle, so every model lookup fails on-device even though the file is
+// present on disk at build time. require('./models.manifest.json') is a
+// static reference bare-pack can see and embed.
 function loadManifest (manifestPath = DEFAULT_MANIFEST_PATH) {
-  if (manifestPath === DEFAULT_MANIFEST_PATH && _manifestCache !== undefined) {
-    return _manifestCache
+  if (manifestPath === DEFAULT_MANIFEST_PATH) {
+    if (_manifestCache !== undefined) return _manifestCache
+    let parsed = null
+    try {
+      parsed = require('./models.manifest.json')
+    } catch (_) {
+      parsed = null
+    }
+    _manifestCache = parsed
+    return parsed
   }
   let parsed = null
   try {
@@ -231,7 +248,6 @@ function loadManifest (manifestPath = DEFAULT_MANIFEST_PATH) {
   } catch (_) {
     parsed = null
   }
-  if (manifestPath === DEFAULT_MANIFEST_PATH) _manifestCache = parsed
   return parsed
 }
 
@@ -305,10 +321,19 @@ function resetDownloadCount () { _downloadCount = 0 }
 // Resolves a model into test/model/, reusing a cached copy when it passes
 // integrity. Model URL + sha256/bytes come from models.manifest.json (by
 // `modelName`); an explicit `downloadUrl` is honoured only as a fallback when
-// the manifest has no entry. `modelDir`, `manifest`, and `download` overrides
-// exist for unit testing.
-async function ensureModel ({ modelName, downloadUrl, modelDir, manifest, download } = {}) {
-  const dir = modelDir || path.resolve(__dirname, '../model')
+// the manifest has no entry. `modelDirOverride`, `manifest`, and `download`
+// overrides exist for unit testing.
+//
+// The line below resolving the default model directory is matched verbatim
+// by qvac-test-addon-mobile's build-time patch (patchIntegrationUtilsForMobile),
+// which rewrites it to a writable mobile directory (__dirname is a virtual
+// bundle path on-device, not writable). Keep it intact and standalone, with
+// no other occurrence of this exact snippet earlier in the file, so that
+// patch's string replace (which only replaces the first match) keeps hitting
+// the right line.
+async function ensureModel ({ modelName, downloadUrl, modelDir: modelDirOverride, manifest, download } = {}) {
+  const modelDir = path.resolve(__dirname, '../model')
+  const dir = modelDirOverride || modelDir
   const modelPath = path.join(dir, modelName)
   const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
   const doDownload = download || downloadFileWithRetries
