@@ -251,9 +251,23 @@ let _manifestCache
 // Loads and caches the model manifest (single source of truth for model URLs +
 // sha256/bytes integrity). Returns null when absent so callers fall back to the
 // explicitly-passed downloadUrl.
+//
+// The default path is loaded via a literal require() rather than fs.readFileSync.
+// Mobile builds pack this file into a single bundle via bare-pack, which follows
+// static require()/import calls. A dynamic fs.readFileSync call is invisible to
+// that traversal and drops the manifest from the bundle, so model lookup fails
+// on-device even though the file was present at build time.
 function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
-  if (manifestPath === DEFAULT_MANIFEST_PATH && _manifestCache !== undefined) {
-    return _manifestCache
+  if (manifestPath === DEFAULT_MANIFEST_PATH) {
+    if (_manifestCache !== undefined) return _manifestCache
+    let parsed = null
+    try {
+      parsed = require('./models.manifest.json')
+    } catch (_) {
+      parsed = null
+    }
+    _manifestCache = parsed
+    return parsed
   }
   let parsed = null
   try {
@@ -261,7 +275,6 @@ function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
   } catch (_) {
     parsed = null
   }
-  if (manifestPath === DEFAULT_MANIFEST_PATH) _manifestCache = parsed
   return parsed
 }
 
@@ -366,8 +379,11 @@ function prestagedModelDir(modelName) {
   return null
 }
 
-async function ensureModel({ modelName, downloadUrl, modelDir, manifest, download } = {}) {
-  const dir = modelDir || path.resolve(__dirname, '../model')
+// The standalone default modelDir assignment is patched by the mobile test
+// packager to point at a writable app directory. Keep this shape stable.
+async function ensureModel({ modelName, downloadUrl, modelDir: modelDirOverride, manifest, download } = {}) {
+  const modelDir = path.resolve(__dirname, '../model')
+  const dir = modelDirOverride || modelDir
   const modelPath = path.join(dir, modelName)
 
   // Model URL + sha256/bytes come from models.manifest.json (by modelName); an
