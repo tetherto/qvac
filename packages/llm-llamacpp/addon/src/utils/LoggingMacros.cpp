@@ -6,7 +6,7 @@ using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace qvac_lib_inference_addon_llama {
 namespace logging {
-// Global verbosity level - initialized to ERROR as safe default
+// Global verbosity level - initialized to ERROR as a safe default
 // This ensures that if llamaLogCallback is triggered before verbosity is set,
 // only ERROR messages will be shown, preventing log spam
 Priority g_verbosityLevel = Priority::ERROR;
