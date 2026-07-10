@@ -3,8 +3,8 @@ import { z } from 'zod'
 import prettier from 'prettier'
 import { requestSchema, responseSchema } from '@/schemas/common'
 import { methodShapes, type MethodName } from '@/server/rpc/method-shapes'
+import { constantsRegistry } from '@/schemas/constants-registry'
 import { buildModelsRegistry } from './build-models-registry'
-import { buildConstantsRegistry } from './build-constants-registry'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
 
@@ -588,6 +588,19 @@ export function buildContract() {
   for (const [type, schema] of responseByType) {
     defEntries.push([`${type}.response`, schema, 'output', classTitleFor(type, 'Response')])
   }
+
+  // Public constants (@/schemas/constants-registry), merged into the same
+  // $defs as every request/response type via the same z.toJSONSchema call —
+  // not a separate artifact. `x-enum-varnames` preserves each entry's
+  // original key names (`ModelType.llamacppCompletion`, `PluginId.LLM`, ...)
+  // through codegen; plain JSON Schema `enum:` only carries values.
+  const constantVarNames = new Map<string, readonly string[]>()
+  for (const [name, schema] of Object.entries(constantsRegistry)) {
+    const defName = `constants.${name}`
+    defEntries.push([defName, schema, 'output', name])
+    constantVarNames.set(defName, Object.keys(schema.enum))
+  }
+
   defEntries.sort(function (a, b) {
     return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0
   })
@@ -604,7 +617,12 @@ export function buildContract() {
   for (const [defName, schema, io, title] of defEntries) {
     const wireSchema = toWireJsonSchema(schema, io, defName)
     titleNestedSchemas(wireSchema, title, seenTitles)
-    defs[defName] = { title, ...wireSchema }
+    const varNames = constantVarNames.get(defName)
+    defs[defName] = {
+      title,
+      ...wireSchema,
+      ...(varNames && { 'x-enum-varnames': varNames })
+    }
   }
 
   const manifest = {
@@ -650,11 +668,9 @@ async function formatJson(value: unknown, fileName: string) {
 export async function renderContractFiles() {
   const { schemaDocument, manifest } = buildContract()
   const modelsRegistry = buildModelsRegistry()
-  const constantsRegistryJson = buildConstantsRegistry()
   return {
     'schema.json': await formatJson(schemaDocument, 'schema.json'),
     'manifest.json': await formatJson(manifest, 'manifest.json'),
-    'models.json': await formatJson(modelsRegistry, 'models.json'),
-    'constants.json': await formatJson(constantsRegistryJson, 'constants.json')
+    'models.json': await formatJson(modelsRegistry, 'models.json')
   }
 }

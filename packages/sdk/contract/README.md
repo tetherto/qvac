@@ -5,21 +5,20 @@ the Zod schemas and the method registry. Generated clients are built from
 these artifacts.
 
 - `schema.json` — JSON Schema (draft 2020-12) for every request and response
-  wire type. Requests use the schema input shape, responses the output shape;
-  runtime-only refinements and transforms stay server-side.
+  wire type, plus every public constant registered in `@/schemas/constants-
+  registry` (`ModelType`, `ToolsMode`, `Verbosity`, `PluginId`,
+  `SupportedAudioFormat`) as its own `constants.<Name>` def, tagged with
+  `x-enum-varnames` so codegen preserves the original key names (plain JSON
+  Schema `enum:` only carries values). Requests use the schema input shape,
+  responses the output shape; runtime-only refinements and transforms stay
+  server-side. See `.cursor/rules/sdk/public-constants-contract.mdc` for
+  what must be registered to reach `schema.json` at all.
 - `manifest.json` — every RPC method with its call shape (`request-reply`,
   `server-stream`, `duplex`) and pointers into `schema.json`.
 - `models.json` — every named model registry constant (`QWEN3_600M_INST_Q4`,
   ...) from `@/models/registry`, the same constants JS consumers import
   directly and pass as `modelSrc`. Not part of the RPC wire contract, but a
   static data catalog downstream client generators need the same way.
-- `constants.json` — every public constant registered in
-  `@/schemas/constants-registry` (`ModelType`, `ToolsMode`, `Verbosity`,
-  `PluginId`, `SupportedAudioFormat`, `VlaDefaultImageSize`, ...): named
-  enums as `{ kind: 'enum', members: { <name>: <value> } }`, standalone
-  scalars as `{ kind: 'scalar', value }`. See
-  `.cursor/rules/sdk/public-constants-contract.mdc` for what must be
-  registered here.
 
 Do not edit these files by hand. Regenerate with:
 

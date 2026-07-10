@@ -8,7 +8,7 @@ import {
   renderContractFiles
 } from '@/scripts/contract/build-contract'
 import { buildModelsRegistry } from '@/scripts/contract/build-models-registry'
-import { buildConstantsRegistry } from '@/scripts/contract/build-constants-registry'
+import { constantsRegistry } from '@/schemas/constants-registry'
 import { methodShapes } from '@/server/rpc/method-shapes'
 import { contractValidate } from './utils/contract-validator'
 
@@ -255,37 +255,47 @@ test('models registry catalog exports every named model constant', (t) => {
   }
 })
 
-test('constants registry exports every registered public constant', (t) => {
+test('every registered public constant is merged into schema.json as its own $def', (t) => {
   // Regression guard for the same client-parity gap as models.json, but for
   // plain constants (ModelType, PLUGIN_*, ...) that never appear in a wire
   // schema at all — see .cursor/rules/sdk/public-constants-contract.mdc.
-  const constants = buildConstantsRegistry()
+  // Merged into the same schema.json $defs (not a separate artifact) so the
+  // same datamodel-code-generator run that produces every Request/Response
+  // class also produces these, with x-enum-varnames preserving each entry's
+  // key names (plain JSON Schema `enum:` only carries values).
+  const { schemaDocument } = buildContract()
+  const defs = schemaDocument.$defs as Record<
+    string,
+    { title?: string; enum?: unknown[]; 'x-enum-varnames'?: string[] }
+  >
 
+  const expectedNames = new Set(Object.keys(constantsRegistry))
   t.alike(
-    new Set(Object.keys(constants)),
-    new Set(['ModelType', 'ToolsMode', 'Verbosity', 'PluginId', 'SupportedAudioFormat', 'VlaDefaultImageSize']),
-    'every registered constant is exported, nothing extra'
+    new Set(
+      Object.keys(defs)
+        .filter((name) => name.startsWith('constants.'))
+        .map((name) => name.slice('constants.'.length))
+    ),
+    expectedNames,
+    'every registered constant has a constants.* def, nothing extra'
   )
 
-  const modelType = constants['ModelType'] as { kind: string; members: Record<string, unknown> }
-  t.is(modelType.kind, 'enum')
-  t.is(modelType.members['llamacppCompletion'], 'llamacpp-completion')
-
-  const verbosity = constants['Verbosity'] as { kind: string; members: Record<string, unknown> }
-  t.is(verbosity.kind, 'enum')
-  t.is(verbosity.members['ERROR'], 0)
-  t.is(verbosity.members['DEBUG'], 3)
-
-  const audioFormat = constants['SupportedAudioFormat'] as {
-    kind: string
-    members: Record<string, unknown>
+  for (const [name, schema] of Object.entries(constantsRegistry)) {
+    const def = defs[`constants.${name}`]
+    t.is(def?.title, name, `${name} def is titled after the registry key`)
+    t.alike(def?.enum, Object.values(schema.enum), `${name} enum values match the registered schema`)
+    t.alike(
+      def?.['x-enum-varnames'],
+      Object.keys(schema.enum),
+      `${name} x-enum-varnames preserve the original key names`
+    )
   }
-  t.is(audioFormat.kind, 'enum')
-  t.is(audioFormat.members['.mp3'], '.mp3', 'array-form enum keys identity-map to their value')
 
-  const vlaSize = constants['VlaDefaultImageSize'] as { kind: string; value: unknown }
-  t.is(vlaSize.kind, 'scalar')
-  t.is(vlaSize.value, 512)
+  const modelType = defs['constants.ModelType']
+  t.ok(modelType?.enum?.includes('llamacpp-completion'), 'ModelType carries its canonical values')
+
+  const verbosity = defs['constants.Verbosity']
+  t.alike(verbosity?.['x-enum-varnames'], ['ERROR', 'WARN', 'INFO', 'DEBUG'])
 })
 
 test('export is deterministic across runs', async (t) => {
@@ -295,7 +305,6 @@ test('export is deterministic across runs', async (t) => {
   t.is(first['schema.json'], second['schema.json'])
   t.is(first['manifest.json'], second['manifest.json'])
   t.is(first['models.json'], second['models.json'])
-  t.is(first['constants.json'], second['constants.json'])
 })
 
 test('committed artifacts are up to date', async (t) => {

@@ -1873,6 +1873,84 @@
       "required": ["type", "events"],
       "additionalProperties": false
     },
+    "constants.ModelType": {
+      "title": "ModelType",
+      "type": "string",
+      "enum": [
+        "llamacpp-completion",
+        "whispercpp-transcription",
+        "bci-whispercpp-transcription",
+        "llamacpp-embedding",
+        "nmtcpp-translation",
+        "onnx-tts",
+        "tts-ggml",
+        "parakeet-transcription",
+        "ggml-ocr",
+        "sdcpp-generation",
+        "ggml-vla",
+        "ggml-classification"
+      ],
+      "x-enum-varnames": [
+        "llamacppCompletion",
+        "whispercppTranscription",
+        "bciWhispercppTranscription",
+        "llamacppEmbedding",
+        "nmtcppTranslation",
+        "onnxTts",
+        "ttsGgml",
+        "parakeetTranscription",
+        "ggmlOcr",
+        "sdcppGeneration",
+        "ggmlVla",
+        "ggmlClassification"
+      ]
+    },
+    "constants.PluginId": {
+      "title": "PluginId",
+      "type": "string",
+      "enum": [
+        "@qvac/sdk/llamacpp-completion/plugin",
+        "@qvac/sdk/llamacpp-embedding/plugin",
+        "@qvac/sdk/whispercpp-transcription/plugin",
+        "@qvac/sdk/bci-whispercpp-transcription/plugin",
+        "@qvac/sdk/nmtcpp-translation/plugin",
+        "@qvac/sdk/tts-ggml/plugin",
+        "@qvac/sdk/ggml-ocr/plugin",
+        "@qvac/sdk/sdcpp-generation/plugin",
+        "@qvac/sdk/ggml-vla/plugin",
+        "@qvac/sdk/ggml-classification/plugin"
+      ],
+      "x-enum-varnames": [
+        "LLM",
+        "EMBEDDING",
+        "WHISPER",
+        "BCI",
+        "NMT",
+        "TTS",
+        "OCR",
+        "DIFFUSION",
+        "VLA",
+        "CLASSIFICATION"
+      ]
+    },
+    "constants.SupportedAudioFormat": {
+      "title": "SupportedAudioFormat",
+      "type": "string",
+      "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
+      "x-enum-varnames": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"]
+    },
+    "constants.ToolsMode": {
+      "title": "ToolsMode",
+      "type": "string",
+      "enum": ["static", "dynamic"],
+      "x-enum-varnames": ["static", "dynamic"]
+    },
+    "constants.Verbosity": {
+      "title": "Verbosity",
+      "type": "number",
+      "enum": [0, 1, 2, 3],
+      "x-enum-varnames": ["ERROR", "WARN", "INFO", "DEBUG"]
+    },
     "deleteCache.request": {
       "title": "DeleteCacheRequest",
       "anyOf": [
@@ -3444,24 +3522,9 @@
                       "type": "boolean"
                     },
                     "verbosity": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "const": 0
-                        },
-                        {
-                          "type": "number",
-                          "const": 1
-                        },
-                        {
-                          "type": "number",
-                          "const": 2
-                        },
-                        {
-                          "type": "number",
-                          "const": 3
-                        }
-                      ]
+                      "type": "number",
+                      "enum": [0, 1, 2, 3],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
                     },
                     "presence_penalty": {
                       "type": "number"
@@ -4510,24 +4573,9 @@
                       "type": "string"
                     },
                     "verbosity": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "const": 0
-                        },
-                        {
-                          "type": "number",
-                          "const": 1
-                        },
-                        {
-                          "type": "number",
-                          "const": 2
-                        },
-                        {
-                          "type": "number",
-                          "const": 3
-                        }
-                      ]
+                      "type": "number",
+                      "enum": [0, 1, 2, 3],
+                      "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"
                     },
                     "openclCacheDir": {
                       "type": "string"
