@@ -5,7 +5,7 @@ export interface AddonLogger {
     debug?: (message: string) => void;
 }
 type NativeLoggerCallback = (priority: number, message: string) => void;
-interface ClassificationBinding {
+export interface ClassificationBinding {
     setLogger(callback: NativeLoggerCallback): void;
     createInstance(owner: ClassificationInterface, configurationParams: ClassificationConfigurationParams, outputCallback: ClassificationOutputCallback): unknown;
     activate(handle: unknown): void;

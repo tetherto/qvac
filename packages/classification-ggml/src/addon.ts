@@ -7,7 +7,7 @@ export interface AddonLogger {
 
 type NativeLoggerCallback = (priority: number, message: string) => void;
 
-interface ClassificationBinding {
+export interface ClassificationBinding {
   setLogger(callback: NativeLoggerCallback): void;
   createInstance(
     owner: ClassificationInterface,

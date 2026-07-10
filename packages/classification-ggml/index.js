@@ -18,7 +18,7 @@ function resolveDefaultModelPath() {
 function getErrorMessage(error, fallback) {
     if (error && typeof error === "object" && "message" in error) {
         const message = error.message;
-        if (typeof message === "string")
+        if (typeof message === "string" && message)
             return message;
     }
     return typeof error === "string" ? error : fallback;

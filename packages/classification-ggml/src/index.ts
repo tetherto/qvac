@@ -6,6 +6,7 @@ import { createJobHandler, exclusiveRunQueue, type JobHandler } from "@qvac/infe
 import {
   ClassificationInterface,
   mapAddonEvent,
+  type ClassificationBinding,
   type ClassificationConfigurationParams,
   type ClassificationInterfaceOptions,
   type ClassificationJob,
@@ -70,24 +71,6 @@ export interface ImageClassifierState {
   destroyed: boolean;
 }
 
-interface ClassificationBinding {
-  setLogger(callback: (priority: number, message: string) => void): void;
-  createInstance(
-    owner: ClassificationInterface,
-    configurationParams: ClassificationConfigurationParams,
-    outputCallback: (
-      addon: ClassificationInterface,
-      event: unknown,
-      data: unknown,
-      error: unknown,
-    ) => void,
-  ): unknown;
-  activate(handle: unknown): void;
-  runJob(handle: unknown, input: ClassificationJob): Promise<boolean>;
-  cancel(handle: unknown): Promise<void>;
-  destroyInstance(handle: unknown): void;
-}
-
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
 const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
@@ -104,7 +87,7 @@ function resolveDefaultModelPath(): string {
 function getErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === "object" && "message" in error) {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === "string") return message;
+    if (typeof message === "string" && message) return message;
   }
   return typeof error === "string" ? error : fallback;
 }
