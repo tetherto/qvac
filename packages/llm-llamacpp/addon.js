@@ -11,7 +11,7 @@ const path = require('bare-path')
  * @param {{ skipNextRuntimeStats: boolean }} state
  * @returns {{ type: string, data: *, error: * } | null}
  */
-function mapAddonEvent (rawEvent, rawData, rawError, state) {
+function mapAddonEvent(rawEvent, rawData, rawError, state) {
   // TPS-shaped runtime stats — either a real inference terminal or the stale
   // trailer that follows a finetune terminal.
   if (rawData && typeof rawData === 'object' && 'TPS' in rawData) {
@@ -42,11 +42,7 @@ function mapAddonEvent (rawEvent, rawData, rawError, state) {
   }
 
   // Per-iteration finetune metrics.
-  if (
-    rawData &&
-    typeof rawData === 'object' &&
-    rawData.type === 'finetune_progress'
-  ) {
+  if (rawData && typeof rawData === 'object' && rawData.type === 'finetune_progress') {
     return { type: 'FinetuneProgress', data: rawData, error: null }
   }
   if (
@@ -84,7 +80,7 @@ class LlamaInterface {
    * @param {Object} configurationParams - all the required configuration for inference setup
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
    */
-  constructor (binding, configurationParams, outputCb) {
+  constructor(binding, configurationParams, outputCb) {
     this._binding = binding
 
     if (!configurationParams.config) {
@@ -95,12 +91,7 @@ class LlamaInterface {
       configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
     }
 
-    this._handle = this._binding.createInstance(
-      this,
-      configurationParams,
-      outputCb,
-      null
-    )
+    this._handle = this._binding.createInstance(this, configurationParams, outputCb, null)
   }
 
   /**
@@ -109,21 +100,21 @@ class LlamaInterface {
    * @param {Uint8Array|null} weightsData.chunk
    * @param {Boolean} weightsData.completed
    */
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     this._binding.loadWeights(this._handle, weightsData)
   }
 
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
-  async activate () {
+  async activate() {
     this._binding.activate(this._handle)
   }
 
   /**
    * Cancel current inference job
    */
-  async cancel (savePauseCheckpoint = 1) {
+  async cancel(savePauseCheckpoint = 1) {
     if (!this._handle) return
     await this._binding.cancel(this._handle, savePauseCheckpoint)
   }
@@ -131,7 +122,7 @@ class LlamaInterface {
   /**
    * Run finetuning when native binding provides support.
    */
-  async finetune (finetuningParams) {
+  async finetune(finetuningParams) {
     if (typeof this._binding.finetune !== 'function') {
       throw new Error('Finetuning is not exposed by this native binding')
     }
@@ -145,14 +136,14 @@ class LlamaInterface {
    * Run one inference job with an array of message objects.
    * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
    */
-  async runJob (data) {
+  async runJob(data) {
     return this._binding.runJob(this._handle, data)
   }
 
   /**
    * Unload the model and clear resources (including memory).
    */
-  async unload () {
+  async unload() {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)
     this._handle = null

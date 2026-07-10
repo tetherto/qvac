@@ -6,9 +6,13 @@
 const test = require('brittle')
 const { QWEN35_MODEL, IMAGE_CASES, isDarwinX64, runVlmImagePerf } = require('./_vlm-image-perf.js')
 
-test('Qwen3.5-VL image perf [fruit plate]', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
-  await runVlmImagePerf(t, QWEN35_MODEL, IMAGE_CASES['fruit-plate'])
-})
+test(
+  'Qwen3.5-VL image perf [fruit plate]',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    await runVlmImagePerf(t, QWEN35_MODEL, IMAGE_CASES['fruit-plate'])
+  }
+)
 
 setImmediate(() => {
   setTimeout(() => {}, 500)
