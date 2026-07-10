@@ -7,7 +7,9 @@ import type {
   QvacConfig,
   RPCOptions
 } from './schemas'
-import { normalizeModelType, PROFILING_KEY, createErrorResponse } from './schemas'
+import { normalizeModelType, PROFILING_KEY, createErrorResponse, requestSchema } from './schemas'
+import { z } from 'zod'
+import { formatZodError } from './utils/zod-error'
 import os from 'bare-os'
 import Buffer from 'bare-buffer'
 import { PassThrough, type Readable } from 'bare-stream'
@@ -21,7 +23,11 @@ import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from './logging'
 import { profileReplyHandler, profileStreamHandler } from './profiling'
-import { RPCNoHandlerError, PluginsNotRegisteredError } from './errors'
+import {
+  RPCNoHandlerError,
+  PluginsNotRegisteredError,
+  RequestValidationFailedError
+} from './errors'
 
 // The dispatch seam. Public operations in `api/` build a typed request and call
 // `send`/`stream`/`duplex`; this runs each against the handler registry.
@@ -116,6 +122,31 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
   return undefined
 }
 
+/**
+ * Validate a request against its schema and apply device + schema defaults
+ * before dispatch. Every operation flows through here, so validation and
+ * defaulting are guaranteed for the whole registry — there is no per-operation
+ * step to forget. Per-call profiling meta rides on a symbol key the schema
+ * parse would drop, so it is carried across.
+ */
+function prepareRequest<T extends Request>(request: T): Request {
+  const withDeviceDefaults = applyDeviceDefaults(request)
+  const profilingMeta = getProfilingMeta(withDeviceDefaults)
+  let validated: Request
+  try {
+    validated = requestSchema.parse(withDeviceDefaults)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new RequestValidationFailedError(formatZodError(error))
+    }
+    throw error
+  }
+  if (profilingMeta !== undefined) {
+    ;(validated as Record<PropertyKey, unknown>)[PROFILING_KEY] = profilingMeta
+  }
+  return validated
+}
+
 function delegatedOptions(
   request: Request,
   progressCallback?: (update: Response) => void
@@ -194,7 +225,7 @@ export async function send<T extends Request>(
   await ensureReady()
   assertLifecycleAllowed(request)
 
-  const processed = applyDeviceDefaults(request)
+  const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
   const { handler, isDelegated } = selectHandler(entry, processed)
 
@@ -217,7 +248,7 @@ export async function* stream<T extends Request>(
   await ensureReady()
   assertLifecycleAllowed(request)
 
-  const processed = applyDeviceDefaults(request)
+  const processed = prepareRequest(request)
   const entry = getHandlerEntry(processed.type)
   const { handler, isDelegated } = selectHandler(entry, processed)
 
@@ -264,9 +295,10 @@ export async function duplex<T extends Request>(
   await ensureReady()
   assertLifecycleAllowed(request)
 
-  const entry = registry[request.type]
+  const processed = prepareRequest(request)
+  const entry = registry[processed.type]
   if (!entry || entry.type !== 'duplex') {
-    throw new RPCNoHandlerError(request.type)
+    throw new RPCNoHandlerError(processed.type)
   }
 
   const inputStream = new PassThrough()
@@ -279,7 +311,7 @@ export async function duplex<T extends Request>(
 
   void (async () => {
     try {
-      for await (const response of duplexHandler(request, inputStream)) {
+      for await (const response of duplexHandler(processed, inputStream)) {
         outputStream.write(JSON.stringify(response) + '\n', 'utf-8')
       }
     } catch (error) {
