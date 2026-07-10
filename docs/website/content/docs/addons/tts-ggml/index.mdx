@@ -1,0 +1,362 @@
+---
+title: "@qvac/tts-ggml"
+titleStyle: code
+description: Speech synthesis for text-to-speech (TTS).
+schemaType: APIReference
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text-to-speech in QVAC, backed by the [`qvac-tts.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp) GGML library.
+
+It runs in-process with a persistent native engine — the GGUFs, the S3Gen preload, the ggml backend, and any voice-conditioning tensors are loaded once and reused across every synthesis call. GPU acceleration (Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows/Android) is **opt-in** via `config: { useGPU: true }`; the default is CPU.
+
+## Models
+
+Two engine families are wrapped — **Chatterbox** and **Supertonic** — each with its own GGUF layout under `models/`:
+
+| Model | GGUF files | Languages / notes |
+|-------|-----------|-------------------|
+| Chatterbox Turbo | `chatterbox-t3-turbo.gguf`, `chatterbox-s3gen.gguf` | English; voice cloning |
+| Chatterbox multilingual | `chatterbox-t3-mtl.gguf`, `chatterbox-s3gen-mtl.gguf` | 23 languages (see below); voice cloning |
+| Supertonic | `supertonic.gguf` | English; voice baked in |
+| Supertonic 2 | `supertonic2.gguf` | Multilingual: `en`, `ko`, `es`, `pt`, `fr` |
+| Supertonic 3 | `supertonic3.gguf` | Multilingual: 31 languages plus the language-agnostic `na` code (see below) |
+
+**Chatterbox multilingual (23 languages):** Arabic (`ar`), Danish (`da`), German (`de`), Greek (`el`), English (`en`), Spanish (`es`), Finnish (`fi`), French (`fr`), Hebrew (`he`), Hindi (`hi`), Italian (`it`), Japanese (`ja`), Korean (`ko`), Malay (`ms`), Dutch (`nl`), Norwegian (`no`), Polish (`pl`), Portuguese (`pt`), Russian (`ru`), Swedish (`sv`), Swahili (`sw`), Turkish (`tr`), Chinese (`zh`).
+
+**Supertonic 3 (31 languages + `na`):** `ar`, `bg`, `hr`, `cs`, `da`, `nl`, `en`, `et`, `fi`, `fr`, `de`, `el`, `hi`, `hu`, `id`, `it`, `ja`, `ko`, `lv`, `lt`, `pl`, `pt`, `ro`, `ru`, `sk`, `sl`, `es`, `sv`, `tr`, `uk`, `vi`. Pass `language: 'na'` when the input language is unknown.
+
+Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox) / `files.supertonicModel` (Supertonic).
+
+## Requirement
+
+Bare $\geq$ v1.19
+
+## Installation
+
+```bash
+npm i @qvac/tts-ggml
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-tts-quickstart
+cd qvac-tts-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/tts-ggml bare-fs bare-path
+```
+</Step>
+
+<Step>
+Place the Chatterbox GGUF files into `models/`: `chatterbox-t3-turbo.gguf` and `chatterbox-s3gen.gguf`. Optionally place a mono reference WAV (≥ 5 s of clean speech) at `./reference.wav` for voice cloning.
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const fs = require('bare-fs')
+const TTSGgml = require('@qvac/tts-ggml')
+
+const SAMPLE_RATE = 24000
+
+async function main () {
+  const model = new TTSGgml({
+    files: { modelDir: './models' }, // contains chatterbox-{t3-turbo,s3gen}.gguf
+    referenceAudio: './reference.wav', // optional voice cloning
+    config: { language: 'en' },
+    opts: { stats: true }
+  })
+
+  try {
+    console.log('Loading Chatterbox TTS model...')
+    await model.load()
+    console.log('Model loaded.')
+
+    const textToSynthesize = 'Hello world! This is a test of the Chatterbox TTS system.'
+    console.log(`Running TTS on: "${textToSynthesize}"`)
+
+    const response = await model.run({
+      input: textToSynthesize,
+      type: 'text'
+    })
+
+    let pcm = []
+    await response
+      .onUpdate(data => {
+        if (data && data.outputArray) pcm = pcm.concat(Array.from(data.outputArray))
+      })
+      .await()
+
+    console.log('TTS finished!')
+    if (response.stats) {
+      console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+    }
+
+    console.log(`Generated ${pcm.length} audio samples at ${SAMPLE_RATE}Hz`)
+  } catch (err) {
+    console.error('Error during TTS processing:', err)
+  } finally {
+    console.log('Unloading model...')
+    await model.unload()
+    console.log('Model unloaded.')
+  }
+}
+
+main().catch(console.error)
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### 1. Import the Model Class
+
+```js
+const TTSGgml = require('@qvac/tts-ggml')
+```
+
+### 2. Create the Model Instance
+
+```js
+const model = new TTSGgml({
+  files: { modelDir: './models' },
+  referenceAudio: './voices/me.wav',
+  config: { language: 'en', useGPU: false },
+  opts: { stats: true }
+})
+```
+
+The most common constructor options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `files.modelDir` | string | — | Directory containing the two GGUFs (engine auto-detected) |
+| `files.t3Model` / `files.s3genModel` | string | — | Override `modelDir` for the Chatterbox T3 / S3Gen GGUF |
+| `files.supertonicModel` | string | — | Supertonic GGUF path |
+| `referenceAudio` | string | — | Mono WAV ≥ 5 s for voice cloning |
+| `voiceDir` | string | — | Pre-baked voice profile directory |
+| `streamChunkTokens` | number | 0 | `> 0` enables native chunk streaming (25 tokens ≈ 1 s of audio) |
+| `cfmSteps` | number | 2 | `1` halves CFM cost for faster synthesis |
+| `config.language` | string | `'en'` | Language code; multilingual models accept `es/fr/de/pt/it/zh/ja/ko/...` |
+| `config.useGPU` | boolean | `false` | Route through Metal / Vulkan / OpenCL if available |
+| `config.outputSampleRate` | number | 24000 | Resample the native 24 kHz output |
+| `opts.stats` | boolean | `false` | Populate `response.stats` with RTF, backend info, etc. |
+
+See the [package README](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) for the full option set (GPU/backend, KV-cache, and Android-specific options).
+
+### 3. Load the Model
+
+```js
+await model.load()
+```
+
+`load()` constructs the native engine — it loads T3, preloads S3Gen, and bakes voice conditioning. Subsequent `run()` calls reuse all of it.
+
+### 4. Run TTS Synthesis
+
+Pass the text to synthesize to the `run` method and process the generated audio output asynchronously:
+
+```javascript
+try {
+  const textToSynthesize = 'Hello world! This is a test of the TTS system.'
+  let audioSamples = []
+
+  const response = await model.run({
+    input: textToSynthesize,
+    type: 'text'
+  })
+
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        audioSamples = audioSamples.concat(Array.from(data.outputArray))
+      }
+    })
+    .await()
+
+  console.log(`Total audio samples generated: ${audioSamples.length}`)
+
+  // audioSamples now contains the complete audio as PCM data (16-bit, 24 kHz, mono)
+  if (response.stats) {
+    console.log(`Inference stats: ${JSON.stringify(response.stats)}`)
+  }
+} catch (error) {
+  console.error('TTS synthesis failed:', error)
+}
+```
+
+### 5. Release Resources
+
+Unload the model when finished:
+
+```javascript
+try {
+  await model.unload()
+} catch (error) {
+  console.error('Failed to unload model:', error)
+}
+```
+
+## Streaming
+
+### Sentence streaming — `runStreaming(asyncIterable)`
+
+Use when your text arrives as discrete sentences (e.g. buffered LLM output) and you want the audio to flow sentence-by-sentence. One `onUpdate` event per input yield:
+
+```js
+async function * sentencesOverTime () {
+  yield 'First sentence.'
+  await new Promise(r => setTimeout(r, 200))
+  yield 'The second arrives shortly after.'
+}
+
+const response = await model.runStreaming(sentencesOverTime())
+await response.onUpdate(data => {
+  // data.outputArray   — Int16 PCM for this sentence's audio
+  // data.chunkIndex    — 0-based index of the yielded sentence
+  // data.sentenceChunk — the sentence text that produced this audio
+}).await()
+```
+
+### Chunk streaming — `streamChunkTokens`
+
+Use when you want the fastest possible first-audio-out **within a single utterance**. The C++ engine splits each synthesis into chunks of `streamChunkTokens` speech tokens and emits audio per chunk:
+
+```js
+const model = new TTSGgml({
+  files: { modelDir: './models' },
+  streamChunkTokens: 25,      // ~1 s of audio per chunk
+  streamFirstChunkTokens: 10, // smaller first chunk = faster first-audio-out
+  cfmSteps: 1,
+  config: { language: 'en' }
+})
+
+await model.load()
+
+const response = await model.run({ input: 'A long sentence produces many chunks...' })
+await response.onUpdate(data => {
+  if (data && data.outputArray) playPcmChunk(data.outputArray)
+}).await()
+```
+
+## Voice cloning
+
+Pass a mono WAV with ≥ 5 s of clean speech. The engine does the loudness normalisation, resampling, and all conditioning natively at `load()` time:
+
+```js
+const model = new TTSGgml({
+  files: { modelDir: './models' },
+  referenceAudio: './voices/me.wav',
+  config: { language: 'en' }
+})
+```
+
+Alternatively point at a pre-baked profile directory via `voiceDir`. When both are supplied, missing tensors in `voiceDir` are backfilled from `referenceAudio`.
+
+## Speech enhancement (LavaSR)
+
+Opt-in neural post-processing that bandwidth-extends the synthesized audio to **48 kHz** with a synthesised high band, using the LavaSR Vocos enhancer run on the CPU/GGML path. It is fully backward compatible — provide no enhancer GGUF and nothing changes. Enhancement is enabled simply by supplying the enhancer GGUF; there is no separate on/off flag.
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  // Providing the enhancer GGUF is what turns enhancement on:
+  files: { supertonicModel, lavasrEnhancer: 'models/lavasr/lavasr-enhancer.gguf' },
+  config: { language: 'en' }
+})
+// The output callback now reports 48000:
+//   response.onUpdate(d => { /* d.outputArray; d.sampleRate === 48000 */ })
+```
+
+The GGUF path may instead be given as an `enhancer: { type: 'lavasr', enhancerPath }` block.
+
+- Works for Supertonic and Chatterbox — on the batch path, sentence-level streaming, and Chatterbox native chunk streaming (`streamChunkTokens > 0`).
+- For native chunk streaming the enhancer runs over a sliding window with look-ahead + crossfade, so each emitted chunk is bandwidth-extended seam-free; this adds ~0.34 s of look-ahead latency.
+- The enhancer always runs at 48 kHz internally. By default the emitted audio is 48 kHz; set `config.outputSampleRate` to resample the enhanced output (`sampleRate` reports the actual rate).
+
+### Denoiser
+
+LavaSR's first stage — the UL-UNAS **denoiser** that cleans the signal before the enhancer bandwidth-extends it — is enabled the same way, via `files.lavasrDenoiser` (or a `denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the enhancer on the batch path for both engines:
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  files: {
+    supertonicModel,
+    lavasrDenoiser: 'models/lavasr/lavasr-denoiser.gguf', // cleaned first…
+    lavasrEnhancer: 'models/lavasr/lavasr-enhancer.gguf'  // …then upsampled
+  },
+  config: { language: 'en' }
+})
+```
+
+- The denoiser forward runs at 16 kHz internally (resampled in/out), so it is **rate-preserving** — the emitted audio keeps the engine's sample rate. With no denoiser path the output is unchanged.
+- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is rejected up front; use batch synthesis, or drop the denoiser for streaming.
+
+## Output Format
+
+Audio is received via the `onUpdate` callback of the response object as raw PCM samples.
+
+```javascript
+response.onUpdate(data => {
+  data.outputArray   // Int16Array — 24 kHz mono PCM
+  data.sampleRate    // 24000
+  data.chunkIndex    // present on sentence-streaming events only
+  data.sentenceChunk // present on sentence-streaming events only
+})
+```
+
+When synthesis completes and `opts: { stats: true }` was set, `response.stats` reports performance:
+
+```javascript
+response.stats.totalTime      // seconds
+response.stats.realTimeFactor // synthesis time / audio duration; < 1 means streaming is possible
+response.stats.audioDurationMs
+response.stats.totalSamples
+response.stats.tokensPerSecond
+```
+
+**Audio Format Specifications:**
+- **Sample Rate:** 24000 Hz (configurable via `config.outputSampleRate`)
+- **Format:** 16-bit signed PCM, mono channel
+- **Data Type:** Int16Array containing raw audio samples
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/tts-ggml)

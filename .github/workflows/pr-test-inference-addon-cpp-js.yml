@@ -160,7 +160,7 @@ jobs:
             if (
               cd "$package_dir"
               npm install --package-lock=false --ignore-scripts
-              npm exec -- standard
+              npm run lint
               bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
               bare-make build
               bare-make install
@@ -195,7 +195,7 @@ jobs:
             if (
               cd "$package_dir"
               npm install --package-lock=false --ignore-scripts
-              npm exec -- standard
+              npm run lint
               rm -rf build prebuilds
               CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer" \
               LDFLAGS="-fsanitize=address" \
