@@ -9,7 +9,7 @@ const logger = require('../utils/logger')
  * Ensures only ONE model is loaded in VRAM at a time
  */
 class ModelManager {
-  constructor () {
+  constructor() {
     this.currentModel = null
     this.currentModelKey = null
     this.loadPromise = null // Track in-progress loads
@@ -19,7 +19,7 @@ class ModelManager {
    * Generate a unique key for a model configuration
    * Includes all parameters that affect model behavior
    */
-  _generateModelKey (modelPath, config) {
+  _generateModelKey(modelPath, config) {
     const device = config?.device === 'cpu' ? 'cpu' : 'gpu'
     const gpuLayers = config?.gpu_layers || '0'
     const ctxSize = config?.ctx_size || '512'
@@ -31,7 +31,7 @@ class ModelManager {
    * Get or create a model instance
    * Reuses existing model if config matches, otherwise unloads old and loads new
    */
-  async getModel (modelPath, diskPath, localModelName, config) {
+  async getModel(modelPath, diskPath, localModelName, config) {
     const modelKey = this._generateModelKey(modelPath, config)
 
     // If same model is already loaded, reuse it
@@ -77,7 +77,7 @@ class ModelManager {
   /**
    * Internal method to load a model
    */
-  async _loadModel (modelPath, diskPath, localModelName, config) {
+  async _loadModel(modelPath, diskPath, localModelName, config) {
     // Build addon config map from parameters
     // Config is a map with string values: { gpu_layers: '25', ctx_size: '512', batch_size: '512' }
     const addonConfig = {}
@@ -124,7 +124,7 @@ class ModelManager {
   /**
    * Unload the current model and free VRAM
    */
-  async unloadModel () {
+  async unloadModel() {
     if (!this.currentModel) {
       return
     }
@@ -153,7 +153,7 @@ class ModelManager {
   /**
    * Get status of currently loaded model
    */
-  getStatus () {
+  getStatus() {
     return {
       hasModel: !!this.currentModel,
       modelKey: this.currentModelKey,

@@ -26,6 +26,17 @@ test('llmConfigBaseSchema: split-mode is optional', (t) => {
   t.is(llmConfigBaseSchema.safeParse({}).success, true)
 })
 
+test('llmConfigBaseSchema: accepts continuous-batching parallel slots', (t) => {
+  const result = llmConfigBaseSchema.safeParse({ parallel: 4 })
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.parallel, 4)
+})
+
+test('llmConfigBaseSchema: rejects invalid parallel values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ parallel: 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ parallel: 1.5 }).success, false)
+})
+
 test('llmConfigBaseSchema: accepts tensor-split string', (t) => {
   const result = llmConfigBaseSchema.safeParse({ 'tensor-split': '1,1' })
   t.is(result.success, true)
@@ -137,4 +148,40 @@ test('llmConfigSchema: explicit image_tile_mode overrides the default', (t) => {
   const result = llmConfigSchema.safeParse({ image_tile_mode: 'batched' })
   t.is(result.success, true)
   if (result.success) t.is(result.data.image_tile_mode, 'batched')
+})
+
+test('llmConfigBaseSchema: accepts mmproj-use-gpu boolean', (t) => {
+  const enabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': true })
+  t.is(enabled.success, true)
+  if (enabled.success) t.is(enabled.data['mmproj-use-gpu'], true)
+  const disabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': false })
+  t.is(disabled.success, true)
+  if (disabled.success) t.is(disabled.data['mmproj-use-gpu'], false)
+})
+
+test('llmConfigBaseSchema: rejects non-boolean mmproj-use-gpu', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': 'true' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': 1 }).success, false)
+})
+
+test('llmConfigBaseSchema: mmproj-use-gpu is optional (auto-default when unset)', (t) => {
+  const result = llmConfigBaseSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('mmproj-use-gpu' in result.data)
+})
+
+test('llmConfigSchema: does not inject a default for mmproj-use-gpu', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.absent('mmproj-use-gpu' in result.data)
+})
+
+test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...LLM_BASE,
+      modelConfig: { 'mmproj-use-gpu': true }
+    }).success,
+    true
+  )
 })

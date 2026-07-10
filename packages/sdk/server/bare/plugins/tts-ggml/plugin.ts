@@ -38,37 +38,97 @@ function rejectLegacyOnnxFields(cfg: object) {
   }
 }
 
+function dirname(path: string) {
+  const normalized = path.replace(/\\/g, '/')
+  const index = normalized.lastIndexOf('/')
+  if (index <= 0) return index === 0 ? '/' : '.'
+  return path.slice(0, index)
+}
+
+// Resolve the optional LavaSR enhancer/denoiser GGUFs shared by both engines.
+async function resolveLavasrArtifacts(
+  lavasrEnhancerModelSrc: TtsChatterboxLoadConfig['lavasrEnhancerModelSrc'],
+  lavasrDenoiserModelSrc: TtsChatterboxLoadConfig['lavasrDenoiserModelSrc'],
+  ctx: ResolveContext
+) {
+  const resolve = ctx.resolveModelPath
+  const [lavasrEnhancerPath, lavasrDenoiserPath] = await Promise.all([
+    lavasrEnhancerModelSrc ? resolve(lavasrEnhancerModelSrc) : Promise.resolve(undefined),
+    lavasrDenoiserModelSrc ? resolve(lavasrDenoiserModelSrc) : Promise.resolve(undefined)
+  ])
+
+  return {
+    ...(lavasrEnhancerPath ? { lavasrEnhancerPath } : {}),
+    ...(lavasrDenoiserPath ? { lavasrDenoiserPath } : {})
+  }
+}
+
 async function resolveChatterboxConfig(
   config: TtsChatterboxLoadConfig,
   ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
   rejectLegacyOnnxFields(config)
 
-  const { s3genModelSrc, referenceAudioSrc, ...runtime } = config
+  const {
+    s3genModelSrc,
+    referenceAudioSrc,
+    mecabDictSrc,
+    cangjieTsvSrc,
+    lavasrEnhancerModelSrc,
+    lavasrDenoiserModelSrc,
+    ...runtime
+  } = config
   if (!s3genModelSrc) {
     throw new TtsArtifactsRequiredError()
   }
 
   const resolve = ctx.resolveModelPath
-  const [s3genPath, referenceAudioPath] = await Promise.all([
-    resolve(s3genModelSrc),
-    referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined)
-  ])
+  const [s3genPath, referenceAudioPath, mecabDictFilePath, cangjieTsvPath, lavasrArtifacts] =
+    await Promise.all([
+      resolve(s3genModelSrc),
+      referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined),
+      mecabDictSrc ? resolve(mecabDictSrc) : Promise.resolve(undefined),
+      cangjieTsvSrc ? resolve(cangjieTsvSrc) : Promise.resolve(undefined),
+      resolveLavasrArtifacts(lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ctx)
+    ])
 
   return {
     config: runtime,
     artifacts: {
       s3genPath,
-      ...(referenceAudioPath ? { referenceAudioPath } : {})
+      ...(referenceAudioPath ? { referenceAudioPath } : {}),
+      ...(mecabDictFilePath ? { mecabDictPath: dirname(mecabDictFilePath) } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {}),
+      ...lavasrArtifacts
     }
   }
 }
 
-function resolveSupertonicConfig(
-  config: TtsSupertonicLoadConfig
+async function resolveSupertonicConfig(
+  config: TtsSupertonicLoadConfig,
+  ctx: ResolveContext
 ): Promise<ResolveResult<TtsRuntimeConfig>> {
   rejectLegacyOnnxFields(config)
-  return Promise.resolve({ config })
+
+  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
+  const lavasrArtifacts = await resolveLavasrArtifacts(
+    lavasrEnhancerModelSrc,
+    lavasrDenoiserModelSrc,
+    ctx
+  )
+
+  return { config: runtime, artifacts: lavasrArtifacts }
+}
+
+// Build the optional LavaSR `files` entries from resolved artifacts. Supplying
+// a path is what enables the stage in @qvac/tts-ggml — there is no on/off flag.
+function lavasrFiles(artifacts: Record<string, string | undefined>) {
+  const lavasrEnhancer = artifacts['lavasrEnhancerPath']
+  const lavasrDenoiser = artifacts['lavasrDenoiserPath']
+  return {
+    ...(lavasrEnhancer ? { lavasrEnhancer } : {}),
+    ...(lavasrDenoiser ? { lavasrDenoiser } : {})
+  }
 }
 
 function createChatterboxModel(
@@ -80,6 +140,8 @@ function createChatterboxModel(
   const t3Model = params.modelPath
   const s3genModel = artifacts['s3genPath']
   const referenceAudioPath = artifacts['referenceAudioPath']
+  const mecabDictPath = artifacts['mecabDictPath']
+  const cangjieTsvPath = artifacts['cangjieTsvPath']
 
   if (!t3Model || !s3genModel) {
     throw new TtsArtifactsRequiredError()
@@ -90,7 +152,13 @@ function createChatterboxModel(
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_CHATTERBOX,
-    files: { t3Model, s3genModel },
+    files: {
+      t3Model,
+      s3genModel,
+      ...(mecabDictPath ? { mecabDictPath } : {}),
+      ...(cangjieTsvPath ? { cangjieTsvPath } : {}),
+      ...lavasrFiles(artifacts)
+    },
     ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
     ...(config.streamChunkTokens !== undefined
       ? { streamChunkTokens: config.streamChunkTokens }
@@ -117,7 +185,8 @@ function createChatterboxModel(
 function createSupertonicModel(
   modelId: string,
   config: TtsSupertonicRuntimeConfig,
-  params: CreateModelParams
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
 ): PluginModelResult {
   const supertonicModel = params.modelPath
   if (!supertonicModel) {
@@ -129,7 +198,7 @@ function createSupertonicModel(
 
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
-    files: { supertonicModel },
+    files: { supertonicModel, ...lavasrFiles(artifacts) },
     voice: config.voice ?? 'F1',
     ...(config.ttsSpeed !== undefined ? { speed: config.ttsSpeed } : {}),
     ...(config.ttsNumInferenceSteps !== undefined
@@ -137,7 +206,10 @@ function createSupertonicModel(
       : {}),
     config: {
       language: config.language ?? 'en',
-      useGPU: config.useGPU ?? false
+      useGPU: config.useGPU ?? false,
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {})
     },
     logger,
     opts: { stats: true },
@@ -158,7 +230,7 @@ export const ttsPlugin = definePlugin({
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
     if (ttsEngine === 'supertonic') {
-      return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig)
+      return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
     }
     return resolveChatterboxConfig(cfg as TtsChatterboxLoadConfig, ctx)
   },
@@ -168,7 +240,7 @@ export const ttsPlugin = definePlugin({
     const artifacts = params.artifacts ?? {}
 
     if (config.ttsEngine === 'supertonic') {
-      return createSupertonicModel(params.modelId, config, params)
+      return createSupertonicModel(params.modelId, config, params, artifacts)
     }
 
     return createChatterboxModel(params.modelId, config, params, artifacts)

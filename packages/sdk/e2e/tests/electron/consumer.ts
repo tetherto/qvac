@@ -32,6 +32,8 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
+  TTS_ENHANCER_LAVASR_FP16,
+  TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
@@ -78,7 +80,9 @@ import { DownloadResilienceExecutor } from '../shared/executors/node/download-re
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
+import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -88,6 +92,18 @@ resources.define('llm', {
   constant: LLAMA_3_2_1B_INST_Q4_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('llm-batch', {
+  constant: LLAMA_3_2_1B_INST_Q4_0,
+  type: 'llm',
+  config: { verbosity: 0, ctx_size: 4096, n_discarded: 256, parallel: 4 }
+})
+
+resources.define('tools-batch', {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: 'llm',
+  config: { ctx_size: 4096, tools: true, parallel: 2 }
 })
 
 resources.define('embeddings', {
@@ -156,6 +172,12 @@ resources.define('ocr', {
 // so no registry constant / pre-download is required.
 resources.define('classification', {
   type: 'ggml-classification'
+})
+
+resources.define('echo', {
+  type: 'echo',
+  modelSrc: '',
+  skipPreDownload: true
 })
 
 resources.define('sharded-embeddings', {
@@ -277,6 +299,36 @@ resources.define('tts-supertonic-multilingual', {
   }
 })
 
+// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
+// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
+resources.define('tts-supertonic-8k', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    outputSampleRate: 8000
+  }
+})
+
+// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
+// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
+// resource manager's config walk pre-downloads them automatically.
+resources.define('tts-supertonic-enhanced', {
+  constant: TTS_EN_SUPERTONIC_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    useGPU: true,
+    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
+    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
+  }
+})
+
 resources.define('parakeet-tdt', {
   constant: PARAKEET_TDT_0_6B_V3_Q8_0,
   type: 'parakeet-transcription',
@@ -322,8 +374,24 @@ resources.define('vision', {
   }
 })
 
+resources.define('vision-batch', {
+  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 2048,
+    parallel: 2,
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+  }
+})
+
 function readJsonConfig(configPath: string) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>
+}
+
+function resolveBatchAttachmentPath(inputPath: string) {
+  const fileName = inputPath.split('/').pop()
+  if (!fileName) return inputPath
+  return path.resolve(process.cwd(), 'assets/images', fileName)
 }
 
 function ensureElectronE2EConfig() {
@@ -385,6 +453,9 @@ export const executor = createExecutor({
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
     ),
     new ModelLoadingExecutor(resources),
+    new BatchCompletionExecutor(resources, {
+      resolveAttachmentPath: resolveBatchAttachmentPath
+    }),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
@@ -418,7 +489,8 @@ export const executor = createExecutor({
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
-    new NodeCancellationExecutor(resources)
+    new NodeCancellationExecutor(resources),
+    new PluginExecutor(resources)
   ],
   profiling: {
     init: () => profiler.enable({ mode: 'summary', includeServerBreakdown: true }),

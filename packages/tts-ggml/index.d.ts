@@ -180,6 +180,8 @@ declare interface TTSGgmlOptions {
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
   openclCacheDir?: string
+  /** Supertonic + `useGPU: true` only: directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Setting it to a writable path moves the one-time first-dispatch pipeline-compile cost off the first `run()` (paid once per install instead of once per process) and enables a load-time pre-warm.  Unset -> no cross-process cache and no pre-warm (behaviour unchanged). */
+  vulkanCacheDir?: string
   /** Chatterbox MTL only: MeCab/IPAdic dictionary dir for Japanese ("ja"). Alias of `files.mecabDictDir`. */
   mecabDictPath?: string
   /** Chatterbox MTL only: Cangjie TSV for Chinese ("zh"). Alias of `files.cangjieTsvPath`. */

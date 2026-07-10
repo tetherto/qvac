@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
+  now runs on the GPU when the model is constructed with the GPU enabled (the
+  same `useGPU` / `nGpuLayers` config the engine uses) — Vulkan on Windows/Linux,
+  Metal on macOS/iOS — and falls back to the CPU otherwise.
+- **Enhancer backend surfaced in `runtimeStats()`.** Both the Chatterbox and
+  Supertonic models now report `enhancerBackendDevice` (`-1` none / `0` CPU /
+  `1` GPU) and `enhancerBackendId` (the ggml backend id, e.g. `3` for Vulkan),
+  so hosts can confirm where the enhancer actually ran.
+- Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
+
+## [0.4.2] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.4.1] - 2026-07-07
+
+### Fixed
+
+- **Chatterbox no longer crashes at load on Samsung S25 / Adreno GPU.** The
+  multilingual model's quantized weights were uploaded to the OpenCL backend in
+  partial pieces, which the backend read past and faulted on at model load.
+  Quantized weights are now uploaded whole. Bumps the `tts-cpp` requirement to
+  `2026-07-06`.
+- **T3 (Chatterbox Turbo/MTL) now falls back to CPU per-op instead of aborting
+  when the GPU backend can't run an op.** New shared `sched_dispatch` helper
+  (mirroring the existing S3Gen/Supertonic pattern) walks the graph and only
+  engages a `ggml_backend_sched` fallback when the primary backend can't run
+  every op, so the happy-path direct-compute output is unchanged. S3Gen and
+  Supertonic converge onto the same helper, which also fixes a Supertonic
+  sched graph-reuse corruption bug on natural-sched backends (Adreno). Bumps
+  the `tts-cpp` requirement to `2026-07-07`.
+
 ## [0.4.0] - 2026-07-03
 
 ### Changed

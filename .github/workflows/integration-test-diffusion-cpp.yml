@@ -3,6 +3,10 @@ name: Integration Tests (Stable Diffusion)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/diffusion-cpp@1.0.0)"
+        type: string
+        required: false
       ref:
         description: "ref"
         type: string
@@ -94,7 +98,7 @@ jobs:
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
             ltx: 'true'
           - os: macos-15-large
             platform: darwin

@@ -28,7 +28,8 @@ ecosystem under test* changes over time:
 | Dispatch ref | `main` (uses the current benchmark tooling + published addon) |
 | Runs | **3**, run **sequentially** (see gotchas) |
 
-Metrics captured per `Platform · Accel`: **mmproj-enc** (desktop) / **TTFT** (mobile),
+Metrics captured per `Platform · Accel`: **mmproj-enc** and **TTFT** (all platforms —
+mobile reads the addon's `visionEncodeMs` stat for the encode time),
 **full inference** (wall), **cognitive %** (VQA Overall), **OCR %** (avg BLEU×100).
 
 ---
@@ -93,7 +94,10 @@ When the user says **"make a checkpoint"**:
 ## Reading a checkpoint
 
 - **Value = `avg ± deviation%`** (deviation = sample stdev / mean across the 3 runs).
-- **`mmproj-enc`** is filled for desktop only; **`TTFT`** for mobile only (`—` in the other).
+- **`mmproj-enc`** is the pure vision-encode time on every platform (desktop parses
+  llama.cpp's stderr, mobile the addon's `visionEncodeMs` runtime stat); **`TTFT`** is
+  reported on all platforms. Older checkpoints (pre vision-encode stat) have `—` for
+  mobile mmproj-enc — compare those on TTFT.
 - **`†`** = the *median* is shown instead of the mean, because a one-run outlier skewed the
   average (almost always self-hosted **desktop-CPU** runner contention). Treat desktop-CPU
   *speed* with a wide tolerance (~±20%).

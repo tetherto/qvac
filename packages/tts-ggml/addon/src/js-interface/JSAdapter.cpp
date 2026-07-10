@@ -160,6 +160,8 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
   cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
+  cfg.vulkanCacheDir =
+      readOptionalString(configurationParams, env, "vulkanCacheDir");
   // LavaSR neural enhancement: a non-empty GGUF path turns it on.
   cfg.enhancerGgufPath =
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");

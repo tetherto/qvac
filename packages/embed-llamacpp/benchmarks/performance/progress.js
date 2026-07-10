@@ -24,11 +24,7 @@ function createProgressReporter (totalRuns) {
   let completedRuns = 0
   let lastNonTtyPercent = -1
   let lastRenderedLength = 0
-  const canRewriteLine = !!(
-    process.stdout &&
-    process.stdout.isTTY &&
-    typeof process.stdout.write === 'function'
-  )
+  const canRewriteLine = !!(process.stdout && typeof process.stdout.write === 'function')
   const barWidth = 24
 
   function render (context) {

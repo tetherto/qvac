@@ -26,7 +26,7 @@ const useCpu = isDarwinX64 || isLinuxArm64
 
 // QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS knobs, same as image-*.test.js.
 // Default 1 warmup + 1 counted on PRs; the benchmark dispatch bumps RUNS to 3.
-function _envInt (key, fallback) {
+function _envInt(key, fallback) {
   let raw = ''
   if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
   if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
@@ -41,7 +41,7 @@ const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 // benchmark (QVAC_PERF_ONLY=true) runs the full set on supported platforms.
 // Uses the explicit QVAC_PERF_ONLY flag (already plumbed to the device via
 // the testspec config) instead of proxying off PERF_RUNS, per review feedback.
-function _envStr (key) {
+function _envStr(key) {
   if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
   if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
   return ''
@@ -82,11 +82,13 @@ const GEMMA4_MODEL = {
   perfLabel: 'gemma4-vl',
   llmModel: {
     modelName: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
-    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
+    downloadUrl:
+      'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
   },
   projModel: {
     modelName: 'mmproj-google_gemma-4-E2B-it-bf16.gguf',
-    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf'
+    downloadUrl:
+      'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf'
   },
   // ubatch 320 keeps Gemma 4's Metal compute buffer under the iPhone Jetsam
   // ceiling; reasoning-budget 0 suppresses CoT so a one-sentence answer fits.
@@ -98,7 +100,8 @@ const QWEN35_MODEL = {
   perfLabel: 'qwen3.5-vl',
   llmModel: {
     modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
-    downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+    downloadUrl:
+      'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
   },
   projModel: {
     modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
@@ -108,7 +111,7 @@ const QWEN35_MODEL = {
   ctxFor: (imageCase) => imageCase.qwenCtxSize
 }
 
-function createLogger () {
+function createLogger() {
   return {
     info: (...args) => console.info(...args),
     warn: (...args) => console.warn(...args),
@@ -122,7 +125,7 @@ function createLogger () {
  * inferences on a single `imageCase`, records a perf row per counted run and
  * asserts the expected keyword. One image per call → one Device Farm test.
  */
-async function runVlmImagePerf (t, modelDef, imageCase) {
+async function runVlmImagePerf(t, modelDef, imageCase) {
   const [modelName, dirPath] = await ensureModel(modelDef.llmModel)
   const [projModelName] = await ensureModel(modelDef.projModel)
   const modelPath = path.join(dirPath, modelName)
@@ -151,7 +154,7 @@ async function runVlmImagePerf (t, modelDef, imageCase) {
   const backendTag = useCpu ? 'CPU' : 'GPU'
   const perfLabel = `[${imageCase.name}] [${modelDef.perfLabel}] [${backendTag}]`
 
-  async function runImageInference (imageBytes) {
+  async function runImageInference(imageBytes) {
     const messages = [
       { role: 'user', type: 'media', content: imageBytes },
       { role: 'user', content: 'Describe the image briefly in one sentence.' }
@@ -160,8 +163,13 @@ async function runVlmImagePerf (t, modelDef, imageCase) {
     const response = await inference.run(messages)
     const chunks = []
     let error = null
-    response.onUpdate(data => { chunks.push(data) })
-      .onError(err => { error = err })
+    response
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
+      .onError((err) => {
+        error = err
+      })
     await response.await()
     if (error) throw new Error('Inference error: ' + error)
     return {
@@ -183,7 +191,9 @@ async function runVlmImagePerf (t, modelDef, imageCase) {
 
     for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
       const warmup = await runImageInference(imageBytes)
-      t.comment(`${perfLabel} warmup ${w}/${PERF_WARMUP_RUNS} (${warmup.totalTime}ms, ${warmup.output.length} chars) - perf NOT recorded`)
+      t.comment(
+        `${perfLabel} warmup ${w}/${PERF_WARMUP_RUNS} (${warmup.totalTime}ms, ${warmup.output.length} chars) - perf NOT recorded`
+      )
     }
 
     let lastOutput = ''
@@ -191,21 +201,28 @@ async function runVlmImagePerf (t, modelDef, imageCase) {
       const { output, totalTime, stats } = await runImageInference(imageBytes)
       lastOutput = output
       t.comment(`${perfLabel} run ${run}/${PERF_RUNS} output: "${output.slice(0, 200)}"`)
-      t.comment(recordPerformance(perfLabel, totalTime, {
-        _output: output,
-        stats,
-        deviceId: useCpu ? 'cpu' : 'gpu',
-        scenario: 'image',
-        model: modelName.replace(/\.gguf$/i, '')
-      }))
+      t.comment(
+        recordPerformance(perfLabel, totalTime, {
+          _output: output,
+          stats,
+          deviceId: useCpu ? 'cpu' : 'gpu',
+          scenario: 'image',
+          model: modelName.replace(/\.gguf$/i, '')
+        })
+      )
     }
 
-    t.ok(lastOutput.length > 0, `${perfLabel} image inference produced output (${lastOutput.length} chars)`)
+    t.ok(
+      lastOutput.length > 0,
+      `${perfLabel} image inference produced output (${lastOutput.length} chars)`
+    )
 
     const lowerOutput = lastOutput.toLowerCase()
-    const matched = imageCase.keywords.some(k => new RegExp(`\\b${k}\\b`, 'i').test(lowerOutput))
-    t.ok(matched,
-      `${perfLabel} output should mention one of ${imageCase.keywords.join(', ')}: "${lastOutput.slice(0, 150)}"`)
+    const matched = imageCase.keywords.some((k) => new RegExp(`\\b${k}\\b`, 'i').test(lowerOutput))
+    t.ok(
+      matched,
+      `${perfLabel} output should mention one of ${imageCase.keywords.join(', ')}: "${lastOutput.slice(0, 150)}"`
+    )
   } finally {
     await inference.unload().catch(() => {})
   }
