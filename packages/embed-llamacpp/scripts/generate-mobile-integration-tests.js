@@ -16,37 +16,38 @@ const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 // functions that no longer exist and schedule zero tests. Refuse to run unless every
 // shard is present. `npm run test:mobile:generate` writes them first; a bare
 // invocation must run `npm run generate:benchmark-shards` beforehand.
-function assertBenchmarkShardsPresent () {
+function assertBenchmarkShardsPresent() {
   const missing = matrix()
     .map(shardFileName)
-    .filter(name => !fs.existsSync(path.join(integrationDir, name)))
+    .filter((name) => !fs.existsSync(path.join(integrationDir, name)))
   if (missing.length) {
     throw new Error(
       `Refusing to regenerate mobile tests: ${missing.length} benchmark shard(s) absent ` +
-      `(e.g. ${missing[0]}). Run \`npm run generate:benchmark-shards\` first, or use ` +
-      '`npm run test:mobile:generate`, which does it for you.'
+        `(e.g. ${missing[0]}). Run \`npm run generate:benchmark-shards\` first, or use ` +
+        '`npm run test:mobile:generate`, which does it for you.'
     )
   }
 }
 
-function getIntegrationFiles () {
+function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(entry => entry.endsWith('.test.js'))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((entry) => entry.endsWith('.test.js'))
     .sort()
 }
 
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
-function buildFileContents (files) {
+function buildFileContents(files) {
   const lines = []
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
@@ -59,7 +60,9 @@ function buildFileContents (files) {
 
   lines.push('/* global __shouldRunTest */')
   lines.push('')
-  lines.push('const __FILTERED = { modulePath: \'filtered\', summary: { total: 0, passed: 0, failed: 0 } }')
+  lines.push(
+    "const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }"
+  )
   lines.push('')
 
   for (let i = 0; i < files.length; i++) {
@@ -67,7 +70,9 @@ function buildFileContents (files) {
     const fnName = toFunctionName(file)
     const relativePath = `../integration/${file}`
     lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars`)
-    lines.push(`  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`)
+    lines.push(
+      `  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`
+    )
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
     lines.push('}')
     // Only add blank line between functions, not after the last one
@@ -79,7 +84,7 @@ function buildFileContents (files) {
   return `${lines.join('\n')}\n`
 }
 
-function main () {
+function main() {
   assertBenchmarkShardsPresent()
   const files = getIntegrationFiles()
   if (files.length === 0) {
