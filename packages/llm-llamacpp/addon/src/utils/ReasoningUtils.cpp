@@ -10,7 +10,7 @@ namespace utils {
 
 namespace {
 
-// Returns true iff the first piece in `tokens` has a CONTROL or
+// Returns true if and only if the first piece in `tokens` has a CONTROL or
 // USER_DEFINED attribute. That attribute is a BPE-merge barrier under
 // `parse_special=true`, so a prior context token cannot absorb the start
 // of the marker — which is what the span-start math
