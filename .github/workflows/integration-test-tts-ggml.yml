@@ -251,11 +251,21 @@ jobs:
           set -euo pipefail
           if [ -n "$QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE" ]; then
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON="$QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE"
-          elif [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
-            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"}]'
           else
-            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"vulkan"}]'
+            engines="chatterbox chatterbox-mtl supertonic supertonic-mtl"
+            variants="f16 q8 q4"
+            entries=""
+            for engine in $engines; do
+              for variant in $variants; do
+                entries="${entries}{\"engine\":\"${engine}\",\"variant\":\"${variant}\",\"useGPU\":false,\"backendHint\":\"cpu\"},"
+                if [ "${{ matrix.no_gpu || 'false' }}" != "true" ]; then
+                  entries="${entries}{\"engine\":\"${engine}\",\"variant\":\"${variant}\",\"useGPU\":true,\"backendHint\":\"vulkan\"},"
+                fi
+              done
+            done
+            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON="[${entries%,}]"
           fi
+          echo "Benchmark matrix: $QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON"
           node scripts/run-rtf-benchmark-matrix.js
         env:
           QVAC_TTS_GGML_BENCHMARK_VARIANT: q4

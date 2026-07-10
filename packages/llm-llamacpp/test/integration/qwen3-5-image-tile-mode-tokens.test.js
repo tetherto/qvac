@@ -20,14 +20,15 @@ const useCpu = isDarwinX64 || isLinuxArm64
 
 const MODEL = {
   modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
-  downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+  downloadUrl:
+    'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
 }
 const PROJ_MODEL = {
   modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
   downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
 }
 
-function createLogger () {
+function createLogger() {
   return {
     info: (...args) => console.info(...args),
     warn: (...args) => console.warn(...args),
@@ -36,71 +37,83 @@ function createLogger () {
   }
 }
 
-test('image_max_tokens + image_tile_mode: prompt token counts reflect cap override and tile mode', { timeout: 1_800_000 }, async t => {
-  const [modelName, dirPath] = await ensureModel(MODEL)
-  const [projModelName] = await ensureModel(PROJ_MODEL)
-  const modelPath = path.join(dirPath, modelName)
-  const projectionModelPath = path.join(dirPath, projModelName)
+test(
+  'image_max_tokens + image_tile_mode: prompt token counts reflect cap override and tile mode',
+  { timeout: 1_800_000 },
+  async (t) => {
+    const [modelName, dirPath] = await ensureModel(MODEL)
+    const [projModelName] = await ensureModel(PROJ_MODEL)
+    const modelPath = path.join(dirPath, modelName)
+    const projectionModelPath = path.join(dirPath, projModelName)
 
-  const imageFilePath = getMediaPath('fruitPlate.png')
-  t.ok(fs.existsSync(imageFilePath), 'fruitPlate.png image file should exist')
-  const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
+    const imageFilePath = getMediaPath('fruitPlate.png')
+    t.ok(fs.existsSync(imageFilePath), 'fruitPlate.png image file should exist')
+    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
-  const baseConfig = {
-    device: useCpu ? 'cpu' : 'gpu',
-    gpu_layers: '98',
-    ctx_size: '8192',
-    temp: '0',
-    seed: '42',
-    'reasoning-budget': '0',
-    verbosity: '2',
-    image_max_tokens: '4096'
-  }
-
-  async function runMode (tileMode) {
-    const inference = new LlmLlamacpp({
-      files: { model: [modelPath], projectionModel: projectionModelPath },
-      config: { ...baseConfig, image_tile_mode: tileMode },
-      logger: createLogger(),
-      opts: { stats: true }
-    })
-    await inference.load()
-    try {
-      const messages = [
-        { role: 'user', type: 'media', content: imageBytes },
-        { role: 'user', content: 'Describe the image briefly in one sentence.' }
-      ]
-      const response = await inference.run(messages)
-      const chunks = []
-      response.onUpdate(data => { chunks.push(data) })
-      await response.await()
-      return { promptTokens: response.stats?.promptTokens ?? 0, output: chunks.join('') }
-    } finally {
-      await inference.unload().catch(() => {})
+    const baseConfig = {
+      device: useCpu ? 'cpu' : 'gpu',
+      gpu_layers: '98',
+      ctx_size: '8192',
+      temp: '0',
+      seed: '42',
+      'reasoning-budget': '0',
+      verbosity: '2',
+      image_max_tokens: '4096'
     }
+
+    async function runMode(tileMode) {
+      const inference = new LlmLlamacpp({
+        files: { model: [modelPath], projectionModel: projectionModelPath },
+        config: { ...baseConfig, image_tile_mode: tileMode },
+        logger: createLogger(),
+        opts: { stats: true }
+      })
+      await inference.load()
+      try {
+        const messages = [
+          { role: 'user', type: 'media', content: imageBytes },
+          { role: 'user', content: 'Describe the image briefly in one sentence.' }
+        ]
+        const response = await inference.run(messages)
+        const chunks = []
+        response.onUpdate((data) => {
+          chunks.push(data)
+        })
+        await response.await()
+        return { promptTokens: response.stats?.promptTokens ?? 0, output: chunks.join('') }
+      } finally {
+        await inference.unload().catch(() => {})
+      }
+    }
+
+    const disabled = await runMode('disabled')
+    t.comment(`disabled: promptTokens=${disabled.promptTokens}`)
+
+    const sequential = await runMode('sequential')
+    t.comment(`sequential: promptTokens=${sequential.promptTokens}`)
+
+    // disabled with image_max_tokens=4096 must exceed the old 2048 cap
+    t.ok(
+      disabled.promptTokens > 3000,
+      `disabled mode should encode >3000 prompt tokens (got ${disabled.promptTokens}); cap override not working if <= 2048`
+    )
+
+    // tiled mode uses fewer tokens (global thumbnail replaces per-tile patches)
+    t.ok(
+      sequential.promptTokens < 3200,
+      `sequential mode should encode <3200 prompt tokens (got ${sequential.promptTokens})`
+    )
+
+    // tiled must be meaningfully cheaper than disabled
+    t.ok(
+      sequential.promptTokens < disabled.promptTokens,
+      `sequential (${sequential.promptTokens}) should use fewer tokens than disabled (${disabled.promptTokens})`
+    )
+
+    t.ok(disabled.output.length > 0, 'disabled mode produced output')
+    t.ok(sequential.output.length > 0, 'sequential mode produced output')
   }
-
-  const disabled = await runMode('disabled')
-  t.comment(`disabled: promptTokens=${disabled.promptTokens}`)
-
-  const sequential = await runMode('sequential')
-  t.comment(`sequential: promptTokens=${sequential.promptTokens}`)
-
-  // disabled with image_max_tokens=4096 must exceed the old 2048 cap
-  t.ok(disabled.promptTokens > 3000,
-    `disabled mode should encode >3000 prompt tokens (got ${disabled.promptTokens}); cap override not working if <= 2048`)
-
-  // tiled mode uses fewer tokens (global thumbnail replaces per-tile patches)
-  t.ok(sequential.promptTokens < 3200,
-    `sequential mode should encode <3200 prompt tokens (got ${sequential.promptTokens})`)
-
-  // tiled must be meaningfully cheaper than disabled
-  t.ok(sequential.promptTokens < disabled.promptTokens,
-    `sequential (${sequential.promptTokens}) should use fewer tokens than disabled (${disabled.promptTokens})`)
-
-  t.ok(disabled.output.length > 0, 'disabled mode produced output')
-  t.ok(sequential.output.length > 0, 'sequential mode produced output')
-})
+)
 
 setImmediate(() => {
   setTimeout(() => {}, 500)

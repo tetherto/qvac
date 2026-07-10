@@ -6,10 +6,8 @@ system for the GGML (tts-cpp) TTS backend — the one wired into the
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
 drops.
 
-It mirrors the ONNX TTS benchmark suite
-([`packages/tts-onnx/benchmarks/RTF-BENCHMARKS.md`](../../tts-onnx/benchmarks/RTF-BENCHMARKS.md))
-so the two TTS backends share tooling and the consolidated findings tables line
-up column-for-column.
+It follows the same RTF and streaming benchmark methodology used across QVAC's
+TTS backends so the consolidated findings tables line up column-for-column.
 
 Two benchmark tracks:
 
