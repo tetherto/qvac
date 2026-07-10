@@ -317,7 +317,7 @@ jobs:
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') }}
       # A skipped prebuild is a pass: doc/JS-only PRs (or PRs without the prebuilds
       # label) don't produce a compiled artifact, and a native-unchanged PR reuses a
       # prior prebuild instead of rebuilding.

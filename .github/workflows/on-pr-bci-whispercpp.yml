@@ -297,6 +297,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - authorize
       - context
       - ci-router
       - detect-native-changes
@@ -304,6 +305,8 @@ jobs:
       - label-gate
     if: |
       always() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.context.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
@@ -342,12 +345,13 @@ jobs:
       packages: read
       id-token: write
     needs:
+      - authorize
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
       - label-gate
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.context.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-bci-whispercpp.yml
     secrets: inherit
     with:
@@ -362,12 +366,13 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - authorize
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
       - label-gate
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
     secrets: inherit
     with:
