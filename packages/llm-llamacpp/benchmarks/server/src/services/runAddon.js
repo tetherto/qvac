@@ -18,7 +18,8 @@ const runAddon = async (payload) => {
   setLogger((priority, message) => {
     const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'OFF']
     // Only log errors and warnings from C++
-    if (priority <= 1) { // ERROR or WARN
+    if (priority <= 1) {
+      // ERROR or WARN
       process.stderr.write(`[C++ ${levels[priority]}] ${message}\n`)
     }
   })
@@ -99,9 +100,11 @@ const runAddon = async (payload) => {
         logger.debug('Calling model.run()...')
         const response = await model.run(messages)
 
-        await response.onUpdate(data => {
-          output.push(data)
-        }).await()
+        await response
+          .onUpdate((data) => {
+            output.push(data)
+          })
+          .await()
 
         const outputString = output.join('')
         outputs.push(outputString)
