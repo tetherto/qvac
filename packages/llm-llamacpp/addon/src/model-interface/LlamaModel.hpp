@@ -52,7 +52,8 @@ class LlamaModel : public IModel,
                    public IModelCancel,
                    public IModelMultiprocessor,
                    public IModelCancelById,
-                   public IModelJobStats {
+                   public IModelJobStats,
+                   public IModelJobLifecycle {
 public:
   LlamaModel(const LlamaModel&) = delete;
   LlamaModel& operator=(const LlamaModel&) = delete;
@@ -149,6 +150,14 @@ public:
   /// scheduler) by stopping the single-prompt context. No-op when @p id is
   /// unknown (already finished or never admitted).
   void cancelById(qvac_lib_inference_addon_cpp::JobId id) const final;
+
+  /// Scheduler dequeue announcement (see IModelJobLifecycle): registers the
+  /// job in the cancel registry, unarmed, while the scheduler still holds its
+  /// admission lock. Any cancel that no longer finds the job queued therefore
+  /// finds it registered here, and parks until the job arms its cancel action
+  /// — closing the window where a cancel would silently no-op between dequeue
+  /// and the model's own per-path registration.
+  void jobStarting(qvac_lib_inference_addon_cpp::JobId id) final;
 
   /// The complete terminal snapshot for a finished concurrent run (see
   /// IModelJobStats), used as the tagged jobEnded payload: the whole-model
