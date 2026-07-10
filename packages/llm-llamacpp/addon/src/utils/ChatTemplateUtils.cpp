@@ -283,7 +283,7 @@ std::string getPrompt(
     exportParams(params);
     return params.prompt;
   } catch (const std::exception& e) {
-    // Catching known issue when a model does not support tools
+    // Handle the known case where a model does not support tools
     QLOG_IF(
         Priority::ERROR,
         string_format(
