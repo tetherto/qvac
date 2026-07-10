@@ -1,10 +1,8 @@
 import {
   bciTranscribeResponseSchema,
-  bciTranscribeClientParamsSchema,
   bciTranscribeStreamResponseSchema,
   type BciTranscribeRequest,
   type BciTranscribeClientParams,
-  type BciTranscribeClientParamsParsed,
   type BciTranscribeStreamClientParams,
   type BciTranscribeStreamRequest,
   type BciTranscribeStreamResponse,
@@ -18,13 +16,12 @@ import { stream, duplex, type DuplexReadable } from '../dispatch'
 import { getAppLogger } from '../logging'
 import { TranscriptionFailedError } from '../errors'
 import { decoratePromise } from '../utils/decorate-promise'
-import { parseClientInput } from './parse-input'
 import { generateRequestId } from '../runtime/request-id'
 
 const logger = getAppLogger()
 
 function buildBciTranscribeRequest(
-  params: BciTranscribeClientParamsParsed,
+  params: BciTranscribeClientParams,
   requestId: string
 ): BciTranscribeRequest {
   return {
@@ -72,14 +69,13 @@ export function bciTranscribe(
   params: BciTranscribeClientParams,
   options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
-  const parsed = parseClientInput(bciTranscribeClientParamsSchema, params)
   const requestId = generateRequestId()
-  const inner = runBciTranscribe(parsed, requestId, options)
+  const inner = runBciTranscribe(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
 
 async function runBciTranscribe(
-  params: BciTranscribeClientParamsParsed,
+  params: BciTranscribeClientParams,
   requestId: string,
   options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> {

@@ -1,7 +1,5 @@
 import {
   textToSpeechStreamResponseSchema,
-  ttsClientParamsSchema,
-  type TtsClientParams,
   type TtsClientParamsInput,
   type TtsRequest,
   type RPCOptions,
@@ -17,7 +15,6 @@ import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch'
 import { getAppLogger } from '../logging'
 import { TextToSpeechStreamFailedError } from '../errors'
-import { parseClientInput } from './parse-input'
 
 const logger = getAppLogger()
 
@@ -144,14 +141,14 @@ export class TtsMulticast {
   }
 }
 
-function buildTtsRequest(params: TtsClientParams): TtsRequest {
+function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
   return {
     type: 'textToSpeech',
     modelId: params.modelId,
-    inputType: params.inputType,
+    inputType: params.inputType ?? 'text',
     text: params.text,
-    stream: params.stream,
-    sentenceStream: params.sentenceStream,
+    stream: params.stream ?? true,
+    sentenceStream: params.sentenceStream ?? false,
     ...(params.sentenceStreamLocale !== undefined && {
       sentenceStreamLocale: params.sentenceStreamLocale
     }),
@@ -213,21 +210,22 @@ export function textToSpeech(
   params: TtsClientParamsInput,
   options?: RPCOptions
 ): TextToSpeechStreamResult {
-  const parsed: TtsClientParams = parseClientInput(ttsClientParamsSchema, params)
+  const stream = params.stream ?? true
+  const sentenceStream = params.sentenceStream ?? false
 
-  if (parsed.sentenceStream && !parsed.stream) {
+  if (sentenceStream && !stream) {
     throw new TextToSpeechStreamFailedError(
       'textToSpeech: `sentenceStream: true` requires `stream: true`'
     )
   }
 
-  const request = buildTtsRequest(parsed)
+  const request = buildTtsRequest(params)
 
-  if (parsed.stream && parsed.sentenceStream) {
+  if (stream && sentenceStream) {
     return sentenceStreamTts(request, options)
   }
 
-  if (parsed.stream) {
+  if (stream) {
     return plainStreamTts(request, options)
   }
 

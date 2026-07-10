@@ -1,10 +1,5 @@
 import { send, stream } from '../dispatch'
 import {
-  ragChunkParamsSchema,
-  ragSearchParamsSchema,
-  ragDeleteEmbeddingsParamsSchema,
-  ragCloseWorkspaceParamsSchema,
-  ragDeleteWorkspaceParamsSchema,
   type RagRequest,
   type RagChunkParams,
   type RagDoc,
@@ -38,7 +33,6 @@ import {
 } from '../errors'
 import { generateRequestId } from '../runtime/request-id'
 import { decoratePromise } from '../utils/decorate-promise'
-import { parseClientInput } from './parse-input'
 
 // ============== Chunk ==============
 
@@ -66,11 +60,10 @@ import { parseClientInput } from './parse-input'
  * ```
  */
 export async function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]> {
-  const parsed = parseClientInput(ragChunkParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'chunk',
-    ...parsed
+    ...params
   }
 
   const response = await send(request, options)
@@ -329,11 +322,12 @@ export async function ragSearch(
   params: RagSearchParams,
   options?: RPCOptions
 ): Promise<RagSearchResult[]> {
-  const parsed = parseClientInput(ragSearchParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'search',
-    ...parsed
+    ...params,
+    topK: params.topK ?? 5,
+    n: params.n ?? 3
   }
 
   const response = await send(request, options)
@@ -377,11 +371,10 @@ export async function ragDeleteEmbeddings(
   params: RagDeleteEmbeddingsParams,
   options?: RPCOptions
 ): Promise<void> {
-  const parsed = parseClientInput(ragDeleteEmbeddingsParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'deleteEmbeddings',
-    ...parsed
+    ...params
   }
 
   const response = await send(request, options)
@@ -570,11 +563,10 @@ export async function ragCloseWorkspace(
   params?: RagCloseWorkspaceParams,
   options?: RPCOptions
 ): Promise<void> {
-  const parsed = parseClientInput(ragCloseWorkspaceParamsSchema, params ?? {})
   const request: RagRequest = {
     type: 'rag',
     operation: 'closeWorkspace',
-    ...parsed
+    ...(params ?? {})
   }
 
   const response = await send(request, options)
@@ -612,11 +604,10 @@ export async function ragDeleteWorkspace(
   params: RagDeleteWorkspaceParams,
   options?: RPCOptions
 ): Promise<void> {
-  const parsed = parseClientInput(ragDeleteWorkspaceParamsSchema, params)
   const request: RagRequest = {
     type: 'rag',
     operation: 'deleteWorkspace',
-    ...parsed
+    ...params
   }
 
   const response = await send(request, options)

@@ -1,5 +1,4 @@
 import {
-  getLoadedModelInfoParamsSchema,
   type GetLoadedModelInfoParams,
   type GetLoadedModelInfoRequest,
   type LoadedModelInfo
@@ -7,7 +6,6 @@ import {
 import { type RPCOptions } from '../schemas/common'
 import { send } from '../dispatch'
 import { InvalidResponseError } from '../errors'
-import { parseClientInput } from './parse-input'
 
 /**
  * Returns introspection info for a loaded `modelId` (local or delegated).
@@ -34,10 +32,9 @@ export async function getLoadedModelInfo(
   params: GetLoadedModelInfoParams,
   rpcOptions?: RPCOptions
 ): Promise<LoadedModelInfo> {
-  const parsed = parseClientInput(getLoadedModelInfoParamsSchema, params)
   const request: GetLoadedModelInfoRequest = {
     type: 'getLoadedModelInfo',
-    modelId: parsed.modelId
+    modelId: params.modelId
   }
 
   const response = await send(request, rpcOptions)
