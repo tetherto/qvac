@@ -8,6 +8,7 @@ import {
   renderContractFiles
 } from '@/scripts/contract/build-contract'
 import { buildModelsRegistry } from '@/scripts/contract/build-models-registry'
+import { buildConstantsRegistry } from '@/scripts/contract/build-constants-registry'
 import { methodShapes } from '@/server/rpc/method-shapes'
 import { contractValidate } from './utils/contract-validator'
 
@@ -254,6 +255,39 @@ test('models registry catalog exports every named model constant', (t) => {
   }
 })
 
+test('constants registry exports every registered public constant', (t) => {
+  // Regression guard for the same client-parity gap as models.json, but for
+  // plain constants (ModelType, PLUGIN_*, ...) that never appear in a wire
+  // schema at all — see .cursor/rules/sdk/public-constants-contract.mdc.
+  const constants = buildConstantsRegistry()
+
+  t.alike(
+    new Set(Object.keys(constants)),
+    new Set(['ModelType', 'ToolsMode', 'Verbosity', 'PluginId', 'SupportedAudioFormat', 'VlaDefaultImageSize']),
+    'every registered constant is exported, nothing extra'
+  )
+
+  const modelType = constants['ModelType'] as { kind: string; members: Record<string, unknown> }
+  t.is(modelType.kind, 'enum')
+  t.is(modelType.members['llamacppCompletion'], 'llamacpp-completion')
+
+  const verbosity = constants['Verbosity'] as { kind: string; members: Record<string, unknown> }
+  t.is(verbosity.kind, 'enum')
+  t.is(verbosity.members['ERROR'], 0)
+  t.is(verbosity.members['DEBUG'], 3)
+
+  const audioFormat = constants['SupportedAudioFormat'] as {
+    kind: string
+    members: Record<string, unknown>
+  }
+  t.is(audioFormat.kind, 'enum')
+  t.is(audioFormat.members['.mp3'], '.mp3', 'array-form enum keys identity-map to their value')
+
+  const vlaSize = constants['VlaDefaultImageSize'] as { kind: string; value: unknown }
+  t.is(vlaSize.kind, 'scalar')
+  t.is(vlaSize.value, 512)
+})
+
 test('export is deterministic across runs', async (t) => {
   const first = await renderContractFiles()
   const second = await renderContractFiles()
@@ -261,6 +295,7 @@ test('export is deterministic across runs', async (t) => {
   t.is(first['schema.json'], second['schema.json'])
   t.is(first['manifest.json'], second['manifest.json'])
   t.is(first['models.json'], second['models.json'])
+  t.is(first['constants.json'], second['constants.json'])
 })
 
 test('committed artifacts are up to date', async (t) => {

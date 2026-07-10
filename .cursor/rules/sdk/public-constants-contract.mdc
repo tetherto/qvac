@@ -1,0 +1,64 @@
+---
+description: Every public SDK constant meant for non-JS consumers must be registered in the constants contract
+globs:
+  - packages/sdk/schemas/**
+  - packages/sdk/index.ts
+  - packages/sdk/client/api/**
+  - packages/sdk/constants/**
+alwaysApply: false
+---
+
+# Public Constants Contract
+
+`packages/sdk/index.ts` re-exports plain constants alongside RPC methods —
+`ModelType`, `MODEL_TYPES`, `PLUGIN_LLM` and friends, `SUPPORTED_AUDIO_FORMATS`,
+`VLA_DEFAULT_IMAGE_SIZE`, `TOOLS_MODE`, `VERBOSITY`. Non-JS SDKs (Python, ...)
+are generated from `packages/sdk/contract/{schema.json,manifest.json,
+models.json,constants.json}` — they never read `index.ts` directly. A
+constant that isn't in one of those artifacts is invisible to every other
+language, no matter how prominently it's exported from JS.
+
+`schema.json`/`manifest.json` only capture what's expressible as Zod wire
+schemas (RPC request/response fields). A hand-authored `export const FOO =
+{...}` with no Zod schema behind it — which is what `ModelType`, `PLUGIN_*`,
+`SUPPORTED_AUDIO_FORMATS`, and `VLA_DEFAULT_IMAGE_SIZE` all were before this
+rule existed — has no path into the contract at all. It won't cause a build
+failure; it just silently never reaches Python (or the next language).
+
+## The rule
+
+When you add a new constant to `index.ts` that other-language consumers
+should get as a typed, named value (not just baked into a wire schema's
+`enum`), you MUST:
+
+1. Express it as a `z.enum(...)` (for a name→value map — works for both
+   string and number values, and for a bare array of strings via identity
+   mapping) or `z.literal(...)` (for a standalone scalar).
+2. Add it to `constantsRegistry` or `scalarConstantsRegistry` in
+   `packages/sdk/schemas/constants-registry.ts`.
+3. Run `bun run contract:export` and commit the resulting
+   `contract/constants.json` diff.
+
+That's the whole obligation — `build-constants-registry.ts` is generic over
+the registered schema's shape (reads `.enum` / `.value`), so a new registry
+entry needs no exporter code changes, and downstream generators (starting
+with `packages/sdk-python`) pick up new entries automatically on their next
+regen.
+
+```ts
+// schemas/constants-registry.ts
+export const constantsRegistry = {
+  ModelType: z.enum(ModelType),
+  // new: MyNewThing: z.enum(MyNewThing),
+} as const
+```
+
+Don't register a constant that's already fully described by a wire schema's
+own `z.enum`/`z.literal` field type with no separate named-constant object
+behind it — that's already in `schema.json` and doesn't need a second,
+redundant entry here. This rule is specifically for constants exported as
+their own standalone JS value.
+
+See `packages/sdk/contract/README.md` for the exported shape, and
+`.cursor/rules/sdk/sdk-pod-packages.mdc` for what counts as an SDK pod
+package this applies to.

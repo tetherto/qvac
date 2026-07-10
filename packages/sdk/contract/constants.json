@@ -1,0 +1,66 @@
+{
+  "ModelType": {
+    "kind": "enum",
+    "members": {
+      "llamacppCompletion": "llamacpp-completion",
+      "whispercppTranscription": "whispercpp-transcription",
+      "bciWhispercppTranscription": "bci-whispercpp-transcription",
+      "llamacppEmbedding": "llamacpp-embedding",
+      "nmtcppTranslation": "nmtcpp-translation",
+      "onnxTts": "onnx-tts",
+      "ttsGgml": "tts-ggml",
+      "parakeetTranscription": "parakeet-transcription",
+      "ggmlOcr": "ggml-ocr",
+      "sdcppGeneration": "sdcpp-generation",
+      "ggmlVla": "ggml-vla",
+      "ggmlClassification": "ggml-classification"
+    }
+  },
+  "ToolsMode": {
+    "kind": "enum",
+    "members": {
+      "static": "static",
+      "dynamic": "dynamic"
+    }
+  },
+  "Verbosity": {
+    "kind": "enum",
+    "members": {
+      "ERROR": 0,
+      "WARN": 1,
+      "INFO": 2,
+      "DEBUG": 3
+    }
+  },
+  "PluginId": {
+    "kind": "enum",
+    "members": {
+      "LLM": "@qvac/sdk/llamacpp-completion/plugin",
+      "EMBEDDING": "@qvac/sdk/llamacpp-embedding/plugin",
+      "WHISPER": "@qvac/sdk/whispercpp-transcription/plugin",
+      "BCI": "@qvac/sdk/bci-whispercpp-transcription/plugin",
+      "NMT": "@qvac/sdk/nmtcpp-translation/plugin",
+      "TTS": "@qvac/sdk/tts-ggml/plugin",
+      "OCR": "@qvac/sdk/ggml-ocr/plugin",
+      "DIFFUSION": "@qvac/sdk/sdcpp-generation/plugin",
+      "VLA": "@qvac/sdk/ggml-vla/plugin",
+      "CLASSIFICATION": "@qvac/sdk/ggml-classification/plugin"
+    }
+  },
+  "SupportedAudioFormat": {
+    "kind": "enum",
+    "members": {
+      ".mp3": ".mp3",
+      ".m4a": ".m4a",
+      ".ogg": ".ogg",
+      ".wav": ".wav",
+      ".flac": ".flac",
+      ".aac": ".aac",
+      ".raw": ".raw"
+    }
+  },
+  "VlaDefaultImageSize": {
+    "kind": "scalar",
+    "value": 512
+  }
+}
