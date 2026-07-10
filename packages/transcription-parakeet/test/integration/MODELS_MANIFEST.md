@@ -17,17 +17,20 @@ warm step is disabled. Changing a model name or `s3Path` updates both the
 staging set and cache key. Increment `cacheEpoch` to force an explicit cache
 eviction.
 
-The `bytes` and `sha256` fields are currently unpinned. Until they are populated,
-staging validates only that each file is present and non-empty. To pin them,
-stage the complete model set and run:
+The `bytes` and `sha256` fields pin every staged object. Staging verifies cached
+and freshly downloaded files and rejects mismatches. After replacing an S3
+object or changing the staged set, stage the complete model set and run:
 
 ```sh
 npm run generate-model-manifest
 ```
 
-Commit the generated sizes and hashes. After pinning, staging verifies cached
-and freshly downloaded files and rejects mismatches. Running `--check` alone
-does not create missing pins.
+Alternatively, dispatch `integration-test-transcription-parakeet.yml` with
+`pin_model_manifest: true`. The dedicated job restores the shared model cache,
+stages the complete S3 set, generates and checks the pins, then uploads the
+manifest as `transcription-parakeet-model-manifest`. Review and commit that
+artifact. Running the generator with `--check` rejects missing or mismatched
+pins for every locally present model.
 
 The S3 date prefixes mirror the registry prefixes in `helpers.js`
 `MODEL_CONFIGS`. The Sortformer Streaming v2.1 q8_0 model is included so

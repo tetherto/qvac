@@ -72,7 +72,7 @@ test('manifest: staged set matches the expected 13 desktop GGUFs', (t) => {
   t.alike(names, EXPECTED_FILES.slice().sort(), 'exact staged filename set')
 })
 
-test('manifest: every entry has a well-formed s3Path + optional integrity', (t) => {
+test('manifest: every entry has a well-formed s3Path + pinned integrity', (t) => {
   const manifest = loadManifest()
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.is(typeof entry.s3Path, 'string', `${name}: s3Path is a string`)
@@ -83,8 +83,8 @@ test('manifest: every entry has a well-formed s3Path + optional integrity', (t) 
       t.is(m[2], name, `${name}: s3Path basename matches the key`)
     }
 
-    t.ok(entry.sha256 === null || /^[0-9a-f]{64}$/.test(entry.sha256), `${name}: sha256 is null or 64-hex`)
-    t.ok(entry.bytes === null || (Number.isInteger(entry.bytes) && entry.bytes > 0), `${name}: bytes is null or positive int`)
+    t.ok(/^[0-9a-f]{64}$/.test(entry.sha256), `${name}: sha256 is pinned as 64-hex`)
+    t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name}: bytes is pinned as a positive int`)
   }
 })
 
