@@ -6,6 +6,7 @@
 // under brittle-bare without a prebuild.
 //
 // It fails loudly if:
+//   - documentation or other non-key metadata is added to the hashed manifest,
 //   - the manifest schema drifts (missing s3Path / malformed sha256 / bytes),
 //   - the staged set no longer matches the expected 13 desktop GGUFs, or
 //   - a manifest filename or its S3 date prefix is not referenced by
@@ -44,6 +45,25 @@ const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27', '2026-05-
 function loadManifest () {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
 }
+
+test('manifest: contains only cache-key-bearing fields', (t) => {
+  const manifest = loadManifest()
+  t.alike(
+    Object.keys(manifest).sort(),
+    ['cacheEpoch', 'models', 'source'],
+    'top level excludes prose and unrelated metadata'
+  )
+  t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is a positive integer')
+  t.is(manifest.source, 's3', 'source is s3')
+
+  for (const [name, entry] of Object.entries(manifest.models)) {
+    t.alike(
+      Object.keys(entry).sort(),
+      ['bytes', 's3Path', 'sha256'],
+      `${name}: entry contains only staging and integrity fields`
+    )
+  }
+})
 
 test('manifest: staged set matches the expected 13 desktop GGUFs', (t) => {
   const manifest = loadManifest()
