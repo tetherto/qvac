@@ -750,6 +750,21 @@ void LlamaModel::cancelImpl() const {
   if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
     state_->llmContext_->stop();
   }
+  // Park a cancel on every registered job. The engine stops above only reach
+  // work the run counters already see; a job the scheduler dequeued but that
+  // has not armed its cancel action yet (jobStarting ran, the engine slot has
+  // not) is invisible to them — it consumes the parked cancel when it arms
+  // and stops before its first decode. Park-only: running armed actions here
+  // could take engine locks, and this cancel may be issued from a streaming
+  // callback on the engine's own worker thread (see above).
+  liveJobs_.parkAll();
+}
+
+void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
+  // Runs under the scheduler's admission lock (see IModelJobLifecycle), so
+  // it must stay quick and must not call back into the scheduler. Registering
+  // unarmed here makes every later cancel park instead of no-op.
+  liveJobs_.add(id);
 }
 
 std::any LlamaModel::process(const std::any& input) {
@@ -801,6 +816,11 @@ std::any LlamaModel::process(
     const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
   const bool isSingle = input.type() == typeid(Prompt);
   const bool isBatch = input.type() == typeid(std::vector<Prompt>);
+  // The scheduler registered this id at dequeue (jobStarting); make sure no
+  // path out of here — bad input type, finetune, batch, or an early throw —
+  // leaves that entry behind. Inner guards removing the same id first are
+  // fine: remove is idempotent, unknown ids (kNoJobId) are a no-op.
+  ScopeGuard lifecycleGuard([this, id] { liveJobs_.remove(id); });
   if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
     return process(input);
   }
@@ -810,12 +830,25 @@ std::any LlamaModel::process(
   // under the canceller's shared stateMtx_ (see cancelById), so state_ stays
   // valid.
   const auto processSinglePath = [this, &input, id] {
-    liveJobs_.add(id, [this] {
+    // Counted before arming: both the armed action and the whole-model
+    // cancelImpl gate their context stop on this counter, so a cancel landing
+    // any time from arming onwards can stop the eval loop; the loop consumes
+    // the flag at its first check, before any decode.
+    activeSingleJobs_.fetch_add(1);
+    ScopeGuard countGuard([this] { activeSingleJobs_.fetch_sub(1); });
+    const bool parkedCancel = liveJobs_.add(id, [this] {
       if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
         state_->llmContext_->stop();
       }
     });
     ScopeGuard registrationGuard([this, id] { liveJobs_.remove(id); });
+    if (parkedCancel) {
+      // A cancel landed while the job sat between the scheduler queue and
+      // this slot (jobStarting parked it). Re-issue it through the armed
+      // action: the counter above is already visible, so the context stop
+      // lands and the request cancels with the usual rollback.
+      cancelById(id);
+    }
     return process(input);
   };
   if (isSingle) {
@@ -843,6 +876,14 @@ std::any LlamaModel::process(
 std::vector<std::string> LlamaModel::processConcurrentBatch(
     const std::vector<Prompt>& prompts,
     const qvac_lib_inference_addon_cpp::JobId id) {
+  // A batch group never arms a per-job cancel action, so a whole-model cancel
+  // parked between the scheduler dequeue and here (jobStarting -> parkAll)
+  // must be taken explicitly. Honor it with the same terminal the scheduler
+  // gives a queued drop; once the group is running, activeBatchJobs_ routes
+  // cancels through requestCancelAll instead.
+  if (liveJobs_.consumeParked(id)) {
+    throw std::runtime_error("Job cancelled");
+  }
   batching::BatchResult result = processPromptBatchImpl(prompts);
   // Leave the group-level observed figures behind for the tagged jobEnded
   // event: TTFT/TPS averaged over the group's requests that produced them,

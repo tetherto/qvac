@@ -11,6 +11,7 @@
 #include <cctype>
 #include <chrono>
 #include <future>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -463,4 +464,88 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdBeforeFirstTokenCancelsJob) {
       << "a cancel issued before the first token was lost; the job went on "
          "to stream its full generation";
   EXPECT_TRUE(out.empty()) << out;
+}
+
+/// Regression for the prefill-cancel CI flake: a whole-model cancel() landing
+/// in the scheduler's dequeue window — the job already announced via
+/// jobStarting, its slot not yet armed — must cancel the run, not evaporate.
+/// This drives the exact interleaving the MultiJobScheduler produces when a
+/// cancel races the dequeue: jobStarting under the scheduler lock, the cancel
+/// next, process(input, id) only after. The run must come back empty with the
+/// cache rolled back, and the consumed cancel must not leak into a later run.
+TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowStopsPrefill) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "4096";
+  auto model = loadModel();
+
+  constexpr JobId kPrefillId = 51;
+  auto prompt = makePrompt(
+      "Store this long note in the cached conversation. " +
+      repeatWord("detail", 700));
+  prompt.prefill = true;
+  prompt.cacheKey = "window-prefill-cache.bin";
+
+  model->jobStarting(kPrefillId);
+  model->cancel();
+
+  std::any out = model->process(std::any(prompt), kPrefillId);
+  EXPECT_EQ(std::any_cast<std::string>(out), "")
+      << "the parked whole-model cancel was lost; the prefill ran through";
+  EXPECT_DOUBLE_EQ(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0.0)
+      << "cancelled prefill must roll the cache back to the pre-request "
+         "cursor";
+
+  // The consumed cancel must not poison the next run with a stale stop flag.
+  auto followUp = makePrompt("What is the capital of France? One word.");
+  std::any followOut = model->process(std::any(followUp), JobId{52});
+  EXPECT_FALSE(std::any_cast<std::string>(followOut).empty())
+      << "a cancel consumed by one job must not cancel the next";
+}
+
+/// Same window, per-id flavour: cancelById(id) between the dequeue
+/// announcement and the slot arming its cancel action parks in the registry
+/// and must land when the job arms — not be dropped as an unknown id.
+TEST_F(ConcurrentProcessByIdTest, CancelByIdInDequeueWindowStopsPrefill) {
+  REQUIRE_MODEL(model_);
+  config_["ctx_size"] = "4096";
+  auto model = loadModel();
+
+  constexpr JobId kPrefillId = 61;
+  auto prompt = makePrompt(
+      "Store this long note in the cached conversation. " +
+      repeatWord("detail", 700));
+  prompt.prefill = true;
+  prompt.cacheKey = "window-prefill-cache-byid.bin";
+
+  model->jobStarting(kPrefillId);
+  model->cancelById(kPrefillId);
+
+  std::any out = model->process(std::any(prompt), kPrefillId);
+  EXPECT_EQ(std::any_cast<std::string>(out), "")
+      << "the parked cancelById was lost; the prefill ran through";
+  EXPECT_DOUBLE_EQ(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0.0);
+}
+
+/// Batch-group flavour of the dequeue window: the group never arms a per-job
+/// cancel action, so the parked whole-model cancel is taken at the group's
+/// entry and surfaces as the same "Job cancelled" terminal the scheduler
+/// gives a queued drop.
+TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowFailsBatch) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+
+  constexpr JobId kGroupId = 71;
+  std::vector<LlamaModel::Prompt> prompts;
+  prompts.push_back(makePrompt("Name one primary color."));
+  prompts.push_back(makePrompt("Name one weekday."));
+
+  model->jobStarting(kGroupId);
+  model->cancel();
+
+  EXPECT_THROW(
+      { model->process(std::any(prompts), kGroupId); }, std::runtime_error)
+      << "a batch group caught in the dequeue window must fail with the "
+         "queued-drop terminal, not run";
 }

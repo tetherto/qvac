@@ -12,26 +12,30 @@
 /// single-context stop, ...), so cancel(id) needs no knowledge of which path
 /// runs the job.
 ///
-/// A job may be live before it is cancellable (admitted by the multi-job
-/// scheduler but still queued for an engine slot): cancel(id) on such a job
-/// is parked and handed back to bind() when the slot appears, so no cancel is
-/// lost in that window.
+/// A job may be live before it is cancellable (announced by the scheduler at
+/// dequeue via jobStarting, or admitted but still queued for an engine slot):
+/// cancel(id) — and a whole-model parkAll() — on such a job is parked and
+/// handed back when add()/bind() arms it, so no cancel is lost in that window.
 class JobCancelRegistry {
 public:
   using JobId = qvac_lib_inference_addon_cpp::JobId;
   using CancelAction = std::function<void()>;
 
   /// Register a live job that is not yet cancellable (no engine slot yet);
-  /// cancel(id) requests are parked until bind() arms it.
+  /// cancel(id) requests are parked until add()/bind() arms it.
   void add(JobId id) {
     std::lock_guard<std::mutex> lock(mtx_);
     jobs_.try_emplace(id);
   }
 
-  /// Register a live job cancellable via @p action from the start.
-  void add(JobId id, CancelAction action) {
+  /// Arm a live job with its cancel action, creating the entry when the job
+  /// was never announced (single-job scheduler path). Returns true when a
+  /// cancel was parked before the action existed — the caller must apply it.
+  [[nodiscard]] bool add(JobId id, CancelAction action) {
     std::lock_guard<std::mutex> lock(mtx_);
-    jobs_[id] = Entry{std::move(action), false};
+    Entry& entry = jobs_[id];
+    entry.action = std::move(action);
+    return std::exchange(entry.cancelRequested, false);
   }
 
   /// Arm a registered job with its cancel action. Returns true when a cancel
@@ -54,6 +58,32 @@ public:
   void remove(JobId id) {
     std::lock_guard<std::mutex> lock(mtx_);
     jobs_.erase(id);
+  }
+
+  /// Park a cancel on every live job (whole-model cancel). Park-only by
+  /// design: armed jobs are already stoppable through their engines by the
+  /// caller's counter-guarded stops, and running actions here could take
+  /// engine locks the caller cannot afford (a whole-model cancel may be
+  /// issued from a streaming callback on the engine's own worker thread).
+  /// The flag matters for jobs still unarmed — they consume it when they arm
+  /// and cancel before their first decode.
+  void parkAll() {
+    std::lock_guard<std::mutex> lock(mtx_);
+    for (auto& job : jobs_) {
+      job.second.cancelRequested = true;
+    }
+  }
+
+  /// Take a parked cancel for @p id without arming the job (paths that never
+  /// arm an action, e.g. batch groups). False for unknown ids or when no
+  /// cancel is parked.
+  [[nodiscard]] bool consumeParked(JobId id) {
+    std::lock_guard<std::mutex> lock(mtx_);
+    const auto found = jobs_.find(id);
+    if (found == jobs_.end()) {
+      return false;
+    }
+    return std::exchange(found->second.cancelRequested, false);
   }
 
   /// Cancel a live job: runs its action, parks the request when the job is
