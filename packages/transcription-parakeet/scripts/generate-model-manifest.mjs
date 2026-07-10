@@ -65,8 +65,10 @@ async function main () {
     const sha256 = await sha256File(file)
 
     if (args.check) {
-      if (entry.bytes != null && entry.bytes !== bytes) drift.push(`${name}: bytes ${entry.bytes} != ${bytes}`)
-      if (entry.sha256 != null && entry.sha256 !== sha256) drift.push(`${name}: sha256 ${entry.sha256} != ${sha256}`)
+      if (entry.bytes == null) drift.push(`${name}: bytes is not pinned`)
+      else if (entry.bytes !== bytes) drift.push(`${name}: bytes ${entry.bytes} != ${bytes}`)
+      if (entry.sha256 == null) drift.push(`${name}: sha256 is not pinned`)
+      else if (entry.sha256 !== sha256) drift.push(`${name}: sha256 ${entry.sha256} != ${sha256}`)
       continue
     }
 
