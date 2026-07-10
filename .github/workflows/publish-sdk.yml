@@ -504,7 +504,7 @@ jobs:
 
   publish-gpr-core:
     name: Publish @qvac/core to GitHub Packages (GPR)
-    needs: [publish-logic]
+    needs: [build, publish-logic]
     if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -564,9 +564,6 @@ jobs:
       - publish-logic
       - release-merge-guard
       - label-gate
-      # Core publishes first so @qvac/core@<version> is on npm before the SDK
-      # that will depend on it (acyclic: core is a leaf).
-      - publish-npm-core
     if: >-
       needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
@@ -675,6 +672,7 @@ jobs:
   publish-npm-core:
     name: Publish @qvac/core to NPM
     needs:
+      - build
       - publish-logic
       - release-merge-guard
       - label-gate
