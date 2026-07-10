@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/onnx/**"
       - ".github/workflows/*onnx*.yml"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
   workflow_call:
 

@@ -16,6 +16,7 @@ on:
       - "packages/ocr-onnx/**"
       - ".github/workflows/*ocr-onnx*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
   workflow_call:
 

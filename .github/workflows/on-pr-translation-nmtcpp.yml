@@ -16,6 +16,7 @@ on:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
 
 permissions:

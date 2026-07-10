@@ -8,6 +8,7 @@ on:
       - "packages/bci-whispercpp/**"
       - ".github/workflows/*bci-whispercpp*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
     inputs:

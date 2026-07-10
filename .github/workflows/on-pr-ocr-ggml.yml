@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
     inputs:
       base_sha:

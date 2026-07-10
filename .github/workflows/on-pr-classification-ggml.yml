@@ -16,6 +16,7 @@ on:
       - "packages/classification-ggml/**"
       - ".github/workflows/*classification-ggml*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
 
   workflow_call:
