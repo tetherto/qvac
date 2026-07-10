@@ -207,10 +207,11 @@ jobs:
 
   cpp-lint:
     needs:
+      - authorize
       - context
       - ci-router
       - label-gate
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.authorize.outputs.allowed == 'true' && needs.context.result == 'success' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -227,10 +228,11 @@ jobs:
       actions: read
       id-token: write
     needs:
+      - authorize
       - context
       - ci-router
       - label-gate
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.authorize.outputs.allowed == 'true' && needs.context.result == 'success' && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/cpp-test-coverage-bci-whispercpp.yml
     secrets: inherit
     with:
@@ -300,6 +302,7 @@ jobs:
       - authorize
       - context
       - ci-router
+      - sanity-checks
       - detect-native-changes
       - prebuild-artifact-reuse
       - label-gate
@@ -307,6 +310,7 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       needs.context.result == 'success' &&
+      needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')

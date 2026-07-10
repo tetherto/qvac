@@ -128,8 +128,8 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/classification-ggml
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   cpp-lint:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -140,8 +140,8 @@ jobs:
       - label-gate
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/classification-ggml
 
   ts-checks:
@@ -242,8 +242,8 @@ jobs:
     uses: ./.github/workflows/prebuilds-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   prebuild-artifact-save:
     if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
@@ -283,8 +283,8 @@ jobs:
     uses: ./.github/workflows/integration-test-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -302,8 +302,8 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
     needs:
