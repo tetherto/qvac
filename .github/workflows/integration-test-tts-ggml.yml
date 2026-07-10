@@ -274,7 +274,7 @@ jobs:
       # engine/backend does not sink the whole leg. A run with zero artifacts
       # means every entry failed and should still fail loudly.
       - name: Verify RTF benchmark output exists
-        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         shell: bash
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: |
@@ -302,7 +302,7 @@ jobs:
           fi
 
       - name: Upload RTF benchmark results
-        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: rtf-results-tts-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
