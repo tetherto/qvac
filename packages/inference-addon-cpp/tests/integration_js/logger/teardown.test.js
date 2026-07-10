@@ -8,7 +8,7 @@ const Thread = require('bare-thread')
 // hook in JsLogger, the teardown's final uv_run dispatched asyncCallback against
 // the disposing context (js_get_global -> v8::Context::Global()) and aborted.
 
-function delay (ms) {
+function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
