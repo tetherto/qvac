@@ -15,7 +15,7 @@ const COMPANION_FILE_KEYS = [
   'highNoiseDiffusionModel'
 ]
 
-function assertAbsolute (key, value) {
+function assertAbsolute(key, value) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`files.${key} must be an absolute path string`)
   }
@@ -36,24 +36,26 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // Throws TypeError on anything else so callers get a precise diagnostic
 // before the value reaches the native binding (which only accepts
 // Uint8Array).
-function _coerceToUint8 (name, value) {
+function _coerceToUint8(name, value) {
   if (value instanceof Uint8Array) return value
   if (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   }
-  if (value instanceof ArrayBuffer ||
-      (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)) {
+  if (
+    value instanceof ArrayBuffer ||
+    (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)
+  ) {
     return new Uint8Array(value)
   }
   throw new TypeError(
     `${name} must be a Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes. ` +
-    `Got: ${value === null ? 'null' : typeof value}`
+      `Got: ${value === null ? 'null' : typeof value}`
   )
 }
 // Matches C++ int max: repeats are stored as int and used in native loop counters.
 const NATIVE_UPSCALE_REPEATS_MAX = 2147483647
 
-function normalizeUpscaleRepeats (options) {
+function normalizeUpscaleRepeats(options) {
   if (options == null) return 1
   if (typeof options !== 'object' || Array.isArray(options)) {
     throw new TypeError('upscale options must be an object')
@@ -93,7 +95,7 @@ class ImgStableDiffusion {
    *   `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
    * @param {object} [args.opts] - Optional inference options
    */
-  constructor ({ files, config, logger = null, opts = {} }) {
+  constructor({ files, config, logger = null, opts = {} }) {
     if (!files || typeof files !== 'object') {
       throw new TypeError('files must be an object containing at least { model }')
     }
@@ -115,7 +117,7 @@ class ImgStableDiffusion {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -123,7 +125,7 @@ class ImgStableDiffusion {
     })
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('Starting stable-diffusion model load')
 
     // Route the primary model file to the correct stable-diffusion.cpp param:
@@ -133,8 +135,8 @@ class ImgStableDiffusion {
     //                         FLUX.1 → t5Xxl + clipL, etc.)
     // Any caller-supplied separate encoder implies the primary file is the standalone
     // diffusion model, not an all-in-one checkpoint.
-    const isSplitLayout = !!this._files.llm || !!this._files.t5Xxl ||
-      !!this._files.clipL || !!this._files.clipG
+    const isSplitLayout =
+      !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG
     const configurationParams = {
       path: isSplitLayout ? '' : this._files.model,
       diffusionModelPath: isSplitLayout ? this._files.model : '',
@@ -163,7 +165,9 @@ class ImgStableDiffusion {
       this.logger.error('Error during stable-diffusion model load:', loadError)
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
-      try { await this.addon?.unload?.() } catch (_) {}
+      try {
+        await this.addon?.unload?.()
+      } catch (_) {}
       this.addon = null
       throw loadError
     }
@@ -175,16 +179,12 @@ class ImgStableDiffusion {
    * @param {object} configurationParams
    * @returns {SdInterface}
    */
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     const binding = require('./binding')
-    return new SdInterface(
-      binding,
-      configurationParams,
-      this._addonOutputCallback.bind(this)
-    )
+    return new SdInterface(binding, configurationParams, this._addonOutputCallback.bind(this))
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const mapped = mapAddonEvent(event, data, error)
     if (mapped === null) {
       // Unknown event/data combination — log it instead of feeding null/undefined
@@ -262,11 +262,11 @@ class ImgStableDiffusion {
    *                                                   with `init_image`.
    * @returns {Promise<QvacResponse>}
    */
-  async run (params) {
+  async run(params) {
     return this._run(() => this._runInternal(params))
   }
 
-  async _runInternal (params) {
+  async _runInternal(params) {
     // Validate inputs first so callers get precise errors before any
     // readiness/busy checks.
 
@@ -302,8 +302,8 @@ class ImgStableDiffusion {
       const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : 512
       throw new Error(
         `width and height must be positive multiples of ${alignTo}. ` +
-        `Got: ${w}x${h}. ` +
-        `Use ${suggestW}x${suggestH} instead.`
+          `Got: ${w}x${h}. ` +
+          `Use ${suggestW}x${suggestH} instead.`
       )
     }
 
@@ -326,15 +326,14 @@ class ImgStableDiffusion {
       )
     }
 
-    const hasInitImages =
-      Array.isArray(params.init_images) && params.init_images.length > 0
+    const hasInitImages = Array.isArray(params.init_images) && params.init_images.length > 0
 
     // Mutual exclusion — pick one, not both.
     if (params.init_image != null && hasInitImages) {
       throw new Error(
         'init_image and init_images are mutually exclusive — pick one. ' +
-        'Use init_images (with FLUX.2) for multi-reference "fusion" mode, ' +
-        'or init_image for single-image conditioning (SDEdit / FLUX.2 single-ref).'
+          'Use init_images (with FLUX.2) for multi-reference "fusion" mode, ' +
+          'or init_image for single-image conditioning (SDEdit / FLUX.2 single-ref).'
       )
     }
 
@@ -351,10 +350,14 @@ class ImgStableDiffusion {
     }
 
     // Multi-image: check array is not empty.
-    if (params.init_images != null && Array.isArray(params.init_images) && params.init_images.length === 0) {
+    if (
+      params.init_images != null &&
+      Array.isArray(params.init_images) &&
+      params.init_images.length === 0
+    ) {
       throw new Error(
         'init_images must not be an empty array. ' +
-        'Pass at least one reference image or use init_image for single-image mode.'
+          'Pass at least one reference image or use init_image for single-image mode.'
       )
     }
 
@@ -386,9 +389,9 @@ class ImgStableDiffusion {
       if (!isFlux2) {
         throw new Error(
           'init_images (multi-reference fusion) requires a FLUX.2 model. ' +
-          "Load a FLUX.2 [klein] checkpoint with files.llm set and pass config.prediction: 'flux2_flow'. " +
-          'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
-          '@image1/@imageN in-context references.'
+            "Load a FLUX.2 [klein] checkpoint with files.llm set and pass config.prediction: 'flux2_flow'. " +
+            'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
+            '@image1/@imageN in-context references.'
         )
       }
 
@@ -396,8 +399,7 @@ class ImgStableDiffusion {
       if (params.increase_ref_index != null) {
         if (typeof params.increase_ref_index !== 'boolean') {
           throw new Error(
-            'increase_ref_index must be a boolean. ' +
-            'Got: ' + typeof params.increase_ref_index
+            'increase_ref_index must be a boolean. ' + 'Got: ' + typeof params.increase_ref_index
           )
         }
       }
@@ -407,7 +409,8 @@ class ImgStableDiffusion {
         if (typeof params.auto_resize_ref_image !== 'boolean') {
           throw new Error(
             'auto_resize_ref_image must be a boolean. ' +
-            'Got: ' + typeof params.auto_resize_ref_image
+              'Got: ' +
+              typeof params.auto_resize_ref_image
           )
         }
       }
@@ -427,21 +430,21 @@ class ImgStableDiffusion {
       if (mentioned.length === 0) {
         this.logger.warn(
           'If multiple images have been selected, you need to check the prompt to see ' +
-          'if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ' +
-          `None of @image1…@image${params.init_images.length} were found in the prompt ` +
-          '— FLUX2 will run but the references will have no effect.'
+            'if "@image1" and "@imageX" is mentioned at all so that the prompt makes sense. ' +
+            `None of @image1…@image${params.init_images.length} were found in the prompt ` +
+            '— FLUX2 will run but the references will have no effect.'
         )
       } else if (missing.length > 0) {
         this.logger.warn(
           `Only ${mentioned.join(', ')} found in the prompt; ` +
-          `missing ${missing.join(', ')}. Those reference images will be ignored by FLUX2.`
+            `missing ${missing.join(', ')}. Those reference images will be ignored by FLUX2.`
         )
       }
 
       this.logger.info(
         `stable-diffusion: entering "fusion" mode — ${params.init_images.length} reference images ` +
-        '(FLUX2 in-context conditioning via ref_images). ' +
-        'Generation will attend to every referenced @imageN in the prompt.'
+          '(FLUX2 in-context conditioning via ref_images). ' +
+          'Generation will attend to every referenced @imageN in the prompt.'
       )
     }
 
@@ -449,7 +452,7 @@ class ImgStableDiffusion {
     if (params.increase_ref_index != null && !hasInitImages) {
       throw new Error(
         'increase_ref_index is only valid with init_images (multi-reference fusion). ' +
-        'Your params do not include init_images.'
+          'Your params do not include init_images.'
       )
     }
 
@@ -457,7 +460,7 @@ class ImgStableDiffusion {
     if (params.auto_resize_ref_image != null && !params.init_image && !hasInitImages) {
       throw new Error(
         'auto_resize_ref_image can only be used with init_image or init_images. ' +
-        'No reference images provided.'
+          'No reference images provided.'
       )
     }
 
@@ -484,9 +487,9 @@ class ImgStableDiffusion {
       if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
-          "Set prediction: 'flux2_flow' (FLUX.2). " +
-          'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
-          'instead of the FLUX in-context conditioning path.'
+            "Set prediction: 'flux2_flow' (FLUX.2). " +
+            'Without this the addon silently falls back to the SD/SDEdit img2img branch ' +
+            'instead of the FLUX in-context conditioning path.'
         )
       }
     }
@@ -495,7 +498,7 @@ class ImgStableDiffusion {
       throw new Error('Addon not initialized. Call load() first.')
     }
 
-    const mode = (params.init_image || hasInitImages) ? 'img2img' : 'txt2img'
+    const mode = params.init_image || hasInitImages ? 'img2img' : 'txt2img'
     this.logger.info('Starting generation with mode:', mode)
 
     if (this._hasActiveResponse) {
@@ -518,7 +521,9 @@ class ImgStableDiffusion {
     }
 
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
     finalized.catch((err) => {
       this.logger?.warn?.('Generation response rejected:', err?.message || err)
     })
@@ -532,7 +537,7 @@ class ImgStableDiffusion {
    * Cancel the current generation job.
    * During ESRGAN upscale, cancellation is honored between repeat passes.
    */
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
@@ -541,7 +546,7 @@ class ImgStableDiffusion {
   /**
    * Unload the model and release all resources.
    */
-  async unload () {
+  async unload() {
     return this._run(async () => {
       await this.cancel()
       if (this._job.active) {
@@ -558,7 +563,9 @@ class ImgStableDiffusion {
     })
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
 }
 
 /**
@@ -577,7 +584,7 @@ class EsrganUpscaler {
    *   `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
    * @param {object} [args.opts] - Optional inference options
    */
-  constructor ({ files, config, logger = null, opts = {} }) {
+  constructor({ files, config, logger = null, opts = {} }) {
     if (!files || typeof files !== 'object') {
       throw new TypeError('files must be an object containing { esrgan }')
     }
@@ -594,7 +601,7 @@ class EsrganUpscaler {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -602,7 +609,7 @@ class EsrganUpscaler {
     })
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('Starting ESRGAN upscaler load')
 
     const configurationParams = {
@@ -618,7 +625,9 @@ class EsrganUpscaler {
       await this.addon.activate()
     } catch (loadError) {
       this.logger.error('Error during ESRGAN upscaler load:', loadError)
-      try { await this.addon?.unload?.() } catch (_) {}
+      try {
+        await this.addon?.unload?.()
+      } catch (_) {}
       this.addon = null
       throw loadError
     }
@@ -630,7 +639,7 @@ class EsrganUpscaler {
    * @param {object} configurationParams
    * @returns {EsrganUpscalerInterface}
    */
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     const binding = require('./binding')
     return new EsrganUpscalerInterface(
       binding,
@@ -639,7 +648,7 @@ class EsrganUpscaler {
     )
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const mapped = mapAddonEvent(event, data, error)
     if (mapped === null) {
       this.logger.debug(`Unhandled addon event: ${event} (data type: ${typeof data})`)
@@ -670,11 +679,11 @@ class EsrganUpscaler {
    * @param {number} [options.repeats=1] - Number of ESRGAN passes
    * @returns {Promise<QvacResponse>}
    */
-  async upscale (imageBytes, options) {
+  async upscale(imageBytes, options) {
     return this._run(() => this._upscaleInternal(imageBytes, options))
   }
 
-  async _upscaleInternal (imageBytes, options) {
+  async _upscaleInternal(imageBytes, options) {
     if (!(imageBytes instanceof Uint8Array)) {
       throw new TypeError('input image must be a Uint8Array')
     }
@@ -705,7 +714,9 @@ class EsrganUpscaler {
     }
 
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
     finalized.catch((err) => {
       this.logger?.warn?.('ESRGAN upscale response rejected:', err?.message || err)
     })
@@ -719,13 +730,13 @@ class EsrganUpscaler {
    * Cancel the current upscale job.
    * Cancellation is honored between ESRGAN repeat passes.
    */
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
   }
 
-  async unload () {
+  async unload() {
     return this._run(async () => {
       await this.cancel()
       if (this._job.active) {
@@ -740,7 +751,9 @@ class EsrganUpscaler {
     })
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
 }
 
 /**
@@ -760,7 +773,7 @@ class EsrganUpscaler {
  *   dimension logic is the same.
  * @returns {object} Modified params with injected width/height if applicable
  */
-function applyFluxImg2ImgDimDefaults (params, prediction, hasInitImages) {
+function applyFluxImg2ImgDimDefaults(params, prediction, hasInitImages) {
   // Only apply defaults for FLUX predictions in img2img/fusion mode.
   // Do NOT apply for other predictions (SD1.x, SD2.x, SDXL, SD3) which use
   // image-based defaults.
