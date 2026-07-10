@@ -154,6 +154,35 @@ test('ctor | accepts a Wan 2.2 file set (with high-noise expert)', async (t) => 
   t.is(m.getState().configLoaded, false)
 })
 
+test('load | passes native-required path fields as strings', async (t) => {
+  const m = makeWanModel()
+  let captured = null
+
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+
+  t.is(captured.path, '')
+  t.is(captured.diffusionModelPath, FAKE_MODEL)
+  t.is(captured.highNoiseDiffusionModelPath, '')
+  t.is(captured.uncondDiffusionModelPath, '')
+  t.is(captured.clipLPath, '')
+  t.is(captured.clipGPath, '')
+  t.is(captured.t5XxlPath, FAKE_T5XXL)
+  t.is(captured.llmPath, '')
+  t.is(captured.vaePath, FAKE_VAE)
+  t.is(captured.clipVisionPath, FAKE_CLIP_VISION)
+  t.is(captured.esrganPath, '')
+  t.is(captured.audioVaePath, '')
+  t.is(captured.embeddingsConnectorsPath, '')
+})
+
 // ─────────────────────────────────────────────────────────────────────
 //  run(): mode validation
 // ─────────────────────────────────────────────────────────────────────
