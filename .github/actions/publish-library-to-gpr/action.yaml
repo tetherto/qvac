@@ -206,7 +206,6 @@ runs:
           transcription-whispercpp
           onnx-vad
           embed-llamacpp
-          tts-onnx
           ocr-onnx
         )
 

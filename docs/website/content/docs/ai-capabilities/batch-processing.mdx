@@ -1,0 +1,80 @@
+---
+title: Batch processing
+description: Run multiple LLM prompts concurrently through a single loaded model in one call.
+schemaType: HowTo
+---
+
+## Overview
+
+**What it does:** `batchCompletion()` runs **multiple prompts through a single loaded model in one call**, instead of firing a separate [`completion()`](/reference/api#completion) call per prompt.
+
+**When to use it:** you have several prompts to run against the same model and want them handled together as one job.
+
+**Why use it:**
+- **Optimizes resources:** all prompts share one loaded model — you don't load the model multiple times to run prompts side by side.
+- **Lower total run time:** the prompts run together rather than one after another, so the whole set finishes faster than the equivalent sequence of `completion()` calls.
+
+To use it, load the model with `modelConfig.parallel >= 2` (this is what lets it handle more than one prompt at a time), then pass an array of `prompts` — each with its own `history` and, optionally, `generationParams`, `responseFormat`, `tools`, `mcp`, and multimodal `attachments`.
+
+<Callout type="info">
+Batch processing is specific to **LLM text generation**. It does not apply to other capabilities such as embeddings or transcription.
+</Callout>
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/reference/api#loadmodel) — load with `modelConfig.parallel >= 2`.
+2. [`batchCompletion()`](/reference/api#batchcompletion)
+3. [`unloadModel()`](/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Models
+
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model (same models as [Text generation](/ai-capabilities/text-generation)). Model file format: `*.gguf`.
+
+- Per-prompt `tools`/`mcp` require a tool-capable model loaded with `modelConfig.tools: true`.
+- Per-prompt `attachments` require a multimodal-capable model plus its matching `projectionModelSrc` — see [Multimodal](/ai-capabilities/multimodal).
+- For models available as constants, see [SDK — Models](/introduction#models).
+
+## Features
+
+`batchCompletion()` returns a `BatchCompletionRun` that exposes several ways to consume the batch:
+
+* **Merged event stream:** `run.events` is a single async iterable yielding `{ id, event }` interleaved across all prompts, where `event` is the same discriminated `CompletionEvent` (`contentDelta`, `thinkingDelta`, `toolCall`, `completionStats`, `completionDone`, etc.) used by `completion()`.
+* **Per-prompt streams:** `run.byId(id)` returns `{ events, final }` scoped to one prompt — its own event iterable plus an aggregated `final` promise.
+* **Assigned ids:** `run.ids` resolves to the addon-assigned ids in prompt order.
+* **Ordered results:** `run.results` resolves to `BatchCompletionResult[]` in prompt order. It is **all-or-nothing for stream-level failures** — if the batch handler throws (e.g. a `ContextOverflowError`), the whole run rejects and no per-prompt finals can be recovered. Graceful terminal events such as cancellation still settle each `byId(id).final` according to that id's terminal state.
+* **Batch-level stats:** `run.stats` resolves to a single `CompletionStats | undefined` aggregated across the whole batch (e.g. total tokens), rather than per prompt.
+* **Per-prompt tools and MCP:** each prompt can carry its own `tools` and/or `mcp` clients, resolved client-side (including MCP tool discovery) before submission. Tool calls are routed back to the correct prompt.
+* **Cancellable:** like any other request — see [Cancellation](/runtime/cancellation).
+
+<Callout type="info">
+Validation rules: prompt `id`s must be unique within a batch, and a prompt's `responseFormat` (`json_object` / `json_schema`) cannot be combined with `tools` or `mcp` (tools already constrain output via their parameter schema).
+</Callout>
+
+## Example
+
+The following script loads a model with `parallel: 4`, submits several prompts in one `batchCompletion()` call, consumes the merged event stream, and reads the ordered results and batch-level stats:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/batch-completion.js title="batch-completion.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/batch-completion.ts title="batch-completion.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>
