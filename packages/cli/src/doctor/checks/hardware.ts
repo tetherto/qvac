@@ -149,8 +149,8 @@ export const checkGpuAcceleration: Check = (ctx) => {
         : 'Install a Vulkan loader and vulkan-tools (Debian/Ubuntu: `apt install libvulkan1 vulkan-tools`; Fedora: `dnf install vulkan-tools vulkan-loader`).'
     const fallbackNote =
       ctx.platform === 'win32'
-        ? 'On Windows the inference addon loads Vulkan even for CPU inference, so a missing or pre-1.3 Vulkan runtime prevents the SDK from loading. Vulkan 1.3 or newer is required.'
-        : 'Without a Vulkan ICD, GPU acceleration is unavailable and inference runs on CPU, which is significantly slower. Vulkan 1.3 or newer is required for GPU acceleration.'
+        ? 'On Windows the inference addon loads Vulkan even for CPU inference, so a missing or pre-1.4 Vulkan runtime prevents the SDK from loading. Vulkan 1.4 or newer is required.'
+        : 'Without a Vulkan ICD, GPU acceleration is unavailable and inference runs on CPU, which is significantly slower. Vulkan 1.4 or newer is required for GPU acceleration.'
     return {
       id: 'gpu-acceleration',
       label: 'GPU acceleration',
