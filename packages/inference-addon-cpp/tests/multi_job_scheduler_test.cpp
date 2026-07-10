@@ -258,6 +258,144 @@ public:
   }
 };
 
+/// Emulates a registration-gated model (the real LlamaModel): cancel() and
+/// cancelById() land ONLY on jobs the model already knows about, and the only
+/// way it learns about a job before process(input, id) is the scheduler's
+/// jobStarting() announcement. A cancel for an unknown id is silently dropped,
+/// exactly like the run-counter / cancel-registry guards in the real model —
+/// so these tests fail whenever the scheduler lets a cancel fall between
+/// dequeue and the announcement.
+class RegistrationGatedTestModel final : public model::IModel,
+                                         public model::IModelMultiprocessor,
+                                         public model::IModelCancel,
+                                         public model::IModelCancelById,
+                                         public model::IModelJobLifecycle {
+  const std::chrono::milliseconds processTime_;
+
+  mutable std::mutex mtx_;
+  std::unordered_set<JobId> announced_;
+  std::vector<JobId> announceOrder_;
+  std::unordered_set<JobId> entered_;
+  /// Ids whose process() started while the job was still unannounced — each
+  /// one is an ordering violation of the jobStarting contract.
+  std::unordered_set<JobId> enteredUnannounced_;
+  std::unordered_set<JobId> cancelled_;
+  int active_{0};
+
+public:
+  explicit RegistrationGatedTestModel(std::chrono::milliseconds processTime)
+      : processTime_(processTime) {}
+
+  std::string getName() const override {
+    return "RegistrationGatedTestModel";
+  }
+
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+
+  std::any process(const std::any& input) override { return input; }
+
+  void jobStarting(JobId id) override {
+    std::lock_guard lock(mtx_);
+    announced_.insert(id);
+    announceOrder_.push_back(id);
+  }
+
+  std::any process(const std::any& input, JobId id) override {
+    {
+      std::lock_guard lock(mtx_);
+      entered_.insert(id);
+      if (announced_.count(id) == 0) {
+        enteredUnannounced_.insert(id);
+      }
+      ++active_;
+    }
+    const std::chrono::steady_clock::time_point start =
+        std::chrono::steady_clock::now();
+    bool sawCancel = false;
+    while (std::chrono::steady_clock::now() - start < processTime_) {
+      {
+        std::lock_guard lock(mtx_);
+        if (cancelled_.count(id) != 0) {
+          sawCancel = true;
+          break;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds{2});
+    }
+    {
+      std::lock_guard lock(mtx_);
+      --active_;
+    }
+    return std::string(sawCancel ? "cancelled" : "ran-to-completion");
+  }
+
+  /// Whole-model cancel: lands on announced jobs only, mirroring the real
+  /// model's "only work it knows about" guard.
+  void cancel() const override {
+    auto* self = const_cast<RegistrationGatedTestModel*>(this);
+    std::lock_guard lock(self->mtx_);
+    for (const JobId id : self->announced_) {
+      self->cancelled_.insert(id);
+    }
+  }
+
+  /// Per-id cancel: unknown ids are dropped, like the real cancel registry.
+  void cancelById(JobId id) const override {
+    auto* self = const_cast<RegistrationGatedTestModel*>(this);
+    std::lock_guard lock(self->mtx_);
+    if (self->announced_.count(id) != 0) {
+      self->cancelled_.insert(id);
+    }
+  }
+
+  bool announced(JobId id) const {
+    std::lock_guard lock(mtx_);
+    return announced_.count(id) != 0;
+  }
+
+  /// How many times the scheduler announced @p id (must be exactly once for a
+  /// started job, zero for a dropped queued job).
+  std::size_t announceCount(JobId id) const {
+    std::lock_guard lock(mtx_);
+    std::size_t count = 0;
+    for (const JobId seen : announceOrder_) {
+      if (seen == id) {
+        ++count;
+      }
+    }
+    return count;
+  }
+
+  /// Whether the job was announced strictly before process(input, id) ran.
+  bool announcedBeforeEntered(JobId id) const {
+    std::lock_guard lock(mtx_);
+    return entered_.count(id) != 0 && enteredUnannounced_.count(id) == 0;
+  }
+
+  bool entered(JobId id) const {
+    std::lock_guard lock(mtx_);
+    return entered_.count(id) != 0;
+  }
+
+  int active() const {
+    std::lock_guard lock(mtx_);
+    return active_;
+  }
+};
+
+/// Blocks until @p target jobs are concurrently active on the gated model or
+/// the timeout lapses.
+int waitForGatedActive(const RegistrationGatedTestModel& model, int target,
+                       std::chrono::milliseconds timeout) {
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + timeout;
+  while (model.active() < target &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  return model.active();
+}
+
 /// Blocks until @p target jobs are concurrently active or the timeout lapses,
 /// returning the active count observed at exit.
 int waitForActive(const ConcurrentTestModel& model, int target,
@@ -289,6 +427,7 @@ class MultiJobSchedulerTest : public ::testing::Test {
 protected:
   std::unique_ptr<MockOutputCallback> callback_;
   std::unique_ptr<ConcurrentTestModel> model_;
+  std::unique_ptr<RegistrationGatedTestModel> gatedModel_;
   std::shared_ptr<OutputQueue> outputQueue_;
   std::unique_ptr<MultiJobScheduler> scheduler_;
 
@@ -336,6 +475,22 @@ protected:
     scheduler_->start(outputQueue_);
   }
 
+  /// buildWithQueue with a RegistrationGatedTestModel instead; returns it
+  /// (non-owning) so the test can query announcements and cancellations. The
+  /// scheduler resolves the model's IModelJobLifecycle itself.
+  RegistrationGatedTestModel* buildGatedWithQueue(
+      unsigned maxConcurrency, unsigned queueCapacity,
+      std::chrono::milliseconds processTime) {
+    gatedModel_ = std::make_unique<RegistrationGatedTestModel>(processTime);
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ = std::make_shared<OutputQueue>(*callback_, *gatedModel_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        gatedModel_.get(), maxConcurrency, gatedModel_.get(),
+        gatedModel_.get(), queueCapacity);
+    scheduler_->start(outputQueue_);
+    return gatedModel_.get();
+  }
+
   /// Build a scheduler whose model exposes no per-job cancellation (cancelById
   /// = nullptr), so cancel(id) for an in-flight job hits the unsupported path.
   void buildNoCancelById(
@@ -352,6 +507,7 @@ protected:
     scheduler_.reset();
     outputQueue_.reset();
     model_.reset();
+    gatedModel_.reset();
     callback_.reset();
   }
 };
@@ -734,6 +890,83 @@ TEST_F(MultiJobSchedulerTest, CancelAllDropsQueuedJobs) {
   EXPECT_EQ(errored.count(2), 1u);
   EXPECT_EQ(errored.count(3), 1u)
       << "dropped queued jobs must surface terminal errors";
+}
+
+// (k2) Dequeue must announce the job to the model (jobStarting) before
+// process(input, id) runs — exactly once per started job, and never for a job
+// dropped from the queue.
+TEST_F(MultiJobSchedulerTest, JobStartingAnnouncesBeforeProcess) {
+  RegistrationGatedTestModel* gated =
+      buildGatedWithQueue(1, 1, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
+  EXPECT_TRUE(gated->announcedBeforeEntered(1))
+      << "jobStarting must run before process(input, id)";
+  EXPECT_EQ(gated->announceCount(1), 1u);
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  scheduler_->cancel(2);
+  scheduler_->cancel(1);
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  EXPECT_FALSE(gated->announced(2))
+      << "a job dropped from the queue never starts, so it must not be "
+         "announced";
+}
+
+// (k3) Regression for the lost-cancel window (QVAC prefill-cancel CI flake): a
+// model that honours cancellation only for jobs it already knows about (the
+// real model's run-counter / cancel-registry guards) must still see every
+// cancel land. Announcing the job at dequeue — under the same lock the cancel
+// paths take — is what guarantees an in-flight job is always known by the time
+// any cancel reaches the model. Without jobStarting this test's cancelAll is
+// silently dropped and the job runs to completion.
+TEST_F(MultiJobSchedulerTest, CancelAllLandsOnRegistrationGatedModel) {
+  RegistrationGatedTestModel* gated =
+      buildGatedWithQueue(1, 0, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
+
+  scheduler_->cancelAll();
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  bool sawResult = false;
+  for (const std::pair<JobId, std::any>& entry : outputQueue_->clear()) {
+    if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
+      sawResult = true;
+      EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
+          << "the in-flight job must observe the cancel, not run to "
+             "completion";
+    }
+  }
+  EXPECT_TRUE(sawResult) << "the cancelled job must still publish its result";
+}
+
+// (k4) Same window, per-id flavour: cancel(id) for a job that already left the
+// queue routes to cancelById(), which a registration-gated model drops for
+// unknown ids — the dequeue-time announcement must make the id known first.
+TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
+  RegistrationGatedTestModel* gated =
+      buildGatedWithQueue(1, 0, std::chrono::milliseconds{10000});
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
+
+  scheduler_->cancel(1);
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  ASSERT_EQ(scheduler_->activeJobs(), 0u);
+
+  bool sawResult = false;
+  for (const std::pair<JobId, std::any>& entry : outputQueue_->clear()) {
+    if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
+      sawResult = true;
+      EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
+          << "cancel(id) on a dequeued job must reach it via cancelById";
+    }
+  }
+  EXPECT_TRUE(sawResult) << "the cancelled job must still publish its result";
 }
 
 // (l) Destroying the scheduler while a job waits in the queue must fail that

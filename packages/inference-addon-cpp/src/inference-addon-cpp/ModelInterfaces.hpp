@@ -100,4 +100,22 @@ struct IModelCancelById {
   virtual void cancelById(JobId id) const = 0;
 };
 
+/// Scheduler-side job lifecycle hook. jobStarting(id) runs on the worker
+/// thread while the scheduler still holds its admission lock, after the job
+/// left the queue and before process(input, id) is entered. Cancellation
+/// (cancel(id) / cancelAll()) serialises on that same lock, so a cancel that
+/// no longer finds the job queued is guaranteed to find it already announced
+/// here — registering the job with the model in this hook closes the window
+/// where a cancel would otherwise fall between dequeue and the model's own
+/// registration and silently do nothing. Implementations must be quick and
+/// must not call back into the scheduler.
+struct IModelJobLifecycle {
+  virtual ~IModelJobLifecycle() = default;
+  IModelJobLifecycle() = default;
+  IModelJobLifecycle(const IModelJobLifecycle&) = delete;
+  IModelJobLifecycle& operator=(const IModelJobLifecycle&) = delete;
+
+  virtual void jobStarting(JobId id) = 0;
+};
+
 } // namespace qvac_lib_inference_addon_cpp::model

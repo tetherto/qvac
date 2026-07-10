@@ -42,7 +42,11 @@ namespace qvac_lib_inference_addon_cpp {
 /// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
 /// queued as its terminal event. In-flight cancellation routes to the model:
 /// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(); that
-/// id -> internal-slot mapping is the model's concern.
+/// id -> internal-slot mapping is the model's concern. Dequeue announces the
+/// job to the model (IModelJobLifecycle::jobStarting) under the same lock the
+/// cancel paths take, so every cancel finds each admitted job either still
+/// queued (dropped here) or already announced (cancellable model-side) — never
+/// in between.
 ///
 /// runExclusiveJob admits a job that must run with the model to itself (a
 /// finetune reloads weights): it is refused unless the scheduler is idle, and
@@ -59,6 +63,10 @@ class MultiJobScheduler final : public IJobScheduler {
   model::IModelMultiprocessor* const multiprocessor_;
   model::IModelCancel* const cancel_;
   model::IModelCancelById* const cancelById_;
+  /// Optional lifecycle surface of the same model (see jobStarting below);
+  /// resolved from the multiprocessor so the wiring cannot point at a
+  /// different object than the one whose process() runs the job.
+  model::IModelJobLifecycle* const lifecycle_;
   const unsigned maxConcurrency_;
   /// Waiting room beyond the worker pool. Jobs admitted here sit in queued_
   /// until a worker frees; 0 restores strict reject-at-pool back-pressure.
@@ -131,6 +139,14 @@ class MultiJobScheduler final : public IJobScheduler {
       queuedIndex_.erase(job.id);
       queued_.erase(front);
       inFlight_.insert(job.id);
+      if (lifecycle_ != nullptr) {
+        // Announce the job to the model BEFORE the admission lock is
+        // released: cancel(id)/cancelAll() serialise on this lock, so a
+        // cancel that no longer finds the job queued always finds it
+        // registered model-side — no cancel can fall into the gap between
+        // dequeue and the model's own bookkeeping in process().
+        lifecycle_->jobStarting(job.id);
+      }
       lock.unlock();
 
       // Release the slot, in-flight entry and exclusivity BEFORE publishing
@@ -177,8 +193,9 @@ public:
       model::IModelCancel* cancel, model::IModelCancelById* cancelById,
       unsigned queueCapacity = DEFAULT_MAX_CAPACITY)
       : multiprocessor_(multiprocessor), cancel_(cancel),
-        cancelById_(cancelById), maxConcurrency_(maxConcurrency),
-        queueCapacity_(queueCapacity) {
+        cancelById_(cancelById),
+        lifecycle_(dynamic_cast<model::IModelJobLifecycle*>(multiprocessor)),
+        maxConcurrency_(maxConcurrency), queueCapacity_(queueCapacity) {
     if (multiprocessor_ == nullptr) {
       throw std::invalid_argument("multiprocessor must not be null");
     }
