@@ -88,7 +88,7 @@ node quickstart.js
 * **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
 * **Translation:** text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
 * **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
-* **Text-to-Speech:** speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+* **Text-to-Speech:** speech synthesis for text-to-speech (TTS) using the Chatterbox and Supertonic neural TTS models.
 * **OCR:** optical character recognition (OCR) for extracting text from images via ONNX runtime.
 * **Image generation:** text-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
 * **Fine-tuning:** adapting LLMs to domain-specific tasks via LoRA.
@@ -135,7 +135,7 @@ Legend:
 | diffusion-cpp | Native C++ addon for text-to-image generation via `qvac-ext-stable-diffusion.cpp` | Addon |
 | lib-infer-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
-| lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
+| tts-ggml | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS models via the GGML backend | Addon |
 | lib-infer-parakeet | High-performance speech-to-text inference addon using via NVIDIA/Parakeet | Addon |
 | transcription-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
 | inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |

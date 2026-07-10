@@ -43,7 +43,7 @@ The label-gated addon PR workflows use a shared **[`ci-router`](../../.github/ac
 - `on-pr-translation-nmtcpp.yml`
 - `on-pr-transcription-whispercpp.yml`
 
-**Being migrated onto the same shared composites** (run their prior CI until then): `ocr-onnx`, `bci-whispercpp`, `classification-ggml`, `tts-onnx`, `decoder-audio`, `onnx`.
+**Being migrated onto the same shared composites** (run their prior CI until then): `ocr-onnx`, `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `onnx`.
 
 > **Security invariant** — every stage below *also* requires `verified` (the trust gate). A granular label on its own — without `verified` — triggers **nothing**, so an untrusted contributor can never self-route into a secret-bearing job. `verified` alone authorises the PR and runs the baseline verified checks (`sanity-checks`, `cpp-lint`, and `ts-checks` where present), but no longer runs the full pipeline.
 

@@ -89,7 +89,7 @@ graph TB
 
     subgraph "Inference Addons"
         OCR["ocr-onnx<br/>OCR"]
-        TTS["tts-onnx<br/>TTS"]
+        TTS["tts-ggml<br/>TTS"]
         LLM["llm-llamacpp<br/>LLMs"]
         WHISPER["whispercpp<br/>STT"]
         NMT["nmtcpp<br/>Translation"]

@@ -6,12 +6,12 @@ schemaType: HowTo
 
 ## Overview
 
-Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `embed()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
+Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
 
 The mental model is: **the primary path is `requestId`** — pass the run's `requestId` to `cancel()` to stop that exact call. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, admin sweeps, or for ops whose addons cannot interrupt mid-decode (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`).
 
 <Callout title="Coverage" type="info">
-**Targeted cancel by `requestId`** works for: `completion()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+**Targeted cancel by `requestId`** works for: `completion()`, `batchCompletion()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
 
 **Broad cancel by `modelId`** additionally covers `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
 
@@ -22,7 +22,7 @@ The mental model is: **the primary path is `requestId`** — pass the run's `req
 
 ## Functions
 
-1. [`completion()`](/reference/api#completion) — returns a `CompletionRun` that exposes a synchronous `requestId` field.
+1. [`completion()`](/reference/api#completion) and [`batchCompletion()`](/ai-capabilities/batch-processing) — return a run object that exposes a synchronous `requestId` field.
 2. [`loadModel()`](/reference/api#loadmodel), [`downloadAsset()`](/reference/api#downloadasset), [`embed()`](/reference/api#embed), [`transcribe()`](/reference/api#transcribe), and the [`rag*()`](/ai-capabilities/rag) workspace operations (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
 3. [`cancel()`](/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
 
@@ -83,6 +83,7 @@ await cancel({ modelId });
 
 // Narrow to a specific kind
 await cancel({ modelId, kind: "completion" });
+await cancel({ modelId, kind: "batchCompletion" });
 await cancel({ modelId, kind: "embeddings" });
 await cancel({ modelId, kind: "transcribe" });
 await cancel({ modelId, kind: "translate" });
