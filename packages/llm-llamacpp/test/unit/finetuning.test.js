@@ -72,8 +72,7 @@ const createModelWithMockAddon = (opts = {}) => {
   /// (exclusive job) or any registered inference sink counts as outstanding.
   /// Lets the model's activeJobs-based admission gate work without a JS-side
   /// counter.
-  model.addon.activeJobs = () =>
-    (model._finetuneJob.active ? 1 : 0) + model._jobSinks.size
+  model.addon.activeJobs = () => (model._finetuneJob.active ? 1 : 0) + model._jobSinks.size
   return model
 }
 
