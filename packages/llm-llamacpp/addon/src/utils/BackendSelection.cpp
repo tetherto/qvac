@@ -224,7 +224,7 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
     return std::nullopt;
   }
 
-  // Try to parse as integer first
+  // Try parsing as an integer first
   try {
     int deviceIndex = std::stoi(mainGpuStr);
     return MainGpu(deviceIndex);
