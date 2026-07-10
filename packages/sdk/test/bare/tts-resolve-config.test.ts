@@ -90,8 +90,7 @@ test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets
       language: 'ja',
       s3genModelSrc: 'registry://s3/s3gen.gguf',
       mecabDictSrc: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-      cangjieTsvSrc:
-        'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
+      cangjieTsvSrc: 'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
     },
     {
       resolveModelPath: async (src) => {
