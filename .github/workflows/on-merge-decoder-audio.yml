@@ -43,7 +43,7 @@ jobs:
       authorised: ${{ steps.gate.outputs.authorised }}
     steps:
       - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
@@ -63,7 +63,7 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-publish-logic@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
 
   release-merge-guard:
     name: Release Merge Guard
@@ -71,7 +71,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -130,7 +130,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           fetch-depth: 0
 
@@ -172,18 +172,18 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
         with:
           workdir: "packages/decoder-audio"
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@be1d22629cc48b6dcc36645acc9e6d89cfaf54d8 # 0.2.0
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: "packages/decoder-audio"

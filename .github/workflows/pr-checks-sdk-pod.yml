@@ -68,7 +68,7 @@ jobs:
       # baseline are read from here — never from the PR — so a PR cannot edit
       # the config to exclude itself from its own checks.
       - name: Checkout base
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           ref: ${{ github.event.pull_request.base.sha || github.ref }}
           fetch-depth: 0
@@ -139,7 +139,7 @@ jobs:
       # so checking out and executing PR code cannot exfiltrate anything.
       - name: Checkout PR head
         if: steps.detect.outputs.has_changes == 'true'
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
@@ -151,7 +151,7 @@ jobs:
 
       - name: Setup Node
         if: steps.detect.outputs.has_changes == 'true'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: 22
 
