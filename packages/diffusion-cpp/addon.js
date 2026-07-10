@@ -18,7 +18,7 @@ const path = require('bare-path')
  * @param {*} rawError
  * @returns {{ type: string, data: *, error: * } | null}
  */
-function mapAddonEvent (rawEvent, rawData, rawError) {
+function mapAddonEvent(rawEvent, rawData, rawError) {
   // Error classification: event string contains "Error" (e.g.,
   // "GenerationError", "ContextError", hypothetical "ProcessingErrored").
   // Runs first so that error events are never misclassified as Output/JobEnded.
@@ -66,35 +66,35 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
  * @param {Uint8Array} buf
  * @returns {{ width: number, height: number } | null}
  */
-function readImageDimensions (buf) {
+function readImageDimensions(buf) {
   if (!buf || buf.length < 4) return null
 
   // PNG — magic: \x89PNG\r\n\x1a\n  (IHDR width/height at bytes 16–23)
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
     if (buf.length < 24) return null
-    const w = (buf[16] << 24 | buf[17] << 16 | buf[18] << 8 | buf[19]) >>> 0
-    const h = (buf[20] << 24 | buf[21] << 16 | buf[22] << 8 | buf[23]) >>> 0
+    const w = ((buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19]) >>> 0
+    const h = ((buf[20] << 24) | (buf[21] << 16) | (buf[22] << 8) | buf[23]) >>> 0
     return { width: w, height: h }
   }
 
   // JPEG — magic: 0xFF 0xD8
-  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
     let i = 2
     while (i + 4 < buf.length) {
-      if (buf[i] !== 0xFF) break
+      if (buf[i] !== 0xff) break
       const marker = buf[i + 1]
-      const segLen = (buf[i + 2] << 8 | buf[i + 3])
+      const segLen = (buf[i + 2] << 8) | buf[i + 3]
       if (segLen < 2) break
       // SOF0–SOF3, SOF5–SOF7, SOF9–SOF11, SOF13–SOF15
       if (
-        (marker >= 0xC0 && marker <= 0xC3) ||
-        (marker >= 0xC5 && marker <= 0xC7) ||
-        (marker >= 0xC9 && marker <= 0xCB) ||
-        (marker >= 0xCD && marker <= 0xCF)
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf)
       ) {
         if (i + 8 >= buf.length) return null
-        const h = (buf[i + 5] << 8 | buf[i + 6])
-        const w = (buf[i + 7] << 8 | buf[i + 8])
+        const h = (buf[i + 5] << 8) | buf[i + 6]
+        const w = (buf[i + 7] << 8) | buf[i + 8]
         return { width: w, height: h }
       }
       i += 2 + segLen
@@ -116,7 +116,7 @@ class SdInterface {
    * @param {object} [configurationParams.config] - SD-specific configuration options
    * @param {Function} outputCb - Called on any generation event (started, progress, output, error)
    */
-  constructor (binding, configurationParams, outputCb) {
+  constructor(binding, configurationParams, outputCb) {
     this._binding = binding
 
     // LTX-2 (LTXAV) is keyed on the embeddings-connectors input (matches the
@@ -140,24 +140,20 @@ class SdInterface {
         .map(([k, v]) => [k, String(v)])
     )
 
-    this._handle = this._binding.createInstance(
-      this,
-      configurationParams,
-      outputCb
-    )
+    this._handle = this._binding.createInstance(this, configurationParams, outputCb)
   }
 
   /**
    * Moves addon to the LISTENING state after initialization.
    */
-  async activate () {
+  async activate() {
     this._binding.activate(this._handle)
   }
 
   /**
    * Cancel the current generation job.
    */
-  async cancel () {
+  async cancel() {
     if (!this._handle) return
     await this._binding.cancel(this._handle)
   }
@@ -167,7 +163,7 @@ class SdInterface {
    * @param {object} params - Generation parameters (will be JSON-serialized)
    * @returns {Promise<boolean>} true if job was accepted, false if busy
    */
-  async runJob (params) {
+  async runJob(params) {
     // Pass init_image / init_images / control_frames Uint8Array(s)
     // directly to C++ as typed-array properties (avoids JSON-encoding every
     // byte as a number).
@@ -177,18 +173,14 @@ class SdInterface {
     // both init_image and init_images being set at this boundary so a direct
     // misuse of addon.js doesn't silently drop one of the buffers.
     if (params.init_image && Array.isArray(params.init_images) && params.init_images.length > 0) {
-      throw new Error(
-        'addon.runJob: init_image and init_images are mutually exclusive — pick one.'
-      )
+      throw new Error('addon.runJob: init_image and init_images are mutually exclusive — pick one.')
     }
 
     // ── Video-specific buffers ───────────────────────────────────────────
     // `control_frames` -- VACE-guided video generation (array of Uint8Array,
     //                     one per frame). Forwarded as dedicated typed-array
     //                     properties to bypass JSON serialisation.
-    const controlFramesBufs = Array.isArray(params.control_frames)
-      ? params.control_frames
-      : null
+    const controlFramesBufs = Array.isArray(params.control_frames) ? params.control_frames : null
 
     // ── Multi-reference ("fusion") path ─────────────────────────────────────
     // FLUX2 in-context conditioning with N reference images. Dimensions are
@@ -259,7 +251,7 @@ class SdInterface {
    * If one axis is set, only fill the missing axis from the image.
    * @private
    */
-  _fillDimsFromImage (params, buf) {
+  _fillDimsFromImage(params, buf) {
     if (params.width && params.height) return // Both provided, no-op
 
     const dims = readImageDimensions(buf)
@@ -283,7 +275,7 @@ class SdInterface {
    * Destroy the native instance and release all resources.
    * After this the SdInterface object must not be used.
    */
-  async unload () {
+  async unload() {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)
     this._handle = null
@@ -298,7 +290,7 @@ class EsrganUpscalerInterface {
    * @param {object} [configurationParams.config] - ESRGAN-specific configuration options
    * @param {Function} outputCb - Called on any upscale event
    */
-  constructor (binding, configurationParams, outputCb) {
+  constructor(binding, configurationParams, outputCb) {
     this._binding = binding
 
     if (!configurationParams.config) {
@@ -315,23 +307,19 @@ class EsrganUpscalerInterface {
         .map(([k, v]) => [k, String(v)])
     )
 
-    this._handle = this._binding.createUpscalerInstance(
-      this,
-      configurationParams,
-      outputCb
-    )
+    this._handle = this._binding.createUpscalerInstance(this, configurationParams, outputCb)
   }
 
-  async activate () {
+  async activate() {
     this._binding.activateUpscaler(this._handle)
   }
 
-  async cancel () {
+  async cancel() {
     if (!this._handle) return
     await this._binding.cancel(this._handle)
   }
 
-  async runJob (imageBytes, params) {
+  async runJob(imageBytes, params) {
     return this._binding.runUpscaleJob(this._handle, {
       type: 'image',
       input: imageBytes,
@@ -339,7 +327,7 @@ class EsrganUpscalerInterface {
     })
   }
 
-  async unload () {
+  async unload() {
     if (!this._handle) return
     this._binding.destroyInstance(this._handle)
     this._handle = null
