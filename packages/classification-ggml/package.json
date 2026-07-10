@@ -8,6 +8,7 @@
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js index.d.ts addon.d.ts",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "lint": "standard --ignore \"addon/**\"",
     "lint:fix": "standard --ignore \"addon/**\" --fix",
@@ -24,7 +25,7 @@
     "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:dts": "npm run test:types",
-    "test:types": "npm run typecheck && npm run build:ts",
+    "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
   },
   "standard": {
