@@ -108,6 +108,8 @@ jobs:
             pkg:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
+              - ".github/actions/cache-models/**"
+              - "vcpkg-overlays/**"
   verify-fabric-lockstep:
     needs: [authorize, changes]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
