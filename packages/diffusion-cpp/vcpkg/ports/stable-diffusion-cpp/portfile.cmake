@@ -7,7 +7,7 @@ vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
     URL https://github.com/tetherto/qvac-ext-stable-diffusion.cpp.git
     # PR #19: qvac/ideogram-uncond-2026-07-03 (Ideogram 4 support)
-    REF 99a783398dafeaba41ff07258b9f139589707d29
+    REF 8ba3f9933a0572fa77e48aae713fd8d8b64d3416
 )
 
 set(SD_FLASH_ATTN OFF)
