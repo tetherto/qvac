@@ -33,7 +33,7 @@ This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer sp
 | Windows | x64 | 10+ | Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp: C++ addon framework
+- qvac-lib-inference-addon-cpp (latest): C++ addon framework
 - parakeet-cpp (latest): NVIDIA Parakeet ASR + Sortformer diarization engine
 - ggml-speech (latest): GGML flavour shared with the speech stack; library prefix `qvac-speech-` so it can coexist with the fabric/llm and diffusion ggml builds on the same Android device
 - Bare Runtime (latest): JavaScript runtime
@@ -157,14 +157,14 @@ The integration suite locates each model type via `QVAC_TEST_GGUF_DIR=<path-with
 
 The library wraps `qvac-parakeet.cpp`'s engine in the QVAC addon framework so you can transcribe audio files, run speaker diarization, or stream live mic input through the same shape: load a single `.gguf`, push audio chunks, drain segment callbacks.
 
-> **Heads up:** the package is intended to be used through `index.js`'s `TranscriptionParakeet` class. A lower-level `ParakeetInterface` (in `parakeet.js`) is also exported as an escape hatch for power users that need to drive the addon's job runner directly, but new code should default to `TranscriptionParakeet` -- it's what the bundled examples and integration tests use.
+> **Heads up:** the package is intended to be used through the default export, `index.js`'s `TranscriptionParakeet` class. A lower-level `ParakeetInterface` is available only via the dedicated `@qvac/transcription-parakeet/parakeet.js` subpath (`require('@qvac/transcription-parakeet/parakeet.js')`) as an escape hatch for power users that need to drive the addon's job runner directly, but new code should default to `TranscriptionParakeet` -- it's what the bundled examples and integration tests use.
 
 ### 1. Stage a Model
 
 The ggml backend takes a single `.gguf` per checkpoint. The standard flow is "provision a Python venv, download `.nemo` from HuggingFace, convert to `.gguf` via the in-tree converter":
 
 ```bash
-npm run setup-models                       # venv + download + convert, all 4 models, q8_0
+npm run setup-models                       # venv + download + convert, all 5 models, q8_0
 npm run setup-models -- -t tdt             # just TDT
 npm run setup-models -- -t eou -q f16      # full-precision EOU
 ```
@@ -177,9 +177,9 @@ The three underlying scripts are also flag-driven if you want to run them separa
 
 ```
 setup-venv.sh      [--python <bin>] [--venv <path>] [--force] [--help]
-download-models.sh [--type ctc|tdt|eou|sortformer|all]
+download-models.sh [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--output <dir>] [--force] [--help]
-convert-nemo.sh    [--type ctc|tdt|eou|sortformer|all]
+convert-nemo.sh    [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--quant f16|q8_0|q5_0|q4_0|f32]
                    [--python <bin>]
                    [--nemo-dir <dir>] [--output <dir>] [--force] [--help]
@@ -187,12 +187,13 @@ convert-nemo.sh    [--type ctc|tdt|eou|sortformer|all]
 
 #### Source repositories
 
-| Model | HuggingFace `.nemo` |
+| Model (`--type`) | HuggingFace `.nemo` |
 |-------|-----------------------------------|
-| CTC | [`nvidia/parakeet-ctc-0.6b`](https://huggingface.co/nvidia/parakeet-ctc-0.6b) |
-| TDT | [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
-| EOU | [`nvidia/parakeet_realtime_eou_120m-v1`](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1) |
-| Sortformer | [`nvidia/diar_sortformer_4spk-v1`](https://huggingface.co/nvidia/diar_sortformer_4spk-v1) |
+| `ctc` | [`nvidia/parakeet-ctc-0.6b`](https://huggingface.co/nvidia/parakeet-ctc-0.6b) |
+| `tdt` | [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
+| `eou` | [`nvidia/parakeet_realtime_eou_120m-v1`](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1) |
+| `sortformer` | [`nvidia/diar_sortformer_4spk-v1`](https://huggingface.co/nvidia/diar_sortformer_4spk-v1) |
+| `sortformer-streaming-v2.1` | [`nvidia/diar_streaming_sortformer_4spk-v2.1`](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1) |
 
 NVIDIA Open Model License -- see each repo's model card for terms.
 
@@ -205,7 +206,7 @@ Most users interact with the package through `index.js`. From that entrypoint we
 | Section | Key | Description |
 | --- | --- | --- |
 | `files` | `model` | Absolute or relative path to the `.gguf` checkpoint |
-| `config.parakeetConfig` | `maxThreads` | CPU threads; `0` lets the engine pick `hardware_concurrency` |
+| `config.parakeetConfig` | `maxThreads` | CPU threads (default: `4`); `0` defers to the engine's `hardware_concurrency` |
 | | `useGPU` | Enable the linked ggml GPU backend (default: `false`) |
 | | `streaming` | Open a long-lived `StreamSession` / `SortformerStreamSession` so speaker IDs stay stable across appends and EOU `<EOU>` boundaries surface as segments. Cross-append state is preserved only within a single `run()` call -- separate `run()` invocations on the same instance start a fresh session. For continuous live capture, drive a single long-running `run()` from a pushable stream, or use the duplex `runStreaming()` API which owns one streaming session for the lifetime of the call. Default: `false` (offline `transcribe_samples` / `diarize_samples`). |
 | | `streamingChunkMs` | Streaming chunk cadence in ms (default: 2000) |
@@ -296,7 +297,7 @@ try {
 
 Pass an audio stream (e.g. from `bare-fs.createReadStream` or a live PCM buffer) to either `run()` (offline / batched) or `runStreaming()` (duplex / live). Audio must be **16 kHz mono**, either Float32 or signed 16-bit little-endian PCM.
 
-> **Buffer cap (`run()` only):** the JS layer batches every chunk for a single `run()` call into one native `process()` invocation. Total buffered audio per call is capped at **500 MiB** (`MAX_BUFFERED_BYTES` in `parakeet.js`); exceeding it raises `BUFFER_LIMIT_EXCEEDED`. At 16 kHz mono int16, that's roughly 4 hours of continuous audio. For longer single-session captures, use `runStreaming()` (no per-call buffer cap -- audio is fed straight to the engine as it arrives) or split into sequential `run()` calls.
+> **Buffer cap (`run()` only):** the JS layer batches every chunk for a single `run()` call into one native `process()` invocation. Incoming audio is normalized to **Float32** (4 bytes/sample) before it is buffered, and the buffer is capped at **500 MiB** (`MAX_BUFFERED_BYTES` in `parakeet.js`); exceeding it raises `BUFFER_LIMIT_EXCEEDED`. At 16 kHz mono that's roughly 2.7 hours of continuous audio (regardless of whether the input arrived as int16 or Float32). For longer single-session captures, use `runStreaming()` (no per-call buffer cap -- audio is fed straight to the engine as it arrives) or split into sequential `run()` calls.
 
 There are three ways to receive transcription results:
 
@@ -402,6 +403,33 @@ The new lower-level entry points (`startStreaming` / `appendStreamingAudio` / `e
 
 For Sortformer GGUFs, the `Output` event carries `Speaker N: HH:MM:SS - HH:MM:SS` text per segment instead of an ASR transcript -- see `examples/diarized-transcribe.js` for offline parsing and `examples/live-mic-diarized.js` for the streaming flow.
 
+#### Backend info and runtime stats
+
+After `load()`, `getBackendInfo()` reports the compute backend the native engine actually resolved (post-fallback):
+
+```javascript
+const info = model.getBackendInfo()
+// { backendDevice: 'GPU', backendId: 3, backendName: 'Vulkan0',
+//   backendDescription: 'NVIDIA GeForce RTX 3090' }
+```
+
+It returns `null` before `load()` / after `unload()`. `backendId` follows the `BackendId` enum (`0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other; see `index.d.ts`).
+
+Once a `run()` / `runStreaming()` job settles, `response.stats` carries a `RuntimeStats` object -- pipeline timings plus the post-fallback backend truth:
+
+```javascript
+const response = await model.run(audioStream)
+await response.onUpdate(() => {}).await()
+// response.stats.backendDevice   // 0 = CPU, 1 = GPU (after any runtime fallback)
+// response.stats.backendId       // BackendId code, as above
+// response.stats.gpuUnsupported  // 1 when a GPU was present but the engine ran
+//                                //   on CPU anyway (e.g. Mali Vulkan mis-compute,
+//                                //   or a vendor/tier declined by policy)
+// response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
+```
+
+A CPU `backendDevice` together with `gpuUnsupported === 1` is expected on GPUs the engine declines, not a regression. See `RuntimeStats` in `index.d.ts` for the full field list.
+
 ### 6. Release Resources
 
 ```javascript
@@ -420,9 +448,10 @@ try {
 git clone https://github.com/tetherto/qvac.git
 cd qvac/packages/transcription-parakeet
 npm install
+npm run build
 ```
 
-`npm install` pulls the `parakeet-cpp` and `ggml-speech` overlay ports (the speech-stack ggml flavour, with the `qvac-speech-` library prefix) and produces `prebuilds/<platform>-<arch>/qvac__transcription-parakeet.bare`.
+`npm install` fetches the JS dependencies. `npm run build` (`bare-make generate && bare-make build && bare-make install`) is what pulls the `parakeet-cpp` and `ggml-speech` vcpkg ports (the speech-stack ggml flavour, with the `qvac-speech-` library prefix), compiles the native addon, and installs `prebuilds/<platform>-<arch>/qvac__transcription-parakeet.bare`. Published npm releases ship these prebuilds, so consumers who `npm install @qvac/transcription-parakeet` skip the build step.
 
 ### 2. Stage a model
 
@@ -442,7 +471,7 @@ bare examples/transcribe.js \
 bare examples/diarized-transcribe.js \
      --asr-model  models/parakeet-tdt-0.6b-v3.q8_0.gguf \
      --diar-model models/sortformer-4spk-v1.q8_0.gguf \
-     --audio      examples/samples/two-speakers-16k.wav
+     --audio      examples/samples/diarization-sample-16k.wav
 
 # Live mic transcription
 bare examples/live-mic.js --model models/parakeet-eou-120m-v1.q8_0.gguf --accumulate
@@ -481,13 +510,35 @@ The live-mic examples capture the default input device via `sox -d` (install: `b
 - [`examples/live-mic-diarized.js`](examples/live-mic-diarized.js) -- live mic with parallel Sortformer + ASR for speaker-tagged transcripts. Pass a v2.1 Sortformer GGUF to get AOSC speaker-cache streaming automatically.
 - [`examples/live-mic-diarized-aosc.js`](examples/live-mic-diarized-aosc.js) -- same as above but with CLI flags for the AOSC tuning knobs (`--spk-cache-len`, `--fifo-len`, `--chunk-right-context-ms`, `--spk-cache-enable`, etc.). Useful for A/B comparing AOSC vs the v1 sliding-window code path on the same v2.1 GGUF.
 - [`examples/decode-audio.js`](examples/decode-audio.js) -- decode + transcribe in one step. Same flag surface as `transcribe.js` but pipes the input through `@qvac/decoder-audio` (FFmpeg) first, so any container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...) works -- not just 16 kHz mono `.wav` / raw s16le PCM.
-- [`examples/utils.js`](examples/utils.js) -- shared helpers used by the examples (`loadWeights` streaming, `Output`/`JobEnded` race resolution).
+- [`examples/utils.js`](examples/utils.js) -- shared helpers used by the examples: `setupLogger` (native-log filtering), `readFileAsStream`, `parseWavFile`, `convertRawToFloat32`, `validatePaths`, `pushableStream` (live-mic feed), and `printResults`.
 
 ## Glossary
 
 - **Bare** -- small, modular JavaScript runtime for desktop and mobile. [Learn more](https://docs.pears.com/bare-reference/overview).
 - **GGUF** -- single-file model format used by ggml-based runtimes; carries weights + tokenizer + hyperparameters in one file.
 - **QVAC** -- our open-source AI-SDK for building decentralized AI applications.
+
+## Error Range
+
+Thrown errors are `QvacErrorAddonParakeet` instances (extending `QvacErrorBase`) and carry a numeric `.code` from this package's reserved range **24001 - 25000**, so callers can match programmatically on `err.code`. The codes are re-exported as `ERR_CODES` from the `./parakeet.js` subpath (`require('@qvac/transcription-parakeet/parakeet.js').ERR_CODES`).
+
+| Code | Name | Raised when |
+|------|------|-------------|
+| 24001 | `FAILED_TO_LOAD_WEIGHTS` | Weight streaming into the engine failed. |
+| 24002 | `FAILED_TO_CANCEL` | Cancelling an in-flight job failed. |
+| 24003 | `FAILED_TO_APPEND` | Appending audio / starting a job failed. |
+| 24004 | `FAILED_TO_GET_STATUS` | Reading the wrapper state failed. |
+| 24005 | `FAILED_TO_DESTROY` | Destroying the native instance failed. |
+| 24006 | `FAILED_TO_ACTIVATE` | Activating the model for inference failed. |
+| 24007 | `FAILED_TO_RESET` | Reset / reload / `endStreaming` teardown failed. |
+| 24008 | `FAILED_TO_PAUSE` | Pausing inference failed. |
+| 24009 | `MODEL_NOT_FOUND` | The configured `.gguf` path does not exist. |
+| 24010 | `INVALID_AUDIO_FORMAT` | Audio is not 16 kHz mono. |
+| 24015 | `INVALID_CONFIG` | A configuration value was rejected. |
+| 24016 | `JOB_ALREADY_RUNNING` | A job is already set or being processed. |
+| 24017 | `BUFFER_LIMIT_EXCEEDED` | Buffered audio for one `run()` exceeded `MAX_BUFFERED_BYTES` (500 MiB). |
+| 24018 | `INSTANCE_DESTROYED` | `load()` was called on a destroyed instance. |
+| 24019 | `JOB_CANCELLED` | The active job was cancelled. |
 
 ## Resources
 
