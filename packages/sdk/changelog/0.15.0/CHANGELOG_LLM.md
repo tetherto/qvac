@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.15.x (latest)
-description: Release notes for QVAC SDK v0.15.0.
----
-
-## v0.15.0
-
-### @qvac/sdk
+# QVAC SDK v0.15.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.15.0
 
 QVAC SDK 0.15.0 introduces single-job batch completion for running many prompts through one loaded model, adds LavaSR speech enhancement and denoising to the TTS pipeline, and extends Chatterbox TTS to Japanese and Chinese. It also gives multimodal models explicit GPU/CPU control over the vision encoder and ships stability fixes for Android worklets, worker RPC teardown, registry caching, and symlinked installs.
 
-#### New APIs
+## New APIs
 
-##### Single-Job Batch Completion
+### Single-Job Batch Completion
 
 `batchCompletion` runs many prompts through a single loaded model in one job, streaming per-prompt deltas and returning ordered results. Each prompt can carry its own history, generation parameters, and optional per-prompt tools or MCP-sourced tools.
 
@@ -55,7 +48,7 @@ const results = await run.results; // ordered, all-or-nothing on stream-level fa
 const stats = await run.stats; // batch-level CompletionStats | undefined
 ```
 
-##### GPU Placement for Multimodal Vision Encoders
+### GPU Placement for Multimodal Vision Encoders
 
 Multimodal LLMs can now force the vision encoder (mmproj) onto the GPU or CPU explicitly via the `mmproj-use-gpu` config key. Omit it to keep the previous per-device-class auto-selection.
 
@@ -69,9 +62,9 @@ await loadModel({
 });
 ```
 
-#### Features
+## Features
 
-##### LavaSR Speech Enhancement and Denoising for TTS
+### LavaSR Speech Enhancement and Denoising for TTS
 
 Supertonic TTS gains optional LavaSR post-processing: an enhancer and a denoiser that clean up generated audio. Both are opt-in via new load-time config keys, and Supertonic output can be resampled to a chosen rate.
 
@@ -87,7 +80,7 @@ await sdk.loadModel({
 });
 ```
 
-##### Japanese and Chinese Chatterbox TTS
+### Japanese and Chinese Chatterbox TTS
 
 Chatterbox TTS now supports Japanese and Chinese. Japanese uses a MeCab IPADIC dictionary asset and Chinese uses a new Cangjie TSV asset, both passed at load time alongside the shared T3 and S3Gen models.
 
@@ -123,15 +116,15 @@ await loadModel({
 });
 ```
 
-#### Bug Fixes
+## Bug Fixes
 
 Android inference now always terminates the Bare worklet on teardown, preventing the worklet leak and out-of-memory growth seen under repeated model loads. When the bare-rpc channel closes, pending worker calls now surface as proper `WorkerCrashedError` / `WorkerShutdownError` instead of a generic RPC error, and the dead connection is torn down eagerly so the next call respawns cleanly. The registry descriptor cache honors its cache metadata, avoiding stale or unnecessary re-fetches, and bundled SDK installs correctly resolve the SDK's hoisted `bare-*` dependencies for symlinked (workspace) setups.
 
-#### Model Changes
+## Model Changes
 
 This release adds the LavaSR enhancer and denoiser assets, several Parakeet transcription models, and a Cangjie Chinese asset for Chatterbox, and refreshes the quantized multilingual Supertonic 3 model.
 
-##### Added Models
+### Added Models
 
 ```text
 PARAKEET_CTC_0_6B_F16
@@ -146,7 +139,7 @@ TTS_ENHANCER_LAVASR_FP16
 TTS_ENHANCER_LAVASR_FP32
 ```
 
-##### Updated Models
+### Updated Models
 
 ```text
 TTS_MULTILINGUAL_SUPERTONIC3_Q4_0

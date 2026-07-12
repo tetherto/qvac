@@ -16,6 +16,7 @@ on:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
   workflow_call:

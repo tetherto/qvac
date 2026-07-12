@@ -16,6 +16,7 @@ on:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
 
   workflow_call:
