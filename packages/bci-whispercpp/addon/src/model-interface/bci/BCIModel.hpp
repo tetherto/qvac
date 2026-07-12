@@ -32,14 +32,6 @@ public:
     OutputCallback outputCallback = nullptr;
   };
 
-  // Data passed to encoder_begin_callback so it can inject mel features.
-  struct EncoderCallbackData {
-    whisper_context* ctx = nullptr;
-    const float* melData = nullptr;
-    int melFrames = 0;
-    int melBins = 0;
-  };
-
   explicit BCIModel(BCIConfig config);
   ~BCIModel() noexcept;
 
@@ -97,6 +89,9 @@ private:
       const BCIConfig& oldCfg, const BCIConfig& newCfg);
   void resetContext();
   void loadEmbedderIfNeeded();
+  int injectNeuralMelAndRunWhisper(
+      const std::vector<float>& melFeatures, int melFrames, int melBins,
+      whisper_full_params& params);
 
   BCIConfig cfg_;
   NeuralProcessor neuralProcessor_;
@@ -148,12 +143,6 @@ private:
   double whisperDecodeMs_ = 0.0;
   double whisperBatchdMs_ = 0.0;
   double whisperPromptMs_ = 0.0;
-
-  // 30 s of silent audio reused on every process() call; whisper.cpp does
-  // the actual encode via our encoder_begin_callback, but it still requires
-  // a padding buffer of the right shape. Hoisted to a member so we don't
-  // reallocate ~1.9 MB per call.
-  std::vector<float> dummyAudioPad_;
 
   mutable std::atomic_bool cancelRequested_{false};
 };

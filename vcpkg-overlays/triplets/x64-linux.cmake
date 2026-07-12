@@ -7,3 +7,6 @@ set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../toolchains/linu
 set(VCPKG_C_FLAGS "-fPIC")
 set(VCPKG_CXX_FLAGS "-fPIC -stdlib=libc++")
 set(VCPKG_LINKER_FLAGS "-stdlib=libc++")
+
+# Build only Release configuration to avoid vcpkg debug dependency builds in CI.
+set(VCPKG_BUILD_TYPE release)

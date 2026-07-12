@@ -16,6 +16,7 @@ on:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
 
   workflow_call:
