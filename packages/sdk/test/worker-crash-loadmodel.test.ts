@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { waitForBareChildren } from './utils/bare-children'
+import { waitForBareChildren } from './fixtures/bare-children'
 
 // Real worker, warm up, SIGKILL the bare child, then issue a new call
 // into the cached-but-dead rpcInstance. Without the worker-life signal

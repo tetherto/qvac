@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { waitForBareChildren } from './utils/bare-children'
+import { waitForBareChildren } from './fixtures/bare-children'
 
 // Post-crash recovery: next call must respawn, not reuse a dead RPC.
 test('RPC client recovers from worker crash and serves the next call', async function (t) {

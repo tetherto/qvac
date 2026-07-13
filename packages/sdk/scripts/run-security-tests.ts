@@ -4,7 +4,7 @@ import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const testDir = join(__dirname, '..', 'test', 'unit')
+const testDir = join(__dirname, '..', 'test')
 const testFiles = readdirSync(testDir).filter(
   (f) => (f.startsWith('path-traversal') || f.startsWith('path-security')) && f.endsWith('.test.ts')
 )

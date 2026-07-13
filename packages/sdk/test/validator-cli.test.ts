@@ -3,8 +3,8 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
-const VALIDATOR_PATH = path.join(__dirname, '../../../../scripts/sdk/validator.cjs')
-const MOCKS_DIR = path.join(__dirname, '../mocks')
+const VALIDATOR_PATH = path.join(__dirname, '../../../scripts/sdk/validator.cjs')
+const MOCKS_DIR = path.join(__dirname, './mocks')
 
 function loadMock(filename: string): string {
   return fs.readFileSync(path.join(MOCKS_DIR, filename), 'utf-8')

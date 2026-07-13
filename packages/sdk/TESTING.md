@@ -6,13 +6,13 @@ The SDK test suite is split into three clearly separated buckets. Each bucket ha
 
 | Bucket                | Runtime                                 | Framework                 | Location     | Command                                     |
 | --------------------- | --------------------------------------- | ------------------------- | ------------ | ------------------------------------------- |
-| **Unit**              | Bun / Node                              | brittle                   | `test/unit/` | `bun run test:unit`                         |
+| **Unit**              | Bun / Node                              | brittle                   | `test/`      | `bun run test:unit`                         |
 | **Server (Bare)**     | Bare                                    | brittle                   | `test/bare/` | `bun run test:bare`                         |
 | **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @tetherto/qvac-test-suite | `e2e/`       | See [below](#e2e--clientconsumer-e2e-tests) |
 
 ## Where new tests must land
 
-### `test/unit/` — Unit tests (Bun/Node)
+### `test/` — Unit tests (Bun/Node)
 
 Tests that exercise **shared schemas, client logic, utilities, and any code that does NOT require the Bare runtime**. These run with `bun run` directly on TypeScript sources.
 

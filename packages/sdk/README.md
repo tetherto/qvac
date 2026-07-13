@@ -121,7 +121,7 @@ The SDK test suite is organized into three buckets by runtime:
 
 | Bucket            | Runtime    | Location     | Command                                |
 | ----------------- | ---------- | ------------ | -------------------------------------- |
-| Unit              | Bun / Node | `test/unit/` | `bun run test:unit`                    |
+| Unit              | Bun / Node | `test/`      | `bun run test:unit`                    |
 | Server (Bare)     | Bare       | `test/bare/` | `bun run test:bare`                    |
 | Client (consumer) | Node / RN  | `e2e/`       | See [`e2e/README.md`](./e2e/README.md) |
 
