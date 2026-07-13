@@ -22,6 +22,7 @@ const {
   getDownloadCount,
   resetDownloadCount
 } = require('../integration/utils.js')
+const { matrix, modelFileName } = require('../integration/_benchmark-matrix.js')
 
 const GOOD = 'qvac-integrity-fixture-GOOD-content-0123456789'
 const BAD_SAME_LEN = 'qvac-integrity-fixture-BADD-content-0123456789'
@@ -340,11 +341,15 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    const expectedKeys = entry.warm === undefined ? 'bytes,sha256,urls' : 'bytes,sha256,urls,warm'
     t.is(
       Object.keys(entry).sort().join(','),
-      'bytes,sha256,urls',
+      expectedKeys,
       `${name} contains only cache-key-bearing fields`
     )
+    if (entry.warm !== undefined) {
+      t.is(entry.warm, false, `${name} only declares warm when explicitly deferred`)
+    }
     const hasUrl =
       Array.isArray(entry.urls) &&
       entry.urls.length > 0 &&
@@ -356,6 +361,29 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
     t.ok(hasUrl, `${name} has at least one immutable Hugging Face URL`)
     t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is pinned`)
     t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name} bytes is pinned`)
+  }
+
+  const normallyIntegratedBenchmarkModels = new Set([
+    'Qwen3.5-0.8B-Q4_0.gguf',
+    'Qwen3.5-0.8B-Q8_0.gguf'
+  ])
+  const benchmarkModelNames = [
+    ...new Set(matrix().map((cell) => modelFileName(cell.size, cell.quant)))
+  ]
+  const expectedDeferred = benchmarkModelNames
+    .filter((name) => !normallyIntegratedBenchmarkModels.has(name))
+    .sort()
+  const actualDeferred = benchmarkModelNames
+    .filter((name) => manifest.models[name].warm === false)
+    .sort()
+  t.is(
+    actualDeferred.join(','),
+    expectedDeferred.join(','),
+    'only benchmark-only models defer warming'
+  )
+  t.is(expectedDeferred.length, 8, 'eight benchmark-only models are deferred')
+  for (const name of normallyIntegratedBenchmarkModels) {
+    t.absent(manifest.models[name].warm, `${name} remains selected for ordinary desktop warming`)
   }
 
   // Spot-check a scattered model resolves by its LOCAL filename.

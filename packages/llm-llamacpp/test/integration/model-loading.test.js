@@ -3,8 +3,7 @@
 const test = require('brittle')
 
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
-const HttpDL = require('./http-loader')
+const { ensureModel, ensureModelPath, safeTest } = require('./utils')
 const os = require('bare-os')
 const path = require('bare-path')
 
@@ -126,21 +125,12 @@ safeTest('model unload is clean and idempotent', { timeout: 600_000 }, async (t)
   }
 })
 
-const SHARDED_MODEL = {
-  name: 'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
-  baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main/'
-}
-
 // This test can take longer to download and execute. Keep it on desktop x64
 // runners where the sharded loader has CI coverage.
 test(
   'sharded model can run inference end-to-end',
   { timeout: 4 * 60 * 1000, skip: !(isLinuxX64 || isWindowsX64) },
   async (t) => {
-    const fs = require('bare-fs')
-    const modelDir = path.resolve(__dirname, '../model')
-    fs.mkdirSync(modelDir, { recursive: true })
-
     const shardFiles = [
       'Qwen3-0.6B-UD-IQ1_S.tensors.txt',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
@@ -148,22 +138,11 @@ test(
       'Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf'
     ]
 
-    const loader = new HttpDL({ baseUrl: SHARDED_MODEL.baseUrl })
+    const shardPaths = []
     for (const filename of shardFiles) {
-      const dest = path.join(modelDir, filename)
-      if (fs.existsSync(dest)) continue
-      console.log(`  Downloading shard: ${filename}`)
-      const stream = await loader.getStream(filename)
-      const ws = fs.createWriteStream(dest)
-      for await (const chunk of stream) {
-        ws.write(chunk)
-      }
-      ws.end()
-      await new Promise((resolve) => ws.on('close', resolve))
+      shardPaths.push(await ensureModelPath({ modelName: filename }))
     }
-    await loader.close().catch(() => {})
 
-    const shardPaths = shardFiles.map((f) => path.join(modelDir, f))
     const config = {
       gpu_layers: '999',
       ctx_size: '1024',

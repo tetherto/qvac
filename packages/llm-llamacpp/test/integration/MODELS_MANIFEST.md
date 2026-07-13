@@ -13,6 +13,11 @@ Every model must use an immutable source revision and pin both `sha256` and
 reused after a manifest update. The warm step and runtime verify every restored
 file and replace it when either pin does not match.
 
+Entries used only by opt-in benchmarks may set `"warm": false`. They remain
+fully pinned and can still be downloaded lazily or selected for mobile
+pre-staging, but the ordinary desktop cache warmer will not fetch them on every
+self-hosted runner. Omit `warm` for models used by normal integration tests.
+
 To populate pins from fresh downloads, run:
 
 ```sh
