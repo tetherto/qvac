@@ -300,12 +300,13 @@ export interface RunOptions {
    */
   saveCacheToDisk?: boolean
   /**
-   * Admission policy when the worker pool is full. `true` (default) rejects with
+   * Admission policy when the worker pool is full. `true` rejects with
    * RUN_BUSY before submitting. `false` submits to the native multi-job
    * scheduler, which queues the job in a nearly unbounded waiting room beyond
    * the pool (queued jobs start as slots free); under any realistic backlog it
    * is queued rather than rejected. Overrides the instance-level
-   * `opts.rejectWhenBusy`.
+   * `opts.rejectWhenBusy`, whose default is `true` for `parallel: 1` and
+   * `false` for `parallel >= 2`.
    */
   rejectWhenBusy?: boolean
 }

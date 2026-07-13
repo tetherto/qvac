@@ -264,8 +264,10 @@ class LlmLlamacpp {
     this._maxConcurrency = Math.max(1, Number(config?.parallel) || 1)
     /// Admission policy when at capacity: true throws RUN_BUSY, false lets the
     /// native multi-job scheduler admit/queue it. Overridable per call via
-    /// `runOptions.rejectWhenBusy`. Defaults to throwing for backward compat.
-    this._rejectWhenBusy = opts?.rejectWhenBusy ?? true
+    /// `runOptions.rejectWhenBusy`. Defaults to throwing on the sequential
+    /// path (`parallel: 1`, backward compat) and to queueing when the
+    /// multi-job scheduler is active (`parallel >= 2`).
+    this._rejectWhenBusy = opts?.rejectWhenBusy ?? this._maxConcurrency === 1
     /// Maps the native-assigned jobId → response for active concurrent requests.
     this._jobSinks = new Map()
     this._batchHandler = new BatchHandler({
