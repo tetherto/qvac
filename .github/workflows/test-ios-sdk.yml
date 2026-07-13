@@ -472,7 +472,9 @@ jobs:
         id: select
         uses: ./.github/actions/sdk-device-farm-select-pool
         with:
-          pools: ${{ inputs.ios-device-pools }}
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.ios-device-pools)) }}
           pool-name: ${{ inputs.device-pool-name }}
 
   device-farm:
