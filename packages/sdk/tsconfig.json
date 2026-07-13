@@ -1,6 +1,6 @@
 {
   "include": ["**/*"],
-  "exclude": ["node_modules", "dist", "e2e", "test", "src/worker", "src/server/worker-core.ts"],
+  "exclude": ["node_modules", "dist", "e2e", "test", "src/worker"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "target": "ES2022",

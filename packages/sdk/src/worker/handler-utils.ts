@@ -54,7 +54,7 @@ export function isShutdownMessage(data: unknown): data is ShutdownMessage {
 
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
   try {
-    const { cleanupForTerminate } = await import('@/server/worker-core')
+    const { cleanupForTerminate } = await import('@/worker/worker-core')
     await cleanupForTerminate()
     req.reply(JSON.stringify({ success: true }), 'utf-8')
   } catch (error) {

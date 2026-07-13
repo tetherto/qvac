@@ -116,7 +116,7 @@
     },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
-      "import": "./dist/src/server/worker-core.js"
+      "import": "./dist/src/worker/worker-core.js"
     },
     "./plugins": {
       "import": "./dist/src/server/plugins/index.js"

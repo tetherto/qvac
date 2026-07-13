@@ -8,14 +8,14 @@ import { acquireWorkerLock, releaseWorkerLock } from '@/server/utils/worker-lock
 
 let coreInitialized = false
 let rpcInitialized = false
-// Set true when shutdownBareDirectWorker is in flight, so a later
+// Set true when shutdownWorker is in flight, so a later
 // SIGTERM/SIGINT/uncaught-exception does not re-run releaseWorkerLock + Bare.exit.
 let isShuttingDown = false
 
 const logger = getServerLogger()
 
 // Defense-in-depth grace period for the SIGKILL safety net armed before
-// Bare.exit() in shutdownBareDirectWorker. If Bare.exit cannot
+// Bare.exit() in shutdownWorker. If Bare.exit cannot
 // terminate the worker within this window — typically because some path
 // holds a non-cancellable native handle (e.g. a libuv worker thread
 // blocked on flock; see QVAC-18197) — we force-kill the OS process to
@@ -74,7 +74,7 @@ export function ensureRPCSetup() {
     if (ipcSocketPath) {
       logger.info(`Running in desktop mode, connecting to IPC socket: ${ipcSocketPath}`)
       const rpc = createIPCClient(ipcSocketPath, {
-        onDisconnect: () => void shutdownBareDirectWorker('ipc-disconnect')
+        onDisconnect: () => void shutdownWorker('ipc-disconnect')
       })
       logger.debug('Desktop IPC client created?', !!rpc)
     } else {
@@ -95,7 +95,7 @@ export function isCoreInitialized(): boolean {
   return coreInitialized
 }
 
-export type BareDirectShutdownReason =
+export type WorkerShutdownReason =
   'signal' | 'rpc-close' | 'uncaught-exception' | 'unhandled-rejection' | 'ipc-disconnect'
 
 /**
@@ -116,13 +116,13 @@ export async function cleanupForTerminate(): Promise<void> {
   await cleanupCoreForTerminate()
 }
 
-export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason): Promise<void> {
+export async function shutdownWorker(reason: WorkerShutdownReason): Promise<void> {
   if (isShuttingDown) return
   isShuttingDown = true
 
-  const messages: Record<BareDirectShutdownReason, string> = {
+  const messages: Record<WorkerShutdownReason, string> = {
     signal: '🐻 Bare worker shutdown signal received, cleaning up...',
-    'rpc-close': '🧹 Bare direct mode RPC closed, cleaning up...',
+    'rpc-close': '🧹 Worker RPC closed, cleaning up...',
     'uncaught-exception': '💥 Uncaught exception, cleaning up...',
     'unhandled-rejection': '💥 Unhandled rejection, cleaning up...',
     'ipc-disconnect': '🔌 Parent IPC disconnected, cleaning up...'
@@ -149,16 +149,16 @@ export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason)
 function setupShutdownHandlers() {
   const signals = new Signal.Emitter()
   signals.unref()
-  signals.once('SIGTERM', () => void shutdownBareDirectWorker('signal'))
-  signals.once('SIGINT', () => void shutdownBareDirectWorker('signal'))
+  signals.once('SIGTERM', () => void shutdownWorker('signal'))
+  signals.once('SIGINT', () => void shutdownWorker('signal'))
 
   Bare.on('uncaughtException', (err) => {
     logger.error('Uncaught exception in worker:', err)
-    void shutdownBareDirectWorker('uncaught-exception')
+    void shutdownWorker('uncaught-exception')
   })
 
   Bare.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection in worker:', reason)
-    void shutdownBareDirectWorker('unhandled-rejection')
+    void shutdownWorker('unhandled-rejection')
   })
 }

@@ -2,7 +2,7 @@
  * Default worker entry point that registers ALL built-in plugins.
  */
 
-import { initializeWorkerCore, ensureRPCSetup } from '@/server/worker-core'
+import { initializeWorkerCore, ensureRPCSetup } from '@/worker/worker-core'
 import { getServerLogger } from '@/logging'
 import { registerPlugins } from '@qvac/core/plugins'
 import { llmPlugin } from '@qvac/core/llamacpp-completion/plugin'
