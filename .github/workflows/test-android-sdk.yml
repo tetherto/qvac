@@ -49,6 +49,11 @@ on:
         description: 'JSON array of device pools [{name, arn}]'
         required: true
         type: string
+      device-pool-name:
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from device-pools is chosen."
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -353,16 +358,45 @@ jobs:
           path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
           retention-days: 7
 
+  select-pool:
+    name: "[android] select-pool"
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      pool: ${{ steps.select.outputs.pool }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.device-pool-name == '' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Select device pool
+        id: select
+        uses: ./.github/actions/sdk-device-farm-select-pool
+        with:
+          pools: ${{ inputs.device-pools }}
+          pool-name: ${{ inputs.device-pool-name }}
+
   device-farm:
     name: "[android] device-farm"
-    needs: build
+    needs: [build, select-pool]
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        device: ${{ fromJson(inputs.device-pools) }}
+        device: ${{ fromJson(needs.select-pool.outputs.pool) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:

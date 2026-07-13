@@ -57,6 +57,14 @@ on:
         description: "Device Farm scheduling timeout before producer starts (minutes)"
         type: number
         default: 90
+      android-device-pool:
+        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
+      ios-device-pool:
+        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
@@ -100,6 +108,12 @@ on:
       device-farm-start-timeout:
         type: number
         default: 90
+      android-device-pool:
+        type: string
+        default: ""
+      ios-device-pool:
+        type: string
+        default: ""
       desktop-platforms:
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
@@ -194,6 +208,7 @@ jobs:
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
 
@@ -218,5 +233,6 @@ jobs:
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.ios-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
