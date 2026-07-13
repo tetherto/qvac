@@ -181,10 +181,9 @@
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
-    "bare:example": "bare ./scripts/bare-bootstrap.js",
-    "check-models": "tsx ./models/update-models/index.ts --check",
-    "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
-    "update-models": "tsx ./models/update-models/index.ts",
+    "check-models": "tsx ./src/models/update-models/index.ts --check",
+    "check-models:hook": "tsx ./src/models/update-models/index.ts --check --non-blocking",
+    "update-models": "tsx ./src/models/update-models/index.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
@@ -297,6 +296,5 @@
     "tsx": {
       "optional": true
     }
-  },
-  "patchedDependencies": {}
+  }
 }
