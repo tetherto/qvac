@@ -69,52 +69,40 @@
       "require": "./dist/src/worker/index.js"
     },
     "./llamacpp-completion/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+      "import": "./dist/src/worker/plugins/llamacpp-completion.js"
     },
     "./llamacpp-embedding/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+      "import": "./dist/src/worker/plugins/llamacpp-embedding.js"
     },
     "./whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+      "import": "./dist/src/worker/plugins/whispercpp-transcription.js"
     },
     "./bci-whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.js"
+      "import": "./dist/src/worker/plugins/bci-whispercpp-transcription.js"
     },
     "./parakeet-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/parakeet-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/parakeet-transcription/plugin.js"
+      "import": "./dist/src/worker/plugins/parakeet-transcription.js"
     },
     "./nmtcpp-translation/plugin": {
-      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+      "import": "./dist/src/worker/plugins/nmtcpp-translation.js"
     },
     "./tts-ggml/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "import": "./dist/src/worker/plugins/tts-ggml.js"
     },
     "./onnx-tts/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "import": "./dist/src/worker/plugins/tts-ggml.js"
     },
     "./ggml-ocr/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-ocr/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-ocr/plugin.js"
+      "import": "./dist/src/worker/plugins/ggml-ocr.js"
     },
     "./sdcpp-generation/plugin": {
-      "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
+      "import": "./dist/src/worker/plugins/sdcpp-generation.js"
     },
     "./ggml-vla/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
+      "import": "./dist/src/worker/plugins/ggml-vla.js"
     },
     "./ggml-classification/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
+      "import": "./dist/src/worker/plugins/ggml-classification.js"
     },
     "./plugin-utils": {
       "types": "./dist/src/schemas/plugin.d.ts",
