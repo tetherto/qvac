@@ -85,10 +85,12 @@ function getUpperBound (benchmarkSettings) {
 function getRequestedBackendFamily (platformName, useGPU, backendHint) {
   if (backendHint) return backendHint
   if (!useGPU) return 'cpu'
-  if (platformName === 'darwin' || platformName === 'ios') return 'coreml'
-  if (platformName === 'win32') return 'directml'
-  if (platformName === 'linux') return 'cuda'
-  if (platformName === 'android') return 'nnapi'
+  // ggml GPU backend by platform: Metal on Apple, Vulkan on Windows (the
+  // prebuild is a Vulkan build) and Linux, Vulkan/OpenCL on Android.
+  if (platformName === 'darwin' || platformName === 'ios') return 'metal'
+  if (platformName === 'win32') return 'vulkan'
+  if (platformName === 'linux') return 'vulkan'
+  if (platformName === 'android') return 'vulkan'
   return 'gpu'
 }
 

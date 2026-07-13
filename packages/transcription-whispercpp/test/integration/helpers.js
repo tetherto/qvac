@@ -165,6 +165,11 @@ function recordWhisperStats (label, stats, extra) {
   const encodeMs = typeof stats.whisperEncodeMs === 'number' ? Math.round(stats.whisperEncodeMs) : null
   const decodeMs = typeof stats.whisperDecodeMs === 'number' ? Math.round(stats.whisperDecodeMs) : null
   const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+  // The active ggml backend id captured once per load() and echoed in every
+  // stats snapshot (0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other). Recorded
+  // so the aggregator can label the REAL backend per device instead of guessing
+  // from the platform — e.g. Adreno Android lands on OpenCL(4), Mali on Vulkan(3).
+  const backendId = typeof stats.backendId === 'number' ? stats.backendId : null
 
   _perfReporter.record(label, {
     real_time_factor: rtf,
@@ -173,7 +178,8 @@ function recordWhisperStats (label, stats, extra) {
     whisper_encode_time_ms: encodeMs,
     whisper_decode_time_ms: decodeMs,
     audio_duration_ms: audioMs,
-    total_time_ms: totalTimeMs
+    total_time_ms: totalTimeMs,
+    backend_id: backendId
   }, {
     execution_provider: ep,
     output: extra && extra.output ? String(extra.output) : null
