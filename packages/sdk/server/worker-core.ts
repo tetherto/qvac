@@ -1,6 +1,6 @@
 import os from 'bare-os'
 import Signal from 'bare-signals'
-import { createBareKitRPCServer, createIPCClient } from '@/server/rpc/create-server'
+import { createBareKitRPCServer, createIPCClient } from '@/src/worker/create-server'
 import { destroySwarm } from '@/server/bare/hyperswarm'
 import { initEnv, getValidatedEnv } from '@/server/env'
 import { closeAllRagInstances } from '@/server/bare/rag-hyperdb'

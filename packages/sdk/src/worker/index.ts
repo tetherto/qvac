@@ -3,21 +3,19 @@
  */
 
 import { initializeWorkerCore, ensureRPCSetup } from '@/server/worker-core'
-import { registerPlugins } from '@/server/plugins'
 import { getServerLogger } from '@/logging'
-import {
-  llmPlugin,
-  embeddingsPlugin,
-  whisperPlugin,
-  bciPlugin,
-  parakeetPlugin,
-  nmtPlugin,
-  ttsPlugin,
-  ocrPlugin,
-  diffusionPlugin,
-  vlaPlugin,
-  classificationPlugin
-} from '@/server/bare/plugins'
+import { registerPlugins } from '@qvac/core/plugins'
+import { llmPlugin } from '@qvac/core/llamacpp-completion/plugin'
+import { embeddingsPlugin } from '@qvac/core/llamacpp-embedding/plugin'
+import { whisperPlugin } from '@qvac/core/whispercpp-transcription/plugin'
+import { bciPlugin } from '@qvac/core/bci-whispercpp-transcription/plugin'
+import { parakeetPlugin } from '@qvac/core/parakeet-transcription/plugin'
+import { nmtPlugin } from '@qvac/core/nmtcpp-translation/plugin'
+import { ttsPlugin } from '@qvac/core/tts-ggml/plugin'
+import { ocrPlugin } from '@qvac/core/ggml-ocr/plugin'
+import { diffusionPlugin } from '@qvac/core/sdcpp-generation/plugin'
+import { vlaPlugin } from '@qvac/core/ggml-vla/plugin'
+import { classificationPlugin } from '@qvac/core/ggml-classification/plugin'
 
 const { hasRPCConfig } = initializeWorkerCore()
 

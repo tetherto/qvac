@@ -93,15 +93,15 @@ function getDefaultWorkerPath(): string {
   const hasAsset = typeof (import.meta as ImportMetaAsset).asset === 'function'
 
   const packagedUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../server/worker.js'))
-    : new URL('../../server/worker.js', import.meta.url)
+    ? new URL((import.meta as ImportMetaAsset).asset!('../../../src/worker/index.ts'))
+    : new URL('../../../src/worker/index.ts', import.meta.url)
   const packaged = fileURLToPath(packagedUrl)
   if (fs.existsSync(packaged)) return packaged
 
   // Dev/source layout fallback
   const devUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../dist/server/worker.js'))
-    : new URL('../../dist/server/worker.js', import.meta.url)
+    ? new URL((import.meta as ImportMetaAsset).asset!('../../src/worker/index.ts'))
+    : new URL('../../src/worker/index.ts', import.meta.url)
   return fileURLToPath(devUrl)
 }
 
