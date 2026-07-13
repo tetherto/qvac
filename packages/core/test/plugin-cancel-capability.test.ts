@@ -1,22 +1,124 @@
 import test from 'brittle'
+import { z } from 'zod'
 import {
+  defineHandler,
+  defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema,
   type PluginHandlerCancel
 } from '../src/schemas/plugin'
 
 // -----------------------------------------------------------------------------
-// Built-in plugin cancel-capability truth table — Bare runtime tests.
+// Plugin cancel-capability contract.
 //
-// Locks the cancel-capability truth table in — if a future change flips
-// a plugin's `cancel` declaration without the corresponding code path
-// landing, this test fails loudly.
-//
-// These tests require the Bare runtime (addon bindings are N-API) and
-// run via `npm run test:bare`.
-//
-// The schema-level and defineHandler tests (runtime-agnostic) live in
-// test/unit/plugin-cancel-capability.test.ts.
+// Two halves:
+//   - Runtime schema + defineHandler/defineDuplexHandler: the runtime-agnostic
+//     shape of the `cancel` field — optional, every valid `scope`, invalid
+//     scopes rejected, and the field threaded through the define helpers
+//     unmodified.
+//   - Built-in plugin truth table: every built-in plugin manifest carries the
+//     expected cancel value for its addon's cancel surface, guarding against a
+//     manifest tweak that forgets to keep `cancel` in sync with the addon
+//     (e.g. adding a hard-cancel call to nmtcpp without flipping its
+//     declaration off `"none"`). The truth-table half imports N-API addon
+//     bindings, so the whole file runs under the Bare runtime.
 // -----------------------------------------------------------------------------
+
+// =============================================================================
+// Runtime schema + define helpers
+// =============================================================================
+
+test('pluginHandlerDefinitionRuntimeSchema: cancel field is optional', (t) => {
+  const withoutCancel = pluginHandlerDefinitionRuntimeSchema.safeParse({
+    requestSchema: { safeParse: () => {} },
+    responseSchema: { safeParse: () => {} },
+    streaming: true,
+    handler: () => {}
+  })
+  t.ok(withoutCancel.success, 'handler without cancel field is valid')
+})
+
+test('pluginHandlerDefinitionRuntimeSchema: accepts each cancel.scope value', (t) => {
+  const scopes: PluginHandlerCancel['scope'][] = ['request', 'model', 'none']
+  for (const scope of scopes) {
+    const result = pluginHandlerDefinitionRuntimeSchema.safeParse({
+      requestSchema: { safeParse: () => {} },
+      responseSchema: { safeParse: () => {} },
+      streaming: false,
+      handler: () => {},
+      cancel: { scope }
+    })
+    t.ok(result.success, `cancel.scope='${scope}' is valid`)
+  }
+})
+
+test('pluginHandlerDefinitionRuntimeSchema: cancel.hard is optional and boolean', (t) => {
+  const withHardTrue = pluginHandlerDefinitionRuntimeSchema.safeParse({
+    requestSchema: { safeParse: () => {} },
+    responseSchema: { safeParse: () => {} },
+    streaming: false,
+    handler: () => {},
+    cancel: { scope: 'model', hard: true }
+  })
+  t.ok(withHardTrue.success, 'hard:true is valid')
+
+  const withHardFalse = pluginHandlerDefinitionRuntimeSchema.safeParse({
+    requestSchema: { safeParse: () => {} },
+    responseSchema: { safeParse: () => {} },
+    streaming: false,
+    handler: () => {},
+    cancel: { scope: 'model', hard: false }
+  })
+  t.ok(withHardFalse.success, 'hard:false is valid')
+
+  const withoutHard = pluginHandlerDefinitionRuntimeSchema.safeParse({
+    requestSchema: { safeParse: () => {} },
+    responseSchema: { safeParse: () => {} },
+    streaming: false,
+    handler: () => {},
+    cancel: { scope: 'none' }
+  })
+  t.ok(withoutHard.success, 'hard omitted is valid')
+})
+
+test('pluginHandlerDefinitionRuntimeSchema: rejects invalid cancel.scope', (t) => {
+  const result = pluginHandlerDefinitionRuntimeSchema.safeParse({
+    requestSchema: { safeParse: () => {} },
+    responseSchema: { safeParse: () => {} },
+    streaming: false,
+    handler: () => {},
+    cancel: { scope: 'everywhere' }
+  })
+  t.is(result.success, false, 'invalid scope is rejected')
+})
+
+test('defineHandler: preserves cancel field on the returned definition', (t) => {
+  const def = defineHandler({
+    requestSchema: z.object({ modelId: z.string() }),
+    responseSchema: z.object({ ok: z.boolean() }),
+    streaming: false,
+    handler: async () => ({ ok: true }),
+    cancel: { scope: 'model', hard: true }
+  })
+  t.alike(def.cancel, { scope: 'model', hard: true })
+})
+
+test('defineDuplexHandler: preserves cancel field on the returned definition', (t) => {
+  const def = defineDuplexHandler({
+    requestSchema: z.object({ modelId: z.string() }),
+    responseSchema: z.object({ ok: z.boolean() }),
+    streaming: true,
+    duplex: true,
+    handler: async function* () {
+      yield { ok: true }
+    },
+    cancel: { scope: 'none' }
+  })
+  t.alike(def.cancel, { scope: 'none' })
+})
+
+// =============================================================================
+// Built-in plugin truth table (Bare runtime — N-API addon bindings)
+// =============================================================================
 
 test('builtin plugins: every handler declares cancel matching the truth table', async (t) => {
   const [
