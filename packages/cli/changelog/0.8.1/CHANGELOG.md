@@ -14,4 +14,3 @@ Release Date: 2026-07-13
 
 - Adopt Prettier across SDK-pod packages. (see PR [#3039](https://github.com/tetherto/qvac/pull/3039))
 - Unify lint/format/typecheck across SDK-pod packages. (see PR [#3040](https://github.com/tetherto/qvac/pull/3040))
-
