@@ -1,0 +1,252 @@
+name: Prebuilds Caller
+
+# Direct dispatch, no dedup layer: each job below calls that package's
+# existing prebuilds-<pkg>.yml unmodified. A PR touching packages/<pkg>/
+# will build that package twice (once here, once via the existing
+# on-pr-<pkg>.yml) - accepted, known duplicate-compute tradeoff, same as
+# validated in qvac-internal (QVAC-18048). qvac's existing
+# detect-native-changes/prebuild-artifact-reuse/prebuild-artifact-save
+# dedup mechanism inside on-pr-<pkg>.yml is untouched and unaffected.
+
+on:
+  workflow_call:
+    inputs:
+      changed-packages:
+        description: "JSON array of changed package names, from dorny/paths-filter"
+        required: true
+        type: string
+      repository:
+        required: false
+        type: string
+        default: "tetherto/qvac"
+      ref:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bci-whispercpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'bci-whispercpp')
+    concurrency:
+      group: prebuilds-bci-whispercpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  classification-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'classification-ggml')
+    concurrency:
+      group: prebuilds-classification-ggml-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-classification-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  diffusion-cpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'diffusion-cpp')
+    concurrency:
+      group: prebuilds-diffusion-cpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  embed-llamacpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'embed-llamacpp')
+    concurrency:
+      group: prebuilds-embed-llamacpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  llm-llamacpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'llm-llamacpp')
+    concurrency:
+      group: prebuilds-llm-llamacpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  ocr-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'ocr-ggml')
+    concurrency:
+      group: prebuilds-ocr-ggml-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-ocr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  ocr-onnx-build:
+    if: contains(fromJSON(inputs.changed-packages), 'ocr-onnx')
+    concurrency:
+      group: prebuilds-ocr-onnx-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  onnx-build:
+    if: contains(fromJSON(inputs.changed-packages), 'onnx')
+    concurrency:
+      group: prebuilds-onnx-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  transcription-parakeet-build:
+    if: contains(fromJSON(inputs.changed-packages), 'transcription-parakeet')
+    concurrency:
+      group: prebuilds-transcription-parakeet-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  transcription-whispercpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'transcription-whispercpp')
+    concurrency:
+      group: prebuilds-transcription-whispercpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  translation-nmtcpp-build:
+    if: contains(fromJSON(inputs.changed-packages), 'translation-nmtcpp')
+    concurrency:
+      group: prebuilds-translation-nmtcpp-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  tts-ggml-build:
+    if: contains(fromJSON(inputs.changed-packages), 'tts-ggml')
+    concurrency:
+      group: prebuilds-tts-ggml-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-tts-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  fabric-build:
+    if: contains(fromJSON(inputs.changed-packages), 'fabric')
+    concurrency:
+      group: prebuilds-fabric-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-fabric.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  vla-build:
+    if: contains(fromJSON(inputs.changed-packages), 'vla')
+    concurrency:
+      group: prebuilds-vla-${{ github.event.pull_request.head.sha || inputs.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-vla.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
