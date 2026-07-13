@@ -12,7 +12,7 @@
       "urls": [
         "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/ef8fa11863cc80ab078276f9a0bf81601e5ed904/stable-diffusion-v2-1-Q4_0.gguf"
       ],
-      "sha256": "3bc6163b7e7979aab49cc9dd76a98b99945f6a3cca8ba14411d730380c1a10e1",
+      "sha256": "27740067fae2c988f64839ae806d989eb6d5aa6cfe5d47c8994c100677ef97e4",
       "bytes": 2185459424
     },
     "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
