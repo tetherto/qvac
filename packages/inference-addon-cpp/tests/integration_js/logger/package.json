@@ -6,7 +6,7 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "test": "bare test.js && bare teardown.test.js"
+    "test": "bare test.js && bare teardown.test.js && bare reject.test.js"
   },
   "files": [
     "binding.js",

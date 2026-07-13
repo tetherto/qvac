@@ -1,5 +1,11 @@
 import test from 'brittle'
-import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
+import {
+  loadModelOptionsToRequestSchema,
+  loadModelRequestSchema,
+  loadModelSrcRequestSchema,
+  modelProgressUpdateSchema
+} from '@/schemas/load-model'
+import { contractValidate } from './utils/contract-validator'
 import { llmConfigBaseSchema, ModelType } from '@/schemas'
 import {
   getExplicitRegistryMetadata,
@@ -215,4 +221,148 @@ test('loadModelRequestSchema: custom plugin allows unknown modelConfig keys', (t
   if (result.success) {
     t.is((result.data.modelConfig as Record<string, unknown>)?.customOption1, 'value1')
   }
+})
+
+test('contract loadModel.request: accepts the modelConfig variations Zod accepts', (t) => {
+  const variations: Array<[string, Record<string, unknown>]> = [
+    [
+      'whisper companion sources',
+      {
+        type: 'loadModel',
+        modelType: 'whispercpp-transcription',
+        modelSrc: 'model.bin',
+        modelConfig: { language: 'en', vadModelSrc: 'vad.bin' }
+      }
+    ],
+    [
+      'ocr detector companion',
+      {
+        type: 'loadModel',
+        modelType: 'ggml-ocr',
+        modelSrc: 'recognizer.gguf',
+        modelConfig: { detectorModelSrc: 'detector.gguf' }
+      }
+    ],
+    [
+      'classification bundled weights (empty modelSrc)',
+      {
+        type: 'loadModel',
+        modelType: 'ggml-classification',
+        modelSrc: '',
+        modelConfig: { topK: 3 }
+      }
+    ],
+    [
+      'llm projection descriptor',
+      {
+        type: 'loadModel',
+        modelType: 'llamacpp-completion',
+        modelSrc: 'model.gguf',
+        modelConfig: {
+          projectionModelSrc: {
+            src: 'registry://hf/future/Qwen3.5-2B.mmproj-Q8_0.gguf',
+            name: 'MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0',
+            expectedSize: 364_664_384,
+            sha256Checksum: '526dbf85f350baf3a5107b1f14e629e94571c7cbab4277476fbdaaa8c4a31a64'
+          }
+        }
+      }
+    ],
+    [
+      'custom plugin with free-form modelConfig',
+      {
+        type: 'loadModel',
+        modelType: 'my-custom-plugin',
+        modelSrc: 'model.bin',
+        modelConfig: { customOption1: 'value1', nestedConfig: { deep: true } }
+      }
+    ]
+  ]
+
+  for (const [label, payload] of variations) {
+    t.is(loadModelRequestSchema.safeParse(payload).success, true, `zod accepts ${label}`)
+    const contract = contractValidate('loadModel.request', payload)
+    t.ok(contract.valid, `contract accepts ${label}: ${contract.errors}`)
+  }
+})
+
+test('contract loadModel.request: rejects structurally invalid requests', (t) => {
+  const invalid: Array<[string, Record<string, unknown>]> = [
+    ['missing modelSrc and modelType', { type: 'loadModel' }],
+    [
+      'numeric modelSrc',
+      {
+        type: 'loadModel',
+        modelType: 'llamacpp-completion',
+        modelSrc: 123,
+        modelConfig: {}
+      }
+    ]
+  ]
+
+  for (const [label, payload] of invalid) {
+    t.is(loadModelRequestSchema.safeParse(payload).success, false, `zod rejects ${label}`)
+    t.is(contractValidate('loadModel.request', payload).valid, false, `contract rejects ${label}`)
+  }
+})
+
+test('contract loadModel.request: runtime-only refinements stay server-side', (t) => {
+  // Zod rejects these via refinements (custom-plugin arm excludes built-in
+  // modelTypes; misplaced-config hints), which JSON Schema cannot express.
+  // The exported contract is intentionally looser here: clients trust the
+  // wire and the server remains the source of truth for these rejections.
+  const runtimeOnlyRejections: Array<[string, Record<string, unknown>]> = [
+    [
+      'unknown top-level key',
+      {
+        type: 'loadModel',
+        modelType: 'llamacpp-completion',
+        modelSrc: 'model.gguf',
+        modelConfig: {},
+        unknownTopLevelField: 'should-fail'
+      }
+    ],
+    [
+      'misplaced ctx_size outside modelConfig',
+      {
+        type: 'loadModel',
+        modelType: 'llamacpp-completion',
+        modelSrc: 'model.gguf',
+        modelConfig: {},
+        ctx_size: 2048
+      }
+    ]
+  ]
+
+  for (const [label, payload] of runtimeOnlyRejections) {
+    t.is(loadModelRequestSchema.safeParse(payload).success, false, `zod rejects ${label}`)
+    const contract = contractValidate('loadModel.request', payload)
+    t.ok(contract.valid, `contract accepts ${label} (server-side refinement)`)
+  }
+})
+
+test('contract modelProgress.response: validates loadModel progress updates', (t) => {
+  const progressUpdate = {
+    type: 'modelProgress',
+    downloaded: 1024,
+    total: 4096,
+    percentage: 25,
+    downloadKey: 'model.gguf',
+    shardInfo: {
+      currentShard: 1,
+      totalShards: 4,
+      shardName: 'model-00001-of-00004.gguf',
+      overallDownloaded: 1024,
+      overallTotal: 16384,
+      overallPercentage: 6.25
+    }
+  }
+
+  t.is(modelProgressUpdateSchema.safeParse(progressUpdate).success, true)
+  const contract = contractValidate('modelProgress.response', progressUpdate)
+  t.ok(contract.valid, `contract accepts sharded progress update: ${contract.errors}`)
+
+  const missingKey = { type: 'modelProgress', downloaded: 1, total: 2, percentage: 50 }
+  t.is(modelProgressUpdateSchema.safeParse(missingKey).success, false)
+  t.is(contractValidate('modelProgress.response', missingKey).valid, false)
 })

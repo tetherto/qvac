@@ -234,6 +234,7 @@ class VideoStableDiffusion {
       path: '',
       diffusionModelPath: this._files.model,
       highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
+      uncondDiffusionModelPath: '',
       clipLPath: '',
       clipGPath: '',
       t5XxlPath: this._files.t5Xxl || '',

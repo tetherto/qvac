@@ -15,6 +15,13 @@ const {
   recordParakeetStats,
   quantFromGgufName
 } = require('./helpers.js')
+const {
+  readRssBytes,
+  createMemorySampler,
+  bytesToMb,
+  buildMemorySummary,
+  RECLAIM_SETTLE_MS
+} = require('./memory-usage.js')
 
 const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
@@ -100,11 +107,34 @@ function loadSampleAudio () {
   return audioData
 }
 
+async function recordReclaimAfterUnload (teardownLabel, rssAfterLoadBytes, peakRssBytes) {
+  if (typeof global.gc === 'function') {
+    try { global.gc() } catch (_) {}
+  }
+  await new Promise(resolve => setTimeout(resolve, RECLAIM_SETTLE_MS))
+  const summary = buildMemorySummary({
+    rssAfterLoadBytes,
+    peakRssBytes,
+    rssAfterUnloadBytes: readRssBytes()
+  })
+  recordParakeetStats(teardownLabel, {}, {
+    reclaimedMb: summary.reclaimedMb,
+    rssAfterLoadMb: bytesToMb(rssAfterLoadBytes, 2)
+  })
+  console.log('   Reclaimed after unload: ' + summary.reclaimedMb + 'MB')
+}
+
 async function runMobilePerfCase (t, opts) {
   if (!opts.quant) {
-    await runMobilePerfCase(t, { ...opts, quant: 'q4_0' })
-    await runMobilePerfCase(t, { ...opts, quant: 'q8_0' })
-    await runMobilePerfCase(t, { ...opts, quant: 'f16' })
+    // Sweep the requested quants (default: the full q4_0/q8_0/f16 set). Callers
+    // can narrow it — e.g. sortformer-streaming (v2.1) only publishes q4_0/q8_0
+    // for mobile, so its perf tests pass quants: ['q4_0', 'q8_0'].
+    const quants = Array.isArray(opts.quants) && opts.quants.length > 0
+      ? opts.quants
+      : ['q4_0', 'q8_0', 'f16']
+    for (const quant of quants) {
+      await runMobilePerfCase(t, { ...opts, quant })
+    }
     return
   }
 
@@ -127,6 +157,9 @@ async function runMobilePerfCase (t, opts) {
   const loggerBinding = setupJsLogger(binding)
   let parakeet = null
   let outputResolve = null
+  let quantLabel = ''
+  let rssAfterLoadBytes = 0
+  let peakRssBytes = 0
   const allResults = []
   const receivedStats = []
 
@@ -151,7 +184,7 @@ async function runMobilePerfCase (t, opts) {
     const modelPath = await loadGgufOrSkip(t, modelType, quant ? { quant } : {})
     if (!modelPath) return
     const resolvedQuant = quantFromGgufName(modelPath) || 'q4_0'
-    const quantLabel = `[${resolvedQuant}]`
+    quantLabel = `[${resolvedQuant}]`
     console.log(` Model path: ${modelPath}`)
     console.log(` Quant: ${resolvedQuant}`)
 
@@ -189,7 +222,9 @@ async function runMobilePerfCase (t, opts) {
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
     await parakeet.activate()
-    console.log('   Model activated\n')
+    rssAfterLoadBytes = readRssBytes()
+    peakRssBytes = rssAfterLoadBytes
+    console.log('   Model activated (RSS ' + bytesToMb(rssAfterLoadBytes, 1) + 'MB)\n')
 
     const timings = []
     for (let run = 1; run <= NUM_TRANSCRIPTIONS; run++) {
@@ -197,6 +232,8 @@ async function runMobilePerfCase (t, opts) {
       const runStartTime = Date.now()
       const startResultCount = allResults.length
       const outputPromise = new Promise(resolve => { outputResolve = resolve })
+      const memSampler = createMemorySampler()
+      memSampler.start()
 
       await parakeet.append({ type: 'audio', data: audioData.buffer })
       await parakeet.append({ type: 'end of job' })
@@ -205,6 +242,9 @@ async function runMobilePerfCase (t, opts) {
       await outputPromise
       clearTimeout(timeout)
 
+      const runMemory = memSampler.stop()
+      if (runMemory.peakBytes > peakRssBytes) peakRssBytes = runMemory.peakBytes
+
       const runTime = Date.now() - runStartTime
       timings.push(runTime)
       const runResults = allResults.slice(startResultCount)
@@ -212,6 +252,7 @@ async function runMobilePerfCase (t, opts) {
 
       console.log(`   Time: ${runTime}ms`)
       console.log(`   Segments: ${runResults.length}`)
+      console.log(`   Memory: avg ${bytesToMb(runMemory.avgBytes, 1)}MB, peak ${bytesToMb(runMemory.peakBytes, 1)}MB`)
       console.log(`   Text preview: "${runText.substring(0, 80)}${runText.length > 80 ? '...' : ''}"`)
 
       const jobStats = receivedStats.length > 0
@@ -220,7 +261,9 @@ async function runMobilePerfCase (t, opts) {
       if (jobStats) {
         recordParakeetStats(`${modelLabel} ${quantLabel} ${epLabel} mobile-perf run ${run}`, jobStats, {
           wallMs: runTime,
-          output: runText
+          output: runText,
+          avgRssMb: bytesToMb(runMemory.avgBytes, 2),
+          peakRssMb: bytesToMb(runMemory.peakBytes, 2)
         })
         if (typeof jobStats.realTimeFactor === 'number') {
           console.log(`   RTF: ${jobStats.realTimeFactor.toFixed(4)}`)
@@ -247,6 +290,9 @@ async function runMobilePerfCase (t, opts) {
       try {
         await parakeet.destroyInstance()
         console.log('   Instance destroyed')
+        if (peakRssBytes > 0) {
+          await recordReclaimAfterUnload(`${modelLabel} ${quantLabel} ${epLabel} mobile-perf teardown`, rssAfterLoadBytes, peakRssBytes)
+        }
       } catch (err) {
         console.log('   Instance destroy error:', err.message)
       }

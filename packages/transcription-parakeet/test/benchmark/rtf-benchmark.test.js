@@ -32,12 +32,19 @@ const {
   quantFromGgufName,
   isMobile
 } = require('../integration/helpers.js')
+const {
+  readRssBytes,
+  createMemorySampler,
+  bytesToMb,
+  summarizeRunMemory,
+  RECLAIM_SETTLE_MS
+} = require('../integration/memory-usage.js')
 
 const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
 
 const SAMPLE_RATE = 16000
-const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
+const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer', 'sortformer-streaming']
 const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'
@@ -238,6 +245,24 @@ function stats (values) {
   }
 }
 
+async function reclaimAfterUnload (model) {
+  try { await model.unload() } catch (_) { /* ignore */ }
+  if (typeof global.gc === 'function') {
+    try { global.gc() } catch (_) { /* ignore */ }
+  }
+  await new Promise(resolve => setTimeout(resolve, RECLAIM_SETTLE_MS))
+  return readRssBytes()
+}
+
+async function measureMemory (model, allResults, rssBeforeLoad, rssAfterLoad) {
+  const rssAfterUnload = await reclaimAfterUnload(model)
+  return summarizeRunMemory(allResults, {
+    rssBeforeLoadBytes: rssBeforeLoad,
+    rssAfterLoadBytes: rssAfterLoad,
+    rssAfterUnloadBytes: rssAfterUnload
+  })
+}
+
 test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
   const benchmarkSettings = getBenchmarkSettings()
@@ -284,7 +309,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
   const allResults = []
   let observedBackendId = null
-  const model = new TranscriptionParakeet({
+  let model = new TranscriptionParakeet({
     files: { model: modelPath },
     config: {
       parakeetConfig: {
@@ -304,6 +329,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
   try {
     console.log('Loading model...')
+    const rssBeforeLoad = readRssBytes()
     const loadStart = getTimeMs()
     await model.load()
 
@@ -323,7 +349,8 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     await runOnce(silentAudio).catch(() => null)
 
     const loadMs = getTimeMs() - loadStart
-    console.log(`Model loaded and initialised in ${loadMs.toFixed(0)}ms\n`)
+    const rssAfterLoad = readRssBytes()
+    console.log(`Model loaded and initialised in ${loadMs.toFixed(0)}ms (RSS ${bytesToMb(rssAfterLoad, 1)}MB)\n`)
 
     // --- Warmup runs (discard) ---
     for (let w = 0; w < benchmarkSettings.numWarmup; w++) {
@@ -338,8 +365,11 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
     // --- Benchmark runs ---
     for (let i = 0; i < benchmarkSettings.numRuns; i++) {
+      const sampler = createMemorySampler()
       const runStart = getTimeMs()
+      sampler.start()
       const jobStats = await runOnce(audioData)
+      const runMemory = sampler.stop()
       const wallMs = getTimeMs() - runStart
 
       if (!jobStats) {
@@ -373,7 +403,10 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         decoderMs: jobStats.decoderMs || 0,
         totalWallMs: jobStats.totalWallMs || 0,
         backendDevice: typeof jobStats.backendDevice === 'number' ? jobStats.backendDevice : null,
-        backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null
+        backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null,
+        avgRssBytes: runMemory.avgBytes,
+        peakRssBytes: runMemory.peakBytes,
+        rssSampleCount: runMemory.count
       }
 
       if (run.backendId !== null) observedBackendId = run.backendId
@@ -410,6 +443,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     const encoderStats = stats(encoderValues)
     const decoderStats = stats(decoderValues)
 
+    const memorySummary = await measureMemory(model, allResults, rssBeforeLoad, rssAfterLoad)
+    model = null
+
     console.log('\n' + '='.repeat(70))
     console.log('RTF BENCHMARK RESULTS')
     console.log('='.repeat(70))
@@ -441,6 +477,13 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     console.log('  Decoder (ms):')
     console.log(`    Mean:   ${decoderStats.mean.toFixed(0)}`)
     console.log(`    P50:    ${decoderStats.p50.toFixed(0)}`)
+    console.log('')
+    console.log('  Memory (RSS, MB):')
+    console.log(`    Average:      ${memorySummary.avgRssMb.toFixed(2)}`)
+    console.log(`    Peak:         ${memorySummary.peakRssMb.toFixed(2)}`)
+    console.log(`    After load:   ${memorySummary.rssAfterLoadMb.toFixed(2)}`)
+    console.log(`    After unload: ${memorySummary.rssAfterUnloadMb.toFixed(2)}`)
+    console.log(`    Reclaimed:    ${memorySummary.reclaimedMb.toFixed(2)}`)
     console.log('')
     console.log('='.repeat(70) + '\n')
 
@@ -496,6 +539,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         tokensPerSecond: tpsStats,
         encoderMs: encoderStats,
         decoderMs: decoderStats,
+        memory: memorySummary,
         backendId: observedBackendId,
         activeBackend: observedBackendId !== null ? backendIdToName(observedBackendId) : ''
       },
@@ -542,9 +586,14 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
         `Mean RTF ${rtfStats.mean.toFixed(4)} should be <= ${upperBound}`)
     }
 
+    t.ok(memorySummary.peakRssMb > 0, 'Peak memory (RSS) should be positive')
+    t.ok(memorySummary.avgRssMb > 0, 'Average memory (RSS) should be positive')
+    t.ok(memorySummary.peakRssMb >= memorySummary.avgRssMb, 'Peak memory should be >= average memory')
+    t.ok(memorySummary.reclaimedMb >= 0, 'Reclaimed memory should be non-negative')
+
     console.log('RTF benchmark completed successfully!\n')
   } finally {
-    try { await model.unload() } catch (_) { /* ignore */ }
+    try { if (model) await model.unload() } catch (_) { /* ignore */ }
     try { loggerBinding.releaseLogger() } catch (_) { /* ignore */ }
   }
 })
