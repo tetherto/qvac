@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
     inputs:
       base_sha:
@@ -249,6 +250,7 @@ jobs:
       - label-gate
     if: |
       always() &&
+      !cancelled() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
@@ -261,7 +263,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   prebuild-artifact-save:
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
@@ -289,7 +291,7 @@ jobs:
       packages: read
       id-token: write
     needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-ocr-ggml.yml
     secrets: inherit
     with:
@@ -303,7 +305,7 @@ jobs:
       pull-requests: write
       id-token: write
     needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
     secrets: inherit
     with:
@@ -313,7 +315,7 @@ jobs:
   combine-perf-reports:
     name: Combined Performance Report
     needs: [authorize, run-integration-tests, run-mobile-integration-tests]
-    if: always() && needs.authorize.outputs.allowed == 'true'
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -346,8 +348,10 @@ jobs:
   merge-guard:
     needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, label-gate]
     # Always run so the PR still gets a status check even if label-gate is
-    # skipped or fails; matches on-pr-tts-ggml.yml's pattern.
-    if: always()
+    # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
+    # ensures this doesn't hold the concurrency group open after a
+    # superseding push cancels the run.
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}

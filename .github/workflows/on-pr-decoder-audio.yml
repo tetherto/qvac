@@ -78,6 +78,29 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -157,10 +180,11 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
       - authorize
       - context
+      - ci-router
       - label-gate
     runs-on: ubuntu-latest
     steps:
@@ -180,8 +204,9 @@ jobs:
   run-integration-tests:
     needs:
       - context
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true'
     permissions:
       contents: read
       packages: read
@@ -201,8 +226,9 @@ jobs:
       id-token: write
     needs:
       - context
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:
@@ -211,7 +237,7 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs: [authorize, sanity-checks, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, ci-router, label-gate, sanity-checks, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
