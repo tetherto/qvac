@@ -94,6 +94,10 @@ async function runSortformerAoscStreamingTest (options = {}) { // eslint-disable
   return runIntegrationModule('../integration/sortformer-aosc-streaming.test.js', options)
 }
 
+async function runSortformerStreamingAliasTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/sortformer-streaming-alias.test.js', options)
+}
+
 module.exports = {
   runAccuracyMultilangTest,
   runAddonMultimodelTest,
@@ -116,5 +120,6 @@ module.exports = {
   runMobilePerfTdtGpuTest,
   runModelFileValidationTest,
   runMultipleTranscriptionsTest,
-  runSortformerAoscStreamingTest
+  runSortformerAoscStreamingTest,
+  runSortformerStreamingAliasTest
 }
