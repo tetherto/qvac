@@ -1,4 +1,4 @@
-import type { ErrorResponse } from '@/schemas'
+import type { ErrorResponse } from '@qvac/core/surface'
 import {
   ContextOverflowError,
   RequestIdConflictError,

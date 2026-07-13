@@ -1,5 +1,5 @@
 import { isBare } from 'which-runtime'
-import { type UnloadModelRequest, type UnloadModelParams } from '@/schemas'
+import { type UnloadModelRequest, type UnloadModelParams } from '@qvac/core/surface'
 import { send, close } from '@/client/rpc/rpc-client'
 import { stopLoggingStreamForModel } from '@/client/logging-stream-registry'
 import { InvalidResponseError, ModelUnloadFailedError } from '@/utils/errors-client'

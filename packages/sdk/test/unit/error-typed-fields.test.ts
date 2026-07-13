@@ -1,13 +1,15 @@
 import test from 'brittle'
-import { createErrorResponse } from '@/schemas/error'
+// The worker serializes core's error classes with core's `createErrorResponse`;
+// this checks that envelope shape against the classes core actually throws.
 import {
+  createErrorResponse,
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   InferenceCancelledError,
   ModelNotLoadedError
-} from '@/utils/errors-server'
+} from '@qvac/core/surface'
 
 test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
   const err = new RequestRejectedByPolicyError('rid-1', 'completion', 'model-1', 'queue full')

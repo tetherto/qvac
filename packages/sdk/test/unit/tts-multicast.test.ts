@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { TtsMulticast } from '@/client/api/text-to-speech'
-import type { TtsResponse } from '@/schemas'
+import type { TtsResponse } from '@qvac/core/surface'
 
 // ---------------------------------------------------------------------------
 // Push-controlled source: the test pushes `TtsResponse` items at deterministic

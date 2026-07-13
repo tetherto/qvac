@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import type { ProcessedModel, CompanionSetMetadata, CompanionSetMetadataEntry } from './types'
-import { BERGAMOT_MODEL_RE } from '@/schemas'
+import { BERGAMOT_MODEL_RE } from '@qvac/core/surface'
 
 /**
  * Detects companion file relationships among processed models and

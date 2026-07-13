@@ -1,4 +1,4 @@
-import { type ProvideParams, type ProvideRequest } from '@/schemas'
+import { type ProvideParams, type ProvideRequest } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError, ProviderStartFailedError } from '@/utils/errors-client'
 

@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { responseFormatSchema, completionClientParamsSchema } from '@/schemas/completion-stream'
+import { responseFormatSchema, completionClientParamsSchema } from '@qvac/core/surface'
 import { getResponseFormatJsonSchema } from '@/server/utils/response-format'
 
 test('responseFormatSchema: accepts text', (t) => {

@@ -1,4 +1,4 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas'
+import type { DeleteCacheRequest, DeleteCacheResponse } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/errors-client'
 

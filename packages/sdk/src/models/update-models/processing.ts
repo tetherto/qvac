@@ -1,5 +1,5 @@
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { getAddonFromEngine, resolveCanonicalEngine } from '../../schemas/engine-addon-map'
+import { getAddonFromEngine, resolveCanonicalEngine } from '@qvac/core/surface'
 import { detectShardedModel } from './shards'
 import type { ProcessedModel } from './types'
 

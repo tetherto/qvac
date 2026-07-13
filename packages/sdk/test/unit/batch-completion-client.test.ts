@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { z } from 'zod'
 import { createBatchCompletionRun } from '@/client/api/batch-completion'
-import type { BatchCompletionStreamRequest } from '@/schemas'
+import type { BatchCompletionStreamRequest } from '@qvac/core/surface'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 
 async function* mockResponses(responses: unknown[]): AsyncGenerator<unknown> {

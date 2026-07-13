@@ -17,7 +17,7 @@ import {
   WorkerCrashedError,
   WorkerShutdownError
 } from '@/utils/errors-client'
-import type { RuntimeContext } from '@/schemas'
+import type { RuntimeContext } from '@qvac/core/surface'
 
 const RPC_INIT_TIMEOUT_MS = 30_000
 const WORKER_STDERR_TAIL_CHARS = 16_384

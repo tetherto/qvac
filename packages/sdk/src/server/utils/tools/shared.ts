@@ -1,4 +1,4 @@
-import type { Tool, ToolCall, ToolCallError } from '@/schemas'
+import type { Tool, ToolCall, ToolCallError } from '@qvac/core/surface'
 
 export type ParserResult = {
   matched: boolean

@@ -7,7 +7,7 @@ import type {
   ModelRegistryGetModelResponse,
   ModelRegistryEntry,
   ModelRegistryEntryAddon
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { ModelRegistryQueryFailedError } from '@/utils/errors-client'
 

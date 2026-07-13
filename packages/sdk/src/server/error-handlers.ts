@@ -1,5 +1,5 @@
 import type RPC from 'bare-rpc'
-import { createErrorResponse, responseSchema } from '@/schemas'
+import { createErrorResponse, responseSchema } from '@qvac/core/surface'
 import { getServerLogger } from '@/logging'
 import { type ServerProfiler } from './rpc/profiling'
 

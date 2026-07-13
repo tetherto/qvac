@@ -7,7 +7,7 @@ import {
   modelTypeSchema,
   normalizeModelType,
   isModelTypeAlias
-} from '@/schemas/model-types'
+} from '@qvac/core/surface'
 
 test('ModelType contains all canonical values', (t) => {
   t.is(ModelType.llamacppCompletion, 'llamacpp-completion')

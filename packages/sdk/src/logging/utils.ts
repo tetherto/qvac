@@ -1,7 +1,7 @@
 import { LEVEL_PRIORITIES, LOG_LEVELS } from '@qvac/logging/constants'
 import type { LogLevel } from '@qvac/logging'
 import stringify from 'fast-safe-stringify'
-import type { Request } from '@/schemas'
+import type { Request } from '@qvac/core/surface'
 
 export function isLevelEnabled(messageLevel: LogLevel, currentLevel: LogLevel) {
   // "off" suppresses every emission (console, streams, and transports alike),

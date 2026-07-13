@@ -12,7 +12,7 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
 import { TextToSpeechStreamFailedError } from '@/utils/errors-client'

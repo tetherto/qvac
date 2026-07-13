@@ -3,7 +3,7 @@ import { groupShardedModels } from './shards'
 import { groupCompanionSets } from './companions'
 import { processRegistryModel } from './processing'
 import type { CollectOptions, ProcessedModel } from './types'
-import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants'
+import { DEFAULT_REGISTRY_CORE_KEY } from '@qvac/core/surface'
 
 // Re-export for backward compat
 export { processRegistryModel, extractModelName, toHexString } from './processing'

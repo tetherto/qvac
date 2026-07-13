@@ -1,13 +1,13 @@
 import test from 'brittle'
-import { audioInputSchema } from '@/schemas/transcription'
-import { imageInputSchema } from '@/schemas/ocr'
-import { attachmentSchema } from '@/schemas/completion-stream'
+import { audioInputSchema } from '@qvac/core/surface'
+import { imageInputSchema } from '@qvac/core/surface'
+import { attachmentSchema } from '@qvac/core/surface'
 import {
   ragIngestParamsSchema,
   ragSearchParamsSchema,
   ragDeleteWorkspaceParamsSchema,
   ragCloseWorkspaceParamsSchema
-} from '@/schemas/rag'
+} from '@qvac/core/surface'
 
 // ============== Attack vectors ==============
 

@@ -1,4 +1,4 @@
-import { type GetModelInfoRequest, type GetModelInfoParams } from '@/schemas'
+import { type GetModelInfoRequest, type GetModelInfoParams } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 

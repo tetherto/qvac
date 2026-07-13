@@ -5,7 +5,7 @@ import {
   videoStatsSchema,
   videoStreamRequestSchema,
   videoStreamResponseSchema
-} from '@/schemas'
+} from '@qvac/core/surface'
 
 type BrittleT = {
   alike: (actual: unknown, expected: unknown, msg?: string) => void

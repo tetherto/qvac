@@ -9,7 +9,7 @@ import {
   TTS_CHATTERBOX_LANGUAGES,
   TTS_SUPERTONIC_LANGUAGES,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
-} from '@/schemas/text-to-speech'
+} from '@qvac/core/surface'
 
 test('ttsConfigSchema: accepts GGML chatterbox load config', (t) => {
   const r = ttsConfigSchema.safeParse({

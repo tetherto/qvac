@@ -4,7 +4,7 @@ import type {
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse,
   RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 export interface InvokePluginOptions<TParams = unknown> {

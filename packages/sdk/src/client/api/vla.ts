@@ -8,7 +8,7 @@ import {
   type VlaRunResponse,
   vlaHparamsResponseSchema,
   vlaRunResponseSchema
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 import { invokePlugin } from './invoke-plugin'
 

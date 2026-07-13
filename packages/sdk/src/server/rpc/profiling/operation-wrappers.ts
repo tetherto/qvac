@@ -9,9 +9,9 @@ import {
   type PerCallProfiling,
   type ProfilingRequestMeta,
   type OperationEvent
-} from '@/schemas'
-import { nowMs, generateProfileId } from '@/profiling/clock'
-import { record, shouldProfile } from '@/profiling/controller'
+} from '@qvac/core/surface'
+import { nowMs, generateProfileId } from '@qvac/core/surface'
+import { record, shouldProfile } from '@qvac/core/surface'
 import { buildOperationEvent } from './operation-metrics'
 import { isTerminalChunk } from '../rpc-utils'
 

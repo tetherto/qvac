@@ -1,7 +1,7 @@
 import test from 'brittle'
-import { nmtConfigBaseSchema, nmtConfigSchema } from '@/schemas/translation-config'
-import { translateRequestSchema, translateServerParamsSchema } from '@/schemas/translate'
-import { ModelType } from '@/schemas'
+import { nmtConfigBaseSchema, nmtConfigSchema } from '@qvac/core/surface'
+import { translateRequestSchema, translateServerParamsSchema } from '@qvac/core/surface'
+import { ModelType } from '@qvac/core/surface'
 
 // === nmtConfigSchema defaults transform ===
 

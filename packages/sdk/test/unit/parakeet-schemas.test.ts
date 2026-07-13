@@ -4,7 +4,7 @@ import {
   parakeetConfigSchema,
   parakeetLoadConfigSchema,
   LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS
-} from '@/schemas/transcription-config'
+} from '@qvac/core/surface'
 
 test('parakeetRuntimeConfigSchema: accepts empty config', (t) => {
   const result = parakeetRuntimeConfigSchema.parse({})

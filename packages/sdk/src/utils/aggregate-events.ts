@@ -5,7 +5,7 @@ import type {
   CompletionStats,
   StopReason,
   ToolCall
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
 import { attachHandlersToToolCalls, type ToolHandlerMap } from '@/utils/tool-helpers'
 

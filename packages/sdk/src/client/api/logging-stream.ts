@@ -3,7 +3,7 @@ import type {
   LoggingStreamResponse,
   LoggingStreamRequest,
   LoggingParams
-} from '@/schemas/logging-stream'
+} from '@qvac/core/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 /**

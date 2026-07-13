@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { embedRequestSchema, embedResponseSchema, embedStatsSchema } from '@/schemas/embed'
+import { embedRequestSchema, embedResponseSchema, embedStatsSchema } from '@qvac/core/surface'
 
 test("embedStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
   t.is(embedStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)

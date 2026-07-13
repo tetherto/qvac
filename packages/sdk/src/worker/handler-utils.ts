@@ -1,4 +1,4 @@
-import { type QvacConfig, type RuntimeContext } from '@/schemas'
+import { type QvacConfig, type RuntimeContext } from '@qvac/core/surface'
 import type RPC from 'bare-rpc'
 import { setConfig, setRuntimeContext } from '@qvac/core/engine'
 

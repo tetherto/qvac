@@ -1,7 +1,7 @@
 import { BUILTIN_PLUGINS, BUILTIN_SUFFIXES } from '@/commands/bundle/constants'
 import { InvalidPluginSpecifierError } from '@/utils/errors-client'
 import type { Logger } from '@/logging/types'
-import type { QvacConfig } from '@/schemas/sdk-config'
+import type { QvacConfig } from '@qvac/core/surface'
 
 export function buildBuiltinSpecifier(sdkName: string, suffix: string): string {
   return `${sdkName}/${suffix}/plugin`

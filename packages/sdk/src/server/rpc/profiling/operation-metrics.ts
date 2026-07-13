@@ -12,9 +12,9 @@ import {
   type TtsStats,
   type DiffusionStats,
   type VideoStats
-} from '@/schemas'
-import { readModelExecutionMs } from '@/profiling/model-execution'
-import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
+} from '@qvac/core/surface'
+import { readModelExecutionMs } from '@qvac/core/surface'
+import type { ProfilingEvent, ProfilingEventKind } from '@qvac/core/surface'
 interface DownloadStats {
   downloadTimeMs?: number
   totalBytesDownloaded?: number

@@ -2,8 +2,8 @@ import {
   type GetLoadedModelInfoParams,
   type GetLoadedModelInfoRequest,
   type LoadedModelInfo
-} from '@/schemas'
-import { type RPCOptions } from '@/schemas/common'
+} from '@qvac/core/surface'
+import { type RPCOptions } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 

@@ -124,6 +124,26 @@ export {
 
 export { type ToolInput, type ToolHandler } from './utils/tool-helpers'
 
+// The full value-clean schema, profiling, and constant barrels: the SDK client
+// and worker source every internal schema/const/profiling name from here, so it
+// carries no duplicate copies. All value-clean (only erased `import type` touches
+// `bare-*`), so this stays Node-safe.
+export * from './schemas'
+export * from './profiling'
+export * from './constants'
+
+// Value-clean helpers the SDK's registry codegen and server-side profiler reach
+// for; not part of either barrel, so re-exported explicitly here.
+export { getAddonFromEngine, resolveCanonicalEngine } from './schemas/engine-addon-map'
+export { generateProfileId } from './profiling/clock'
+export { readModelExecutionMs } from './profiling/model-execution'
+export {
+  PUBLIC_MODEL_TYPES,
+  ModelTypeAliases,
+  modelTypeInputSchema,
+  modelTypeSchema
+} from './schemas/model-types'
+
 // Model registry constants
 export * from './models/registry'
 
@@ -136,7 +156,8 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  RequestValidationFailedError
+  RequestValidationFailedError,
+  ModelNotLoadedError
 } from './errors'
 export type { InferenceCancelledPartial } from './errors'
 

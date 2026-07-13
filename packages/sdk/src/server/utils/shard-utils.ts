@@ -1,7 +1,7 @@
 import { ModelLoadFailedError, InvalidShardUrlPatternError } from '@/utils/errors-server'
 import { generateShortHash } from './formatting'
 import { validateAndJoinPath } from './path-security'
-import type { ShardPatternInfo, ShardUrl } from '@/schemas'
+import type { ShardPatternInfo, ShardUrl } from '@qvac/core/surface'
 import { extractAndWriteTensorsFile } from './gguf-tensor-extractor'
 import { promises as fsPromises } from 'bare-fs'
 

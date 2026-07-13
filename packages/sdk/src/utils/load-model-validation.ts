@@ -1,5 +1,5 @@
-import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
-import { normalizeModelType } from '@/schemas/model-types'
+import { inferModelTypeFromModelSrc } from '@qvac/core/surface'
+import { normalizeModelType } from '@qvac/core/surface'
 import { ModelSrcTypeMismatchError } from './errors-client'
 
 /**

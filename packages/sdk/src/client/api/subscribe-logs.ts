@@ -1,6 +1,6 @@
 import { getClientLogger, SDK_ALL_LOG_ID } from '@/logging'
 import { loggingStream } from './logging-stream'
-import type { LoggingStreamResponse } from '@/schemas/logging-stream'
+import type { LoggingStreamResponse } from '@qvac/core/surface'
 
 const logger = getClientLogger()
 

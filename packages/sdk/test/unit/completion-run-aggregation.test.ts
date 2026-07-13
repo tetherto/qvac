@@ -1,5 +1,5 @@
 import test from 'brittle'
-import type { CompletionEvent, ToolCall } from '@/schemas'
+import type { CompletionEvent, ToolCall } from '@qvac/core/surface'
 import { aggregateEvents, buildFinalFromEvents } from '@/utils/aggregate-events'
 import type { ToolHandlerMap } from '@/utils/tool-helpers'
 

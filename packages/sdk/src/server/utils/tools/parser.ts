@@ -1,4 +1,4 @@
-import type { Tool, ToolCall, ToolCallError, ToolDialect } from '@/schemas'
+import type { Tool, ToolCall, ToolCallError, ToolDialect } from '@qvac/core/surface'
 import { stripThinkingBlocks, type ParserResult } from '@/server/utils/tools/shared'
 import {
   parseGemmaFormat,

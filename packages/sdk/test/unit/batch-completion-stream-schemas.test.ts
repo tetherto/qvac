@@ -3,8 +3,8 @@ import {
   batchCompletionClientParamsSchema,
   batchCompletionStreamRequestSchema,
   batchCompletionStreamResponseSchema
-} from '@/schemas/batch-completion-stream'
-import { requestSchema, responseSchema } from '@/schemas/common'
+} from '@qvac/core/surface'
+import { requestSchema, responseSchema } from '@qvac/core/surface'
 
 const prompt = {
   id: 'first',

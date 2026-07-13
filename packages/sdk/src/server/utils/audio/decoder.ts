@@ -4,7 +4,7 @@ import { FFmpegDecoder } from '@qvac/decoder-audio'
 import { FORMATS_NEEDING_DECODE } from '@qvac/decoder-audio/constants'
 import { Readable } from 'bare-stream'
 import { getServerLogger } from '@/logging'
-import { type AudioFormat } from '@/schemas'
+import { type AudioFormat } from '@qvac/core/surface'
 
 const logger = getServerLogger()
 

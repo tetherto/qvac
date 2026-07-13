@@ -110,8 +110,6 @@ export {
   type RagIngestStage,
   type RagReindexStage,
   type RagSaveStage,
-  SDK_CLIENT_ERROR_CODES,
-  SDK_SERVER_ERROR_CODES,
   RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
@@ -162,7 +160,6 @@ export {
   PLUGIN_DIFFUSION,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION,
-  SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,
   type FinetuneValidation,
@@ -174,17 +171,27 @@ export {
   type FinetuneProgress,
   type FinetuneStats,
   type FinetuneResult
-} from './schemas'
+} from '@qvac/core/surface'
+
+// SDK-owned error-code objects: `SDK_CLIENT_ERROR_CODES` holds transport/client
+// codes absent from core, and `SDK_SERVER_ERROR_CODES` carries the client-side
+// error definitions (`addCodes` message registry) core's value-clean surface
+// does not provide.
+export { SDK_CLIENT_ERROR_CODES } from '@/utils/sdk-errors-client'
+export { SDK_SERVER_ERROR_CODES } from '@/utils/sdk-errors-server'
+
+// `SDK_DEFAULT_PLUGINS` is core's `BUILTIN_PLUGINS` under the public SDK name.
+export { BUILTIN_PLUGINS as SDK_DEFAULT_PLUGINS } from '@qvac/core/surface'
 
 export { type ToolInput, type ToolHandler } from './utils/tool-helpers'
 
 // Model types - canonical naming with backward-compatible aliases
-export { MODEL_TYPES, ModelType } from './schemas'
+export { MODEL_TYPES, ModelType } from '@qvac/core/surface'
 
 // Model registry constants
-export * from './models/registry'
+export * from '@qvac/core/models'
 
-export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
+export { SUPPORTED_AUDIO_FORMATS } from '@qvac/core/surface'
 
 // Error classes that clients need for `instanceof` checks on rejected
 // promises. `InferenceCancelledError` rides the standard `QvacError`
@@ -233,5 +240,5 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from './profiling'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'
+export { profiler } from '@qvac/core/surface'
+export type { ProfilerRuntimeOptions, ProfilerExport } from '@qvac/core/surface'

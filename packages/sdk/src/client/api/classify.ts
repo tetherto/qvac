@@ -3,7 +3,7 @@ import {
   type ClassifyRequest,
   type ClassifyClientParams,
   type ClassificationResult
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { encodeBase64 } from '@/utils/encoding'
 

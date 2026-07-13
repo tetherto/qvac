@@ -13,7 +13,7 @@ import {
   type TranscribeStreamConversationSession,
   type TranscribeStreamEvent,
   type TranscribeStreamResponse
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
 import { TranscriptionFailedError } from '@/utils/errors-client'

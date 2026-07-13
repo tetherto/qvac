@@ -4,7 +4,7 @@ import {
   type OCRClientParams,
   type OCRTextBlock,
   type OCRStats
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 
 /**

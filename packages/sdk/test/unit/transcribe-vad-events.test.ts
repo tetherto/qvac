@@ -7,7 +7,7 @@ import {
   whisperEndOfTurnEventSchema,
   parakeetEndOfTurnEventSchema,
   type TranscribeStreamEvent
-} from '@/schemas/transcription'
+} from '@qvac/core/surface'
 
 // =============================================================================
 // vadStateEventSchema / endOfTurnEventSchema round-trip

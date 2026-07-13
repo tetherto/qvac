@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { getClientLogger } from '@/logging/client-logger'
 import { createBaseLogger } from '@/logging/base-logger'
-import { logLevelSchema } from '@/schemas/logging-stream'
+import { logLevelSchema } from '@qvac/core/surface'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
   for (const level of ['error', 'warn', 'info', 'debug', 'off']) {

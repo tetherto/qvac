@@ -1,4 +1,4 @@
-import { type CanonicalModelType } from '@/schemas/model-types'
+import { type CanonicalModelType } from '@qvac/core/surface'
 
 export const RAG_NAMESPACE = 'rag:hyperdb' as const
 

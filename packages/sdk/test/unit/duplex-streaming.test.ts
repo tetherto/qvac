@@ -4,17 +4,17 @@ import {
   defineHandler,
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema
-} from '@/schemas/plugin'
+} from '@qvac/core/surface'
 import {
   transcribeRequestSchema,
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   type TranscribeStreamResponse,
   type TranscribeStreamSession
-} from '@/schemas/transcription'
-import type { BciTranscribeStreamSession } from '@/schemas/bci'
-import { createErrorResponse } from '@/schemas/error'
-import { textToSpeechStreamRequestSchema } from '@/schemas/text-to-speech'
+} from '@qvac/core/surface'
+import type { BciTranscribeStreamSession } from '@qvac/core/surface'
+import { createErrorResponse } from '@qvac/core/surface'
+import { textToSpeechStreamRequestSchema } from '@qvac/core/surface'
 
 // =============================================================================
 // defineDuplexHandler — type-safe definition without unsafe casts

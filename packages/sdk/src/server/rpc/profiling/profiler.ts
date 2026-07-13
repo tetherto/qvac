@@ -1,4 +1,4 @@
-import { nowMs } from '@/profiling'
+import { nowMs } from '@qvac/core/surface'
 import {
   responseSchema,
   DELEGATION_BREAKDOWN_KEY,
@@ -8,7 +8,7 @@ import {
   type ProfilingRequestMeta,
   type DelegationBreakdown,
   type OperationEvent
-} from '@/schemas'
+} from '@qvac/core/surface'
 import {
   createProfilingContext,
   injectProfilingIntoString,

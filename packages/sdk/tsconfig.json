@@ -13,7 +13,8 @@
     "baseUrl": ".",
     "paths": {
       "@qvac/sdk": ["./src/index.ts"],
-      "@/*": ["./src/*", "./*"]
+      "@/*": ["./src/*", "./*"],
+      "bare-buffer": ["./types/bare-buffer.d.ts"]
     },
     "outDir": "./dist",
     "declaration": true,

@@ -1,4 +1,4 @@
-import type { ResponseFormat } from '@/schemas'
+import type { ResponseFormat } from '@qvac/core/surface'
 
 // Translates the request-level `responseFormat` into the JSON Schema string
 // that the llama.cpp addon's per-request `generationParams.json_schema`

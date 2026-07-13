@@ -1,10 +1,10 @@
 import test from 'brittle'
-import { sourceTypeSchema, type OperationEvent } from '@/schemas'
+import { sourceTypeSchema, type OperationEvent } from '@qvac/core/surface'
 import { buildOperationEvent } from '@/server/rpc/profiling'
-import type { ProfilingEvent } from '@/profiling/types'
+import type { ProfilingEvent } from '@qvac/core/surface'
 import { injectProfilingIntoString } from '@/server/rpc/profiling/context'
-import { extractProfilingMeta } from '@/profiling'
-import { clearAggregator, getAggregates, recordEvent } from '@/profiling/aggregator'
+import { extractProfilingMeta } from '@qvac/core/surface'
+import { clearAggregator, getAggregates, recordEvent } from '@qvac/core/surface'
 
 test('sourceType: accepts expected values and rejects unknown', (t) => {
   const expected = ['hyperdrive', 'http', 'registry', 'filesystem']

@@ -4,8 +4,8 @@ import {
   completionStatsSchema,
   doneEventSchema,
   seqSchema
-} from '@/schemas/completion-event'
-import { completionStreamResponseSchema } from '@/schemas/completion-stream'
+} from '@qvac/core/surface'
+import { completionStreamResponseSchema } from '@qvac/core/surface'
 
 test('seqSchema: accepts valid, rejects invalid', (t) => {
   t.is(seqSchema.safeParse(0).success, true)

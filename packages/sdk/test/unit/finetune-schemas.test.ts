@@ -4,7 +4,7 @@ import {
   finetuneRequestSchema,
   finetuneResponseSchema,
   finetuneValidationSchema
-} from '@/schemas'
+} from '@qvac/core/surface'
 
 test('finetuneValidationSchema: defaults split validation fraction', (t) => {
   const result = finetuneValidationSchema.parse({

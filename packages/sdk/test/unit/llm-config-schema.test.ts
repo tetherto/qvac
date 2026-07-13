@@ -3,9 +3,9 @@ import {
   llmConfigBaseSchema,
   llmConfigSchema,
   REASONING_BUDGET_MAX
-} from '@/schemas/llamacpp-config'
-import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+} from '@qvac/core/surface'
+import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@qvac/core/surface'
+import { ModelType } from '@qvac/core/surface'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,

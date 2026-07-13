@@ -6,8 +6,8 @@ import {
   recordServerBreakdownPhases,
   type BaseTimings,
   type BaseEvent
-} from '@/profiling'
-import type { ProfilingRequestMeta, ProfilingResponseMeta, DelegationBreakdown } from '@/schemas'
+} from '@qvac/core/surface'
+import type { ProfilingRequestMeta, ProfilingResponseMeta, DelegationBreakdown } from '@qvac/core/surface'
 
 export interface DelegatedHandlerOptions {
   profilingMeta?: ProfilingRequestMeta

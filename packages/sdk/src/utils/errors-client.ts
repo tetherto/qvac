@@ -1,6 +1,6 @@
 import { QvacErrorBase } from '@qvac/error'
-import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
-import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
+import { SDK_CLIENT_ERROR_CODES } from '@/utils/sdk-errors-client'
+import { SDK_SERVER_ERROR_CODES } from '@/utils/sdk-errors-server'
 import { createErrorOptions } from './errors-base'
 
 // ============== Response Validation Errors ==============

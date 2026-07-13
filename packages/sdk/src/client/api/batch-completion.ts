@@ -14,7 +14,7 @@ import {
   type McpClientInput,
   type RPCOptions,
   type Tool
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { buildFinalFromEvents } from '@/utils/aggregate-events'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'

@@ -1,5 +1,5 @@
-import { type HeartbeatRequest, type HeartbeatResponse } from '@/schemas'
-import type { DelegateBase } from '@/schemas/delegate'
+import { type HeartbeatRequest, type HeartbeatResponse } from '@qvac/core/surface'
+import type { DelegateBase } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 

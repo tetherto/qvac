@@ -12,7 +12,7 @@ import {
   type BciTranscribeStreamMetadataSession,
   type RPCOptions,
   type TranscribeSegment
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
 import { TranscriptionFailedError } from '@/utils/errors-client'

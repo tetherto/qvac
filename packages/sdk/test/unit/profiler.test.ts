@@ -7,11 +7,13 @@ import {
   shouldIncludeServerBreakdown,
   record,
   getAggregates,
-  getRecentEvents
-} from '../../src/profiling/controller'
-import { clearAggregator } from '../../src/profiling/aggregator'
-import { exportJSON, exportTable, exportSummary } from '../../src/profiling/exporters'
-import type { ProfilingEvent } from '../../src/profiling/types'
+  getRecentEvents,
+  clearAggregator,
+  exportJSON,
+  exportTable,
+  exportSummary,
+  type ProfilingEvent
+} from '@qvac/core/profiling'
 
 function reset() {
   disable()

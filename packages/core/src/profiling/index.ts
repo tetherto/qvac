@@ -103,13 +103,21 @@ export type {
 export type { ProfilerMode } from '../schemas'
 export { nowMs } from './clock'
 export {
+  enable,
+  disable,
   record,
   shouldProfile,
   shouldIncludeServerBreakdown,
   generateId,
   isEnabled,
+  getAggregates,
+  getRecentEvents,
+  getEffectiveConfig,
+  onRecord,
   type ResolvedProfilerConfig
 } from './controller'
+export { recordEvent, clearAggregator } from './aggregator'
+export { exportJSON, exportTable, exportSummary } from './exporters'
 export {
   createProfilingMeta,
   createProfilingDisabledMeta,

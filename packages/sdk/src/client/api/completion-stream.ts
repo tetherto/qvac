@@ -13,7 +13,7 @@ import {
   type ToolCallEvent,
   type ToolCallWithCall,
   type RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import { validateTools, type ToolHandlerMap, type ToolInput } from '@/utils/tool-helpers'

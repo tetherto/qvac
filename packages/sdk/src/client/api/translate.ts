@@ -7,7 +7,7 @@ import {
   type TranslateClientParams,
   type TranslationStats,
   type RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { detectOne } from '@qvac/langdetect-text'
 import { TranslationFailedError } from '@/utils/errors-client'
 

@@ -6,7 +6,7 @@ import { initializeConfig } from '@/client/init-hooks'
 import { resolveConfig } from '@/client/config-loader/resolve-config.expo'
 import { getClientLogger } from '@/logging'
 import { getDeviceInfo } from '@/client/rpc/expo-device-info'
-import type { RuntimeContext } from '@/schemas'
+import type { RuntimeContext } from '@qvac/core/surface'
 
 const logger = getClientLogger()
 

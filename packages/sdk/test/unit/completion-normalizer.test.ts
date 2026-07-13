@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { createCompletionNormalizer } from '@/server/utils/completion-normalizer'
-import type { CompletionEvent, NormalizerConfig, PluginCapabilities, Tool } from '@/schemas'
+import type { CompletionEvent, NormalizerConfig, PluginCapabilities, Tool } from '@qvac/core/surface'
 
 const NONE_CAPS: PluginCapabilities = {
   toolCalling: 'none',

@@ -1,5 +1,5 @@
 import test from 'brittle'
-import type { Tool } from '@/schemas'
+import type { Tool } from '@qvac/core/surface'
 import { parseToolCalls, detectToolDialectFromName } from '@/server/utils/tools'
 import { parseHarmonyFormat } from '@/server/utils/tools/parsers/harmony'
 import { parseQwen35Format } from '@/server/utils/tools/parsers/qwen35'

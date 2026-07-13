@@ -1,6 +1,6 @@
 import { registerPlugins } from '@/server/plugins'
 import * as hostApi from '@/client/api'
-import type { QvacPlugin } from '@/schemas/plugin'
+import type { QvacPlugin } from '@qvac/core/surface'
 
 /**
  * Register plugins and return the client host API. Designed for

@@ -14,7 +14,7 @@ import {
   type FinetuneRunParams,
   type FinetuneStopParams,
   type RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { InvalidResponseError, StreamEndedError } from '@/utils/errors-client'
 import { parseClientInput } from '@/client/parse-input'
 

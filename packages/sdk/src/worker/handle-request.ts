@@ -1,5 +1,5 @@
-import { PROFILING_KEY, type Request, type ProfilingRequestMeta } from '@/schemas'
-import { nowMs } from '@/profiling'
+import { PROFILING_KEY, type Request, type ProfilingRequestMeta } from '@qvac/core/surface'
+import { nowMs } from '@qvac/core/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/core/engine'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'

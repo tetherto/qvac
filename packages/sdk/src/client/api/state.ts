@@ -1,5 +1,5 @@
 import { send } from '@/client/rpc/rpc-client'
-import type { LifecycleState } from '@/schemas'
+import type { LifecycleState } from '@qvac/core/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 /**

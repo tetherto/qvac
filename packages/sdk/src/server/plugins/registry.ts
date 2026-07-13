@@ -2,8 +2,8 @@ import {
   pluginDefinitionRuntimeSchema,
   type QvacPlugin,
   type PluginHandlerDefinition
-} from '@/schemas/plugin'
-import { isModelTypeAlias } from '@/schemas'
+} from '@qvac/core/surface'
+import { isModelTypeAlias } from '@qvac/core/surface'
 import {
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,

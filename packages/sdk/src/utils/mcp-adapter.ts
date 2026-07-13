@@ -1,10 +1,10 @@
-import type { Tool } from '@/schemas/tools'
-import type { JsonSchema } from '@/schemas/json-schema'
-import type { McpClientInput, McpClient } from '@/schemas/mcp-adapter'
+import type { Tool } from '@qvac/core/surface'
+import type { JsonSchema } from '@qvac/core/surface'
+import type { McpClientInput, McpClient } from '@qvac/core/surface'
 import type { ToolHandler } from '@/utils/tool-helpers'
 import { mapValues } from '@/utils/object'
 
-export type { McpClient, McpClientInput } from '@/schemas/mcp-adapter'
+export type { McpClient, McpClientInput } from '@qvac/core/surface'
 
 export type ToolHandlerMap = Map<string, ToolHandler>
 

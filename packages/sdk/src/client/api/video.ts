@@ -3,7 +3,7 @@ import {
   type VideoStreamRequest,
   type VideoClientParams,
   type VideoStats
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'

@@ -1,4 +1,4 @@
-import { type StopProvideRequest } from '@/schemas'
+import { type StopProvideRequest } from '@qvac/core/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError, ProviderStopFailedError } from '@/utils/errors-client'
 

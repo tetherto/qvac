@@ -1,5 +1,5 @@
 import { send } from '@/client/rpc/rpc-client'
-import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '@/schemas'
+import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '@qvac/core/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateClientRequestId } from '@/client/api/client-request-id'

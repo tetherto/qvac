@@ -6,8 +6,8 @@ import {
   PearWorkerEntryRequiredError,
   WorkerPluginsNotRegisteredError
 } from '@/utils/errors-client'
-import { ModelType } from '@/schemas'
-import type { QvacPlugin } from '@/schemas/plugin'
+import { ModelType } from '@qvac/core/surface'
+import type { QvacPlugin } from '@qvac/core/surface'
 
 function makeValidPlugin(modelType: string): QvacPlugin {
   return {

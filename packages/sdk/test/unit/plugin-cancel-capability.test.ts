@@ -5,7 +5,7 @@ import {
   defineDuplexHandler,
   pluginHandlerDefinitionRuntimeSchema,
   type PluginHandlerCancel
-} from '@/schemas/plugin'
+} from '@qvac/core/surface'
 
 // -----------------------------------------------------------------------------
 // PluginHandlerDefinition.cancel — declarative cancel-capability tests.

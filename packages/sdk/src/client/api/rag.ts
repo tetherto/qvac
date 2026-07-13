@@ -19,7 +19,7 @@ import type {
   RagCloseWorkspaceParams,
   RagDeleteWorkspaceParams,
   RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import {
   InvalidResponseError,
   InvalidOperationError,

@@ -52,6 +52,7 @@
     "./plugins": "./src/plugins/index.ts",
     "./plugin-utils": "./src/schemas/plugin.ts",
     "./logging": "./src/logging/index.ts",
+    "./profiling": "./src/profiling/index.ts",
     "./models": "./src/models/registry/index.ts",
     "./llamacpp-completion/plugin": "./src/plugins/builtin/llamacpp-completion/plugin.ts",
     "./llamacpp-embedding/plugin": "./src/plugins/builtin/llamacpp-embedding/plugin.ts",

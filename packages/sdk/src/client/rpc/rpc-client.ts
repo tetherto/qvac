@@ -6,7 +6,7 @@ import {
   type Request,
   type Response,
   type RPCOptions
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { reconstructError } from './rpc-error'
 import { withTimeout, withTimeoutStream, OperationTimeoutError } from '@/utils/withTimeout'
 import { getClientLogger, summarizeRequest } from '@/logging'
@@ -31,7 +31,7 @@ import {
   extractProfilingMeta,
   stripProfilingMeta,
   recordFailure
-} from '@/profiling'
+} from '@qvac/core/surface'
 import {
   createClientTimings,
   createClientStreamTimings,

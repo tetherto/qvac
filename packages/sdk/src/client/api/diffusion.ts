@@ -3,7 +3,7 @@ import {
   type DiffusionStreamRequest,
   type DiffusionClientParams,
   type DiffusionStats
-} from '@/schemas'
+} from '@qvac/core/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 

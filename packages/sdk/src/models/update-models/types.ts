@@ -1,4 +1,4 @@
-import type { ModelRegistryEntryAddon, ModelRegistryEngine } from '../../schemas/registry'
+import type { ModelRegistryEntryAddon, ModelRegistryEngine } from '@qvac/core/surface'
 
 export interface ShardInfo {
   isSharded: true

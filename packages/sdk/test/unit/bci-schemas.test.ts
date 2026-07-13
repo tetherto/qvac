@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { bciConfigSchema } from '@/schemas/bci-config'
+import { bciConfigSchema } from '@qvac/core/surface'
 import {
   neuralInputSchema,
   bciTranscribeClientParamsSchema,
@@ -8,10 +8,10 @@ import {
   bciStreamOptsSchema,
   bciTranscribeStreamRequestSchema,
   bciTranscribeStreamResponseSchema
-} from '@/schemas/bci'
-import { requestSchema, responseSchema } from '@/schemas/common'
-import { loadModelSrcRequestSchema, loadModelOptionsToRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+} from '@qvac/core/surface'
+import { requestSchema, responseSchema } from '@qvac/core/surface'
+import { loadModelSrcRequestSchema, loadModelOptionsToRequestSchema } from '@qvac/core/surface'
+import { ModelType } from '@qvac/core/surface'
 
 // === bciConfigSchema (engine config) ===
 
