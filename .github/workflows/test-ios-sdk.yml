@@ -449,7 +449,9 @@ jobs:
   select-pool:
     name: "[ios] select-pool"
     runs-on: ubuntu-latest
+    environment: release
     permissions:
+      id-token: write
       contents: read
     outputs:
       pool: ${{ steps.select.outputs.pool }}
@@ -458,6 +460,15 @@ jobs:
         with:
           sparse-checkout: .github/actions/sdk-device-farm-select-pool
           sparse-checkout-cone-mode: false
+
+      # Only random selection queries Device Farm (GetDevicePool + ListDevices);
+      # an explicit pool name needs no AWS access.
+      - name: Configure AWS credentials
+        if: ${{ inputs.device-pool-name == '' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
 
       - name: Select device pool
         id: select
