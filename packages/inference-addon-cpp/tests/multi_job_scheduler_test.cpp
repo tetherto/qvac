@@ -421,6 +421,45 @@ void waitForIdle(
   }
 }
 
+using Outputs = std::vector<std::pair<JobId, std::any>>;
+
+/// A worker frees a job's slot BEFORE publishing its terminal events, so
+/// waitForIdle returning cannot guarantee those events are already queued.
+/// Keeps draining the output queue, accumulating every event, until
+/// @p published(everything drained so far) holds or the timeout lapses;
+/// returns the accumulated events either way.
+Outputs drainUntil(
+    OutputQueue& queue, const std::function<bool(const Outputs&)>& published,
+    std::chrono::milliseconds timeout) {
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + timeout;
+  Outputs drained;
+  for (;;) {
+    Outputs batch = queue.clear();
+    for (std::pair<JobId, std::any>& entry : batch) {
+      drained.push_back(std::move(entry));
+    }
+    if (published(drained) || std::chrono::steady_clock::now() >= deadline) {
+      return drained;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+}
+
+/// Terminal events among @p outputs: a jobEnded stats snapshot (success) or an
+/// Output::Error (failure / cancelled while queued) — exactly one per admitted
+/// job. The success result payload (the echoed input) is not terminal.
+int countTerminalEvents(const Outputs& outputs) {
+  int terminal = 0;
+  for (const std::pair<JobId, std::any>& entry : outputs) {
+    if (entry.second.type() == typeid(RuntimeStats) ||
+        entry.second.type() == typeid(Output::Error)) {
+      ++terminal;
+    }
+  }
+  return terminal;
+}
+
 } // namespace
 
 class MultiJobSchedulerTest : public ::testing::Test {
@@ -668,23 +707,22 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
     thread.join();
   }
   // Poll for a genuine drain instead of guessing with a fixed sleep: with the
-  // cancel threads joined only the workers remain, and each queues a job's
-  // terminal event before releasing its admission slot, so once the scheduler
-  // reports idle every terminal event has been queued.
+  // cancel threads joined only the workers remain, so the admitted count can
+  // only fall to zero.
   waitForIdle(*scheduler_, std::chrono::seconds{10});
   EXPECT_EQ(scheduler_->activeJobs(), 0u)
       << "every admitted job must drain (in-flight + queued)";
 
-  const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
-  int terminal = 0;
+  // A worker frees the slot before publishing, so idle does not mean every
+  // terminal event is observable yet — drain until they all are.
+  const Outputs outputs = drainUntil(
+      *outputQueue_,
+      [admitted](const Outputs& seen) {
+        return countTerminalEvents(seen) >= admitted;
+      },
+      std::chrono::seconds{5});
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    // Each admitted job produces exactly one terminal event: a jobEnded stats
-    // snapshot when it completes, or an error when it is dropped/cancelled. The
-    // success result payload (the echoed input) is not terminal.
-    if (entry.second.type() == typeid(RuntimeStats)) {
-      ++terminal;
-    } else if (entry.second.type() == typeid(Output::Error)) {
-      ++terminal;
+    if (entry.second.type() == typeid(Output::Error)) {
       const Output::Error error = std::any_cast<Output::Error>(entry.second);
       const bool slotTear =
           error.find("bad_optional_access") != std::string::npos ||
@@ -693,7 +731,7 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
           << "Slot tear under contention. Error: " << error;
     }
   }
-  EXPECT_EQ(terminal, admitted)
+  EXPECT_EQ(countTerminalEvents(outputs), admitted)
       << "every admitted job must produce exactly one terminal event; a "
          "dropped or duplicated job under contention would break this";
 }
@@ -809,8 +847,12 @@ TEST_F(MultiJobSchedulerTest, OneJobThrowsPeersSurvive) {
   EXPECT_EQ(scheduler_->activeJobs(), 0u)
       << "the throwing job's slot must be released";
 
-  const std::unordered_set<JobId> errored =
-      erroredIds(outputQueue_->clear());
+  // One terminal event per job (peers' jobEnded stats, the thrower's error);
+  // judging the peers before all four are observable could miss a late error.
+  const std::unordered_set<JobId> errored = erroredIds(drainUntil(
+      *outputQueue_,
+      [](const Outputs& seen) { return countTerminalEvents(seen) >= 4; },
+      std::chrono::seconds{5}));
   EXPECT_EQ(errored.count(2), 1u) << "the throwing job must surface an error";
   EXPECT_EQ(errored.count(1), 0u);
   EXPECT_EQ(errored.count(3), 0u);
@@ -933,7 +975,11 @@ TEST_F(MultiJobSchedulerTest, CancelAllLandsOnRegistrationGatedModel) {
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
   bool sawResult = false;
-  for (const std::pair<JobId, std::any>& entry : outputQueue_->clear()) {
+  const Outputs outputs = drainUntil(
+      *outputQueue_,
+      [](const Outputs& seen) { return countTerminalEvents(seen) >= 1; },
+      std::chrono::seconds{5});
+  for (const std::pair<JobId, std::any>& entry : outputs) {
     if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
       sawResult = true;
       EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
@@ -959,7 +1005,11 @@ TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
   bool sawResult = false;
-  for (const std::pair<JobId, std::any>& entry : outputQueue_->clear()) {
+  const Outputs outputs = drainUntil(
+      *outputQueue_,
+      [](const Outputs& seen) { return countTerminalEvents(seen) >= 1; },
+      std::chrono::seconds{5});
+  for (const std::pair<JobId, std::any>& entry : outputs) {
     if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
       sawResult = true;
       EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
@@ -1058,7 +1108,14 @@ TEST_F(MultiJobSchedulerTest, TaggedJobEndedUsesPerJobStats) {
   EXPECT_TRUE(scheduler_->runJob(std::string("job"), 5));
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 
-  const auto snapshot = jobEndedStatsFor(outputQueue_->clear(), 5);
+  const auto snapshot = jobEndedStatsFor(
+      drainUntil(
+          *outputQueue_,
+          [](const Outputs& seen) {
+            return jobEndedStatsFor(seen, 5).has_value();
+          },
+          std::chrono::seconds{5}),
+      5);
   ASSERT_TRUE(snapshot.has_value()) << "job 5 must end with a stats snapshot";
   EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"))
       << "the per-job snapshot's model-level entries come through";
@@ -1080,7 +1137,14 @@ TEST_F(MultiJobSchedulerTest, ThrownJobReclaimsPerJobStats) {
 
   EXPECT_TRUE(scheduler_->runJob(std::string("job"), 7));
   waitForIdle(*scheduler_, std::chrono::seconds{5});
-  outputQueue_->clear();
+  // The reclaim happens right before the error event is queued, so once that
+  // event is observable the entry must already be gone.
+  const Outputs outputs = drainUntil(
+      *outputQueue_,
+      [](const Outputs& seen) { return erroredIds(seen).count(7) != 0; },
+      std::chrono::seconds{5});
+  ASSERT_EQ(erroredIds(outputs).count(7), 1u)
+      << "the thrown job must surface its terminal error";
 
   EXPECT_FALSE(stats->hasJobStats(7))
       << "a job that ends in error must not leak its per-job stats entry";
@@ -1095,7 +1159,14 @@ TEST_F(MultiJobSchedulerTest, UnknownPerJobStatsFallBackToGenericSnapshot) {
   EXPECT_TRUE(scheduler_->runJob(std::string("job"), 6));
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 
-  const auto snapshot = jobEndedStatsFor(outputQueue_->clear(), 6);
+  const auto snapshot = jobEndedStatsFor(
+      drainUntil(
+          *outputQueue_,
+          [](const Outputs& seen) {
+            return jobEndedStatsFor(seen, 6).has_value();
+          },
+          std::chrono::seconds{5}),
+      6);
   ASSERT_TRUE(snapshot.has_value()) << "job 6 must end with a stats snapshot";
   EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"));
   EXPECT_DOUBLE_EQ(statValue(*snapshot, "TPS"), 1.0)
