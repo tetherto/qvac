@@ -170,7 +170,6 @@ runs:
 
           echo "  - '$NAME':"
           AVAIL=$(get_availability "$DEVICE_ARNS")
-          echo "    availability=$AVAIL"
 
           if [ "$AVAIL" = "HIGHLY_AVAILABLE" ] && [ -z "$HIGH_IDX" ]; then
             HIGH_IDX="$i"
