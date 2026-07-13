@@ -47,6 +47,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./engine": "./src/engine.ts",
+    "./surface": "./src/surface.ts",
     "./package": "./package.json",
     "./plugins": "./src/plugins/index.ts",
     "./plugin-utils": "./src/schemas/plugin.ts",
