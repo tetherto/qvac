@@ -10,29 +10,29 @@ const dummyCancelHandler = async () => {}
 // Test hooks and iterator (onUpdate, onFinish, onError, getLatest, iterate)
 // ------------------------------
 
-test('onUpdate should trigger callback on updateOutput', async t => {
+test('onUpdate should trigger callback on updateOutput', async (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
   let received = null
-  response.onUpdate(data => {
+  response.onUpdate((data) => {
     received = data
   })
 
   const testData = { msg: 'hello' }
   response.updateOutput(testData)
 
-  await new Promise(resolve => setTimeout(resolve, 50))
+  await new Promise((resolve) => setTimeout(resolve, 50))
   t.alike(received, testData, 'onUpdate callback received the correct output')
 })
 
-test('onFinish resolves with final outputs on ended via await()', async t => {
+test('onFinish resolves with final outputs on ended via await()', async (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
   let finishCallbackOutput = null
 
-  response.onFinish(finalOutputs => {
+  response.onFinish((finalOutputs) => {
     finishCallbackOutput = finalOutputs
   })
 
@@ -41,11 +41,7 @@ test('onFinish resolves with final outputs on ended via await()', async t => {
   response.ended()
 
   const result = await response.await()
-  t.alike(
-    result,
-    ['first', 'second'],
-    'await() promise resolves with the correct outputs'
-  )
+  t.alike(result, ['first', 'second'], 'await() promise resolves with the correct outputs')
   t.alike(
     finishCallbackOutput,
     ['first', 'second'],
@@ -53,7 +49,7 @@ test('onFinish resolves with final outputs on ended via await()', async t => {
   )
 })
 
-test('onFinish and await resolve with custom terminal result', async t => {
+test('onFinish and await resolve with custom terminal result', async (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
@@ -65,7 +61,7 @@ test('onFinish and await resolve with custom terminal result', async t => {
   }
   let finishCallbackResult = null
 
-  response.onFinish(result => {
+  response.onFinish((result) => {
     finishCallbackResult = result
   })
 
@@ -74,20 +70,16 @@ test('onFinish and await resolve with custom terminal result', async t => {
 
   const result = await response.await()
   t.is(result, terminalResult, 'await() resolves with custom terminal result')
-  t.is(
-    finishCallbackResult,
-    terminalResult,
-    'onFinish callback receives custom terminal result'
-  )
+  t.is(finishCallbackResult, terminalResult, 'onFinish callback receives custom terminal result')
 })
 
-test('failed should trigger error and reject await()', async t => {
+test('failed should trigger error and reject await()', async (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
   let errorCallbackCalled = false
 
-  response.onError(err => {
+  response.onError((err) => {
     errorCallbackCalled = true
     t.ok(err instanceof Error, 'onError received an Error instance')
   })
@@ -104,27 +96,19 @@ test('failed should trigger error and reject await()', async t => {
   t.ok(errorCallbackCalled, 'onError callback was called')
 })
 
-test('getLatest returns the most recent output', t => {
+test('getLatest returns the most recent output', (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
-  t.is(
-    response.getLatest(),
-    null,
-    'getLatest returns null when there is no output'
-  )
+  t.is(response.getLatest(), null, 'getLatest returns null when there is no output')
 
   response.updateOutput('first')
   response.updateOutput('second')
-  t.is(
-    response.getLatest(),
-    'second',
-    'getLatest returns the most recent output'
-  )
+  t.is(response.getLatest(), 'second', 'getLatest returns the most recent output')
   t.end()
 })
 
-test('iterate yields outputs until ended', async t => {
+test('iterate yields outputs until ended', async (t) => {
   const response = new QvacResponse(
     {
       cancelHandler: dummyCancelHandler
@@ -143,7 +127,7 @@ test('iterate yields outputs until ended', async t => {
   t.alike(collected, ['a', 'b'], 'iterate yields all outputs correctly')
 })
 
-test('chaining should return the same instance', t => {
+test('chaining should return the same instance', (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
@@ -152,11 +136,7 @@ test('chaining should return the same instance', t => {
     .onError(() => {})
     .onCancel(() => {})
     .onFinish(() => {})
-  t.is(
-    chainedInstance,
-    response,
-    'All chaining methods return the same instance'
-  )
+  t.is(chainedInstance, response, 'All chaining methods return the same instance')
   t.end()
 })
 
@@ -164,7 +144,7 @@ test('chaining should return the same instance', t => {
 // Cancel Tests
 // ------------------------------
 
-test('cancel calls cancelHandler and emits cancel', async t => {
+test('cancel calls cancelHandler and emits cancel', async (t) => {
   let cancelHandlerCalled = false
   const cancelHandler = async () => {
     cancelHandlerCalled = true
@@ -183,10 +163,12 @@ test('cancel calls cancelHandler and emits cancel', async t => {
   t.ok(cancelEventCalled, 'cancel event was emitted')
 })
 
-test('cancel is a no-op if response is already finished', async t => {
+test('cancel is a no-op if response is already finished', async (t) => {
   let cancelHandlerCalled = false
   const response = new QvacResponse({
-    cancelHandler: async () => { cancelHandlerCalled = true }
+    cancelHandler: async () => {
+      cancelHandlerCalled = true
+    }
   })
   response.ended()
 
@@ -202,10 +184,12 @@ test('cancel is a no-op if response is already finished', async t => {
 // Idempotent terminal settlement
 // ------------------------------
 
-test('failed is idempotent — second failed() does not re-emit or re-reject', async t => {
+test('failed is idempotent — second failed() does not re-emit or re-reject', async (t) => {
   const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
   let errorEmits = 0
-  response.onError(() => { errorEmits++ })
+  response.onError(() => {
+    errorEmits++
+  })
 
   response.failed(new Error('first'))
   response.failed(new Error('second'))
@@ -220,7 +204,7 @@ test('failed is idempotent — second failed() does not re-emit or re-reject', a
   }
 })
 
-test('ended after failed is a no-op', async t => {
+test('ended after failed is a no-op', async (t) => {
   const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
   response.failed(new Error('boom'))
   response.ended('payload')
@@ -233,7 +217,7 @@ test('ended after failed is a no-op', async t => {
   }
 })
 
-test('failed after ended is a no-op', async t => {
+test('failed after ended is a no-op', async (t) => {
   const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
   response.updateOutput('value')
   response.ended()
@@ -247,10 +231,13 @@ test('failed after ended is a no-op', async t => {
 // Constructor signal wiring
 // ------------------------------
 
-test('constructor signal — abort after construction fails the response with the abort reason', async t => {
+test('constructor signal — abort after construction fails the response with the abort reason', async (t) => {
   const controller = makeAbortable()
   class TestCancel extends Error {
-    constructor () { super('test-cancel'); this.name = 'TestCancel' }
+    constructor() {
+      super('test-cancel')
+      this.name = 'TestCancel'
+    }
   }
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler,
@@ -268,7 +255,7 @@ test('constructor signal — abort after construction fails the response with th
   }
 })
 
-test('constructor signal — already-aborted signal fails the response with the abort reason', async t => {
+test('constructor signal — already-aborted signal fails the response with the abort reason', async (t) => {
   const controller = makeAbortable()
   controller.abort(new Error('precancel'))
   const response = new QvacResponse({
@@ -284,7 +271,7 @@ test('constructor signal — already-aborted signal fails the response with the 
   }
 })
 
-test('constructor signal — already-aborted signal fires onError listeners attached after construction', async t => {
+test('constructor signal — already-aborted signal fires onError listeners attached after construction', async (t) => {
   const controller = makeAbortable()
   controller.abort(new Error('precancel'))
   const response = new QvacResponse({
@@ -294,7 +281,9 @@ test('constructor signal — already-aborted signal fires onError listeners atta
 
   // Settlement is deferred to a microtask so a listener attached here still fires.
   let received = null
-  response.onError(err => { received = err })
+  response.onError((err) => {
+    received = err
+  })
 
   await response.await().catch(() => {})
 
@@ -302,7 +291,7 @@ test('constructor signal — already-aborted signal fires onError listeners atta
   t.is(received.message, 'precancel', 'error listener received the abort reason')
 })
 
-test('constructor signal — synchronous ended() after already-aborted construction does not win the race', async t => {
+test('constructor signal — synchronous ended() after already-aborted construction does not win the race', async (t) => {
   const controller = makeAbortable()
   controller.abort(new Error('precancel'))
   const response = new QvacResponse({
@@ -318,11 +307,15 @@ test('constructor signal — synchronous ended() after already-aborted construct
     await response.await()
     t.fail('await should reject')
   } catch (err) {
-    t.is(err.message, 'precancel', 'await rejects with the abort reason despite synchronous ended()')
+    t.is(
+      err.message,
+      'precancel',
+      'await rejects with the abort reason despite synchronous ended()'
+    )
   }
 })
 
-test('constructor signal — non-Error abort reason is wrapped in a default Error', async t => {
+test('constructor signal — non-Error abort reason is wrapped in a default Error', async (t) => {
   const controller = makeAbortable()
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler,
@@ -340,7 +333,7 @@ test('constructor signal — non-Error abort reason is wrapped in a default Erro
   }
 })
 
-test('constructor signal — abort with no reason produces a default Error', async t => {
+test('constructor signal — abort with no reason produces a default Error', async (t) => {
   const controller = makeAbortable()
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler,
@@ -358,7 +351,7 @@ test('constructor signal — abort with no reason produces a default Error', asy
   }
 })
 
-test('constructor signal — listener detaches on natural terminal', async t => {
+test('constructor signal — listener detaches on natural terminal', async (t) => {
   const controller = makeAbortable()
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler,
@@ -377,7 +370,7 @@ test('constructor signal — listener detaches on natural terminal', async t => 
 // iterate behavior under external settle
 // ------------------------------
 
-test('iterate stops promptly when the response is externally failed', async t => {
+test('iterate stops promptly when the response is externally failed', async (t) => {
   const controller = makeAbortable()
   const response = new QvacResponse(
     {
@@ -404,7 +397,7 @@ test('iterate stops promptly when the response is externally failed', async t =>
   t.alike(collected, [], 'no outputs collected before abort')
 })
 
-test('iterate wakes promptly on output events without polling', async t => {
+test('iterate wakes promptly on output events without polling', async (t) => {
   const response = new QvacResponse(
     { cancelHandler: dummyCancelHandler },
     1000 // long poll interval — wake must come from the output event
@@ -424,33 +417,21 @@ test('iterate wakes promptly on output events without polling', async t => {
   t.ok(elapsed < 500, `iterate woke up on events not pollInterval (${elapsed}ms)`)
 })
 
-test('onFinish chaining and await returns final outputs', async t => {
+test('onFinish chaining and await returns final outputs', async (t) => {
   const response = new QvacResponse({
     cancelHandler: dummyCancelHandler
   })
 
   response
-    .onUpdate(output => {
-      t.alike(
-        output,
-        'chained',
-        'onUpdate callback receives the correct output'
-      )
+    .onUpdate((output) => {
+      t.alike(output, 'chained', 'onUpdate callback receives the correct output')
     })
-    .onFinish(outputs => {
-      t.alike(
-        outputs,
-        ['chained'],
-        'onFinish callback receives correct outputs'
-      )
+    .onFinish((outputs) => {
+      t.alike(outputs, ['chained'], 'onFinish callback receives correct outputs')
     })
   response.updateOutput('chained')
   response.ended()
 
   const finalOutputs = await response.await()
-  t.alike(
-    finalOutputs,
-    ['chained'],
-    'await() returns the correct final outputs'
-  )
+  t.alike(finalOutputs, ['chained'], 'await() returns the correct final outputs')
 })

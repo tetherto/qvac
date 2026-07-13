@@ -12,6 +12,7 @@ import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
  */
 export type RequestKind =
   | 'completion'
+  | 'batchCompletion'
   | 'embeddings'
   | 'transcribe'
   | 'translate'

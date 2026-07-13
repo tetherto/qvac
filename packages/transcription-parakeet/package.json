@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.8.3",
+  "version": "0.9.1",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
@@ -33,6 +33,8 @@
     "convert-models": "bash scripts/convert-nemo.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/download-models.sh && bash scripts/convert-nemo.sh",
     "download-models:registry": "node scripts/download-parakeet-models.js",
+    "stage-models:integration": "node scripts/stage-integration-models.mjs",
+    "generate-model-manifest": "node scripts/generate-model-manifest.mjs",
     "example": "bare examples/transcribe.js",
     "example:diarize": "bare examples/diarized-transcribe.js",
     "example:mic": "bare examples/live-mic.js",

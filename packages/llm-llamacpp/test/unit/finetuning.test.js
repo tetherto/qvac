@@ -3,7 +3,7 @@
 const test = require('brittle')
 const LlmLlamacpp = require('../../index.js')
 
-function createStub (defaultImpl = () => {}) {
+function createStub(defaultImpl = () => {}) {
   let impl = defaultImpl
   const fn = function (...args) {
     fn.called = true
@@ -19,7 +19,7 @@ function createStub (defaultImpl = () => {}) {
   return fn
 }
 
-function createMockAddon () {
+function createMockAddon() {
   return {
     finetune: createStub(),
     runJob: createStub(),
@@ -28,7 +28,7 @@ function createMockAddon () {
   }
 }
 
-function completeFinetuneWith (model, status = 'COMPLETED', stats = null) {
+function completeFinetuneWith(model, status = 'COMPLETED', stats = null) {
   return () => {
     setImmediate(() => {
       const payload = { op: 'finetune', status }
@@ -39,7 +39,7 @@ function completeFinetuneWith (model, status = 'COMPLETED', stats = null) {
   }
 }
 
-function baseFinetuneOpts (overrides = {}) {
+function baseFinetuneOpts(overrides = {}) {
   return {
     trainDatasetDir: '/tmp/train.jsonl',
     outputParametersDir: '/tmp/out',
@@ -48,7 +48,7 @@ function baseFinetuneOpts (overrides = {}) {
   }
 }
 
-async function assertInferenceSucceeds (t, model, token) {
+async function assertInferenceSucceeds(t, model, token) {
   model.addon.runJob.callsFake(() => true)
   const response = await model._runInternal([{ role: 'user', content: 'test' }])
   model._addonOutputCallback(null, 'Output', token, null)
@@ -72,40 +72,28 @@ const createModelWithMockAddon = (opts = {}) => {
 
 test('finetune() throws when no params provided', async (t) => {
   const model = createModelWithMockAddon()
-  await t.exception(
-    () => model.finetune(),
-    /Finetuning parameters are required/
-  )
+  await t.exception(() => model.finetune(), /Finetuning parameters are required/)
   t.ok(!model.addon.finetune.called)
 })
 
 test('finetune(opts) throws when validation object is missing', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts()
-  await t.exception(
-    () => model.finetune(opts),
-    /must include validation/
-  )
+  await t.exception(() => model.finetune(opts), /must include validation/)
   t.ok(!model.addon.finetune.called)
 })
 
 test('finetune(opts) with validation.type dataset requires validation.path', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'dataset' } })
-  await t.exception(
-    () => model.finetune(opts),
-    /no path is provided/
-  )
+  await t.exception(() => model.finetune(opts), /no path is provided/)
   t.ok(!model.addon.finetune.called)
 })
 
 test('finetune(opts) with validation.type dataset throws when path same as trainDatasetDir', async (t) => {
   const model = createModelWithMockAddon()
   const opts = baseFinetuneOpts({ validation: { type: 'dataset', path: '/tmp/train.jsonl' } })
-  await t.exception(
-    () => model.finetune(opts),
-    /same as trainDatasetDir/
-  )
+  await t.exception(() => model.finetune(opts), /same as trainDatasetDir/)
   t.ok(!model.addon.finetune.called)
 })
 
@@ -126,11 +114,11 @@ test('finetune(opts) with validation.type dataset and validation.path passes eva
 
 test('finetune(opts) throws when top-level evalDatasetPath is provided', async (t) => {
   const model = createModelWithMockAddon()
-  const opts = baseFinetuneOpts({ evalDatasetPath: '/tmp/eval.jsonl', validation: { type: 'split' } })
-  await t.exception(
-    () => model.finetune(opts),
-    /Top-level evalDatasetPath is no longer supported/
-  )
+  const opts = baseFinetuneOpts({
+    evalDatasetPath: '/tmp/eval.jsonl',
+    validation: { type: 'split' }
+  })
+  await t.exception(() => model.finetune(opts), /Top-level evalDatasetPath is no longer supported/)
   t.ok(!model.addon.finetune.called)
 })
 
@@ -151,10 +139,7 @@ test('finetune(opts) stores params and calls addon.finetune', async (t) => {
 
 test('finetune() with no args throws', async (t) => {
   const model = createModelWithMockAddon()
-  await t.exception(
-    () => model.finetune(),
-    /Finetuning parameters are required/
-  )
+  await t.exception(() => model.finetune(), /Finetuning parameters are required/)
   t.ok(!model.addon.finetune.called)
 })
 
@@ -195,10 +180,7 @@ test('finetune() rejects when another active job exists', async (t) => {
   const opts = baseFinetuneOpts({ validation: { type: 'split' } })
   model._hasActiveResponse = true
 
-  await t.exception(
-    () => model.finetune(opts),
-    /already set or being processed/
-  )
+  await t.exception(() => model.finetune(opts), /already set or being processed/)
   t.ok(!model.addon.finetune.called, 'addon.finetune is not called when busy')
 })
 
@@ -210,10 +192,7 @@ test('finetune() marks busy and rejects second finetune while active', async (t)
   const firstHandle = await model.finetune(opts)
   t.is(model._hasActiveResponse, true, 'finetune should set active job flag after accept')
 
-  await t.exception(
-    () => model.finetune(opts),
-    /already set or being processed/
-  )
+  await t.exception(() => model.finetune(opts), /already set or being processed/)
 
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'PAUSED' }, null)
   const firstResult = await firstHandle.await()
@@ -302,10 +281,7 @@ test('finetune() clears busy state on error and allows next finetune', async (t)
   })
 
   const firstHandle = await model.finetune(opts)
-  await t.exception(
-    () => firstHandle.await(),
-    /out of memory/
-  )
+  await t.exception(() => firstHandle.await(), /out of memory/)
   t.is(model._hasActiveResponse, false, 'busy state should clear after failed finetune')
 
   const secondHandle = await model.finetune(opts)
@@ -321,7 +297,7 @@ test('finetune() clears busy state on terminal callback even without await', asy
   await model.finetune(opts)
   t.is(model._hasActiveResponse, true, 'busy flag should be set after finetune starts')
 
-  await new Promise(resolve => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
   t.is(model._hasActiveResponse, false, 'busy flag should clear when terminal callback arrives')
 
   const secondHandle = await model.finetune(opts)
@@ -332,7 +308,9 @@ test('finetune() clears busy state on terminal callback even without await', asy
 test('pause() is no-op when addon not initialized', async (t) => {
   const model = createModelWithMockAddon()
   model.addon = null
-  await t.execution(async () => { await model.pause() })
+  await t.execution(async () => {
+    await model.pause()
+  })
 })
 
 test('pause() calls addon.cancel to trigger checkpoint save', async (t) => {
@@ -349,7 +327,9 @@ test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
   model.addon.cancel.callsFake(() => Promise.resolve())
 
   let clearCalled = false
-  model._clearPauseCheckpoints = () => { clearCalled = true }
+  model._clearPauseCheckpoints = () => {
+    clearCalled = true
+  }
 
   await model.cancel()
   t.ok(model.addon.cancel.called, 'addon.cancel must be called')
@@ -360,13 +340,17 @@ test('cancel() calls addon.cancel and clears pause checkpoints', async (t) => {
 test('cancel() is no-op when addon not initialized', async (t) => {
   const model = createModelWithMockAddon()
   model.addon = null
-  await t.execution(async () => { await model.cancel() })
+  await t.execution(async () => {
+    await model.cancel()
+  })
 })
 
 test('cancel() does not throw when no checkpointSaveDir configured', async (t) => {
   const model = createModelWithMockAddon()
   model.addon.cancel.callsFake(() => Promise.resolve())
-  await t.execution(async () => { await model.cancel() })
+  await t.execution(async () => {
+    await model.cancel()
+  })
   t.ok(model.addon.cancel.called)
 })
 
@@ -391,10 +375,7 @@ test('finetune() rejects handle.await() on runtime error (like inference)', asyn
   })
 
   const handle = await model.finetune(opts)
-  await t.exception(
-    () => handle.await(),
-    /out of memory/
-  )
+  await t.exception(() => handle.await(), /out of memory/)
 })
 
 test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal result', async (t) => {
@@ -403,16 +384,28 @@ test('_skipNextRuntimeStats swallows TPS stats that follow a finetune terminal r
   model.addon.finetune.callsFake(() => true)
 
   const handle = await model.finetune(opts)
-  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag starts false before finetune terminal arrives')
+  t.is(
+    model._addonEventState.skipNextRuntimeStats,
+    false,
+    'flag starts false before finetune terminal arrives'
+  )
 
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
-  t.is(model._addonEventState.skipNextRuntimeStats, true, 'flag must be set after finetune terminal result')
+  t.is(
+    model._addonEventState.skipNextRuntimeStats,
+    true,
+    'flag must be set after finetune terminal result'
+  )
 
   const result = await handle.await()
   t.alike(result, { op: 'finetune', status: 'COMPLETED' })
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0, time_ms: 100 }, null)
-  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag must reset after TPS stats are consumed')
+  t.is(
+    model._addonEventState.skipNextRuntimeStats,
+    false,
+    'flag must reset after TPS stats are consumed'
+  )
 })
 
 test('TPS stats without prior finetune are forwarded as normal JobEnded', async (t) => {
@@ -440,14 +433,26 @@ test('_skipNextRuntimeStats prevents finetune TPS from ending a subsequent infer
   const finetuneHandle = await model.finetune(opts)
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null)
   await finetuneHandle.await()
-  t.is(model._addonEventState.skipNextRuntimeStats, true, 'skip flag should be armed after finetune')
+  t.is(
+    model._addonEventState.skipNextRuntimeStats,
+    true,
+    'skip flag should be armed after finetune'
+  )
 
   model.addon.runJob.callsFake(() => true)
   const inferResponse = await model._runInternal([{ role: 'user', content: 'Hello' }])
 
   model._addonOutputCallback(null, 'Output', { TPS: 0, tokens: 0 }, null)
-  t.is(model._addonEventState.skipNextRuntimeStats, false, 'flag should reset after consuming stale TPS')
-  t.is(inferResponse.getStatus(), 'running', 'inference must still be running after stale TPS was swallowed')
+  t.is(
+    model._addonEventState.skipNextRuntimeStats,
+    false,
+    'flag should reset after consuming stale TPS'
+  )
+  t.is(
+    inferResponse.getStatus(),
+    'running',
+    'inference must still be running after stale TPS was swallowed'
+  )
 
   model._addonOutputCallback(null, 'Output', 'answer', null)
   model._addonOutputCallback(null, 'Output', { TPS: 50.0, tokens: 5 }, null)
@@ -465,10 +470,26 @@ test('finetune progress events emit stats on handle when opts.stats is enabled',
 
   const handle = await model.finetune(finetuneOpts)
   const received = []
-  handle.on('stats', (stats) => { received.push(stats) })
+  handle.on('stats', (stats) => {
+    received.push(stats)
+  })
 
-  const progress1 = { loss: 2.5, accuracy: 0.3, global_steps: 10, current_epoch: 0, current_batch: 5, total_batches: 20 }
-  const progress2 = { loss: 1.8, accuracy: 0.55, global_steps: 20, current_epoch: 0, current_batch: 10, total_batches: 20 }
+  const progress1 = {
+    loss: 2.5,
+    accuracy: 0.3,
+    global_steps: 10,
+    current_epoch: 0,
+    current_batch: 5,
+    total_batches: 20
+  }
+  const progress2 = {
+    loss: 1.8,
+    accuracy: 0.55,
+    global_steps: 20,
+    current_epoch: 0,
+    current_batch: 10,
+    total_batches: 20
+  }
   model._addonOutputCallback(null, 'Output', { type: 'finetune_progress', stats: progress1 }, null)
   model._addonOutputCallback(null, 'Output', { type: 'finetune_progress', stats: progress2 }, null)
 
@@ -487,12 +508,26 @@ test('finetune progress events are suppressed when opts.stats is not enabled', a
 
   const handle = await model.finetune(finetuneOpts)
   const received = []
-  handle.on('stats', (stats) => { received.push(stats) })
+  handle.on('stats', (stats) => {
+    received.push(stats)
+  })
 
-  model._addonOutputCallback(null, 'Output', {
-    type: 'finetune_progress',
-    stats: { loss: 2.5, accuracy: 0.3, global_steps: 10, current_epoch: 0, current_batch: 5, total_batches: 20 }
-  }, null)
+  model._addonOutputCallback(
+    null,
+    'Output',
+    {
+      type: 'finetune_progress',
+      stats: {
+        loss: 2.5,
+        accuracy: 0.3,
+        global_steps: 10,
+        current_epoch: 0,
+        current_batch: 5,
+        total_batches: 20
+      }
+    },
+    null
+  )
 
   t.is(received.length, 0, 'should not emit stats when opts.stats is disabled')
 

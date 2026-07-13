@@ -29,6 +29,10 @@ on:
 
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/tts-ggml@1.0.0)"
+        type: string
+        required: false
       ref:
         description: 'ref'
         type: string
@@ -99,10 +103,10 @@ jobs:
             platform: linux
             arch: arm64
             no_gpu: 'true'
-          - os: macos-14-xlarge
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
-            no_gpu: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -249,6 +253,10 @@ jobs:
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON="$QVAC_TTS_GGML_BENCHMARK_MATRIX_OVERRIDE"
           elif [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"}]'
+          elif [ "${{ matrix.platform }}" = "darwin" ]; then
+            # macOS GPU backend is Metal, not Vulkan. Needs a Metal-capable
+            # runner (qvac-macos26-arm64-gpu); hosted macs stay CPU-only via no_gpu.
+            export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"metal"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"metal"},{"engine":"supertonic","useGPU":true,"backendHint":"metal"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"metal"}]'
           else
             export QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[{"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox","useGPU":true,"backendHint":"vulkan"},{"engine":"chatterbox-mtl","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic","useGPU":true,"backendHint":"vulkan"},{"engine":"supertonic-mtl","useGPU":true,"backendHint":"vulkan"}]'
           fi

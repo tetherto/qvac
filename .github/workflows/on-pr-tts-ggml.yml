@@ -8,6 +8,7 @@ on:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
     inputs:

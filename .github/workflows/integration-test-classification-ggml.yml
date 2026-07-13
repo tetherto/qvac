@@ -33,7 +33,7 @@ env:
 jobs:
   run-integration-tests:
     timeout-minutes: 30
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
@@ -53,14 +53,21 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: macos-14
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2022
             platform: win32
             arch: x64
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:

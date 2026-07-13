@@ -56,3 +56,28 @@ test('transformLlmConfig: numeric fields are stringified', (t) => {
   t.is(result['gpu_layers'], '99')
   t.is(result['temp'], '0.7')
 })
+
+test('transformLlmConfig: parallel is forwarded as a string', (t) => {
+  const config = makeConfig({ parallel: 4 })
+  const result = transformLlmConfig(config)
+  t.is(result['parallel'], '4')
+})
+
+test('transformLlmConfig: mmproj-use-gpu=true is forwarded as string "true"', (t) => {
+  const config = makeConfig({ 'mmproj-use-gpu': true })
+  const result = transformLlmConfig(config)
+  t.is(result['mmproj-use-gpu'], 'true')
+  t.absent('mmproj_use_gpu' in result, 'hyphenated key must not be snake_cased')
+})
+
+test('transformLlmConfig: mmproj-use-gpu=false is forwarded as string "false"', (t) => {
+  const config = makeConfig({ 'mmproj-use-gpu': false })
+  const result = transformLlmConfig(config)
+  t.is(result['mmproj-use-gpu'], 'false')
+})
+
+test('transformLlmConfig: mmproj-use-gpu is omitted when unset', (t) => {
+  const config = makeConfig({})
+  const result = transformLlmConfig(config)
+  t.absent('mmproj-use-gpu' in result, 'unset key must not be forwarded so the addon auto-defaults')
+})

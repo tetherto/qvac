@@ -28,11 +28,11 @@ const UTF8_PROMPT = [
   }
 ]
 
-function containsEmoji (text) {
+function containsEmoji(text) {
   return /\u{1F600}/u.test(text)
 }
 
-safeTest('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async t => {
+safeTest('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, async (t) => {
   let model = null
   let specLogger = null
   let loggerReleased = false
@@ -73,7 +73,7 @@ safeTest('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, a
     await model.load()
     const response = await model.run(UTF8_PROMPT)
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         output += data
       })
       .await()
@@ -81,7 +81,11 @@ safeTest('model returns UTF-8 emoji without truncation', { timeout: 600_000 }, a
     const normalized = output.trim()
     t.ok(normalized.length > 0, 'generated some output')
     t.ok(containsEmoji(normalized), 'output contains emoji')
-    t.is(Buffer.from(normalized, 'utf8').toString('utf8'), normalized, 'utf8 encoding round-trip succeeds')
+    t.is(
+      Buffer.from(normalized, 'utf8').toString('utf8'),
+      normalized,
+      'utf8 encoding round-trip succeeds'
+    )
     t.is(normalized, '😀', 'model respected exact emoji instruction')
     t.ok(response.stats.generatedTokens > 0, 'token stats recorded')
   } finally {

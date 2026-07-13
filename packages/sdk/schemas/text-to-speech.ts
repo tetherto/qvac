@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils'
+import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils'
 
-// Chatterbox multilingual supported languages (22). The engines support
+// Chatterbox multilingual supported languages (23). The engines support
 // different language sets, so the language enum is validated per engine.
 export const TTS_CHATTERBOX_LANGUAGES = [
   'en', // English
@@ -9,6 +9,7 @@ export const TTS_CHATTERBOX_LANGUAGES = [
   'fr', // French
   'de', // German
   'it', // Italian
+  'ja', // Japanese
   'pt', // Portuguese
   'nl', // Dutch
   'pl', // Polish
@@ -68,7 +69,6 @@ export const TTS_SUPERTONIC_LANGUAGES = [
 // Supertonic languages not already present in the Chatterbox set, used to keep
 // TTS_LANGUAGES a true union across engines without duplicates.
 const TTS_SUPERTONIC_ONLY_LANGUAGES = [
-  'ja', // Japanese
   'bg', // Bulgarian
   'cs', // Czech
   'et', // Estonian
@@ -97,6 +97,12 @@ const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
 
+// Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
+// accepted range; omit to keep the engine's native rate (or 48 kHz when the
+// LavaSR enhancer is active). Supertonic-only: the Chatterbox engine does not
+// yet resample its output, so the field is not exposed on that config.
+const ttsOutputSampleRateSchema = ttsIntegerSchema.min(8000).max(192000)
+
 export const ttsChatterboxRuntimeConfigSchema = z.object({
   ttsEngine: z.literal('chatterbox'),
   language: ttsChatterboxLanguageSchema,
@@ -117,7 +123,8 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   voice: z.string().optional(),
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
-  useGPU: z.boolean().optional()
+  useGPU: z.boolean().optional(),
+  outputSampleRate: ttsOutputSampleRateSchema.optional()
 })
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
@@ -125,19 +132,62 @@ export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsSupertonicRuntimeConfigSchema
 ])
 
+// Optional LavaSR post-processing model sources, shared across engines. Supply
+// the enhancer GGUF to bandwidth-extend the output to 48 kHz, and/or the
+// denoiser GGUF (runs before the enhancer, rate-preserving). Resolved to
+// artifacts by the plugin's resolveConfig and forwarded to @qvac/tts-ggml.
+const ttsLavasrLoadFieldsShape = {
+  lavasrEnhancerModelSrc: modelSrcInputSchema.optional(),
+  lavasrDenoiserModelSrc: modelSrcInputSchema.optional()
+}
+
 export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
   // Optional at schema time so legacy ONNX configs (no s3genModelSrc) reach
   // the plugin's resolveConfig and raise LegacyTtsModelDeprecatedError.
   s3genModelSrc: modelSrcInputSchema.optional(),
-  referenceAudioSrc: modelSrcInputSchema.optional()
+  referenceAudioSrc: modelSrcInputSchema.optional(),
+  mecabDictSrc: modelSrcInputSchema.optional(),
+  cangjieTsvSrc: modelSrcInputSchema.optional(),
+  ...ttsLavasrLoadFieldsShape
 })
 
-export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema
+export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
+  ...ttsLavasrLoadFieldsShape
+})
 
-export const ttsLoadConfigSchema = z.discriminatedUnion('ttsEngine', [
-  ttsChatterboxLoadConfigSchema,
-  ttsSupertonicLoadConfigSchema
-])
+type TtsTokenizerAssetRefinementInput = {
+  ttsEngine?: string
+  language?: string
+  mecabDictSrc?: ModelSrcInput | undefined
+  cangjieTsvSrc?: ModelSrcInput | undefined
+}
+
+function refineChatterboxTokenizerAssets(
+  data: TtsTokenizerAssetRefinementInput,
+  ctx: z.RefinementCtx
+) {
+  if (data.ttsEngine !== 'chatterbox') return
+
+  if (data.language === 'ja' && data.mecabDictSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['mecabDictSrc'],
+      message: 'mecabDictSrc is required when Chatterbox language is "ja".'
+    })
+  }
+
+  if (data.language === 'zh' && data.cangjieTsvSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['cangjieTsvSrc'],
+      message: 'cangjieTsvSrc is required when Chatterbox language is "zh".'
+    })
+  }
+}
+
+export const ttsLoadConfigSchema = z
+  .discriminatedUnion('ttsEngine', [ttsChatterboxLoadConfigSchema, ttsSupertonicLoadConfigSchema])
+  .superRefine(refineChatterboxTokenizerAssets)
 
 // === Legacy ONNX modelConfig fields (deprecated) ===
 //
@@ -173,10 +223,12 @@ const legacyTtsOnnxFieldsShape = LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
 // `loadConfigSchema`. Permits deprecated ONNX field names so
 // `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
 // generic Zod error; other unknown keys are still rejected by `.strict()`.
-export const ttsConfigSchema = z.discriminatedUnion('ttsEngine', [
-  ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
-  ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
-])
+export const ttsConfigSchema = z
+  .discriminatedUnion('ttsEngine', [
+    ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
+    ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
+  ])
+  .superRefine(refineChatterboxTokenizerAssets)
 
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),

@@ -8,6 +8,7 @@ on:
       - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
     inputs:

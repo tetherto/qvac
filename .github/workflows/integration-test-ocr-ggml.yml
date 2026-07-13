@@ -9,6 +9,10 @@ on:
         type: string
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/ocr-ggml@1.0.0)"
+        type: string
+        required: false
       ref:
         description: "ref"
         type: string
