@@ -10683,6 +10683,22 @@
     "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
   },
   {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E2B instruct multimodal model",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
     "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Vision projector (mmproj) for Gemma 4 E2B",
@@ -10975,6 +10991,22 @@
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 2B multimodal model",
     "quantization": "q6_k",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model",
+    "quantization": "q8_0",
     "params": "2B",
     "licenseId": "Apache-2.0",
     "tags": [

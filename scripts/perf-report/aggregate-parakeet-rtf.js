@@ -239,7 +239,9 @@ function mobileExecutionProvider (result) {
 
 function mobileModelType (result) {
   const testName = String(result.test || '').toLowerCase()
-  const match = testName.match(/\[(tdt|ctc|eou|sortformer)\]/)
+  // `sortformer-streaming` (v2.1) must precede `sortformer` (v1) so the more
+  // specific token wins the alternation.
+  const match = testName.match(/\[(tdt|ctc|eou|sortformer-streaming|sortformer)\]/)
   return match ? match[1] : 'tdt'
 }
 

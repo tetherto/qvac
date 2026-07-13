@@ -49,6 +49,31 @@ test('GPU desktop row keeps the probed GPU model', () => {
   assert.equal(record.gpuModel, 'NVIDIA RTX 4000 SFF Ada Generation')
 })
 
+test('mobile [sortformer-streaming] label maps to model sortformer-streaming, not sortformer', () => {
+  // Guards the alternation ordering in mobileModelType(): `sortformer-streaming`
+  // (v2.1) must be matched before `sortformer` (v1). If the order regresses, the
+  // v2.1 label silently collapses onto `sortformer` and collides with v1 rows.
+  const report = {
+    addon: 'parakeet',
+    addon_type: 'parakeet',
+    addonVersion: '0.9.1',
+    device: { name: 'Apple iPhone 16 Pro', platform: 'ios' },
+    results: [
+      {
+        test: '[sortformer-streaming] [q8_0] [CPU] mobile-perf run 1',
+        execution_provider: 'cpu',
+        metrics: { real_time_factor: 0.02, wall_time_ms: 400, audio_duration_ms: 20000 }
+      }
+    ]
+  }
+  const records = normalizeMobileRecords(report, '/x/Apple_iPhone_16_Pro/performance-report.json')
+  assert.equal(records.length, 1)
+  const [row] = records
+  assert.equal(row.model, 'sortformer-streaming')
+  assert.equal(row.quant, 'q8_0')
+  assert.equal(row.gpu, 'cpu')
+})
+
 test('mobile RTF is derived from wall/audio when real_time_factor is null', () => {
   const report = {
     addon: 'parakeet',
