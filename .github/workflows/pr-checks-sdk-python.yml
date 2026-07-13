@@ -1,0 +1,59 @@
+name: PR Checks (SDK Python)
+
+on:
+  pull_request:
+    paths:
+      - 'packages/sdk-python/**'
+      - 'packages/sdk/contract/**'
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/sdk-python
+
+jobs:
+  check:
+    name: Generate + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -e ".[gen,dev]"
+
+      # Regenerates from packages/sdk/contract/{schema,manifest}.json and
+      # fails if the committed src/qvac/_generated tree doesn't match —
+      # mirrors the SDK pod's own `contract:check` step.
+      - name: Contract check (generated client up to date)
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      # Excludes src/qvac/_generated/models/ — datamodel-code-generator
+      # formats that itself, with settings that don't match a plain black
+      # invocation (it preserves single-quoted strings; a bare `black`
+      # normalizes to double), so checking it here would always disagree.
+      - name: Format check
+        run: .venv/bin/python3 -m black --check src/qvac/_transport.py src/qvac/_generated/__init__.py src/qvac/_generated/methods.py scripts/ tests/
+
+      # test_poc_smoke.py needs a real Bare worker + a downloaded model; it
+      # skips itself unless QVAC_POC_SDK_DIR is set, which it isn't here.
+      - name: Test
+        run: .venv/bin/python3 -m pytest tests/ -v

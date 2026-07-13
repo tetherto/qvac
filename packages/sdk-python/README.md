@@ -1,0 +1,49 @@
+# qvac (Python)
+
+Generated Python client for the QVAC SDK's worker RPC.
+
+## What's generated, and from what
+
+`src/qvac/_generated/` is regenerated from `../sdk/contract/{schema,manifest}.json`
+(the TypeScript SDK's own generated contract — see `packages/sdk/contract/README.md`):
+
+- `_generated/models/` — pydantic v2 models for every request/response, produced
+  by [`datamodel-code-generator`](https://github.com/koxudaxi/datamodel-code-generator)
+  from `schema.json`.
+- `_generated/__init__.py` — a flat, stable re-export of every model under its
+  contract title (`LoadModelRequest`, `HeartbeatResponse`, ...), regardless of
+  which internal module `datamodel-code-generator` happened to place it in.
+- `_generated/methods.py` — one typed function per `manifest.json` entry,
+  grouped by call shape:
+  - `request-reply` → `def heartbeat(transport, params: HeartbeatRequest) -> HeartbeatResponse`
+  - `server-stream` → `def transcribe(transport, params: TranscribeRequest) -> Iterator[TranscribeResponse]`
+  - `duplex` → `def transcribe_stream(transport, params: TranscribeStreamRequest, up: Iterable[bytes]) -> Iterator[TranscribeStreamResponse]`
+
+Regenerate with:
+
+```bash
+python3 scripts/generate.py
+```
+
+`python3 scripts/generate.py --check` exits non-zero when the committed output
+is stale; `tests/test_generate.py` enforces the same via pytest.
+
+## What's NOT generated: the transport
+
+Every stub takes a `transport: Transport` (`src/qvac/_transport.py`) — a
+`Protocol` with `call`/`call_stream`/`call_duplex`. This package does not
+implement the actual `bare-rpc` socket transport that speaks to the SDK
+worker; that's a separate, not-yet-built piece (QVAC's "Transport integration
+(bare-rpc-python)" task). Anything implementing the `Transport` protocol can
+back the generated stubs — see `tests/poc_transport.py` for a minimal adapter
+over a hand-written PoC transport, used to validate the generated surface
+against a real running worker ahead of the production transport landing.
+
+## Development
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[gen,dev]"
+.venv/bin/python3 scripts/generate.py
+.venv/bin/python3 -m pytest
+```
