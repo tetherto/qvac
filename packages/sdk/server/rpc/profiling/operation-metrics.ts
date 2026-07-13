@@ -15,7 +15,21 @@ import {
 } from '@/schemas'
 import { readModelExecutionMs } from '@/profiling/model-execution'
 import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
-import type { LoadModelProfilingMeta, DownloadStats } from '@/server/rpc/handlers/load-model/types'
+interface DownloadStats {
+  downloadTimeMs?: number
+  totalBytesDownloaded?: number
+  downloadSpeedBps?: number
+  checksumValidationTimeMs?: number
+  cacheHit?: boolean
+  sharedTransfer?: boolean
+}
+
+interface LoadModelProfilingMeta {
+  sourceType?: string
+  downloadStats?: DownloadStats
+  modelInitializationTimeMs?: number
+  totalLoadTimeMs?: number
+}
 
 export type MetricExtractor<T> = (data: T) => Record<string, number> | undefined
 

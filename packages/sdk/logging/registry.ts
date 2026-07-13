@@ -14,7 +14,7 @@
  * - loggerLevel and loggerConsoleOutput from config file apply to both processes
  * - Client applies settings after loading config, server applies during __init_config
  *
- * NOTE: This is separate from server/bare/registry/logging-stream-registry.ts
+ * NOTE: This is separate from logging/logging-stream-registry.ts
  * which manages RPC subscriptions for streaming logs to connected clients.
  *
  * IMPORTANT: Some bundlers may evaluate the same logical module multiple times with

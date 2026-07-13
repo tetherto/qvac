@@ -15,8 +15,8 @@ export const cancelInferenceBaseSchema = z.object({
 
 /**
  * Coarse kind narrowing for the broad-cancel escape hatch. Matches the
- * server-side `RequestKind` union in `server/bare/runtime/request-context.ts`
- * — keep the two lists in sync. The kind is optional; omitting it
+ * engine's `RequestKind` union in `@qvac/core` — keep the two lists in
+ * sync. The kind is optional; omitting it
  * cancels every in-flight request on the model regardless of kind
  * (the "cancel everything on this model" sweep used by model-unload
  * and app-shutdown paths).

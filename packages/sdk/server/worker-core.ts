@@ -1,31 +1,15 @@
 import os from 'bare-os'
 import Signal from 'bare-signals'
 import { createBareKitRPCServer, createIPCClient } from '@/src/worker/create-server'
-import { destroySwarm } from '@/server/bare/hyperswarm'
 import { initEnv, getValidatedEnv } from '@/server/env'
-import { closeAllRagInstances } from '@/server/bare/rag-hyperdb'
-import { cleanupDownloads } from '@/server/rpc/handlers/load-model/download-manager'
-import { unloadAllModels } from '@/server/bare/registry/model-registry'
-import { closeRegistryClient } from '@/server/bare/registry/registry-client'
-import {
-  clearAllLoggingStreams,
-  startLogBuffering,
-  stopLogBufferingWithTimeout
-} from '@/server/bare/registry/logging-stream-registry'
-import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from '@/logging'
-import { clearPlugins } from '@/server/plugins'
+import { close as closeCore, cleanupForTerminate as cleanupCoreForTerminate } from '@qvac/core/engine'
+import { getServerLogger } from '@/logging'
 import { acquireWorkerLock, releaseWorkerLock } from '@/server/utils/worker-lock'
 
 let coreInitialized = false
 let rpcInitialized = false
-// Set true when the cleanup body has run at least once. Lets both
-// cleanupForTerminate (pre-terminate path) and shutdownBareDirectWorker
-// (signal/exit path) call runCleanup() without doing duplicate work.
-let cleanupRan = false
-// Set true when shutdownBareDirectWorker is in flight. Distinct from
-// cleanupRan: cleanupForTerminate must NOT set this, otherwise a later
-// SIGTERM/SIGINT/uncaught-exception would early-return at the guard
-// in shutdownBareDirectWorker and skip releaseWorkerLock + Bare.exit.
+// Set true when shutdownBareDirectWorker is in flight, so a later
+// SIGTERM/SIGINT/uncaught-exception does not re-run releaseWorkerLock + Bare.exit.
 let isShuttingDown = false
 
 const logger = getServerLogger()
@@ -62,9 +46,6 @@ export function initializeWorkerCore(): { hasRPCConfig: boolean } {
     const validatedEnv = getValidatedEnv()
     return { hasRPCConfig: !!validatedEnv.QVAC_IPC_SOCKET_PATH }
   }
-
-  startLogBuffering(SDK_LOG_ID)
-  startLogBuffering(SDK_ALL_LOG_ID)
 
   const { hasRPCConfig } = initEnv()
 
@@ -104,13 +85,6 @@ export function ensureRPCSetup() {
     logger.info('Bare worker started and listening for RPC requests')
     logger.debug('Working directory:', os.cwd())
     rpcInitialized = true
-
-    // The worker is now reachable, so a `subscribeServerLogs` client can connect.
-    // Bound the global startup buffer the same way model-load buffering is bounded:
-    // if nothing subscribes within the grace window, stop buffering so every server
-    // log doesn't keep churning that buffer for the worker's whole lifetime. A
-    // subscriber that connects in time cancels the timeout and flushes the buffer.
-    stopLogBufferingWithTimeout(SDK_ALL_LOG_ID)
   } catch (error) {
     logger.error('Worker error:', error)
     Bare.exit(1)
@@ -120,68 +94,26 @@ export function ensureRPCSetup() {
 export function isCoreInitialized(): boolean {
   return coreInitialized
 }
-function clearRegistries() {
-  clearAllLoggingStreams()
-  clearAllAddonLoggers()
-  clearPlugins()
-}
 
 export type BareDirectShutdownReason =
   'signal' | 'rpc-close' | 'uncaught-exception' | 'unhandled-rejection' | 'ipc-disconnect'
 
 /**
- * Run the cleanup body shared by terminal and graceful-shutdown paths.
- * Clears plugin registries (which calls each addon's `releaseLogger` →
- * frees env-bound js_ref_t state), unloads all loaded models (which calls
- * each addon's `destroyInstance`), and closes infra (swarm, rag, downloads,
- * registry client). Does NOT touch the worker lock or call `Bare.exit`.
- *
- * Idempotent: subsequent calls are no-ops via the `cleanupRan` flag. The
- * underlying clearPlugins / unloadAllModels / closers are also idempotent
- * on empty registries, but the flag avoids the redundant log noise and
- * allocator churn.
- */
-async function runCleanup(): Promise<void> {
-  if (cleanupRan) return
-  cleanupRan = true
-  clearRegistries()
-  await Promise.allSettled([
-    destroySwarm(),
-    closeAllRagInstances(),
-    cleanupDownloads(),
-    unloadAllModels(),
-    closeRegistryClient()
-  ])
-}
-
-/**
  * Pre-terminate cleanup, callable while the worker is still alive.
  *
  * On platforms where the worker lives in the same OS process as the JS host
- * (i.e. mobile via react-native-bare-kit Worklet), `Bare.exit()` would
- * kill the entire app. This path runs the same registry/model cleanup as
- * `shutdownBareDirectWorker` but skips the lock release + exit, leaving the
- * caller (typically the SDK client about to call `worklet.terminate()`)
- * responsible for tearing the worker down.
+ * (i.e. mobile via react-native-bare-kit Worklet), `Bare.exit()` would kill the
+ * entire app. This path runs the engine's cleanup (models, swarm, RAG,
+ * downloads, registry client, plugin/addon registries) without releasing the
+ * worker lock or exiting, leaving the caller (typically the SDK client about to
+ * call `worklet.terminate()`) responsible for tearing the worker down.
  *
  * Critical for clean termination: addons hold static state with js_ref_t
- * handles into the current V8 isolate; without this cleanup, those refs
- * survive into the next worklet's isolate and crash on first access.
+ * handles into the current V8 isolate; without this cleanup, those refs survive
+ * into the next worklet's isolate and crash on first access.
  */
 export async function cleanupForTerminate(): Promise<void> {
-  // Intentionally does NOT set isShuttingDown — that flag is reserved for
-  // shutdownBareDirectWorker so a later SIGTERM/SIGINT still gets to run
-  // the lock release + Bare.exit path. runCleanup is idempotent on its
-  // own, so a follow-up shutdownBareDirectWorker call won't redo the body.
-  if (cleanupRan) return
-
-  logger.info('🧹 Pre-terminate cleanup starting...')
-  try {
-    await runCleanup()
-    logger.info('✅ Pre-terminate cleanup completed')
-  } catch (error) {
-    logger.error('❌ Error during pre-terminate cleanup:', error)
-  }
+  await cleanupCoreForTerminate()
 }
 
 export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason): Promise<void> {
@@ -198,8 +130,9 @@ export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason)
   logger.info(messages[reason])
 
   try {
-    // Idempotent: if cleanupForTerminate already ran, this is a no-op.
-    await runCleanup()
+    // Idempotent: if cleanupForTerminate already ran, this only releases the
+    // engine's cache lock.
+    await closeCore()
     logger.info('✅ Cleanup completed successfully')
   } catch (error) {
     logger.error('❌ Error during shutdown cleanup:', error)
