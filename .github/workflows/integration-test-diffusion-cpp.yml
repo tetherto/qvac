@@ -213,7 +213,7 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -240,7 +240,7 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -292,6 +292,8 @@ jobs:
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         shell: bash
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ env.WORKDIR }}/.npmrc
         run: |
           PACKAGE="${{ inputs.prebuild_package }}"
           echo "Downloading $PACKAGE from npm..."
@@ -318,6 +320,8 @@ jobs:
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         shell: powershell
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ env.WORKDIR }}/.npmrc
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
 
