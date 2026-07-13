@@ -14,6 +14,11 @@ const path = require('path')
 // (Adreno android). No CoreML/DirectML path. CUDA is disabled in the build.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
+// ggml active-backend ids reported by the addon, mapped to the backend label.
+// Used to recover the REAL backend a mobile device selected at runtime rather
+// than guessing it from the platform family (Adreno=OpenCL vs Mali=Vulkan).
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
+
 function parseArgs (argv) {
   const args = {
     input: '',
@@ -111,6 +116,15 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   }
 }
 
+// Prefer the observed ggml backend id (per-device ground truth) over the
+// platform-family guess. Falls back to normalizeBackend when no id was reported.
+function resolveMobileBackend (backendId, platformName, useGPU) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU)
+}
+
 function num (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
 }
@@ -195,12 +209,13 @@ function normalizeMobileRecords (report, sourceFile) {
     const metrics = result.metrics || {}
     const key = `${modelTag}|${provider}`
     if (!byModelAndProvider.has(key)) {
-      byModelAndProvider.set(key, { modelTag, provider, tps: [], wallMs: [], rtf: [] })
+      byModelAndProvider.set(key, { modelTag, provider, tps: [], wallMs: [], rtf: [], backendId: null })
     }
     const group = byModelAndProvider.get(key)
     if (typeof metrics.tps === 'number') group.tps.push(metrics.tps)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
     if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    if (group.backendId === null && typeof metrics.backend_id === 'number') group.backendId = metrics.backend_id
   }
 
   const records = []
@@ -213,7 +228,7 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: normalizeBackend(platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
       meanTps: mean(values.tps),
       stddevTps: stddev(values.tps),
       p50Tps: percentile(values.tps, 50),
