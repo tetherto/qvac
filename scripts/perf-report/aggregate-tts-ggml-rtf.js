@@ -3,11 +3,9 @@
 
 /**
  * Aggregate GGML TTS RTF benchmark artifacts (desktop + mobile + manual) into
- * a single findings table (Markdown + JSON). Mirrors the ONNX TTS aggregator
- * (aggregate-onnx-tts-rtf.js) so the two TTS backends share table conventions
- * and reviewers can compare them side-by-side.
+ * a single findings table (Markdown + JSON).
  *
- * GGML differences vs ONNX:
+ * GGML backend notes:
  *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl
  *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
  *     opencl (Adreno android, manual / off the default cascade)
