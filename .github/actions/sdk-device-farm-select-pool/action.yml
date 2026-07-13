@@ -118,13 +118,16 @@ runs:
         # on any failure/denial. Priority: HIGHLY_AVAILABLE > AVAILABLE > BUSY >
         # TEMPORARY_NOT_AVAILABLE.
         get_availability() {
-          local arns_json="$1" filters availabilities err_file
+          local arns_json="$1" filters devices err_file
           err_file="$(mktemp)"
           filters=$(jq -cn --argjson v "$arns_json" '[{attribute: "ARN", operator: "IN", values: $v}]')
-          if availabilities=$(aws devicefarm list-devices --filters "$filters" --query 'devices[].availability' --output json 2>"$err_file"); then
+          if devices=$(aws devicefarm list-devices --filters "$filters" --query 'devices[].{name: name, os: os, availability: availability}' --output json 2>"$err_file"); then
             rm -f "$err_file"
-            echo "$availabilities" | jq -r '
-              map(select(. != null)) as $a
+            # Per-device breakdown to the log (stderr) so the raw Device Farm
+            # response is visible; stdout stays the single reduced token.
+            echo "$devices" | jq -r '.[] | "      \u2022 " + (.name // "?") + " (os " + (.os // "?") + "): " + (.availability // "null")' >&2
+            echo "$devices" | jq -r '
+              [.[].availability] | map(select(. != null)) as $a
               | if   ($a | index("HIGHLY_AVAILABLE"))        != null then "HIGHLY_AVAILABLE"
                 elif ($a | index("AVAILABLE"))               != null then "AVAILABLE"
                 elif ($a | index("BUSY"))                    != null then "BUSY"
