@@ -17,7 +17,7 @@ import { registry } from './registry'
 import type { HandlerEntry } from './handlers/types'
 import { handlerSupportsProgress, selectHandler } from './selection'
 import { assertLifecycleAllowed } from './runtime/runtime-lifecycle'
-import { resolveModelConfig, setConfig, setRuntimeContext } from './runtime/state'
+import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from './runtime/state'
 import { initialize, close as closeEngine } from './runtime/lifecycle'
 import { getAllPlugins } from './plugins'
 import { resolveConfig } from './config/resolve-config'
@@ -69,12 +69,19 @@ function applyLoggerSettings(config: QvacConfig): void {
 }
 
 async function initializeConfig(): Promise<void> {
-  const config = await resolveConfig()
-  if (config) {
-    applyLoggerSettings(config)
-    setConfig(config)
-    logger.info('📦 Initializing QVAC config')
+  // A host may have injected config already (the SDK worker pushes it over RPC
+  // before the first request). Only resolve from disk when it hasn't — a second
+  // `setConfig` would throw `ConfigAlreadySetError`.
+  if (!isConfigSet()) {
+    const config = await resolveConfig()
+    if (config) {
+      applyLoggerSettings(config)
+      setConfig(config)
+      logger.info('📦 Initializing QVAC config')
+    }
   }
+  // First-write-wins: an injected runtime context is preserved; this bare default
+  // only applies to standalone Bare, where nothing was injected.
   const runtimeContext: RuntimeContext = {
     runtime: 'bare',
     platform: os.platform()

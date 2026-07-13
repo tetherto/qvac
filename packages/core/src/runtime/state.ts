@@ -126,6 +126,15 @@ export function getConfig(): QvacConfig {
   return { ...configRegistry }
 }
 
+/**
+ * Whether config has been set (injected by a host or resolved from disk). A host
+ * that pushes config uses this to keep `initializeConfig` from resolving again —
+ * a second `setConfig` would throw {@link ConfigAlreadySetError}.
+ */
+export function isConfigSet(): boolean {
+  return configIsSet
+}
+
 function getDefaultCacheDir() {
   return getQvacPath('models')
 }
