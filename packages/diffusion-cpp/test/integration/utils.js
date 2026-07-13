@@ -3,6 +3,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
+const crypto = require('bare-crypto')
 
 // Lazily loaded: requiring addonLogging pulls in the native binding, which
 // isn't needed for model download/integrity helpers and lets those run in
@@ -293,23 +294,10 @@ function entryHasIntegrity(entry) {
   return hasSha || hasBytes
 }
 
-// Streaming sha256 via bare-crypto (matches the pattern used in vla-ggml
-// tests). Returns null when bare-crypto is unavailable so callers can decide
-// how to degrade.
+// Streaming sha256 via the package's direct bare-crypto dependency.
 async function sha256File(filePath) {
-  let crypto
-  try {
-    crypto = require('bare-crypto')
-  } catch (_) {
-    return null
-  }
   return await new Promise((resolve, reject) => {
-    let hash
-    try {
-      hash = crypto.createHash('sha256')
-    } catch (_) {
-      return resolve(null)
-    }
+    const hash = crypto.createHash('sha256')
     const stream = fs.createReadStream(filePath)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
@@ -320,7 +308,7 @@ async function sha256File(filePath) {
 // Verifies a model file against a manifest entry. Byte-length is checked first
 // (cheap) so a size mismatch fails fast before hashing a multi-GB file.
 // { ok: true } when it passes (or when no integrity value is pinned yet).
-async function verifyModelFile(filePath, entry) {
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
   let stats
   try {
     stats = fs.statSync(filePath)
@@ -335,14 +323,14 @@ async function verifyModelFile(filePath, entry) {
 
   const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
   if (hasSha) {
-    const got = await sha256File(filePath)
-    if (got === null) {
-      // bare-crypto missing: we cannot honour the pinned hash. Degrade to a
-      // loud warning rather than looping forever on re-download.
-      console.log(
-        '[download] WARNING: sha256 pinned for this model but bare-crypto is unavailable — integrity NOT verified'
-      )
-      return { ok: true, unverified: true }
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
     }
     if (got !== entry.sha256.toLowerCase()) {
       return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }

@@ -67,6 +67,26 @@ test('bare-crypto sha256 is available in this runtime', async function (t) {
   }
 })
 
+test('pinned sha256 verification fails closed when hashing cannot complete', async function (t) {
+  const dir = mkTmpDir()
+  try {
+    const p = path.join(dir, 'x')
+    fs.writeFileSync(p, GOOD)
+    const entry = { sha256: '0'.repeat(64), bytes: GOOD.length }
+    const missing = await verifyModelFile(p, entry, function () {
+      return Promise.resolve(null)
+    })
+    t.absent(missing.ok, 'missing digest is a verification failure')
+    const failed = await verifyModelFile(p, entry, function () {
+      return Promise.reject(new Error('hash unavailable'))
+    })
+    t.absent(failed.ok, 'hashing error is a verification failure')
+    t.ok(/hash unavailable/.test(failed.reason), 'hashing error is preserved')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('correct cached file verifies and performs NO download', async function (t) {
   const name = 'model.bin'
   const { manifest } = await buildManifest(name)
@@ -217,10 +237,31 @@ test('verifyModelFile flags size before hashing (fail-fast)', async function (t)
 test('integration manifest pins integrity for every model', function (t) {
   const manifestPath = path.resolve(__dirname, '../integration/models.manifest.json')
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  t.is(
+    Object.keys(manifest).sort().join(','),
+    'cacheEpoch,models',
+    'top level contains only cache-key-bearing fields'
+  )
+  t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    t.is(
+      Object.keys(entry).sort().join(','),
+      'bytes,sha256,urls',
+      `${name} contains only cache-key-bearing fields`
+    )
+    const hasImmutableUrls =
+      Array.isArray(entry.urls) &&
+      entry.urls.length > 0 &&
+      entry.urls.every(
+        (url) =>
+          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//i.test(url) ||
+          /^https:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\/[^/]+\//i.test(url)
+      )
     const hasBytes = Number.isInteger(entry.bytes) && entry.bytes > 0
     const hasSha = typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)
-    t.ok(hasBytes || hasSha, `${name} pins bytes or sha256`)
+    t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
+    t.ok(hasBytes, `${name} pins bytes`)
+    t.ok(hasSha, `${name} pins sha256`)
   }
 })
