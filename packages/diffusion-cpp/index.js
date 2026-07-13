@@ -12,7 +12,8 @@ const COMPANION_FILE_KEYS = [
   'llm',
   'vae',
   'esrgan',
-  'highNoiseDiffusionModel'
+  'highNoiseDiffusionModel',
+  'uncondModel'
 ]
 
 function assertAbsolute(key, value) {
@@ -73,7 +74,7 @@ function normalizeUpscaleRepeats(options) {
 
 /**
  * Text-to-image and image-to-image generation using stable-diffusion.cpp.
- * Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2 [klein].
+ * Supports SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein], and Ideogram 4.
  */
 class ImgStableDiffusion {
   /**
@@ -83,10 +84,12 @@ class ImgStableDiffusion {
    * @param {string} [args.files.clipL] - CLIP-L text encoder (SD3, absolute path)
    * @param {string} [args.files.clipG] - CLIP-G text encoder (SDXL / SD3, absolute path)
    * @param {string} [args.files.t5Xxl] - T5-XXL text encoder (SD3, absolute path)
-   * @param {string} [args.files.llm] - LLM text encoder (FLUX.2 klein, absolute path)
+   * @param {string} [args.files.llm] - LLM text encoder (FLUX.2 klein → Qwen3, Ideogram 4 → Qwen3-VL, absolute path)
    * @param {string} [args.files.vae] - VAE file (absolute path)
    * @param {string} [args.files.esrgan] - ESRGAN upscaler model (absolute path)
    * @param {string} [args.files.highNoiseDiffusionModel] - Wan 2.2 high-noise expert (absolute path); omit for all other models
+   * @param {string} [args.files.uncondModel] - **Ideogram 4 only**. Unconditional (CFG) diffusion model
+   *   (absolute path), loaded alongside `files.model` so real classifier-free guidance works. Omit for all other models.
    * @param {object} [args.config] - SD context configuration (threads, device, type, etc.).
    *   Optional — when omitted, the addon forwards an empty config and the C++ layer falls
    *   back to stable-diffusion.cpp defaults for every parameter.
@@ -141,6 +144,7 @@ class ImgStableDiffusion {
       path: isSplitLayout ? '' : this._files.model,
       diffusionModelPath: isSplitLayout ? this._files.model : '',
       highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
+      uncondDiffusionModelPath: this._files.uncondModel || '',
       clipLPath: this._files.clipL || '',
       clipGPath: this._files.clipG || '',
       t5XxlPath: this._files.t5Xxl || '',

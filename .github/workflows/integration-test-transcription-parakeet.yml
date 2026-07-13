@@ -319,11 +319,15 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
-          # Desktop quant sweep: f16 + q8_0 + q4_0 for all four model types.
+          # Desktop quant sweep: f16 + q8_0 + q4_0 for all five model types.
           # CPU-only runners run CPU legs; GPU runners additionally run the
           # Vulkan GPU legs. The matrix is generated programmatically so the
           # quant x model-type x backend product stays readable and consistent.
-          MODEL_TYPES="tdt ctc eou sortformer"
+          # Only the q8_0 sortformer-streaming (v2.1) GGUF is pre-staged (see
+          # test/integration/models.manifest.json); its f16 / q4_0 legs resolve
+          # from the QVAC registry at runtime via ensureGgufForType, and the
+          # matrix runner tolerates any single entry that can't be fetched.
+          MODEL_TYPES="tdt ctc eou sortformer sortformer-streaming"
           QUANTS="f16 q8_0 q4_0"
           # macOS GPU legs use the Metal backend; other platforms use Vulkan.
           if [ "${{ matrix.platform }}" = "darwin" ]; then

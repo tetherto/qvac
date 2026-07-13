@@ -5,6 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
+const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -65,7 +66,11 @@ try {
             encoder_time_ms: null,
             decoder_time_ms: null,
             audio_duration_ms: null,
-            total_time_ms: null
+            total_time_ms: null,
+            avg_rss_mb: null,
+            peak_rss_mb: null,
+            rss_after_load_mb: null,
+            reclaimed_mb: null
           }, metrics),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
@@ -146,6 +151,10 @@ function _scheduleReportWrite () {
   process.on('exit', _flushPerfReport)
 }
 
+function roundToTwo (value) {
+  return typeof value === 'number' && Number.isFinite(value) ? roundTo(value, 2) : null
+}
+
 /**
  * Record a parakeet inference stats row through the shared perf reporter.
  *
@@ -156,8 +165,11 @@ function _scheduleReportWrite () {
  *                         { realTimeFactor, totalTime, audioDurationMs,
  *                           tokensPerSecond, encoderMs, decoderMs,
  *                           totalWallMs, ... }
- * @param {Object} [extra] - Optional { wallMs, output, executionProvider }
- *                            overrides.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider,
+ *                            avgRssMb, peakRssMb, rssAfterLoadMb, reclaimedMb }
+ *                            overrides. rssAfterLoadMb lets the aggregator floor
+ *                            the mobile peak at the post-activation footprint,
+ *                            matching the desktop peak floor.
  */
 function recordParakeetStats (label, stats, extra) {
   if (!stats || typeof stats !== 'object') return
@@ -199,7 +211,11 @@ function recordParakeetStats (label, stats, extra) {
     encoder_time_ms: encoderMs,
     decoder_time_ms: decoderMs,
     audio_duration_ms: audioMs,
-    total_time_ms: totalTimeMs
+    total_time_ms: totalTimeMs,
+    avg_rss_mb: roundToTwo(extra && extra.avgRssMb),
+    peak_rss_mb: roundToTwo(extra && extra.peakRssMb),
+    rss_after_load_mb: roundToTwo(extra && extra.rssAfterLoadMb),
+    reclaimed_mb: roundToTwo(extra && extra.reclaimedMb)
   }, {
     execution_provider: ep,
     output: extra && extra.output ? String(extra.output) : null
@@ -936,6 +952,28 @@ const MODEL_CONFIGS = {
   }
 }
 
+// Kebab-case tokens accepted by the benchmark harness / mobile-perf runner that
+// map onto a camelCase MODEL_CONFIGS key. Lets the RTF matrix and mobile perf
+// tests refer to the streaming Sortformer as `sortformer-streaming` (readable in
+// reports and distinct from v1 `sortformer`) while the config key stays
+// `sortformerStreaming`.
+const MODEL_TYPE_ALIASES = {
+  'sortformer-streaming': 'sortformerStreaming'
+}
+
+// Resolve a caller-facing model-type token (which may be a kebab alias) to the
+// canonical MODEL_CONFIGS key. Everything downstream — config lookup, the
+// QVAC_TEST_GGUF_<TYPE> env-key, and the remediation messages — keys off the
+// canonical form so the env var we recommend is always the one the resolver
+// actually reads.
+function canonicalModelType (modelType) {
+  return MODEL_TYPE_ALIASES[modelType] || modelType
+}
+
+function testGgufEnvKey (modelType) {
+  return `QVAC_TEST_GGUF_${canonicalModelType(modelType).toUpperCase()}`
+}
+
 // QVAC model registry fetch. Used as the final fallback in
 // `ensureGgufForType` when no local cache / asset bundle / external
 // dir has the model. Mirrors the pattern in
@@ -1093,12 +1131,13 @@ function quantFromGgufName (ggufPathOrName) {
  * @returns {Promise<string|null>} GGUF file path, or null if unavailable
  */
 async function ensureGgufForType (modelType, override = null, options = {}) {
-  const cfg = MODEL_CONFIGS[modelType]
+  const canonicalType = canonicalModelType(modelType)
+  const cfg = MODEL_CONFIGS[canonicalType]
   if (!cfg) return null
 
   if (override && fs.existsSync(override)) return override
 
-  const envKey = `QVAC_TEST_GGUF_${modelType.toUpperCase()}`
+  const envKey = testGgufEnvKey(modelType)
   if (process.env && process.env[envKey] && fs.existsSync(process.env[envKey])) {
     return process.env[envKey]
   }
@@ -1199,7 +1238,7 @@ async function ensureGgufForType (modelType, override = null, options = {}) {
     return cachePath
   }
 
-  console.log(`  ${modelType.toUpperCase()} GGUF not available. Tried ` +
+  console.log(`  ${canonicalType.toUpperCase()} GGUF not available. Tried ` +
               `QVAC registry (${preferred.registryPath || 'no path'}). ` +
               'Run `npm run download-models:registry` or `npm run setup-models`, ' +
               `or set ${envKey} / QVAC_TEST_GGUF_DIR to a directory of GGUFs.`)
@@ -1241,7 +1280,7 @@ async function loadGgufOrSkip (t, modelType = 'tdt', options = {}) {
   const remediation = 'Run `npm run download-models:registry` (fetches ' +
     'pre-built GGUFs from the QVAC registry) or `npm run setup-models` ' +
     '(downloads .nemo from HuggingFace and converts locally), or set ' +
-    `QVAC_TEST_GGUF_${modelType.toUpperCase()}=/path/to/model.gguf ` +
+    `${testGgufEnvKey(modelType)}=/path/to/model.gguf ` +
     'or QVAC_TEST_GGUF_DIR=/path/to/models. ' +
     'In CI / on mobile the test runtime fetches from the registry ' +
     'automatically, so a failure here means registry access is broken ' +
@@ -1252,7 +1291,7 @@ async function loadGgufOrSkip (t, modelType = 'tdt', options = {}) {
     return null
   }
 
-  t.fail(`No ${modelType.toUpperCase()} GGUF available. ${remediation}`)
+  t.fail(`No ${canonicalModelType(modelType).toUpperCase()} GGUF available. ${remediation}`)
   return null
 }
 
@@ -1292,10 +1331,13 @@ module.exports = {
   loadGgufOrSkip,
   readFileChunked,
   getNamedPathsConfig,
+  canonicalModelType,
+  testGgufEnvKey,
   isMobile,
   platform,
   arch,
   MODEL_CONFIGS,
+  MODEL_TYPE_ALIASES,
   recordParakeetStats,
   flushParakeetPerfReport: _flushPerfReport
 }
