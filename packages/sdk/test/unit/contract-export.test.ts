@@ -283,7 +283,11 @@ test('every registered public constant is merged into schema.json as its own $de
   for (const [name, schema] of Object.entries(constantsRegistry)) {
     const def = defs[`constants.${name}`]
     t.is(def?.title, name, `${name} def is titled after the registry key`)
-    t.alike(def?.enum, Object.values(schema.enum), `${name} enum values match the registered schema`)
+    t.alike(
+      def?.enum,
+      Object.values(schema.enum),
+      `${name} enum values match the registered schema`
+    )
     t.alike(
       def?.['x-enum-varnames'],
       Object.keys(schema.enum),

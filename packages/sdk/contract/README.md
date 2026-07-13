@@ -6,7 +6,7 @@ these artifacts.
 
 - `schema.json` — JSON Schema (draft 2020-12) for every request and response
   wire type, plus every public constant registered in `@/schemas/constants-
-  registry` (`ModelType`, `ToolsMode`, `Verbosity`, `PluginId`,
+registry` (`ModelType`, `ToolsMode`, `Verbosity`, `PluginId`,
   `SupportedAudioFormat`) as its own `constants.<Name>` def, tagged with
   `x-enum-varnames` so codegen preserves the original key names (plain JSON
   Schema `enum:` only carries values). Requests use the schema input shape,
