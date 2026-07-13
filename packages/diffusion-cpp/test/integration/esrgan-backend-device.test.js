@@ -19,7 +19,8 @@ const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const skipGpuBackendDeviceSubtest = noGpu || isMobile
 
 const ESRGAN_MODEL = {
-  name: 'RealESRGAN_x4plus_anime_6B.pth'
+  name: 'RealESRGAN_x4plus_anime_6B.pth',
+  url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
 }
 
 // Valid 16×16 RGB PNG — backendDevice assertions only; keep inputs tiny for
@@ -63,7 +64,8 @@ function queryExpectedBackendDevice(configDevice) {
 async function ensureEsrganModelPath() {
   logPhase('before-model-download', 'n/a')
   const [esrganName, modelDir] = await ensureModel({
-    modelName: ESRGAN_MODEL.name
+    modelName: ESRGAN_MODEL.name,
+    downloadUrl: ESRGAN_MODEL.url
   })
   const esrganPath = path.join(modelDir, esrganName)
   logPhase('after-model-download', 'n/a', null, esrganPath)

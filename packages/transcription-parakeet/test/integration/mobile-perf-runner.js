@@ -102,9 +102,15 @@ function loadSampleAudio () {
 
 async function runMobilePerfCase (t, opts) {
   if (!opts.quant) {
-    await runMobilePerfCase(t, { ...opts, quant: 'q4_0' })
-    await runMobilePerfCase(t, { ...opts, quant: 'q8_0' })
-    await runMobilePerfCase(t, { ...opts, quant: 'f16' })
+    // Sweep the requested quants (default: the full q4_0/q8_0/f16 set). Callers
+    // can narrow it — e.g. sortformer-streaming (v2.1) only publishes q4_0/q8_0
+    // for mobile, so its perf tests pass quants: ['q4_0', 'q8_0'].
+    const quants = Array.isArray(opts.quants) && opts.quants.length > 0
+      ? opts.quants
+      : ['q4_0', 'q8_0', 'f16']
+    for (const quant of quants) {
+      await runMobilePerfCase(t, { ...opts, quant })
+    }
     return
   }
 

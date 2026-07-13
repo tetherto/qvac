@@ -132,15 +132,25 @@ TEST(SdCtxHandlers_Threads, ValidIntegerAndInvalidThrows) {
 }
 
 TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
+  EXPECT_FALSE(SdCtxConfig{}.vaeDecodeOnly);
   EXPECT_TRUE(applyOne("mmap", "true").mmap);
   EXPECT_TRUE(applyOne("offload_to_cpu", "1").offloadToCpu);
   EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
   EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
+  EXPECT_TRUE(applyOne("vae_decode_only", "true").vaeDecodeOnly);
 
   SdCtxConfig cfg;
   EXPECT_THROW(
       applySdCtxHandlers(
           cfg, std::unordered_map<std::string, std::string>{{"mmap", "maybe"}}),
+      StatusError);
+
+  SdCtxConfig decodeOnlyCfg;
+  EXPECT_THROW(
+      applySdCtxHandlers(
+          decodeOnlyCfg,
+          std::unordered_map<std::string, std::string>{
+              {"vae_decode_only", "maybe"}}),
       StatusError);
 }
 

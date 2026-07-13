@@ -20,8 +20,8 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
-    "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
-    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "lint": "prettier --check \"test/**/*.js\" \"*.js\" \"lib/*.js\" && lunte \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/**/*.test.js",
@@ -96,7 +96,9 @@
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
     "husky": "^9.1.7",
-    "standard": "^17.0.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
