@@ -94,17 +94,33 @@ runs:
         # Resolve a concrete device ARN from a pool's rules. Pools defined by an
         # explicit device ARN expose it directly; attribute-based pools
         # (MODEL/OS filters) do not, in which case we skip the availability hint.
+        # AWS errors are surfaced (not swallowed) so a misconfigured pool or an
+        # unexpected rule shape is diagnosable from the job log.
         resolve_device_arn() {
-          local pool_arn="$1" rules
-          rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>/dev/null) || return 0
+          local pool_arn="$1" rules err_file
+          err_file="$(mktemp)"
+          if ! rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>"$err_file"); then
+            echo "    get-device-pool failed: $(tr '\n' ' ' <"$err_file")" >&2
+            rm -f "$err_file"
+            return 0
+          fi
+          rm -f "$err_file"
           echo "$rules" | jq -r '.. | strings' 2>/dev/null \
             | grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' \
             | head -n1 || true
         }
 
         get_availability() {
-          local device_arn="$1"
-          aws devicefarm get-device --arn "$device_arn" --query 'device.availability' --output text 2>/dev/null || echo "UNKNOWN"
+          local device_arn="$1" out err_file
+          err_file="$(mktemp)"
+          if out=$(aws devicefarm get-device --arn "$device_arn" --query 'device.availability' --output text 2>"$err_file"); then
+            rm -f "$err_file"
+            echo "$out"
+          else
+            echo "    get-device failed: $(tr '\n' ' ' <"$err_file")" >&2
+            rm -f "$err_file"
+            echo "UNKNOWN"
+          fi
         }
 
         COUNT=$(echo "$POOLS" | jq 'length')
@@ -131,9 +147,10 @@ runs:
             echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
             continue
           fi
+          echo "  - '$NAME': device=$DEVICE_ARN"
 
           AVAIL=$(get_availability "$DEVICE_ARN")
-          echo "  - '$NAME': $AVAIL"
+          echo "  - '$NAME': availability=$AVAIL"
 
           # HIGHLY_AVAILABLE is the strongest hint — take it immediately.
           if [ "$AVAIL" = "HIGHLY_AVAILABLE" ]; then
