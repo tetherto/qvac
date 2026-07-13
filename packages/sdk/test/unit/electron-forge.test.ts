@@ -1,7 +1,7 @@
 import test from 'brittle'
 import path from 'path'
 
-const PLUGIN_PATH = path.join(__dirname, '../../electron-forge/index.cjs')
+const PLUGIN_PATH = path.join(__dirname, '../../src/electron-forge/index.cjs')
 
 const {
   createIgnore,

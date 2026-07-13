@@ -120,11 +120,11 @@
       "types": "./dist/src/schemas/plugin.d.ts",
       "import": "./dist/src/schemas/plugin.js"
     },
-    "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./expo-plugin": "./dist/src/expo/plugins/index.js",
     "./electron-forge": {
-      "require": "./electron-forge/index.cjs",
-      "import": "./electron-forge/index.cjs",
-      "default": "./electron-forge/index.cjs"
+      "require": "./src/electron-forge/index.cjs",
+      "import": "./src/electron-forge/index.cjs",
+      "default": "./src/electron-forge/index.cjs"
     },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
@@ -137,15 +137,15 @@
       "import": "./dist/src/logging/index.js"
     },
     "./commands": {
-      "types": "./dist/commands/index.d.ts",
-      "import": "./dist/commands/index.js"
+      "types": "./dist/src/commands/index.d.ts",
+      "import": "./dist/src/commands/index.js"
     },
     "./models": {
       "types": "./dist/src/models/registry/index.d.ts",
       "import": "./dist/src/models/registry/index.js",
       "require": "./dist/src/models/registry/index.js"
     },
-    "./pear-pre": "./dist/pear/pre.js"
+    "./pear-pre": "./dist/src/pear/pre.js"
   },
   "imports": {
     "#rpc": {
@@ -155,14 +155,14 @@
   },
   "expo": {
     "plugins": [
-      "./dist/expo/plugins/index.js"
+      "./dist/src/expo/plugins/index.js"
     ]
   },
   "files": [
     "bare-imports.json",
     "dist/**/*",
-    "electron-forge/**/*",
-    "expo/plugins/patches/**/*",
+    "src/electron-forge/**/*",
+    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -187,7 +187,7 @@
     "build:worker": "tsc --project tsconfig.worker.json && npm run postcompile:aliases",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases && npm run build:worker",
     "build:pack": "bun run build && bun pm pack --destination dist/",
-    "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
+    "watch": "nodemon --watch src --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:whispercpp": "cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm && cp -r node_modules/@qvac/transcription-whispercpp/prebuilds/android-arm64 node_modules/@qvac/transcription-whispercpp/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",
@@ -218,14 +218,11 @@
     "@qvac/translation-nmtcpp": "^7.2.2",
     "@qvac/tts-ggml": "^0.4.2",
     "@qvac/vla-ggml": "^0.11.2",
-    "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
-    "bare-fetch": "^3.0.1",
     "bare-fs": "^4.5.1",
     "bare-net": "^2.3.2",
     "bare-os": "^3.6.2",
-    "bare-pack": "^2.0.1",
     "bare-path": "^3.0.1",
     "bare-rpc": "^1.3.2",
     "bare-runtime": "^1.30.3",
@@ -252,7 +249,7 @@
     "@types/node": "^24.2.1",
     "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
-    "bare-process": "^4.4.1",
+    "bare-pack": "^2.0.1",
     "bare-readline": "^1.2.0",
     "bare-stdio": "^1.0.2",
     "bare-subprocess": "^6.1.0",

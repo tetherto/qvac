@@ -123,7 +123,7 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
     return
   }
 
-  const patchesDir = path.join(qvacSdkPath, 'expo', 'plugins', 'patches')
+  const patchesDir = path.join(qvacSdkPath, 'src', 'expo', 'plugins', 'patches')
   if (!fs.existsSync(patchesDir)) {
     console.log(`⚠️ QVAC: patches directory not found (${patchesDir}), skipping linker patch`)
     return

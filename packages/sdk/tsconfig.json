@@ -6,7 +6,7 @@
     "target": "ES2022",
     "module": "ES2022",
     "types": ["node"],
-    "typeRoots": ["./types", "./node_modules/@types"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "rootDir": ".",
@@ -14,7 +14,7 @@
     "paths": {
       "@qvac/sdk": ["./src/index.ts"],
       "@/*": ["./src/*", "./*"],
-      "bare-buffer": ["./types/bare-buffer.d.ts"]
+      "bare-buffer": ["./src/types/bare-buffer.d.ts"]
     },
     "outDir": "./dist",
     "declaration": true,
