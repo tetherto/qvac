@@ -91,37 +91,45 @@ runs:
         # Farm queues the run until a unit frees up, and wait-device-farm-running
         # is the real readiness/timeout arbiter.
 
-        # Resolve a concrete device ARN from a pool's rules (GetDevicePool).
-        # Pools defined by an explicit device ARN expose it directly;
-        # attribute-based pools (MODEL/OS filters) do not, in which case the
-        # availability hint is skipped. AWS errors are surfaced, not swallowed.
-        resolve_device_arn() {
+        # Resolve the device ARNs referenced by a pool's rules (GetDevicePool),
+        # returned as a compact JSON array of strings. Pools defined by explicit
+        # device ARNs expose them directly; attribute-based pools (MODEL/OS
+        # filters) do not, yielding "[]" so the availability hint is skipped.
+        # AWS errors are surfaced, not swallowed.
+        resolve_device_arns() {
           local pool_arn="$1" rules err_file
           err_file="$(mktemp)"
           if ! rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>"$err_file"); then
             echo "    get-device-pool failed: $(tr '\n' ' ' <"$err_file")" >&2
             rm -f "$err_file"
+            echo "[]"
             return 0
           fi
           rm -f "$err_file"
           echo "$rules" | jq -r '.. | strings' 2>/dev/null \
-            | grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' \
-            | head -n1 || true
+            | { grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' || true; } \
+            | sort -u \
+            | jq -Rsc 'split("\n") | map(select(length > 0))'
         }
 
-        # Read a device's availability via ListDevices (the OIDC role is granted
-        # ListDevices but not GetDevice). Returns UNKNOWN on any failure/denial.
+        # Best availability across a pool's device ARNs via ListDevices (the OIDC
+        # role is granted ListDevices but not GetDevice). A pool is considered
+        # available if ANY of its devices is; returns a single token, or UNKNOWN
+        # on any failure/denial. Priority: HIGHLY_AVAILABLE > AVAILABLE > BUSY >
+        # TEMPORARY_NOT_AVAILABLE.
         get_availability() {
-          local device_arn="$1" out err_file filters
+          local arns_json="$1" filters availabilities err_file
           err_file="$(mktemp)"
-          filters=$(jq -cn --arg a "$device_arn" '[{attribute:"ARN",operator:"EQUALS",values:[$a]}]')
-          if out=$(aws devicefarm list-devices --filters "$filters" --query 'devices[0].availability' --output text 2>"$err_file"); then
+          filters=$(jq -cn --argjson v "$arns_json" '[{attribute: "ARN", operator: "IN", values: $v}]')
+          if availabilities=$(aws devicefarm list-devices --filters "$filters" --query 'devices[].availability' --output json 2>"$err_file"); then
             rm -f "$err_file"
-            if [ -n "$out" ] && [ "$out" != "None" ]; then
-              echo "$out"
-            else
-              echo "UNKNOWN"
-            fi
+            echo "$availabilities" | jq -r '
+              map(select(. != null)) as $a
+              | if   ($a | index("HIGHLY_AVAILABLE"))        != null then "HIGHLY_AVAILABLE"
+                elif ($a | index("AVAILABLE"))               != null then "AVAILABLE"
+                elif ($a | index("BUSY"))                    != null then "BUSY"
+                elif ($a | index("TEMPORARY_NOT_AVAILABLE")) != null then "TEMPORARY_NOT_AVAILABLE"
+                else "UNKNOWN" end'
           else
             echo "    list-devices failed: $(tr '\n' ' ' <"$err_file")" >&2
             rm -f "$err_file"
@@ -148,14 +156,14 @@ runs:
             FALLBACK_IDX="$i"
           fi
 
-          DEVICE_ARN=$(resolve_device_arn "$ARN" || true)
-          if [ -z "$DEVICE_ARN" ]; then
+          DEVICE_ARNS=$(resolve_device_arns "$ARN")
+          if [ "$(echo "$DEVICE_ARNS" | jq 'length')" -eq 0 ]; then
             echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
             continue
           fi
 
-          AVAIL=$(get_availability "$DEVICE_ARN")
-          echo "  - '$NAME': availability=$AVAIL (device=$DEVICE_ARN)"
+          AVAIL=$(get_availability "$DEVICE_ARNS")
+          echo "  - '$NAME': availability=$AVAIL (devices=$(echo "$DEVICE_ARNS" | jq 'length'))"
 
           # HIGHLY_AVAILABLE is the strongest hint — take it immediately.
           if [ "$AVAIL" = "HIGHLY_AVAILABLE" ]; then
