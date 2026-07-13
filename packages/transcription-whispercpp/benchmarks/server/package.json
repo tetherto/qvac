@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "start": "bare index.js"
   },
   "files": [
@@ -14,7 +14,9 @@
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/transcription-whispercpp/issues",
   "devDependencies": {
-    "standard": "^17.1.2"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
     "@qvac/transcription-whispercpp": "^0.2.1",
