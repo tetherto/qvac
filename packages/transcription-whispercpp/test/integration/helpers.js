@@ -5,6 +5,7 @@ const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
+const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -56,7 +57,10 @@ try {
             whisper_encode_time_ms: null,
             whisper_decode_time_ms: null,
             audio_duration_ms: null,
-            total_time_ms: null
+            total_time_ms: null,
+            avg_rss_mb: null,
+            peak_rss_mb: null,
+            reclaimed_mb: null
           }, metrics),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
@@ -137,6 +141,10 @@ function _scheduleReportWrite () {
   process.on('exit', _flushPerfReport)
 }
 
+function roundToTwo (value) {
+  return typeof value === 'number' && Number.isFinite(value) ? roundTo(value, 2) : null
+}
+
 /**
  * Record a whisper inference stats row through the shared perf reporter.
  *
@@ -147,8 +155,8 @@ function _scheduleReportWrite () {
  *                         { realTimeFactor, totalTime, audioDurationMs,
  *                           tokensPerSecond, whisperEncodeMs, whisperDecodeMs,
  *                           totalWallMs, ... }
- * @param {Object} [extra] - Optional { wallMs, output, executionProvider }
- *                            overrides.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider,
+ *                            avgRssMb, peakRssMb, reclaimedMb } overrides.
  */
 function recordWhisperStats (label, stats, extra) {
   if (!stats || typeof stats !== 'object') return
@@ -173,7 +181,10 @@ function recordWhisperStats (label, stats, extra) {
     whisper_encode_time_ms: encodeMs,
     whisper_decode_time_ms: decodeMs,
     audio_duration_ms: audioMs,
-    total_time_ms: totalTimeMs
+    total_time_ms: totalTimeMs,
+    avg_rss_mb: roundToTwo(extra && extra.avgRssMb),
+    peak_rss_mb: roundToTwo(extra && extra.peakRssMb),
+    reclaimed_mb: roundToTwo(extra && extra.reclaimedMb)
   }, {
     execution_provider: ep,
     output: extra && extra.output ? String(extra.output) : null

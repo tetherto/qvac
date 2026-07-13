@@ -18,19 +18,13 @@ const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-  0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x40,
-  0x00, 0x00, 0x00, 0x30
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x30
 ])
 
-const FAKE_JPEG = new Uint8Array([
-  0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 0x08,
-  0x00, 0x60, 0x00, 0x80
-])
+const FAKE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x60, 0x00, 0x80])
 
-function makeQuiet () {
+function makeQuiet() {
   return {
     error: () => {},
     warn: () => {},
@@ -39,7 +33,7 @@ function makeQuiet () {
   }
 }
 
-function makeRecording () {
+function makeRecording() {
   const events = { error: [], warn: [], info: [], debug: [] }
   return {
     events,
@@ -52,7 +46,7 @@ function makeRecording () {
   }
 }
 
-function makeWanModel ({ files, config, logger } = {}) {
+function makeWanModel({ files, config, logger } = {}) {
   return new VideoStableDiffusion({
     files: files || {
       model: FAKE_MODEL,
@@ -106,27 +100,30 @@ test('ctor | throws when files.model is a relative path', async (t) => {
 
 test('ctor | throws when files.t5Xxl is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, t5Xxl: 'umt5.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, t5Xxl: 'umt5.safetensors' }
+      }),
     /files\.t5Xxl must be an absolute path/
   )
 })
 
 test('ctor | throws when files.vae is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, vae: 'vae.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, vae: 'vae.safetensors' }
+      }),
     /files\.vae must be an absolute path/
   )
 })
 
 test('ctor | throws when files.highNoiseDiffusionModel is a relative path', async (t) => {
   await t.exception.all(
-    () => new VideoStableDiffusion({
-      files: { model: FAKE_MODEL, highNoiseDiffusionModel: 'high.safetensors' }
-    }),
+    () =>
+      new VideoStableDiffusion({
+        files: { model: FAKE_MODEL, highNoiseDiffusionModel: 'high.safetensors' }
+      }),
     /files\.highNoiseDiffusionModel must be an absolute path/
   )
 })
@@ -152,6 +149,35 @@ test('ctor | accepts a Wan 2.2 file set (with high-noise expert)', async (t) => 
     logger: makeQuiet()
   })
   t.is(m.getState().configLoaded, false)
+})
+
+test('load | passes native-required path fields as strings', async (t) => {
+  const m = makeWanModel()
+  let captured = null
+
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+
+  t.is(captured.path, '')
+  t.is(captured.diffusionModelPath, FAKE_MODEL)
+  t.is(captured.highNoiseDiffusionModelPath, '')
+  t.is(captured.uncondDiffusionModelPath, '')
+  t.is(captured.clipLPath, '')
+  t.is(captured.clipGPath, '')
+  t.is(captured.t5XxlPath, FAKE_T5XXL)
+  t.is(captured.llmPath, '')
+  t.is(captured.vaePath, FAKE_VAE)
+  t.is(captured.clipVisionPath, FAKE_CLIP_VISION)
+  t.is(captured.esrganPath, '')
+  t.is(captured.audioVaePath, '')
+  t.is(captured.embeddingsConnectorsPath, '')
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -222,10 +248,7 @@ test('run | suggests a nearby valid pair in the error message', async (t) => {
 test('run | width/height omitted is allowed (C++ defaults to 480x832)', async (t) => {
   const m = makeWanModel()
   // Validation passes; addon-not-loaded throws afterwards.
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi' }),
-    /Addon not initialized/
-  )
+  await t.exception.all(m.run({ mode: 'txt2vid', prompt: 'hi' }), /Addon not initialized/)
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -283,11 +306,30 @@ test('run | rejects null prompt', async (t) => {
 
 // 100x100 PNG header -- both axes off the multiple-of-16 grid.
 const OFFGRID_PNG = new Uint8Array([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-  0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x64, // width = 100
-  0x00, 0x00, 0x00, 0x64 // height = 100
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+  0x00,
+  0x00,
+  0x00,
+  0x0d,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x64, // width = 100
+  0x00,
+  0x00,
+  0x00,
+  0x64 // height = 100
 ])
 
 test('run | rejects off-grid init_image when width/height are implicit', async (t) => {
@@ -491,10 +533,7 @@ test('run | txt2vid rejects init_image', async (t) => {
 
 test('run | img2vid requires init_image', async (t) => {
   const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'img2vid', prompt: 'hi' }),
-    /img2vid requires init_image/
-  )
+  await t.exception.all(m.run({ mode: 'img2vid', prompt: 'hi' }), /img2vid requires init_image/)
 })
 
 // ─────────────────────────────────────────────────────────────────────

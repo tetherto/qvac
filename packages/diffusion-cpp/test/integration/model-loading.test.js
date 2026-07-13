@@ -19,17 +19,19 @@ const isMobile = platform === 'android' || platform === 'ios'
 // Windows Vulkan and mobile GPU backends are much slower; increase timeout so a
 // slow load/generation (or a retried large-model download) doesn't fail the test.
 const BASE_TIMEOUT = 600_000
-const testTimeout = (isWindows || isMobile) ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const testTimeout = isWindows || isMobile ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 const DEFAULT_MODEL = {
-  name: 'stable-diffusion-v2-1-Q8_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-safeTest('model loading - load and unload', { timeout: testTimeout }, async t => {
+safeTest('model loading - load and unload', { timeout: testTimeout }, async (t) => {
   let addon = null
   try {
     const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
     })
 
     const config = {

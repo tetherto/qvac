@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.4] - 2026-07-13
+
+### Fixed
+- `JsLogger` singleton ownership is now hardened for processes with multiple ephemeral JS envs (worklets / bare-thread workers). QVAC-21544 (1.2.3) fixed crashes on sequential teardown/reload, but left a documented gap: a second **concurrently live** env calling `setLogger` could silently hijack the singleton — leaking the first env's callback ref and leaving `logger_async_` on the wrong loop; `releaseLogger` from a non-owner env could tear down another env's logger (including a cross-thread `uv_close`); and C++ producer threads could race `uv_async_send` against handle close during teardown. This release serializes install, release, and teardown under `admin_mutex_`, rejects concurrent install from a different live env (`InvalidArgument`: "Logger already installed by another env; call releaseLogger first"), makes non-owner `releaseLogger` a no-op, scopes `onEnvTeardown` to the owning env, clears undrained log entries on release/teardown, holds `admin_mutex_` around the armed check and `uv_async_send` in `log()`, and gates enqueue on a live owner so C++ logs emitted after `releaseLogger`/teardown are dropped instead of bleeding into the next owner's callback.
+
+### Added
+- JS integration test suite `tests/integration_js/logger/reject.test.js` covering concurrent-env `setLogger` rejection, sequential cross-env handoff, non-owner `releaseLogger` no-op, and teardown-without-release reload.
+- Regression test in `tests/integration_js/logger/test.js` for orphaned log entries between `releaseLogger()` and the next `setLogger()`.
+- Regression test for same-env callback replacement via `setLogger` without an intervening `releaseLogger`.
+
 ## [1.2.3] - 2026-07-02
 
 ### Fixed

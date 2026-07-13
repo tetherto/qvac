@@ -2,7 +2,8 @@ name: 'Detect native changes'
 description: >
   Shared native-change detection for the addon prebuild-caching workflows.
   Computes native_changed (did THIS event's delta touch native files) and
-  native_hash (sha256 of the HEAD native tree) for a given addon workdir.
+  native_hash (sha256 of the HEAD native tree plus global vcpkg overlays) for
+  a given addon workdir.
   Read-only: fetches the PR head by SHA/ref and uses git diff + ls-tree, never
   checks out or runs PR code. The repo (base branch) must already be checked
   out by the caller. Single source of truth — do NOT inline per workflow.
@@ -17,7 +18,7 @@ outputs:
     description: 'true if this event''s delta touched native files (or a safe-fallback trigger)'
     value: ${{ steps.detect.outputs.native_changed }}
   native_hash:
-    description: 'sha256 (first 16 hex) of the HEAD native tree — the cache key component'
+    description: 'sha256 (first 16 hex) of the HEAD native tree plus global vcpkg overlays — the cache key component'
     value: ${{ steps.detect.outputs.native_hash }}
 
 runs:
@@ -115,6 +116,7 @@ runs:
                 ${WORKDIR}/*CMakeLists.txt) CHANGED=true; break ;;
                 ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) CHANGED=true; break ;;
                 ${WORKDIR}/vcpkg/*) CHANGED=true; break ;;
+                vcpkg-overlays/*) CHANGED=true; break ;;
               esac
             done <<< "$DIFF_FILES"
           fi
@@ -126,8 +128,8 @@ runs:
         # Hash the HEAD native tree. The file set MUST stay in lockstep with the
         # detection predicate above. git ls-tree reads the tree object without
         # checkout — secure and correct.
-        NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" 2>/dev/null \
-          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/' \
+        NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" 2>/dev/null \
+          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/' \
           | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 

@@ -19,7 +19,8 @@ const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const skipGpuBackendDeviceSubtest = noGpu || isMobile
 
 const ESRGAN_MODEL = {
-  name: 'RealESRGAN_x4plus_anime_6B.pth'
+  name: 'RealESRGAN_x4plus_anime_6B.pth',
+  url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
 }
 
 // Valid 16×16 RGB PNG — backendDevice assertions only; keep inputs tiny for
@@ -27,14 +28,14 @@ const ESRGAN_MODEL = {
 const TINY_PNG_16X16_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAABuElEQVR4nA3NQQEAIQgEQCMQwec+iWAEIhCBCEYgghGMYAQD7IMIRribAtNagzT2Bm0cDdboDdE4G7JxNezG03Abq+E1tiYUQReqYAhN4MIQTGEKlnALjvAKSvgErXVIZ+/QztFhnd4RnbMjO1fH7jwdt7M6Xv8HpSi6UhVDaQpXhmIqU7GUW3GUV1HKp/8wIIN9QAfHgA36QAzOgRxcA3vwDNzBGnjjH4xi6EY1DKMZ3BiGaUzDMm7DMV5DGZ/9g0Oc3aHO4TCnO8I5Helcju08jussx/N/CEqgBzUwghbwYARmMAMruAMneAMVfPEPEzLZJ3RyTNikT8TknMjJNbEnz8SdrIk3/yEpiZ7UxEhawpORmMlMrOROnORNVPLlPyzIYl/QxbFgi74Qi3MhF9fCXjwLd7EW3vqHTdnom7oxNm3DN2NjbubG2twbZ/Nu1Obb/3Agh/1AD8eBHfpBHM6DPFwH+/Ac3MM6eOcfLuWiX+rFuLQLv4yLeZkX63JfnMt7UZfv/kNBir2gxVGwoheiOAtZXIVdPIVbrMKrf3iUh/6oD+PRHvwxHuZjPqzH/XAe70M9vocPli9yEL9ki4IAAAAASUVORK5CYII='
 
-function tinyPng16x16 () {
+function tinyPng16x16() {
   return b4a.from(TINY_PNG_16X16_B64, 'base64')
 }
 
 const JOB_TIMEOUT_MS = isAndroid ? 300000 : 120000
 const BACKENDS_DIR = path.join(__dirname, '../../prebuilds')
 
-function logPhase (phase, configDevice, expected, actual) {
+function logPhase(phase, configDevice, expected, actual) {
   let line =
     '[esrgan-backend-device] phase=' +
     phase +
@@ -53,19 +54,18 @@ function logPhase (phase, configDevice, expected, actual) {
   console.log(line)
 }
 
-function queryExpectedBackendDevice (configDevice) {
+function queryExpectedBackendDevice(configDevice) {
   if (typeof binding.getExpectedEsrganBackendDevice !== 'function') {
-    throw new Error(
-      'binding.getExpectedEsrganBackendDevice is required for backend policy tests'
-    )
+    throw new Error('binding.getExpectedEsrganBackendDevice is required for backend policy tests')
   }
   return binding.getExpectedEsrganBackendDevice(configDevice, BACKENDS_DIR)
 }
 
-async function ensureEsrganModelPath () {
+async function ensureEsrganModelPath() {
   logPhase('before-model-download', 'n/a')
   const [esrganName, modelDir] = await ensureModel({
-    modelName: ESRGAN_MODEL.name
+    modelName: ESRGAN_MODEL.name,
+    downloadUrl: ESRGAN_MODEL.url
   })
   const esrganPath = path.join(modelDir, esrganName)
   logPhase('after-model-download', 'n/a', null, esrganPath)
@@ -75,7 +75,7 @@ async function ensureEsrganModelPath () {
 test(
   'ESRGAN standalone — config.device cpu reports backendDevice cpu in RuntimeStats',
   { timeout: JOB_TIMEOUT_MS },
-  async t => {
+  async (t) => {
     const configDevice = 'cpu'
     setupJsLogger(binding)
     logPhase('start', configDevice)
@@ -109,17 +109,15 @@ test(
       await response.onUpdate(() => {}).await()
       logPhase('after-upscale', configDevice, expected, response.stats.backendDevice)
 
-      t.is(
-        response.stats.backendDevice,
-        expected,
-        'native CPU path maps to stats'
-      )
+      t.is(response.stats.backendDevice, expected, 'native CPU path maps to stats')
 
-      t.comment(recordPerformance('[ESRGAN 4x upscale 16x16] [CPU]', response.stats, {
-        scenario: 'upscale',
-        model: 'RealESRGAN_x4plus_anime_6B',
-        execution_provider: 'cpu'
-      }))
+      t.comment(
+        recordPerformance('[ESRGAN 4x upscale 16x16] [CPU]', response.stats, {
+          scenario: 'upscale',
+          model: 'RealESRGAN_x4plus_anime_6B',
+          execution_provider: 'cpu'
+        })
+      )
     } finally {
       await upscaler.unload().catch(() => {})
       try {
@@ -132,7 +130,7 @@ test(
 test(
   'ESRGAN standalone — config.device gpu reports policy-aligned backendDevice in RuntimeStats',
   { timeout: JOB_TIMEOUT_MS, skip: skipGpuBackendDeviceSubtest },
-  async t => {
+  async (t) => {
     const configDevice = 'gpu'
     setupJsLogger(binding)
     logPhase('start', configDevice)
@@ -174,14 +172,19 @@ test(
         actual === 'cpu' || actual === 'gpu',
         'config.device gpu: backendDevice may be gpu when accelerated init succeeds, ' +
           'or cpu when runtime falls back (e.g. GPU/OpenCL init failure); ' +
-          'native policy hint=' + expected + ', actual=' + actual
+          'native policy hint=' +
+          expected +
+          ', actual=' +
+          actual
       )
 
-      t.comment(recordPerformance('[ESRGAN 4x upscale 16x16] [' + (actual || 'GPU') + ']', response.stats, {
-        scenario: 'upscale',
-        model: 'RealESRGAN_x4plus_anime_6B',
-        execution_provider: actual || 'gpu'
-      }))
+      t.comment(
+        recordPerformance('[ESRGAN 4x upscale 16x16] [' + (actual || 'GPU') + ']', response.stats, {
+          scenario: 'upscale',
+          model: 'RealESRGAN_x4plus_anime_6B',
+          execution_provider: actual || 'gpu'
+        })
+      )
     } finally {
       await upscaler.unload().catch(() => {})
       try {

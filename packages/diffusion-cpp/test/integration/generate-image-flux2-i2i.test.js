@@ -5,13 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
-const {
-  ensureModel,
-  detectPlatform,
-  setupJsLogger,
-  isPng,
-  safeTest
-} = require('./utils')
+const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
 const { readImageDimensions } = require('../../addon')
 const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
@@ -41,153 +35,170 @@ const STEPS = 20
 const GUIDANCE = 3.5
 const SEED = 42
 
-safeTest('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, skip }, async (t) => {
-  setupJsLogger(binding)
+safeTest(
+  'FLUX2-klein img2img — transforms an input image',
+  { timeout: 1800000, skip },
+  async (t) => {
+    setupJsLogger(binding)
 
-  let model = null
-  try {
-    const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: FLUX2_MODEL.name
-    })
-
-    const [qwenName] = await ensureModel({
-      modelName: QWEN3_MODEL.name
-    })
-
-    const [vaeName] = await ensureModel({
-      modelName: VAE_MODEL.name
-    })
-
-    console.log('\n' + '='.repeat(60))
-    console.log('FLUX2-KLEIN IMG2IMG — INTEGRATION TEST')
-    console.log('='.repeat(60))
-    console.log(` Platform  : ${platform}`)
-    console.log(` Model     : ${downloadedModelName}`)
-    console.log(` Text Enc  : ${qwenName}`)
-    console.log(` VAE       : ${vaeName}`)
-    console.log(` Models dir: ${modelDir}`)
-
-    const modelPath = path.join(modelDir, downloadedModelName)
-    t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
-
-    model = new ImgStableDiffusion({
-      files: {
-        model: path.join(modelDir, downloadedModelName),
-        llm: path.join(modelDir, qwenName),
-        vae: path.join(modelDir, vaeName)
-      },
-      config: {
-        threads: 4,
-        device: useCpu ? 'cpu' : 'gpu',
-        prediction: 'flux2_flow',
-        diffusion_fa: true,
-        verbosity: 2
-      },
-      logger: console,
-      opts: { stats: true }
-    })
-
-    const images = []
-    const progressTicks = []
-
-    // ── Load ─────────────────────────────────────────────────────────────────
-    console.log('\n=== Loading model ===')
-    const tLoad = Date.now()
-    await model.load()
-    const loadMs = Date.now() - tLoad
-    console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
-    t.ok(loadMs < 180000, `Model loaded within 180s (took ${(loadMs / 1000).toFixed(1)}s)`)
-
-    // ── Load init image ───────────────────────────────────────────────────────
-    const initImagePath = path.join(__dirname, '../../assets/von-neumann.jpg')
-    if (!fs.existsSync(initImagePath)) {
-      t.fail(`Init image not found at ${initImagePath}`)
-      return
-    }
-    const initImage = fs.readFileSync(initImagePath)
-    console.log(`\nLoaded init image: ${initImage.length} bytes`)
-
-    // ── Generate (perf loop) ───────────────────────────────────────────────────
-    const totalIterations = WARMUP_RUNS + PERF_RUNS
-    for (let iteration = 0; iteration < totalIterations; iteration++) {
-      const isWarmup = iteration < WARMUP_RUNS
-      const runLabel = isWarmup ? `warmup ${iteration + 1}` : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
-      console.log(`\n=== Generating image (img2img ${runLabel}) ===`)
-      console.log(`  Steps    : ${STEPS}`)
-      console.log(`  Guidance : ${GUIDANCE}`)
-      console.log(`  Seed     : ${SEED + iteration}`)
-
-      const tGen = Date.now()
-      let ttfbMs = null
-
-      images.length = 0
-      progressTicks.length = 0
-
-      const response = await model.run({
-        prompt: 'same person, color photograph, modern tech CEO of this version, wearing a gray zip up vest, black studio background',
-        negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
-        init_image: initImage,
-        cfg_scale: 1.0,
-        steps: STEPS,
-        guidance: GUIDANCE,
-        seed: SEED + iteration,
-        width: 624,
-        height: 624
+    let model = null
+    try {
+      const [downloadedModelName, modelDir] = await ensureModel({
+        modelName: FLUX2_MODEL.name
       })
 
-      await response
-        .onUpdate((data) => {
-          if (ttfbMs === null) ttfbMs = Date.now() - tGen
-          if (data instanceof Uint8Array) {
-            images.push(data)
-          } else if (typeof data === 'string') {
-            try {
-              const tick = JSON.parse(data)
-              if ('step' in tick && 'total' in tick) {
-                progressTicks.push(tick)
-              }
-            } catch (_) {}
-          }
-        })
-        .await()
+      const [qwenName] = await ensureModel({
+        modelName: QWEN3_MODEL.name
+      })
 
-      const genMs = Date.now() - tGen
-      console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+      const [vaeName] = await ensureModel({
+        modelName: VAE_MODEL.name
+      })
 
-      if (!isWarmup) {
-        t.comment(recordPerformance('[FLUX.2 klein img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
-          scenario: 'img2img',
-          model: 'flux-2-klein-4b-Q8_0',
-          execution_provider: useCpu ? 'cpu' : 'gpu',
-          ttfbMs
-        }))
+      console.log('\n' + '='.repeat(60))
+      console.log('FLUX2-KLEIN IMG2IMG — INTEGRATION TEST')
+      console.log('='.repeat(60))
+      console.log(` Platform  : ${platform}`)
+      console.log(` Model     : ${downloadedModelName}`)
+      console.log(` Text Enc  : ${qwenName}`)
+      console.log(` VAE       : ${vaeName}`)
+      console.log(` Models dir: ${modelDir}`)
+
+      const modelPath = path.join(modelDir, downloadedModelName)
+      t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
+
+      model = new ImgStableDiffusion({
+        files: {
+          model: path.join(modelDir, downloadedModelName),
+          llm: path.join(modelDir, qwenName),
+          vae: path.join(modelDir, vaeName)
+        },
+        config: {
+          threads: 4,
+          device: useCpu ? 'cpu' : 'gpu',
+          prediction: 'flux2_flow',
+          diffusion_fa: true,
+          verbosity: 2
+        },
+        logger: console,
+        opts: { stats: true }
+      })
+
+      const images = []
+      const progressTicks = []
+
+      // ── Load ─────────────────────────────────────────────────────────────────
+      console.log('\n=== Loading model ===')
+      const tLoad = Date.now()
+      await model.load()
+      const loadMs = Date.now() - tLoad
+      console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
+      t.ok(loadMs < 180000, `Model loaded within 180s (took ${(loadMs / 1000).toFixed(1)}s)`)
+
+      // ── Load init image ───────────────────────────────────────────────────────
+      const initImagePath = path.join(__dirname, '../../assets/von-neumann.jpg')
+      if (!fs.existsSync(initImagePath)) {
+        t.fail(`Init image not found at ${initImagePath}`)
+        return
       }
+      const initImage = fs.readFileSync(initImagePath)
+      console.log(`\nLoaded init image: ${initImage.length} bytes`)
+
+      // ── Generate (perf loop) ───────────────────────────────────────────────────
+      const totalIterations = WARMUP_RUNS + PERF_RUNS
+      for (let iteration = 0; iteration < totalIterations; iteration++) {
+        const isWarmup = iteration < WARMUP_RUNS
+        const runLabel = isWarmup
+          ? `warmup ${iteration + 1}`
+          : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
+        console.log(`\n=== Generating image (img2img ${runLabel}) ===`)
+        console.log(`  Steps    : ${STEPS}`)
+        console.log(`  Guidance : ${GUIDANCE}`)
+        console.log(`  Seed     : ${SEED + iteration}`)
+
+        const tGen = Date.now()
+        let ttfbMs = null
+
+        images.length = 0
+        progressTicks.length = 0
+
+        const response = await model.run({
+          prompt:
+            'same person, color photograph, modern tech CEO of this version, wearing a gray zip up vest, black studio background',
+          negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
+          init_image: initImage,
+          cfg_scale: 1.0,
+          steps: STEPS,
+          guidance: GUIDANCE,
+          seed: SEED + iteration,
+          width: 624,
+          height: 624
+        })
+
+        await response
+          .onUpdate((data) => {
+            if (ttfbMs === null) ttfbMs = Date.now() - tGen
+            if (data instanceof Uint8Array) {
+              images.push(data)
+            } else if (typeof data === 'string') {
+              try {
+                const tick = JSON.parse(data)
+                if ('step' in tick && 'total' in tick) {
+                  progressTicks.push(tick)
+                }
+              } catch (_) {}
+            }
+          })
+          .await()
+
+        const genMs = Date.now() - tGen
+        console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+
+        if (!isWarmup) {
+          t.comment(
+            recordPerformance(
+              '[FLUX.2 klein img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']',
+              response.stats,
+              {
+                scenario: 'img2img',
+                model: 'flux-2-klein-4b-Q8_0',
+                execution_provider: useCpu ? 'cpu' : 'gpu',
+                ttfbMs
+              }
+            )
+          )
+        }
+      }
+
+      // ── Assertions (on last iteration) ──────────────────────────────────────
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      t.is(
+        progressTicks[progressTicks.length - 1].total,
+        STEPS,
+        `Final progress tick reports ${STEPS} total steps`
+      )
+
+      t.is(images.length, 1, 'Received exactly 1 image')
+
+      const img = images[0]
+      t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
+      t.ok(img.length > 1000, `Image has meaningful size (${img.length} bytes)`)
+      t.ok(isPng(img), 'Image has valid PNG magic bytes')
+
+      const dims = readImageDimensions(img)
+      t.is(dims.width, 624, 'Output width matches requested 624')
+      t.is(dims.height, 624, 'Output height matches requested 624')
+
+      const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
+      fs.writeFileSync(outPath, img)
+      console.log(`\nSaved → ${outPath}`)
+    } finally {
+      console.log('\n=== Cleanup ===')
+      if (model) await model.unload().catch(() => {})
+      try {
+        binding.releaseLogger()
+      } catch (_) {}
+      console.log('Done.')
     }
-
-    // ── Assertions (on last iteration) ──────────────────────────────────────
-    t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
-    t.is(progressTicks[progressTicks.length - 1].total, STEPS, `Final progress tick reports ${STEPS} total steps`)
-
-    t.is(images.length, 1, 'Received exactly 1 image')
-
-    const img = images[0]
-    t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
-    t.ok(img.length > 1000, `Image has meaningful size (${img.length} bytes)`)
-    t.ok(isPng(img), 'Image has valid PNG magic bytes')
-
-    const dims = readImageDimensions(img)
-    t.is(dims.width, 624, 'Output width matches requested 624')
-    t.is(dims.height, 624, 'Output height matches requested 624')
-
-    const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
-  } finally {
-    console.log('\n=== Cleanup ===')
-    if (model) await model.unload().catch(() => {})
-    try {
-      binding.releaseLogger()
-    } catch (_) {}
-    console.log('Done.')
   }
-})
+)

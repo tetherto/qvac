@@ -15,7 +15,11 @@ on:
     paths:
       - "packages/classification-ggml/**"
       - ".github/workflows/*classification-ggml*.yml"
+      - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
+
+  workflow_call:
 
 permissions:
   contents: read
@@ -52,6 +56,30 @@ jobs:
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
 
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -68,24 +96,12 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  changes:
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      pkg: ${{ steps.filter.outputs.pkg }}
-    steps:
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
-        id: filter
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
-            pkg:
-              - "packages/classification-ggml/**"
-              - ".github/workflows/*classification-ggml*.yml"
-
   sanity-checks:
-    needs: [authorize, changes, label-gate]
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -101,9 +117,39 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/classification-ggml
 
+  cpp-tests:
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - sanity-checks
+      - ci-router
+      - label-gate
+    uses: ./.github/workflows/cpp-tests-classification.yml
+    secrets: inherit
+    with:
+      workdir: packages/classification-ggml
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+  cpp-lint:
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    uses: ./.github/workflows/cpp-lint.yaml
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      workdir: packages/classification-ggml
+
   ts-checks:
-    needs: [authorize, changes, sanity-checks]
-    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -120,35 +166,58 @@ jobs:
       - name: Type declaration check
         run: npm run test:dts
 
-  cpp-lint:
-    needs: [authorize, changes, sanity-checks, label-gate]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.label-gate.outputs.authorised == 'true' &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/cpp-lint.yaml
-    secrets: inherit
-    with:
-      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
-      workdir: packages/classification-ggml
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/classification-ggml
 
-  cpp-tests:
-    needs: [authorize, changes, sanity-checks, label-gate]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.label-gate.outputs.authorised == 'true' &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: ./.github/workflows/cpp-tests-classification.yml
-    secrets: inherit
-    with:
-      workdir: packages/classification-ggml
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - detect-native-changes
+      - sanity-checks
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-classification-ggml.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   prebuild:
     permissions:
@@ -156,27 +225,57 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    needs: [authorize, changes, sanity-checks, label-gate]
+    needs:
+      - authorize
+      - ci-router
+      - sanity-checks
+      - detect-native-changes
+      - prebuild-artifact-reuse
+      - label-gate
     if: |
       always() &&
-      !cancelled() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+  prebuild-artifact-save:
+    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.label-gate.outputs.authorised == 'true' &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    needs:
+      - authorize
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - label-gate
     permissions:
       contents: read
       packages: read
@@ -184,8 +283,8 @@ jobs:
     uses: ./.github/workflows/integration-test-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -193,35 +292,43 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
-    if: |
-      always() &&
-      !cancelled() &&
-      needs.label-gate.outputs.authorised == 'true' &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    needs:
+      - authorize
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - label-gate
     uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
     needs:
       [
         authorize,
-        changes,
+        ci-router,
+        label-gate,
         sanity-checks,
         ts-checks,
         cpp-lint,
         cpp-tests,
+        detect-native-changes,
+        prebuild-artifact-reuse,
         prebuild,
+        prebuild-artifact-save,
         run-integration-tests,
         run-mobile-integration-tests,
       ]
-    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && needs.cpp-lint.result == 'success' && needs.cpp-tests.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
       integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
