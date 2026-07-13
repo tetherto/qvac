@@ -315,20 +315,14 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
     const hasUrl =
       Array.isArray(entry.urls) &&
       entry.urls.length > 0 &&
-      entry.urls.every((u) => typeof u === 'string' && u.startsWith('https://'))
-    t.ok(hasUrl, `${name} has at least one https url (warm-models requires this)`)
-
-    // When present, integrity pins must have the right shape. Null remains
-    // allowed while this workflow uses exact-key-only cache restoration.
-    if (entry.sha256 !== null && entry.sha256 !== undefined) {
-      t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is 64 hex chars when pinned`)
-    }
-    if (entry.bytes !== null && entry.bytes !== undefined) {
-      t.ok(
-        Number.isInteger(entry.bytes) && entry.bytes > 0,
-        `${name} bytes is a positive integer when pinned`
+      entry.urls.every(
+        (url) =>
+          typeof url === 'string' &&
+          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//i.test(url)
       )
-    }
+    t.ok(hasUrl, `${name} has at least one immutable Hugging Face URL`)
+    t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is pinned`)
+    t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name} bytes is pinned`)
   }
 
   // Spot-check a scattered model resolves by its LOCAL filename.
