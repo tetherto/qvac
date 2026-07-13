@@ -5,13 +5,14 @@
 # overlaid here; ggml remains resolved from qvac-registry-vcpkg.
 #
 # PR #20: https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/20
-# c6377dc adds follow-up Ideogram review fixes, including explicit failure
-# when Ideogram CFG is requested without a loaded unconditional model.
+# a547731 adds follow-up Ideogram review fixes: explicit failure when CFG is
+# requested without a loaded unconditional model, and correct FP8 weight_scale
+# ordering (applied to the weight product before bias).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF c6377dc4cd6a899d48963576ea376720e3a8f766
-    SHA512 71a5141fc8294d5e5273f3842ce23f454a53e1857fdcb06b40d59a272e9943ed7419bc147e61c921faadcdcf0a7ad848f01df62118f41e4a4ea43adbad81cc6b
+    REF a5477315f804bbc50279456daaf2c02f5e2c1aca
+    SHA512 fbb4c4c890887760a01e2dd537776ced59ddc91453dc7d6d015728ae7cc7506f9724f7f58a87b9ff5977a95dc6308f045b107419a831f70d9161f90cf0c9da23
 )
 
 set(SD_FLASH_ATTN OFF)
