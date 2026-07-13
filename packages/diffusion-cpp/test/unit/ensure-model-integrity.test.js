@@ -7,7 +7,10 @@ const path = require('bare-path')
 const {
   ensureModel,
   verifyModelFile,
+  verifyModelFileOnce,
   sha256File,
+  resetVerificationCache,
+  loadManifest,
   getDownloadCount,
   resetDownloadCount
 } = require('../integration/utils.js')
@@ -83,6 +86,30 @@ test('pinned sha256 verification fails closed when hashing cannot complete', asy
     t.absent(failed.ok, 'hashing error is a verification failure')
     t.ok(/hash unavailable/.test(failed.reason), 'hashing error is preserved')
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('repeated verification hashes an unchanged model only once per process', async function (t) {
+  const name = 'model.bin'
+  const { manifest, sha256 } = await buildManifest(name)
+  const dir = mkTmpDir()
+  const modelPath = path.join(dir, name)
+  let hashes = 0
+  try {
+    writeModel(dir, name, GOOD)
+    resetVerificationCache()
+    const hashFile = async function () {
+      hashes++
+      return sha256
+    }
+    const first = await verifyModelFileOnce(modelPath, manifest.models[name], hashFile)
+    const second = await verifyModelFileOnce(modelPath, manifest.models[name], hashFile)
+    t.ok(first.ok)
+    t.ok(second.ok)
+    t.is(hashes, 1, 'unchanged file and pins reuse the verification result')
+  } finally {
+    resetVerificationCache()
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
@@ -197,7 +224,7 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
-test('entry without pinned integrity skips verification (keeps a non-zero cached file)', async function (t) {
+test('entry without pinned integrity is rejected before a cached file is used', async function (t) {
   const name = 'unpinned.bin'
   const manifest = {
     models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } }
@@ -205,15 +232,50 @@ test('entry without pinned integrity skips verification (keeps a non-zero cached
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    writeModel(dir, name, BAD_SAME_LEN) // any non-zero content is accepted when unpinned
+    writeModel(dir, name, BAD_SAME_LEN)
     resetDownloadCount()
-    await ensureModel({
-      modelName: name,
-      modelDir: dir,
-      manifest,
-      download: fakeDownloader(GOOD, spy)
-    })
-    t.is(spy.calls, 0, 'no download when an unpinned file already exists and is non-zero')
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /no valid SHA-256 pin/
+    )
+    t.is(spy.calls, 0, 'invalid manifest fails before download or cache use')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('missing manifest model is rejected instead of using a caller URL', async function (t) {
+  const dir = mkTmpDir()
+  try {
+    await t.exception(
+      ensureModel({
+        modelName: 'missing.gguf',
+        downloadUrl: 'https://example.invalid/mutable.gguf',
+        modelDir: dir,
+        manifest: { models: {} }
+      }),
+      /missing from required models\.manifest\.json/
+    )
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('malformed manifest fails explicitly', function (t) {
+  const dir = mkTmpDir()
+  const manifestPath = path.join(dir, 'models.manifest.json')
+  try {
+    fs.writeFileSync(manifestPath, '{broken')
+    t.exception(
+      () => loadManifest(manifestPath),
+      /Failed to load required model manifest/,
+      'invalid JSON cannot disable integrity checks'
+    )
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -245,9 +307,10 @@ test('integration manifest pins integrity for every model', function (t) {
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    const expectedKeys = entry.warm === false ? 'bytes,sha256,urls,warm' : 'bytes,sha256,urls'
     t.is(
       Object.keys(entry).sort().join(','),
-      'bytes,sha256,urls',
+      expectedKeys,
       `${name} contains only cache-key-bearing fields`
     )
     const hasImmutableUrls =
@@ -263,5 +326,26 @@ test('integration manifest pins integrity for every model', function (t) {
     t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
     t.ok(hasBytes, `${name} pins bytes`)
     t.ok(hasSha, `${name} pins sha256`)
+  }
+})
+
+test('integration manifest covers every declared integration model', function (t) {
+  const integrationDir = path.resolve(__dirname, '../integration')
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(integrationDir, 'models.manifest.json'), 'utf8')
+  )
+  const modelNames = new Set()
+  const modelPattern = /name:\s*['"]([^'"]+\.(?:gguf|safetensors|pth))['"]/g
+
+  for (const file of fs.readdirSync(integrationDir)) {
+    if (!file.endsWith('.test.js')) continue
+    const source = fs.readFileSync(path.join(integrationDir, file), 'utf8')
+    let match
+    while ((match = modelPattern.exec(source)) !== null) modelNames.add(match[1])
+  }
+
+  t.ok(modelNames.size > 0, 'found integration model declarations')
+  for (const name of modelNames) {
+    t.ok(manifest.models[name], `${name} is represented in models.manifest.json`)
   }
 })

@@ -56,7 +56,7 @@ inputs:
 
 outputs:
   cache-hit:
-    description: "'true' when cache was restored (download can be skipped)"
+    description: "'true' only when the exact primary cache key was restored"
     value: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
 
 runs:
@@ -129,7 +129,10 @@ runs:
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with
-    # no per-test (brittle) timeout. This is the fix for cold-cache runs where
+    # no per-test (brittle) timeout. A trusted exact-key hit with a verified
+    # marker avoids rehashing the complete multi-GB set on every runner. Prefix
+    # restores, missing markers, and changed manifests always verify normally.
+    # This is the fix for cold-cache runs where
     # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
     # inside a single test's timeout and fail. On a full cache hit every file is
     # already present (and verified when integrity is pinned), so this is a fast
@@ -141,6 +144,7 @@ runs:
       env:
         PKG: ${{ inputs.package }}
         HF_TOKEN_INPUT: ${{ inputs.hf-token }}
+        QVAC_MODEL_CACHE_EXACT_HIT: ${{ steps.cache.outputs.cache-hit == 'true' || steps.cache-restore-only.outputs.cache-hit == 'true' }}
       run: |
         set -euo pipefail
         # Only override an inherited job-level HF_TOKEN when a token was passed

@@ -28,10 +28,11 @@
 //
 // Env:
 //   HF_TOKEN   optional; sent as Bearer for huggingface.co URLs (gated repos).
+//   QVAC_MODEL_CACHE_EXACT_HIT  true only for an exact primary-key cache hit.
 
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import https from 'node:https'
@@ -58,6 +59,7 @@ function authHeaders (url) {
 // / fall back to a mirror) instead of hanging until the job timeout.
 const IDLE_TIMEOUT_MS = Number(process.env.WARM_IDLE_TIMEOUT_MS || 120000)
 const PROGRESS_INTERVAL_MS = 30000
+const VERIFIED_MARKER = '.qvac-model-cache-verified.json'
 
 // Downloads to `dest`. When startByte > 0 it sends a Range header and appends
 // to the existing partial (resume). If the server ignores the range and sends
@@ -178,6 +180,43 @@ function fileExists (p) {
   return stat(p).then(() => true, () => false)
 }
 
+function manifestSha256 (rawManifest) {
+  return createHash('sha256').update(rawManifest).digest('hex')
+}
+
+async function canTrustExactCacheHit ({ markerPath, manifestDigest, entries, modelDir }) {
+  if (process.env.QVAC_MODEL_CACHE_EXACT_HIT !== 'true') return false
+  if (!entries.every(([, entry]) => entry.sha256 != null && entry.bytes != null)) return false
+
+  let marker
+  try {
+    marker = JSON.parse(await readFile(markerPath, 'utf8'))
+  } catch (_) {
+    return false
+  }
+  if (marker.version !== 1 || marker.manifestSha256 !== manifestDigest) return false
+
+  for (const [name, entry] of entries) {
+    const pinned = marker.models && marker.models[name]
+    if (!pinned || pinned.sha256 !== entry.sha256 || pinned.bytes !== entry.bytes) return false
+    const modelStat = await stat(join(modelDir, name)).catch(() => null)
+    if (!modelStat || modelStat.size !== entry.bytes) return false
+  }
+  return true
+}
+
+async function writeVerifiedMarker ({ markerPath, manifestDigest, entries }) {
+  if (!entries.every(([, entry]) => entry.sha256 != null && entry.bytes != null)) return
+  const models = {}
+  for (const [name, entry] of entries) {
+    models[name] = { sha256: entry.sha256, bytes: entry.bytes }
+  }
+  await writeFile(
+    markerPath,
+    `${JSON.stringify({ version: 1, manifestSha256: manifestDigest, models }, null, 2)}\n`
+  )
+}
+
 async function main () {
   const args = parseArgs(process.argv.slice(2))
   if (!args.package) throw new Error('missing --package (or PKG env)')
@@ -188,12 +227,29 @@ async function main () {
     return
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  const rawManifest = await readFile(manifestPath, 'utf8')
+  const manifest = JSON.parse(rawManifest)
   const modelDir = resolve(args.root, 'packages', args.package, 'test/model')
   await mkdir(modelDir, { recursive: true })
+  const markerPath = join(modelDir, VERIFIED_MARKER)
 
-  const entries = Object.entries(manifest.models || {})
-  console.log(`[warm] ${args.package}: ${entries.length} model(s) declared; target ${modelDir}`)
+  const declaredEntries = Object.entries(manifest.models || {})
+  const entries = declaredEntries.filter(([, entry]) => entry.warm !== false)
+  const deferred = declaredEntries.length - entries.length
+  console.log(
+    `[warm] ${args.package}: ${entries.length} model(s) selected` +
+      (deferred ? `, ${deferred} deferred to integration tests` : '') +
+      `; target ${modelDir}`
+  )
+
+  const manifestDigest = manifestSha256(rawManifest)
+  if (await canTrustExactCacheHit({ markerPath, manifestDigest, entries, modelDir })) {
+    console.log(
+      `[warm] trusted exact cache hit: verified marker matches manifest and ${entries.length} file sizes`
+    )
+    console.log(`[warm] done: 0 downloaded, ${entries.length} already verified by cache marker`)
+    return
+  }
 
   let downloaded = 0
   let skipped = 0
@@ -241,6 +297,7 @@ async function main () {
     downloaded++
   }
 
+  await writeVerifiedMarker({ markerPath, manifestDigest, entries })
   console.log(`[warm] done: ${downloaded} downloaded, ${skipped} already cached`)
 }
 

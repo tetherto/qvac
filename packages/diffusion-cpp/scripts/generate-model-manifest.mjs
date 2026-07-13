@@ -45,20 +45,33 @@ function authHeaders(url) {
   return headers
 }
 
-function download(url, dest, redirectsLeft = 10) {
-  return new Promise((resolve, reject) => {
+function linkedIntegrity(headers, inherited = {}) {
+  const rawEtag = headers['x-linked-etag']
+  const etag = typeof rawEtag === 'string' ? rawEtag.replace(/^W\//, '').replace(/"/g, '') : ''
+  const rawSize = Number(headers['x-linked-size'])
+  return {
+    sha256: /^[0-9a-f]{64}$/i.test(etag) ? etag.toLowerCase() : inherited.sha256,
+    bytes: Number.isInteger(rawSize) && rawSize > 0 ? rawSize : inherited.bytes
+  }
+}
+
+function download(url, dest, redirectsLeft = 10, expected = {}) {
+  return new Promise((resolvePromise, reject) => {
     const req = https.get(url, { headers: authHeaders(url) }, (res) => {
+      const sourceIntegrity = linkedIntegrity(res.headers, expected)
       if ([301, 302, 307, 308].includes(res.statusCode)) {
         if (redirectsLeft <= 0) return reject(new Error(`too many redirects: ${url}`))
         res.resume()
         const next = new URL(res.headers.location, url).href
-        return resolve(download(next, dest, redirectsLeft - 1))
+        return resolvePromise(download(next, dest, redirectsLeft - 1, sourceIntegrity))
       }
       if (res.statusCode !== 200) {
         res.resume()
         return reject(new Error(`HTTP ${res.statusCode} for ${url}`))
       }
-      pipeline(res, createWriteStream(dest)).then(resolve).catch(reject)
+      pipeline(res, createWriteStream(dest))
+        .then(() => resolvePromise(sourceIntegrity))
+        .catch(reject)
     })
     req.on('error', reject)
   })
@@ -102,8 +115,18 @@ async function main() {
         const dest = join(tmp, name)
         try {
           console.log(`downloading ${name} from ${new URL(url).host} ...`)
-          await download(url, dest)
+          const expected = await download(url, dest)
           result = await sha256AndSize(dest)
+          if (expected.sha256 && result.sha256 !== expected.sha256) {
+            throw new Error(
+              `downloaded SHA-256 ${result.sha256} does not match source LFS OID ${expected.sha256}`
+            )
+          }
+          if (expected.bytes && result.bytes !== expected.bytes) {
+            throw new Error(
+              `downloaded size ${result.bytes} does not match source size ${expected.bytes}`
+            )
+          }
           await rm(dest, { force: true })
           console.log(`  -> sha256 ${result.sha256} (${result.bytes} bytes)`)
           break

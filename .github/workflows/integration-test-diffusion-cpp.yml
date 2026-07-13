@@ -22,12 +22,6 @@ on:
         type: string
         required: false
         default: '0'
-      pin_model_manifest:
-        description: "Download every model fresh and upload a manifest with SHA-256/byte pins"
-        type: boolean
-        required: false
-        default: false
-
   workflow_dispatch:
     inputs:
       ref:
@@ -94,7 +88,7 @@ jobs:
           if-no-files-found: error
 
   run-integration-tests:
-    if: ${{ !inputs.pin_model_manifest }}
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.pin_model_manifest }}
     timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
