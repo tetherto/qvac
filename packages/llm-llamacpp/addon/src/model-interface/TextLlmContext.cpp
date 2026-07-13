@@ -784,6 +784,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   assistantOutput_.clear();
   generationStarted_ = false;
   generationStopReason_ = GenerationStopReason::None;
+  banEogAfterReasoningRecovery_ = false;
 
   // The chat template force-opened the reasoning channel in the prompt (e.g.
   // Qwen3 / DeepSeek-R1 templates end with "<think>\n"). Emit the matching
@@ -909,6 +910,19 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   llama_token tokenId = LLAMA_TOKEN_NULL;
   if (sampledToken) {
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    if (banEogAfterReasoningRecovery_) {
+      banEogAfterReasoningRecovery_ = false;
+      for (int rerolls = 0;
+           rerolls < 8 && llama_vocab_is_eog(modelCtx_.vocab, tokenId);
+           ++rerolls) {
+        float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
+        if (logits == nullptr) {
+          break;
+        }
+        logits[tokenId] = -INFINITY;
+        tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+      }
+    }
     common_sampler_accept(smpl_.get(), tokenId, true);
   } else {
     tokenId = forcedTokens_.front();
@@ -1012,6 +1026,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
       }
+      banEogAfterReasoningRecovery_ = true;
       const std::string completeChars = utf8Buffer_.addToken(tokenStr);
       if (!completeChars.empty()) {
         emitOutputPiece(outputCallback, completeChars);
@@ -1695,6 +1710,7 @@ void TextLlmContext::resetState(bool resetStats) {
   forcedTokens_.clear();
   assistantOutput_.clear();
   generationStarted_ = false;
+  banEogAfterReasoningRecovery_ = false;
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
   compactor_.reset();
@@ -1861,5 +1877,6 @@ bool TextLlmContext::handleReasoningEOS(
     }
   }
 
+  banEogAfterReasoningRecovery_ = true;
   return true;
 }
