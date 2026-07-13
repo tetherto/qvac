@@ -332,8 +332,12 @@ test('integration manifest pins integrity for every model', function (t) {
   )
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
+  const sourceExceptions = []
   for (const [name, entry] of Object.entries(manifest.models)) {
-    const expectedKeys = 'bytes,group,sha256,urls'
+    const hasSourceException = entry.sourceSha256 !== undefined || entry.sourceBytes !== undefined
+    const expectedKeys = hasSourceException
+      ? 'bytes,group,sha256,sourceBytes,sourceSha256,urls'
+      : 'bytes,group,sha256,urls'
     t.is(
       Object.keys(entry).sort().join(','),
       expectedKeys,
@@ -354,7 +358,48 @@ test('integration manifest pins integrity for every model', function (t) {
     t.ok(hasBytes, `${name} pins bytes`)
     t.ok(hasSha, `${name} pins sha256`)
     t.ok(hasGroup, `${name} declares a supported cache group`)
+    if (hasSourceException) {
+      sourceExceptions.push(name)
+      t.ok(
+        typeof entry.sourceSha256 === 'string' && /^[0-9a-f]{64}$/.test(entry.sourceSha256),
+        `${name} pins sourceSha256`
+      )
+      t.ok(Number.isInteger(entry.sourceBytes) && entry.sourceBytes > 0, `${name} pins sourceBytes`)
+      t.ok(
+        entry.sourceSha256 !== entry.sha256 || entry.sourceBytes !== entry.bytes,
+        `${name} describes a real source/runtime mismatch`
+      )
+      t.ok(
+        entry.urls.every((url) =>
+          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//i.test(url)
+        ),
+        `${name} exception uses only immutable exact-host Hugging Face URLs`
+      )
+    }
   }
+  t.is(
+    sourceExceptions.join(','),
+    'stable-diffusion-v2-1-Q4_0.gguf',
+    'only the known upstream mismatch has source metadata'
+  )
+  const knownMismatch = manifest.models['stable-diffusion-v2-1-Q4_0.gguf']
+  t.is(
+    knownMismatch.urls[0],
+    'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q4_0.gguf',
+    'known mismatch uses the central-registry immutable revision'
+  )
+  t.is(
+    knownMismatch.sha256,
+    '27740067fae2c988f64839ae806d989eb6d5aa6cfe5d47c8994c100677ef97e4',
+    'known mismatch pins served-byte SHA'
+  )
+  t.is(
+    knownMismatch.sourceSha256,
+    '3bc6163b7e7979aab49cc9dd76a98b99945f6a3cca8ba14411d730380c1a10e1',
+    'known mismatch pins Hugging Face source metadata'
+  )
+  t.is(knownMismatch.bytes, 2185459424, 'known mismatch pins served-byte size')
+  t.is(knownMismatch.sourceBytes, 2185459424, 'known mismatch pins source size metadata')
 })
 
 test('Ideogram test and download script use the manifest sources', function (t) {

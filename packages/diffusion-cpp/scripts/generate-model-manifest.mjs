@@ -51,6 +51,19 @@ export function isHuggingFaceLfsUrl(url) {
   )
 }
 
+export function isImmutableHuggingFaceLfsUrl(url) {
+  if (!isHuggingFaceLfsUrl(url)) return false
+  const parsed = new URL(url)
+  return (
+    !parsed.username &&
+    !parsed.password &&
+    !parsed.port &&
+    !parsed.search &&
+    !parsed.hash &&
+    /^\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\/.+/i.test(parsed.pathname)
+  )
+}
+
 export function authHeaders(url, token = process.env.HF_TOKEN) {
   const headers = { 'user-agent': 'qvac-manifest-generator' }
   if (isHuggingFaceUrl(url) && token) {
@@ -200,6 +213,63 @@ export async function sha256AndSize(filePath) {
   return { sha256, bytes: size }
 }
 
+function hasValidSha256(value) {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value)
+}
+
+export function validateDownloadedIntegrity({ url, entry, expected, candidate }) {
+  const hasSourceException = entry.sourceSha256 !== undefined || entry.sourceBytes !== undefined
+
+  if (hasSourceException) {
+    if (!isImmutableHuggingFaceLfsUrl(url)) {
+      throw new Error('source integrity exception requires an immutable Hugging Face LFS URL')
+    }
+    if (
+      !hasValidSha256(entry.sourceSha256) ||
+      !Number.isInteger(entry.sourceBytes) ||
+      entry.sourceBytes <= 0
+    ) {
+      throw new Error('source integrity exception requires sourceSha256 and sourceBytes')
+    }
+    if (!hasValidSha256(entry.sha256) || !Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+      throw new Error('source integrity exception requires committed runtime sha256 and bytes')
+    }
+    if (entry.sourceSha256 === entry.sha256 && entry.sourceBytes === entry.bytes) {
+      throw new Error('source integrity exception does not describe a metadata mismatch')
+    }
+    if (expected.sha256 !== entry.sourceSha256) {
+      throw new Error(
+        `source LFS OID ${expected.sha256 || 'missing'} does not match committed sourceSha256`
+      )
+    }
+    if (expected.bytes !== entry.sourceBytes) {
+      throw new Error(
+        `source size ${expected.bytes || 'missing'} does not match committed sourceBytes`
+      )
+    }
+    if (candidate.sha256 !== entry.sha256) {
+      throw new Error(
+        `downloaded SHA-256 ${candidate.sha256} does not match committed runtime sha256`
+      )
+    }
+    if (candidate.bytes !== entry.bytes) {
+      throw new Error(`downloaded size ${candidate.bytes} does not match committed runtime bytes`)
+    }
+    return
+  }
+
+  if (expected.sha256 && candidate.sha256 !== expected.sha256) {
+    throw new Error(
+      `downloaded SHA-256 ${candidate.sha256} does not match source LFS OID ${expected.sha256}`
+    )
+  }
+  if (expected.bytes && candidate.bytes !== expected.bytes) {
+    throw new Error(
+      `downloaded size ${candidate.bytes} does not match source size ${expected.bytes}`
+    )
+  }
+}
+
 export async function fetchModelResult(
   name,
   entry,
@@ -215,16 +285,7 @@ export async function fetchModelResult(
       console.log(`downloading ${name} from ${new URL(url).host} ...`)
       const expected = await downloadFile(url, dest)
       const candidate = await inspectFile(dest)
-      if (expected.sha256 && candidate.sha256 !== expected.sha256) {
-        throw new Error(
-          `downloaded SHA-256 ${candidate.sha256} does not match source LFS OID ${expected.sha256}`
-        )
-      }
-      if (expected.bytes && candidate.bytes !== expected.bytes) {
-        throw new Error(
-          `downloaded size ${candidate.bytes} does not match source size ${expected.bytes}`
-        )
-      }
+      validateDownloadedIntegrity({ url, entry, expected, candidate })
       console.log(`  -> sha256 ${candidate.sha256} (${candidate.bytes} bytes)`)
       return candidate
     } catch (err) {
