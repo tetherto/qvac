@@ -202,6 +202,7 @@
   "dependencies": {
     "@qvac/bci-whispercpp": "^0.4.1",
     "@qvac/classification-ggml": "^0.10.2",
+    "@qvac/core": "file:../core",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/diffusion-cpp": "^0.13.3",
     "@qvac/embed-llamacpp": "^0.26.2",
