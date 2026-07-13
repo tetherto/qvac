@@ -15,6 +15,7 @@ const {
   ensureModel,
   verifyModelFile,
   sha256File,
+  copyPrestagedModel,
   loadManifest,
   resolveModelEntry,
   getDownloadCount,
@@ -72,6 +73,50 @@ test('bare-crypto sha256 is available in this runtime', async function (t) {
     t.ok(sha && sha.length === 64, 'sha256File returns a 64-char hex digest')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('pinned sha256 verification fails closed when hashing cannot complete', async function (t) {
+  const dir = mkTmpDir()
+  try {
+    const p = path.join(dir, 'x')
+    fs.writeFileSync(p, GOOD)
+    const entry = { sha256: '0'.repeat(64), bytes: GOOD.length }
+    const missing = await verifyModelFile(p, entry, async function () {
+      return null
+    })
+    t.absent(missing.ok, 'missing digest is a verification failure')
+    const failed = await verifyModelFile(p, entry, async function () {
+      throw new Error('hash unavailable')
+    })
+    t.absent(failed.ok, 'hashing error is a verification failure')
+    t.ok(/hash unavailable/.test(failed.reason), 'hashing error is preserved')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('pre-staged model is verified and removed on mismatch', async function (t) {
+  const name = 'model.gguf'
+  const { manifest } = await buildManifest(name)
+  const stagedDir = mkTmpDir()
+  const modelDir = mkTmpDir()
+  const modelPath = path.join(modelDir, name)
+  try {
+    writeModel(stagedDir, name, BAD_SAME_LEN)
+    await t.exception(
+      copyPrestagedModel({
+        stagedDir,
+        modelName: name,
+        modelPath,
+        entry: manifest.models[name]
+      }),
+      /failed integrity/
+    )
+    t.absent(fs.existsSync(modelPath), 'mismatched pre-staged copy is removed')
+  } finally {
+    fs.rmSync(stagedDir, { recursive: true, force: true })
+    fs.rmSync(modelDir, { recursive: true, force: true })
   }
 })
 
@@ -251,19 +296,30 @@ test('verifyModelFile flags size before hashing (fail-fast)', async function (t)
 test('integration manifest is well-formed (usable url per entry, unique keys)', function (t) {
   const manifest = loadManifest()
   t.ok(manifest && manifest.models, 'models.manifest.json loads')
+  t.is(
+    Object.keys(manifest).sort().join(','),
+    'cacheEpoch,models',
+    'top level contains only cache-key-bearing fields'
+  )
+  t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
   const names = Object.keys(manifest.models)
   t.ok(names.length >= 20, `declares the expected model set (${names.length} entries)`)
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    t.is(
+      Object.keys(entry).sort().join(','),
+      'bytes,sha256,urls',
+      `${name} contains only cache-key-bearing fields`
+    )
     const hasUrl =
       Array.isArray(entry.urls) &&
       entry.urls.length > 0 &&
       entry.urls.every((u) => typeof u === 'string' && u.startsWith('https://'))
     t.ok(hasUrl, `${name} has at least one https url (warm-models requires this)`)
 
-    // Integrity is pinned in CI (scripts/generate-model-manifest.mjs). When
-    // present it must be the right shape; null is allowed until pinned.
+    // When present, integrity pins must have the right shape. Null remains
+    // allowed while this workflow uses exact-key-only cache restoration.
     if (entry.sha256 !== null && entry.sha256 !== undefined) {
       t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is 64 hex chars when pinned`)
     }

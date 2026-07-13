@@ -37,6 +37,14 @@ inputs:
       (e.g. Python venvs).
     required: false
     default: 'true'
+  allow-partial-restore:
+    description: |
+      When 'true' (default), permit package/version prefix restores after the
+      content hash changes so unchanged models can be reused. Set to 'false'
+      for mutable or unpinned sources where a cacheEpoch or manifest change
+      must force an exact-key miss instead of restoring stale same-named files.
+    required: false
+    default: 'true'
   warm:
     description: |
       When 'true' (default) and the package has a
@@ -108,8 +116,7 @@ runs:
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
-        restore-keys: |
-          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+        restore-keys: ${{ inputs.allow-partial-restore == 'true' && format('models-{0}-{1}-', inputs.package, inputs.cache-version) || '' }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Fork-PR (untrusted) path: restore only, never save.
@@ -124,8 +131,7 @@ runs:
       with:
         path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
-        restore-keys: |
-          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+        restore-keys: ${{ inputs.allow-partial-restore == 'true' && format('models-{0}-{1}-', inputs.package, inputs.cache-version) || '' }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with

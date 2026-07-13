@@ -154,6 +154,9 @@ jobs:
         uses: ./.github/actions/cache-models
         with:
           package: llm-llamacpp
+          # Sources are not all integrity-pinned yet. An exact-key miss ensures
+          # cacheEpoch/model replacements cannot restore stale same-named files.
+          allow-partial-restore: 'false'
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
