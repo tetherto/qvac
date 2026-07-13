@@ -28,7 +28,7 @@ import https from 'node:https'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const MANIFEST_PATH = resolve(__dirname, '../test/integration/models.manifest.json')
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = { only: null, force: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--only') args.only = argv[++i]
@@ -37,7 +37,7 @@ function parseArgs (argv) {
   return args
 }
 
-function authHeaders (url) {
+function authHeaders(url) {
   const headers = { 'user-agent': 'qvac-manifest-generator' }
   if (url.includes('huggingface.co') && process.env.HF_TOKEN) {
     headers.authorization = `Bearer ${process.env.HF_TOKEN}`
@@ -45,7 +45,7 @@ function authHeaders (url) {
   return headers
 }
 
-function download (url, dest, redirectsLeft = 10) {
+function download(url, dest, redirectsLeft = 10) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: authHeaders(url) }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
@@ -66,7 +66,7 @@ function download (url, dest, redirectsLeft = 10) {
 
 // Hash is streamed because fs.readFile is hard-capped at 2 GiB
 // (kIoMaxLength) and most of these model files are larger than that.
-function sha256Stream (filePath) {
+function sha256Stream(filePath) {
   return new Promise((resolve, reject) => {
     const hash = createHash('sha256')
     const stream = createReadStream(filePath)
@@ -76,13 +76,13 @@ function sha256Stream (filePath) {
   })
 }
 
-async function sha256AndSize (filePath) {
+async function sha256AndSize(filePath) {
   const sha256 = await sha256Stream(filePath)
   const { size } = await stat(filePath)
   return { sha256, bytes: size }
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
   const tmp = await mkdtemp(join(tmpdir(), 'qvac-manifest-'))
