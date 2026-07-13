@@ -69,9 +69,8 @@ function applyLoggerSettings(config: QvacConfig): void {
 }
 
 async function initializeConfig(): Promise<void> {
-  // A host may have injected config already (the SDK worker pushes it over RPC
-  // before the first request). Only resolve from disk when it hasn't — a second
-  // `setConfig` would throw `ConfigAlreadySetError`.
+  // A host may have injected config already. Only resolve from disk when it hasn't
+  // — a second `setConfig` would throw `ConfigAlreadySetError`.
   if (!isConfigSet()) {
     const config = await resolveConfig()
     if (config) {
