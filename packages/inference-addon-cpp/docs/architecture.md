@@ -101,11 +101,11 @@ graph TB
     end
     
     subgraph "Inference Addons"
-        LLAMA[@qvac/llm-llamacpp]
-        WHISPER[@qvac/transcription-whispercpp]
-        NMT[@qvac/translation-nmtcpp]
-        TTS[@qvac/tts-ggml]
-        EMBED[@qvac/embed-llamacpp]
+        LLAMA["@qvac/llm-llamacpp"]
+        WHISPER["@qvac/transcription-whispercpp"]
+        NMT["@qvac/translation-nmtcpp"]
+        TTS["@qvac/tts-ggml"]
+        EMBED["@qvac/embed-llamacpp"]
         OCR["@qvac/ocr-onnx"]
     end
     
