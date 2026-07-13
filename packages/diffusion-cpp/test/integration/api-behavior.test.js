@@ -11,6 +11,8 @@ const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
+const isIos = os.platform() === 'ios'
+const isMobileDevice = isAndroid || isIos
 const isWindows = os.platform() === 'win32'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
@@ -19,12 +21,12 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 // Vulkan is ~24s/step), so give them a larger timeout to avoid tripping the
 // harness ("Can't comment after end") on a single slow generation.
 const BASE_TIMEOUT = 600000
-const testTimeout =
-  isWindows || isAndroid || os.platform() === 'ios' ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const testTimeout = isWindows || isMobileDevice ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 // Smallest model for fast behavior tests
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q4_0.gguf',
+  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
@@ -46,11 +48,21 @@ const SHORT_PARAMS = {
   seed: 1
 }
 
+// Device Farm has a tight execution cap, so mobile behavior tests use tiny
+// generations. Desktop still uses the larger params above for perf reporting.
+const MOBILE_SHORT_PARAMS = {
+  ...SHORT_PARAMS,
+  steps: 2,
+  width: 128,
+  height: 128
+}
+
 async function setupModel(t) {
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: MODEL.name
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
   })
 
   const model = new ImgStableDiffusion({
@@ -87,17 +99,17 @@ function saveGeneratedImages(modelDir, filenameSuffix, images) {
 
 safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async (t) => {
   const { model, modelDir } = await setupModel(t)
-  const isMobileDevice = os.platform() === 'ios' || os.platform() === 'android'
+  const params = isMobileDevice ? MOBILE_SHORT_PARAMS : SHORT_PARAMS
 
-  // Mobile: single run (Pixel 9 Pro takes ~273s per generation — 3x would blow
-  // the 20-minute Device Farm timeout). Desktop: PERF_RUNS iterations.
+  // Mobile: single tiny run; full-size generations can consume most of the
+  // Device Farm budget. Desktop: PERF_RUNS iterations.
   const totalIterations = isMobileDevice ? 1 : WARMUP_RUNS + PERF_RUNS
   let images = []
   for (let iteration = 0; iteration < totalIterations; iteration++) {
     const isWarmup = !isMobileDevice && iteration < WARMUP_RUNS
     const tGen = Date.now()
     let ttfbMs = null
-    const response = await model.run({ ...SHORT_PARAMS, seed: SHORT_PARAMS.seed + iteration })
+    const response = await model.run({ ...params, seed: params.seed + iteration })
 
     if (iteration === 0) {
       t.ok(response, 'run() returns a response')
@@ -164,7 +176,8 @@ safeTest('run | cancel: cancels current job', { timeout: testTimeout }, async (t
 
 safeTest('run | run: second run() throws busy error', { timeout: testTimeout }, async (t) => {
   const { model, modelDir } = await setupModel(t)
-  const firstResponse = await model.run(SHORT_PARAMS)
+  const params = isMobileDevice ? MOBILE_SHORT_PARAMS : SHORT_PARAMS
+  const firstResponse = await model.run(params)
   let firstError = null
   if (typeof firstResponse.onError === 'function') {
     firstResponse.onError((err) => {
@@ -174,7 +187,7 @@ safeTest('run | run: second run() throws busy error', { timeout: testTimeout }, 
 
   const result = await Promise.race([
     model
-      .run(SHORT_PARAMS)
+      .run(params)
       .then(() => ({ kind: 'no-throw' }))
       .catch((err) => ({ kind: 'busy', err })),
     firstResponse
@@ -208,9 +221,10 @@ safeTest('run | run: second run() throws busy error', { timeout: testTimeout }, 
 
 safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, async (t) => {
   const { model, modelDir } = await setupModel(t)
+  const params = isMobileDevice ? MOBILE_SHORT_PARAMS : SHORT_PARAMS
 
   // Start a job and cancel after first progress tick
-  const response1 = await model.run(SHORT_PARAMS)
+  const response1 = await model.run(params)
   let cancelFired = false
   const chain1 = response1.onUpdate(async (data) => {
     if (cancelFired) return
@@ -225,7 +239,7 @@ safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, a
   })
 
   // Should be able to run again
-  const response2 = await model.run(SHORT_PARAMS)
+  const response2 = await model.run(params)
   const images = []
   await response2
     .onUpdate((data) => {
@@ -239,7 +253,8 @@ safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, a
 
 safeTest('run() before load() throws clear initialization error', { timeout: 60000 }, async (t) => {
   const [, modelDir] = await ensureModel({
-    modelName: MODEL.name
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
   })
 
   const model = new ImgStableDiffusion({

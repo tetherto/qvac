@@ -38,6 +38,10 @@ async function runGenerateImageFlux2Test (options = {}) { // eslint-disable-line
   return runIntegrationModule('../integration/generate-image-flux2.test.js', options)
 }
 
+async function runGenerateImageIdeogramTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-ideogram.test.js', options)
+}
+
 async function runGenerateImageSd3I2iTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-sd3-i2i.test.js', options)
 }
@@ -54,6 +58,10 @@ async function runGenerateImageTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/generate-image.test.js', options)
 }
 
+async function runGenerateVideoLtxTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-video-ltx.test.js', options)
+}
+
 async function runGenerateVideoWanTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-video-wan.test.js', options)
 }
@@ -64,6 +72,10 @@ async function runInputValidationTest (options = {}) { // eslint-disable-line no
 
 async function runLoraBridgeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/lora-bridge.test.js', options)
+}
+
+async function runMainGpuBackendTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/main-gpu-backend.test.js', options)
 }
 
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -79,12 +91,15 @@ module.exports = {
   runGenerateImageFlux2I2iLargeTest,
   runGenerateImageFlux2I2iTest,
   runGenerateImageFlux2Test,
+  runGenerateImageIdeogramTest,
   runGenerateImageSd3I2iTest,
   runGenerateImageSd3Test,
   runGenerateImageSdxlTest,
   runGenerateImageTest,
+  runGenerateVideoLtxTest,
   runGenerateVideoWanTest,
   runInputValidationTest,
   runLoraBridgeTest,
+  runMainGpuBackendTest,
   runModelLoadingTest
 }
