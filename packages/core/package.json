@@ -65,8 +65,7 @@
   },
   "files": [
     "src/**/*",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ],
   "scripts": {
     "lint": "lunte",
