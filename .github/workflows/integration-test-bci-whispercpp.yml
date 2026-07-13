@@ -138,7 +138,7 @@ jobs:
             runner: qvac-win25-x64-gpu
             no_gpu: 'false'
             benchmark_matrix_json: >-
-              [{"useGPU":false,"backendHint":"cpu"}]
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
 
     steps:
       - name: Setup Node.js
@@ -220,7 +220,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
           npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          # Extract from inside the temp dir with a RELATIVE archive name. The
+          # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
+          # reads the "C:" in an absolute -f/-C argument as a remote host and
+          # aborts, so the extract silently no-ops and the addon is never staged.
+          Push-Location "${{ runner.temp }}\tmp"
+          tar -xzf $tgz.Name
+          Pop-Location
           Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
@@ -250,8 +256,8 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: |
-          $addon = Get-ChildItem -Recurse -Filter 'qvac__bci-whispercpp*.bare' prebuilds/ | Select-Object -First 1
-          if (-not $addon) { Write-Host "no .bare in prebuilds/"; exit 0 }
+          $addon = Get-ChildItem -Path prebuilds/win32-x64 -Recurse -Filter 'qvac__bci-whispercpp*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $addon) { Write-Host "no win32-x64 .bare in prebuilds/"; exit 0 }
           Write-Host "addon: $($addon.FullName)"
           $dumpbin = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $dumpbin) { Write-Host "dumpbin not found"; exit 0 }
@@ -261,20 +267,29 @@ jobs:
       # and its vulkan-1.dll dependency are only loaded lazily when the GPU is
       # used), bci-whispercpp statically links whisper/ggml with Vulkan, so the
       # .bare has a HARD import on vulkan-1.dll that must resolve at load time.
-      # bare's addon loader does not resolve that static import via PATH, so we
-      # place the Vulkan loader in the addon's own directory (Windows always
-      # searches the loaded module's own directory first).
+      # We copy the Vulkan loader next to the addon (Windows always searches the
+      # loaded module's own directory first) as a belt-and-suspenders fallback.
+      # The loader lives in System32 on the qvac-win25-x64-gpu runner (that is
+      # where the driver installs it and how the Vulkan device is found), not
+      # under C:\VulkanSDK, so search System32 / VULKAN_SDK\Bin first. Non-fatal:
+      # if it is not found, the default DLL search path (System32) still resolves
+      # the import, so a benchmark-only run must not be gated on the copy.
       - if: ${{ matrix.platform == 'win32' }}
         name: Windows - stage Vulkan loader next to addon
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: |
-          $vk = Get-ChildItem -Path "C:\VulkanSDK" -Filter vulkan-1.dll -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $vk) { Write-Host "vulkan-1.dll not found under C:\VulkanSDK"; exit 1 }
-          $dir = Get-ChildItem -Recurse -Filter 'qvac__bci-whispercpp*.bare' prebuilds/ | Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
-          if (-not $dir) { Write-Host "no .bare dir in prebuilds/"; exit 1 }
-          Write-Host "copying $($vk.FullName) -> $dir"
-          Copy-Item -Path $vk.FullName -Destination $dir -Force
+          $vk = @("$Env:WINDIR\System32\vulkan-1.dll", "$Env:VULKAN_SDK\Bin\vulkan-1.dll") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $vk) {
+            $found = Get-ChildItem -Path "C:\VulkanSDK" -Filter vulkan-1.dll -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $vk = $found.FullName }
+          }
+          if (-not $vk) { Write-Host "vulkan-1.dll not found; relying on the default DLL search path (System32)"; exit 0 }
+          $dir = Get-ChildItem -Path prebuilds/win32-x64 -Recurse -Filter 'qvac__bci-whispercpp*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
+          if (-not $dir) { Write-Host "no win32-x64 .bare dir in prebuilds/"; exit 0 }
+          Write-Host "copying $vk -> $dir"
+          Copy-Item -Path $vk -Destination $dir -Force
 
       - name: Download models (registry)
         working-directory: ${{ inputs.workdir }}
