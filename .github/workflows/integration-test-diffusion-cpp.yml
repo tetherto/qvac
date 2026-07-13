@@ -184,6 +184,7 @@ jobs:
           package: diffusion-cpp
           group: base
           cache-key-suffix: base
+          hf-token: ${{ secrets.HF_TOKEN }}
 
       - name: Cache Ideogram integration test models
         id: model-cache-ideogram
@@ -193,6 +194,7 @@ jobs:
           package: diffusion-cpp
           group: ideogram
           cache-key-suffix: ideogram
+          hf-token: ${{ secrets.HF_TOKEN }}
 
       - name: Cache LTX integration test models
         id: model-cache-ltx
@@ -202,6 +204,7 @@ jobs:
           package: diffusion-cpp
           group: ltx
           cache-key-suffix: ltx
+          hf-token: ${{ secrets.HF_TOKEN }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
