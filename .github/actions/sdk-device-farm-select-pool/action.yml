@@ -1,12 +1,12 @@
 name: "SDK Device Farm - Select Pool"
 description: >-
-  Selects a single AWS Device Farm device pool from a candidate list.
-  When a pool name is given, that pool is used as-is without touching Device
-  Farm. When no name is given, a random pool is chosen, using the device
-  availability hint only as a soft preference (public-device availability is a
-  likelihood, not a guarantee) and never failing on it — the downstream
-  "wait-device-farm-running" gate remains the real readiness arbiter. Output is
-  a single-element JSON array suitable for a matrix.
+  Selects a single AWS Device Farm device pool from a candidate list. When a
+  pool name is given, that pool is used as-is; when no name is given, a random
+  candidate is chosen. No Device Farm APIs are called: the OIDC role is not
+  granted devicefarm:GetDevice/ListDevices, and public-device availability is
+  only a likelihood anyway. Device Farm queues the run until a unit is free and
+  the downstream "wait-device-farm-running" gate is the real readiness arbiter.
+  Output is a single-element JSON array suitable for a matrix.
 
 inputs:
   pools:
@@ -14,9 +14,8 @@ inputs:
     required: true
   pool-name:
     description: >-
-      Explicit pool name to select. When set, that pool is used as-is (no
-      availability check). When empty, a random pool is chosen with the
-      availability hint as a soft preference.
+      Explicit pool name to select. When set, that pool is used as-is; when
+      empty, a random candidate is chosen.
     required: false
     default: ""
 
@@ -84,92 +83,15 @@ runs:
           exit 0
         fi
 
-        # --- No name given: pick a random pool, availability as soft hint -----
-        # For public devices, get-device availability is a *likelihood* over the
-        # fleet of a model+OS, not a per-unit free/busy flag. So we use it only
-        # to prefer a candidate that is more likely to start quickly, and never
-        # fail on it: Device Farm queues the run until a unit frees up, and
-        # "wait-device-farm-running" is the real readiness/timeout arbiter.
-
-        # Resolve a concrete device ARN from a pool's rules. Pools defined by an
-        # explicit device ARN expose it directly; attribute-based pools
-        # (MODEL/OS filters) do not, in which case we skip the availability hint.
-        # AWS errors are surfaced (not swallowed) so a misconfigured pool or an
-        # unexpected rule shape is diagnosable from the job log.
-        resolve_device_arn() {
-          local pool_arn="$1" rules err_file
-          err_file="$(mktemp)"
-          if ! rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>"$err_file"); then
-            echo "    get-device-pool failed: $(tr '\n' ' ' <"$err_file")" >&2
-            rm -f "$err_file"
-            return 0
-          fi
-          rm -f "$err_file"
-          echo "$rules" | jq -r '.. | strings' 2>/dev/null \
-            | grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' \
-            | head -n1 || true
-        }
-
-        get_availability() {
-          local device_arn="$1" out err_file
-          err_file="$(mktemp)"
-          if out=$(aws devicefarm get-device --arn "$device_arn" --query 'device.availability' --output text 2>"$err_file"); then
-            rm -f "$err_file"
-            echo "$out"
-          else
-            echo "    get-device failed: $(tr '\n' ' ' <"$err_file")" >&2
-            rm -f "$err_file"
-            echo "UNKNOWN"
-          fi
-        }
-
+        # --- No name given: pick a random candidate --------------------------
+        # No Device Farm API is queried here. The OIDC role is scoped to
+        # scheduling/reading runs and does not include devicefarm:GetDevice or
+        # ListDevices, so a live availability check is not possible; and for
+        # public devices availability is only a likelihood in any case. Device
+        # Farm queues the scheduled run until a matching unit is free, and
+        # "wait-device-farm-running" is the real readiness/timeout gate.
         COUNT=$(echo "$POOLS" | jq 'length')
-        mapfile -t NAMES < <(echo "$POOLS" | jq -r '.[].name')
-        mapfile -t ARNS < <(echo "$POOLS" | jq -r '.[].arn')
-
-        echo "Choosing a device pool from $COUNT candidate(s) (availability = soft preference)..."
-
-        BEST_AVAIL_IDX=""
-        FALLBACK_IDX=""
-
-        # Randomise candidate order so load spreads across devices over time.
-        for i in $(seq 0 $((COUNT - 1)) | shuf); do
-          NAME="${NAMES[$i]}"
-          ARN="${ARNS[$i]}"
-
-          # First candidate in shuffled order is the best-effort fallback.
-          if [ -z "$FALLBACK_IDX" ]; then
-            FALLBACK_IDX="$i"
-          fi
-
-          DEVICE_ARN=$(resolve_device_arn "$ARN" || true)
-          if [ -z "$DEVICE_ARN" ]; then
-            echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
-            continue
-          fi
-          echo "  - '$NAME': device=$DEVICE_ARN"
-
-          AVAIL=$(get_availability "$DEVICE_ARN")
-          echo "  - '$NAME': availability=$AVAIL"
-
-          # HIGHLY_AVAILABLE is the strongest hint — take it immediately.
-          if [ "$AVAIL" = "HIGHLY_AVAILABLE" ]; then
-            emit_pool "$NAME" "$ARN" "random: HIGHLY_AVAILABLE"
-            exit 0
-          fi
-
-          if [ "$AVAIL" = "AVAILABLE" ] && [ -z "$BEST_AVAIL_IDX" ]; then
-            BEST_AVAIL_IDX="$i"
-          fi
-        done
-
-        if [ -n "$BEST_AVAIL_IDX" ]; then
-          emit_pool "${NAMES[$BEST_AVAIL_IDX]}" "${ARNS[$BEST_AVAIL_IDX]}" "random: AVAILABLE"
-          exit 0
-        fi
-
-        # Nothing reported AVAILABLE/HIGHLY_AVAILABLE. Availability is only a
-        # hint for public devices, so proceed with a best-effort pick; Device
-        # Farm will queue the run and wait-device-farm-running gates readiness.
-        echo "::notice::no candidate reported AVAILABLE; proceeding with a best-effort pick (wait-device-farm-running will gate readiness)"
-        emit_pool "${NAMES[$FALLBACK_IDX]}" "${ARNS[$FALLBACK_IDX]}" "random: best-effort (no availability signal)"
+        IDX=$(seq 0 $((COUNT - 1)) | shuf -n1)
+        NAME=$(echo "$POOLS" | jq -r ".[$IDX].name")
+        ARN=$(echo "$POOLS" | jq -r ".[$IDX].arn")
+        emit_pool "$NAME" "$ARN" "random (1 of $COUNT candidate(s))"
