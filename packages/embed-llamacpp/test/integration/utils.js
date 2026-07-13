@@ -4,6 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
+const crypto = require('bare-crypto')
 
 // Lazily loaded: requiring index.js pulls in the native binding, which isn't
 // needed for the model download/integrity helpers and lets those run in unit
@@ -257,22 +258,10 @@ function entryHasIntegrity(entry) {
   return hasSha || hasBytes
 }
 
-// Streaming sha256 via bare-crypto. Returns null when bare-crypto is
-// unavailable so callers can degrade rather than fail.
+// Streaming sha256 via the package's direct bare-crypto dependency.
 async function sha256File(filePath) {
-  let crypto
-  try {
-    crypto = require('bare-crypto')
-  } catch (_) {
-    return null
-  }
   return await new Promise((resolve, reject) => {
-    let hash
-    try {
-      hash = crypto.createHash('sha256')
-    } catch (_) {
-      return resolve(null)
-    }
+    const hash = crypto.createHash('sha256')
     const stream = fs.createReadStream(filePath)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
@@ -283,7 +272,7 @@ async function sha256File(filePath) {
 // Verifies a model file against a manifest entry. Byte-length is checked first
 // (cheap) so a size mismatch fails fast before hashing a multi-GB file.
 // { ok: true } when it passes (or when no integrity value is pinned yet).
-async function verifyModelFile(filePath, entry) {
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
   let stats
   try {
     stats = fs.statSync(filePath)
@@ -298,12 +287,14 @@ async function verifyModelFile(filePath, entry) {
 
   const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
   if (hasSha) {
-    const got = await sha256File(filePath)
-    if (got === null) {
-      console.log(
-        '[download] WARNING: sha256 pinned for this model but bare-crypto is unavailable — integrity NOT verified'
-      )
-      return { ok: true, unverified: true }
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
     }
     if (got !== entry.sha256.toLowerCase()) {
       return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
@@ -381,6 +372,17 @@ function prestagedModelDir(modelName) {
   return null
 }
 
+async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
+  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const res = await verifyModelFile(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+  }
+}
+
 /**
  * Ensures the model file exists, downloading it if necessary
  * @param {Object} opts
@@ -447,12 +449,7 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
   if (staged) {
     fs.mkdirSync(dir, { recursive: true })
     console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
-    fs.copyFileSync(path.join(staged, modelName), modelPath)
-    const stat = fs.statSync(modelPath)
-    if (stat.size === 0) {
-      fs.unlinkSync(modelPath)
-      throw new Error(`[prestage] copied model ${modelName} is empty`)
-    }
+    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
     return [modelName, dir]
   }
 
@@ -642,6 +639,7 @@ module.exports = {
   resolveModelEntry,
   verifyModelFile,
   sha256File,
+  copyPrestagedModel,
   getDownloadCount,
   resetDownloadCount,
   getModelConfigs,

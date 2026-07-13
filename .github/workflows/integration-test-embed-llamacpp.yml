@@ -89,6 +89,9 @@ jobs:
         uses: ./.github/actions/cache-models
         with:
           package: embed-llamacpp
+          # Sources are not all integrity-pinned yet. An exact-key miss ensures
+          # cacheEpoch/model replacements cannot restore stale same-named files.
+          allow-partial-restore: 'false'
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

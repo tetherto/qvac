@@ -1,6 +1,5 @@
 {
   "cacheEpoch": 1,
-  "_comment": "Single source of truth for embed-llamacpp integration test models. Consumed by test/integration/utils.js (ensureModel) for URL resolution + sha256/bytes integrity, and by .github/actions/cache-models for the cache key so ordinary test-JS edits no longer churn the model cache. sha256/bytes are left null until pinned from a fresh download via scripts/pin-model-manifest.mjs. Bump cacheEpoch to force a hard cache eviction.",
   "models": {
     "embeddinggemma-300M-Q8_0.gguf": {
       "urls": [
