@@ -16,6 +16,7 @@ on:
       - "packages/embed-llamacpp/**"
       - ".github/workflows/*embed*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
   workflow_dispatch:
 
 permissions:

@@ -16,6 +16,7 @@ on:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/**"
 
   workflow_dispatch:
   workflow_call:
@@ -259,6 +260,7 @@ jobs:
       - label-gate
     if: |
       always() &&
+      !cancelled() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
@@ -283,7 +285,7 @@ jobs:
     # records reuse for subsequent JS-only pushes; native changes produce a new
     # hash → a new marker → a fresh rebuild. Replaces actions/cache/save, which
     # cannot write from pull_request_target.
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
@@ -306,7 +308,7 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - authorize
       - prebuild
@@ -329,7 +331,7 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - authorize
       - prebuild

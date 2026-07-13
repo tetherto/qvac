@@ -5,6 +5,8 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "addon/BCIErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -14,6 +16,95 @@ namespace qvac_lib_inference_addon_bci {
 namespace {
 constexpr size_t K_HEADER_BYTES = 8;
 constexpr uint32_t K_EMBEDDER_MAGIC = 0x42434945;
+
+constexpr uint32_t K_MIN_PARALLEL_TIMESTEPS = 64;
+constexpr unsigned K_MAX_PREPROC_THREADS = 8;
+
+unsigned resolveTimestepWorkerCount(uint32_t numTimesteps) {
+  const unsigned hardware = std::thread::hardware_concurrency();
+  const unsigned capped =
+      (hardware == 0) ? 1U : std::min(hardware, K_MAX_PREPROC_THREADS);
+  if (capped <= 1 || numTimesteps < K_MIN_PARALLEL_TIMESTEPS) {
+    return 1U;
+  }
+  return std::min<unsigned>(capped, numTimesteps);
+}
+
+template <typename Body>
+void spawnTimestepWorkers(
+    uint32_t numTimesteps, uint32_t chunk, unsigned numThreads,
+    const Body& body) {
+  std::vector<std::thread> workers;
+  workers.reserve(numThreads - 1);
+  for (unsigned t = 1; t < numThreads; ++t) {
+    const uint32_t begin = std::min(numTimesteps, t * chunk);
+    const uint32_t end = std::min(numTimesteps, begin + chunk);
+    if (begin >= end) {
+      break;
+    }
+    workers.emplace_back([&body, begin, end]() { body(begin, end); });
+  }
+  body(0U, std::min(numTimesteps, chunk));
+  for (auto& worker : workers) {
+    worker.join();
+  }
+}
+
+template <typename Body>
+void forEachTimestepBand(uint32_t numTimesteps, const Body& body) {
+  const unsigned numThreads = resolveTimestepWorkerCount(numTimesteps);
+  if (numThreads <= 1) {
+    body(0U, numTimesteps);
+    return;
+  }
+  const uint32_t chunk = (numTimesteps + numThreads - 1) / numThreads;
+  spawnTimestepWorkers(numTimesteps, chunk, numThreads, body);
+}
+
+void addScaledRow(float* out, const float* src, float scale, uint32_t count) {
+  for (uint32_t i = 0; i < count; ++i) {
+    out[i] += src[i] * scale;
+  }
+}
+
+void copyRow(float* out, const float* src, uint32_t count) {
+  for (uint32_t i = 0; i < count; ++i) {
+    out[i] = src[i];
+  }
+}
+
+void applySoftsignRow(float* out, uint32_t count) {
+  for (uint32_t i = 0; i < count; ++i) {
+    const float value = out[i];
+    out[i] = value / (1.0F + std::abs(value));
+  }
+}
+
+void projectTimestepRow(
+    float* out, const float* features, const std::vector<float>& projectionW,
+    const std::vector<float>& projectionBias, uint32_t nf) {
+  copyRow(out, projectionBias.data(), nf);
+  for (uint32_t d = 0; d < nf; ++d) {
+    const float* weightRow = &projectionW[static_cast<size_t>(d) * nf];
+    addScaledRow(out, weightRow, features[d], nf);
+  }
+  applySoftsignRow(out, nf);
+}
+
+void smoothTimestepRow(
+    float* out, const std::vector<float>& data, uint32_t numTimesteps,
+    uint32_t numChannels, const std::vector<float>& kernel, int halfK,
+    uint32_t t) {
+  const int kernelTaps = static_cast<int>(kernel.size());
+  for (int k = 0; k < kernelTaps; ++k) {
+    const int srcT = static_cast<int>(t) + k - halfK;
+    if (srcT < 0 || srcT >= static_cast<int>(numTimesteps)) {
+      continue;
+    }
+    const float* src = &data[static_cast<size_t>(srcT) * numChannels];
+    addScaledRow(out, src, kernel[k], numChannels);
+  }
+}
 
 // Kernel-trim threshold used by gaussianSmooth: values below this are
 // considered numerically negligible and trimmed from the ends of the kernel
@@ -163,17 +254,10 @@ std::vector<float> NeuralProcessor::gaussianSmooth(
   std::vector<float> trimK(kernel.begin() + start, kernel.begin() + end + 1);
   const int halfK = static_cast<int>(trimK.size()) / 2;
 
-  std::vector<float> result(data.size());
-  for (uint32_t c = 0; c < numChannels; ++c) {
-    for (uint32_t t = 0; t < numTimesteps; ++t) {
-      float val = 0.0F;
-      for (int k = 0; k < static_cast<int>(trimK.size()); ++k) {
-        int srcT = static_cast<int>(t) + k - halfK;
-        if (srcT >= 0 && srcT < static_cast<int>(numTimesteps))
-          val += data[srcT * numChannels + c] * trimK[k];
-      }
-      result[t * numChannels + c] = val;
-    }
+  std::vector<float> result(data.size(), 0.0F);
+  for (uint32_t t = 0; t < numTimesteps; ++t) {
+    float* out = &result[static_cast<size_t>(t) * numChannels];
+    smoothTimestepRow(out, data, numTimesteps, numChannels, trimK, halfK, t);
   }
   return result;
 }
@@ -232,21 +316,17 @@ std::vector<float> NeuralProcessor::applyDayProjection(
     cachedDayIdx_ = di;
   }
 
-  const auto& W = cachedProjectionW_;
-  const auto& bias = cachedProjectionBias_;
+  const auto& projectionW = cachedProjectionW_;
+  const auto& projectionBias = cachedProjectionBias_;
 
-  // Python: output[t,k] = softsign(sum_d(features[t,d] * W[d,k]) + bias[k])
-  // i.e. output = features @ W + bias (right-multiply by W)
-  std::vector<float> output(numTimesteps * nf);
-  for (uint32_t t = 0; t < numTimesteps; ++t) {
-    for (uint32_t k = 0; k < nf; ++k) {
-      float s = bias[k];
-      for (uint32_t d = 0; d < nf; ++d) {
-        s += features[t * numChannels + d] * W[d * nf + k];
-      }
-      output[t * nf + k] = s / (1.0F + std::abs(s));
+  std::vector<float> output(static_cast<size_t>(numTimesteps) * nf);
+  forEachTimestepBand(numTimesteps, [&](uint32_t tBegin, uint32_t tEnd) {
+    for (uint32_t t = tBegin; t < tEnd; ++t) {
+      float* out = &output[static_cast<size_t>(t) * nf];
+      const float* feat = &features[static_cast<size_t>(t) * numChannels];
+      projectTimestepRow(out, feat, projectionW, projectionBias, nf);
     }
-  }
+  });
 
   return output;
 }
