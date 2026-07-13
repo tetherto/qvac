@@ -10,7 +10,7 @@ const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error
 /**
  * High-level Parakeet speech-to-text client backed by the ggml engine
  * sourced from qvac-parakeet.cpp. Takes a single `.gguf` checkpoint
- * (CTC, TDT, EOU, or Sortformer); the model type is auto-detected
+ * (CTC, TDT, RNNT, EOU, or Sortformer); the model type is auto-detected
  * from GGUF metadata, so the same class transcribes or diarizes
  * depending on the file you load.
  */

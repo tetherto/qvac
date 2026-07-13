@@ -17,7 +17,7 @@ struct Transcript {
   float end;
   size_t id;
   // True when this segment ends on a recognised end-of-utterance boundary
-  // (EOU streaming: `<EOU>` token; CTC/TDT/Sortformer always leave this
+  // (EOU streaming: `<EOU>` token; CTC/TDT/RNNT/Sortformer always leave this
   // false). The text field still carries any speech tokens decoded in the
   // same chunk; consumers that want a turn-end signal independent of the
   // transcript should test this flag.

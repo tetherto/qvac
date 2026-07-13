@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `rnnt` model type: plain RNN-T (Transducer) checkpoints — e.g. the Transducer
+  branch of NeMo hybrid `EncDecHybridRNNTCTCBPEModel` models such as the Georgian
+  `stt_ka_fastconformer_hybrid_large_pc` — auto-detected from GGUF metadata and
+  exposed in the public `ModelType` union. The vendored converter gains rnnt
+  export (`parakeet.rnnt.*` metadata + `rnnt.predict/joint` tensors, `--type
+  rnnt` in `convert-nemo.sh`). Requires a `parakeet-cpp` engine that ships the
+  rnnt head; the registry port pin must be bumped past the engine-side merge
+  before this is functional.
+
 ## [0.9.1] - 2026-07-08
 
 ### Fixed

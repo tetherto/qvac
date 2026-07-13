@@ -371,7 +371,7 @@ void ParakeetModel::load() {
   is_loaded_ = true;
 
   // Auto-detect modelType from the loaded GGUF's metadata. The engine
-  // returns "ctc" / "tdt" / "eou" / "sortformer" reflecting the
+  // returns "ctc" / "tdt" / "rnnt" / "eou" / "sortformer" reflecting the
   // `parakeet.model.type` GGUF metadata field, so JS callers don't
   // need to pass `modelType` themselves -- the binding picks the
   // right dispatch (ASR vs Sortformer) automatically. We only fall

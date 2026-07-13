@@ -37,7 +37,7 @@ const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
 
 const SAMPLE_RATE = 16000
-const VALID_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
+const VALID_MODEL_TYPES = ['tdt', 'ctc', 'rnnt', 'eou', 'sortformer']
 const VALID_QUANTS = ['q8_0', 'q4_0', 'f16']
 const RTF_RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 const RESULT_MARKER = 'QVAC_RTF_REPORT::'

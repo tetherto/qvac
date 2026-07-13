@@ -1,6 +1,6 @@
 # transcription-parakeet
 
-This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer speaker-diarization inference within QVAC runtime applications. It provides an easy interface to load, execute, and manage Parakeet inference instances, supporting CTC, TDT, EOU, and Sortformer checkpoints from a single binding.
+This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer speaker-diarization inference within QVAC runtime applications. It provides an easy interface to load, execute, and manage Parakeet inference instances, supporting CTC, TDT, RNNT, EOU, and Sortformer checkpoints from a single binding.
 
 ## Table of Contents
 
@@ -179,7 +179,7 @@ The three underlying scripts are also flag-driven if you want to run them separa
 setup-venv.sh      [--python <bin>] [--venv <path>] [--force] [--help]
 download-models.sh [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--output <dir>] [--force] [--help]
-convert-nemo.sh    [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
+convert-nemo.sh    [--type ctc|tdt|rnnt|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--quant f16|q8_0|q5_0|q4_0|f32]
                    [--python <bin>]
                    [--nemo-dir <dir>] [--output <dir>] [--force] [--help]
@@ -194,6 +194,7 @@ convert-nemo.sh    [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
 | `eou` | [`nvidia/parakeet_realtime_eou_120m-v1`](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1) |
 | `sortformer` | [`nvidia/diar_sortformer_4spk-v1`](https://huggingface.co/nvidia/diar_sortformer_4spk-v1) |
 | `sortformer-streaming-v2.1` | [`nvidia/diar_streaming_sortformer_4spk-v2.1`](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1) |
+| `rnnt` | [`nvidia/stt_ka_fastconformer_hybrid_large_pc`](https://huggingface.co/nvidia/stt_ka_fastconformer_hybrid_large_pc) — convert-only; `download-models.sh` has no `rnnt` entry yet, place the `.nemo` manually |
 
 NVIDIA Open Model License -- see each repo's model card for terms.
 
@@ -224,7 +225,7 @@ Most users interact with the package through `index.js`. From that entrypoint we
 | | `backendsDir` | Root directory for dynamically-loaded ggml backend `.so` files (Vulkan, OpenCL, per-arch CPU variants on Android). Defaults to the package's `prebuilds/` folder; the native addon appends `<bare-target>/<module-name>` before scanning. Pass an explicit path when prebuilds live elsewhere — e.g. Android `ApplicationInfo.nativeLibraryDir` when backend libs ship inside the APK. No-op on Apple (statically linked). |
 | | `openclCacheDir` | Persistent directory for ggml-opencl's compiled program-binary cache (`$GGML_OPENCL_CACHE_DIR`). Android-only; pass the host app's cache directory (e.g. `Context.getCacheDir()`) to skip cold `clBuildProgram` on every process start. Ignored on other platforms. |
 
-The model type (CTC / TDT / EOU / Sortformer) is **auto-detected from the GGUF metadata**, so callers don't need to pass `modelType`. Other knobs (`captionEnabled`, `timestampsEnabled`, `seed`, `sampleRate`, `channels`) keep sensible defaults.
+The model type (CTC / TDT / RNNT / EOU / Sortformer) is **auto-detected from the GGUF metadata**, so callers don't need to pass `modelType`. Other knobs (`captionEnabled`, `timestampsEnabled`, `seed`, `sampleRate`, `channels`) keep sensible defaults.
 
 **Sortformer Streaming Diarization (v2.1 + AOSC).** parakeet-cpp ships
 two streaming-diarization paths picked automatically by the GGUF:
@@ -462,7 +463,7 @@ npm run setup-models -- -t tdt -q q8_0
 ### 3. Run the bundled examples
 
 ```bash
-# Single-file transcription (any model type -- CTC / TDT / EOU / Sortformer)
+# Single-file transcription (any model type -- CTC / TDT / RNNT / EOU / Sortformer)
 bare examples/transcribe.js \
      --model models/parakeet-tdt-0.6b-v3.q8_0.gguf \
      --audio examples/samples/sample-16k.wav
@@ -499,6 +500,7 @@ The live-mic examples capture the default input device via `sox -d` (install: `b
 | **CTC** | English | argmax CTC | ~ 700 MiB | Fast, no PnC. |
 | **TDT** | ~25 | RNN-T greedy + duration | ~ 715 MiB | Recommended default; PnC + auto-detect. |
 | **EOU** | English | RNN-T greedy + `<EOU>` | ~ 132 MiB | Streaming-trained; native end-of-turn token. |
+| **RNNT** | checkpoint-dependent (e.g. Georgian for `stt_ka_fastconformer_hybrid_large_pc`) | plain RNN-T greedy | checkpoint-dependent | Duration-less Transducer heads, incl. the RNN-T branch of hybrid transducer+CTC checkpoints. Requires a parakeet-cpp engine with the `rnnt` head. |
 | **Sortformer v1** | n/a | Diarization head (sliding history) | ~ 141 MiB | 4-speaker. **Default for offline diarization.** |
 | **Sortformer v2.1 + AOSC** | n/a | Diarization head + speaker cache | ~ 141 MiB | 4-speaker. **Default for streaming diarization.** AOSC anchors speaker slots across silence/re-entry; auto-detected via GGUF metadata tag `parakeet.model_variant`. |
 

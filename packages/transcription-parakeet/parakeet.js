@@ -33,7 +33,7 @@ function createParakeetError (code, message, cause = undefined) {
  * runtime. Wraps the ggml-backed Parakeet engine sourced from
  * qvac-parakeet.cpp. The model type is auto-detected from the
  * loaded GGUF's metadata, so there's no `modelType` field on the
- * config -- pass any of CTC / TDT / EOU / Sortformer .gguf files
+ * config -- pass any of CTC / TDT / RNNT / EOU / Sortformer .gguf files
  * to `loadWeights()` and the right pipeline is chosen automatically.
  */
 class ParakeetInterface {

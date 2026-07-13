@@ -166,7 +166,14 @@ convert_one() {
 
   if [[ ! -f "$nemo" ]]; then
     echo "  x ${t}: .nemo missing -- expected ${nemo}"
-    echo "         run \`./scripts/download-models.sh -t ${t}\` first."
+    if [[ "$t" == "rnnt" ]]; then
+      # download-models.sh has no rnnt entry yet (see nemo_filename above).
+      echo "         downloads are not wired for rnnt; fetch the checkpoint from"
+      echo "         HF (nvidia/stt_ka_fastconformer_hybrid_large_pc) and place"
+      echo "         it at the path above."
+    else
+      echo "         run \`./scripts/download-models.sh -t ${t}\` first."
+    fi
     return 1
   fi
   if [[ -f "$gguf" ]] && [[ "$FORCE" -eq 0 ]]; then

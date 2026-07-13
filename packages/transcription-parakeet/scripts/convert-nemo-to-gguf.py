@@ -4,7 +4,10 @@
 #   (scripts/convert-nemo-to-gguf.py).
 # qvac-parakeet.cpp owns the GGUF tensor/metadata layout this script
 # produces; if the layout changes upstream, resync the file rather than
-# diverging it locally. Copy is verbatim apart from this header.
+# diverging it locally. Copy is verbatim apart from this header, PLUS the
+# rnnt head support, which is ahead of the pinned commit: it mirrors the
+# engine-side change hunk-for-hunk (see the companion parakeet-cpp PR).
+# Re-pin and resync once that merges.
 # Original copyright/license: MIT, qvac-parakeet.cpp authors -- see
 # the top-level NOTICE for attribution.
 """Convert an NVIDIA NeMo .nemo archive to a single GGUF for the
@@ -23,10 +26,16 @@ Auto-detects the model flavour from ``cfg['target']``:
                                             cache-aware streaming, end-of-
                                             utterance token detection;
                                             parakeet_realtime_eou_120m-v1)
+  - ``EncDecHybridRNNTCTCBPEModel`` / ``EncDecRNNTBPEModel``
+                            (no TDT durations, no ``<EOU>`` token)
+                                         -> plain RNN-T (Transducer) head;
+                                            for hybrids only the Transducer
+                                            branch is exported (the CTC aux
+                                            head ``ctc_decoder.*`` is ignored)
   - ``EncDecDiarLabelModel``             -> Sortformer    (diar_sortformer_4spk-v1,
                                             diar_streaming_sortformer_4spk-v2)
 
-The FastConformer encoder topology is shared across all four flavours; only
+The FastConformer encoder topology is shared across all five flavours; only
 the decoder / head tensors + metadata differ. EOU additionally swaps the
 conv module's BatchNorm for a LayerNorm and carries cache-aware streaming
 hyperparameters (att_context_size, subsampling-output cache lookback, and the
@@ -43,7 +52,7 @@ src/parakeet_sortformer.h for the consumer structs):
   Metadata:
     general.architecture  = "parakeet-ctc"  (kept for GGUF compat)
     general.name          = "<derived from cfg>"
-    parakeet.model.type   = "ctc", "tdt", "eou", or "sortformer"
+    parakeet.model.type   = "ctc", "tdt", "rnnt", "eou", or "sortformer"
     parakeet.encoder.*    (hyperparameters, incl. use_bias, xscaling,
                            conv_norm_type, att_context_size,
                            causal_downsampling, conv_context_size)
@@ -51,6 +60,9 @@ src/parakeet_sortformer.h for the consumer structs):
     parakeet.ctc.*        (vocab_size, blank_id)                    [CTC only]
     parakeet.tdt.*        (predictor + joint hyperparameters
                            + durations)                              [TDT only]
+    parakeet.rnnt.*       (vocab_size, blank_id, pred_hidden,
+                           pred_rnn_layers, joint_hidden,
+                           max_symbols_per_step)                     [RNNT only]
     parakeet.eou.*        (vocab_size, blank_id, eou_id, eob_id,
                            pred_hidden, pred_rnn_layers, joint_hidden,
                            encoder_chunk_mel_frames,
@@ -73,6 +85,10 @@ src/parakeet_sortformer.h for the consumer structs):
     tdt.predict.lstm.{l}.{w_ih,w_hh,b_ih,b_hh}                       [TDT only]
     tdt.joint.{enc,pred}.{weight,bias}                               [TDT only]
     tdt.joint.out.{weight,bias}                                      [TDT only]
+    rnnt.predict.embed.weight                                        [RNNT only]
+    rnnt.predict.lstm.{l}.{w_ih,w_hh,b_ih,b_hh}                      [RNNT only]
+    rnnt.joint.{enc,pred}.{weight,bias}                              [RNNT only]
+    rnnt.joint.out.{weight,bias}                                     [RNNT only]
     eou.predict.embed.weight                                         [EOU only]
     eou.predict.lstm.0.{w_ih,w_hh,b_ih,b_hh}                         [EOU only]
     eou.joint.{enc,pred}.{weight,bias}                               [EOU only]
@@ -393,15 +409,31 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
         # identical to TDT/EOU; the hybrid's CTC aux head (ctc_decoder.*) is
         # ignored. Cache-aware streaming params (att_context_size, conv_norm_type)
         # ride in the shared parakeet.encoder.* metadata already emitted above.
+        if "prednet" not in dec or "joint" not in cfg:
+            raise RuntimeError(
+                "rnnt head requires a Transducer checkpoint "
+                "(decoder.prednet / joint config missing -- is this a CTC model?)")
         pred_hidden       = int(dec["prednet"]["pred_hidden"])
         pred_rnn_layers   = int(dec["prednet"]["pred_rnn_layers"])
         joint_hidden      = int(cfg["joint"]["jointnet"]["joint_hidden"])
         pred_vocab_size   = int(dec["vocab_size"])                  # label vocab (no blank)
-        joint_num_classes = int(cfg["joint"]["num_classes"])        # label vocab + blank
-        blank_id          = joint_num_classes                        # blank_as_pad at vocab_size
+        joint_num_classes = int(cfg["joint"]["num_classes"])        # label vocab, blank excluded (RNNTJoint adds +1)
+        blank_id          = joint_num_classes                        # blank_as_pad at index vocab_size
+        if joint_num_classes != pred_vocab_size:
+            raise RuntimeError(
+                f"rnnt: joint.num_classes ({joint_num_classes}) != decoder.vocab_size "
+                f"({pred_vocab_size}); blank_id placement would be wrong")
         greedy_cfg        = (cfg.get("decoding") or {}).get("greedy") or {}
-        max_symbols       = int(greedy_cfg.get("max_symbols")
-                                or greedy_cfg.get("max_symbols_per_step") or 10)
+        max_symbols_cfg   = greedy_cfg.get("max_symbols",
+                                           greedy_cfg.get("max_symbols_per_step"))
+        if not max_symbols_cfg:
+            # NeMo treats an unset/None max_symbols as "no cap"; the C++ greedy
+            # loop needs a finite cap, so bake in NeMo's usual default of 10.
+            print("[convert] rnnt: decoding.greedy.max_symbols unset (uncapped in "
+                  "NeMo); capping at 10 in the GGUF", file=sys.stderr)
+            max_symbols = 10
+        else:
+            max_symbols = int(max_symbols_cfg)
 
         writer.add_uint32("parakeet.rnnt.vocab_size",           pred_vocab_size)
         writer.add_uint32("parakeet.rnnt.blank_id",             blank_id)
@@ -656,6 +688,16 @@ def write_gguf(out: Path, ckpt: Path, cfg: dict, sd: dict, tok_bytes: bytes, qua
         add_f32("rnnt.joint.enc.bias",    sd["joint.enc.bias"])
         add_2d ("rnnt.joint.pred.weight", sd["joint.pred.weight"])
         add_f32("rnnt.joint.pred.bias",   sd["joint.pred.bias"])
+        # A plain RNN-T joint emits exactly vocab+1 logits (labels + blank).
+        # A TDT-shaped joint (vocab+1+num_durations rows) reaching this branch
+        # (e.g. via --type rnnt) must fail here, not decode garbage later.
+        out_rows = int(sd["joint.joint_net.2.weight"].shape[0])
+        vocab_p1 = int(cfg["decoder"]["vocab_size"]) + 1
+        if out_rows != vocab_p1:
+            raise RuntimeError(
+                f"rnnt: joint output has {out_rows} rows, expected vocab+1 = "
+                f"{vocab_p1}; duration logits present? (TDT checkpoint -- use "
+                f"the auto-detected head instead of forcing rnnt)")
         add_2d ("rnnt.joint.out.weight",  sd["joint.joint_net.2.weight"])
         add_f32("rnnt.joint.out.bias",    sd["joint.joint_net.2.bias"])
     else:
