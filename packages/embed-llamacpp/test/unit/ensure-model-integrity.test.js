@@ -83,12 +83,12 @@ test('pinned sha256 verification fails closed when hashing cannot complete', asy
     const p = path.join(dir, 'x')
     fs.writeFileSync(p, GOOD)
     const entry = { sha256: '0'.repeat(64), bytes: GOOD.length }
-    const missing = await verifyModelFile(p, entry, async function () {
-      return null
+    const missing = await verifyModelFile(p, entry, function () {
+      return Promise.resolve(null)
     })
     t.absent(missing.ok, 'missing digest is a verification failure')
-    const failed = await verifyModelFile(p, entry, async function () {
-      throw new Error('hash unavailable')
+    const failed = await verifyModelFile(p, entry, function () {
+      return Promise.reject(new Error('hash unavailable'))
     })
     t.absent(failed.ok, 'hashing error is a verification failure')
     t.ok(/hash unavailable/.test(failed.reason), 'hashing error is preserved')
