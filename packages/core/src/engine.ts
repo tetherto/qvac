@@ -6,6 +6,8 @@
 //
 // Bare consumers use the public API in `index.ts` instead.
 
+import { registry } from './registry'
+
 export {
   send,
   stream,
@@ -17,3 +19,10 @@ export {
 } from './dispatch'
 export { setConfig, setRuntimeContext } from './runtime/state'
 export { initialize, cleanupForTerminate } from './runtime/lifecycle'
+
+// The transport kind for a request type — reply, stream, or duplex; undefined for
+// an unknown type. A host reads it to pick the matching wire response before
+// calling `send`/`stream`/`duplex`.
+export function dispatchKind(type: string) {
+  return registry[type]?.type
+}
