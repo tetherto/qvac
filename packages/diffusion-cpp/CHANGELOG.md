@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.14.0] - 2026-07-13
+
+This release adds Ideogram 4 text-to-image support with split unconditional (CFG) diffusion weights, Qwen3-VL text encoding, and structured caption conditioning. It also includes critical review fixes: explicit CFG enforcement, correct FP8 weight_scale ordering for Ideogram linear layers, and registry-first build resolution that removes local port overlays.
+
+### Features
+
+#### Ideogram 4 text-to-image generation
+
+The diffusion addon now supports Ideogram 4 end-to-end, wiring the split unconditional (CFG) diffusion model through a new `uncondDiffusionModelPath` field in both the JavaScript API and native C++ config. Structured JSON caption conditioning with explicit bounding boxes is required for reliable image quality; plain-text prompts yield degenerate outputs and model placeholder ("Image blocked by safety filter") fallbacks.
+
+`ImgStableDiffusion` accepts a new `uncondModel` file key, `index.d.ts` documents the Qwen3-VL text encoder for Ideogram, and the `examples/generate-ideogram-coffee.js` and `examples/generate-ideogram-tcg.js` scripts demonstrate photoreal and card-game art styles with structured captions.
+
+#### Ideogram CFG enforcement and correctness
+
+- **CFG model requirement**: Ideogram generation now explicitly fails (returns `null` instead of silently falling back to conditional weights) if classifier-free guidance is requested but the unconditional diffusion model was not successfully loaded.
+- **Weight-scale ordering fix**: Ideogram's FP8 `weight_scale` tensors are now applied with the correct computation order: `(x @ W) * weight_scale + b` instead of `(x @ W + b) * weight_scale`. This is critical for official FP8-with-scale checkpoints.
+
+### Changed
+
+- The diffusion-cpp addon now resolves `stable-diffusion-cpp@2026-07-03#4` directly from the qvac-registry-vcpkg instead of a package-local overlay port (PR qvac-registry-vcpkg#242).
+- Parameter lifecycle management restored for reusable contexts: `free_params_immediately`, `offload_params_to_cpu`, `keep_clip_on_cpu`, and `keep_vae_on_cpu` are now properly mapped to `sd_ctx_params_t`, fixing crashes during model cancel/reuse sequences.
+- Video loading now passes the required `uncondDiffusionModelPath` parameter to prevent addon validation errors (related to Ideogram support).
+
+### Fixed
+
+- Mobile integration tests now include explicit model download URL fallbacks, ensuring tests can fetch models when the test manifest is not bundled into the Device Farm app.
+- Mobile Device Farm test parameters (image sizes, generation steps) optimized to fit within 15-minute execution budget without sacrificing desktop test fidelity.
+- `vae_decode_only` config flag added to explicitly disable VAE decoder-only mode, allowing img2img/fusion/hires image-to-image workflows that require the VAE encoder.
+- Upstream `sd_ctx_params_t` API refactoring ported: dropped removed fields (`vae_decode_only`, `free_params_immediately`, `keep_clip_on_cpu`, `keep_vae_on_cpu`) and added `params_backend` for explicit parameter placement intent.
+
+### Pull Requests
+
+- [#3147](https://github.com/tetherto/qvac/pull/3147) - feat(diffusion-cpp): add Ideogram 4 support
+- [qvac-ext-stable-diffusion.cpp#19](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/19) - Ideogram 4 wiring + uncondDiffusionModelPath field
+- [qvac-ext-stable-diffusion.cpp#20](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/20) - Ideogram review fixes (weight_scale ordering, CFG enforcement, parameter staging)
+- [qvac-registry-vcpkg#242](https://github.com/tetherto/qvac-registry-vcpkg/pull/242) - stable-diffusion-cpp 2026-07-03#4 publish
+
 ## [0.13.3] - 2026-07-06
 
 ### Fixed

@@ -14,7 +14,6 @@ on:
           - nmtcpp
           - llamacpp-llm
           - vlm
-          - onnx-tts
           - parakeet
           - diffusion-cpp
       workflow_name:
@@ -27,8 +26,6 @@ on:
           - "Integration Tests (NMTCPP)"
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
-          - "Integration Tests (TTS)"
-          - "Mobile Integration Tests (TTS)"
           - "Mobile Integration Tests (Parakeet)"
           - "Integration Tests (Stable Diffusion)"
           - "Mobile Integration Tests (Diffusion CPP)"
@@ -160,24 +157,6 @@ jobs:
             --output reports/vlm-mobile-performance.md \
             --output-json reports/vlm-mobile-performance.json \
             --output-html reports/vlm-mobile-performance.html || true
-
-          echo "=== TTS ==="
-          node scripts/perf-report/aggregate.js \
-            --addon onnx-tts \
-            --workflow "Integration Tests (TTS)" \
-            --runs 6 \
-            --output reports/onnx-tts-performance.md \
-            --output-json reports/onnx-tts-performance.json \
-            --output-html reports/onnx-tts-performance.html || true
-
-          echo "=== TTS (Mobile) ==="
-          node scripts/perf-report/aggregate.js \
-            --addon onnx-tts \
-            --workflow "Mobile Integration Tests (TTS)" \
-            --runs 6 \
-            --output reports/onnx-tts-mobile-performance.md \
-            --output-json reports/onnx-tts-mobile-performance.json \
-            --output-html reports/onnx-tts-mobile-performance.html || true
 
           echo "=== Parakeet (Mobile) ==="
           node scripts/perf-report/aggregate.js \

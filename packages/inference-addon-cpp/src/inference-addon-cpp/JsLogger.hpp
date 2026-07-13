@@ -39,76 +39,84 @@ namespace qvac_lib_inference_addon_cpp::logger {
         throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument, "Argument must be a function");
       }
 
+      // Serialize install/release/teardown so state_, async_initiated_ and
+      // logger_async_ are always mutated as one consistent unit.
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
+
+      auto cur = loadState();
+      if (cur && cur->env != env) {
+        // This singleton supports a single live owning env at a time.
+        // A different env still owns the logger. In the supported model the
+        // previous owner clears state_ (via releaseLogger or onEnvTeardown)
+        // before the next env installs, so a populated different-env slot means
+        // a genuinely concurrent live env (unsupported) or an install racing an
+        // in-progress teardown. We cannot touch the other env's ref / handle /
+        // loop safely, so reject and leave the incumbent fully intact.
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "Logger already installed by another env; call releaseLogger "
+            "first");
+      }
+
       js_ref_t *newCb = nullptr;
       JS(js_create_reference(env, fn, 1, &newCb));
       auto onErrorDeleteRef = utils::onError([&](){ js_delete_reference(env, newCb); });
 
-      auto newState = std::make_shared<State>(State{env, newCb});
-
-      bool expected = false;
-      if (async_initiated_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+      // async_initiated_ / logger_async_ are only ever read or written under
+      // admin_mutex_ (held above), so a plain bool is sufficient here.
+      if (!async_initiated_) {
+        // First install (or a clean reinstall after teardown/release): create
+        // the async handle on THIS env's loop.
+        async_initiated_ = true;
         uv_loop_t* jsLoop = nullptr;
         JS(js_get_env_loop(env, &jsLoop));
         logger_async_ = new uv_async_t{};
         if (uv_async_init(jsLoop, logger_async_, &JsLogger::asyncCallback) != 0) {
           delete logger_async_;
+          logger_async_ = nullptr;
+          async_initiated_ = false;
           throw qvac_errors::StatusError(qvac_errors::general_error::InternalError, "Could not initialize uv async handle.");
         }
-        // jsOutputCallbackAsyncHandle_ has been correctly initialized, so if thread fails it needs to be closed
-        auto onErrorClose = utils::onError([&](){
-          uv_close(reinterpret_cast<uv_handle_t*>(logger_async_), [](uv_handle_t* handle) {
-            delete handle;
-          });
-        });
+        // Handle initialized; if the steps below throw it must be closed again.
+        auto onErrorClose = utils::onError([&]() { closeAsyncHandleLocked(); });
 
-        // Tie cleanup to the env lifetime. If the runtime tears this env down
-        // without releaseLogger() being called first (e.g. a worker/runtime
-        // teardown), onEnvTeardown fires while the env is being destroyed but
-        // BEFORE its JS context is disposed, disarming the logger so the
-        // teardown's final uv_run cannot dispatch asyncCallback against a dead
-        // context.
-        JS(js_add_teardown_callback(env, &JsLogger::onEnvTeardown, nullptr));
+        // Tie cleanup to THIS env's lifetime. If the runtime tears this env
+        // down without releaseLogger() being called first (e.g. a
+        // worker/runtime teardown), onEnvTeardown fires while the env is being
+        // destroyed but BEFORE its JS context is disposed, disarming the logger
+        // so the teardown's final uv_run cannot dispatch asyncCallback against
+        // a dead context. The env is passed as the callback data so a stale
+        // hook can only ever disarm its own env, never a newer owner.
+        JS(js_add_teardown_callback(env, &JsLogger::onEnvTeardown, env));
       }
 
-      auto oldState = storeState(newState);
-      if (oldState && oldState->env == env) {
-        // Only delete the previous callback ref when it belongs to THIS env.
-        //
-        // The logger state is a process-global singleton, so it assumes a
-        // single live env owns it at a time. The supported flow is sequential
-        // worklet teardown / soft-reload (QVAC-21544): the previous env has
-        // already been (or is being) torn down, its V8 global handles are gone,
-        // and js_delete_reference on it would crash in GlobalHandles::Release —
-        // so when oldState->env != env we drop the stale ref instead of freeing
-        // it here (it dies with its env / its onEnvTeardown).
-        //
-        // NOTE: concurrent *live* envs (e.g. two worklets/bare-thread workers
-        // logging at once) are NOT supported by this singleton — the second
-        // setLogger would leak the first's live ref and leave logger_async_ on
-        // the wrong loop. Supporting that needs per-js_env_t*-keyed state; see
-        // follow-up ticket.
-        releaseJsRefs((oldState->env), oldState->cb);
+      auto oldState = storeState(std::make_shared<State>(State{env, newCb}));
+      if (oldState) {
+        // Only reachable when oldState->env == env (a different env was
+        // rejected above), i.e. this same live env is replacing its own
+        // callback, so freeing the previous ref here is safe.
+        releaseJsRefs(oldState->env, oldState->cb);
       }
 
       return nullptr;
     } JSCATCH
 
     static auto releaseLogger(js_env_t *env, js_callback_info_t * /*info*/) -> js_value_t* try {
-      auto oldState = storeState(nullptr);
-      if (oldState && oldState->env == env) {
-        // Same env-liveness guard as setLogger: only drop the teardown hook and
-        // delete the callback ref when the stored state belongs to THIS live
-        // env, never a torn-down/reloaded one (deleting a dead env's ref crashes
-        // in GlobalHandles::Release).
-        js_remove_teardown_callback((oldState->env), &JsLogger::onEnvTeardown, nullptr);
-        releaseJsRefs((oldState->env), oldState->cb);
-      }
-      if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
 
-        uv_close(reinterpret_cast<uv_handle_t*>(logger_async_), [](uv_handle_t* handle){
-          delete handle;
-        });
+      auto cur = loadState();
+      if (!cur || cur->env != env) {
+        // Not the owner (or nobody owns it): never tear down another env's
+        // logger. Symmetric with setLogger's reject.
+        return nullptr;
       }
+
+      storeState(nullptr);
+      // Owner is live and releasing explicitly, so drop its hook + ref, then
+      // close the handle (on this env's own loop) and clear any queued entries.
+      dropOwnerLocked(cur, /*removeHook=*/true, /*deleteRef=*/true);
+      closeAsyncHandleLocked();
+      clearQueueLocked();
       return nullptr;
     } JSCATCH
 
@@ -178,33 +186,95 @@ namespace qvac_lib_inference_addon_cpp::logger {
     // the teardown's final uv_run would otherwise drain cannot dispatch
     // asyncCallback against a dead context: nulling the shared state makes any
     // such callback early-return, and closing the handle stops it firing at all.
-    static void onEnvTeardown(void * /*data*/) {
-      storeState(nullptr);
-      if (async_initiated_.exchange(false, std::memory_order_acq_rel)) {
-        uv_close(reinterpret_cast<uv_handle_t*>(logger_async_), [](uv_handle_t* handle) {
-          delete handle;
-        });
+    static void onEnvTeardown(void* data) {
+      auto* teardownEnv = static_cast<js_env_t*>(data);
+
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
+
+      auto cur = loadState();
+      if (!cur || cur->env != teardownEnv) {
+        // A different env owns the logger now; this stale hook must not disarm
+        // it.
+        return;
       }
+
+      storeState(nullptr);
+      // The env is being destroyed: do NOT delete the callback ref (its V8
+      // handles are already gone) and do NOT remove the hook (it dies with the
+      // env). Just disarm the handle and drop any queued entries.
+      closeAsyncHandleLocked();
+      clearQueueLocked();
     }
 
     static void log(int priority, const std::string &message) {
+      // Gate the enqueue on liveness under admin_mutex_ so an entry can only
+      // ever land in the queue while a live owner exists. release/teardown
+      // clear the queue under the same lock, so any enqueue is strictly either
+      // before a release (then cleared/dropped) or after the next setLogger
+      // (then it belongs to the new owner) - a producer can never leave an
+      // orphaned entry in the gap that bleeds into the next owner's callback.
+      // This also serializes the uv_async_send against install/release/teardown
+      // so a producer cannot send a handle that closeAsyncHandleLocked() is
+      // closing, and guards the plain-bool async_initiated_.
+      const std::lock_guard<std::mutex> admin(admin_mutex_);
+
+      auto state = loadState();
+      if (!state) {
+        // No live owner (e.g. between releaseLogger/teardown and the next
+        // setLogger): drop the message instead of enqueuing an orphan.
+        return;
+      }
+
+      if (!async_initiated_) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "The logger should be initialized (async)");
+      }
+
       {
         std::lock_guard<std::mutex> guard(queue_mutex_);
         log_queue_.emplace_back(LogEntry{priority, message});
       }
-      if (async_initiated_.load(std::memory_order_acquire)) {
-        uv_async_send(logger_async_);
-      } else {
-        auto state = loadState();
-        if (!state) return;
-        throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument, "The logger should be initialized (async)");
-      }
+      uv_async_send(logger_async_);
     }
 
     static void releaseJsRefs(js_env_t *env, js_ref_t *cb) {
       JS(js_delete_reference(env, cb));
-      env = nullptr;
-      cb = nullptr;
+    }
+
+    // Requires admin_mutex_ held. Closes and frees the uv_async handle if
+    // armed.
+    static void closeAsyncHandleLocked() {
+      if (async_initiated_) {
+        async_initiated_ = false;
+        uv_close(
+            reinterpret_cast<uv_handle_t*>(logger_async_),
+            [](uv_handle_t* handle) { delete handle; });
+        logger_async_ = nullptr;
+      }
+    }
+
+    // Requires admin_mutex_ held and that `state` is the current owner.
+    // Detaches the owner: optionally removes its teardown hook and deletes its
+    // callback ref. deleteRef must only be requested when the owning env is
+    // still live (deleting a torn-down env's ref crashes in
+    // GlobalHandles::Release).
+    static void dropOwnerLocked(
+        const std::shared_ptr<State>& state, bool removeHook, bool deleteRef) {
+      if (removeHook) {
+        js_remove_teardown_callback(
+            state->env, &JsLogger::onEnvTeardown, state->env);
+      }
+      if (deleteRef) {
+        releaseJsRefs(state->env, state->cb);
+      }
+    }
+
+    // Requires admin_mutex_ held. Drops any queued-but-undrained entries so
+    // they cannot bleed into the next owner's callback.
+    static void clearQueueLocked() {
+      const std::lock_guard<std::mutex> lk(queue_mutex_);
+      log_queue_.clear();
     }
 
     static std::shared_ptr<State> loadState() {
@@ -219,15 +289,15 @@ namespace qvac_lib_inference_addon_cpp::logger {
       );
     }
 
-    static bool compareExchangeState(std::shared_ptr<State>& expected,
-                              std::shared_ptr<State> desired) {
-      return std::atomic_compare_exchange_strong(&state_, &expected, std::move(desired));
-    }
-
-    inline static std::atomic<bool> async_initiated_{false};
+    // Guarded by admin_mutex_ (all reads/writes happen inside a critical
+    // section).
+    inline static bool async_initiated_{false};
     inline static uv_async_t* logger_async_{nullptr};
     inline static std::deque<LogEntry> log_queue_{};
     inline static std::mutex queue_mutex_{};
-    inline static std::shared_ptr<struct State> state_{nullptr}; //Use only safe methods loadState/storeState/compareExchangeState (it's atomic) !
+    // Serializes setLogger / releaseLogger / onEnvTeardown critical sections.
+    inline static std::mutex admin_mutex_{};
+    inline static std::shared_ptr<struct State> state_{
+        nullptr}; // Use only safe methods loadState/storeState (it's atomic) !
   };
 } //namespace qvac_lib_inference_addon_cpp::logger

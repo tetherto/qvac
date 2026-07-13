@@ -27,6 +27,8 @@ namespace qvac_lib_inference_addon_sd {
  * modelPath (CLIP-L, CLIP-G, T5-XXL baked in) OR split layout:
  * diffusionModelPath + clipLPath + clipGPath + t5XxlPath FLUX.2 [klein] -- uses
  * diffusionModelPath + llmPath (Qwen3) + vaePath
+ * Ideogram 4    -- diffusionModelPath + uncondDiffusionModelPath (CFG) +
+ *                  llmPath (Qwen3-VL) + vaePath (FLUX.2-family VAE)
  * Wan 2.1 I2V   -- diffusionModelPath + t5XxlPath (UMT5-XXL) + vaePath
  *                  + clipVisionPath (OpenCLIP ViT-H/14, required for I2V)
  */
@@ -44,6 +46,12 @@ struct SdCtxConfig {
                                            // -- Wan 2.2 high-noise expert.
                                            // Leave empty for Wan 2.1 / all
                                            // non-Wan models.
+  std::string uncondDiffusionModelPath;    // uncond_diffusion_model_path
+                                           // -- Ideogram 4 unconditional (CFG)
+                                           // diffusion model. Loaded alongside
+                                           // diffusionModelPath so real
+                                           // classifier-free guidance works.
+                                           // Empty for all other models.
   std::string clipLPath; // clip_l_path           -- CLIP-L text encoder (SD3
                          // split / SDXL)
   std::string clipGPath; // clip_g_path           -- CLIP-G text encoder (SD3
@@ -85,6 +93,10 @@ struct SdCtxConfig {
       false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
   bool keepVaeOnCpu =
       false; // keep_vae_on_cpu:       keep VAE decoder in CPU RAM
+  // Upstream defaults to true to save memory for pure text-to-image, but the
+  // addon supports image-conditioned jobs through a reusable context. Keep the
+  // encoder available so img2img/fusion/hires paths can encode input images.
+  bool vaeDecodeOnly = false;
 
   // -- Precision -------------------------------------------------------------
   sd_type_t wtype =
