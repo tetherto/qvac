@@ -4,20 +4,44 @@
 // where the network is reliable) that pre-stages exactly the models THIS shard
 // needs onto the device at /data/local/tmp/prestaged-models, so the phone never
 // downloads from huggingface.co. The shard is identified at runtime from the
-// grep pattern in the decoded wdio config; models come from model-manifest.json
-// (base64-embedded here so it is available on the host without shipping it in
-// the test package). Run `node scripts/generate-prestage-block.js` and paste the
-// output under `extra-pre-test-commands:` (indented), or use --check in CI to
-// assert the workflow is up to date.
+// grep pattern in the decoded wdio config. Shard membership comes from the
+// mobile manifest, while URLs come from the pinned integration manifest. The
+// resolved manifest is base64-embedded here so it is available on the host
+// without shipping it in the test package.
 const fs = require('fs')
 const path = require('path')
 
-const manifestPath = path.resolve(__dirname, '../test/mobile/model-manifest.json')
-const manifestB64 = Buffer.from(fs.readFileSync(manifestPath)).toString('base64')
+const mobileManifestPath = path.resolve(__dirname, '../test/mobile/model-manifest.json')
+const integrationManifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
 
-// Host script. Kept POSIX-sh friendly; node + adb + curl are all available in
-// the Device Farm pre_test phase.
-const script = `set -e
+function resolvePinnedManifest(mobileManifest, integrationManifest) {
+  if (!integrationManifest || !integrationManifest.models) {
+    throw new Error('[prestage] integration model manifest has no models')
+  }
+
+  return Object.fromEntries(
+    Object.entries(mobileManifest).map(([testName, models]) => [
+      testName,
+      models.map(({ name }) => {
+        const entry = integrationManifest.models[name]
+        const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
+        if (
+          typeof url !== 'string' ||
+          !url.startsWith('https://') ||
+          /\/resolve\/(?:main|master)\//.test(url)
+        ) {
+          throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
+        }
+        return { name, url }
+      })
+    ])
+  )
+}
+
+function buildScript(manifestB64) {
+  // Host script. Kept POSIX-sh friendly; node + adb + curl are all available
+  // in the Device Farm pre_test phase.
+  return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
 echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
 GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
@@ -37,11 +61,23 @@ done < /tmp/prestage-list.tsv
 echo "[prestage] device contents:"
 adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
+}
 
-// emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
-// start of a YAML literal block whose body lines are indented by 2 spaces.
-const body = script
-  .split('\n')
-  .map((l) => '  ' + l)
-  .join('\n')
-process.stdout.write('|\n' + body + '\n')
+function main() {
+  const mobileManifest = JSON.parse(fs.readFileSync(mobileManifestPath, 'utf8'))
+  const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
+  const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
+  const manifestB64 = Buffer.from(JSON.stringify(manifest)).toString('base64')
+
+  // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
+  // start of a YAML literal block whose body lines are indented by 2 spaces.
+  const body = buildScript(manifestB64)
+    .split('\n')
+    .map((l) => '  ' + l)
+    .join('\n')
+  process.stdout.write('|\n' + body + '\n')
+}
+
+if (require.main === module) main()
+
+module.exports = { resolvePinnedManifest, buildScript }
