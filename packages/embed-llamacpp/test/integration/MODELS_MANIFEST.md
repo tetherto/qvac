@@ -9,10 +9,10 @@ The CI model-cache key hashes the manifest. Keep rationale and operational
 documentation in this file so prose-only edits do not invalidate the model
 cache.
 
-Not every model is integrity-pinned yet. Until all entries have immutable URLs
-and pins, the embed integration workflow disables package-prefix cache restores.
-Therefore, changing the manifest or incrementing `cacheEpoch` causes an exact
-cache-key miss instead of restoring stale same-named files from an older cache.
+Every model must use an immutable source revision and pin both `sha256` and
+`bytes`. Package-prefix cache restores remain enabled so unchanged models can be
+reused after a manifest update. The warm step and runtime verify every restored
+file and replace it when either pin does not match.
 
 To populate pins from fresh downloads, run:
 
