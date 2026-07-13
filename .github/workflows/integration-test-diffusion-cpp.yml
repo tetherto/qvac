@@ -22,6 +22,11 @@ on:
         type: string
         required: false
         default: '0'
+      pin_model_manifest:
+        description: "Download every model fresh and upload a manifest with SHA-256/byte pins"
+        type: boolean
+        required: false
+        default: false
 
   workflow_dispatch:
     inputs:
@@ -44,9 +49,52 @@ on:
         type: string
         required: false
         default: '0'
+      pin_model_manifest:
+        description: "Download every model fresh and upload a manifest with SHA-256/byte pins"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
+  pin-model-manifest:
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    timeout-minutes: 360
+    runs-on: ${{ 'qvac-ubuntu2404-x64-gpu' }}
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Generate pins from fresh downloads
+        working-directory: packages/diffusion-cpp
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: node scripts/generate-model-manifest.mjs --force
+
+      - name: Upload pinned model manifest
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: diffusion-cpp-model-manifest
+          path: packages/diffusion-cpp/test/integration/models.manifest.json
+          if-no-files-found: error
+
   run-integration-tests:
+    if: ${{ !inputs.pin_model_manifest }}
     timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
