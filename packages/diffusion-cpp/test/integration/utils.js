@@ -478,6 +478,18 @@ async function ensureModelPath({ modelName, modelDir, manifest, download } = {})
   return path.join(resolvedDir, downloadedModelName)
 }
 
+// Repository-supported local model directories are cache locations, not trust
+// boundaries. Exact filenames declared in the manifest must pass the same
+// SHA-256/size checks as test/model before an integration test can use them.
+async function verifyLocalModelPath({ modelName, filePath, manifest } = {}) {
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
+  const result = await verifyModelFileOnce(filePath, entry)
+  if (!result.ok) {
+    throw new Error(`[model] ${modelName}: local file failed integrity: ${result.reason}`)
+  }
+  return filePath
+}
+
 /**
  * Get path to a media file - works on both desktop and mobile
  * On mobile, media files must be in testAssets/
@@ -617,6 +629,7 @@ module.exports = {
   GeneratedImageSaver,
   ensureModel,
   ensureModelPath,
+  verifyLocalModelPath,
   loadManifest,
   resolveModelEntry,
   verifyModelFile,

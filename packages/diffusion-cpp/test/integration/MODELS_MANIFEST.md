@@ -10,14 +10,14 @@ cache.
 
 Package-prefix cache restores remain enabled so unchanged models can be reused
 after a manifest update. The warm step and runtime verify every restored file
-and replace it when either pin does not match. After a successful warm, a marker
-tied to the complete manifest and exact cache key allows later exact-key hits to
-skip rehashing the full model set. Prefix restores never trust that marker.
+and replace it when either pin does not match. Cache hits are never treated as
+integrity provenance; every restored file is checked.
 
-Models marked with `"warm": false` remain mandatory and fully pinned, but are
-downloaded lazily only by the platform-specific integration tests that use them.
-This avoids preloading Ideogram and LTX weights on runners where those tests are
-skipped.
+Every model declares a non-overlapping cache `group`: `base`, `ideogram`, or
+`ltx`. CI restores and warms `base` on every self-hosted integration runner,
+adds `ideogram` only where the Ideogram test runs, and adds `ltx` only on the
+LTX runner. Each cache archives exact manifest-declared file paths, so generated
+outputs and platform-specific files are excluded.
 
 To refresh pins from fresh downloads, run:
 

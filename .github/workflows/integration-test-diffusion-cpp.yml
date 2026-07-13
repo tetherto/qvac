@@ -174,17 +174,34 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      # PNGs are test-generated outputs uploaded as artifacts further
-      # down; exclude them so they do not accumulate in the cache.
-      - name: Cache integration test models
-        id: model-cache
+      # Manifest groups use exact declared file paths, so generated images and
+      # platform-specific test outputs are never archived.
+      - name: Cache base integration test models
+        id: model-cache-base
         if: runner.environment != 'github-hosted'
         uses: ./.github/actions/cache-models
         with:
           package: diffusion-cpp
-          paths: |
-            packages/diffusion-cpp/test/model
-            !packages/diffusion-cpp/test/model/*.png
+          group: base
+          cache-key-suffix: base
+
+      - name: Cache Ideogram integration test models
+        id: model-cache-ideogram
+        if: runner.environment != 'github-hosted' && matrix.no_gpu != 'true'
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ideogram
+          cache-key-suffix: ideogram
+
+      - name: Cache LTX integration test models
+        id: model-cache-ltx
+        if: runner.environment != 'github-hosted' && matrix.ltx == 'true'
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ltx
+          cache-key-suffix: ltx
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0

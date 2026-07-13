@@ -37,43 +37,148 @@ function parseArgs(argv) {
   return args
 }
 
-function authHeaders(url) {
+export function isHuggingFaceUrl(url) {
+  const parsed = new URL(url)
+  return parsed.protocol === 'https:' && parsed.hostname === 'huggingface.co'
+}
+
+export function isHuggingFaceLfsUrl(url) {
+  const parsed = new URL(url)
+  return (
+    parsed.protocol === 'https:' &&
+    parsed.hostname === 'huggingface.co' &&
+    parsed.pathname.includes('/resolve/')
+  )
+}
+
+export function authHeaders(url, token = process.env.HF_TOKEN) {
   const headers = { 'user-agent': 'qvac-manifest-generator' }
-  if (url.includes('huggingface.co') && process.env.HF_TOKEN) {
-    headers.authorization = `Bearer ${process.env.HF_TOKEN}`
+  if (isHuggingFaceUrl(url) && token) {
+    headers.authorization = `Bearer ${token}`
   }
   return headers
 }
 
-function linkedIntegrity(headers, inherited = {}) {
+export function redactUrl(url) {
+  try {
+    const parsed = new URL(url)
+    parsed.username = ''
+    parsed.password = ''
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.href
+  } catch (_) {
+    return '[invalid URL]'
+  }
+}
+
+export function redactUrlsInText(value) {
+  return String(value).replace(/https?:\/\/[^\s]+/gi, (url) => redactUrl(url))
+}
+
+export function linkedIntegrity(headers) {
   const rawEtag = headers['x-linked-etag']
   const etag = typeof rawEtag === 'string' ? rawEtag.replace(/^W\//, '').replace(/"/g, '') : ''
   const rawSize = Number(headers['x-linked-size'])
   return {
-    sha256: /^[0-9a-f]{64}$/i.test(etag) ? etag.toLowerCase() : inherited.sha256,
-    bytes: Number.isInteger(rawSize) && rawSize > 0 ? rawSize : inherited.bytes
+    sha256: /^[0-9a-f]{64}$/i.test(etag) ? etag.toLowerCase() : undefined,
+    bytes: Number.isInteger(rawSize) && rawSize > 0 ? rawSize : undefined
   }
 }
 
-function download(url, dest, redirectsLeft = 10, expected = {}) {
+export function canonicalIntegrity(url, headers, inherited = {}) {
+  if (!isHuggingFaceLfsUrl(url)) return inherited
+
+  const observed = linkedIntegrity(headers)
+  for (const field of ['sha256', 'bytes']) {
+    if (
+      inherited[field] !== undefined &&
+      observed[field] !== undefined &&
+      inherited[field] !== observed[field]
+    ) {
+      throw new Error(`conflicting canonical Hugging Face LFS ${field} metadata`)
+    }
+  }
+  return {
+    sha256: inherited.sha256 ?? observed.sha256,
+    bytes: inherited.bytes ?? observed.bytes
+  }
+}
+
+function discardResponse(res) {
+  try {
+    res.resume()
+  } catch (_) {
+    if (typeof res.destroy === 'function') res.destroy()
+  }
+}
+
+export function download(
+  url,
+  dest,
+  {
+    redirectsLeft = 10,
+    expected = {},
+    requireCanonicalMetadata = isHuggingFaceLfsUrl(url),
+    requester = https
+  } = {}
+) {
   return new Promise((resolvePromise, reject) => {
-    const req = https.get(url, { headers: authHeaders(url) }, (res) => {
-      const sourceIntegrity = linkedIntegrity(res.headers, expected)
-      if ([301, 302, 307, 308].includes(res.statusCode)) {
-        if (redirectsLeft <= 0) return reject(new Error(`too many redirects: ${url}`))
-        res.resume()
-        const next = new URL(res.headers.location, url).href
-        return resolvePromise(download(next, dest, redirectsLeft - 1, sourceIntegrity))
-      }
-      if (res.statusCode !== 200) {
-        res.resume()
-        return reject(new Error(`HTTP ${res.statusCode} for ${url}`))
-      }
-      pipeline(res, createWriteStream(dest))
-        .then(() => resolvePromise(sourceIntegrity))
-        .catch(reject)
-    })
-    req.on('error', reject)
+    let req
+    try {
+      req = requester.get(url, { headers: authHeaders(url) }, (res) => {
+        if ([301, 302, 307, 308].includes(res.statusCode)) {
+          if (redirectsLeft <= 0) {
+            discardResponse(res)
+            return reject(new Error(`too many redirects: ${redactUrl(url)}`))
+          }
+          let sourceIntegrity
+          let next
+          try {
+            sourceIntegrity = canonicalIntegrity(url, res.headers, expected)
+            next = new URL(res.headers.location, url).href
+          } catch (err) {
+            discardResponse(res)
+            return reject(new Error(redactUrlsInText(err.message)))
+          }
+          discardResponse(res)
+          return resolvePromise(
+            download(next, dest, {
+              redirectsLeft: redirectsLeft - 1,
+              expected: sourceIntegrity,
+              requireCanonicalMetadata: requireCanonicalMetadata || isHuggingFaceLfsUrl(next),
+              requester
+            })
+          )
+        }
+        if (res.statusCode !== 200) {
+          discardResponse(res)
+          return reject(new Error(`HTTP ${res.statusCode} for ${redactUrl(url)}`))
+        }
+
+        let sourceIntegrity
+        try {
+          sourceIntegrity = canonicalIntegrity(url, res.headers, expected)
+        } catch (err) {
+          discardResponse(res)
+          return reject(new Error(redactUrlsInText(err.message)))
+        }
+        if (requireCanonicalMetadata && (!sourceIntegrity.sha256 || !sourceIntegrity.bytes)) {
+          discardResponse(res)
+          return reject(
+            new Error(
+              `missing canonical Hugging Face LFS SHA-256/size metadata for ${redactUrl(url)}`
+            )
+          )
+        }
+        pipeline(res, createWriteStream(dest))
+          .then(() => resolvePromise(sourceIntegrity))
+          .catch((err) => reject(new Error(redactUrlsInText(err.message))))
+      })
+    } catch (err) {
+      return reject(new Error(redactUrlsInText(err.message)))
+    }
+    req.on('error', (err) => reject(new Error(redactUrlsInText(err.message))))
   })
 }
 
@@ -89,13 +194,51 @@ function sha256Stream(filePath) {
   })
 }
 
-async function sha256AndSize(filePath) {
+export async function sha256AndSize(filePath) {
   const sha256 = await sha256Stream(filePath)
   const { size } = await stat(filePath)
   return { sha256, bytes: size }
 }
 
-async function main() {
+export async function fetchModelResult(
+  name,
+  entry,
+  tmp,
+  { downloadFile = download, inspectFile = sha256AndSize } = {}
+) {
+  let lastErr
+
+  for (const url of entry.urls) {
+    const dest = join(tmp, name)
+    try {
+      await rm(dest, { force: true })
+      console.log(`downloading ${name} from ${new URL(url).host} ...`)
+      const expected = await downloadFile(url, dest)
+      const candidate = await inspectFile(dest)
+      if (expected.sha256 && candidate.sha256 !== expected.sha256) {
+        throw new Error(
+          `downloaded SHA-256 ${candidate.sha256} does not match source LFS OID ${expected.sha256}`
+        )
+      }
+      if (expected.bytes && candidate.bytes !== expected.bytes) {
+        throw new Error(
+          `downloaded size ${candidate.bytes} does not match source size ${expected.bytes}`
+        )
+      }
+      console.log(`  -> sha256 ${candidate.sha256} (${candidate.bytes} bytes)`)
+      return candidate
+    } catch (err) {
+      lastErr = new Error(redactUrlsInText(err.message))
+      console.log(`  ! ${lastErr.message}`)
+    } finally {
+      await rm(dest, { force: true })
+    }
+  }
+
+  throw new Error(`failed to fetch ${name}: ${lastErr && lastErr.message}`)
+}
+
+export async function main() {
   const args = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
   const tmp = await mkdtemp(join(tmpdir(), 'qvac-manifest-'))
@@ -109,34 +252,7 @@ async function main() {
         continue
       }
 
-      let lastErr
-      let result
-      for (const url of entry.urls) {
-        const dest = join(tmp, name)
-        try {
-          console.log(`downloading ${name} from ${new URL(url).host} ...`)
-          const expected = await download(url, dest)
-          result = await sha256AndSize(dest)
-          if (expected.sha256 && result.sha256 !== expected.sha256) {
-            throw new Error(
-              `downloaded SHA-256 ${result.sha256} does not match source LFS OID ${expected.sha256}`
-            )
-          }
-          if (expected.bytes && result.bytes !== expected.bytes) {
-            throw new Error(
-              `downloaded size ${result.bytes} does not match source size ${expected.bytes}`
-            )
-          }
-          await rm(dest, { force: true })
-          console.log(`  -> sha256 ${result.sha256} (${result.bytes} bytes)`)
-          break
-        } catch (err) {
-          lastErr = err
-          console.log(`  ! ${err.message}`)
-        }
-      }
-
-      if (!result) throw new Error(`failed to fetch ${name}: ${lastErr && lastErr.message}`)
+      const result = await fetchModelResult(name, entry, tmp)
       entry.sha256 = result.sha256
       entry.bytes = result.bytes
       updated++
@@ -149,7 +265,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(redactUrlsInText(err.stack || String(err)))
+    process.exit(1)
+  })
+}

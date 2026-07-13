@@ -23,35 +23,68 @@
 // the runtime ensureModel behaviour).
 //
 // Usage:
-//   node warm-models.mjs --package diffusion-cpp [--root <repoRoot>]
+//   node warm-models.mjs --package diffusion-cpp [--group base] [--root <repoRoot>]
 //   PKG=diffusion-cpp node warm-models.mjs
 //
 // Env:
 //   HF_TOKEN   optional; sent as Bearer for huggingface.co URLs (gated repos).
-//   QVAC_MODEL_CACHE_EXACT_HIT  true only for an exact primary-key cache hit.
 
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { appendFile, mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
+import { basename, isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 import https from 'node:https'
 
-function parseArgs (argv) {
-  const args = { package: process.env.PKG || null, root: process.cwd() }
+export function parseArgs(argv) {
+  const args = {
+    package: process.env.PKG || null,
+    root: process.cwd(),
+    group: process.env.MODEL_GROUP || '',
+    pathsOutput: null
+  }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--package') args.package = argv[++i]
     else if (argv[i] === '--root') args.root = argv[++i]
+    else if (argv[i] === '--group') args.group = argv[++i]
+    else if (argv[i] === '--paths-output') args.pathsOutput = argv[++i]
   }
   return args
 }
 
-function authHeaders (url) {
+export function authHeaders(url, token = process.env.HF_TOKEN) {
   const headers = { 'user-agent': 'qvac-warm-models' }
-  if (url.includes('huggingface.co') && process.env.HF_TOKEN) {
-    headers.authorization = `Bearer ${process.env.HF_TOKEN}`
+  const parsed = new URL(url)
+  if (parsed.protocol === 'https:' && parsed.hostname === 'huggingface.co' && token) {
+    headers.authorization = `Bearer ${token}`
   }
   return headers
+}
+
+export function redactUrl(url) {
+  try {
+    const parsed = new URL(url)
+    parsed.username = ''
+    parsed.password = ''
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.href
+  } catch (_) {
+    return '[invalid URL]'
+  }
+}
+
+export function redactUrlsInText(value) {
+  return String(value).replace(/https?:\/\/[^\s]+/gi, (url) => redactUrl(url))
+}
+
+function discardResponse(res) {
+  try {
+    res.resume()
+  } catch (_) {
+    if (typeof res.destroy === 'function') res.destroy()
+  }
 }
 
 // Abort a stalled connection: if no bytes arrive for IDLE_TIMEOUT_MS the
@@ -59,60 +92,105 @@ function authHeaders (url) {
 // / fall back to a mirror) instead of hanging until the job timeout.
 const IDLE_TIMEOUT_MS = Number(process.env.WARM_IDLE_TIMEOUT_MS || 120000)
 const PROGRESS_INTERVAL_MS = 30000
-const VERIFIED_MARKER = '.qvac-model-cache-verified.json'
 
 // Downloads to `dest`. When startByte > 0 it sends a Range header and appends
 // to the existing partial (resume). If the server ignores the range and sends
 // the whole body (200), we overwrite from scratch so bytes never get spliced.
-function downloadOnce (url, dest, name, { redirectsLeft = 10, startByte = 0 } = {}) {
+export function downloadOnce(
+  url,
+  dest,
+  name,
+  { redirectsLeft = 10, startByte = 0, requester = https } = {}
+) {
   return new Promise((resolvePromise, reject) => {
     const headers = authHeaders(url)
     if (startByte > 0) headers.range = `bytes=${startByte}-`
-    const req = https.get(url, { headers }, (res) => {
-      const status = res.statusCode
-      if ([301, 302, 307, 308].includes(status)) {
-        if (redirectsLeft <= 0) return reject(new Error(`too many redirects: ${url}`))
-        res.resume()
-        const next = new URL(res.headers.location, url).href
-        return resolvePromise(downloadOnce(next, dest, name, { redirectsLeft: redirectsLeft - 1, startByte }))
-      }
-      // Requested range is past the file end — drop the partial and restart.
-      if (status === 416) {
-        res.resume()
-        return reject(Object.assign(new Error(`range not satisfiable for ${url}`), { resetPart: true }))
-      }
-      if (status !== 200 && status !== 206) {
-        res.resume()
-        return reject(new Error(`HTTP ${status} for ${url}`))
-      }
+    let req
+    try {
+      req = requester.get(url, { headers }, (res) => {
+        const status = res.statusCode
+        if ([301, 302, 307, 308].includes(status)) {
+          if (redirectsLeft <= 0) {
+            discardResponse(res)
+            return reject(new Error(`too many redirects: ${redactUrl(url)}`))
+          }
+          let next
+          try {
+            next = new URL(res.headers.location, url).href
+          } catch (err) {
+            discardResponse(res)
+            return reject(new Error(redactUrlsInText(err.message)))
+          }
+          discardResponse(res)
+          return resolvePromise(
+            downloadOnce(next, dest, name, {
+              redirectsLeft: redirectsLeft - 1,
+              startByte,
+              requester
+            })
+          )
+        }
+        // Requested range is past the file end — drop the partial and restart.
+        if (status === 416) {
+          discardResponse(res)
+          return reject(
+            Object.assign(new Error(`range not satisfiable for ${redactUrl(url)}`), {
+              resetPart: true
+            })
+          )
+        }
+        if (status !== 200 && status !== 206) {
+          discardResponse(res)
+          return reject(new Error(`HTTP ${status} for ${redactUrl(url)}`))
+        }
 
-      const append = status === 206
-      const startAt = append ? startByte : 0
-      const remaining = Number(res.headers['content-length'] || 0)
-      const total = append ? startAt + remaining : remaining
-      let received = startAt
-      const started = Date.now()
-      const progress = setInterval(() => {
-        const mb = (received / 1024 / 1024).toFixed(0)
-        const pct = total ? ` (${(received / total * 100).toFixed(0)}% of ${(total / 1024 / 1024).toFixed(0)}MB)` : ''
-        const rate = ((received - startAt) / 1024 / 1024 / Math.max(1, (Date.now() - started) / 1000)).toFixed(1)
-        console.log(`  [warm] ${name}: ${mb}MB${pct} @ ${rate}MB/s`)
-      }, PROGRESS_INTERVAL_MS)
-      res.on('data', (chunk) => { received += chunk.length })
+        const append = status === 206
+        const startAt = append ? startByte : 0
+        const remaining = Number(res.headers['content-length'] || 0)
+        const total = append ? startAt + remaining : remaining
+        let received = startAt
+        const started = Date.now()
+        const progress = setInterval(() => {
+          const mb = (received / 1024 / 1024).toFixed(0)
+          const pct = total
+            ? ` (${((received / total) * 100).toFixed(0)}% of ${(total / 1024 / 1024).toFixed(0)}MB)`
+            : ''
+          const rate = (
+            (received - startAt) /
+            1024 /
+            1024 /
+            Math.max(1, (Date.now() - started) / 1000)
+          ).toFixed(1)
+          console.log(`  [warm] ${name}: ${mb}MB${pct} @ ${rate}MB/s`)
+        }, PROGRESS_INTERVAL_MS)
+        res.on('data', (chunk) => {
+          received += chunk.length
+        })
 
-      const done = (fn, arg) => { clearInterval(progress); fn(arg) }
-      pipeline(res, createWriteStream(dest, { flags: append ? 'a' : 'w' }))
-        .then(() => done(resolvePromise))
-        .catch((err) => done(reject, err))
-    })
+        const done = (fn, arg) => {
+          clearInterval(progress)
+          fn(arg)
+        }
+        pipeline(res, createWriteStream(dest, { flags: append ? 'a' : 'w' }))
+          .then(() => done(resolvePromise))
+          .catch((err) => done(reject, new Error(redactUrlsInText(err.message))))
+      })
+    } catch (err) {
+      return reject(new Error(redactUrlsInText(err.message)))
+    }
     req.setTimeout(IDLE_TIMEOUT_MS, () => {
       req.destroy(new Error(`idle timeout after ${IDLE_TIMEOUT_MS}ms`))
     })
-    req.on('error', reject)
+    req.on('error', (err) => reject(new Error(redactUrlsInText(err.message))))
   })
 }
 
-async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
+export async function downloadWithRetries(
+  urls,
+  dest,
+  name,
+  { retries = 3, requester = https } = {}
+) {
   const partPath = dest + '.part'
   let lastErr = null
   // Which URL produced the current .part bytes; we only resume against the same
@@ -125,17 +203,24 @@ async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
     }
     const url = urls[attempt % urls.length]
     let startByte = 0
-    if (partUrl === url) startByte = await stat(partPath).then((s) => s.size, () => 0)
+    if (partUrl === url)
+      startByte = await stat(partPath).then(
+        (s) => s.size,
+        () => 0
+      )
     else await rm(partPath, { force: true }).catch(() => {})
     try {
-      if (startByte > 0) console.log(`  [warm] ${name}: resuming from ${(startByte / 1024 / 1024).toFixed(0)}MB`)
-      await downloadOnce(url, partPath, name, { startByte })
+      if (startByte > 0)
+        console.log(`  [warm] ${name}: resuming from ${(startByte / 1024 / 1024).toFixed(0)}MB`)
+      await downloadOnce(url, partPath, name, { startByte, requester })
       const { size } = await stat(partPath)
       if (size < 1) throw new Error(`downloaded file is empty from ${new URL(url).host}`)
       await rename(partPath, dest)
       return
     } catch (err) {
-      lastErr = err
+      lastErr = Object.assign(new Error(redactUrlsInText(err.message)), {
+        resetPart: err && err.resetPart
+      })
       if (err && err.resetPart) {
         await rm(partPath, { force: true }).catch(() => {})
         partUrl = null
@@ -143,7 +228,7 @@ async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
         // Keep the partial so the next same-URL attempt resumes from it.
         partUrl = url
       }
-      console.log(`  ! attempt ${attempt + 1} failed: ${err.message}`)
+      console.log(`  ! attempt ${attempt + 1} failed: ${lastErr.message}`)
     }
   }
   await rm(partPath, { force: true }).catch(() => {})
@@ -152,7 +237,7 @@ async function downloadWithRetries (urls, dest, name, { retries = 3 } = {}) {
 
 // Streamed so multi-GB models hash correctly: fs.readFile is hard-capped at
 // 2 GiB (kIoMaxLength), which most of these model files exceed.
-function sha256File (filePath) {
+function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = createHash('sha256')
     const stream = createReadStream(filePath)
@@ -164,7 +249,7 @@ function sha256File (filePath) {
 
 // Returns { ok, reason } — mirrors runtime ensureModel verification ordering
 // (cheap size check before the expensive hash).
-async function verify (filePath, entry) {
+async function verify(filePath, entry) {
   if (entry.bytes != null) {
     const { size } = await stat(filePath)
     if (size !== entry.bytes) return { ok: false, reason: `size ${size} != ${entry.bytes}` }
@@ -176,80 +261,91 @@ async function verify (filePath, entry) {
   return { ok: true }
 }
 
-function fileExists (p) {
-  return stat(p).then(() => true, () => false)
-}
-
-function manifestSha256 (rawManifest) {
-  return createHash('sha256').update(rawManifest).digest('hex')
-}
-
-async function canTrustExactCacheHit ({ markerPath, manifestDigest, entries, modelDir }) {
-  if (process.env.QVAC_MODEL_CACHE_EXACT_HIT !== 'true') return false
-  if (!entries.every(([, entry]) => entry.sha256 != null && entry.bytes != null)) return false
-
-  let marker
-  try {
-    marker = JSON.parse(await readFile(markerPath, 'utf8'))
-  } catch (_) {
-    return false
-  }
-  if (marker.version !== 1 || marker.manifestSha256 !== manifestDigest) return false
-
-  for (const [name, entry] of entries) {
-    const pinned = marker.models && marker.models[name]
-    if (!pinned || pinned.sha256 !== entry.sha256 || pinned.bytes !== entry.bytes) return false
-    const modelStat = await stat(join(modelDir, name)).catch(() => null)
-    if (!modelStat || modelStat.size !== entry.bytes) return false
-  }
-  return true
-}
-
-async function writeVerifiedMarker ({ markerPath, manifestDigest, entries }) {
-  if (!entries.every(([, entry]) => entry.sha256 != null && entry.bytes != null)) return
-  const models = {}
-  for (const [name, entry] of entries) {
-    models[name] = { sha256: entry.sha256, bytes: entry.bytes }
-  }
-  await writeFile(
-    markerPath,
-    `${JSON.stringify({ version: 1, manifestSha256: manifestDigest, models }, null, 2)}\n`
+function fileExists(p) {
+  return stat(p).then(
+    () => true,
+    () => false
   )
 }
 
-async function main () {
-  const args = parseArgs(process.argv.slice(2))
+export function validateModelName(name) {
+  if (
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name === '.' ||
+    name === '..' ||
+    isAbsolute(name) ||
+    basename(name) !== name ||
+    name.includes('/') ||
+    name.includes('\\')
+  ) {
+    throw new Error(`[warm] invalid manifest model name: ${JSON.stringify(name)}`)
+  }
+  return name
+}
+
+export function selectManifestEntries(manifest, group = '', { includeDeferred = false } = {}) {
+  const declared = Object.entries(manifest.models || {})
+  for (const [name] of declared) validateModelName(name)
+  const entries = group
+    ? declared.filter(([, entry]) => entry.group === group)
+    : includeDeferred
+      ? declared
+      : declared.filter(([, entry]) => entry.warm !== false)
+
+  if (group && entries.length === 0) {
+    throw new Error(`[warm] manifest has no models in group "${group}"`)
+  }
+  return { declared, entries }
+}
+
+export function manifestModelPaths(packageName, entries) {
+  return entries.map(([name]) => {
+    validateModelName(name)
+    return `packages/${packageName}/test/model/${name}`
+  })
+}
+
+async function writePathsOutput(outputPath, paths) {
+  const delimiter = 'QVAC_MODEL_PATHS'
+  await appendFile(outputPath, `paths<<${delimiter}\n${paths.join('\n')}\n${delimiter}\n`)
+}
+
+export async function warmModels(args, { download = downloadWithRetries } = {}) {
   if (!args.package) throw new Error('missing --package (or PKG env)')
 
-  const manifestPath = resolve(args.root, 'packages', args.package, 'test/integration/models.manifest.json')
+  const manifestPath = resolve(
+    args.root,
+    'packages',
+    args.package,
+    'test/integration/models.manifest.json'
+  )
   if (!(await fileExists(manifestPath))) {
+    if (args.pathsOutput) {
+      await writePathsOutput(args.pathsOutput, [`packages/${args.package}/test/model`])
+    }
     console.log(`[warm] no manifest at ${manifestPath} — skipping (tests will lazy-download)`)
     return
   }
 
-  const rawManifest = await readFile(manifestPath, 'utf8')
-  const manifest = JSON.parse(rawManifest)
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  if (args.pathsOutput) {
+    const { entries } = selectManifestEntries(manifest, args.group, { includeDeferred: true })
+    await writePathsOutput(args.pathsOutput, manifestModelPaths(args.package, entries))
+    return
+  }
+
+  const { declared, entries } = selectManifestEntries(manifest, args.group)
   const modelDir = resolve(args.root, 'packages', args.package, 'test/model')
   await mkdir(modelDir, { recursive: true })
-  const markerPath = join(modelDir, VERIFIED_MARKER)
 
-  const declaredEntries = Object.entries(manifest.models || {})
-  const entries = declaredEntries.filter(([, entry]) => entry.warm !== false)
-  const deferred = declaredEntries.length - entries.length
+  const deferred = declared.length - entries.length
   console.log(
     `[warm] ${args.package}: ${entries.length} model(s) selected` +
+      (args.group ? ` for group ${args.group}` : '') +
       (deferred ? `, ${deferred} deferred to integration tests` : '') +
       `; target ${modelDir}`
   )
-
-  const manifestDigest = manifestSha256(rawManifest)
-  if (await canTrustExactCacheHit({ markerPath, manifestDigest, entries, modelDir })) {
-    console.log(
-      `[warm] trusted exact cache hit: verified marker matches manifest and ${entries.length} file sizes`
-    )
-    console.log(`[warm] done: 0 downloaded, ${entries.length} already verified by cache marker`)
-    return
-  }
 
   let downloaded = 0
   let skipped = 0
@@ -271,7 +367,9 @@ async function main () {
       } else {
         const { size } = await stat(dest)
         if (size > 0) {
-          console.log(`[warm] ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`)
+          console.log(
+            `[warm] ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`
+          )
           skipped++
           continue
         }
@@ -283,7 +381,7 @@ async function main () {
     if (!urls.length) throw new Error(`[warm] ${name}: no urls in manifest`)
 
     console.log(`[warm] ${name}: downloading (${urls.length} source(s))...`)
-    await downloadWithRetries(urls, dest, name)
+    await download(urls, dest, name)
 
     if (hasIntegrity) {
       const res = await verify(dest, entry)
@@ -297,11 +395,13 @@ async function main () {
     downloaded++
   }
 
-  await writeVerifiedMarker({ markerPath, manifestDigest, entries })
   console.log(`[warm] done: ${downloaded} downloaded, ${skipped} already cached`)
 }
 
-main().catch((err) => {
-  console.error(err.stack || String(err))
-  process.exit(1)
-})
+const scriptPath = fileURLToPath(import.meta.url)
+if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {
+  warmModels(parseArgs(process.argv.slice(2))).catch((err) => {
+    console.error(redactUrlsInText(err.stack || String(err)))
+    process.exit(1)
+  })
+}

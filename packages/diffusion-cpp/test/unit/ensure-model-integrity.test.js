@@ -6,6 +6,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const {
   ensureModel,
+  verifyLocalModelPath,
   verifyModelFile,
   verifyModelFileOnce,
   sha256File,
@@ -224,6 +225,31 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
+test('manifest-declared local model paths must pass integrity', async function (t) {
+  const name = 'model.bin'
+  const { manifest } = await buildManifest(name)
+  const dir = mkTmpDir()
+  try {
+    const modelPath = path.join(dir, name)
+    writeModel(dir, name, GOOD)
+    t.is(
+      await verifyLocalModelPath({ modelName: name, filePath: modelPath, manifest }),
+      modelPath,
+      'valid local file is accepted'
+    )
+
+    fs.writeFileSync(modelPath, BAD_SAME_LEN)
+    resetVerificationCache()
+    await t.exception(
+      verifyLocalModelPath({ modelName: name, filePath: modelPath, manifest }),
+      /local file failed integrity/
+    )
+  } finally {
+    resetVerificationCache()
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('entry without pinned integrity is rejected before a cached file is used', async function (t) {
   const name = 'unpinned.bin'
   const manifest = {
@@ -307,7 +333,7 @@ test('integration manifest pins integrity for every model', function (t) {
   t.ok(Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0, 'cacheEpoch is positive')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
-    const expectedKeys = entry.warm === false ? 'bytes,sha256,urls,warm' : 'bytes,sha256,urls'
+    const expectedKeys = 'bytes,group,sha256,urls'
     t.is(
       Object.keys(entry).sort().join(','),
       expectedKeys,
@@ -323,10 +349,50 @@ test('integration manifest pins integrity for every model', function (t) {
       )
     const hasBytes = Number.isInteger(entry.bytes) && entry.bytes > 0
     const hasSha = typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)
+    const hasGroup = ['base', 'ideogram', 'ltx'].includes(entry.group)
     t.ok(hasImmutableUrls, `${name} uses immutable source URLs`)
     t.ok(hasBytes, `${name} pins bytes`)
     t.ok(hasSha, `${name} pins sha256`)
+    t.ok(hasGroup, `${name} declares a supported cache group`)
   }
+})
+
+test('Ideogram test and download script use the manifest sources', function (t) {
+  const packageDir = path.resolve(__dirname, '../..')
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(packageDir, 'test/integration/models.manifest.json'), 'utf8')
+  )
+  const testSource = fs.readFileSync(
+    path.join(packageDir, 'test/integration/generate-image-ideogram.test.js'),
+    'utf8'
+  )
+  const specPattern = /name:\s*'([^']+)',\s*url:\s*'([^']+)'/g
+  let specCount = 0
+  let match
+  while ((match = specPattern.exec(testSource)) !== null) {
+    specCount++
+    t.ok(
+      manifest.models[match[1]] && manifest.models[match[1]].urls.includes(match[2]),
+      `${match[1]} test spec uses its manifest URL`
+    )
+  }
+  t.is(specCount, 4, 'all four Ideogram test model specs were checked')
+
+  const scriptSource = fs.readFileSync(
+    path.join(packageDir, 'scripts/download-model-ideogram.sh'),
+    'utf8'
+  )
+  const downloadPattern = /dl "\$HF([^"]+)"\s+"\$OUT\/([^"]+)"/g
+  let downloadCount = 0
+  while ((match = downloadPattern.exec(scriptSource)) !== null) {
+    downloadCount++
+    const url = `https://huggingface.co${match[1]}`
+    t.ok(
+      manifest.models[match[2]] && manifest.models[match[2]].urls.includes(url),
+      `${match[2]} download uses its manifest URL`
+    )
+  }
+  t.is(downloadCount, 4, 'all four Ideogram script downloads were checked')
 })
 
 test('integration manifest covers every declared integration model', function (t) {

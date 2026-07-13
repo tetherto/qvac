@@ -12,7 +12,8 @@
 // Optional env vars:
 //   WAN_MODELS_DIR  - reuse an existing models directory (e.g. the one
 //                     populated by ./scripts/download-model-wan.sh).
-//                     Files present here are used as-is; missing files
+//                     Exact manifest-declared files are integrity-verified;
+//                     missing files
 //                     fall back to the standard ensureModel download.
 //   WAN_DEVICE      - 'gpu' (default) or 'cpu'
 //
@@ -26,7 +27,7 @@ const proc = require('bare-process')
 const test = require('brittle')
 const binding = require('../../binding')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const { detectPlatform, setupJsLogger, ensureModelPath } = require('./utils')
+const { detectPlatform, setupJsLogger, ensureModelPath, verifyLocalModelPath } = require('./utils')
 const { recordPerformance } = require('./_perf-helper')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
@@ -88,6 +89,16 @@ const WAN_I2V_FILES = [
     name: 'clip_vision_h.safetensors'
   }
 ]
+
+async function resolveWanModelPath(entry, overrideDir, logPrefix) {
+  const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
+  if (overridePath && fs.existsSync(overridePath)) {
+    await verifyLocalModelPath({ modelName: entry.name, filePath: overridePath })
+    console.log(`[${logPrefix}] Using verified override: ${overridePath}`)
+    return overridePath
+  }
+  return await ensureModelPath({ modelName: entry.name })
+}
 
 // Detects an MJPG AVI buffer with a basic RIFF/AVI/idx1 sniff. We only
 // validate structural markers — strict bit-for-bit AVI parsing lives in
@@ -189,16 +200,7 @@ test(
     const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
     const resolvedFiles = {}
     for (const entry of WAN_FILES) {
-      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
-      let modelPath
-      if (overridePath && fs.existsSync(overridePath)) {
-        console.log(`[wan] Using override: ${overridePath}`)
-        modelPath = overridePath
-      } else {
-        modelPath = await ensureModelPath({
-          modelName: entry.name
-        })
-      }
+      const modelPath = await resolveWanModelPath(entry, overrideDir, 'wan')
       resolvedFiles[entry.key] = modelPath
       t.ok(fs.existsSync(modelPath), `Wan file present: ${entry.name}`)
     }
@@ -385,16 +387,7 @@ test(
     const overrideDir = proc.env && proc.env.WAN_MODELS_DIR
     const resolvedFiles = {}
     for (const entry of WAN_I2V_FILES) {
-      const overridePath = overrideDir ? path.join(overrideDir, entry.name) : null
-      let modelPath
-      if (overridePath && fs.existsSync(overridePath)) {
-        console.log(`[wan-i2v] Using override: ${overridePath}`)
-        modelPath = overridePath
-      } else {
-        modelPath = await ensureModelPath({
-          modelName: entry.name
-        })
-      }
+      const modelPath = await resolveWanModelPath(entry, overrideDir, 'wan-i2v')
       resolvedFiles[entry.key] = modelPath
       t.ok(fs.existsSync(modelPath), `Wan I2V file present: ${entry.name}`)
     }
