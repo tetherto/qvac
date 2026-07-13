@@ -5,13 +5,13 @@
 # overlaid here; ggml remains resolved from qvac-registry-vcpkg.
 #
 # PR #20: https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/20
-# cebd60c adds follow-up Ideogram review fixes on top of the merged
-# 2026-07-03 / PR #19 baseline.
+# c6377dc adds follow-up Ideogram review fixes, including explicit failure
+# when Ideogram CFG is requested without a loaded unconditional model.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF cebd60c6b4a8b08f354d3b12878cad51848ed83e
-    SHA512 e189313bd17dca5d4209f3c90fe70117f8de803b069d1dc21dca718d8c0bd7324c8589aedaac8c7867543d77ddcf68b1c50a027570fff99ae1b1e8f70ba048f0
+    REF c6377dc4cd6a899d48963576ea376720e3a8f766
+    SHA512 71a5141fc8294d5e5273f3842ce23f454a53e1857fdcb06b40d59a272e9943ed7419bc147e61c921faadcdcf0a7ad848f01df62118f41e4a4ea43adbad81cc6b
 )
 
 set(SD_FLASH_ATTN OFF)
