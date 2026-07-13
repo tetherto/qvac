@@ -3,9 +3,8 @@
 // Offline integrity/manifest proof for embed-llamacpp, mirroring
 // diffusion-cpp/test/unit/ensure-model-integrity.test.js: ensureModel resolves
 // URL + sha256/bytes from models.manifest.json, re-downloads poisoned/truncated
-// caches, falls back to MODEL_CONFIGS when the manifest lacks an entry, and the
-// real manifest is well-formed. No network and no native addon are touched —
-// downloads are injected.
+// caches, requires fully pinned entries, and the real manifest is well-formed.
+// No network and no native addon are touched — downloads are injected.
 
 const test = require('brittle')
 const fs = require('bare-fs')
@@ -14,7 +13,9 @@ const path = require('bare-path')
 const {
   ensureModel,
   verifyModelFile,
+  verifyModelFileOnce,
   sha256File,
+  resetVerificationCache,
   copyPrestagedModel,
   loadManifest,
   resolveModelEntry,
@@ -93,6 +94,30 @@ test('pinned sha256 verification fails closed when hashing cannot complete', asy
     t.absent(failed.ok, 'hashing error is a verification failure')
     t.ok(/hash unavailable/.test(failed.reason), 'hashing error is preserved')
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('repeated verification hashes an unchanged model only once per process', async function (t) {
+  const name = 'gte-large_fp16.gguf'
+  const { manifest, sha256 } = await buildManifest(name)
+  const dir = mkTmpDir()
+  const modelPath = path.join(dir, name)
+  let hashes = 0
+  try {
+    writeModel(dir, name, GOOD)
+    resetVerificationCache()
+    const hashFile = async function () {
+      hashes++
+      return sha256
+    }
+    const first = await verifyModelFileOnce(modelPath, manifest.models[name], hashFile)
+    const second = await verifyModelFileOnce(modelPath, manifest.models[name], hashFile)
+    t.ok(first.ok)
+    t.ok(second.ok)
+    t.is(hashes, 1, 'unchanged file and pins reuse the verification result')
+  } finally {
+    resetVerificationCache()
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
@@ -227,7 +252,7 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
-test('entry without pinned integrity skips verification (keeps a non-zero cached file)', async function (t) {
+test('entry without pinned integrity is rejected before cache use', async function (t) {
   const name = 'gte-large_fp16.gguf'
   const manifest = {
     models: { [name]: { urls: ['https://example.invalid/x'], sha256: null, bytes: null } }
@@ -235,44 +260,52 @@ test('entry without pinned integrity skips verification (keeps a non-zero cached
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
-    writeModel(dir, name, BAD_SAME_LEN) // any non-zero content is accepted when unpinned
-    await ensureModel({
-      modelName: name,
-      modelDir: dir,
-      manifest,
-      download: fakeDownloader(GOOD, spy)
-    })
-    t.is(spy.calls, 0, 'no download when an unpinned file already exists and is non-zero')
+    writeModel(dir, name, BAD_SAME_LEN)
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /no valid SHA-256 pin/
+    )
+    t.is(spy.calls, 0, 'invalid manifest fails before download or cache use')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
 
-test('MODEL_CONFIGS is used as a fallback when the manifest has no entry', async function (t) {
+test('MODEL_CONFIGS URL cannot bypass a missing manifest entry', async function (t) {
   const name = 'gte-large_fp16.gguf' // known in MODEL_CONFIGS
   const dir = mkTmpDir()
   const spy = { calls: 0 }
   try {
     t.ok(MODEL_CONFIGS[name], 'model is declared in MODEL_CONFIGS')
-    await ensureModel({
-      modelName: name,
-      modelDir: dir,
-      manifest: { models: {} },
-      download: fakeDownloader(GOOD, spy)
-    })
-    t.is(spy.calls, 1, 'downloaded via the MODEL_CONFIGS fallback url')
-    t.is(fs.readFileSync(path.join(dir, name), 'utf8'), GOOD)
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest: { models: {} },
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /missing from required models\.manifest\.json/
+    )
+    t.is(spy.calls, 0, 'missing entry fails before MODEL_CONFIGS fallback')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
 
-test('truly unknown model (no config, no manifest entry) throws', async function (t) {
+test('malformed manifest fails explicitly', function (t) {
   const dir = mkTmpDir()
+  const manifestPath = path.join(dir, 'models.manifest.json')
   try {
-    await t.exception(
-      ensureModel({ modelName: 'nope.gguf', modelDir: dir, manifest: { models: {} } }),
-      /Unknown model/
+    fs.writeFileSync(manifestPath, '{broken')
+    t.exception(
+      () => loadManifest(manifestPath),
+      /Failed to load required model manifest/,
+      'invalid JSON cannot disable integrity checks'
     )
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })

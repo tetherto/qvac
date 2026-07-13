@@ -18,12 +18,12 @@ const SAMPLE = {
   models: {
     'embeddinggemma-300M-Q8_0.gguf': {
       urls: [
-        'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf'
+        'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/0123456789012345678901234567890123456789/embeddinggemma-300M-Q8_0.gguf'
       ]
     },
     'gte-large_fp16.gguf': {
       urls: [
-        'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf'
+        'https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/0123456789012345678901234567890123456789/gte-large_fp16.gguf'
       ]
     }
   }
@@ -34,7 +34,7 @@ test('modelsFromManifest pulls name + url pairs from the integration manifest', 
   assert.equal(models.length, 2)
   assert.deepEqual(models[0], {
     name: 'embeddinggemma-300M-Q8_0.gguf',
-    url: 'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf'
+    url: 'https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/0123456789012345678901234567890123456789/embeddinggemma-300M-Q8_0.gguf'
   })
   assert.equal(models[1].name, 'gte-large_fp16.gguf')
 })
@@ -42,7 +42,18 @@ test('modelsFromManifest pulls name + url pairs from the integration manifest', 
 test('modelsFromManifest rejects entries without a usable URL', () => {
   assert.throws(
     () => modelsFromManifest({ models: { 'broken.gguf': { urls: [] } } }),
-    /no usable manifest URL/
+    /no usable pinned manifest URL/
+  )
+  assert.throws(
+    () =>
+      modelsFromManifest({
+        models: {
+          'mutable.gguf': {
+            urls: ['https://huggingface.co/example/model/resolve/main/mutable.gguf']
+          }
+        }
+      }),
+    /no usable pinned manifest URL/
   )
 })
 

@@ -17,12 +17,18 @@ const path = require('path')
 const manifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
 
 function modelsFromManifest(manifest) {
-  if (!manifest || !manifest.models) return []
+  if (!manifest || !manifest.models) {
+    throw new Error('[prestage] integration model manifest has no models')
+  }
   const models = []
   for (const [name, entry] of Object.entries(manifest.models)) {
     const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
-    if (typeof url !== 'string' || !url.startsWith('https://')) {
-      throw new Error(`[prestage] ${name} has no usable manifest URL`)
+    if (
+      typeof url !== 'string' ||
+      !url.startsWith('https://') ||
+      /\/resolve\/(?:main|master)\//.test(url)
+    ) {
+      throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
     }
     models.push({ name, url })
   }
