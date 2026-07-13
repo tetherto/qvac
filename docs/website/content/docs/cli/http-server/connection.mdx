@@ -298,7 +298,7 @@ Your local-model choice decides whether an agent actually works. Empirical findi
 
 - **Q4-quantized 4B/8B Qwen3-Instruct** can hold a conversation but won't reliably *invoke* tools. The model will say "let me search the docs" without emitting a tool call, then fabricate an answer.
 - **Cloud Qwen3.5-9B** (full precision, e.g. via OpenRouter) calls tools aggressively but still hallucinates content from tool results.
-- Reliable local tool use generally needs $\geq$ **14B parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
+- Reliable local tool use generally needs **`>= 14B` parameters and coder/agent post-training** (e.g. `GPT_OSS_20B_INST_Q4_K_M` from the catalog, future Qwen3-Coder variants). Plain Instruct tunes at 4–8B sizes are not reliable agent backends.
 
 <Callout type="info">
 
