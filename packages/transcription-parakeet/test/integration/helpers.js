@@ -936,6 +936,15 @@ const MODEL_CONFIGS = {
   }
 }
 
+// Kebab-case tokens accepted by the benchmark harness / mobile-perf runner that
+// map onto a camelCase MODEL_CONFIGS key. Lets the RTF matrix and mobile perf
+// tests refer to the streaming Sortformer as `sortformer-streaming` (readable in
+// reports and distinct from v1 `sortformer`) while the config key stays
+// `sortformerStreaming`.
+const MODEL_TYPE_ALIASES = {
+  'sortformer-streaming': 'sortformerStreaming'
+}
+
 // QVAC model registry fetch. Used as the final fallback in
 // `ensureGgufForType` when no local cache / asset bundle / external
 // dir has the model. Mirrors the pattern in
@@ -1093,12 +1102,13 @@ function quantFromGgufName (ggufPathOrName) {
  * @returns {Promise<string|null>} GGUF file path, or null if unavailable
  */
 async function ensureGgufForType (modelType, override = null, options = {}) {
-  const cfg = MODEL_CONFIGS[modelType]
+  const canonicalType = MODEL_TYPE_ALIASES[modelType] || modelType
+  const cfg = MODEL_CONFIGS[canonicalType]
   if (!cfg) return null
 
   if (override && fs.existsSync(override)) return override
 
-  const envKey = `QVAC_TEST_GGUF_${modelType.toUpperCase()}`
+  const envKey = `QVAC_TEST_GGUF_${canonicalType.toUpperCase()}`
   if (process.env && process.env[envKey] && fs.existsSync(process.env[envKey])) {
     return process.env[envKey]
   }

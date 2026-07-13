@@ -66,6 +66,14 @@ async function runMobilePerfSortformerGpuTest (options = {}) { // eslint-disable
   return runIntegrationModule('../integration/mobile-perf-sortformer-gpu.test.js', options)
 }
 
+async function runMobilePerfSortformerStreamingCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sortformer-streaming-cpu.test.js', options)
+}
+
+async function runMobilePerfSortformerStreamingGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sortformer-streaming-gpu.test.js', options)
+}
+
 async function runMobilePerfTdtCpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/mobile-perf-tdt-cpu.test.js', options)
 }
@@ -102,6 +110,8 @@ module.exports = {
   runMobilePerfEouGpuTest,
   runMobilePerfSortformerCpuTest,
   runMobilePerfSortformerGpuTest,
+  runMobilePerfSortformerStreamingCpuTest,
+  runMobilePerfSortformerStreamingGpuTest,
   runMobilePerfTdtCpuTest,
   runMobilePerfTdtGpuTest,
   runModelFileValidationTest,
