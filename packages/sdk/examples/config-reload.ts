@@ -1,4 +1,4 @@
-import { WHISPER_TINY, loadModel, transcribe, unloadModel } from '../index'
+import { WHISPER_TINY, loadModel, transcribe, unloadModel } from '@qvac/sdk'
 
 // Parse command line arguments
 const args = process.argv.slice(2)

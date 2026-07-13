@@ -213,7 +213,7 @@ async function findPackagedConfig(): Promise<string | undefined> {
  * 4. SDK defaults
  */
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
-  const configPath = process.env['QVAC_CONFIG_PATH'] as string | undefined
+  const configPath = process.env['QVAC_CONFIG_PATH']
 
   if (configPath) {
     const normalizedPath = path.resolve(configPath)

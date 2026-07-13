@@ -55,13 +55,13 @@
     "whisper"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
     },
     "./package": "./package.json",
     "./dist/src/worker/index.js": {
@@ -117,8 +117,8 @@
       "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
     },
     "./plugin-utils": {
-      "types": "./dist/schemas/plugin.d.ts",
-      "import": "./dist/schemas/plugin.js"
+      "types": "./dist/src/schemas/plugin.d.ts",
+      "import": "./dist/src/schemas/plugin.js"
     },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./electron-forge": {
@@ -128,29 +128,29 @@
     },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
-      "import": "./dist/server/worker-core.js"
+      "import": "./dist/src/server/worker-core.js"
     },
     "./plugins": {
-      "import": "./dist/server/plugins/index.js"
+      "import": "./dist/src/server/plugins/index.js"
     },
     "./logging": {
-      "import": "./dist/logging/index.js"
+      "import": "./dist/src/logging/index.js"
     },
     "./commands": {
       "types": "./dist/commands/index.d.ts",
       "import": "./dist/commands/index.js"
     },
     "./models": {
-      "types": "./dist/models/registry/index.d.ts",
-      "import": "./dist/models/registry/index.js",
-      "require": "./dist/models/registry/index.js"
+      "types": "./dist/src/models/registry/index.d.ts",
+      "import": "./dist/src/models/registry/index.js",
+      "require": "./dist/src/models/registry/index.js"
     },
     "./pear-pre": "./dist/pear/pre.js"
   },
   "imports": {
     "#rpc": {
-      "react-native": "./dist/client/rpc/expo-rpc-client.js",
-      "default": "./dist/client/rpc/node-rpc-client.js"
+      "react-native": "./dist/src/client/rpc/expo-rpc-client.js",
+      "default": "./dist/src/client/rpc/node-rpc-client.js"
     }
   },
   "expo": {

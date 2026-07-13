@@ -1,6 +1,6 @@
 import os from 'bare-os'
 import Signal from 'bare-signals'
-import { createBareKitRPCServer, createIPCClient } from '@/src/worker/create-server'
+import { createBareKitRPCServer, createIPCClient } from '@/worker/create-server'
 import { initEnv, getValidatedEnv } from '@/server/env'
 import { close as closeCore, cleanupForTerminate as cleanupCoreForTerminate } from '@qvac/core/engine'
 import { getServerLogger } from '@/logging'

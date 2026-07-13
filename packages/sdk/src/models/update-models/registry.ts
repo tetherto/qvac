@@ -12,7 +12,6 @@ export async function collectModels(options: CollectOptions = {}): Promise<Proce
   const { showDuplicates = false, noDedup = false } = options
   const models: ProcessedModel[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const registryCoreKey: string = process.env['QVAC_REGISTRY_CORE_KEY'] ?? DEFAULT_REGISTRY_CORE_KEY
   const client = new QVACRegistryClient({ registryCoreKey })
 

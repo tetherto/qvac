@@ -15,7 +15,7 @@ export default [
       // Bare-only worker code, excluded from the Node tsconfig; the type-aware
       // ESLint project service cannot parse files outside that program.
       'src/worker/**',
-      'server/worker-core.ts'
+      'src/server/worker-core.ts'
     ]
   },
 

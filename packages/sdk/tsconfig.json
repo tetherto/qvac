@@ -1,6 +1,6 @@
 {
   "include": ["**/*"],
-  "exclude": ["node_modules", "dist", "e2e", "test", "src/worker", "server/worker-core.ts"],
+  "exclude": ["node_modules", "dist", "e2e", "test", "src/worker", "src/server/worker-core.ts"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "target": "ES2022",
@@ -12,8 +12,8 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@qvac/sdk": ["./index.ts"],
-      "@/*": ["./*"]
+      "@qvac/sdk": ["./src/index.ts"],
+      "@/*": ["./src/*", "./*"]
     },
     "outDir": "./dist",
     "declaration": true,

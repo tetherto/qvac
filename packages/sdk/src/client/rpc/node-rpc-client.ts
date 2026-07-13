@@ -84,8 +84,8 @@ function resolvePackagedWorkerPath(): string | undefined {
  *
  * The worker is transpiled with its `@/` aliases resolved into
  * `dist/src/worker/index.js`; Bare cannot run the `@/`-laden source. This file
- * compiles to `dist/client/rpc/node-rpc-client.js`, so the built worker sits at
- * `../../src/worker/index.js` for both the dev and packaged layouts.
+ * compiles to `dist/src/client/rpc/node-rpc-client.js`, so the built worker sits
+ * at `../../worker/index.js` for both the dev and packaged layouts.
  *
  * `path.resolve(__dirname, ...)` is invisible to static analysis, so packaged
  * consumers ship without the worker. We use `import.meta.asset(<literal>)` on
@@ -98,8 +98,8 @@ function getDefaultWorkerPath(): string {
   const hasAsset = typeof (import.meta as ImportMetaAsset).asset === 'function'
 
   const workerUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../src/worker/index.js'))
-    : new URL('../../src/worker/index.js', import.meta.url)
+    ? new URL((import.meta as ImportMetaAsset).asset!('../../worker/index.js'))
+    : new URL('../../worker/index.js', import.meta.url)
   return fileURLToPath(workerUrl)
 }
 
@@ -111,7 +111,7 @@ function getDefaultWorkerPath(): string {
  * 4. Default SDK worker
  */
 function resolveWorkerPath(): string {
-  const envWorkerPath = process.env['QVAC_WORKER_PATH'] as string | undefined
+  const envWorkerPath = process.env['QVAC_WORKER_PATH']
   if (envWorkerPath) {
     const normalized = path.resolve(envWorkerPath)
     if (fs.existsSync(normalized)) {
