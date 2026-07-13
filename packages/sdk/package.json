@@ -64,9 +64,9 @@
       "require": "./dist/index.js"
     },
     "./package": "./package.json",
-    "./dist/server/worker.js": {
-      "import": "./dist/server/worker.js",
-      "require": "./dist/server/worker.js"
+    "./dist/src/worker/index.js": {
+      "import": "./dist/src/worker/index.js",
+      "require": "./dist/src/worker/index.js"
     },
     "./llamacpp-completion/plugin": {
       "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
@@ -184,7 +184,8 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "postcompile:aliases": "node ./scripts/resolve-aliases.mjs",
-    "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
+    "build:worker": "tsc --project tsconfig.worker.json && npm run postcompile:aliases",
+    "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases && npm run build:worker",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",

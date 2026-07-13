@@ -171,6 +171,9 @@ function fixDirectoryImports(code, filePath, cfg) {
   updated = updated.replace(
     /(from\s*["'])(@\w+\/[^\/"']+\/[^"']*?)(?<!\.js|\.d\.ts)(["'])/g,
     (match, prefix, importPath, suffix) => {
+      // @qvac/core maps its subpaths through an `exports` map to `.ts` sources;
+      // appending `.js` would miss those export keys under Bare. Leave it alone.
+      if (importPath.startsWith('@qvac/core/')) return match
       // Add .js extension to external package sub-paths
       const extension = targetExtension === '.d.ts' ? '' : '.js'
       return `${prefix}${importPath}${extension}${suffix}`
@@ -206,6 +209,9 @@ function fixDirectoryImports(code, filePath, cfg) {
   updated = updated.replace(
     /(import\s*\(\s*["'])(@\w+\/[^\/"']+\/[^"']*?)(?<!\.js|\.d\.ts)(["']\s*\))/g,
     (match, prefix, importPath, suffix) => {
+      // @qvac/core maps its subpaths through an `exports` map to `.ts` sources;
+      // appending `.js` would miss those export keys under Bare. Leave it alone.
+      if (importPath.startsWith('@qvac/core/')) return match
       // Add .js extension to external package sub-paths
       const extension = targetExtension === '.d.ts' ? '' : '.js'
       return `${prefix}${importPath}${extension}${suffix}`

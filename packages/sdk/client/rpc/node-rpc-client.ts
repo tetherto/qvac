@@ -82,27 +82,25 @@ function resolvePackagedWorkerPath(): string | undefined {
 /**
  * Resolve the SDK's default worker entry via bundler-visible asset references.
  *
+ * The worker is transpiled with its `@/` aliases resolved into
+ * `dist/src/worker/index.js`; Bare cannot run the `@/`-laden source. This file
+ * compiles to `dist/client/rpc/node-rpc-client.js`, so the built worker sits at
+ * `../../src/worker/index.js` for both the dev and packaged layouts.
+ *
  * `path.resolve(__dirname, ...)` is invisible to static analysis, so packaged
- * consumers ship without worker.js. We use `import.meta.asset(<literal>)` on
+ * consumers ship without the worker. We use `import.meta.asset(<literal>)` on
  * Bare (detected by bare-module-lexer) and fall back to
- * `new URL(<literal>, import.meta.url)` elsewhere. Specs must be string
- * literals at the call site.
+ * `new URL(<literal>, import.meta.url)` elsewhere. The spec must be a string
+ * literal at the call site.
  */
 function getDefaultWorkerPath(): string {
   type ImportMetaAsset = { asset?: (spec: string) => string }
   const hasAsset = typeof (import.meta as ImportMetaAsset).asset === 'function'
 
-  const packagedUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../../src/worker/index.ts'))
-    : new URL('../../../src/worker/index.ts', import.meta.url)
-  const packaged = fileURLToPath(packagedUrl)
-  if (fs.existsSync(packaged)) return packaged
-
-  // Dev/source layout fallback
-  const devUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../src/worker/index.ts'))
-    : new URL('../../src/worker/index.ts', import.meta.url)
-  return fileURLToPath(devUrl)
+  const workerUrl = hasAsset
+    ? new URL((import.meta as ImportMetaAsset).asset!('../../src/worker/index.js'))
+    : new URL('../../src/worker/index.js', import.meta.url)
+  return fileURLToPath(workerUrl)
 }
 
 /**
