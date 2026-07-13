@@ -27,7 +27,7 @@
  * 3=Vulkan, 4=OpenCL, 99=other-GPU) / `stats.backendDevice` (0=CPU, 1=GPU).
  *
  * Environment variables (all optional):
- *   QVAC_TTS_GGML_BENCHMARK_ENGINE       chatterbox | chatterbox-mtl | supertonic | supertonic-mtl
+ *   QVAC_TTS_GGML_BENCHMARK_ENGINE       chatterbox | chatterbox-mtl | supertonic | supertonic-mtl | supertonic3
  *                                        (default: chatterbox)
  *   QVAC_TTS_GGML_BENCHMARK_VARIANT      q4 | q8 | f16 | mixed       (default: q4, label only)
  *   QVAC_TTS_GGML_BENCHMARK_USE_GPU      1 | true | 0 | false        (default: false)
@@ -54,10 +54,11 @@ const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
-  ensureSupertonicMtlModel
+  ensureSupertonicMtlModel,
+  ensureSupertonic3Model
 } = require('../utils/downloadModel')
 
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
 // GGUF quant is baked into the file (registry serves q4_0 weights + f16 s3gen),
 // so the variant is a label, not a model selector. The list stays permissive so
 // future re-quantised registry drops can be tagged without a code change here.
@@ -331,6 +332,19 @@ function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+// Supertonic 3 encodes the quant tier in the on-disk filename (unlike v1/v2,
+// which read the quant from GGUF metadata). Map the benchmark's `variant`
+// label to the published tier so `ensureSupertonic3Model` fetches the right
+// file. Unknown labels fall back to q4_0 (the default mobile/CI tier).
+function supertonic3QuantFromVariant (variant) {
+  switch (variant) {
+    case 'q8': return 'q8_0'
+    case 'f16': return 'f16'
+    case 'q4':
+    default: return 'q4_0'
+  }
+}
+
 async function loadModelForEngine (settings) {
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
@@ -390,6 +404,21 @@ async function loadModelForEngine (settings) {
     return { model, modelFiles: [supertonicPath] }
   }
 
+  if (settings.engine === 'supertonic3') {
+    const quant = supertonic3QuantFromVariant(settings.variant)
+    const download = await ensureSupertonic3Model({ targetDir: modelsDir, quant })
+    if (!download || !download.success) throw new Error(`Supertonic 3 GGUF (${quant}) unavailable (registry fetch failed)`)
+    const supertonicPath = download.path || path.join(download.targetDir || modelsDir, `supertonic3-${quant}.gguf`)
+    const model = await loadSupertonicTTS({
+      supertonicModelPath: supertonicPath,
+      voice: 'F1',
+      language: 'en',
+      useGPU: settings.useGPU,
+      ...threadOpts
+    })
+    return { model, modelFiles: [supertonicPath] }
+  }
+
   const download = await ensureSupertonicModel({ targetDir: modelsDir })
   if (!download || !download.success) throw new Error('Supertonic GGUF unavailable (registry fetch failed)')
   const supertonicPath = download.path || path.join(download.targetDir || modelsDir, 'supertonic.gguf')
@@ -403,8 +432,12 @@ async function loadModelForEngine (settings) {
   return { model, modelFiles: [supertonicPath] }
 }
 
+// All Supertonic tiers (v1 / v2-mtl / v3) run through the Supertonic runner;
+// everything else is Chatterbox.
+const SUPERTONIC_ENGINES = ['supertonic', 'supertonic-mtl', 'supertonic3']
+
 async function runSynthesis (engine, model, text) {
-  const runner = (engine === 'supertonic' || engine === 'supertonic-mtl') ? runSupertonicTTS : runChatterboxTTS
+  const runner = SUPERTONIC_ENGINES.includes(engine) ? runSupertonicTTS : runChatterboxTTS
   return runner(model, { text }, {})
 }
 

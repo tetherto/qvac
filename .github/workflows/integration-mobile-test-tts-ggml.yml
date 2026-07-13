@@ -67,7 +67,7 @@ jobs:
   # merge today.  Tighten once the Device Farm provisioning + signing
   # + runner pool is stable.
   build-and-test:
-    name: Build ${{ matrix.platform }} (${{ matrix.variant }}) and Run E2E Tests
+    name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -79,7 +79,13 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4"}]}') }}
+      # Benchmark matrix (run_rtf_benchmarks=true) sweeps engine x backend on
+      # Android + iOS: chatterbox (CPU q4/q8 + GPU q4), supertonic (CPU + GPU
+      # q4) and supertonic3 (CPU + GPU q4). `use_gpu:true` selects Vulkan on
+      # Android / Metal on iOS via the benchmark's resolveBackend(). New rows are
+      # q4-only to keep the Device Farm run count bounded; chatterbox keeps its
+      # q4+q8 CPU coverage. The default (non-benchmark) matrix is unchanged.
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -146,6 +152,9 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
           VARIANT: ${{ matrix.variant }}
+          ENGINE: ${{ matrix.engine || 'chatterbox' }}
+          USE_GPU: ${{ matrix.use_gpu && '1' || '0' }}
+          GPU_TAG: ${{ matrix.use_gpu && 'gpu' || 'cpu' }}
         run: |
           echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
           cat > test/mobile/inject-env.cjs <<NODE
@@ -155,8 +164,10 @@ jobs:
             if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
-            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$VARIANT'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$ENGINE-$VARIANT-$GPU_TAG'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_VARIANT') return '$VARIANT'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_ENGINE') return '$ENGINE'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_USE_GPU') return '$USE_GPU'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
@@ -281,8 +292,8 @@ jobs:
           filter: ''
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.variant }})'
-          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.variant }}-${{ github.run_number }}
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.engine || ''chatterbox'' }} ${{ matrix.variant }} ${{ matrix.use_gpu && ''gpu'' || ''cpu'' }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.engine || 'chatterbox' }}-${{ matrix.variant }}-${{ matrix.use_gpu && 'gpu' || 'cpu' }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

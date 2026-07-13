@@ -21,7 +21,7 @@
  * JSON files.
  *
  * Environment variables (all optional):
- *   QVAC_TTS_GGML_BENCHMARK_ENGINE       chatterbox | chatterbox-mtl | supertonic | supertonic-mtl
+ *   QVAC_TTS_GGML_BENCHMARK_ENGINE       chatterbox | chatterbox-mtl | supertonic | supertonic-mtl | supertonic3
  *   QVAC_TTS_GGML_BENCHMARK_VARIANT      q4 | q8 | f16 | mixed (default: q4, label only)
  *   QVAC_TTS_GGML_BENCHMARK_USE_GPU      1 | 0 (default 0)
  *   QVAC_TTS_GGML_BENCHMARK_BACKEND      cpu | metal | vulkan | cuda | opencl
@@ -44,10 +44,11 @@ const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
-  ensureSupertonicMtlModel
+  ensureSupertonicMtlModel,
+  ensureSupertonic3Model
 } = require('../utils/downloadModel')
 
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
 const VALID_VARIANTS = ['q4', 'q8', 'f16', 'mixed']
 const RESULTS_DIR = path.resolve(__dirname, '../../benchmarks/results')
 // Schema version for the rich on-disk `streaming-benchmark-*.json` artifact.
@@ -222,6 +223,19 @@ function isMultilingualEngine (engine) {
   return engine === 'chatterbox-mtl' || engine === 'supertonic-mtl'
 }
 
+// Supertonic 3 encodes the quant tier in the on-disk filename (unlike v1/v2,
+// which read the quant from GGUF metadata). Map the benchmark's `variant`
+// label to the published tier so `ensureSupertonic3Model` fetches the right
+// file. Unknown labels fall back to q4_0 (the default mobile/CI tier).
+function supertonic3QuantFromVariant (variant) {
+  switch (variant) {
+    case 'q8': return 'q8_0'
+    case 'f16': return 'f16'
+    case 'q4':
+    default: return 'q4_0'
+  }
+}
+
 async function loadModelForEngine (settings) {
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
@@ -259,6 +273,19 @@ async function loadModelForEngine (settings) {
       supertonicModelPath: download.path || path.join(download.targetDir || modelsDir, 'supertonic2.gguf'),
       voice: 'F1',
       language: 'es',
+      useGPU: settings.useGPU,
+      ...threadOpts
+    })
+  }
+
+  if (settings.engine === 'supertonic3') {
+    const quant = supertonic3QuantFromVariant(settings.variant)
+    const download = await ensureSupertonic3Model({ targetDir: modelsDir, quant })
+    if (!download || !download.success) throw new Error(`Supertonic 3 GGUF (${quant}) unavailable (registry fetch failed)`)
+    return loadSupertonicTTS({
+      supertonicModelPath: download.path || path.join(download.targetDir || modelsDir, `supertonic3-${quant}.gguf`),
+      voice: 'F1',
+      language: 'en',
       useGPU: settings.useGPU,
       ...threadOpts
     })

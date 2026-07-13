@@ -41,6 +41,13 @@ const Q4_MODELS = [
     'supertonic2-q4_0.gguf',
     'qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf',
     'supertonic2.gguf'
+  ),
+  // Supertonic 3 encodes the quant in the on-disk name (unlike v1/v2), so the
+  // target keeps the quant-tagged filename that ensureSupertonic3Model expects.
+  model(
+    'supertonic3-q4_0.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf',
+    'supertonic3-q4_0.gguf'
   )
 ]
 
