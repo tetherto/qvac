@@ -221,6 +221,33 @@ function fixDirectoryImports(code, filePath, cfg) {
   return updated
 }
 
+const VENDORED_CORE_SUBPATHS = {
+  '@qvac/core/surface': 'surface',
+  '@qvac/core/plugin-utils': 'plugin-utils',
+  '@qvac/core/models': 'models'
+}
+
+// Repoint the client dist's runtime imports of core's value-clean subpaths at the
+// bundled JS under dist/src/_vendor (see scripts/bundle-core-surface.mjs). Only
+// emitted JS is rewritten: `.d.ts` keep importing `@qvac/core/*` so consumer types
+// still resolve against core's source, and the Bare worker keeps the package
+// import because Bare loads core's `.ts` directly at runtime.
+function replaceVendoredCore(code, filePath, cfg) {
+  if (filePath.endsWith('.d.ts')) return code
+  if (normalizeToPosix(filePath).includes('/src/worker/')) return code
+
+  const distRoot = path.resolve(projectRoot, cfg.outDir)
+  let updated = code
+  for (const [specifier, name] of Object.entries(VENDORED_CORE_SUBPATHS)) {
+    const target = path.join(distRoot, 'src', '_vendor', `${name}.js`)
+    const rel = ensureDotSlash(normalizeToPosix(path.relative(path.dirname(filePath), target)))
+    const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const fromRe = new RegExp(`((?:from|import\\s*\\()\\s*["'])${escaped}(["'])`, 'g')
+    updated = updated.replace(fromRe, `$1${rel}$2`)
+  }
+  return updated
+}
+
 async function processFile(filePath, cfg) {
   const content = await fsp.readFile(filePath, 'utf8')
   let updated = content
@@ -253,6 +280,9 @@ async function processFile(filePath, cfg) {
   updated = replaceBareImport(updated)
   updated = replaceExportFrom(updated)
   updated = replaceDynamicImport(updated)
+
+  // Repoint core's value-clean subpaths at the bundled JS in the client dist.
+  updated = replaceVendoredCore(updated, filePath, cfg)
 
   // Fix directory imports
   updated = fixDirectoryImports(updated, filePath, cfg)
