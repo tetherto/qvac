@@ -64,8 +64,13 @@ describe('chat completions (blocking)', () => {
     assert.equal(body.choices.length, 1)
     assert.equal(body.choices[0].index, 0)
     assert.equal(body.choices[0].message.role, 'assistant')
-    assert.ok(body.choices[0].message.content.length > 0)
-    assert.equal(body.choices[0].finish_reason, 'stop')
+    // With captureThinking on, a reasoning model can spend the whole budget in
+    // its `<think>` block (routed to reasoning_content), leaving content null
+    // and finishing on the token cap, so assert generation in either channel.
+    const message = body.choices[0].message
+    const produced = (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
+    assert.ok(produced > 0)
+    assert.ok(['stop', 'length'].includes(body.choices[0].finish_reason))
     assert.equal(typeof body.usage.completion_tokens, 'number')
   })
 
