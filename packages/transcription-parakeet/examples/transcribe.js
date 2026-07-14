@@ -26,7 +26,7 @@ const {
   printResults
 } = require('./utils.js')
 
-function parseArgs () {
+function parseArgs() {
   const args = { model: null, audio: null }
   const argv = Bare.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
@@ -37,14 +37,14 @@ function parseArgs () {
   return args
 }
 
-async function loadAudio (audioPath) {
+async function loadAudio(audioPath) {
   const ext = path.extname(audioPath).toLowerCase()
   if (ext === '.wav') return parseWavFile(audioPath)
   const rawBuffer = await readFileAsStream(audioPath)
   return convertRawToFloat32(rawBuffer)
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.model || !args.audio) {
     console.error('Usage: bare examples/transcribe.js --model <gguf> --audio <file>')
@@ -74,7 +74,7 @@ async function main () {
   const segments = []
   const response = await model.run(audioData)
   await response
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const s of items) {
         if (s && s.text && s.toAppend) segments.push(s)
@@ -87,7 +87,7 @@ async function main () {
   addonLogging.releaseLogger()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)

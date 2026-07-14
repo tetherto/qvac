@@ -21,7 +21,7 @@ const TranscriptionWhispercpp = require('../index.js')
 /**
  * Download model if not present
  */
-async function downloadRealModel (url, filepath, minSize = 1000000) {
+async function downloadRealModel(url, filepath, minSize = 1000000) {
   if (fs.existsSync(filepath)) {
     const stats = fs.statSync(filepath)
     if (stats.size >= minSize) {
@@ -36,12 +36,23 @@ async function downloadRealModel (url, filepath, minSize = 1000000) {
   console.log(`⬇ Downloading model: ${filepath}...`)
   try {
     const { spawnSync } = require('bare-subprocess')
-    const result = spawnSync('curl', [
-      '-L', '-o', filepath, url,
-      '--fail', '--silent', '--show-error',
-      '--connect-timeout', '30',
-      '--max-time', '300'
-    ], { stdio: ['inherit', 'inherit', 'pipe'] })
+    const result = spawnSync(
+      'curl',
+      [
+        '-L',
+        '-o',
+        filepath,
+        url,
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--connect-timeout',
+        '30',
+        '--max-time',
+        '300'
+      ],
+      { stdio: ['inherit', 'inherit', 'pipe'] }
+    )
 
     if (result.status === 0 && fs.existsSync(filepath)) {
       const stats = fs.statSync(filepath)
@@ -60,7 +71,7 @@ async function downloadRealModel (url, filepath, minSize = 1000000) {
 /**
  * Split audio buffer into small chunks for live transcription simulation
  */
-function splitAudioIntoChunks (audioBuffer, chunkSizeSeconds, sampleRate, bytesPerSample) {
+function splitAudioIntoChunks(audioBuffer, chunkSizeSeconds, sampleRate, bytesPerSample) {
   const chunkSizeBytes = chunkSizeSeconds * sampleRate * bytesPerSample
   const chunks = []
 
@@ -75,7 +86,7 @@ function splitAudioIntoChunks (audioBuffer, chunkSizeSeconds, sampleRate, bytesP
 /**
  * Simulate live transcription by sending small audio chunks sequentially
  */
-async function transcribeLiveStream (model, audioChunks, audioCtx) {
+async function transcribeLiveStream(model, audioChunks, audioCtx) {
   const startTime = Date.now()
 
   const results = []
@@ -84,7 +95,9 @@ async function transcribeLiveStream (model, audioChunks, audioCtx) {
   console.log(`\nSending ${audioChunks.length} chunks sequentially...\n`)
 
   const liveReadable = new Readable({
-    read (cb) { cb(null) }
+    read(cb) {
+      cb(null)
+    }
   })
 
   const response = await model.run(liveReadable)
@@ -94,7 +107,10 @@ async function transcribeLiveStream (model, audioChunks, audioCtx) {
     results.push(...items)
     segmentCount += items.length
 
-    const latestText = items.map(i => i.text).join(' ').trim()
+    const latestText = items
+      .map((i) => i.text)
+      .join(' ')
+      .trim()
     if (latestText) {
       process.stdout.write(`\r[${segmentCount} segments] Latest: ${latestText.substring(0, 60)}...`)
     }
@@ -111,7 +127,7 @@ async function transcribeLiveStream (model, audioChunks, audioCtx) {
     }
 
     if (chunkDelayMs > 0) {
-      await new Promise(resolve => setTimeout(resolve, chunkDelayMs))
+      await new Promise((resolve) => setTimeout(resolve, chunkDelayMs))
     }
   }
   liveReadable.push(null)
@@ -141,7 +157,7 @@ async function transcribeLiveStream (model, audioChunks, audioCtx) {
   return { results, processingTime }
 }
 
-async function main () {
+async function main() {
   const modelsDir = path.join(__dirname, '..', 'models')
   const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
   const audioPath = path.join(__dirname, 'samples', '10min-16k-s16le.raw')
@@ -189,13 +205,15 @@ async function main () {
   // Calculate audio duration and chunks
   const WHISPER_SAMPLE_RATE = 16000
   const BYTES_PER_SAMPLE = 2
-  const totalDurationSeconds = (audioStats.size / BYTES_PER_SAMPLE) / WHISPER_SAMPLE_RATE
+  const totalDurationSeconds = audioStats.size / BYTES_PER_SAMPLE / WHISPER_SAMPLE_RATE
   const CHUNK_SIZE_SECONDS = 3
   const audioCtx = 1500
 
   console.log(`Audio file: ${audioPath}`)
   console.log(`File size: ${(audioStats.size / 1024 / 1024).toFixed(2)} MB`)
-  console.log(`Duration: ${totalDurationSeconds.toFixed(1)}s (~${(totalDurationSeconds / 60).toFixed(1)} minutes)`)
+  console.log(
+    `Duration: ${totalDurationSeconds.toFixed(1)}s (~${(totalDurationSeconds / 60).toFixed(1)} minutes)`
+  )
   console.log(`Chunk size: ${CHUNK_SIZE_SECONDS}s`)
   console.log(`Audio context: ${audioCtx}ms`)
   console.log(`Model: ${modelPath}\n`)
@@ -213,11 +231,7 @@ async function main () {
 
   console.log(`Created ${audioChunks.length} chunks of ~${CHUNK_SIZE_SECONDS}s each\n`)
 
-  const { results, processingTime } = await transcribeLiveStream(
-    model,
-    audioChunks,
-    audioCtx
-  )
+  const { results, processingTime } = await transcribeLiveStream(model, audioChunks, audioCtx)
 
   console.log('\n=== RESULTS ===')
   console.log(`Total segments: ${results.length}`)
@@ -227,8 +241,8 @@ async function main () {
 
   // Build full transcription
   const fullTranscription = results
-    .map(s => s.text.trim())
-    .filter(t => t.length > 0)
+    .map((s) => s.text.trim())
+    .filter((t) => t.length > 0)
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -246,7 +260,7 @@ async function main () {
   await model.destroy()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   console.error(err.stack)
   process.exit(1)

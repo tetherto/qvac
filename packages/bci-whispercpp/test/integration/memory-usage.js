@@ -49,6 +49,23 @@ function readRssBytes() {
   return readRssFromBareOs() || readRssFromProcess()
 }
 
+function requestGcIfAvailable() {
+  if (typeof globalThis.gc !== 'function') return
+  try {
+    globalThis.gc()
+  } catch {}
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function settleAndReadRss() {
+  requestGcIfAvailable()
+  await delay(RECLAIM_SETTLE_MS)
+  return readRssBytes()
+}
+
 function filterPositive(samples) {
   return (Array.isArray(samples) ? samples : []).filter(isPositiveNumber)
 }
@@ -226,8 +243,8 @@ function peakBytesSamples(runResults) {
 
 // Aggregates per-run RSS samplers into a single memory summary. Kept pure (no
 // model/timer access) so the weighting, the after-load fallback and the peak
-// floor are unit-testable; the live gc + settle-then-sample orchestration stays
-// in the benchmark harness.
+// floor are unit-testable; the live gc + settle-then-sample orchestration lives
+// in settleAndReadRss, shared by the desktop and mobile reclaim paths.
 function summarizeRunMemory(runResults, context) {
   const ctx = context || {}
   const rssAfterLoadBytes = toBytes(ctx.rssAfterLoadBytes)
@@ -246,6 +263,7 @@ module.exports = {
   DEFAULT_SAMPLE_INTERVAL_MS,
   RECLAIM_SETTLE_MS,
   readRssBytes,
+  settleAndReadRss,
   createMemorySampler,
   summarizeSamples,
   meanOfPositive,

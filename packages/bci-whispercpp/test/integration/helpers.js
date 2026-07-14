@@ -5,6 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { computeWER } = require('@qvac/bci-whispercpp/wer')
+const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -43,21 +44,28 @@ try {
     }
 
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         _results.push({
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            real_time_factor: null,
-            wall_time_ms: null,
-            tps: null,
-            total_time_ms: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              real_time_factor: null,
+              wall_time_ms: null,
+              tps: null,
+              total_time_ms: null,
+              avg_rss_mb: null,
+              peak_rss_mb: null,
+              rss_after_load_mb: null,
+              reclaimed_mb: null
+            },
+            metrics
+          ),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
         })
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -67,7 +75,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         const dirs = []
         if (global.testDir) dirs.push(global.testDir)
@@ -79,7 +87,9 @@ try {
         dirs.push('/tmp')
         for (let di = 0; di < dirs.length; di++) {
           try {
-            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(dirs[di], { recursive: true })
+            } catch (_) {}
             const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -88,8 +98,8 @@ try {
           }
         }
       },
-      writeStepSummary () {},
-      writeToConsole () {
+      writeStepSummary() {},
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           const CHUNK = 800
@@ -99,14 +109,25 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -115,16 +136,24 @@ const _perfReporter = createPerformanceReporter({ addon: 'bci', addonType: 'bci'
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _reportScheduled = false
 
-function _flushPerfReport () {
+function _flushPerfReport() {
   if (_perfReporter.length === 0) return
-  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
-  try { _perfReporter.writeToConsole() } catch (_) {}
+  try {
+    _perfReporter.writeReport(_reportPath)
+  } catch (_) {}
+  try {
+    _perfReporter.writeToConsole()
+  } catch (_) {}
 }
 
-function _scheduleReportWrite () {
+function _scheduleReportWrite() {
   if (_reportScheduled) return
   _reportScheduled = true
   process.on('exit', _flushPerfReport)
+}
+
+function roundToTwo(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? roundTo(value, 2) : null
 }
 
 /**
@@ -135,9 +164,13 @@ function _scheduleReportWrite () {
  *                         label when it contains [CPU] or [GPU].
  * @param {Object} stats - response.stats from the addon: { totalTime,
  *                         tokensPerSecond, totalWallMs, realTimeFactor?, ... }.
- * @param {Object} [extra] - Optional { wallMs, output, executionProvider }.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider,
+ *                            avgRssMb, peakRssMb, rssAfterLoadMb, reclaimedMb }
+ *                            overrides. rssAfterLoadMb lets the aggregator floor
+ *                            the mobile peak at the post-load footprint,
+ *                            matching the desktop peak floor.
  */
-function recordBciStats (label, stats, extra) {
+function recordBciStats(label, stats, extra) {
   if (!stats || typeof stats !== 'object') return
   const epOverride = extra && extra.executionProvider
   const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
@@ -145,9 +178,12 @@ function recordBciStats (label, stats, extra) {
   const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
   const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
   const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
-  const wallMs = (extra && typeof extra.wallMs === 'number')
-    ? Math.round(extra.wallMs)
-    : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
+  const wallMs =
+    extra && typeof extra.wallMs === 'number'
+      ? Math.round(extra.wallMs)
+      : typeof stats.totalWallMs === 'number'
+        ? Math.round(stats.totalWallMs)
+        : totalTimeMs
   const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
   // Active ggml backend id echoed in every stats snapshot
   // (0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other). Recorded so the
@@ -155,21 +191,33 @@ function recordBciStats (label, stats, extra) {
   // platform — e.g. Adreno Android lands on OpenCL(4), Mali on Vulkan(3).
   const backendId = typeof stats.backendId === 'number' ? stats.backendId : null
 
-  _perfReporter.record(label, {
-    real_time_factor: rtf,
-    wall_time_ms: wallMs,
-    tps,
-    total_time_ms: totalTimeMs,
-    backend_id: backendId
-  }, {
-    execution_provider: ep,
-    output: extra && extra.output ? String(extra.output) : null
-  })
+  _perfReporter.record(
+    label,
+    {
+      real_time_factor: rtf,
+      wall_time_ms: wallMs,
+      tps,
+      total_time_ms: totalTimeMs,
+      backend_id: backendId,
+      avg_rss_mb: roundToTwo(extra && extra.avgRssMb),
+      peak_rss_mb: roundToTwo(extra && extra.peakRssMb),
+      rss_after_load_mb: roundToTwo(extra && extra.rssAfterLoadMb),
+      reclaimed_mb: roundToTwo(extra && extra.reclaimedMb)
+    },
+    {
+      execution_provider: ep,
+      output: extra && extra.output ? String(extra.output) : null
+    }
+  )
   _scheduleReportWrite()
 
   if (isMobile) {
-    try { _perfReporter.writeReport() } catch (_) {}
-    try { _perfReporter.writeToConsole() } catch (_) {}
+    try {
+      _perfReporter.writeReport()
+    } catch (_) {}
+    try {
+      _perfReporter.writeToConsole()
+    } catch (_) {}
   }
 }
 
@@ -178,12 +226,12 @@ function recordBciStats (label, stats, extra) {
 // (writable scratch). Fall back to test/mobile/testAssets/ on disk so
 // the same code paths work when these tests are exercised from the
 // repo root (e.g. during local mobile dry-runs).
-function getMobileAssetsDir () {
+function getMobileAssetsDir() {
   if (typeof global !== 'undefined' && global.testDir) return global.testDir
   return path.join(__dirname, '..', 'mobile', 'testAssets')
 }
 
-function getModelPath (filename) {
+function getModelPath(filename) {
   if (isMobile) return path.join(getMobileAssetsDir(), filename)
   return path.join(__dirname, '..', '..', 'models', filename)
 }
@@ -193,7 +241,7 @@ function getModelPath (filename) {
 // and exposes each file via global.assetPaths['../../testAssets/<file>'] as a
 // file:// URL (under the app cache dir, NOT global.testDir). Falls back to the
 // testDir-based path off-mobile or when the manifest is absent.
-function getMobileAssetPath (filename) {
+function getMobileAssetPath(filename) {
   if (typeof global !== 'undefined' && global.assetPaths) {
     const key = '../../testAssets/' + filename
     if (global.assetPaths[key]) return String(global.assetPaths[key]).replace('file://', '')
@@ -201,10 +249,8 @@ function getMobileAssetPath (filename) {
   return path.join(getMobileAssetsDir(), filename)
 }
 
-function getTestPaths () {
-  const fixturesDir = isMobile
-    ? getMobileAssetsDir()
-    : path.join(__dirname, '..', 'fixtures')
+function getTestPaths() {
+  const fixturesDir = isMobile ? getMobileAssetsDir() : path.join(__dirname, '..', 'fixtures')
   const manifestPath = path.join(fixturesDir, 'manifest.json')
 
   let manifest = { samples: [] }
@@ -219,7 +265,7 @@ function getTestPaths () {
   }
 }
 
-function detectPlatform () {
+function detectPlatform() {
   const os = require('bare-os')
   const arch = os.arch()
   const platform = os.platform()
@@ -230,7 +276,7 @@ function detectPlatform () {
  * Read a .bin neural signal fixture from disk as a Uint8Array view over
  * the original buffer bytes (no copy).
  */
-function readSignal (samplePath) {
+function readSignal(samplePath) {
   const buf = fs.readFileSync(samplePath)
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
 }
@@ -239,7 +285,7 @@ function readSignal (samplePath) {
  * Parse the [T, C] header of a neural signal buffer and return the header
  * fields alongside a view over the body bytes.
  */
-function splitHeaderAndBody (signalBytes) {
+function splitHeaderAndBody(signalBytes) {
   const view = new DataView(signalBytes.buffer, signalBytes.byteOffset, signalBytes.byteLength)
   const timesteps = view.getUint32(0, true)
   const channels = view.getUint32(4, true)
@@ -252,7 +298,7 @@ function splitHeaderAndBody (signalBytes) {
  * fragments; used to synthesise longer fixtures (e.g. tile a fixture
  * body N times to force multi-window streaming).
  */
-function buildSignal (channels, bodies) {
+function buildSignal(channels, bodies) {
   const totalBodyBytes = bodies.reduce((sum, b) => sum + b.byteLength, 0)
   const totalTimesteps = totalBodyBytes / (channels * 4)
   const out = new Uint8Array(8 + totalBodyBytes)
@@ -271,7 +317,7 @@ function buildSignal (channels, bodies) {
  * Async generator that yields fixed-size slices of a Uint8Array; used by
  * streaming tests to simulate chunked input delivery.
  */
-async function * chunkify (bytes, chunkSize) {
+async function* chunkify(bytes, chunkSize) {
   for (let i = 0; i < bytes.byteLength; i += chunkSize) {
     yield bytes.subarray(i, Math.min(i + chunkSize, bytes.byteLength))
   }

@@ -52,7 +52,7 @@ const SAMPLE_RATE = 16000
 const STREAM_CHUNK_MS = 1000
 const FEED_CHUNK_MS = 500
 
-function loadAudioSample () {
+function loadAudioSample() {
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
@@ -62,31 +62,44 @@ function loadAudioSample () {
   return audio
 }
 
-function pushableStream () {
+function pushableStream() {
   const queue = []
   let waiter = null
   let ended = false
   return {
-    push (chunk) {
+    push(chunk) {
       if (ended) return
       queue.push(chunk)
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    end () {
+    end() {
       ended = true
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
-        if (queue.length > 0) { yield queue.shift(); continue }
+        if (queue.length > 0) {
+          yield queue.shift()
+          continue
+        }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
 }
 
-async function streamEou (model, audioData) {
+async function streamEou(model, audioData) {
   const samplesPerChunk = Math.floor((FEED_CHUNK_MS / 1000) * SAMPLE_RATE)
   const stream = pushableStream()
   const segments = []
@@ -94,7 +107,7 @@ async function streamEou (model, audioData) {
   const runPromise = (async () => {
     const response = await model.run(stream)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         for (const seg of items) {
           if (seg && seg.text) segments.push(seg)
@@ -108,7 +121,7 @@ async function streamEou (model, audioData) {
     const chunk = new Float32Array(audioData.slice(i, endIdx))
     stream.push(chunk)
     if (i + samplesPerChunk < audioData.length) {
-      await new Promise(resolve => setTimeout(resolve, FEED_CHUNK_MS))
+      await new Promise((resolve) => setTimeout(resolve, FEED_CHUNK_MS))
     }
   }
   stream.end()
@@ -117,55 +130,82 @@ async function streamEou (model, audioData) {
   return segments
 }
 
-test('EOU streaming — emits transcript segments and end-of-turn boundaries', { timeout: 600000 }, async (t) => {
-  const loggerBinding = setupJsLogger(binding)
-
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'eou')
-    if (!modelPath) return
-
-    const audio = loadAudioSample()
-    if (!audio) {
-      t.pass('sample.raw not found - skipping')
-      return
-    }
-
-    const model = new TranscriptionParakeet({
-      files: { model: modelPath },
-      config: {
-        parakeetConfig: {
-          streaming: true,
-          streamingChunkMs: STREAM_CHUNK_MS,
-          maxThreads: 4,
-          useGPU: false
-        }
-      }
-    })
+test(
+  'EOU streaming — emits transcript segments and end-of-turn boundaries',
+  { timeout: 600000 },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
 
     try {
-      await model.load()
+      const modelPath = await loadGgufOrSkip(t, 'eou')
+      if (!modelPath) return
 
-      console.log(`[eou/streaming] audio duration: ${(audio.length / SAMPLE_RATE).toFixed(2)}s`)
-      console.log(`[eou/streaming] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`)
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
 
-      const segments = await streamEou(model, audio)
+      const model = new TranscriptionParakeet({
+        files: { model: modelPath },
+        config: {
+          parakeetConfig: {
+            streaming: true,
+            streamingChunkMs: STREAM_CHUNK_MS,
+            maxThreads: 4,
+            useGPU: false
+          }
+        }
+      })
 
-      const eotSegments = segments.filter(s => s.isEndOfTurn === true)
-      const transcript = segments.map(s => s.text).join(' ').trim()
+      try {
+        await model.load()
 
-      console.log(`[eou/streaming] segments=${segments.length} eotSegments=${eotSegments.length} chars=${transcript.length}`)
-      console.log(`[eou/streaming] result: "${transcript.substring(0, 150)}${transcript.length > 150 ? '...' : ''}"`)
+        console.log(`[eou/streaming] audio duration: ${(audio.length / SAMPLE_RATE).toFixed(2)}s`)
+        console.log(
+          `[eou/streaming] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`
+        )
 
-      t.ok(segments.length > 0,
-        `EOU streaming should emit at least one segment (got ${segments.length})`)
-      t.ok(transcript.length > 0,
-        `EOU streaming transcript should be non-empty (got ${transcript.length} chars)`)
-      t.ok(eotSegments.length > 0,
-        `EOU streaming should mark at least one end-of-turn boundary on a finalized clip (got ${eotSegments.length})`)
+        const segments = await streamEou(model, audio)
+
+        const eotSegments = segments.filter((s) => s.isEndOfTurn === true)
+        const transcript = segments
+          .map((s) => s.text)
+          .join(' ')
+          .trim()
+
+        console.log(
+          `[eou/streaming] segments=${segments.length} eotSegments=${eotSegments.length} chars=${transcript.length}`
+        )
+        console.log(
+          `[eou/streaming] result: "${transcript.substring(0, 150)}${transcript.length > 150 ? '...' : ''}"`
+        )
+
+        t.ok(
+          segments.length > 0,
+          `EOU streaming should emit at least one segment (got ${segments.length})`
+        )
+        t.ok(
+          transcript.length > 0,
+          `EOU streaming transcript should be non-empty (got ${transcript.length} chars)`
+        )
+        t.ok(
+          eotSegments.length > 0,
+          `EOU streaming should mark at least one end-of-turn boundary on a finalized clip (got ${eotSegments.length})`
+        )
+      } finally {
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
+      }
     } finally {
-      try { await model.unload() } catch (e) { /* ignore */ }
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
     }
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
-})
+)

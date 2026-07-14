@@ -68,14 +68,14 @@ const ALL_KV_TYPES = [undefined, 'f16', 'f32', 'q8_0']
 // still caught.
 const CHATTERBOX_VARIANTS = ['mtl', 'turbo']
 
-function getBaseDir () {
+function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
 // Platforms that wire up a GPU backend in tts-cpp's vcpkg port today
 // (mirrors gpu-smoke.test.js::expectsGpu): darwin/ios -> Metal,
 // linux/win32 -> Vulkan, android -> Vulkan/OpenCL.
-function expectsGpu () {
+function expectsGpu() {
   return (
     platform === 'darwin' ||
     platform === 'ios' ||
@@ -85,19 +85,26 @@ function expectsGpu () {
   )
 }
 
-function backendIdToName (id) {
+function backendIdToName(id) {
   switch (id) {
-    case 0: return 'CPU'
-    case 1: return 'Metal'
-    case 2: return 'CUDA'
-    case 3: return 'Vulkan'
-    case 4: return 'OpenCL'
-    case 99: return 'other-GPU'
-    default: return `unknown(${id})`
+    case 0:
+      return 'CPU'
+    case 1:
+      return 'Metal'
+    case 2:
+      return 'CUDA'
+    case 3:
+      return 'Vulkan'
+    case 4:
+      return 'OpenCL'
+    case 99:
+      return 'other-GPU'
+    default:
+      return `unknown(${id})`
   }
 }
 
-function kvLabel (kvCacheType) {
+function kvLabel(kvCacheType) {
   return kvCacheType == null ? 'default' : kvCacheType
 }
 
@@ -105,7 +112,7 @@ function kvLabel (kvCacheType) {
 // EXPLICITLY (not via modelDir auto-detect) so the variant is unambiguous
 // even when both the Turbo and MTL GGUF sets live in the same models/ dir
 // (they do once both ensure* helpers have run in one CI job).
-function chatterboxFiles (variant, modelDir) {
+function chatterboxFiles(variant, modelDir) {
   if (variant === 'mtl') {
     return {
       modelDir,
@@ -120,7 +127,7 @@ function chatterboxFiles (variant, modelDir) {
   }
 }
 
-async function ensureModelsFor (variant, modelsDir) {
+async function ensureModelsFor(variant, modelsDir) {
   return variant === 'mtl'
     ? ensureChatterboxMtlModels({ targetDir: modelsDir })
     : ensureChatterboxModels({ targetDir: modelsDir })
@@ -136,11 +143,11 @@ const SAMPLE_TEXT = {
   fr: 'Le renard brun saute par-dessus le chien paresseux.'
 }
 
-function textFor (language) {
+function textFor(language) {
   return SAMPLE_TEXT[language] || SAMPLE_TEXT.en
 }
 
-async function loadChatterbox ({ variant, modelDir, refWavPath, language, useGPU, kvCacheType }) {
+async function loadChatterbox({ variant, modelDir, refWavPath, language, useGPU, kvCacheType }) {
   const options = {
     files: chatterboxFiles(variant, modelDir),
     referenceAudio: refWavPath,
@@ -161,7 +168,7 @@ async function loadChatterbox ({ variant, modelDir, refWavPath, language, useGPU
 // Mirrors gpu-smoke.test.js::assertGpuBackend; kept here so the matrix harness
 // is self-contained.  `allowPolicyCpu` would let a CPU fallback on a declined
 // vendor pass — but Chatterbox now runs on Mali GPU, so it defaults to strict.
-function assertGpuEngaged (t, tag, stats, allowPolicyCpu = false) {
+function assertGpuEngaged(t, tag, stats, allowPolicyCpu = false) {
   if (!stats) {
     t.fail(`${tag}: no response.stats returned (cannot verify backend)`)
     return
@@ -180,7 +187,8 @@ function assertGpuEngaged (t, tag, stats, allowPolicyCpu = false) {
     return
   }
   if (dev !== 1) {
-    const msg = `${tag}/${platform}: expected GPU backend, got ${name} (backendDevice=${dev}). ` +
+    const msg =
+      `${tag}/${platform}: expected GPU backend, got ${name} (backendDevice=${dev}). ` +
       'useGPU=true was requested but the engine fell back to CPU.'
     if (RELAX) {
       t.comment(`WARNING (relaxed): ${msg}`)
@@ -194,7 +202,11 @@ function assertGpuEngaged (t, tag, stats, allowPolicyCpu = false) {
 // Run one synth to completion and assert it produced audio.  Surviving this
 // call at all is the core regression signal: a q8_0 CONT abort on Metal would
 // have SIGABRT'd the process before we got here.
-async function assertSynthesisCompletes (t, model, { tag, text, language, minSamples = 2000, expectGpu = false, allowPolicyCpu = false }) {
+async function assertSynthesisCompletes(
+  t,
+  model,
+  { tag, text, language, minSamples = 2000, expectGpu = false, allowPolicyCpu = false }
+) {
   const result = await runTTS(
     model,
     { text: text || textFor(language) },

@@ -9,12 +9,11 @@ const { createWavBuffer } = require('./wav-helper')
 
 const SUPERTONIC_SAMPLE_RATE = 44100
 
-async function loadSupertonicTTS (params = {}) {
+async function loadSupertonicTTS(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models'))
 
-  const supertonicPath =
-    params.supertonicModelPath || path.join(defaultModelDir, 'supertonic.gguf')
+  const supertonicPath = params.supertonicModelPath || path.join(defaultModelDir, 'supertonic.gguf')
 
   const config = { language: params.language || 'en' }
   if (params.useGPU !== undefined) {
@@ -39,7 +38,7 @@ async function loadSupertonicTTS (params = {}) {
   return model
 }
 
-async function runSupertonicTTS (model, params = {}, expectation = {}) {
+async function runSupertonicTTS(model, params = {}, expectation = {}) {
   const tag = '[Supertonic] '
   const sampleRate = SUPERTONIC_SAMPLE_RATE
 
@@ -56,7 +55,7 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
     const response = await model.run({ input: params.text, type: 'text' })
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         if (data && data.outputArray) {
           outputArray = outputArray.concat(Array.from(data.outputArray))
         }
@@ -66,19 +65,23 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
 
     const sampleCount = outputArray.length
     const stats = response.stats || null
-    const durationMs = stats?.audioDurationMs || (sampleCount / (sampleRate / 1000))
+    const durationMs = stats?.audioDurationMs || sampleCount / (sampleRate / 1000)
 
     let passed = true
     if (expectation.minSamples !== undefined && sampleCount < expectation.minSamples) passed = false
     if (expectation.maxSamples !== undefined && sampleCount > expectation.maxSamples) passed = false
-    if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs) passed = false
-    if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs) passed = false
+    if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs)
+      passed = false
+    if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs)
+      passed = false
 
     const wavBuffer = createWavBuffer(outputArray, sampleRate)
 
     if (params.saveWav === true) {
       const wavPath = params.wavOutputPath || path.join(__dirname, '../output/supertonic.wav')
-      try { fs.mkdirSync(path.dirname(wavPath), { recursive: true }) } catch (_e) {}
+      try {
+        fs.mkdirSync(path.dirname(wavPath), { recursive: true })
+      } catch (_e) {}
       if (!isMobile || params.wavOutputPath) {
         fs.writeFileSync(wavPath, wavBuffer)
       }
@@ -100,7 +103,11 @@ async function runSupertonicTTS (model, params = {}, expectation = {}) {
       }
     }
   } catch (error) {
-    return { output: `${tag}Error: ${error.message}`, passed: false, data: { error: error.message } }
+    return {
+      output: `${tag}Error: ${error.message}`,
+      passed: false,
+      data: { error: error.message }
+    }
   }
 }
 

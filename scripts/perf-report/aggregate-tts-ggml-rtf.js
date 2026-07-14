@@ -6,7 +6,7 @@
  * a single findings table (Markdown + JSON).
  *
  * GGML backend notes:
- *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl
+ *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
  *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
  *     opencl (Adreno android, manual / off the default cascade)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
@@ -23,7 +23,7 @@ const fs = require('fs')
 const path = require('path')
 
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
 const NOISY_STDDEV_RATIO = 0.15
 
 function parseArgs (argv) {

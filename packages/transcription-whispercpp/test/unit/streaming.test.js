@@ -9,7 +9,7 @@ const { WhisperInterface } = require('../../whisper')
 const process = require('bare-process')
 global.process = process
 
-function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
   TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
@@ -32,12 +32,17 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   }
   const model = new TranscriptionWhispercpp(args, config)
 
-  model._createAddon = configurationParams => {
+  model._createAddon = (configurationParams) => {
     const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
-      onOutput(addon, event, jobId, output, error)
-      model._outputCallback(addon, event, jobId, output, error)
-    }, transitionCb)
+    const addon = new WhisperInterface(
+      _binding,
+      configurationParams,
+      (addon, event, jobId, output, error) => {
+        onOutput(addon, event, jobId, output, error)
+        model._outputCallback(addon, event, jobId, output, error)
+      },
+      transitionCb
+    )
 
     return addon
   }
@@ -45,12 +50,12 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   return model
 }
 
-function makeAudioChunks (count, size) {
+function makeAudioChunks(count, size) {
   const chunks = []
   for (let i = 0; i < count; i++) {
     const chunk = new Uint8Array(size)
     for (let j = 0; j < size; j++) {
-      chunk[j] = (i * size + j) & 0xFF
+      chunk[j] = (i * size + j) & 0xff
     }
     chunks.push(chunk)
   }
@@ -85,7 +90,7 @@ test('runStreaming completes and delivers transcription output', async (t) => {
 
   t.ok(results.length > 0, 'Should receive transcription output from streaming')
   t.ok(
-    events.find(e => e.event === 'JobEnded'),
+    events.find((e) => e.event === 'JobEnded'),
     'JobEnded should be emitted after streaming completes'
   )
 })
@@ -99,18 +104,19 @@ test('runStreaming passes conversation config to native streaming', async (t) =>
   const model = createMockedModel({ binding })
   await model.load()
 
-  const response = await model.runStreaming(
-    makeAudioChunks(1, 16000),
-    {
-      emitVadEvents: true,
-      endOfTurnSilenceMs: 750,
-      vadRunIntervalMs: 125
-    }
-  )
+  const response = await model.runStreaming(makeAudioChunks(1, 16000), {
+    emitVadEvents: true,
+    endOfTurnSilenceMs: 750,
+    vadRunIntervalMs: 125
+  })
   await response.await()
 
   t.ok(binding.lastStreamingConfig.emitVadEvents, 'emitVadEvents should be forwarded')
-  t.is(binding.lastStreamingConfig.endOfTurnSilenceMs, 750, 'end-of-turn threshold should be forwarded')
+  t.is(
+    binding.lastStreamingConfig.endOfTurnSilenceMs,
+    750,
+    'end-of-turn threshold should be forwarded'
+  )
   t.is(binding.lastStreamingConfig.vadRunIntervalMs, 125, 'VAD interval should be forwarded')
 })
 
@@ -130,10 +136,10 @@ test('runStreaming forwards VAD and end-of-turn events without ending the job', 
   const model = createMockedModel({ onOutput, binding })
   await model.load()
 
-  const response = await model.runStreaming(
-    makeAudioChunks(2, 16000),
-    { emitVadEvents: true, endOfTurnSilenceMs: 900 }
-  )
+  const response = await model.runStreaming(makeAudioChunks(2, 16000), {
+    emitVadEvents: true,
+    endOfTurnSilenceMs: 900
+  })
 
   const updates = []
   response.onUpdate((data) => {
@@ -142,12 +148,30 @@ test('runStreaming forwards VAD and end-of-turn events without ending the job', 
 
   await response.await()
 
-  t.ok(events.find(e => e.event === 'VadState'), 'VadState event should be forwarded')
-  t.ok(events.find(e => e.event === 'EndOfTurn'), 'EndOfTurn event should be forwarded')
-  t.ok(events.find(e => e.event === 'JobEnded'), 'JobEnded should still complete the stream')
-  t.ok(updates.find(data => data?.type === 'vad'), 'VAD event should reach response output')
-  t.ok(updates.find(data => data?.type === 'endOfTurn'), 'EndOfTurn event should reach response output')
-  t.ok(updates.find(data => Array.isArray(data) && data[0]?.text === 'hello world'), 'Transcript output should still be delivered')
+  t.ok(
+    events.find((e) => e.event === 'VadState'),
+    'VadState event should be forwarded'
+  )
+  t.ok(
+    events.find((e) => e.event === 'EndOfTurn'),
+    'EndOfTurn event should be forwarded'
+  )
+  t.ok(
+    events.find((e) => e.event === 'JobEnded'),
+    'JobEnded should still complete the stream'
+  )
+  t.ok(
+    updates.find((data) => data?.type === 'vad'),
+    'VAD event should reach response output'
+  )
+  t.ok(
+    updates.find((data) => data?.type === 'endOfTurn'),
+    'EndOfTurn event should reach response output'
+  )
+  t.ok(
+    updates.find((data) => Array.isArray(data) && data[0]?.text === 'hello world'),
+    'Transcript output should still be delivered'
+  )
 })
 
 test('runStreaming delivers accumulated stats across segments', async (t) => {
@@ -169,7 +193,7 @@ test('runStreaming delivers accumulated stats across segments', async (t) => {
   const response = await model.runStreaming(audioChunks)
   await response.await()
 
-  const jobEnded = events.find(e => e.event === 'JobEnded')
+  const jobEnded = events.find((e) => e.event === 'JobEnded')
   t.ok(jobEnded, 'JobEnded should be emitted')
   t.ok(jobEnded.output.processCalls === 4, 'processCalls should reflect total chunk count')
   t.ok(jobEnded.output.totalSamples > 0, 'totalSamples should be > 0 for accumulated stats')
@@ -186,9 +210,9 @@ test('Cancel stops an active streaming session', async (t) => {
   await model.load()
 
   const slowStream = {
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       yield new Uint8Array([1, 2, 3, 4])
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
       yield new Uint8Array([5, 6, 7, 8])
     }
   }
@@ -203,7 +227,10 @@ test('Cancel stops an active streaming session', async (t) => {
     t.fail('Response should not resolve after cancel')
   } catch (error) {
     t.ok(
-      error.message.includes('cancel') || error.message.includes('Cancel') || error.message.includes('failed') || error.message.includes('No active'),
+      error.message.includes('cancel') ||
+        error.message.includes('Cancel') ||
+        error.message.includes('failed') ||
+        error.message.includes('No active'),
       'Response should fail with a cancellation-related error'
     )
   }
@@ -219,9 +246,9 @@ test('Destroy cleans up active streaming session', async (t) => {
   await model.load()
 
   const slowStream = {
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       yield new Uint8Array([10, 20, 30])
-      await new Promise(resolve => setTimeout(resolve, 200))
+      await new Promise((resolve) => setTimeout(resolve, 200))
       yield new Uint8Array([40, 50, 60])
     }
   }
@@ -235,7 +262,10 @@ test('Destroy cleans up active streaming session', async (t) => {
     t.fail('Response should fail when model is destroyed mid-stream')
   } catch (error) {
     t.ok(
-      error.message.includes('destroyed') || error.message.includes('Destroy') || error.message.includes('cancel') || error.message.includes('No active'),
+      error.message.includes('destroyed') ||
+        error.message.includes('Destroy') ||
+        error.message.includes('cancel') ||
+        error.message.includes('No active'),
       'Streaming response should fail on destroy'
     )
   }
@@ -267,10 +297,10 @@ test('Streaming error propagation surfaces to response', async (t) => {
     t.ok(error, 'Response should reject with an error when segments fail')
   }
 
-  const goodOutputs = events.filter(e => e.event === 'Output' && e.output !== null)
+  const goodOutputs = events.filter((e) => e.event === 'Output' && e.output !== null)
   t.ok(goodOutputs.length > 0, 'Successful segments should still deliver output')
 
-  const errorEvents = events.filter(e => e.event === 'Error')
+  const errorEvents = events.filter((e) => e.event === 'Error')
   t.ok(errorEvents.length > 0, 'Error event should be emitted for failed processing')
 })
 
@@ -280,9 +310,9 @@ test('Second streaming session waits on exclusive queue until first completes', 
   await model.load()
 
   const slowStream = {
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       yield new Uint8Array([1, 2])
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500))
       yield new Uint8Array([3, 4])
     }
   }

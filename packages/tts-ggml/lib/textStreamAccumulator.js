@@ -7,7 +7,7 @@ const { countScalars } = require('./textChunker')
  * @param {number} n
  * @returns {{ head: string, rest: string }}
  */
-function splitGraphemeHead (s, n) {
+function splitGraphemeHead(s, n) {
   const g = [...s]
   if (g.length <= n) {
     return { head: s, rest: '' }
@@ -22,10 +22,10 @@ function splitGraphemeHead (s, n) {
  * @param {{ sentenceDelimiter?: RegExp, sentenceDelimiterPreset?: string }} opts
  * @returns {(buffer: string) => boolean}
  */
-function buildSentenceEndTester (opts) {
+function buildSentenceEndTester(opts) {
   if (opts.sentenceDelimiter instanceof RegExp) {
     const re = opts.sentenceDelimiter
-    return function testCustom (buffer) {
+    return function testCustom(buffer) {
       re.lastIndex = 0
       return re.test(buffer)
     }
@@ -37,7 +37,7 @@ function buildSentenceEndTester (opts) {
     multilingual: /(?:[.!?…؟]|[。！？…])\s*$/u
   }
   const re = patterns[preset] || patterns.multilingual
-  return function testPreset (buffer) {
+  return function testPreset(buffer) {
     return re.test(buffer)
   }
 }
@@ -46,7 +46,7 @@ function buildSentenceEndTester (opts) {
  * Default `maxBufferScalars` aligned with `splitTtsText` when `maxScalars` is unset.
  * @param {string} [language]
  */
-function defaultMaxBufferScalars (language) {
+function defaultMaxBufferScalars(language) {
   const lang = (language || 'en').toLowerCase()
   return lang === 'ko' ? 120 : 300
 }
@@ -65,7 +65,7 @@ function defaultMaxBufferScalars (language) {
  * @param {number} [opts.flushAfterMs]
  * @returns {AsyncGenerator<string, void, void>}
  */
-async function * accumulateTextStream (source, opts) {
+async function* accumulateTextStream(source, opts) {
   const flushAfterMs = opts.flushAfterMs != null ? opts.flushAfterMs : 500
   const defaultMax = defaultMaxBufferScalars(opts.language)
   let maxScalars
@@ -80,7 +80,7 @@ async function * accumulateTextStream (source, opts) {
   const queue = []
   let notify = null
 
-  function push (item) {
+  function push(item) {
     queue.push(item)
     if (notify) {
       const n = notify
@@ -89,18 +89,18 @@ async function * accumulateTextStream (source, opts) {
     }
   }
 
-  ;(async function pump () {
+  ;(async function pump() {
     let buffer = ''
     let idleTimer = null
 
-    function clearIdle () {
+    function clearIdle() {
       if (idleTimer) {
         clearTimeout(idleTimer)
         idleTimer = null
       }
     }
 
-    function armIdle () {
+    function armIdle() {
       clearIdle()
       idleTimer = setTimeout(() => {
         idleTimer = null
@@ -150,7 +150,7 @@ async function * accumulateTextStream (source, opts) {
 
   while (true) {
     while (queue.length === 0) {
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         notify = resolve
       })
     }

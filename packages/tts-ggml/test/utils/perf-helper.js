@@ -35,7 +35,9 @@ const isMobile = platform === 'ios' || platform === 'android'
 // _perf-helper.js. Mobile doesn't need it — the inline fallback below leaves
 // gpu null on Device Farm where the probes wouldn't work anyway.
 let _subprocess = null
-try { _subprocess = require('bare-subprocess') } catch (_) {}
+try {
+  _subprocess = require('bare-subprocess')
+} catch (_) {}
 
 let createPerformanceReporter
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
@@ -62,24 +64,27 @@ try {
     }
 
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         const entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
           model: (extra && extra.model) || null,
-          metrics: Object.assign({
-            total_time_ms: null,
-            tps: null,
-            real_time_factor: null,
-            sample_count: null,
-            audio_duration_ms: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              total_time_ms: null,
+              tps: null,
+              real_time_factor: null,
+              sample_count: null,
+              audio_duration_ms: null
+            },
+            metrics
+          ),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
         }
         _results.push(entry)
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -89,7 +94,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         const dirs = []
         if (global.testDir) dirs.push(global.testDir)
@@ -101,7 +106,9 @@ try {
         dirs.push('/tmp')
         for (let di = 0; di < dirs.length; di++) {
           try {
-            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(dirs[di], { recursive: true })
+            } catch (_) {}
             const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -110,8 +117,8 @@ try {
           }
         }
       },
-      writeStepSummary () {},
-      writeToConsole () {
+      writeStepSummary() {},
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           const CHUNK = 800
@@ -121,14 +128,25 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -141,20 +159,26 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _reportScheduled = false
 
-function _flushPerfReport () {
+function _flushPerfReport() {
   if (_perfReporter.length === 0) return
-  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
-  try { _perfReporter.writeStepSummary() } catch (_) {}
-  try { _perfReporter.writeToConsole() } catch (_) {}
+  try {
+    _perfReporter.writeReport(_reportPath)
+  } catch (_) {}
+  try {
+    _perfReporter.writeStepSummary()
+  } catch (_) {}
+  try {
+    _perfReporter.writeToConsole()
+  } catch (_) {}
 }
 
-function _scheduleReportWrite () {
+function _scheduleReportWrite() {
   if (_reportScheduled) return
   _reportScheduled = true
   process.on('exit', _flushPerfReport)
 }
 
-function _num (v) {
+function _num(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
@@ -174,7 +198,7 @@ function _num (v) {
  *                         { wallMs, sampleCount, model, output,
  *                           executionProvider }.
  */
-function recordTtsStats (label, stats, extra) {
+function recordTtsStats(label, stats, extra) {
   const s = stats || {}
   const resolvedEp = s.backendDevice === 1 ? 'gpu' : s.backendDevice === 0 ? 'cpu' : null
   const epOverride = extra && extra.executionProvider
@@ -185,11 +209,10 @@ function recordTtsStats (label, stats, extra) {
   const finalLabel = ep ? `[${ep.toUpperCase()}] ${baseLabel}` : baseLabel
 
   const rtf = _num(s.realTimeFactor)
-  const sampleCount = (extra && _num(extra.sampleCount)) != null
-    ? _num(extra.sampleCount)
-    : _num(s.totalSamples)
+  const sampleCount =
+    (extra && _num(extra.sampleCount)) != null ? _num(extra.sampleCount) : _num(s.totalSamples)
   const audioMs = _num(s.audioDurationMs) != null ? Math.round(_num(s.audioDurationMs)) : null
-  const wallMs = (extra && _num(extra.wallMs) != null) ? Math.round(_num(extra.wallMs)) : null
+  const wallMs = extra && _num(extra.wallMs) != null ? Math.round(_num(extra.wallMs)) : null
   const tps = _num(s.tokensPerSecond)
 
   // When the addon doesn't report a positive realTimeFactor (e.g. Supertonic /
@@ -202,28 +225,34 @@ function recordTtsStats (label, stats, extra) {
   // overhead that wall-RTF includes), so record rtf_source per row: anyone
   // comparing numbers across rows in a single report can see which is which.
   const usingComputeRtf = rtf != null && rtf > 0
-  const effRtf = usingComputeRtf
-    ? rtf
-    : (wallMs != null && audioMs ? wallMs / audioMs : null)
-  const rtfSource = usingComputeRtf ? 'compute' : (effRtf != null ? 'wall' : null)
+  const effRtf = usingComputeRtf ? rtf : wallMs != null && audioMs ? wallMs / audioMs : null
+  const rtfSource = usingComputeRtf ? 'compute' : effRtf != null ? 'wall' : null
 
-  _perfReporter.record(finalLabel, {
-    total_time_ms: wallMs,
-    tps,
-    real_time_factor: effRtf,
-    rtf_source: rtfSource,
-    sample_count: sampleCount,
-    audio_duration_ms: audioMs
-  }, {
-    execution_provider: ep,
-    model: (extra && extra.model) || null,
-    output: extra && extra.output ? String(extra.output) : null
-  })
+  _perfReporter.record(
+    finalLabel,
+    {
+      total_time_ms: wallMs,
+      tps,
+      real_time_factor: effRtf,
+      rtf_source: rtfSource,
+      sample_count: sampleCount,
+      audio_duration_ms: audioMs
+    },
+    {
+      execution_provider: ep,
+      model: (extra && extra.model) || null,
+      output: extra && extra.output ? String(extra.output) : null
+    }
+  )
   _scheduleReportWrite()
 
   if (isMobile) {
-    try { _perfReporter.writeReport() } catch (_) {}
-    try { _perfReporter.writeToConsole() } catch (_) {}
+    try {
+      _perfReporter.writeReport()
+    } catch (_) {}
+    try {
+      _perfReporter.writeToConsole()
+    } catch (_) {}
   }
 
   const lines = [
