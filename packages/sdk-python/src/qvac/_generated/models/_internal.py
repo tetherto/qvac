@@ -1248,13 +1248,13 @@ class PluginId(Enum):
 
 
 class SupportedAudioFormat(Enum):
-    field_mp3 = '.mp3'
-    field_m4a = '.m4a'
-    field_ogg = '.ogg'
-    field_wav = '.wav'
-    field_flac = '.flac'
-    field_aac = '.aac'
-    field_raw = '.raw'
+    mp3 = '.mp3'
+    m4_a = '.m4a'
+    ogg = '.ogg'
+    wav = '.wav'
+    flac = '.flac'
+    aac = '.aac'
+    raw = '.raw'
 
 
 class ToolsMode(Enum):

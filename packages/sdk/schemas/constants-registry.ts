@@ -14,7 +14,6 @@ import {
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION
 } from './plugin'
-import { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 
 /**
  * Every public constant `enum` from index.ts that downstream (non-JS)
@@ -56,5 +55,13 @@ export const constantsRegistry = {
     VLA: PLUGIN_VLA,
     CLASSIFICATION: PLUGIN_CLASSIFICATION
   }),
-  SupportedAudioFormat: z.enum(SUPPORTED_AUDIO_FORMATS)
+  SupportedAudioFormat: z.enum({
+    MP3: '.mp3',
+    M4A: '.m4a',
+    OGG: '.ogg',
+    WAV: '.wav',
+    FLAC: '.flac',
+    AAC: '.aac',
+    RAW: '.raw'
+  })
 } as const
