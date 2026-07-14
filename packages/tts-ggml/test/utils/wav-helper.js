@@ -1,13 +1,13 @@
 const fs = require('bare-fs')
 
-function writeIntLE (buffer, value, offset, byteLength) {
+function writeIntLE(buffer, value, offset, byteLength) {
   for (let i = 0; i < byteLength; i++) {
     buffer[offset + i] = value & 0xff
     value >>= 8
   }
 }
 
-function readWavAsFloat32 (wavPath) {
+function readWavAsFloat32(wavPath) {
   const buf = fs.readFileSync(wavPath)
   if (buf.length < 44) throw new Error('WAV file too small')
 
@@ -32,7 +32,12 @@ function readWavAsFloat32 (wavPath) {
   let offset = 12
 
   while (offset + 8 <= buf.length) {
-    const chunkId = String.fromCharCode(buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3])
+    const chunkId = String.fromCharCode(
+      buf[offset],
+      buf[offset + 1],
+      buf[offset + 2],
+      buf[offset + 3]
+    )
     const chunkSize = view.getUint32(offset + 4, true)
 
     if (chunkId === 'fmt ') {
@@ -59,7 +64,9 @@ function readWavAsFloat32 (wavPath) {
   const bitsPerSample = view.getUint16(fmtOff + 14, true)
 
   if (audioFormat !== 1 && audioFormat !== 3) {
-    throw new Error('Unsupported WAV audio format: ' + audioFormat + ' (only PCM=1 and IEEE_FLOAT=3 supported)')
+    throw new Error(
+      'Unsupported WAV audio format: ' + audioFormat + ' (only PCM=1 and IEEE_FLOAT=3 supported)'
+    )
   }
 
   const dataOff = dataChunk.offset
@@ -112,13 +119,15 @@ function readWavAsFloat32 (wavPath) {
       samples[i] = (buf[idx] - 128) / 128
     }
   } else {
-    throw new Error('Unsupported WAV format: audioFormat=' + audioFormat + ', bitsPerSample=' + bitsPerSample)
+    throw new Error(
+      'Unsupported WAV format: audioFormat=' + audioFormat + ', bitsPerSample=' + bitsPerSample
+    )
   }
 
   return { samples, sampleRate, numChannels }
 }
 
-function createWavBuffer (samples, sampleRate = 16000) {
+function createWavBuffer(samples, sampleRate = 16000) {
   const numChannels = 1
   const bytesPerSample = 2
   const blockAlign = numChannels * bytesPerSample
@@ -151,12 +160,12 @@ function createWavBuffer (samples, sampleRate = 16000) {
   return buffer
 }
 
-function createWav (samples, sampleRate = 16000, outputPath = 'test.wav') {
+function createWav(samples, sampleRate = 16000, outputPath = 'test.wav') {
   const buffer = createWavBuffer(samples, sampleRate)
   fs.writeFileSync(outputPath, buffer)
 }
 
-function resampleLinear (samples, fromRate, toRate) {
+function resampleLinear(samples, fromRate, toRate) {
   if (fromRate === toRate) return samples
   const ratio = fromRate / toRate
   const outputLen = Math.round(samples.length / ratio)
