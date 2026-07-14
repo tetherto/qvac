@@ -30,6 +30,9 @@ outputs:
   arn:
     description: "Selected pool ARN."
     value: ${{ steps.select.outputs.arn }}
+  availability:
+    description: "Selected pool availability at scheduling time (HIGHLY_AVAILABLE | AVAILABLE | BUSY | TEMPORARY_NOT_AVAILABLE | UNKNOWN)."
+    value: ${{ steps.select.outputs.availability }}
 
 runs:
   using: composite
@@ -51,13 +54,14 @@ runs:
         fi
 
         emit_pool() {
-          local name="$1" arn="$2" reason="$3"
+          local name="$1" arn="$2" reason="$3" availability="${4:-UNKNOWN}"
           local json
           json=$(jq -cn --arg n "$name" --arg a "$arn" '[{name: $n, arn: $a}]')
           {
             echo "pool=$json"
             echo "name=$name"
             echo "arn=$arn"
+            echo "availability=$availability"
           } >> "$GITHUB_OUTPUT"
           echo "Selected device pool: '$name' ($reason)"
           echo "  arn: $arn"
@@ -65,6 +69,7 @@ runs:
             echo "### Selected device pool: \`$name\`"
             echo ""
             echo "- reason: $reason"
+            echo "- availability: $availability"
             echo "- arn: \`$arn\`"
           } >> "$GITHUB_STEP_SUMMARY"
         }
@@ -80,7 +85,7 @@ runs:
           fi
           NAME=$(echo "$MATCH" | jq -r '.[0].name')
           ARN=$(echo "$MATCH" | jq -r '.[0].arn')
-          emit_pool "$NAME" "$ARN" "named: selected by name"
+          emit_pool "$NAME" "$ARN" "named: selected by name" "UNKNOWN"
           exit 0
         fi
 
@@ -153,6 +158,7 @@ runs:
         HIGH_IDX=""
         AVAIL_IDX=""
         FALLBACK_IDX=""
+        declare -a AVAIL_BY_IDX
 
         for i in $(seq 0 $((COUNT - 1)) | shuf); do
           NAME="${NAMES[$i]}"
@@ -165,11 +171,13 @@ runs:
           DEVICE_ARNS=$(resolve_device_arns "$ARN")
           if [ "$(echo "$DEVICE_ARNS" | jq 'length')" -eq 0 ]; then
             echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
+            AVAIL_BY_IDX[$i]="UNKNOWN"
             continue
           fi
 
           echo "  - '$NAME':"
           AVAIL=$(get_availability "$DEVICE_ARNS")
+          AVAIL_BY_IDX[$i]="$AVAIL"
 
           if [ "$AVAIL" = "HIGHLY_AVAILABLE" ] && [ -z "$HIGH_IDX" ]; then
             HIGH_IDX="$i"
@@ -180,13 +188,15 @@ runs:
         done
 
         # Prefer HIGHLY_AVAILABLE, then AVAILABLE. Availability is only a hint for
-        # public devices, so if none report ready proceed with a best-effort pick;
-        # Device Farm queues the run and wait-device-farm-running gates readiness.
+        # public devices, so if none report ready proceed with a best-effort pick
+        # and warn loudly — Device Farm queues the run and wait-device-farm-running
+        # fails fast (short start-timeout) so a busy fleet surfaces quickly.
         if [ -n "$HIGH_IDX" ]; then
-          emit_pool "${NAMES[$HIGH_IDX]}" "${ARNS[$HIGH_IDX]}" "random: HIGHLY_AVAILABLE"
+          emit_pool "${NAMES[$HIGH_IDX]}" "${ARNS[$HIGH_IDX]}" "random: HIGHLY_AVAILABLE" "HIGHLY_AVAILABLE"
         elif [ -n "$AVAIL_IDX" ]; then
-          emit_pool "${NAMES[$AVAIL_IDX]}" "${ARNS[$AVAIL_IDX]}" "random: AVAILABLE"
+          emit_pool "${NAMES[$AVAIL_IDX]}" "${ARNS[$AVAIL_IDX]}" "random: AVAILABLE" "AVAILABLE"
         else
-          echo "::notice::no candidate reported AVAILABLE; proceeding with a best-effort pick (wait-device-farm-running will gate readiness)"
-          emit_pool "${NAMES[$FALLBACK_IDX]}" "${ARNS[$FALLBACK_IDX]}" "random: best-effort (no availability signal)"
+          SEL_AVAIL="${AVAIL_BY_IDX[$FALLBACK_IDX]:-UNKNOWN}"
+          echo "::warning::Device Farm busy: no candidate pool reported AVAILABLE/HIGHLY_AVAILABLE (best pick '${NAMES[$FALLBACK_IDX]}' is $SEL_AVAIL). Proceeding, but the run will fail fast if no device starts within the start-timeout."
+          emit_pool "${NAMES[$FALLBACK_IDX]}" "${ARNS[$FALLBACK_IDX]}" "random: best-effort ($SEL_AVAIL)" "$SEL_AVAIL"
         fi

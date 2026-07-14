@@ -367,6 +367,8 @@ jobs:
       contents: read
     outputs:
       pool: ${{ steps.select.outputs.pool }}
+      name: ${{ steps.select.outputs.name }}
+      availability: ${{ steps.select.outputs.availability }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -955,7 +957,7 @@ jobs:
 
   report-finalize:
     name: "[android] report-finalize"
-    needs: [report-start, run-producer]
+    needs: [report-start, run-producer, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -976,10 +978,12 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[android] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm]
+    needs: [report-start, run-producer, cleanup-device-farm, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1000,4 +1004,6 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
           update-summary: "false"
