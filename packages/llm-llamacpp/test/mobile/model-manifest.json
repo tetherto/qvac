@@ -45,8 +45,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -63,8 +63,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -81,8 +81,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -99,8 +99,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     }
   ],
   "runGenerationParamsTest": [
@@ -245,8 +245,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -263,8 +263,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
@@ -281,8 +281,8 @@
       "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
     },
     {
-      "name": "mmproj-google_gemma-4-E2B-it-bf16.gguf",
-      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+      "name": "mmproj-google_gemma-4-E2B-it-f16.gguf",
+      "url": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf"
     },
     {
       "name": "Qwen3.5-0.8B-Q8_0.gguf",
