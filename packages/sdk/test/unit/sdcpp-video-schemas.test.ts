@@ -1,5 +1,6 @@
 import test from 'brittle'
 import {
+  ltxVideoRequestSchema,
   sdcppConfigSchema,
   videoRequestSchema,
   videoStatsSchema,
@@ -36,6 +37,17 @@ test('sdcppConfigSchema: accepts clipVisionModelSrc for Wan img2vid pipelines', 
   t.is(result.success, true)
 })
 
+test('sdcppConfigSchema: accepts LTX-2 video layout sources', (t: BrittleT) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: 'video',
+    llmModelSrc: 'gemma-3-12b-it.gguf',
+    vaeModelSrc: 'ltx-2.3-22b_video_vae.safetensors',
+    audioVaeModelSrc: 'ltx-2.3-22b_audio_vae.safetensors',
+    embeddingsConnectorsModelSrc: 'ltx-2.3-22b_embeddings_connectors.safetensors'
+  })
+  t.is(result.success, true)
+})
+
 test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
   const result = videoStatsSchema.safeParse({
     modelLoadMs: 500,
@@ -57,6 +69,23 @@ test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
   t.is(result.success, true)
 })
 
+test('videoStatsSchema: preserves LTX-2 audio stats through parse', (t: BrittleT) => {
+  // These come straight off the addon's VideoRuntimeStats; the schema must not
+  // strip them, otherwise consumers awaiting `video(...).stats` never see
+  // whether audio was muxed into the output AVI.
+  const result = videoStatsSchema.safeParse({
+    generationMs: 1234,
+    totalVideos: 1,
+    videoFrames: 121,
+    fps: 24,
+    hasAudio: true,
+    audioSampleRate: 48000
+  })
+  t.is(result.success, true)
+  t.is(result.success && result.data.hasAudio, true)
+  t.is(result.success && result.data.audioSampleRate, 48000)
+})
+
 test('videoRequestSchema: accepts minimal txt2vid request', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
@@ -65,6 +94,39 @@ test('videoRequestSchema: accepts minimal txt2vid request', (t: BrittleT) => {
     video_frames: 5
   })
   t.is(result.success, true)
+})
+
+test('videoRequestSchema: accepts temporal_tiling and LTX-shaped dims/frames', (t: BrittleT) => {
+  const result = videoRequestSchema.safeParse({
+    modelId: 'model-1',
+    mode: 'txt2vid',
+    prompt: 'a claymation cat playing jazz',
+    // LTX dims (multiples of 32) and frames (8*k + 1) are a subset of the
+    // permissive wire checks (multiples of 16, 4*k + 1); the server validates
+    // the exact LTX rules after resolving the loaded model's layout.
+    width: 512,
+    height: 320,
+    video_frames: 121,
+    temporal_tiling: true
+  })
+  t.is(result.success, true)
+})
+
+test('ltxVideoRequestSchema: enforces LTX-2 dimensions and frame counts', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'txt2vid' as const,
+    prompt: 'a claymation cat playing jazz',
+    width: 512,
+    height: 320,
+    video_frames: 121
+  }
+
+  t.is(ltxVideoRequestSchema.safeParse(base).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, width: 528 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, height: 496 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 13 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
 })
 
 test('videoRequestSchema: accepts optional requestId', (t: BrittleT) => {
@@ -147,6 +209,21 @@ test('videoRequestSchema: accepts img2vid with init_image', (t: BrittleT) => {
   t.is(result.success, true)
 })
 
+test('videoRequestSchema: accepts LTX-2 img2vid (init_image + strength + temporal_tiling)', (t: BrittleT) => {
+  const result = videoRequestSchema.safeParse({
+    modelId: 'model-1',
+    mode: 'img2vid',
+    prompt: 'the subject slowly turns and smiles',
+    init_image: PNG_B64,
+    strength: 0.85,
+    width: 512,
+    height: 320,
+    video_frames: 121,
+    temporal_tiling: true
+  })
+  t.is(result.success, true)
+})
+
 test('videoRequestSchema: rejects img2vid without init_image', (t: BrittleT) => {
   const result = videoRequestSchema.safeParse({
     modelId: 'model-1',
@@ -211,4 +288,20 @@ test('videoStreamResponseSchema: accepts progress, output, and final stats chunk
     }).success,
     true
   )
+
+  const withAudio = videoStreamResponseSchema.safeParse({
+    type: 'videoStream',
+    done: true,
+    stats: {
+      generationMs: 1234,
+      totalVideos: 1,
+      videoFrames: 121,
+      fps: 24,
+      hasAudio: true,
+      audioSampleRate: 48000
+    }
+  })
+  t.is(withAudio.success, true)
+  t.is(withAudio.success && withAudio.data.stats?.hasAudio, true)
+  t.is(withAudio.success && withAudio.data.stats?.audioSampleRate, 48000)
 })

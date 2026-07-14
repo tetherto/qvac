@@ -16,7 +16,9 @@ on:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
       - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
 
   workflow_dispatch:
   workflow_call:
