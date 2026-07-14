@@ -898,15 +898,76 @@ std::any LlamaModel::process(
 std::vector<std::string> LlamaModel::processConcurrentBatch(
     const std::vector<Prompt>& prompts,
     const qvac_lib_inference_addon_cpp::JobId id) {
-  // A batch group never arms a per-job cancel action, so a whole-model cancel
-  // parked between the scheduler dequeue and here (jobStarting -> parkAll)
-  // must be taken explicitly. Honor it with the same terminal the scheduler
-  // gives a queued drop; once the group is running, activeBatchJobs_ routes
-  // cancels through requestCancelAll instead.
+  // A whole-model cancel parked between the scheduler dequeue and here
+  // (jobStarting -> parkAll) is taken explicitly, with the same terminal the
+  // scheduler gives a queued drop.
   if (liveJobs_.consumeParked(id)) {
     throw std::runtime_error("Job cancelled");
   }
-  batching::BatchResult result = processPromptBatchImpl(prompts);
+  // Registered before submission so a cancel arriving while the group is
+  // still queued for slots is parked instead of dropped as an unknown id.
+  liveJobs_.add(id);
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
+
+  // The group's live slots, shared with its cancel action. A slot joins at
+  // admission and leaves the moment it ends — the scheduler may recycle the
+  // seqId to a peer job, so a late group cancel must never see it.
+  // `cancelled` marks the whole group: requests admitted after the cancel
+  // are torn down at admission instead of outliving their group.
+  struct GroupSlots {
+    std::mutex mtx;
+    std::unordered_set<uint32_t> seqs;
+    bool cancelled = false;
+  };
+  auto slots = std::make_shared<GroupSlots>();
+
+  // The group's cancel action: tear down every slot it currently holds. Runs
+  // under the canceller's shared stateMtx_ (see cancelById), so state_ stays
+  // valid; it releases slots->mtx before touching the scheduler, so it never
+  // holds both locks at once.
+  const auto cancelGroup = [this, slots] {
+    std::vector<uint32_t> seqs;
+    {
+      std::lock_guard<std::mutex> seqsLock(slots->mtx);
+      slots->cancelled = true;
+      seqs.assign(slots->seqs.begin(), slots->seqs.end());
+      slots->seqs.clear();
+    }
+    if (state_ && state_->batchScheduler_) {
+      for (const uint32_t seqId : seqs) {
+        state_->batchScheduler_->cancel(seqId);
+      }
+    }
+  };
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, slots, cancelGroup](size_t, uint32_t seqId) {
+        {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          if (slots->cancelled) {
+            return true;
+          }
+          slots->seqs.insert(seqId);
+        }
+        // Re-arming per admission is idempotent — the action reads the live
+        // set. A true return means a cancel parked before the group had any
+        // slot: mark the group so later admissions die too, and let the
+        // scheduler kill this one before it decodes.
+        if (liveJobs_.bind(id, cancelGroup)) {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          slots->cancelled = true;
+          slots->seqs.erase(seqId);
+          return true;
+        }
+        return false;
+      };
+  const SeqObserver onSeqDone = [slots](size_t, uint32_t seqId) {
+    std::lock_guard<std::mutex> seqsLock(slots->mtx);
+    slots->seqs.erase(seqId);
+  };
+
+  batching::BatchResult result =
+      processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone);
   // Leave the group-level observed figures behind for the tagged jobEnded
   // event: TTFT/TPS averaged over the group's requests that produced them,
   // token counts summed (see aggregateObservedStats).

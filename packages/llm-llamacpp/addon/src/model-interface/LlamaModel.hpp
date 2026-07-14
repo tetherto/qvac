@@ -288,7 +288,9 @@ private:
 
   /// Tagged group run (a runBatched call admitted as one multi-job): runs the
   /// prompts through the scheduler and leaves group-level observed figures
-  /// behind for consumeJobStats (rates averaged, counts summed).
+  /// behind for consumeJobStats (rates averaged, counts summed). Records the
+  /// group's live seqIds against @p id so cancelById tears down exactly this
+  /// group's slots — peers keep running.
   std::vector<std::string> processConcurrentBatch(
       const std::vector<Prompt>& prompts,
       qvac_lib_inference_addon_cpp::JobId id);
@@ -441,6 +443,7 @@ private:
 
   /// Live tagged jobs and each one's cancel action: a concurrent job binds
   /// its scheduler-slot teardown at slot admission (see SeqAssignedObserver),
+  /// a batch group binds one action tearing down all of its live slots, and
   /// a single-path job (prefill-only, or no scheduler) arms the single-prompt
   /// context stop on entry. Finetune jobs are never registered — they keep
   /// the whole-model cancel semantics.
