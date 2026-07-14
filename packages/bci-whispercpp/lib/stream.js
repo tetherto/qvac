@@ -14,7 +14,7 @@ const { QvacErrorAddonBCI, ERR_CODES } = require('./error')
  * Coerce a stream chunk into a Uint8Array without copying when possible.
  * Throws INVALID_STREAM_INPUT if the chunk isn't a recognised binary form.
  */
-function toUint8 (chunk) {
+function toUint8(chunk) {
   if (chunk instanceof Uint8Array) return chunk
   if (ArrayBuffer.isView(chunk)) {
     return new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)
@@ -32,7 +32,7 @@ function toUint8 (chunk) {
  * (each element a Uint8Array) into a single contiguous Uint8Array.
  * The caller owns timestep→byte translation via bytesPerTimestep.
  */
-function sliceBody (bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
+function sliceBody(bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
   const startByte = startTs * bytesPerTimestep
   const endByte = Math.min(endTs * bytesPerTimestep, totalBytes)
   const out = new Uint8Array(Math.max(0, endByte - startByte))
@@ -48,7 +48,7 @@ function sliceBody (bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
     const from = Math.max(0, startByte - chunkStart)
     const to = Math.min(chunk.byteLength, endByte - chunkStart)
     out.set(chunk.subarray(from, to), offset)
-    offset += (to - from)
+    offset += to - from
   }
   return out
 }
@@ -57,7 +57,7 @@ function sliceBody (bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
  * Build an [T, C] header-prefixed buffer the addon can consume as a single
  * batch input, reusing the per-window body bytes.
  */
-function buildWindowBuffer (windowBody, channels, windowTimesteps) {
+function buildWindowBuffer(windowBody, channels, windowTimesteps) {
   const out = new Uint8Array(8 + windowBody.byteLength)
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength)
   view.setUint32(0, windowTimesteps, true)
@@ -66,7 +66,7 @@ function buildWindowBuffer (windowBody, channels, windowTimesteps) {
   return out
 }
 
-function normalizeWord (w) {
+function normalizeWord(w) {
   return w.toLowerCase().replace(/[^a-z0-9']/g, '')
 }
 
@@ -92,7 +92,7 @@ function normalizeWord (w) {
  * boundary (e.g. "the the") will collapse; acceptable for v1 sliding
  * window until a segmentation model replaces this.
  */
-function stitchMerge (prevText, newText, maxWords) {
+function stitchMerge(prevText, newText, maxWords) {
   const prevWords = prevText.trim().split(/\s+/).filter(Boolean)
   const newWords = newText.trim().split(/\s+/).filter(Boolean)
 
@@ -131,13 +131,13 @@ function stitchMerge (prevText, newText, maxWords) {
  *   - merged: running transcript text (identical to stitchMerge.merged)
  *   - bestK: for inspection / tests
  */
-function stitchSegments (prevText, segments, maxWords, windowStartTimestep = 0) {
+function stitchSegments(prevText, segments, maxWords, windowStartTimestep = 0) {
   const prevWords = prevText.trim().split(/\s+/).filter(Boolean)
 
   const perSegment = []
   const newWords = []
   for (const seg of segments) {
-    const text = (seg && typeof seg.text === 'string') ? seg.text : ''
+    const text = seg && typeof seg.text === 'string' ? seg.text : ''
     const words = text.trim().split(/\s+/).filter(Boolean)
     perSegment.push({ seg, words })
     for (const w of words) newWords.push(w)
@@ -159,16 +159,18 @@ function stitchSegments (prevText, segments, maxWords, windowStartTimestep = 0) 
   const deltaSegments = []
   for (const { seg, words } of perSegment) {
     if (words.length === 0) continue
-    if (toSkip >= words.length) { toSkip -= words.length; continue }
+    if (toSkip >= words.length) {
+      toSkip -= words.length
+      continue
+    }
     if (toSkip === 0) {
       deltaSegments.push({ ...seg, windowStartTimestep })
     } else {
       const remainingWords = words.slice(toSkip)
       const hasT0 = typeof seg.t0 === 'number'
       const hasT1 = typeof seg.t1 === 'number'
-      const approxT0 = (hasT0 && hasT1)
-        ? seg.t0 + Math.round((seg.t1 - seg.t0) * (toSkip / words.length))
-        : seg.t0
+      const approxT0 =
+        hasT0 && hasT1 ? seg.t0 + Math.round((seg.t1 - seg.t0) * (toSkip / words.length)) : seg.t0
       deltaSegments.push({
         ...seg,
         text: remainingWords.join(' '),
@@ -183,14 +185,17 @@ function stitchSegments (prevText, segments, maxWords, windowStartTimestep = 0) 
   return { deltaSegments, merged, bestK }
 }
 
-function _computeBestK (prevWords, newWords, maxWords) {
+function _computeBestK(prevWords, newWords, maxWords) {
   const maxK = Math.min(prevWords.length, newWords.length, maxWords)
   for (let k = maxK; k >= 1; k--) {
     let match = true
     for (let i = 0; i < k; i++) {
       const a = normalizeWord(prevWords[prevWords.length - k + i])
       const b = normalizeWord(newWords[i])
-      if (a.length === 0 || b.length === 0 || a !== b) { match = false; break }
+      if (a.length === 0 || b.length === 0 || a !== b) {
+        match = false
+        break
+      }
     }
     if (match) return k
   }

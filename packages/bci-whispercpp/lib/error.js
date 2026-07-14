@@ -2,7 +2,7 @@
 
 const { QvacErrorBase, addCodes } = require('@qvac/error')
 
-class QvacErrorAddonBCI extends QvacErrorBase { }
+class QvacErrorAddonBCI extends QvacErrorBase {}
 
 const { name, version } = require('../package.json')
 
@@ -32,79 +32,82 @@ const ERR_CODES = Object.freeze({
   WINDOW_TOO_LARGE: 26017
 })
 
-addCodes({
-  [ERR_CODES.FAILED_TO_LOAD_WEIGHTS]: {
-    name: 'FAILED_TO_LOAD_WEIGHTS',
-    message: (message) => `Failed to load weights, error: ${message}`
+addCodes(
+  {
+    [ERR_CODES.FAILED_TO_LOAD_WEIGHTS]: {
+      name: 'FAILED_TO_LOAD_WEIGHTS',
+      message: (message) => `Failed to load weights, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_CANCEL]: {
+      name: 'FAILED_TO_CANCEL',
+      message: (message) => `Failed to cancel inference, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_APPEND]: {
+      name: 'FAILED_TO_APPEND',
+      message: (message) => `Failed to append data to processing queue, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_DESTROY]: {
+      name: 'FAILED_TO_DESTROY',
+      message: (message) => `Failed to destroy instance, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_ACTIVATE]: {
+      name: 'FAILED_TO_ACTIVATE',
+      message: (message) => `Failed to activate model, error: ${message}`
+    },
+    [ERR_CODES.INVALID_NEURAL_INPUT]: {
+      name: 'INVALID_NEURAL_INPUT',
+      message: (message) => `Invalid neural signal input: ${message}`
+    },
+    [ERR_CODES.JOB_ALREADY_RUNNING]: {
+      name: 'JOB_ALREADY_RUNNING',
+      message: () => 'Cannot set new job: a job is already set or being processed'
+    },
+    [ERR_CODES.MODEL_NOT_LOADED]: {
+      name: 'MODEL_NOT_LOADED',
+      message: () => 'Model is not loaded'
+    },
+    [ERR_CODES.MODEL_FILE_NOT_FOUND]: {
+      name: 'MODEL_FILE_NOT_FOUND',
+      message: (modelPath) => `Model file not found at: ${modelPath}`
+    },
+    [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
+      name: 'BUFFER_LIMIT_EXCEEDED',
+      message: (limit) => `Neural signal buffer exceeded limit of ${limit}`
+    },
+    [ERR_CODES.FAILED_TO_START_JOB]: {
+      name: 'FAILED_TO_START_JOB',
+      message: (message) => `Failed to start inference job, error: ${message}`
+    },
+    [ERR_CODES.INVALID_CONFIG]: {
+      name: 'INVALID_CONFIG',
+      message: (message) => `Invalid BCI configuration: ${message}`
+    },
+    [ERR_CODES.EMBEDDER_WEIGHTS_INVALID]: {
+      name: 'EMBEDDER_WEIGHTS_INVALID',
+      message: (message) => `BCI embedder weights are invalid: ${message}`
+    },
+    [ERR_CODES.STREAM_ALREADY_ACTIVE]: {
+      name: 'STREAM_ALREADY_ACTIVE',
+      message: () => 'A streaming transcription is already in progress'
+    },
+    [ERR_CODES.INVALID_STREAM_INPUT]: {
+      name: 'INVALID_STREAM_INPUT',
+      message: (message) => `Invalid neural signal stream input: ${message}`
+    },
+    [ERR_CODES.INVALID_STREAM_HEADER]: {
+      name: 'INVALID_STREAM_HEADER',
+      message: (message) => `Invalid neural signal stream header: ${message}`
+    },
+    [ERR_CODES.WINDOW_TOO_LARGE]: {
+      name: 'WINDOW_TOO_LARGE',
+      message: (limit) => `Stream window size exceeds encoder capacity of ${limit} timesteps`
+    }
   },
-  [ERR_CODES.FAILED_TO_CANCEL]: {
-    name: 'FAILED_TO_CANCEL',
-    message: (message) => `Failed to cancel inference, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_APPEND]: {
-    name: 'FAILED_TO_APPEND',
-    message: (message) => `Failed to append data to processing queue, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_DESTROY]: {
-    name: 'FAILED_TO_DESTROY',
-    message: (message) => `Failed to destroy instance, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_ACTIVATE]: {
-    name: 'FAILED_TO_ACTIVATE',
-    message: (message) => `Failed to activate model, error: ${message}`
-  },
-  [ERR_CODES.INVALID_NEURAL_INPUT]: {
-    name: 'INVALID_NEURAL_INPUT',
-    message: (message) => `Invalid neural signal input: ${message}`
-  },
-  [ERR_CODES.JOB_ALREADY_RUNNING]: {
-    name: 'JOB_ALREADY_RUNNING',
-    message: () => 'Cannot set new job: a job is already set or being processed'
-  },
-  [ERR_CODES.MODEL_NOT_LOADED]: {
-    name: 'MODEL_NOT_LOADED',
-    message: () => 'Model is not loaded'
-  },
-  [ERR_CODES.MODEL_FILE_NOT_FOUND]: {
-    name: 'MODEL_FILE_NOT_FOUND',
-    message: (modelPath) => `Model file not found at: ${modelPath}`
-  },
-  [ERR_CODES.BUFFER_LIMIT_EXCEEDED]: {
-    name: 'BUFFER_LIMIT_EXCEEDED',
-    message: (limit) => `Neural signal buffer exceeded limit of ${limit}`
-  },
-  [ERR_CODES.FAILED_TO_START_JOB]: {
-    name: 'FAILED_TO_START_JOB',
-    message: (message) => `Failed to start inference job, error: ${message}`
-  },
-  [ERR_CODES.INVALID_CONFIG]: {
-    name: 'INVALID_CONFIG',
-    message: (message) => `Invalid BCI configuration: ${message}`
-  },
-  [ERR_CODES.EMBEDDER_WEIGHTS_INVALID]: {
-    name: 'EMBEDDER_WEIGHTS_INVALID',
-    message: (message) => `BCI embedder weights are invalid: ${message}`
-  },
-  [ERR_CODES.STREAM_ALREADY_ACTIVE]: {
-    name: 'STREAM_ALREADY_ACTIVE',
-    message: () => 'A streaming transcription is already in progress'
-  },
-  [ERR_CODES.INVALID_STREAM_INPUT]: {
-    name: 'INVALID_STREAM_INPUT',
-    message: (message) => `Invalid neural signal stream input: ${message}`
-  },
-  [ERR_CODES.INVALID_STREAM_HEADER]: {
-    name: 'INVALID_STREAM_HEADER',
-    message: (message) => `Invalid neural signal stream header: ${message}`
-  },
-  [ERR_CODES.WINDOW_TOO_LARGE]: {
-    name: 'WINDOW_TOO_LARGE',
-    message: (limit) => `Stream window size exceeds encoder capacity of ${limit} timesteps`
+  {
+    name,
+    version
   }
-}, {
-  name,
-  version
-})
+)
 
 module.exports = {
   ERR_CODES,

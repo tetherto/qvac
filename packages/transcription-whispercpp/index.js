@@ -28,12 +28,12 @@ class TranscriptionWhispercpp {
    * @param {string} [args.files.vadModel] - optional path to the Silero VAD model
    * @param {Object} config - environment-specific inference setup configuration
    */
-  constructor (
-    { files, logger = null, exclusiveRun = true, ...args },
-    config
-  ) {
+  constructor({ files, logger = null, exclusiveRun = true, ...args }, config) {
     if (!files || typeof files.model !== 'string' || files.model.length === 0) {
-      throw new QvacErrorAddonWhisper({ code: ERR_CODES.MODEL_REQUIRED, adds: 'files.model is required' })
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.MODEL_REQUIRED,
+        adds: 'files.model is required'
+      })
     }
 
     const { opts = {}, ...passThrough } = { logger, exclusiveRun, ...args }
@@ -48,9 +48,7 @@ class TranscriptionWhispercpp {
     }
 
     const vadModel =
-      typeof files.vadModel === 'string' && files.vadModel.length > 0
-        ? files.vadModel
-        : null
+      typeof files.vadModel === 'string' && files.vadModel.length > 0 ? files.vadModel : null
 
     this._files = { model: files.model, vadModel }
     this._config = config
@@ -77,11 +75,11 @@ class TranscriptionWhispercpp {
     this.validateModelFiles()
   }
 
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load (...loadArgs) {
+  async load(...loadArgs) {
     if (this.state.destroyed) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
@@ -98,35 +96,47 @@ class TranscriptionWhispercpp {
     this.state.weightsLoaded = true
   }
 
-  async pause () {
+  async pause() {
     if (!this.addon?.pause) {
-      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_PAUSE, adds: 'pause not supported' })
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_PAUSE,
+        adds: 'pause not supported'
+      })
     }
     await this.addon.pause()
   }
 
-  async unpause () {
+  async unpause() {
     if (!this.addon?.activate) {
-      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_ACTIVATE, adds: 'activate not supported' })
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_ACTIVATE,
+        adds: 'activate not supported'
+      })
     }
     await this.addon.activate()
   }
 
-  async stop () {
+  async stop() {
     if (!this.addon?.stop) {
-      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_STOP, adds: 'stop not supported' })
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_STOP,
+        adds: 'stop not supported'
+      })
     }
     await this.addon.stop()
   }
 
-  async status () {
+  async status() {
     if (!this.addon?.status) {
-      throw new QvacErrorAddonWhisper({ code: ERR_CODES.FAILED_TO_GET_STATUS, adds: 'status not supported' })
+      throw new QvacErrorAddonWhisper({
+        code: ERR_CODES.FAILED_TO_GET_STATUS,
+        adds: 'status not supported'
+      })
     }
     return await this.addon.status()
   }
 
-  _resolveVadModelPath () {
+  _resolveVadModelPath() {
     if (this._config.vadModelPath) {
       return this._config.vadModelPath
     }
@@ -144,7 +154,7 @@ class TranscriptionWhispercpp {
    * @param {boolean} [_closeLoader=false] - Unused; kept for `load(...args)` forwarding compatibility.
    * @param {Function} [_reportProgressCallback] - Unused; kept for `load(...args)` forwarding compatibility.
    */
-  async _load (_closeLoader = false, _reportProgressCallback) {
+  async _load(_closeLoader = false, _reportProgressCallback) {
     this.logger.debug('TranscriptionWhispercpp _load (local model files)')
 
     const whisperConfig = {
@@ -194,7 +204,7 @@ class TranscriptionWhispercpp {
     this.logger.debug('Addon activated')
   }
 
-  _getModelFilePath () {
+  _getModelFilePath() {
     return this._files.model
   }
 
@@ -202,10 +212,12 @@ class TranscriptionWhispercpp {
    * Serialize inference until the returned response settles (replaces `_hasActiveResponse`).
    * Uses a dedicated waiter so `destroy` / `reload` (`_runQueueWaiter`) can still preempt.
    */
-  async _enqueueExclusiveRunResponse (runFn) {
+  async _enqueueExclusiveRunResponse(runFn) {
     const prev = this._inferenceQueueWaiter || Promise.resolve()
     let releaseSlot
-    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    this._inferenceQueueWaiter = new Promise((resolve) => {
+      releaseSlot = resolve
+    })
     await prev
     let response
     try {
@@ -214,18 +226,23 @@ class TranscriptionWhispercpp {
       releaseSlot()
       throw err
     }
-    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    response
+      .await()
+      .finally(() => {
+        releaseSlot()
+      })
+      .catch(() => {})
     return response
   }
 
-  async run (input) {
+  async run(input) {
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveRunResponse(() => this._runInternal(input))
     }
     return await this._runInternal(input)
   }
 
-  async runStreaming (audioStream, opts = {}) {
+  async runStreaming(audioStream, opts = {}) {
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveRunResponse(() =>
         this._runInternal(audioStream, { ...opts, streaming: true })
@@ -234,7 +251,7 @@ class TranscriptionWhispercpp {
     return await this._runInternal(audioStream, { ...opts, streaming: true })
   }
 
-  async _runInternal (audioStream, opts = {}) {
+  async _runInternal(audioStream, opts = {}) {
     const normalizedAudioStream = this._normalizeAudioStream(audioStream)
 
     if (opts.streaming) {
@@ -245,7 +262,7 @@ class TranscriptionWhispercpp {
   }
 
   /** Batch runJob path: `_job` / response setup; audio via {@link #_handleAudioStream}. */
-  async _runBatchTranscription (normalizedAudioStream) {
+  async _runBatchTranscription(normalizedAudioStream) {
     this._pendingWhisperJobId = await this.addon.append({
       type: 'audio',
       input: new Uint8Array()
@@ -263,7 +280,7 @@ class TranscriptionWhispercpp {
     return response
   }
 
-  async _runStreaming (audioStream, streamingOpts = {}) {
+  async _runStreaming(audioStream, streamingOpts = {}) {
     const vadModelPath = this._resolveVadModelPath()
     if (!vadModelPath) {
       throw new QvacErrorAddonWhisper({
@@ -307,7 +324,7 @@ class TranscriptionWhispercpp {
   }
 
   /** Append-only path to the native addon; job lifecycle lives in callers / `_outputCallback`. */
-  async _handleAudioStream (audioStream) {
+  async _handleAudioStream(audioStream) {
     this.logger.debug('Start handling audio stream', {
       modelPath: this._getModelFilePath()
     })
@@ -322,7 +339,7 @@ class TranscriptionWhispercpp {
     await this.addon.append({ type: END_OF_INPUT })
   }
 
-  async _handleStreamingAudio (audioStream) {
+  async _handleStreamingAudio(audioStream) {
     this.logger.debug('Start handling streaming audio')
     for await (const chunk of audioStream) {
       this.addon.appendStreamingAudio({
@@ -333,7 +350,7 @@ class TranscriptionWhispercpp {
     this.addon.endStreaming()
   }
 
-  _normalizeAudioStream (audioStream) {
+  _normalizeAudioStream(audioStream) {
     if (!audioStream) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.INVALID_AUDIO_INPUT,
@@ -371,7 +388,7 @@ class TranscriptionWhispercpp {
    * @param {Object} [newConfig.miscConfig] - Miscellaneous configuration
    * @param {string} [newConfig.audio_format] - Audio format (defaults to 's16le')
    */
-  async reload (newConfig = {}) {
+  async reload(newConfig = {}) {
     return await this._withExclusiveRun(async () => {
       this.logger.debug('Reloading addon with new configuration', newConfig)
 
@@ -384,7 +401,9 @@ class TranscriptionWhispercpp {
         ...this.params,
         ...newConfig.whisperConfig,
         language: newConfig.whisperConfig?.language || this.params.language || 'en',
-        duration_ms: newConfig.whisperConfig?.duration_ms ?? (this.params.max_seconds ? this.params.max_seconds * 1000 : 0),
+        duration_ms:
+          newConfig.whisperConfig?.duration_ms ??
+          (this.params.max_seconds ? this.params.max_seconds * 1000 : 0),
         temperature: newConfig.whisperConfig?.temperature ?? this.params.temperature ?? 0.0,
         suppress_nst: newConfig.whisperConfig?.suppress_nst ?? this.params.suppress_nst ?? true,
         n_threads: newConfig.whisperConfig?.n_threads ?? this.params.n_threads ?? 0
@@ -402,7 +421,8 @@ class TranscriptionWhispercpp {
       const vadModelPath = this._resolveVadModelPath()
       if (vadModelPath) {
         whisperConfig.vad_model_path = vadModelPath
-        whisperConfig.vadParams = newConfig.whisperConfig?.vad_params || this.params.vad_params || { threshold: 0.6 }
+        whisperConfig.vadParams = newConfig.whisperConfig?.vad_params ||
+          this.params.vad_params || { threshold: 0.6 }
       }
 
       const configurationParams = {
@@ -439,11 +459,8 @@ class TranscriptionWhispercpp {
    * @param {string} [configurationParams.backendsDir] - root of the per-arch ggml backend `.so` modules (Android only)
    * @returns {Addon} The instantiated addon interface
    */
-  _createAddon (configurationParams) {
-    this.logger.info(
-      'Creating Whisper interface with configuration:',
-      configurationParams
-    )
+  _createAddon(configurationParams) {
+    this.logger.info('Creating Whisper interface with configuration:', configurationParams)
     const binding = require('./binding')
     return new WhisperInterface(
       binding,
@@ -453,7 +470,7 @@ class TranscriptionWhispercpp {
     )
   }
 
-  _outputCallback (addon, event, jobId, data, error) {
+  _outputCallback(addon, event, jobId, data, error) {
     if (event === 'Error') {
       this.logger.error(`Job failed with error: ${error}`)
       this._pendingWhisperJobId = null
@@ -492,7 +509,7 @@ class TranscriptionWhispercpp {
    * Override unload to also call destroyInstance for proper cleanup
    * This ensures the process can exit cleanly by closing the uv_async handle
    */
-  async unload () {
+  async unload() {
     return await this._withExclusiveRun(async () => {
       this._pendingWhisperJobId = null
       if (this._job.active) {
@@ -507,7 +524,7 @@ class TranscriptionWhispercpp {
     })
   }
 
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
@@ -517,7 +534,7 @@ class TranscriptionWhispercpp {
     }
   }
 
-  async destroy () {
+  async destroy() {
     return await this._withExclusiveRun(async () => {
       this._pendingWhisperJobId = null
       if (this._job.active) {
@@ -533,14 +550,12 @@ class TranscriptionWhispercpp {
     })
   }
 
-  validateModelFiles () {
+  validateModelFiles() {
     const modelPath = this._config.path || this._getModelFilePath()
     if (!modelPath || !fs.existsSync(modelPath)) {
       this.logger.error('Model file not found', { path: modelPath })
       throw new Error(
-        modelPath
-          ? `Model file doesn't exist: ${modelPath}`
-          : "Model file doesn't exist"
+        modelPath ? `Model file doesn't exist: ${modelPath}` : "Model file doesn't exist"
       )
     }
 
@@ -552,7 +567,7 @@ class TranscriptionWhispercpp {
   }
 }
 
-function dataAsStringWhisper (data) {
+function dataAsStringWhisper(data) {
   if (!data) return ''
   if (typeof data === 'object') {
     return JSON.stringify(data)
@@ -560,7 +575,7 @@ function dataAsStringWhisper (data) {
   return data.toString()
 }
 
-function _checkParamsExists (params) {
+function _checkParamsExists(params) {
   // Use the centralized config validation from configChecker.js
   checkConfig(params)
 }

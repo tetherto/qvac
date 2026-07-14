@@ -46,49 +46,61 @@ const SAMPLE_RATE = 16000
 const STREAM_CHUNK_MS = 2000
 const FEED_CHUNK_MS = 500
 
-function loadAudioSample () {
+function loadAudioSample() {
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
-  const pcm = new Int16Array(
-    rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+  const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
   const audio = new Float32Array(pcm.length)
   for (let i = 0; i < pcm.length; i++) audio[i] = pcm[i] / 32768.0
   return audio
 }
 
-function pushableStream () {
+function pushableStream() {
   const queue = []
   let waiter = null
   let ended = false
   return {
-    push (chunk) {
+    push(chunk) {
       if (ended) return
       queue.push(chunk)
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    end () {
+    end() {
       ended = true
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
-        if (queue.length > 0) { yield queue.shift(); continue }
+        if (queue.length > 0) {
+          yield queue.shift()
+          continue
+        }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
 }
 
-async function feedAndCollect (model, audio) {
+async function feedAndCollect(model, audio) {
   const samplesPerChunk = Math.floor((FEED_CHUNK_MS / 1000) * SAMPLE_RATE)
   const stream = pushableStream()
   const segments = []
 
   const response = await model.runStreaming(stream)
   const updateDone = response
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const seg of items) {
         if (!seg || !seg.text) continue
@@ -102,7 +114,7 @@ async function feedAndCollect (model, audio) {
     const chunk = new Float32Array(audio.slice(i, endIdx))
     stream.push(chunk)
     if (i + samplesPerChunk < audio.length) {
-      await new Promise(resolve => setTimeout(resolve, FEED_CHUNK_MS))
+      await new Promise((resolve) => setTimeout(resolve, FEED_CHUNK_MS))
     }
   }
   stream.end()
@@ -115,13 +127,15 @@ async function feedAndCollect (model, audio) {
 // the text doesn't match (e.g. silence sentinels). Mirrors the parser
 // used by examples/live-mic-diarized.js so the assertion below stays
 // in sync with the actual contract consumers rely on.
-function parseSpeakerId (text) {
+function parseSpeakerId(text) {
   const m = typeof text === 'string' ? text.match(/Speaker\s+(\d+)/) : null
   return m ? parseInt(m[1], 10) : -1
 }
 
-test('Sortformer v2.1 AOSC — default config streams diarization segments',
-  { timeout: 600000 }, async (t) => {
+test(
+  'Sortformer v2.1 AOSC — default config streams diarization segments',
+  { timeout: 600000 },
+  async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
     try {
@@ -129,7 +143,10 @@ test('Sortformer v2.1 AOSC — default config streams diarization segments',
       if (!modelPath) return
 
       const audio = loadAudioSample()
-      if (!audio) { t.pass('sample.raw not found - skipping'); return }
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
 
       const model = new TranscriptionParakeet({
         files: { model: modelPath },
@@ -149,29 +166,40 @@ test('Sortformer v2.1 AOSC — default config streams diarization segments',
         await model.load()
         const segments = await feedAndCollect(model, audio)
 
-        t.ok(segments.length > 0,
-          `AOSC streaming should emit at least one segment (got ${segments.length})`)
+        t.ok(
+          segments.length > 0,
+          `AOSC streaming should emit at least one segment (got ${segments.length})`
+        )
 
-        const speakerIds = segments
-          .map(s => parseSpeakerId(s.text))
-          .filter(id => id >= 0)
-        t.ok(speakerIds.length > 0,
-          'segments should match the "Speaker N: ..." format')
+        const speakerIds = segments.map((s) => parseSpeakerId(s.text)).filter((id) => id >= 0)
+        t.ok(speakerIds.length > 0, 'segments should match the "Speaker N: ..." format')
 
         const distinctIds = new Set(speakerIds)
         console.log(
           `[aosc/default] segments=${segments.length} ` +
-          `speakers=${distinctIds.size} ids=[${[...distinctIds].sort().join(',')}]`)
+            `speakers=${distinctIds.size} ids=[${[...distinctIds].sort().join(',')}]`
+        )
       } finally {
-        try { await model.unload() } catch (e) { /* ignore */ }
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
       }
     } finally {
-      try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
     }
-  })
+  }
+)
 
-test('Sortformer v2.1 AOSC — streamingSpkCacheEnable=false falls back to v1 path',
-  { timeout: 600000 }, async (t) => {
+test(
+  'Sortformer v2.1 AOSC — streamingSpkCacheEnable=false falls back to v1 path',
+  { timeout: 600000 },
+  async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
     try {
@@ -179,7 +207,10 @@ test('Sortformer v2.1 AOSC — streamingSpkCacheEnable=false falls back to v1 pa
       if (!modelPath) return
 
       const audio = loadAudioSample()
-      if (!audio) { t.pass('sample.raw not found - skipping'); return }
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
 
       const model = new TranscriptionParakeet({
         files: { model: modelPath },
@@ -202,21 +233,28 @@ test('Sortformer v2.1 AOSC — streamingSpkCacheEnable=false falls back to v1 pa
         await model.load()
         const segments = await feedAndCollect(model, audio)
 
-        t.ok(segments.length > 0,
-          'v1-path streaming should still emit at least one segment ' +
-          `(got ${segments.length})`)
+        t.ok(
+          segments.length > 0,
+          'v1-path streaming should still emit at least one segment ' + `(got ${segments.length})`
+        )
 
-        const speakerIds = segments
-          .map(s => parseSpeakerId(s.text))
-          .filter(id => id >= 0)
-        t.ok(speakerIds.length > 0,
-          'segments should match the "Speaker N: ..." format')
+        const speakerIds = segments.map((s) => parseSpeakerId(s.text)).filter((id) => id >= 0)
+        t.ok(speakerIds.length > 0, 'segments should match the "Speaker N: ..." format')
 
         console.log(`[aosc/disabled] segments=${segments.length}`)
       } finally {
-        try { await model.unload() } catch (e) { /* ignore */ }
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
       }
     } finally {
-      try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
     }
-  })
+  }
+)

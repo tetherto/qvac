@@ -1,10 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const {
-  supertonic3QuantFromVariant,
-  DEFAULT_SUPERTONIC3_QUANT
-} = require('../utils/downloadModel')
+const { supertonic3QuantFromVariant, DEFAULT_SUPERTONIC3_QUANT } = require('../utils/downloadModel')
 
 test('supertonic3QuantFromVariant maps known variant labels to tiers', (t) => {
   t.is(supertonic3QuantFromVariant('q4'), 'q4_0', 'q4 -> q4_0')

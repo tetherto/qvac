@@ -11,7 +11,7 @@ const { setupJsLogger, ensureWhisperModel, isMobile } = require('./helpers.js')
 /**
  * Helper function to test that corrupted model files throw exceptions
  */
-async function testCorruptedModelFile (t, { corruptedFilePath, constructorArgs, config }) {
+async function testCorruptedModelFile(t, { corruptedFilePath, constructorArgs, config }) {
   let loggerBinding = null
   if (!isMobile) {
     loggerBinding = setupJsLogger()
@@ -25,7 +25,7 @@ async function testCorruptedModelFile (t, { corruptedFilePath, constructorArgs, 
 
     const audioData = new Uint8Array(1600)
     const audioStream = new Readable({
-      read () {
+      read() {
         this.push(Buffer.from(audioData))
         this.push(null)
       }
@@ -66,7 +66,7 @@ async function testCorruptedModelFile (t, { corruptedFilePath, constructorArgs, 
       try {
         loggerBinding.releaseLogger()
       } catch (e) {
-      // ignore
+        // ignore
       }
     }
   }
@@ -79,7 +79,9 @@ async function testCorruptedModelFile (t, { corruptedFilePath, constructorArgs, 
  * Works on both mobile and desktop
  */
 test('Corrupted model file should throw exception to JavaScript', { timeout: 30000 }, async (t) => {
-  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(__dirname, '../.test-models')
+  const testDir = isMobile
+    ? path.join(global.testDir || os.tmpdir(), '.test-models')
+    : path.join(__dirname, '../.test-models')
   const corruptedModelPath = path.join(testDir, 'corrupted-model.bin')
 
   if (!fs.existsSync(testDir)) {
@@ -108,45 +110,53 @@ test('Corrupted model file should throw exception to JavaScript', { timeout: 300
  * Test corrupted VAD model file
  * Works on both mobile and desktop
  */
-test('Corrupted VAD model file should throw exception to JavaScript', { timeout: 180000 }, async (t) => {
-  const testDir = isMobile ? path.join(global.testDir || os.tmpdir(), '.test-models') : path.join(__dirname, '../.test-models')
-  const corruptedVadPath = path.join(testDir, 'corrupted-vad-model.bin')
+test(
+  'Corrupted VAD model file should throw exception to JavaScript',
+  { timeout: 180000 },
+  async (t) => {
+    const testDir = isMobile
+      ? path.join(global.testDir || os.tmpdir(), '.test-models')
+      : path.join(__dirname, '../.test-models')
+    const corruptedVadPath = path.join(testDir, 'corrupted-vad-model.bin')
 
-  // Ensure we have a valid whisper model
-  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../models')
-  const validModelPath = path.join(modelsDir, 'ggml-tiny.bin')
+    // Ensure we have a valid whisper model
+    const modelsDir = isMobile
+      ? path.join(global.testDir || os.tmpdir(), 'models')
+      : path.resolve(__dirname, '../../models')
+    const validModelPath = path.join(modelsDir, 'ggml-tiny.bin')
 
-  // Download the model if needed
-  const modelResult = await ensureWhisperModel(validModelPath)
-  if (!modelResult.success) {
-    console.log('⚠️ Could not download model, skipping test')
-    t.pass('Test skipped - model not available')
-    return
-  }
-
-  t.ok(fs.existsSync(validModelPath), 'Valid whisper model should exist')
-
-  if (!fs.existsSync(testDir)) {
-    fs.mkdirSync(testDir, { recursive: true })
-  }
-
-  fs.writeFileSync(corruptedVadPath, 'This is not a valid VAD model file')
-  t.ok(fs.existsSync(corruptedVadPath), 'Corrupted VAD model file should exist')
-
-  await testCorruptedModelFile(t, {
-    corruptedFilePath: corruptedVadPath,
-    constructorArgs: {
-      files: {
-        model: validModelPath
-      }
-    },
-    config: {
-      whisperConfig: {
-        language: 'en',
-        vad_model_path: corruptedVadPath
-      },
-      contextParams: { model: validModelPath },
-      miscConfig: { caption_enabled: false }
+    // Download the model if needed
+    const modelResult = await ensureWhisperModel(validModelPath)
+    if (!modelResult.success) {
+      console.log('⚠️ Could not download model, skipping test')
+      t.pass('Test skipped - model not available')
+      return
     }
-  })
-})
+
+    t.ok(fs.existsSync(validModelPath), 'Valid whisper model should exist')
+
+    if (!fs.existsSync(testDir)) {
+      fs.mkdirSync(testDir, { recursive: true })
+    }
+
+    fs.writeFileSync(corruptedVadPath, 'This is not a valid VAD model file')
+    t.ok(fs.existsSync(corruptedVadPath), 'Corrupted VAD model file should exist')
+
+    await testCorruptedModelFile(t, {
+      corruptedFilePath: corruptedVadPath,
+      constructorArgs: {
+        files: {
+          model: validModelPath
+        }
+      },
+      config: {
+        whisperConfig: {
+          language: 'en',
+          vad_model_path: corruptedVadPath
+        },
+        contextParams: { model: validModelPath },
+        miscConfig: { caption_enabled: false }
+      }
+    })
+  }
+)

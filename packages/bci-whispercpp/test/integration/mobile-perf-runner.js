@@ -5,23 +5,18 @@ const os = require('bare-os')
 const process = require('bare-process')
 const BCIWhispercpp = require('../../index')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
-const {
-  detectPlatform,
-  getMobileAssetPath,
-  isMobile,
-  recordBciStats
-} = require('./helpers.js')
+const { detectPlatform, getMobileAssetPath, isMobile, recordBciStats } = require('./helpers.js')
 
 const { platform } = detectPlatform()
 const NUM_TRANSCRIPTIONS = 3
 const NO_GPU = os.hasEnv('NO_GPU') && os.getEnv('NO_GPU') === 'true'
 
-function getTimeMs () {
+function getTimeMs() {
   const [sec, nsec] = process.hrtime()
   return sec * 1000 + nsec / 1e6
 }
 
-function loadManifest () {
+function loadManifest() {
   const manifestPath = getMobileAssetPath('manifest.json')
   if (!fs.existsSync(manifestPath)) return { samples: [] }
   try {
@@ -31,7 +26,7 @@ function loadManifest () {
   }
 }
 
-async function runMobilePerfCase (t, opts) {
+async function runMobilePerfCase(t, opts) {
   const modelFile = opts.modelFile || 'ggml-bci-windowed.bin'
   const useGPU = opts.useGPU
   const epLabel = useGPU ? '[GPU]' : '[CPU]'
@@ -54,7 +49,9 @@ async function runMobilePerfCase (t, opts) {
   const modelPath = getMobileAssetPath(modelFile)
   const embedderPath = getMobileAssetPath('bci-embedder.bin')
   if (!fs.existsSync(modelPath) || !fs.existsSync(embedderPath)) {
-    t.pass(modelLabel + ' ' + epLabel + ' skipped: model/embedder asset not found (' + modelPath + ')')
+    t.pass(
+      modelLabel + ' ' + epLabel + ' skipped: model/embedder asset not found (' + modelPath + ')'
+    )
     return
   }
 
@@ -81,15 +78,18 @@ async function runMobilePerfCase (t, opts) {
 
   let bci = null
   try {
-    bci = new BCIWhispercpp({
-      files: { model: modelPath, embedder: embedderPath },
-      opts: { stats: true }
-    }, {
-      whisperConfig: { language: 'en', temperature: 0.0 },
-      miscConfig: { caption_enabled: false },
-      contextParams: { use_gpu: useGPU },
-      ...(typeof sample.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})
-    })
+    bci = new BCIWhispercpp(
+      {
+        files: { model: modelPath, embedder: embedderPath },
+        opts: { stats: true }
+      },
+      {
+        whisperConfig: { language: 'en', temperature: 0.0 },
+        miscConfig: { caption_enabled: false },
+        contextParams: { use_gpu: useGPU },
+        ...(typeof sample.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})
+      }
+    )
 
     const loadStart = getTimeMs()
     await bci.load()
@@ -105,7 +105,10 @@ async function runMobilePerfCase (t, opts) {
       const runTime = getTimeMs() - runStart
 
       const segments = flattenSegments(output)
-      const text = segments.map((s) => (s && s.text) || '').join('').trim()
+      const text = segments
+        .map((s) => (s && s.text) || '')
+        .join('')
+        .trim()
       const jobStats = response.stats
 
       console.log('   Time: ' + runTime.toFixed(0) + 'ms  Text: "' + text.substring(0, 60) + '"')
@@ -125,15 +128,40 @@ async function runMobilePerfCase (t, opts) {
     // ids are logged for the report but not asserted, so a legitimate GPU->CPU
     // fallback doesn't turn the benchmark red.
     const probe = lastStats || {}
-    console.log('   Backend stats: backendDevice=' +
-      (typeof probe.backendDevice === 'number' ? probe.backendDevice : 'n/a') +
-      ' backendId=' + (typeof probe.backendId === 'number' ? probe.backendId : 'n/a'))
+    console.log(
+      '   Backend stats: backendDevice=' +
+        (typeof probe.backendDevice === 'number' ? probe.backendDevice : 'n/a') +
+        ' backendId=' +
+        (typeof probe.backendId === 'number' ? probe.backendId : 'n/a')
+    )
 
-    t.ok(statsCount > 0, modelLabel + ' ' + epLabel + ' should produce runtime stats for at least one run (got ' + statsCount + ')')
-    console.log('Mobile perf case ' + modelLabel + ' ' + epLabel + ' completed (' + statsCount + '/' + NUM_TRANSCRIPTIONS + ' runs with stats)\n')
+    t.ok(
+      statsCount > 0,
+      modelLabel +
+        ' ' +
+        epLabel +
+        ' should produce runtime stats for at least one run (got ' +
+        statsCount +
+        ')'
+    )
+    console.log(
+      'Mobile perf case ' +
+        modelLabel +
+        ' ' +
+        epLabel +
+        ' completed (' +
+        statsCount +
+        '/' +
+        NUM_TRANSCRIPTIONS +
+        ' runs with stats)\n'
+    )
   } finally {
     if (bci) {
-      try { await bci.destroy() } catch (err) { console.log('   destroy error: ' + err.message) }
+      try {
+        await bci.destroy()
+      } catch (err) {
+        console.log('   destroy error: ' + err.message)
+      }
     }
   }
 }
