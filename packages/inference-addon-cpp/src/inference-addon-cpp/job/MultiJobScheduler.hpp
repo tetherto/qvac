@@ -155,7 +155,15 @@ class MultiJobScheduler final : public IJobScheduler {
       // count would refuse it as busy. process() has fully returned or thrown
       // by the time this runs, so a stuck exclusive flag can never wedge
       // admission if an exclusive job (finetune) fails.
-      const auto releaseSlot = [this, &job] {
+      // Once-only: publication runs inside the try after the release, so a
+      // throw during publication (allocation, a custom callback's notify())
+      // reaches the catch with the slot already released — a second release
+      // would underflow admittedCount_ and wedge admission forever.
+      auto releaseSlot = [this, &job, released = false]() mutable {
+        if (released) {
+          return;
+        }
+        released = true;
         std::lock_guard relock(mtx_);
         --admittedCount_;
         inFlight_.erase(job.id);

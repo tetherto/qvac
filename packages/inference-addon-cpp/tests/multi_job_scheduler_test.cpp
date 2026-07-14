@@ -84,6 +84,20 @@ public:
   }
 };
 
+/// Throws from the first notify() only: exercises a terminal-publication
+/// failure without also blowing up the queueException() the worker publishes
+/// from its catch (that second notify() must succeed).
+class ThrowOnceCallback final : public MockOutputCallback {
+  std::atomic_bool thrown_{false};
+
+public:
+  void notify() override {
+    if (!thrown_.exchange(true)) {
+      throw std::runtime_error("notify failed");
+    }
+  }
+};
+
 /// Concurrent test model whose per-job process() blocks until its id is
 /// cancelled (cancelById), every job is cancelled (cancel), or its configured
 /// duration elapses. Tracks peak overlap so a test can assert that jobs were
@@ -1366,6 +1380,36 @@ TEST_F(MultiJobSchedulerTest, SlotReleasedBeforeErrorEventPublished) {
         << "the terminal error event became observable while the scheduler "
            "still counted the failed job's slot as admitted";
   }
+}
+
+/// A throw during terminal publication (e.g. a consumer callback's notify())
+/// lands in the worker's catch AFTER the slot was already released. The
+/// release must be once-only: a second release underflows the size_t admitted
+/// count, after which activeJobs() reports garbage and every admission is
+/// refused as busy forever.
+TEST_F(MultiJobSchedulerTest, PublicationThrowReleasesSlotOnce) {
+  model_ = std::make_unique<ConcurrentTestModel>(std::chrono::milliseconds{5});
+  callback_ = std::make_unique<ThrowOnceCallback>();
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  scheduler_ = std::make_unique<MultiJobScheduler>(
+      model_.get(), 1, model_.get(), model_.get(), 0);
+  scheduler_->start(outputQueue_);
+
+  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+
+  // The job's first publication throws; once the worker has settled it the
+  // admitted count must be back at exactly zero, not underflowed.
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{5};
+  while (scheduler_->activeJobs() != 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  EXPECT_EQ(scheduler_->activeJobs(), 0u)
+      << "slot released twice: admitted count underflowed";
+
+  EXPECT_TRUE(scheduler_->runJob(std::string("follow-up"), JobId{2}))
+      << "admission wedged after a publication throw";
 }
 
 } // namespace qvac_lib_inference_addon_cpp
