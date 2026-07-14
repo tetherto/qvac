@@ -32,6 +32,11 @@ public:
     std::shared_lock lock(model.stateMtx_);
     return model.state_ ? model.state_->llmContext_.get() : nullptr;
   }
+
+  /// The multi-job routing predicate (private static on the model).
+  static bool isConcurrentEligible(const LlamaModel::Prompt& prompt) {
+    return LlamaModel::isConcurrentEligible(prompt);
+  }
 };
 
 class ContinuousBatchSchedulerTestPeer {
