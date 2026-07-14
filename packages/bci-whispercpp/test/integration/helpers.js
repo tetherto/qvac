@@ -149,12 +149,18 @@ function recordBciStats (label, stats, extra) {
     ? Math.round(extra.wallMs)
     : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
   const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
+  // Active ggml backend id echoed in every stats snapshot
+  // (0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other). Recorded so the
+  // aggregator labels the REAL per-device backend instead of guessing from the
+  // platform — e.g. Adreno Android lands on OpenCL(4), Mali on Vulkan(3).
+  const backendId = typeof stats.backendId === 'number' ? stats.backendId : null
 
   _perfReporter.record(label, {
     real_time_factor: rtf,
     wall_time_ms: wallMs,
     tps,
-    total_time_ms: totalTimeMs
+    total_time_ms: totalTimeMs,
+    backend_id: backendId
   }, {
     execution_provider: ep,
     output: extra && extra.output ? String(extra.output) : null

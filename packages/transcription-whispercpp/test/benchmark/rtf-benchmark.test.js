@@ -24,6 +24,15 @@ const {
   createAudioStream,
   isMobile
 } = require('../integration/helpers.js')
+const {
+  readRssBytes,
+  createMemorySampler,
+  buildMemorySummary,
+  bytesToMb,
+  meanOfPositive,
+  maxOfPositive,
+  RECLAIM_SETTLE_MS
+} = require('../integration/memory-usage.js')
 
 const platform = detectPlatform()
 const { modelsDir, audioPath, samplesDir } = getTestPaths()
@@ -85,10 +94,12 @@ function getUpperBound (benchmarkSettings) {
 function getRequestedBackendFamily (platformName, useGPU, backendHint) {
   if (backendHint) return backendHint
   if (!useGPU) return 'cpu'
-  if (platformName === 'darwin' || platformName === 'ios') return 'coreml'
-  if (platformName === 'win32') return 'directml'
-  if (platformName === 'linux') return 'cuda'
-  if (platformName === 'android') return 'nnapi'
+  // ggml GPU backend by platform: Metal on Apple, Vulkan on Windows (the
+  // prebuild is a Vulkan build) and Linux, Vulkan/OpenCL on Android.
+  if (platformName === 'darwin' || platformName === 'ios') return 'metal'
+  if (platformName === 'win32') return 'vulkan'
+  if (platformName === 'linux') return 'vulkan'
+  if (platformName === 'android') return 'vulkan'
   return 'gpu'
 }
 
@@ -144,9 +155,12 @@ function getAudioDurationSec (samplePath) {
 
 async function runSingleBenchmark (model, samplePath) {
   const audioStream = createAudioStream(samplePath)
+  const sampler = createMemorySampler()
   const wallStart = getTimeMs()
+  sampler.start()
   const response = await model.run(audioStream)
   await response.await()
+  const memory = sampler.stop()
 
   const jobStats = response.stats
   if (!jobStats) {
@@ -168,8 +182,42 @@ async function runSingleBenchmark (model, samplePath) {
     whisperDecodeMs: jobStats.whisperDecodeMs || 0,
     whisperBatchdMs: jobStats.whisperBatchdMs || 0,
     whisperPromptMs: jobStats.whisperPromptMs || 0,
-    totalWallMs: jobStats.totalWallMs || 0
+    totalWallMs: jobStats.totalWallMs || 0,
+    avgRssBytes: memory.avgBytes,
+    peakRssBytes: memory.peakBytes,
+    rssSampleCount: memory.count,
+    gpuMemTotalMb: typeof jobStats.gpuMemTotalMb === 'number' ? jobStats.gpuMemTotalMb : -1,
+    gpuMemFreeMb: typeof jobStats.gpuMemFreeMb === 'number' ? jobStats.gpuMemFreeMb : -1
   }
+}
+
+async function reclaimAfterUnload (model) {
+  try { await model.unload() } catch {}
+  if (typeof global.gc === 'function') {
+    try { global.gc() } catch {}
+  }
+  await new Promise(resolve => setTimeout(resolve, RECLAIM_SETTLE_MS))
+  return readRssBytes()
+}
+
+async function measureMemory (model, allResults, rssBeforeLoad, rssAfterLoad) {
+  const avgRssBytes = meanOfPositive(allResults.map(result => result.avgRssBytes)) || rssAfterLoad
+  const peakRssBytes = maxOfPositive(allResults.map(result => result.peakRssBytes), rssAfterLoad)
+  const sampleCount = allResults.reduce((sum, result) => sum + (result.rssSampleCount || 0), 0)
+  const lastResult = allResults[allResults.length - 1] || {}
+  const rssAfterUnload = await reclaimAfterUnload(model)
+
+  const summary = buildMemorySummary({
+    rssBeforeLoadBytes: rssBeforeLoad,
+    rssAfterLoadBytes: rssAfterLoad,
+    avgRssBytes,
+    peakRssBytes,
+    rssAfterUnloadBytes: rssAfterUnload,
+    sampleCount
+  })
+  summary.gpuMemTotalMb = typeof lastResult.gpuMemTotalMb === 'number' ? lastResult.gpuMemTotalMb : -1
+  summary.gpuMemFreeMb = typeof lastResult.gpuMemFreeMb === 'number' ? lastResult.gpuMemFreeMb : -1
+  return summary
 }
 
 test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 600000 }, async (t) => {
@@ -237,11 +285,13 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
     }
 
     console.log('Loading model...')
+    const rssBeforeLoad = readRssBytes()
     const loadStart = getTimeMs()
     model = new TranscriptionWhispercpp(constructorArgs, config)
     await model._load()
     const loadMs = getTimeMs() - loadStart
-    console.log(`Model loaded in ${loadMs.toFixed(0)}ms\n`)
+    const rssAfterLoad = readRssBytes()
+    console.log(`Model loaded in ${loadMs.toFixed(0)}ms (RSS ${bytesToMb(rssAfterLoad, 1)}MB)\n`)
 
     for (let i = 0; i < benchmarkSettings.numWarmup; i++) {
       console.log(`[warmup ${i + 1}/${benchmarkSettings.numWarmup}]`)
@@ -283,6 +333,9 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
     const encodeStats = stats(allResults.map(result => result.whisperEncodeMs))
     const decodeStats = stats(allResults.map(result => result.whisperDecodeMs))
 
+    const memorySummary = await measureMemory(model, allResults, rssBeforeLoad, rssAfterLoad)
+    model = null
+
     console.log('\n' + '='.repeat(70))
     console.log('WHISPER RTF BENCHMARK RESULTS')
     console.log('='.repeat(70))
@@ -314,6 +367,16 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
     console.log('  Decode (ms):')
     console.log(`    Mean:   ${decodeStats.mean.toFixed(0)}`)
     console.log(`    P50:    ${decodeStats.p50.toFixed(0)}`)
+    console.log('')
+    console.log('  Memory (RSS, MB):')
+    console.log(`    Average:   ${memorySummary.avgRssMb.toFixed(2)}`)
+    console.log(`    Peak:      ${memorySummary.peakRssMb.toFixed(2)}`)
+    console.log(`    After load:${memorySummary.rssAfterLoadMb.toFixed(2)}`)
+    console.log(`    After unload: ${memorySummary.rssAfterUnloadMb.toFixed(2)}`)
+    console.log(`    Reclaimed: ${memorySummary.reclaimedMb.toFixed(2)}`)
+    if (memorySummary.gpuMemTotalMb >= 0) {
+      console.log(`    GPU total: ${memorySummary.gpuMemTotalMb}  GPU free: ${memorySummary.gpuMemFreeMb}`)
+    }
     console.log('')
     console.log('='.repeat(70) + '\n')
 
@@ -360,7 +423,8 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
         wallMs: wallStats,
         tokensPerSecond: tpsStats,
         whisperEncodeMs: encodeStats,
-        whisperDecodeMs: decodeStats
+        whisperDecodeMs: decodeStats,
+        memory: memorySummary
       },
       runs: allResults
     }
@@ -391,6 +455,10 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
       t.ok(rtfStats.mean <= upperBound, `Mean RTF ${rtfStats.mean.toFixed(4)} should be <= ${upperBound}`)
     }
     t.ok(tpsStats.mean > 0, 'Tokens/second should be positive')
+    t.ok(memorySummary.peakRssMb > 0, 'Peak memory (RSS) should be positive')
+    t.ok(memorySummary.avgRssMb > 0, 'Average memory (RSS) should be positive')
+    t.ok(memorySummary.peakRssMb >= memorySummary.avgRssMb, 'Peak memory should be >= average memory')
+    t.ok(memorySummary.reclaimedMb >= 0, 'Reclaimed memory should be non-negative')
   } finally {
     if (model) {
       try { await model.unload() } catch {}

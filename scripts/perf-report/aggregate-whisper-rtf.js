@@ -4,11 +4,17 @@
 const fs = require('fs')
 const path = require('path')
 
-// whisper.cpp GPU backends: the ggml cascade (Vulkan on linux/win32/android,
-// Metal on darwin/ios, OpenCL on Adreno android) plus the CoreML encoder
-// (darwin) and the DirectML path (win32) the benchmark matrix exercises.
+// whisper.cpp GPU backends: the ggml cascade — Vulkan on linux/win32/android,
+// Metal on darwin/ios, OpenCL on Adreno android. ggml has no DirectML/CoreML
+// compute backend (the Windows prebuild is a Vulkan build, macOS offloads to
+// Metal), so the set matches bci-whispercpp for consistency across packages.
 // CUDA is not supported on any platform.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'coreml', 'directml']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
+
+// ggml active-backend ids reported by the addon (WhisperModel BackendId enum),
+// mapped to the backend label. Used to recover the REAL backend a mobile device
+// selected at runtime rather than guessing it from the platform family.
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
 
 function parseArgs (argv) {
   const args = {
@@ -97,9 +103,9 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   switch (String(platformName || '').toLowerCase()) {
     case 'darwin':
     case 'ios':
-      return 'coreml'
+      return 'metal'
     case 'win32':
-      return 'directml'
+      return 'vulkan'
     case 'android':
       return 'vulkan'
     case 'linux':
@@ -109,10 +115,25 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   }
 }
 
+function numberOrNaN (value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : NaN
+}
+
+// Prefer the observed ggml backend id (per-device ground truth) over the
+// platform-family guess. Falls back to normalizeBackend when the addon did not
+// report an id (older prebuilds, or a snapshot without stats).
+function resolveMobileBackend (backendId, platformName, useGPU) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU)
+}
+
 function normalizeReport (report, sourceFile, source) {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
+  const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
 
@@ -129,6 +150,9 @@ function normalizeReport (report, sourceFile, source) {
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
+    avgRssMb: numberOrNaN(memory.avgRssMb),
+    peakRssMb: numberOrNaN(memory.peakRssMb),
+    reclaimedMb: numberOrNaN(memory.reclaimedMb),
     notes: sourceFile ? path.basename(sourceFile) : ''
   }
 }
@@ -151,6 +175,12 @@ function mean (values) {
   const nums = values.filter((value) => Number.isFinite(value))
   if (nums.length === 0) return NaN
   return nums.reduce((sum, value) => sum + value, 0) / nums.length
+}
+
+function maxFinite (values) {
+  const nums = values.filter((value) => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  return nums.reduce((current, value) => (value > current ? value : current), nums[0])
 }
 
 function stddev (values) {
@@ -226,12 +256,20 @@ function normalizeMobileRecords (report, sourceFile) {
         modelTag,
         provider,
         rtf: [],
-        wallMs: []
+        wallMs: [],
+        avgRss: [],
+        peakRss: [],
+        reclaimed: [],
+        backendId: null
       })
     }
     const group = byModelAndProvider.get(key)
     if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
+    if (typeof metrics.avg_rss_mb === 'number') group.avgRss.push(metrics.avg_rss_mb)
+    if (typeof metrics.peak_rss_mb === 'number') group.peakRss.push(metrics.peak_rss_mb)
+    if (typeof metrics.reclaimed_mb === 'number') group.reclaimed.push(metrics.reclaimed_mb)
+    if (group.backendId === null && typeof metrics.backend_id === 'number') group.backendId = metrics.backend_id
   }
 
   const records = []
@@ -244,12 +282,15 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: normalizeBackend(platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
       meanRtf: mean(values.rtf),
       stddevRtf: stddev(values.rtf),
       p50: percentile(values.rtf, 50),
       p95: percentile(values.rtf, 95),
       wallMs: mean(values.wallMs),
+      avgRssMb: mean(values.avgRss),
+      peakRssMb: maxFinite(values.peakRss),
+      reclaimedMb: maxFinite(values.reclaimed),
       notes
     })
   }
@@ -309,6 +350,9 @@ function scoreRecord (record) {
   if (Number.isFinite(record.p50)) score += 4
   if (Number.isFinite(record.p95)) score += 4
   if (Number.isFinite(record.wallMs)) score += 2
+  if (Number.isFinite(record.avgRssMb)) score += 2
+  if (Number.isFinite(record.peakRssMb)) score += 2
+  if (Number.isFinite(record.reclaimedMb)) score += 1
   if (record.device && record.device !== 'unknown') score += 1
   if (record.notes) score += 1
   return score
@@ -354,13 +398,13 @@ function renderMarkdown (records) {
   const lines = [
     '## Whisper Performance Findings',
     '',
-    '| Source | Device | Platform | Model | GPU | Backend | Mean RTF | Stddev RTF | P50 | P95 | Mean Wall (ms) | Notes |',
-    '|--------|--------|----------|-------|-----|---------|----------|------------|-----|-----|----------------|-------|'
+    '| Source | Device | Platform | Model | GPU | Backend | Mean RTF | Stddev RTF | P50 | P95 | Mean Wall (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |',
+    '|--------|--------|----------|-------|-----|---------|----------|------------|-----|-----|----------------|--------------|---------------|----------------|-------|'
   ]
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddevRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.gpu} | ${record.backend} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddevRtf)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${formatMaybeInteger(record.avgRssMb)} | ${formatMaybeInteger(record.peakRssMb)} | ${formatMaybeInteger(record.reclaimedMb)} | ${record.notes || ''} |`
     )
   }
 
@@ -389,6 +433,9 @@ function renderHtml (records) {
       formatNumber(record.p50),
       formatNumber(record.p95),
       formatMaybeInteger(record.wallMs),
+      formatMaybeInteger(record.avgRssMb),
+      formatMaybeInteger(record.peakRssMb),
+      formatMaybeInteger(record.reclaimedMb),
       record.notes || ''
     ].map((value) => `<td>${escapeHtml(value)}</td>`).join('')
   }).map((cells) => `<tr>${cells}</tr>`).join('\n')
@@ -427,6 +474,9 @@ function renderHtml (records) {
     '        <th>P50</th>',
     '        <th>P95</th>',
     '        <th>Mean Wall (ms)</th>',
+    '        <th>Avg RSS (MB)</th>',
+    '        <th>Peak RSS (MB)</th>',
+    '        <th>Reclaimed (MB)</th>',
     '        <th>Notes</th>',
     '      </tr>',
     '    </thead>',
@@ -482,4 +532,13 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeReport,
+  normalizeMobileRecords,
+  renderMarkdown,
+  buildCoverage
+}
