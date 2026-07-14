@@ -818,6 +818,27 @@ const SUPERTONIC3_REGISTRY_DATES = {
   q4_0: REGISTRY_DATE_SUPERTONIC3_QUANT
 }
 
+// Single source of truth for the default Supertonic 3 tier. Shared by
+// `supertonic3QuantFromVariant` (unknown-variant fallback) and
+// `ensureSupertonic3Model` (missing `options.quant`) so the two can't drift —
+// q4_0 is the tier staged in CI / on mobile Device Farm.
+const DEFAULT_SUPERTONIC3_QUANT = 'q4_0'
+
+// Map a benchmark `variant` label (q4 / q8 / f16 / mixed) to the published
+// Supertonic 3 quant tier. Unlike v1/v2 (which read the quant from GGUF
+// metadata), v3 encodes the tier in the on-disk filename, so the benchmarks
+// must resolve the label to a concrete tier before fetching. Owned here next to
+// `supertonic3Gguf` / `SUPERTONIC3_REGISTRY_DATES` and imported by both
+// benchmark suites so the mapping lives in one place.
+function supertonic3QuantFromVariant (variant) {
+  switch (variant) {
+    case 'q8': return 'q8_0'
+    case 'f16': return 'f16'
+    case 'q4': return 'q4_0'
+    default: return DEFAULT_SUPERTONIC3_QUANT
+  }
+}
+
 function supertonic3Gguf (quant) {
   const gguf = {
     name: `supertonic3-${quant}.gguf`,
@@ -846,11 +867,12 @@ function supertonic3Gguf (quant) {
  *
  * @param {Object} [options]
  * @param {string} [options.targetDir] - dir to look in (default ./models).
- * @param {string} [options.quant] - quant tier: 'q8_0' | 'q4_0' | 'f16' | 'f32'.
+ * @param {string} [options.quant] - quant tier: 'q8_0' | 'q4_0' | 'f16' | 'f32'
+ *   (default DEFAULT_SUPERTONIC3_QUANT = 'q4_0', matching the CI / mobile tier).
  * @returns {Promise<{ success: boolean, path: string|null, targetDir: string, quant: string }>}
  */
 async function ensureSupertonic3Model (options = {}) {
-  const quant = options.quant || 'q8_0'
+  const quant = options.quant || DEFAULT_SUPERTONIC3_QUANT
   const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
   const gguf = supertonic3Gguf(quant)
   console.log(`Ensuring Supertonic 3 GGUF (${quant}) (requested dir: ${requestedDir})...`)
@@ -1128,6 +1150,8 @@ module.exports = {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
+  supertonic3QuantFromVariant,
+  DEFAULT_SUPERTONIC3_QUANT,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf

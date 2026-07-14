@@ -45,7 +45,8 @@ const {
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
-  ensureSupertonic3Model
+  ensureSupertonic3Model,
+  supertonic3QuantFromVariant
 } = require('../utils/downloadModel')
 
 const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
@@ -221,19 +222,6 @@ function getBaseDir () {
 
 function isMultilingualEngine (engine) {
   return engine === 'chatterbox-mtl' || engine === 'supertonic-mtl'
-}
-
-// Supertonic 3 encodes the quant tier in the on-disk filename (unlike v1/v2,
-// which read the quant from GGUF metadata). Map the benchmark's `variant`
-// label to the published tier so `ensureSupertonic3Model` fetches the right
-// file. Unknown labels fall back to q4_0 (the default mobile/CI tier).
-function supertonic3QuantFromVariant (variant) {
-  switch (variant) {
-    case 'q8': return 'q8_0'
-    case 'f16': return 'f16'
-    case 'q4':
-    default: return 'q4_0'
-  }
 }
 
 async function loadModelForEngine (settings) {
