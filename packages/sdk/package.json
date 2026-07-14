@@ -105,8 +105,8 @@
       "import": "./dist/src/worker/plugins/ggml-classification.js"
     },
     "./plugin-utils": {
-      "types": "./dist/src/schemas/plugin.d.ts",
-      "import": "./dist/src/schemas/plugin.js"
+      "types": "./dist/src/plugin-utils.d.ts",
+      "import": "./dist/src/plugin-utils.js"
     },
     "./expo-plugin": "./dist/src/expo/plugins/index.js",
     "./electron-forge": {
