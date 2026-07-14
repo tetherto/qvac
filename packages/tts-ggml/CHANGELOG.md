@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chatterbox S3Gen classifier-free-guidance rate (`cfgRate`) (QVAC-21908).**
+  New optional `cfgRate` knob for the Chatterbox engine, surfacing the S3Gen
+  CFG rate that was previously fixed to the model's GGUF-baked value. The S3Gen
+  CFM diffusion loop normally runs a batched cond+uncond pass combined by this
+  rate; passing `cfgRate: 0` makes it run **cond-only** (skips the uncond pass,
+  roughly halving S3Gen compute at some quality cost), and a positive value
+  overrides the model rate. Omit it to keep the model's baked rate (full
+  backward compat); negative values are rejected at construction. Plumbed
+  through `ChatterboxConfig::cfgRate` → `JSAdapter` → `EngineOptions::s3gen_cfg_rate`
+  and exposed on the JS surface (`index.d.ts` `TTSGgmlOptions.cfgRate`), with
+  C++ validation/mapping unit tests and a JS param-forwarding test. Requires the
+  `tts-cpp` pin bump to `2026-07-13#1` (qvac-ext-lib-whisper.cpp PR #88), which
+  adds `EngineOptions::s3gen_cfg_rate` / `s3gen_synthesize_opts::cfg_rate`.
 - **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
   now runs on the GPU when the model is constructed with the GPU enabled (the
   same `useGPU` / `nGpuLayers` config the engine uses) — Vulkan on Windows/Linux,

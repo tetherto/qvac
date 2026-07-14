@@ -113,6 +113,21 @@ struct ChatterboxConfig {
   std::optional<int> streamFirstChunkTokens;
   /** CFM Euler steps for streaming chunks.  0 = library default (2). */
   std::optional<int> streamCfmSteps;
+  /**
+   * S3Gen classifier-free-guidance (CFG) rate override, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::s3gen_cfg_rate`.
+   *
+   * The S3Gen CFM diffusion loop normally runs a batched cond+uncond pass
+   * combined by this rate.  Setting it to 0 makes S3Gen run cond-only (skips
+   * the uncond pass), roughly halving S3Gen compute at some quality cost; a
+   * positive value overrides the model's GGUF-baked rate.
+   *
+   *   - unset:  keep the model's baked rate (tts-cpp sentinel -1)
+   *   - 0:      disable CFG (cond-only, ~2x faster S3Gen)
+   *   - > 0:    explicit override of the model rate
+   *   - < 0:    rejected by ChatterboxModel::validateConfig
+   */
+  std::optional<float> cfgRate;
 
   /**
    * Forwarded to `tts_cpp::chatterbox::EngineOptions::backends_dir` /

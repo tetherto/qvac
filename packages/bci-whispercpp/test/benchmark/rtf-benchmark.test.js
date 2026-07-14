@@ -26,6 +26,13 @@ const {
   getModelPath,
   isMobile
 } = require('../integration/helpers.js')
+const {
+  readRssBytes,
+  settleAndReadRss,
+  createMemorySampler,
+  bytesToMb,
+  summarizeRunMemory
+} = require('../integration/memory-usage.js')
 
 const { label: platformLabel, platform: platformName, arch: archName } = detectPlatform()
 const { manifest, getSamplePath } = getTestPaths()
@@ -129,9 +136,12 @@ function stats(values) {
 }
 
 async function runSingleBenchmark(bci, samplePath) {
+  const sampler = createMemorySampler()
   const wallStart = getTimeMs()
+  sampler.start()
   const response = await bci.transcribeFile(samplePath)
   const output = await response.await()
+  const runMemory = sampler.stop()
   const wallMs = getTimeMs() - wallStart
 
   const segments = flattenSegments(output)
@@ -149,8 +159,29 @@ async function runSingleBenchmark(bci, samplePath) {
     totalWallMs: typeof jobStats.totalWallMs === 'number' ? jobStats.totalWallMs : null,
     realTimeFactor: typeof jobStats.realTimeFactor === 'number' ? jobStats.realTimeFactor : null,
     backendDevice: typeof jobStats.backendDevice === 'number' ? jobStats.backendDevice : null,
-    backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null
+    backendId: typeof jobStats.backendId === 'number' ? jobStats.backendId : null,
+    avgRssBytes: runMemory.avgBytes,
+    peakRssBytes: runMemory.peakBytes,
+    rssSampleCount: runMemory.count
   }
+}
+
+async function reclaimAfterUnload(bci) {
+  try {
+    if (bci) await bci.destroy()
+  } catch (_) {
+    /* ignore */
+  }
+  return settleAndReadRss()
+}
+
+async function measureMemory(bci, allResults, rssBeforeLoad, rssAfterLoad) {
+  const rssAfterUnload = await reclaimAfterUnload(bci)
+  return summarizeRunMemory(allResults, {
+    rssBeforeLoadBytes: rssBeforeLoad,
+    rssAfterLoadBytes: rssAfterLoad,
+    rssAfterUnloadBytes: rssAfterUnload
+  })
 }
 
 test(
@@ -208,9 +239,13 @@ test(
         }
       )
 
+      const rssBeforeLoad = readRssBytes()
       const loadStart = getTimeMs()
       await bci.load()
-      console.log(`Model loaded in ${(getTimeMs() - loadStart).toFixed(0)}ms\n`)
+      const rssAfterLoad = readRssBytes()
+      console.log(
+        `Model loaded in ${(getTimeMs() - loadStart).toFixed(0)}ms (RSS ${bytesToMb(rssAfterLoad, 1)}MB)\n`
+      )
 
       for (let i = 0; i < s.numWarmup; i++) {
         const warmup = await runSingleBenchmark(bci, samplePath)
@@ -233,6 +268,17 @@ test(
       const wallStats = stats(allResults.map((r) => r.wallMs))
       const rtfStats = stats(allResults.map((r) => r.realTimeFactor))
       const last = allResults[allResults.length - 1]
+
+      const memorySummary = await measureMemory(bci, allResults, rssBeforeLoad, rssAfterLoad)
+      bci = null
+
+      console.log('  Memory (RSS, MB):')
+      console.log(`    Average:      ${memorySummary.avgRssMb.toFixed(2)}`)
+      console.log(`    Peak:         ${memorySummary.peakRssMb.toFixed(2)}`)
+      console.log(`    After load:   ${memorySummary.rssAfterLoadMb.toFixed(2)}`)
+      console.log(`    After unload: ${memorySummary.rssAfterUnloadMb.toFixed(2)}`)
+      console.log(`    Reclaimed:    ${memorySummary.reclaimedMb.toFixed(2)}`)
+      console.log('')
 
       const report = {
         timestamp: new Date().toISOString(),
@@ -264,14 +310,18 @@ test(
         summary: {
           tokensPerSecond: tpsStats,
           wallMs: wallStats,
-          rtf: rtfStats
+          rtf: rtfStats,
+          memory: memorySummary
         },
         runs: allResults.map((r, i) => ({
           iteration: i + 1,
           wallMs: r.wallMs,
           tokensPerSecond: r.tokensPerSecond,
           totalTimeSec: r.totalTimeSec,
-          realTimeFactor: r.realTimeFactor
+          realTimeFactor: r.realTimeFactor,
+          avgRssBytes: r.avgRssBytes,
+          peakRssBytes: r.peakRssBytes,
+          rssSampleCount: r.rssSampleCount
         }))
       }
 
@@ -293,6 +343,13 @@ test(
 
       t.is(allResults.length, s.numRuns, `Completed ${s.numRuns} benchmark runs`)
       t.ok(wallStats.mean > 0, 'Mean wall time should be positive')
+      t.ok(memorySummary.peakRssMb > 0, 'Peak memory (RSS) should be positive')
+      t.ok(memorySummary.avgRssMb > 0, 'Average memory (RSS) should be positive')
+      t.ok(
+        memorySummary.peakRssMb >= memorySummary.avgRssMb,
+        'Peak memory should be >= average memory'
+      )
+      t.ok(memorySummary.reclaimedMb >= 0, 'Reclaimed memory should be non-negative')
     } finally {
       if (bci) {
         try {

@@ -6514,7 +6514,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -6526,6 +6526,21 @@
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
+                    },
+                    "main-gpu": {
+                      "description": "GPU to pin when `device` is \"gpu\": a GPU-device index, \"integrated\", or \"dedicated\" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon's own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. \"integrated\" with no integrated GPU, \"dedicated\" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["integrated", "dedicated"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigMainGpu"
+                        }
+                      ]
                     },
                     "prediction": {
                       "description": "Prediction type; auto-detected from model when omitted",
@@ -6844,7 +6859,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -6926,7 +6941,7 @@
                       ]
                     },
                     "vaeModelSrc": {
-                      "description": "VAE decoder model — required for FLUX.2 [klein], optional for SDXL",
+                      "description": "VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -7090,7 +7105,7 @@
                       ]
                     },
                     "clipVisionModelSrc": {
-                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines.",
+                      "description": "OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -7168,6 +7183,170 @@
                           },
                           "required": ["src"],
                           "title": "LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc"
+                        }
+                      ]
+                    },
+                    "audioVaeModelSrc": {
+                      "description": "Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc"
+                        }
+                      ]
+                    },
+                    "embeddingsConnectorsModelSrc": {
+                      "description": "Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc"
                         }
                       ]
                     },
@@ -10442,21 +10621,21 @@
           "type": "string"
         },
         "width": {
-          "description": "Video width in pixels (must be a multiple of 16).",
+          "description": "Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
         "height": {
-          "description": "Video height in pixels (must be a multiple of 16).",
+          "description": "Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
         "video_frames": {
-          "description": "Frame count for the generated video; must satisfy (4*k + 1), where k>=1.",
+          "description": "Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -10622,6 +10801,10 @@
           "description": "VAE tile overlap override.",
           "type": "number"
         },
+        "temporal_tiling": {
+          "description": "LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).",
+          "type": "boolean"
+        },
         "cache_mode": {
           "description": "Step-caching algorithm.",
           "type": "string",
@@ -10748,6 +10931,14 @@
             },
             "fps": {
               "description": "Frames-per-second metadata for the most recent generated video.",
+              "type": "number"
+            },
+            "hasAudio": {
+              "description": "True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
+              "type": "boolean"
+            },
+            "audioSampleRate": {
+              "description": "Sample rate (Hz) of the muxed audio track; 0 when there is no audio.",
               "type": "number"
             }
           },

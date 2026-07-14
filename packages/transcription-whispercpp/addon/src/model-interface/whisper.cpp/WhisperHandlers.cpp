@@ -6,6 +6,10 @@ namespace qvac_lib_inference_addon_whisper {
 
 constexpr int MAX_TEXT_CONTEXT = 4096;
 
+// whisper.cpp sentinel: logprob_thold = -1 disables the log-probability
+// threshold. It is the only negative value the handler accepts.
+constexpr float K_LOGPROB_THOLD_DISABLED = -1.0F;
+
 int computeOptimalThreads() {
   size_t hwThreads = std::thread::hardware_concurrency();
   return hwThreads > 2 ? static_cast<int>(hwThreads / 2U) : 1;
@@ -14,9 +18,9 @@ int computeOptimalThreads() {
 const std::unordered_map<std::string, HandlerFunction<whisper_context_params>>
     WHISPER_CONTEXT_HANDLERS = {
         {"model",
-         [](whisper_context_params& params, const JSValueVariant& value) {
-           // model is passed in as a reset argument but it is required with
-           // context_params.
+         [](whisper_context_params&, const JSValueVariant&) {
+           // No-op: the model path is consumed directly in
+           // WhisperModel::load(); whisper_context_params has no model field.
          }},
         {"use_gpu",
          [](whisper_context_params& params, const JSValueVariant& value) {
@@ -270,33 +274,6 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
            params.detect_language = false;
          }},
 
-        {"detect_language",
-         [](whisper_full_params& params, const JSValueVariant& value) {
-           bool detectLanguage = std::get<bool>(value);
-
-           // Get the current language setting to validate the combination
-           std::string currentLanguage;
-           if (params.language) {
-             currentLanguage = std::string(params.language);
-           }
-
-           // handle detect language if set to false but on auto
-           if (!detectLanguage && currentLanguage == "auto") {
-             throw qvac_errors::StatusError(
-                 qvac_errors::general_error::InvalidArgument,
-                 "detect_language must be true if language is auto");
-           }
-
-           // handle detect language if set to true but language is not auto
-           if (detectLanguage && currentLanguage != "auto") {
-             throw qvac_errors::StatusError(
-                 qvac_errors::general_error::InvalidArgument,
-                 "detect_language must be false if language is not auto");
-           }
-
-           params.detect_language = detectLanguage;
-         }},
-
         {"suppress_blank",
          [](whisper_full_params& params, const JSValueVariant& value) {
            params.suppress_blank = std::get<bool>(value);
@@ -369,14 +346,12 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
         {"logprob_thold",
          [](whisper_full_params& params, const JSValueVariant& value) {
            auto logProbThold = std::get<double>(value);
+           if (logProbThold == K_LOGPROB_THOLD_DISABLED) {
+             params.logprob_thold = K_LOGPROB_THOLD_DISABLED;
+             return;
+           }
            auto logProbTholdFloat = static_cast<float>(logProbThold);
            if (logProbTholdFloat < 0.0F) {
-
-             if (logProbThold == -1) {
-               params.logprob_thold = -1.0F;
-               return;
-             }
-
              throw qvac_errors::StatusError(
                  qvac_errors::general_error::InvalidArgument,
                  "logprob_thold must be greater than 0");
@@ -504,8 +479,6 @@ const std::unordered_map<std::string, HandlerFunction<MiscConfig>>
            int seed = static_cast<int>(std::get<double>(value));
            miscParams.seed = seed;
          }},
-
-        // add in more of these later as neeeded.
 };
 
 } // namespace qvac_lib_inference_addon_whisper
