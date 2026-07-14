@@ -4,11 +4,17 @@
 const fs = require('fs')
 const path = require('path')
 
-// whisper.cpp GPU backends: the ggml cascade (Vulkan on linux/win32/android,
-// Metal on darwin/ios, OpenCL on Adreno android) plus the CoreML encoder
-// (darwin) and the DirectML path (win32) the benchmark matrix exercises.
+// whisper.cpp GPU backends: the ggml cascade — Vulkan on linux/win32/android,
+// Metal on darwin/ios, OpenCL on Adreno android. ggml has no DirectML/CoreML
+// compute backend (the Windows prebuild is a Vulkan build, macOS offloads to
+// Metal), so the set matches bci-whispercpp for consistency across packages.
 // CUDA is not supported on any platform.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'coreml', 'directml']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
+
+// ggml active-backend ids reported by the addon (WhisperModel BackendId enum),
+// mapped to the backend label. Used to recover the REAL backend a mobile device
+// selected at runtime rather than guessing it from the platform family.
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
 
 function parseArgs (argv) {
   const args = {
@@ -97,9 +103,9 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   switch (String(platformName || '').toLowerCase()) {
     case 'darwin':
     case 'ios':
-      return 'coreml'
+      return 'metal'
     case 'win32':
-      return 'directml'
+      return 'vulkan'
     case 'android':
       return 'vulkan'
     case 'linux':
@@ -111,6 +117,16 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 
 function numberOrNaN (value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : NaN
+}
+
+// Prefer the observed ggml backend id (per-device ground truth) over the
+// platform-family guess. Falls back to normalizeBackend when the addon did not
+// report an id (older prebuilds, or a snapshot without stats).
+function resolveMobileBackend (backendId, platformName, useGPU) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU)
 }
 
 function normalizeReport (report, sourceFile, source) {
@@ -243,7 +259,8 @@ function normalizeMobileRecords (report, sourceFile) {
         wallMs: [],
         avgRss: [],
         peakRss: [],
-        reclaimed: []
+        reclaimed: [],
+        backendId: null
       })
     }
     const group = byModelAndProvider.get(key)
@@ -252,6 +269,7 @@ function normalizeMobileRecords (report, sourceFile) {
     if (typeof metrics.avg_rss_mb === 'number') group.avgRss.push(metrics.avg_rss_mb)
     if (typeof metrics.peak_rss_mb === 'number') group.peakRss.push(metrics.peak_rss_mb)
     if (typeof metrics.reclaimed_mb === 'number') group.reclaimed.push(metrics.reclaimed_mb)
+    if (group.backendId === null && typeof metrics.backend_id === 'number') group.backendId = metrics.backend_id
   }
 
   const records = []
@@ -264,7 +282,7 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: normalizeBackend(platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
       meanRtf: mean(values.rtf),
       stddevRtf: stddev(values.rtf),
       p50: percentile(values.rtf, 50),
