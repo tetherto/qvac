@@ -87,6 +87,11 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.streamChunkTokens.has_value())      opts.stream_chunk_tokens       = *cfg.streamChunkTokens;
   if (cfg.streamFirstChunkTokens.has_value()) opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
   if (cfg.streamCfmSteps.has_value())         opts.stream_cfm_steps          = *cfg.streamCfmSteps;
+  // S3Gen classifier-free-guidance rate. tts-cpp uses -1 as the "keep the
+  // model's baked rate" sentinel, which the addon expresses by leaving the
+  // option unset; a supplied value (0 = disable CFG, > 0 = override) is passed
+  // straight through.
+  if (cfg.cfgRate.has_value())                opts.s3gen_cfg_rate            = *cfg.cfgRate;
 
   // Compose the actual backends-scan directory from the host-provided
   // prebuilds root plus the cmake-bare per-target subdir
@@ -247,6 +252,21 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
           "ChatterboxModel: speed must be in [0.25, 4.0] (1.0 = unchanged, "
           "< 1 slower, > 1 faster), got " +
               std::to_string(s));
+    }
+  }
+  // cfgRate is the S3Gen classifier-free-guidance rate. tts-cpp uses -1 as the
+  // "keep the model's baked rate" sentinel, which the addon expresses by
+  // omitting the option, so a user-supplied negative value (or NaN/inf) is
+  // rejected here (0 = disable CFG, > 0 = override the model rate).
+  if (cfg.cfgRate.has_value()) {
+    const float r = *cfg.cfgRate;
+    if (!std::isfinite(r) || r < 0.0f) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "ChatterboxModel: cfgRate must be >= 0 (0 = disable CFG, > 0 = "
+          "override the model's S3Gen CFG rate; omit it to keep the model's "
+          "baked rate), got " +
+              std::to_string(r));
     }
   }
   // Reject unknown KV dtypes at construction instead of inheriting
