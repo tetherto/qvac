@@ -4241,6 +4241,11 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = 'cpu'
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigMainGpu(Enum):
+    integrated = 'integrated'
+    dedicated = 'dedicated'
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigPrediction(Enum):
     auto = 'auto'
     eps = 'eps'
@@ -4597,6 +4602,98 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(BaseModel)
     ) = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
+    llamacpp_completion = 'llamacpp-completion'
+    whispercpp_transcription = 'whispercpp-transcription'
+    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
+    llamacpp_embedding = 'llamacpp-embedding'
+    nmtcpp_translation = 'nmtcpp-translation'
+    onnx_tts = 'onnx-tts'
+    tts_ggml = 'tts-ggml'
+    parakeet_transcription = 'parakeet-transcription'
+    ggml_ocr = 'ggml-ocr'
+    sdcpp_generation = 'sdcpp-generation'
+    ggml_vla = 'ggml-vla'
+    ggml_classification = 'ggml-classification'
+    llm = 'llm'
+    whisper = 'whisper'
+    bci = 'bci'
+    embeddings = 'embeddings'
+    nmt = 'nmt'
+    parakeet = 'parakeet'
+    tts = 'tts'
+    ocr = 'ocr'
+    diffusion = 'diffusion'
+    vla = 'vla'
+    classification = 'classification'
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(BaseModel):
+    src: str
+    name: str | None = None
+    model_id: str | None = Field(None, alias='modelId')
+    registry_path: str | None = Field(None, alias='registryPath')
+    registry_source: str | None = Field(None, alias='registrySource')
+    blob_core_key: str | None = Field(None, alias='blobCoreKey')
+    blob_index: float | None = Field(None, alias='blobIndex')
+    engine: str | None = None
+    expected_size: float | None = Field(None, alias='expectedSize')
+    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon
+        | Literal['vad']
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(
+    Enum
+):
+    llamacpp_completion = 'llamacpp-completion'
+    whispercpp_transcription = 'whispercpp-transcription'
+    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
+    llamacpp_embedding = 'llamacpp-embedding'
+    nmtcpp_translation = 'nmtcpp-translation'
+    onnx_tts = 'onnx-tts'
+    tts_ggml = 'tts-ggml'
+    parakeet_transcription = 'parakeet-transcription'
+    ggml_ocr = 'ggml-ocr'
+    sdcpp_generation = 'sdcpp-generation'
+    ggml_vla = 'ggml-vla'
+    ggml_classification = 'ggml-classification'
+    llm = 'llm'
+    whisper = 'whisper'
+    bci = 'bci'
+    embeddings = 'embeddings'
+    nmt = 'nmt'
+    parakeet = 'parakeet'
+    tts = 'tts'
+    ocr = 'ocr'
+    diffusion = 'diffusion'
+    vla = 'vla'
+    classification = 'classification'
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
+    BaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: str | None = Field(None, alias='modelId')
+    registry_path: str | None = Field(None, alias='registryPath')
+    registry_source: str | None = Field(None, alias='registrySource')
+    blob_core_key: str | None = Field(None, alias='blobCoreKey')
+    blob_index: float | None = Field(None, alias='blobIndex')
+    engine: str | None = None
+    expected_size: float | None = Field(None, alias='expectedSize')
+    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon
+        | Literal['vad']
+        | None
+    ) = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     llamacpp_completion = 'llamacpp-completion'
     whispercpp_transcription = 'whispercpp-transcription'
@@ -4676,12 +4773,21 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(BaseModel):
 class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
     mode: LoadModelSrcRequestSdcppGenerationModelConfigMode | None = Field(
         'diffusion',
-        description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a Wan `VideoStableDiffusion` pipeline and exposes video({ ... }). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+        description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
         title='LoadModelSrcRequestSdcppGenerationModelConfigMode',
     )
     threads: float | None = None
     device: LoadModelSrcRequestSdcppGenerationModelConfigDevice | None = Field(
         None, title='LoadModelSrcRequestSdcppGenerationModelConfigDevice'
+    )
+    main_gpu: (
+        conint(ge=0, le=9007199254740991)
+        | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu
+        | None
+    ) = Field(
+        None,
+        alias='main-gpu',
+        description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
     )
     prediction: LoadModelSrcRequestSdcppGenerationModelConfigPrediction | None = Field(
         None,
@@ -4750,14 +4856,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
     ) = Field(
         None,
         alias='llmModelSrc',
-        description='LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]',
+        description='LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).',
     )
     vae_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None
     ) = Field(
         None,
         alias='vaeModelSrc',
-        description='VAE decoder model — required for FLUX.2 [klein], optional for SDXL',
+        description='VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.',
     )
     high_noise_diffusion_model_src: (
         str
@@ -4773,7 +4879,23 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
     ) = Field(
         None,
         alias='clipVisionModelSrc',
-        description='OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines.',
+        description='OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).',
+    )
+    audio_vae_model_src: (
+        str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None
+    ) = Field(
+        None,
+        alias='audioVaeModelSrc',
+        description='Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.',
+    )
+    embeddings_connectors_model_src: (
+        str
+        | LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc
+        | None
+    ) = Field(
+        None,
+        alias='embeddingsConnectorsModelSrc',
+        description='Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.',
     )
     upscaler: LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None = Field(
         None,
@@ -6765,14 +6887,16 @@ class VideoStreamRequest(BaseModel):
         None, description='Optional negative prompt describing what to avoid.'
     )
     width: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
-        None, description='Video width in pixels (must be a multiple of 16).'
+        None,
+        description='Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.',
     )
     height: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
-        None, description='Video height in pixels (must be a multiple of 16).'
+        None,
+        description='Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.',
     )
     video_frames: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         None,
-        description='Frame count for the generated video; must satisfy (4*k + 1), where k>=1.',
+        description='Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.',
     )
     fps: confloat(le=120.0, gt=0.0) | None = Field(
         None,
@@ -6837,6 +6961,10 @@ class VideoStreamRequest(BaseModel):
     )
     vae_tile_overlap: float | None = Field(
         None, description='VAE tile overlap override.'
+    )
+    temporal_tiling: bool | None = Field(
+        None,
+        description='LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).',
     )
     cache_mode: VideoStreamRequestCacheMode | None = Field(
         None, description='Step-caching algorithm.', title='VideoStreamRequestCacheMode'
@@ -6936,6 +7064,16 @@ class VideoStreamResponseStats(BaseModel):
     fps: float | None = Field(
         None,
         description='Frames-per-second metadata for the most recent generated video.',
+    )
+    has_audio: bool | None = Field(
+        None,
+        alias='hasAudio',
+        description='True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.',
+    )
+    audio_sample_rate: float | None = Field(
+        None,
+        alias='audioSampleRate',
+        description='Sample rate (Hz) of the muxed audio track; 0 when there is no audio.',
     )
 
 
