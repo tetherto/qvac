@@ -30,7 +30,7 @@ import { ModelLoadFailedError } from '@/utils/errors-server'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 import { diffusion } from './ops/diffusion'
-import { video } from './ops/video'
+import { markLtxVideoModel, video } from './ops/video'
 import { upscale } from './ops/upscale'
 
 type DiffusionArtifactKey =
@@ -328,6 +328,7 @@ export const diffusionPlugin = definePlugin({
         logger,
         opts: { stats: true }
       })
+      if (embeddingsConnectorsModelPath) markLtxVideoModel(model)
       return { model }
     }
 

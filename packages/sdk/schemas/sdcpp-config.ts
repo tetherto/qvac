@@ -525,7 +525,7 @@ const videoGenerationBaseSchema = z.object({
     .optional()
     .describe(
       'Video width in pixels (must be a multiple of 16). LTX-2 additionally ' +
-        'requires a multiple of 32, enforced by the addon at generation time.'
+        'requires a multiple of 32, validated against the loaded model before generation.'
     ),
   height: z
     .number()
@@ -535,7 +535,7 @@ const videoGenerationBaseSchema = z.object({
     .optional()
     .describe(
       'Video height in pixels (must be a multiple of 16). LTX-2 additionally ' +
-        'requires a multiple of 32, enforced by the addon at generation time.'
+        'requires a multiple of 32, validated against the loaded model before generation.'
     ),
   video_frames: z
     .number()
@@ -547,7 +547,7 @@ const videoGenerationBaseSchema = z.object({
     .describe(
       'Frame count for the generated video; must satisfy (4*k + 1), where k>=1. ' +
         'LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, ' +
-        'enforced by the addon at generation time.'
+        'validated against the loaded model before generation.'
     ),
   fps: z
     .number()
@@ -677,6 +677,38 @@ function refineVideoMode(data: z.infer<typeof videoRequestObjectSchema>, ctx: z.
 }
 
 export const videoRequestSchema = videoRequestObjectSchema.superRefine(refineVideoMode)
+
+function refineLtxVideoRequest(
+  data: z.infer<typeof videoRequestObjectSchema>,
+  ctx: z.RefinementCtx
+) {
+  if (data.width !== undefined && data.width % 32 !== 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['width'],
+      message: 'LTX-2 width must be a multiple of 32.'
+    })
+  }
+  if (data.height !== undefined && data.height % 32 !== 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['height'],
+      message: 'LTX-2 height must be a multiple of 32.'
+    })
+  }
+  if (
+    data.video_frames !== undefined &&
+    (data.video_frames > 257 || (data.video_frames - 1) % 8 !== 0)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['video_frames'],
+      message: 'LTX-2 video_frames must be at most 257 and satisfy (8*k + 1), where k>=1.'
+    })
+  }
+}
+
+export const ltxVideoRequestSchema = videoRequestSchema.superRefine(refineLtxVideoRequest)
 
 export type VideoRequest = z.input<typeof videoRequestSchema>
 

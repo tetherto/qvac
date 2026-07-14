@@ -1,5 +1,6 @@
 import test from 'brittle'
 import {
+  ltxVideoRequestSchema,
   sdcppConfigSchema,
   videoRequestSchema,
   videoStatsSchema,
@@ -101,14 +102,31 @@ test('videoRequestSchema: accepts temporal_tiling and LTX-shaped dims/frames', (
     mode: 'txt2vid',
     prompt: 'a claymation cat playing jazz',
     // LTX dims (multiples of 32) and frames (8*k + 1) are a subset of the
-    // permissive wire checks (multiples of 16, 4*k + 1); the addon enforces
-    // the exact LTX rules at generation time.
+    // permissive wire checks (multiples of 16, 4*k + 1); the server validates
+    // the exact LTX rules after resolving the loaded model's layout.
     width: 512,
     height: 320,
     video_frames: 121,
     temporal_tiling: true
   })
   t.is(result.success, true)
+})
+
+test('ltxVideoRequestSchema: enforces LTX-2 dimensions and frame counts', (t: BrittleT) => {
+  const base = {
+    modelId: 'model-1',
+    mode: 'txt2vid' as const,
+    prompt: 'a claymation cat playing jazz',
+    width: 512,
+    height: 320,
+    video_frames: 121
+  }
+
+  t.is(ltxVideoRequestSchema.safeParse(base).success, true)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, width: 528 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, height: 496 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 13 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
 })
 
 test('videoRequestSchema: accepts optional requestId', (t: BrittleT) => {

@@ -4,12 +4,34 @@ import { getServerLogger } from '@/logging'
 import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { ModelOperationNotSupportedError } from '@/utils/errors-server'
+import {
+  ModelOperationNotSupportedError,
+  PluginRequestValidationFailedError
+} from '@/utils/errors-server'
+import { formatZodError } from '@/utils/zod-error'
 import { ModelType } from '@/schemas'
-import type { VideoRequest, VideoStreamResponse, VideoStats } from '@/schemas/sdcpp-config'
+import {
+  ltxVideoRequestSchema,
+  type VideoRequest,
+  type VideoStreamResponse,
+  type VideoStats
+} from '@/schemas/sdcpp-config'
 
 interface ResponseWithStats {
   stats?: VideoRuntimeStats
+}
+
+const ltxVideoModels = new WeakSet<VideoStableDiffusion>()
+
+export function markLtxVideoModel(model: VideoStableDiffusion) {
+  ltxVideoModels.add(model)
+}
+
+function parseLtxVideoRequest(request: VideoRequest) {
+  const result = ltxVideoRequestSchema.safeParse(request)
+  if (!result.success) {
+    throw new PluginRequestValidationFailedError('videoStream', formatZodError(result.error))
+  }
 }
 
 // The addon reports `hasAudio` as a numeric flag (1/0); the SDK surfaces it as
@@ -47,6 +69,7 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
+  if (ltxVideoModels.has(model)) parseLtxVideoRequest(request)
 
   const onAbort = () => {
     model.cancel().catch((err: unknown) => {

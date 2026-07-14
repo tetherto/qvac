@@ -13,17 +13,21 @@ function makeId(prefix: string): string {
 async function withRegisteredVideoModel<T>(
   runImpl: (params: unknown) => Promise<unknown>,
   body: (modelId: string) => Promise<T>,
-  cancelImpl: () => Promise<void> = async function () {}
+  cancelImpl: () => Promise<void> = async function () {},
+  isLtx = false
 ) {
-  const [{ registerModel, unregisterModel }, { ModelType }] = await Promise.all([
-    import('@/server/bare/registry/model-registry'),
-    import('@/schemas')
-  ])
+  const [{ registerModel, unregisterModel }, { ModelType }, { markLtxVideoModel }] =
+    await Promise.all([
+      import('@/server/bare/registry/model-registry'),
+      import('@/schemas'),
+      import('@/server/bare/plugins/sdcpp-generation/ops/video')
+    ])
   const modelId = makeId('test-video')
   const fakeModel = Object.create(VideoStableDiffusion.prototype) as Record<string, unknown>
   fakeModel['load'] = async function () {}
   fakeModel['run'] = runImpl
   fakeModel['cancel'] = cancelImpl
+  if (isLtx) markLtxVideoModel(fakeModel as unknown as VideoStableDiffusion)
 
   try {
     registerModel(modelId, {
@@ -271,6 +275,80 @@ test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', a
       t.ok(observed, 'model.run was called')
       t.is(observed?.['temporal_tiling'], true)
     }
+  )
+})
+
+test('video op: rejects invalid LTX-2 dimensions and frame counts before generation', async function (t) {
+  const [{ video: videoOp }, { PluginRequestValidationFailedError }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/video'),
+    import('@/utils/errors-server')
+  ])
+  let runCalls = 0
+
+  await withRegisteredVideoModel(
+    async function () {
+      runCalls++
+      return {
+        iterate: async function* () {}
+      }
+    },
+    async function (modelId) {
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 528,
+            height: 320,
+            video_frames: 121
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 496,
+            video_frames: 121
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 320,
+            video_frames: 13
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 320,
+            video_frames: 265
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      t.is(runCalls, 0, 'invalid LTX-2 requests never reach model.run')
+    },
+    async function () {},
+    true
   )
 })
 
