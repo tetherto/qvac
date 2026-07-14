@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Faster desktop neural-signal preprocessing on the GPU (Vulkan) and CPU paths. Public API and transcription output are unchanged.
 
+## [0.5.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.4.1] - 2026-07-03
 
 ### Fixed

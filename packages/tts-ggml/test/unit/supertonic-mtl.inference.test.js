@@ -15,7 +15,7 @@ const process = require('bare-process')
 
 global.process = process
 
-function createMockedSupertonicMtlModel ({
+function createMockedSupertonicMtlModel({
   onOutput = () => {},
   binding,
   language = 'es',
@@ -64,10 +64,13 @@ test('Supertonic MTL: synthesis returns audio output and stats with non-en langu
 
   const response = await model.run({ type: 'text', input: 'Bonjour le monde.' })
   const outputs = []
-  await response.onUpdate(d => outputs.push(d)).await()
+  await response.onUpdate((d) => outputs.push(d)).await()
 
   t.ok(outputs.length > 0, 'MTL run emits at least one update')
-  t.ok(outputs.some(d => d.outputArray), 'MTL output has outputArray')
+  t.ok(
+    outputs.some((d) => d.outputArray),
+    'MTL output has outputArray'
+  )
   t.ok(response.stats.totalSamples > 0, 'MTL stats include totalSamples')
   t.ok(events.length > 0, 'raw addon callback fired for MTL run')
   await model.unload()

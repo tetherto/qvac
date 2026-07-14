@@ -42,7 +42,7 @@ const OUTPUT_CHANNEL_LAYOUT = ffmpeg.constants.channelLayouts.MONO
 // 13. Repeat till out input has packets.
 // 14. Get the remaining data out of resampler.
 // 15. By concatenating all the output data, we get decoded audio.
-function decodeAudio (audio) {
+function decodeAudio(audio) {
   const io = new ffmpeg.IOContext(audio)
   const format = new ffmpeg.InputFormatContext(io)
 
@@ -92,8 +92,7 @@ function decodeAudio (audio) {
         // `bytesPerSample` * `samplesPerChannel` * `channelsPerSample` gives
         // total amount of bytes.
         const count = resampler.convert(raw, output)
-        const length =
-          OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels
+        const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels
         const buf = Buffer.from(samples.data.subarray(0, length))
         buffers.push(buf)
       }

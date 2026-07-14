@@ -4,6 +4,12 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.10.2] - 2026-07-08
 
 ### Changed

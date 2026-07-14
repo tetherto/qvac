@@ -1,6 +1,6 @@
 'use strict'
 
-function flattenSegments (output) {
+function flattenSegments(output) {
   const segments = []
   for (const entry of output) {
     if (Array.isArray(entry)) {

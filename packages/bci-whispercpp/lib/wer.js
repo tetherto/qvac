@@ -7,7 +7,7 @@
  * @param {string} reference
  * @returns {number} WER as a ratio (0.0 = perfect, 1.0 = 100% errors)
  */
-function computeWER (hypothesis, reference) {
+function computeWER(hypothesis, reference) {
   const hyp = hypothesis.toLowerCase().trim().split(/\s+/).filter(Boolean)
   const ref = reference.toLowerCase().trim().split(/\s+/).filter(Boolean)
 
@@ -25,11 +25,7 @@ function computeWER (hypothesis, reference) {
       if (ref[i - 1] === hyp[j - 1]) {
         dp[i][j] = dp[i - 1][j - 1]
       } else {
-        dp[i][j] = 1 + Math.min(
-          dp[i - 1][j],
-          dp[i][j - 1],
-          dp[i - 1][j - 1]
-        )
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
       }
     }
   }

@@ -39,10 +39,16 @@ test('sortformer-streaming alias resolves to the sortformerStreaming config key'
 })
 
 test('sortformer-streaming derives the canonical QVAC_TEST_GGUF env-key', (t) => {
-  t.is(testGgufEnvKey(ALIAS), 'QVAC_TEST_GGUF_SORTFORMERSTREAMING',
-    'env-key uses the canonical key, not the hyphenated alias')
-  t.is(testGgufEnvKey(ALIAS), testGgufEnvKey(CANONICAL),
-    'alias and canonical token derive the same env-key')
+  t.is(
+    testGgufEnvKey(ALIAS),
+    'QVAC_TEST_GGUF_SORTFORMERSTREAMING',
+    'env-key uses the canonical key, not the hyphenated alias'
+  )
+  t.is(
+    testGgufEnvKey(ALIAS),
+    testGgufEnvKey(CANONICAL),
+    'alias and canonical token derive the same env-key'
+  )
 })
 
 test('ensureGgufForType(sortformer-streaming) resolves via the canonical env-key override', async (t) => {
@@ -58,7 +64,9 @@ test('ensureGgufForType(sortformer-streaming) resolves via the canonical env-key
   t.teardown(() => {
     if (previous === undefined) delete process.env[envKey]
     else process.env[envKey] = previous
-    try { fs.unlinkSync(sentinel) } catch (_) {}
+    try {
+      fs.unlinkSync(sentinel)
+    } catch (_) {}
   })
 
   const viaAlias = await ensureGgufForType(ALIAS)

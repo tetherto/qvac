@@ -27,7 +27,7 @@ binding.setLogger((priority, message) => {
  * Usage: bare examples/example.streaming-vad.js [audioPath] [modelPath] [vadModelPath]
  */
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
   const modelsDir = path.join(__dirname, '..', 'models')
   const audioFilePath = args[0] || path.join(__dirname, 'samples', 'sample.raw')
@@ -89,7 +89,7 @@ async function main () {
   })
 
   const { size: fileSize } = fs.statSync(audioFilePath)
-  const totalDurationS = (fileSize / BYTES_PER_SAMPLE) / SAMPLE_RATE
+  const totalDurationS = fileSize / BYTES_PER_SAMPLE / SAMPLE_RATE
   console.log(`Audio duration: ${totalDurationS.toFixed(1)}s\n`)
 
   const segments = []
@@ -105,7 +105,9 @@ async function main () {
       segments.push(item)
       const text = (item.text || '').trim()
       if (text) {
-        console.log(`[segment ${segmentCount}] [${item.start.toFixed(1)}s - ${item.end.toFixed(1)}s] ${text}`)
+        console.log(
+          `[segment ${segmentCount}] [${item.start.toFixed(1)}s - ${item.end.toFixed(1)}s] ${text}`
+        )
       }
     }
   })
@@ -119,8 +121,8 @@ async function main () {
     console.log(`Audio duration: ${totalDurationS.toFixed(1)}s`)
 
     const fullText = segments
-      .map(s => (s.text || '').trim())
-      .filter(t => t.length > 0)
+      .map((s) => (s.text || '').trim())
+      .filter((t) => t.length > 0)
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim()
@@ -140,7 +142,7 @@ async function main () {
   binding.releaseLogger()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err)
   binding.releaseLogger()
   process.exit(1)

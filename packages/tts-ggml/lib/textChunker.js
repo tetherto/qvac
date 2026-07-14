@@ -13,11 +13,8 @@
  * should always use {@link splitTtsText} which falls back to punctuation
  * and max-length chunking.
  */
-function intlSentenceSegmentationAvailable () {
-  return (
-    typeof Intl !== 'undefined' &&
-    typeof Intl.Segmenter === 'function'
-  )
+function intlSentenceSegmentationAvailable() {
+  return typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
 }
 
 /**
@@ -25,7 +22,7 @@ function intlSentenceSegmentationAvailable () {
  * @param {string} [locale]
  * @returns {string[]|null}
  */
-function splitByIntlSentences (text, locale) {
+function splitByIntlSentences(text, locale) {
   if (!intlSentenceSegmentationAvailable()) return null
   const trimmed = text.trim()
   if (!trimmed) return null
@@ -49,7 +46,7 @@ const SENTENCE_TERMINATORS = /([.!?。！？؟])(\s*)/gu
  * @param {string} text
  * @returns {string[]}
  */
-function splitByAsciiAndCjkPunctuation (text) {
+function splitByAsciiAndCjkPunctuation(text) {
   const parts = []
   let lastIndex = 0
   let m
@@ -68,8 +65,11 @@ function splitByAsciiAndCjkPunctuation (text) {
  * @param {string} text
  * @returns {string[]}
  */
-function splitByParagraphs (text) {
-  return text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0)
+function splitByParagraphs(text) {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
 }
 
 const MIN_CHUNK_GRAPHEMES = 10
@@ -78,7 +78,7 @@ const MIN_CHUNK_GRAPHEMES = 10
  * @param {string[]} chunks
  * @returns {string[]}
  */
-function mergeShortChunks (chunks) {
+function mergeShortChunks(chunks) {
   const merged = []
   let buffer = ''
 
@@ -108,7 +108,7 @@ function mergeShortChunks (chunks) {
  * @param {string} s
  * @returns {number}
  */
-function countScalars (s) {
+function countScalars(s) {
   return [...s].length
 }
 
@@ -117,7 +117,7 @@ function countScalars (s) {
  * @param {number} maxScalars
  * @returns {string[]}
  */
-function hardSplitByMaxScalars (text, maxScalars) {
+function hardSplitByMaxScalars(text, maxScalars) {
   if (maxScalars < 10) maxScalars = 10
   const g = [...text]
   if (g.length <= maxScalars) return [text]
@@ -137,7 +137,7 @@ function hardSplitByMaxScalars (text, maxScalars) {
  * @param {number} maxScalars
  * @returns {string[]}
  */
-function mergeUpToMaxScalars (pieces, maxScalars) {
+function mergeUpToMaxScalars(pieces, maxScalars) {
   const out = []
   let current = ''
 
@@ -157,7 +157,7 @@ function mergeUpToMaxScalars (pieces, maxScalars) {
   if (current.length > 0) {
     out.push(...hardSplitByMaxScalars(current, maxScalars))
   }
-  return out.filter(s => s.trim().length > 0)
+  return out.filter((s) => s.trim().length > 0)
 }
 
 /**
@@ -172,15 +172,10 @@ function mergeUpToMaxScalars (pieces, maxScalars) {
  *   mergeUpToMaxScalars pass). Default true. Useful for test harnesses that synthesize per sentence.
  * @returns {string[]}
  */
-function splitTtsText (text, options = {}) {
+function splitTtsText(text, options = {}) {
   const mergeToMaxScalars = options.mergeToMaxScalars !== false
   const language = (options.language || 'en').toLowerCase()
-  const maxScalars =
-    options.maxScalars != null
-      ? options.maxScalars
-      : language === 'ko'
-        ? 120
-        : 300
+  const maxScalars = options.maxScalars != null ? options.maxScalars : language === 'ko' ? 120 : 300
 
   const raw = text.trim()
   if (!raw) return []

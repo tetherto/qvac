@@ -19,7 +19,7 @@ require('./all.js')
 
 const RUNNER = Symbol.for('brittle-runner')
 
-function writeExitCode () {
+function writeExitCode() {
   let code = 0
   if (global.Bare && global.Bare.exitCode !== undefined) code = global.Bare.exitCode
   try {
@@ -31,7 +31,10 @@ let lastCount = 0
 let stableTicks = 0
 let done = false
 const stabilityPoll = setInterval(function () {
-  if (done) { clearInterval(stabilityPoll); return }
+  if (done) {
+    clearInterval(stabilityPoll)
+    return
+  }
   const runner = global[RUNNER]
   if (!runner || !runner.started) return
 
@@ -46,6 +49,8 @@ const stabilityPoll = setInterval(function () {
   if (stableTicks >= 3) {
     done = true
     clearInterval(stabilityPoll)
-    try { runner.end() } catch (e) {}
+    try {
+      runner.end()
+    } catch (e) {}
   }
 }, 5000)

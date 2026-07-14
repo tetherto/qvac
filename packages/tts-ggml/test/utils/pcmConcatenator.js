@@ -3,7 +3,7 @@
 const DEFAULT_CROSSFADE_SAMPLES = 720
 const SILENCE_GAP_SAMPLES = 2400
 
-function applyCrossfade (prevChunk, nextChunk, crossfadeSamples) {
+function applyCrossfade(prevChunk, nextChunk, crossfadeSamples) {
   if (crossfadeSamples <= 0) return { prev: prevChunk, next: nextChunk }
   if (prevChunk.length < crossfadeSamples || nextChunk.length < crossfadeSamples) {
     return { prev: prevChunk, next: nextChunk }
@@ -14,7 +14,7 @@ function applyCrossfade (prevChunk, nextChunk, crossfadeSamples) {
   const fadeStart = prevCopy.length - crossfadeSamples
 
   for (let i = 0; i < crossfadeSamples; i++) {
-    const fadeOut = 1.0 - (i / crossfadeSamples)
+    const fadeOut = 1.0 - i / crossfadeSamples
     const fadeIn = i / crossfadeSamples
     prevCopy[fadeStart + i] = Math.round(prevCopy[fadeStart + i] * fadeOut)
     nextCopy[i] = Math.round(nextCopy[i] * fadeIn)
@@ -23,11 +23,11 @@ function applyCrossfade (prevChunk, nextChunk, crossfadeSamples) {
   return { prev: prevCopy, next: nextCopy }
 }
 
-function createSilenceGap (samples) {
+function createSilenceGap(samples) {
   return new Int16Array(samples)
 }
 
-function concatenatePcmChunks (chunks, options = {}) {
+function concatenatePcmChunks(chunks, options = {}) {
   if (chunks.length === 0) return new Int16Array(0)
   if (chunks.length === 1) return toInt16Array(chunks[0])
 
@@ -60,12 +60,12 @@ function concatenatePcmChunks (chunks, options = {}) {
   return mergeInt16Arrays(parts)
 }
 
-function toInt16Array (arr) {
+function toInt16Array(arr) {
   if (arr instanceof Int16Array) return arr
   return Int16Array.from(arr)
 }
 
-function mergeInt16Arrays (arrays) {
+function mergeInt16Arrays(arrays) {
   let totalLength = 0
   for (const arr of arrays) {
     totalLength += arr.length
