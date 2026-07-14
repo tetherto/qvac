@@ -120,6 +120,7 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.streamChunkTokens       = readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
+  cfg.cfgRate                 = readOptionalFloat(configurationParams, env, "cfgRate");
   // useGPU is tri-state on the C++ side: std::nullopt means "unspecified"
   // (let the engine pick its default); true/false are explicit user
   // intent.  ChatterboxModel::validateConfig rejects useGPU/nGpuLayers

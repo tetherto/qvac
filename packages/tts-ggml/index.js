@@ -268,6 +268,7 @@ class TTSGgml {
       streamChunkTokens,
       streamFirstChunkTokens,
       cfmSteps,
+      cfgRate,
       voice,
       voiceName,
       steps,
@@ -377,6 +378,7 @@ class TTSGgml {
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
     this._cfmSteps = cfmSteps
+    this._cfgRate = cfgRate
     this._voice = firstNonEmpty(voice, voiceName)
     this._steps = firstNonEmpty(steps, numInferenceSteps)
     this._speed = speed
@@ -903,6 +905,9 @@ class TTSGgml {
       params.streamFirstChunkTokens = this._streamFirstChunkTokens | 0
     }
     if (this._cfmSteps != null) params.cfmSteps = this._cfmSteps | 0
+    // S3Gen classifier-free-guidance rate (float): 0 disables CFG (cond-only,
+    // ~2x faster S3Gen), > 0 overrides the model's baked rate; omit to keep it.
+    if (this._cfgRate != null) params.cfgRate = Number(this._cfgRate)
     if (this._enhancerGgufPath) {
       params.lavasrEnhancerPath = this._enhancerGgufPath
     }

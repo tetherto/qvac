@@ -390,3 +390,19 @@ test('Chatterbox: outputSampleRate forwards to ttsParams; omitted when unset', (
   const noRate = new TTSGgml({ files, config: { language: 'en' } })
   t.absent(noRate._buildTtsParams().outputSampleRate, 'no outputSampleRate when unset')
 })
+
+test('Chatterbox: cfgRate forwards to ttsParams; omitted when unset', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+
+  const override = new TTSGgml({ files, config: { language: 'en' }, cfgRate: 0.7 })
+  t.is(override._buildTtsParams().cfgRate, 0.7, 'explicit cfgRate forwarded to the addon')
+
+  const disabled = new TTSGgml({ files, config: { language: 'en' }, cfgRate: 0 })
+  t.is(disabled._buildTtsParams().cfgRate, 0, 'cfgRate=0 (disable CFG) forwarded as-is, not treated as unset')
+
+  const defaulted = new TTSGgml({ files, config: { language: 'en' } })
+  t.absent(defaulted._buildTtsParams().cfgRate, 'cfgRate omitted when unset so the engine keeps the model\'s baked rate')
+})
