@@ -138,3 +138,25 @@ export function chatCompletionChunk(params: ChatCompletionChunkParams): ChatComp
     ...(params.usage !== undefined ? { usage: params.usage } : {})
   }
 }
+
+/**
+ * OpenAI streams token usage only when the client sets
+ * `stream_options.include_usage`, and delivers it in a trailing chunk whose
+ * `choices` array is empty (it follows the finish_reason chunk). Kept separate
+ * from `chatCompletionChunk` so a normal delta chunk never ships empty choices.
+ */
+export function chatCompletionUsageChunk(params: {
+  id: string
+  created: number
+  model: string
+  usage: ChatCompletionUsage
+}): ChatCompletionChunk {
+  return {
+    id: params.id,
+    object: 'chat.completion.chunk',
+    created: params.created,
+    model: params.model,
+    choices: [],
+    usage: params.usage
+  }
+}

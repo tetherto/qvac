@@ -138,14 +138,36 @@ describe('chat completions (streaming)', () => {
       model: E2E.llm,
       messages: [{ role: 'user', content: 'Count from 1 to 100.' }],
       stream: true,
+      max_tokens: 1,
+      stream_options: { include_usage: true }
+    })
+    const chunks = collectSSE(res.payload)
+      .map((e) => e.data)
+      .filter((d) => d !== '[DONE]') as any[]
+    // With include_usage, usage arrives in a trailing choices:[] chunk after the
+    // finish_reason chunk (OpenAI streaming shape).
+    const usageChunk = chunks[chunks.length - 1]
+    assert.deepEqual(usageChunk.choices, [])
+    assert.equal(usageChunk.usage.completion_tokens, 1)
+    const finishChunk = chunks.find((c) => c.choices[0]?.finish_reason === 'length')
+    assert.ok(finishChunk, 'expected a chunk carrying finish_reason=length')
+  })
+
+  it('omits streaming usage unless include_usage is set', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'Count from 1 to 100.' }],
+      stream: true,
       max_tokens: 1
     })
     const chunks = collectSSE(res.payload)
       .map((e) => e.data)
       .filter((d) => d !== '[DONE]') as any[]
+    // No opt-in: every chunk carries a choices entry and none carries usage.
+    assert.ok(chunks.every((c) => c.usage === undefined))
+    assert.ok(chunks.every((c) => Array.isArray(c.choices) && c.choices.length > 0))
     const last = chunks[chunks.length - 1]
     assert.equal(last.choices[0].finish_reason, 'length')
-    assert.equal(last.usage.completion_tokens, 1)
   })
 
   it('SSE stream returns valid chunks', async () => {

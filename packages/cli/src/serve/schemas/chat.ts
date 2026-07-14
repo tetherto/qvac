@@ -26,7 +26,8 @@ export const chatCompletionsBody = z
     response_format: responseFormat.optional(),
     temperature: z.number().optional(),
     top_p: z.number().optional(),
-    max_tokens: z.number().int().optional()
+    max_tokens: z.number().int().optional(),
+    stream_options: z.object({ include_usage: z.boolean().optional() }).passthrough().optional()
   })
   .passthrough()
 
@@ -201,8 +202,13 @@ export async function writeChatImages(
 // the model's original native framing is gone. Re-render it in the model's own
 // dialect: replaying a Qwen3.5 call as Hermes JSON makes the model imitate that
 // foreign shape next turn and emit a malformed hybrid frame, which then fails to
-// parse and leaks the raw markup into `content`. Only qwen35 diverges from the
-// Hermes JSON envelope today; other dialects fall back to it unchanged.
+// parse and leaks the raw markup into `content`.
+//
+// hermes/json models re-parse a Hermes envelope cleanly (their SDK parse chains
+// keep a Hermes/JSON fallback), so replaying as Hermes is safe for them. qwen35
+// is rendered natively below. gemma4/harmony/pythonic have single native parse
+// chains with no Hermes fallback, so a Hermes replay can provoke the same leak
+// for them — they still need native renderers (QVAC-22318).
 function synthesizeToolCallContent(
   toolCalls: NonNullable<OpenAIMessage['tool_calls']>,
   dialect: ToolDialect

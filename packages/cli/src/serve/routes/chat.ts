@@ -22,8 +22,8 @@ import {
   buildUsage,
   chatCompletionChunk,
   chatCompletionResponse,
-  type ChatCompletionDelta,
-  type ChatCompletionUsage
+  chatCompletionUsageChunk,
+  type ChatCompletionDelta
 } from '../adapters/openai/chat-shapes.js'
 
 interface PreparedRequest extends SdkChatArgs {
@@ -139,7 +139,9 @@ never appears in \`content\`.
 **Token accounting**: \`usage.prompt_tokens\`, \`completion_tokens\` and
 \`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
 provides them; \`completion_tokens\` falls back to a whitespace split of the
-output otherwise.
+output otherwise. When streaming, \`usage\` is emitted only if
+\`stream_options: { include_usage: true }\` is set, as a final chunk with an
+empty \`choices\` array (OpenAI compatibility).
 `.trim()
 }
 
@@ -170,7 +172,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       )
 
       if (streaming) {
-        await runStreaming(req, reply, prepared)
+        // OpenAI only streams a usage object when the client opts in.
+        const includeUsage = body.stream_options?.include_usage === true
+        await runStreaming(req, reply, prepared, includeUsage)
         return
       }
       await runBlocking(req, reply, prepared)
@@ -225,7 +229,8 @@ async function runBlocking(
 async function runStreaming(
   req: FastifyRequest,
   reply: FastifyReply,
-  p: PreparedRequest
+  p: PreparedRequest,
+  includeUsage: boolean
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
@@ -246,18 +251,13 @@ async function runStreaming(
     const id = `chatcmpl-${randomId()}`
     const created = Math.floor(Date.now() / 1000)
 
-    const chunk = (
-      delta: ChatCompletionDelta,
-      finishReason: OpenAiFinishReason | null,
-      usage?: ChatCompletionUsage
-    ) =>
+    const chunk = (delta: ChatCompletionDelta, finishReason: OpenAiFinishReason | null) =>
       chatCompletionChunk({
         id,
         created,
         model: p.modelAlias,
         delta,
-        finishReason,
-        ...(usage !== undefined ? { usage } : {})
+        finishReason
       })
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
@@ -273,18 +273,23 @@ async function runStreaming(
       `  streaming done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
     )
 
-    const usage = buildUsage({
-      completionTokens,
-      ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
-      ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {})
-    })
-
     if (hasToolCalls) {
       const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls) ?? []
       sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
-      sendSSE(raw, chunk({}, 'tool_calls', usage))
+      sendSSE(raw, chunk({}, 'tool_calls'))
     } else {
-      sendSSE(raw, chunk({}, finishReason, usage))
+      sendSSE(raw, chunk({}, finishReason))
+    }
+
+    // OpenAI streams usage only when the client set stream_options.include_usage,
+    // and as a trailing chunk with an empty choices array after finish_reason.
+    if (includeUsage) {
+      const usage = buildUsage({
+        completionTokens,
+        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {})
+      })
+      sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))
     }
 
     endSSE(raw)
