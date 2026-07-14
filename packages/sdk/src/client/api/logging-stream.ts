@@ -1,9 +1,5 @@
 import { stream } from '@/client/rpc/rpc-client'
-import type {
-  LoggingStreamResponse,
-  LoggingStreamRequest,
-  LoggingParams
-} from '@qvac/core/surface'
+import type { LoggingStreamResponse, LoggingStreamRequest, LoggingParams } from '@qvac/core/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 /**

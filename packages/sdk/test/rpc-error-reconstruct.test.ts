@@ -18,7 +18,12 @@ import {
 } from '@/utils/errors-server'
 
 test('reconstructError: RequestRejectedByPolicyError round-trips via name + typedFields', (t) => {
-  const original = new CoreRequestRejectedByPolicyError('rid-1', 'completion', 'model-1', 'queue full')
+  const original = new CoreRequestRejectedByPolicyError(
+    'rid-1',
+    'completion',
+    'model-1',
+    'queue full'
+  )
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -158,7 +163,12 @@ test('reconstructError: missing typedFields on a known name does not throw', (t)
 })
 
 test('reconstructError: remote stack/timestamp attach onto the reconstructed instance', (t) => {
-  const original = new CoreRequestRejectedByPolicyError('rid-4', 'embeddings', 'model-2', 'queue full')
+  const original = new CoreRequestRejectedByPolicyError(
+    'rid-4',
+    'embeddings',
+    'model-2',
+    'queue full'
+  )
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope) as RequestRejectedByPolicyError & {

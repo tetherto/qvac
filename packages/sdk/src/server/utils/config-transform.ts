@@ -1,4 +1,9 @@
-import { type WhisperConfig, type ModelTypeInput, normalizeModelType, ModelType } from '@qvac/core/surface'
+import {
+  type WhisperConfig,
+  type ModelTypeInput,
+  normalizeModelType,
+  ModelType
+} from '@qvac/core/surface'
 
 export function transformConfigForReload(modelType: ModelTypeInput, config: unknown) {
   const canonicalType = normalizeModelType(modelType)
