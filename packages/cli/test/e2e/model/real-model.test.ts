@@ -224,6 +224,54 @@ describe('chat completions (tools / structured output)', () => {
     assert.ok(body.choices[0].message)
     assert.ok(['stop', 'tool_calls', 'length'].includes(body.choices[0].finish_reason))
   })
+
+  // A follow-up turn replays a prior assistant tool call as history. The server
+  // re-renders it in the model's own dialect (resolved via getLoadedModelInfo);
+  // rendering it in a foreign dialect made the model emit a malformed tool frame
+  // that failed to parse and leaked raw `<tool_call>`/`<function=` markup into
+  // `content`. A structured `tool_calls` reply is the correct channel; raw markup
+  // in `content` is the regression this guards.
+  it('replays a prior tool call without leaking raw tool markup into content', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      max_tokens: 128,
+      messages: [
+        { role: 'user', content: 'How many .ts files are under src/? Use the tool, then answer.' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'bash', arguments: '{"command":"find src -name \\"*.ts\\" | wc -l"}' }
+            }
+          ]
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '2\n' }
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'bash',
+            description: 'Run a shell command.',
+            parameters: {
+              type: 'object',
+              properties: { command: { type: 'string' } },
+              required: ['command']
+            }
+          }
+        }
+      ]
+    })
+    assert.equal(res.statusCode, 200)
+    const message = (res.json() as any).choices[0].message
+    const content = message.content ?? ''
+    assert.ok(!content.includes('<tool_call>'), 'raw <tool_call> markup leaked into content')
+    assert.ok(!content.includes('<function='), 'raw <function= markup leaked into content')
+    assert.ok(!content.includes('<parameter='), 'raw <parameter= markup leaked into content')
+  })
 })
 
 // The rejection branches are request parsing — no multimodal model needed, just

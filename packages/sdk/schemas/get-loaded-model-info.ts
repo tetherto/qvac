@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { toolDialectSchema } from './completion-stream'
 
 export const getLoadedModelInfoParamsSchema = z.object({
   modelId: z.string()
@@ -14,7 +15,10 @@ const delegatedProviderInfoSchema = z.object({
 
 /**
  * Loaded local model: routing plugin known on this node, so modelType +
- * handler vocabulary are authoritative.
+ * handler vocabulary are authoritative. `toolDialect` is the tool-call dialect
+ * the completion normalizer will apply to this model (present only for
+ * completion-capable models); a stateless OpenAI-style server needs it to
+ * replay a prior assistant tool call in the model's own dialect.
  */
 const localLoadedModelInfoSchema = z
   .object({
@@ -26,7 +30,8 @@ const localLoadedModelInfoSchema = z
     addonPackage: z.string().optional(),
     loadedAt: z.coerce.date(),
     name: z.string().optional(),
-    path: z.string().optional()
+    path: z.string().optional(),
+    toolDialect: toolDialectSchema.optional()
   })
   .meta({ title: 'LocalLoadedModelInfo' })
 
