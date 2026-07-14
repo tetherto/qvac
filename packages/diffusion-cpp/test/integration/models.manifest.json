@@ -9,16 +9,6 @@
       "bytes": 2322705024,
       "group": "base"
     },
-    "stable-diffusion-v2-1-Q4_0.gguf": {
-      "urls": [
-        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/12ddc22724f6da35f0b6006e459fae66eaf56931/stable-diffusion-v2-1-Q4_0.gguf"
-      ],
-      "sha256": "27740067fae2c988f64839ae806d989eb6d5aa6cfe5d47c8994c100677ef97e4",
-      "bytes": 2185459424,
-      "sourceSha256": "3bc6163b7e7979aab49cc9dd76a98b99945f6a3cca8ba14411d730380c1a10e1",
-      "sourceBytes": 2185459424,
-      "group": "base"
-    },
     "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/f00927e80a399ecb0bcacca868131d5e9d4e77aa/stable-diffusion-xl-base-1.0-Q4_0.gguf"

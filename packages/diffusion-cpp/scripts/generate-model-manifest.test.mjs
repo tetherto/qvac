@@ -254,123 +254,34 @@ test('canonical LFS size mismatch rejects the attempt', async () => {
   })
 })
 
-test('known immutable Hugging Face source/runtime mismatch is accepted exactly', () => {
-  assert.doesNotThrow(() =>
-    validateDownloadedIntegrity({
-      url: KNOWN_MISMATCH_URL,
-      entry: {
-        urls: [KNOWN_MISMATCH_URL],
-        sha256: KNOWN_RUNTIME_SHA256,
-        bytes: KNOWN_BYTES,
-        sourceSha256: KNOWN_SOURCE_SHA256,
-        sourceBytes: KNOWN_BYTES
-      },
-      expected: { sha256: KNOWN_SOURCE_SHA256, bytes: KNOWN_BYTES },
-      candidate: { sha256: KNOWN_RUNTIME_SHA256, bytes: KNOWN_BYTES }
-    })
+test('a documented source/runtime mismatch is now rejected fail-closed', () => {
+  // The former `sourceSha256`/`sourceBytes` exception is gone: a source whose
+  // delivered bytes differ from its immutable content address is unauditable
+  // and must be rejected, not documented. The gpustack SD2.1 Q4_0 file is the
+  // real-world case that motivated this (legacy-LFS blob whose bytes hash to
+  // 27740067… while its pointer OID is 3bc6163b…).
+  assert.throws(
+    () =>
+      validateDownloadedIntegrity({
+        url: KNOWN_MISMATCH_URL,
+        entry: {
+          urls: [KNOWN_MISMATCH_URL],
+          sha256: KNOWN_RUNTIME_SHA256,
+          bytes: KNOWN_BYTES
+        },
+        expected: { sha256: KNOWN_SOURCE_SHA256, bytes: KNOWN_BYTES },
+        candidate: { sha256: KNOWN_RUNTIME_SHA256, bytes: KNOWN_BYTES }
+      }),
+    /does not match source LFS OID/
   )
 })
 
-test('source/runtime mismatch exception is enforced fail-closed', async (t) => {
-  const scenarios = [
-    {
-      name: 'changed source SHA header',
-      mutate(values) {
-        values.expected.sha256 = '0'.repeat(64)
-      },
-      error: /does not match committed sourceSha256/
-    },
-    {
-      name: 'missing source SHA header',
-      mutate(values) {
-        delete values.expected.sha256
-      },
-      error: /source LFS OID missing does not match committed sourceSha256/
-    },
-    {
-      name: 'changed source size header',
-      mutate(values) {
-        values.expected.bytes++
-      },
-      error: /does not match committed sourceBytes/
-    },
-    {
-      name: 'missing source size header',
-      mutate(values) {
-        delete values.expected.bytes
-      },
-      error: /source size missing does not match committed sourceBytes/
-    },
-    {
-      name: 'changed downloaded SHA',
-      mutate(values) {
-        values.candidate.sha256 = '0'.repeat(64)
-      },
-      error: /does not match committed runtime sha256/
-    },
-    {
-      name: 'changed downloaded size',
-      mutate(values) {
-        values.candidate.bytes--
-      },
-      error: /does not match committed runtime bytes/
-    },
-    {
-      name: 'missing committed source SHA',
-      mutate(values) {
-        delete values.entry.sourceSha256
-      },
-      error: /requires sourceSha256 and sourceBytes/
-    },
-    {
-      name: 'missing committed source size',
-      mutate(values) {
-        delete values.entry.sourceBytes
-      },
-      error: /requires sourceSha256 and sourceBytes/
-    },
-    {
-      name: 'missing committed runtime SHA',
-      mutate(values) {
-        delete values.entry.sha256
-      },
-      error: /requires committed runtime sha256 and bytes/
-    },
-    {
-      name: 'missing committed runtime size',
-      mutate(values) {
-        delete values.entry.bytes
-      },
-      error: /requires committed runtime sha256 and bytes/
-    },
-    {
-      name: 'mutable Hugging Face URL',
-      mutate(values) {
-        values.url =
-          'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
-      },
-      error: /requires an immutable Hugging Face LFS URL/
-    },
-    {
-      name: 'lookalike Hugging Face host',
-      mutate(values) {
-        values.url = KNOWN_MISMATCH_URL.replace('huggingface.co/', 'huggingface.co.evil.test/')
-      },
-      error: /requires an immutable Hugging Face LFS URL/
-    },
-    {
-      name: 'source fields without a real mismatch',
-      mutate(values) {
-        values.entry.sourceSha256 = values.entry.sha256
-        values.expected.sha256 = values.entry.sha256
-      },
-      error: /does not describe a metadata mismatch/
-    }
-  ]
-
-  for (const scenario of scenarios) {
-    await t.test(scenario.name, () => {
-      const values = {
+test('legacy source-exception fields are ignored and cannot re-enable acceptance', () => {
+  // Even if an entry still carried the old exception fields, they must not
+  // create an accepted path around a content-address mismatch.
+  assert.throws(
+    () =>
+      validateDownloadedIntegrity({
         url: KNOWN_MISMATCH_URL,
         entry: {
           urls: [KNOWN_MISMATCH_URL],
@@ -381,43 +292,9 @@ test('source/runtime mismatch exception is enforced fail-closed', async (t) => {
         },
         expected: { sha256: KNOWN_SOURCE_SHA256, bytes: KNOWN_BYTES },
         candidate: { sha256: KNOWN_RUNTIME_SHA256, bytes: KNOWN_BYTES }
-      }
-      scenario.mutate(values)
-      assert.throws(() => validateDownloadedIntegrity(values), scenario.error)
-    })
-  }
-})
-
-test('generator accepts a fully pinned source/runtime mismatch after hashing', async () => {
-  await withTmp(async (dir) => {
-    const source =
-      'https://huggingface.co/org/repo/resolve/0123456789abcdef0123456789abcdef01234567/model.bin'
-    const requester = fixtureRequester({
-      [source]: {
-        body: ALTERNATE_CONTENT,
-        headers: canonicalHeaders()
-      }
-    })
-    const result = await fetchModelResult(
-      'model.bin',
-      {
-        urls: [source],
-        sha256: ALTERNATE_SHA256,
-        bytes: ALTERNATE_CONTENT.length,
-        sourceSha256: SHA256,
-        sourceBytes: CONTENT.length
-      },
-      dir,
-      {
-        downloadFile: (url, dest) => download(url, dest, { requester })
-      }
-    )
-
-    assert.deepEqual(result, {
-      sha256: ALTERNATE_SHA256,
-      bytes: ALTERNATE_CONTENT.length
-    })
-  })
+      }),
+    /does not match source LFS OID/
+  )
 })
 
 test('failed canonical source is cleared before a fallback URL succeeds', async () => {

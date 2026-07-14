@@ -184,6 +184,10 @@ jobs:
           package: diffusion-cpp
           group: base
           cache-key-suffix: base
+          # v2: evict any archive that still contains the removed, unauditable
+          # gpustack SD2.1 Q4_0 object (a restore-keys prefix hit could otherwise
+          # carry it forward on the transition run).
+          cache-version: v2
 
       - name: Cache Ideogram integration test models
         id: model-cache-ideogram
@@ -193,6 +197,7 @@ jobs:
           package: diffusion-cpp
           group: ideogram
           cache-key-suffix: ideogram
+          cache-version: v2
 
       - name: Cache LTX integration test models
         id: model-cache-ltx
@@ -202,6 +207,7 @@ jobs:
           package: diffusion-cpp
           group: ltx
           cache-key-suffix: ltx
+          cache-version: v2
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0

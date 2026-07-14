@@ -31,7 +31,7 @@
 
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { appendFile, mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
@@ -42,13 +42,21 @@ export function parseArgs(argv) {
     package: process.env.PKG || null,
     root: process.cwd(),
     group: process.env.MODEL_GROUP || '',
-    pathsOutput: null
+    pathsOutput: null,
+    // Only an EXACT primary-key cache hit may use the verified-marker fast path.
+    // A restore-keys prefix hit reports 'false' and always triggers full hashing.
+    exactHit: process.env.MODEL_CACHE_EXACT_HIT === 'true',
+    // The fully-rendered exact cache key, recorded in and matched against the
+    // marker so it can only be trusted for the identity that produced it.
+    cacheKey: process.env.MODEL_CACHE_KEY || ''
   }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--package') args.package = argv[++i]
     else if (argv[i] === '--root') args.root = argv[++i]
     else if (argv[i] === '--group') args.group = argv[++i]
     else if (argv[i] === '--paths-output') args.pathsOutput = argv[++i]
+    else if (argv[i] === '--exact-hit') args.exactHit = argv[++i] === 'true'
+    else if (argv[i] === '--cache-key') args.cacheKey = argv[++i]
   }
   return args
 }
@@ -306,6 +314,80 @@ export function manifestModelPaths(packageName, entries) {
   })
 }
 
+// Per-group verified marker. It lives inside the cached model dir so it is
+// archived and restored with the group's files, and it is written ONLY after
+// every selected file passed full SHA/size verification in this job.
+export function markerFileName(group) {
+  return `.qvac-verified-${group || 'default'}.json`
+}
+
+function markerPath(modelDir, group) {
+  return join(modelDir, markerFileName(group))
+}
+
+export function manifestDigest(rawManifest) {
+  return createHash('sha256').update(rawManifest).digest('hex')
+}
+
+export function buildMarker({ packageName, group, cacheKey, digest, entries }) {
+  return {
+    version: 2,
+    package: packageName,
+    group: group || '',
+    cacheKey: cacheKey || '',
+    manifestDigest: digest,
+    modelCount: entries.length,
+    models: entries.map(([name, entry]) => ({
+      name,
+      sha256: entry.sha256 ?? null,
+      bytes: entry.bytes ?? null
+    }))
+  }
+}
+
+async function readMarker(path) {
+  try {
+    return JSON.parse(await readFile(path, 'utf8'))
+  } catch (_) {
+    return null
+  }
+}
+
+// A marker is trusted only when its full identity matches the current
+// expectation: schema version, package, group, exact cache key, manifest
+// digest, model count, and every selected model's SHA/bytes. Any drift forces
+// full verification.
+export function markerMatches(marker, expected) {
+  if (!marker || marker.version !== 2) return false
+  if (marker.package !== expected.package) return false
+  if ((marker.group || '') !== (expected.group || '')) return false
+  if ((marker.cacheKey || '') !== (expected.cacheKey || '')) return false
+  if (marker.manifestDigest !== expected.manifestDigest) return false
+  if (marker.modelCount !== expected.modelCount) return false
+  if (!Array.isArray(marker.models) || marker.models.length !== expected.models.length) return false
+  const byName = new Map(marker.models.map((m) => [m.name, m]))
+  for (const e of expected.models) {
+    const m = byName.get(e.name)
+    if (!m || m.sha256 !== e.sha256 || m.bytes !== e.bytes) return false
+  }
+  return true
+}
+
+async function writeMarkerAtomic(markerFile, marker) {
+  const tmp = markerFile + '.tmp'
+  await writeFile(tmp, JSON.stringify(marker, null, 2) + '\n')
+  await rename(tmp, markerFile)
+}
+
+// Single parseable line so a warm run can be proven from logs (e.g. an exact hit
+// must show mode=marker-skip hashed=0 downloaded=0).
+function logSummary({ mode, group, hashed, downloaded, verified }) {
+  console.log(
+    `[warm] summary: mode=${mode} group=${group || 'default'} ` +
+      `hashed=${hashed} downloaded=${downloaded} verified=${verified}`
+  )
+}
+
 async function writePathsOutput(outputPath, paths) {
   const delimiter = 'QVAC_MODEL_PATHS'
   await appendFile(outputPath, `paths<<${delimiter}\n${paths.join('\n')}\n${delimiter}\n`)
@@ -328,10 +410,14 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
     return
   }
 
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  const rawManifest = await readFile(manifestPath, 'utf8')
+  const manifest = JSON.parse(rawManifest)
   if (args.pathsOutput) {
     const { entries } = selectManifestEntries(manifest, args.group, { includeDeferred: true })
-    await writePathsOutput(args.pathsOutput, manifestModelPaths(args.package, entries))
+    const paths = manifestModelPaths(args.package, entries)
+    // Cache the marker alongside the group's files so it round-trips with them.
+    paths.push(`packages/${args.package}/test/model/${markerFileName(args.group)}`)
+    await writePathsOutput(args.pathsOutput, paths)
     return
   }
 
@@ -347,8 +433,63 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
       `; target ${modelDir}`
   )
 
+  const digest = manifestDigest(rawManifest)
+  const expectedMarker = buildMarker({
+    packageName: args.package,
+    group: args.group,
+    cacheKey: args.cacheKey,
+    digest,
+    entries
+  })
+  const markerFile = markerPath(modelDir, args.group)
+  const fullyPinned = entries.every(([, e]) => e.sha256 != null && e.bytes != null)
+
+  // Fast path: an EXACT primary-key cache hit + a matching verified marker + a
+  // cheap size/existence recheck lets us skip re-hashing the whole set. Runtime
+  // ensureModel() still performs the authoritative first-use SHA check, so this
+  // never lets corrupted bytes reach inference — it only removes a redundant
+  // read pass. Any drift falls through to full verification below.
+  if (args.exactHit && fullyPinned) {
+    const existing = await readMarker(markerFile)
+    if (markerMatches(existing, expectedMarker)) {
+      let reason = ''
+      for (const [name, entry] of entries) {
+        let st = null
+        try {
+          st = await stat(join(modelDir, name))
+        } catch (_) {
+          st = null
+        }
+        if (!st) {
+          reason = `${name} missing`
+          break
+        }
+        if (entry.bytes != null && st.size !== entry.bytes) {
+          reason = `${name} size ${st.size} != ${entry.bytes}`
+          break
+        }
+      }
+      if (!reason) {
+        logSummary({
+          mode: 'marker-skip',
+          group: args.group,
+          hashed: 0,
+          downloaded: 0,
+          verified: entries.length
+        })
+        return { mode: 'marker-skip', hashed: 0, downloaded: 0, verified: entries.length }
+      }
+      console.log(`[warm] marker present but recheck failed (${reason}) — full verification`)
+    } else if (existing) {
+      console.log('[warm] marker present but identity did not match — full verification')
+    } else {
+      console.log('[warm] exact cache hit but no marker — full verification')
+    }
+  }
+
   let downloaded = 0
   let skipped = 0
+  let hashed = 0
 
   for (const [name, entry] of entries) {
     const dest = join(modelDir, name)
@@ -357,6 +498,7 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
     if (await fileExists(dest)) {
       if (hasIntegrity) {
         const res = await verify(dest, entry)
+        if (entry.sha256 != null) hashed++
         if (res.ok) {
           console.log(`[warm] ${name}: present + verified — skip`)
           skipped++
@@ -385,6 +527,7 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
 
     if (hasIntegrity) {
       const res = await verify(dest, entry)
+      if (entry.sha256 != null) hashed++
       if (!res.ok) {
         await rm(dest, { force: true })
         throw new Error(`[warm] ${name}: freshly downloaded file failed integrity: ${res.reason}`)
@@ -395,7 +538,21 @@ export async function warmModels(args, { download = downloadWithRetries } = {}) 
     downloaded++
   }
 
+  // Every selected file is present and verified now. Persist the marker so the
+  // next EXACT-key hit can take the fast path. Only fully pinned sets get a
+  // marker, so unpinned entries can never enable it.
+  if (fullyPinned) {
+    await writeMarkerAtomic(markerFile, expectedMarker)
+    console.log(`[warm] wrote verified marker ${markerFileName(args.group)}`)
+  } else {
+    // A stale marker must never outlive the pins that justified it.
+    await rm(markerFile, { force: true }).catch(() => {})
+  }
+
+  const mode = downloaded > 0 ? 'full-download' : 'full-verify'
   console.log(`[warm] done: ${downloaded} downloaded, ${skipped} already cached`)
+  logSummary({ mode, group: args.group, hashed, downloaded, verified: entries.length })
+  return { mode, hashed, downloaded, verified: entries.length }
 }
 
 const scriptPath = fileURLToPath(import.meta.url)

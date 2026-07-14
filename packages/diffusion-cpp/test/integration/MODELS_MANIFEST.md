@@ -26,27 +26,22 @@ node scripts/generate-model-manifest.mjs --force
 ```
 
 Do not derive pins from the restored model cache. For Hugging Face LFS objects,
-the generator also requires the downloaded digest and size to match the source
-`X-Linked-ETag` and `X-Linked-Size` metadata.
+the generator requires the downloaded digest and size to match the source
+`X-Linked-ETag` and `X-Linked-Size` metadata. There is no source-mismatch
+exception: every artifact must satisfy `downloaded SHA/size == canonical content
+address`.
 
-The sole exception is
-`stable-diffusion-v2-1-Q4_0.gguf`. Hugging Face reports source SHA
-`3bc6163b7e7979aab49cc9dd76a98b99945f6a3cca8ba14411d730380c1a10e1` in
-`X-Linked-ETag`, while fresh downloads across Linux, macOS, and Windows hash to
-`27740067fae2c988f64839ae806d989eb6d5aa6cfe5d47c8994c100677ef97e4`;
-the QVAC central registry independently pins the same served-byte SHA and
-immutable `12ddc22724f6da35f0b6006e459fae66eaf56931` revision. Its manifest
-entry records the upstream headers as `sourceSha256`/`sourceBytes` and the bytes
-consumed at runtime as `sha256`/`bytes`.
+A source whose delivered bytes disagree with its own immutable content address
+is unauditable and must be replaced, not documented. The gpustack
+`stable-diffusion-v2-1-Q4_0.gguf` file was the real-world case: it is served over
+legacy Hugging Face LFS with a stored blob that hashes to
+`27740067…` while its pointer OID (`X-Linked-ETag`) is `3bc6163b…`, so the
+canonical object is unrecoverable. It was removed from the manifest; the generic
+behavior, ESRGAN, and GPU-backend tests use the Xet-backed, content-address-
+matching `stable-diffusion-v2-1-Q8_0.gguf` instead, and Q4-format coverage
+remains via `stable-diffusion-xl-base-1.0-Q4_0.gguf`.
 
-This exception remains fail-closed: it is accepted only for an immutable,
-exact-host HTTPS Hugging Face URL when both source headers match the committed
-source pins and the fresh download matches the already committed runtime pins.
-Missing fields, changed headers, changed bytes, mutable URLs, and unrecognized
-mismatches fail. Do not add source fields merely to make generation pass.
-
-The manifest content hash changes the cache key when any of these values change,
-so this correction does not require a `cacheEpoch` bump.
+The manifest content hash changes the cache key when any of these values change.
 
 The FLUX.2 VAE uses the Black Forest Labs source. The previously listed Comfy
 file is a different artifact: its SHA-256 and byte size do not match the model

@@ -170,6 +170,11 @@ runs:
         PKG: ${{ inputs.package }}
         MODEL_GROUP: ${{ inputs.group }}
         HF_TOKEN_INPUT: ${{ inputs.hf-token }}
+        # Verified-marker fast path: skip the redundant full rehash ONLY on an
+        # exact primary-key hit (restore-keys prefix hits report 'false'), and
+        # bind the marker to the exact key that produced it.
+        MODEL_CACHE_EXACT_HIT: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
+        MODEL_CACHE_KEY: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
       run: |
         set -euo pipefail
         # Only override an inherited job-level HF_TOKEN when a token was passed
