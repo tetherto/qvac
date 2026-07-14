@@ -58,7 +58,7 @@ const SILENCE_SENTINELS = new Set([
   '[No speakers detected]'
 ])
 
-function isSilenceText (text) {
+function isSilenceText(text) {
   return text.length === 0 || SILENCE_SENTINELS.has(text)
 }
 
@@ -67,7 +67,7 @@ function isSilenceText (text) {
 // flag we use to gate the inserted separator so "see" + "if" stays
 // "see if" while "pun" + "ctuation" rejoins into "punctuation". See
 // live-mic.js for full rationale.
-function buildSegmentText (items) {
+function buildSegmentText(items) {
   let text = ''
   let firstStartsWord = true
   let isFirst = true
@@ -85,7 +85,7 @@ function buildSegmentText (items) {
   return { text: text.replace(/\s+/g, ' '), firstStartsWord }
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = {
     asrModel: null,
     diarModel: null,
@@ -122,17 +122,17 @@ const STREAMING_HISTORY_MS = 30000
 // Pull the Sortformer speaker_id out of the addon's segment text
 // ("Speaker N: HH:MM:SS.fff - HH:MM:SS.fff"). Returns -1 if the text
 // doesn't match the expected format.
-function parseSortformerSpeakerId (text) {
-  const m = typeof text === 'string'
-    ? text.match(/Speaker\s+(\d+)/)
-    : null
+function parseSortformerSpeakerId(text) {
+  const m = typeof text === 'string' ? text.match(/Speaker\s+(\d+)/) : null
   return m ? parseInt(m[1], 10) : -1
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.asrModel || !args.diarModel) {
-    console.error('Usage: bare examples/live-mic-diarized.js --asr-model <gguf> --diar-model <gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]')
+    console.error(
+      'Usage: bare examples/live-mic-diarized.js --asr-model <gguf> --diar-model <gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]'
+    )
     process.exit(1)
   }
 
@@ -141,8 +141,14 @@ async function main () {
 
   const asrPath = path.resolve(args.asrModel)
   const diarPath = path.resolve(args.diarModel)
-  if (!validatePaths({ model: asrPath })) { addonLogging.releaseLogger(); process.exit(1) }
-  if (!validatePaths({ model: diarPath })) { addonLogging.releaseLogger(); process.exit(1) }
+  if (!validatePaths({ model: asrPath })) {
+    addonLogging.releaseLogger()
+    process.exit(1)
+  }
+  if (!validatePaths({ model: diarPath })) {
+    addonLogging.releaseLogger()
+    process.exit(1)
+  }
 
   console.log(`Loading ${asrPath}...`)
   console.log(`Loading ${diarPath}...`)
@@ -177,12 +183,13 @@ async function main () {
   const [captureBin, ...captureArgs] = captureCmd.split(' ')
   let child
   try {
-    child = subprocess.spawn(captureBin, captureArgs,
-      { stdio: ['ignore', 'pipe', 'pipe'] })
+    child = subprocess.spawn(captureBin, captureArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
   } catch (err) {
     if (err && err.code === 'ENOENT') {
       console.error(`\n'${captureBin}' not found on PATH.`)
-      console.error('Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).')
+      console.error(
+        'Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).'
+      )
     } else {
       console.error(`\nFailed to spawn capture command: ${err.message}`)
     }
@@ -205,14 +212,14 @@ async function main () {
   let lineSpeaker = null
   let lastSpeaker = -1
 
-  function flushLine () {
+  function flushLine() {
     if (lineOpen) {
       process.stdout.write('\n')
       lineOpen = false
       lineSpeaker = null
     }
   }
-  function emitTranscript (speaker, text, firstStartsWord) {
+  function emitTranscript(speaker, text, firstStartsWord) {
     if (isSilenceText(text)) {
       if (args.accumulate) flushLine()
       return
@@ -248,7 +255,7 @@ async function main () {
   const diarRunPromise = (async () => {
     const response = await diar.runStreaming(diarStream, streamingConfig)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         // Update lastSpeaker from the latest non-silence segment in
         // the batch. We tag the ASR transcript with whatever ID
@@ -270,7 +277,7 @@ async function main () {
   const asrRunPromise = (async () => {
     const response = await asr.runStreaming(asrStream, streamingConfig)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         const { text, firstStartsWord } = buildSegmentText(items)
         emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
@@ -278,17 +285,33 @@ async function main () {
       .await()
   })()
 
-  async function shutdown () {
+  async function shutdown() {
     if (stopping) return
     stopping = true
     console.log('\nStopping...')
-    try { child.kill('SIGTERM') } catch (e) { /* ignore */ }
+    try {
+      child.kill('SIGTERM')
+    } catch (e) {
+      /* ignore */
+    }
     asrStream.end()
     diarStream.end()
-    try { await Promise.all([asrRunPromise, diarRunPromise]) } catch (e) { /* swallow */ }
+    try {
+      await Promise.all([asrRunPromise, diarRunPromise])
+    } catch (e) {
+      /* swallow */
+    }
     flushLine()
-    try { await asr.unload() } catch (e) { /* ignore */ }
-    try { await diar.unload() } catch (e) { /* ignore */ }
+    try {
+      await asr.unload()
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      await diar.unload()
+    } catch (e) {
+      /* ignore */
+    }
     addonLogging.releaseLogger()
     process.exit(0)
   }
@@ -297,7 +320,9 @@ async function main () {
   process.once('SIGTERM', shutdown)
   child.on('exit', (code, signal) => {
     if (!firstAudioSeen && !stopping) {
-      console.error(`\nCapture command exited before producing audio (code=${code}, signal=${signal}).`)
+      console.error(
+        `\nCapture command exited before producing audio (code=${code}, signal=${signal}).`
+      )
       const tail = stderrBuf.trim()
       if (tail) {
         console.error('--- sox stderr ---')
@@ -305,15 +330,21 @@ async function main () {
         console.error('------------------')
       }
       console.error('Hints:')
-      console.error('  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"')
-      console.error('  - Verify a default recording device exists (Settings -> System -> Sound -> Input).')
-      console.error('  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head')
+      console.error(
+        '  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"'
+      )
+      console.error(
+        '  - Verify a default recording device exists (Settings -> System -> Sound -> Input).'
+      )
+      console.error(
+        '  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head'
+      )
     }
     shutdown()
   })
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)

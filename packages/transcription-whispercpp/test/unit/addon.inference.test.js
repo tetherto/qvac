@@ -10,7 +10,7 @@ const { WhisperInterface } = require('../../whisper')
 const process = require('bare-process')
 global.process = process
 
-function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
   TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
@@ -38,12 +38,17 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   }
   const model = new TranscriptionWhispercpp(args, config)
 
-  model._createAddon = configurationParams => {
+  model._createAddon = (configurationParams) => {
     const _binding = binding || new MockedBinding()
-    const addon = new WhisperInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
-      onOutput(addon, event, jobId, output, error)
-      model._outputCallback(addon, event, jobId, output, error)
-    }, transitionCb)
+    const addon = new WhisperInterface(
+      _binding,
+      configurationParams,
+      (addon, event, jobId, output, error) => {
+        onOutput(addon, event, jobId, output, error)
+        model._outputCallback(addon, event, jobId, output, error)
+      },
+      transitionCb
+    )
 
     return addon
   }
@@ -78,13 +83,17 @@ test('Inference returns correct output for audio input', async (t) => {
   await wait()
 
   // Check that we received an Output event for the audio chunk.
-  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
+  const outputEvent = events.find((e) => e.event === 'Output' && e.jobId === 1)
   t.ok(outputEvent, 'Should receive an Output event for the audio chunk')
   t.ok(outputEvent.output, 'Output event should have output property')
-  t.is(outputEvent.output.data, sampleChunk.length, 'Output data should equal the audio chunk length')
+  t.is(
+    outputEvent.output.data,
+    sampleChunk.length,
+    'Output data should equal the audio chunk length'
+  )
 
   // Check that we received a JobEnded event.
-  const jobEndedEvent = events.find(e => e.event === 'JobEnded' && e.jobId === 1)
+  const jobEndedEvent = events.find((e) => e.event === 'JobEnded' && e.jobId === 1)
   t.ok(jobEndedEvent, 'Should receive a JobEnded event for job 1')
 })
 
@@ -108,14 +117,14 @@ test('Streaming transcript output preserves segment ordering', async (t) => {
   await model.addon.append({ type: 'end of job' })
   await wait()
 
-  const outputEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
+  const outputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 1)
   t.alike(
-    outputEvents.map(e => e.output[0].text),
+    outputEvents.map((e) => e.output[0].text),
     ['segment-0', 'segment-1', 'segment-2'],
     'Output segments should keep original ordering'
   )
 
-  const jobEndedIndex = events.findIndex(e => e.event === 'JobEnded' && e.jobId === 1)
+  const jobEndedIndex = events.findIndex((e) => e.event === 'JobEnded' && e.jobId === 1)
   const lastOutputIndex = events.reduce((idx, evt, i) => {
     return evt.event === 'Output' && evt.jobId === 1 ? i : idx
   }, -1)
@@ -139,7 +148,7 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   await wait(60)
 
   t.is(
-    events.find(e => e.jobId === 1 && (e.event === 'Output' || e.event === 'JobEnded')),
+    events.find((e) => e.jobId === 1 && (e.event === 'Output' || e.event === 'JobEnded')),
     undefined,
     'Cancelled job should not emit output or completion events'
   )
@@ -149,26 +158,30 @@ test('Cancel clears in-flight job and allows a new run', async (t) => {
   await wait(60)
 
   t.ok(
-    events.find(e => e.jobId === 2 && e.event === 'JobEnded'),
+    events.find((e) => e.jobId === 2 && e.event === 'JobEnded'),
     'A new job should complete successfully after cancel'
   )
 })
 
 test('WhisperInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(binding, {
-    contextParams: {
-      model: 'ggml-tiny.bin'
+  const addon = new WhisperInterface(
+    binding,
+    {
+      contextParams: {
+        model: 'ggml-tiny.bin'
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
     },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0
-    },
-    miscConfig: {
-      caption_enabled: false
-    }
-  }, () => {})
+    () => {}
+  )
 
   addon._activeJobId = 42
   addon._nextJobId = 43
@@ -183,24 +196,32 @@ test('WhisperInterface runJob preserves active job when native rejects new job',
   t.is(accepted, false, 'runJob should report rejected when native side is busy')
   t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
   t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
-  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+  t.is(
+    await addon.status(),
+    'processing',
+    'State should remain unchanged for the current active job'
+  )
 })
 
 test('WhisperInterface cancel clears active job only after cancel resolves', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(binding, {
-    contextParams: {
-      model: 'ggml-tiny.bin'
+  const addon = new WhisperInterface(
+    binding,
+    {
+      contextParams: {
+        model: 'ggml-tiny.bin'
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
     },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0
-    },
-    miscConfig: {
-      caption_enabled: false
-    }
-  }, () => {})
+    () => {}
+  )
 
   addon._activeJobId = 7
   addon._setState('processing')
@@ -222,21 +243,25 @@ test('WhisperInterface cancel clears active job only after cancel resolves', asy
 test('WhisperInterface cancels buffered job before native run starts', async (t) => {
   const events = []
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(binding, {
-    contextParams: {
-      model: 'ggml-tiny.bin'
+  const addon = new WhisperInterface(
+    binding,
+    {
+      contextParams: {
+        model: 'ggml-tiny.bin'
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
     },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0
-    },
-    miscConfig: {
-      caption_enabled: false
+    (handle, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
     }
-  }, (handle, event, jobId, output, error) => {
-    events.push({ event, jobId, output, error })
-  })
+  )
 
   const pendingJobId = await addon.append({
     type: 'audio',
@@ -249,26 +274,32 @@ test('WhisperInterface cancels buffered job before native run starts', async (t)
   t.is(addon._bufferedAudio.length, 0, 'Buffered cancel should clear queued audio')
   t.is(await addon.status(), 'listening', 'Buffered cancel should return to listening state')
   t.ok(
-    events.find(e => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'),
+    events.find(
+      (e) => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'
+    ),
     'Buffered cancel should fail the pending JS-owned job'
   )
 })
 
 test('WhisperInterface ignores stale wrapper job ids when cancelling', async (t) => {
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(binding, {
-    contextParams: {
-      model: 'ggml-tiny.bin'
+  const addon = new WhisperInterface(
+    binding,
+    {
+      contextParams: {
+        model: 'ggml-tiny.bin'
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
     },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0
-    },
-    miscConfig: {
-      caption_enabled: false
-    }
-  }, () => {})
+    () => {}
+  )
 
   addon._activeJobId = 2
   addon._nextJobId = 3
@@ -320,7 +351,11 @@ test('Orphan native callbacks are ignored when no active job exists', async (t) 
   await model.load()
 
   binding._callCallbacks('Output', { data: 99 }, null)
-  binding._callCallbacks('JobEnded', { totalTime: 0.01, audioDurationMs: 99, totalSamples: 99 }, null)
+  binding._callCallbacks(
+    'JobEnded',
+    { totalTime: 0.01, audioDurationMs: 99, totalSamples: 99 },
+    null
+  )
 
   t.is(events.length, 0, 'Callbacks without an active job should be ignored')
 })
@@ -339,7 +374,7 @@ test('Model state transitions are handled correctly', async (t) => {
   const response = await model.run(new Uint8Array([10, 19, 30, 40, 50]))
   await response._finishPromise
 
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   try {
     await model.pause()
@@ -350,16 +385,19 @@ test('Model state transitions are handled correctly', async (t) => {
       'Pause should explicitly reject in runJob mode'
     )
   }
-  t.ok(await model.status() === 'listening', 'Status: Model should remain listening after unsupported pause')
+  t.ok(
+    (await model.status()) === 'listening',
+    'Status: Model should remain listening after unsupported pause'
+  )
 
   await model.unpause()
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   await model.addon.activate()
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   await model.addon.destroyInstance()
-  t.ok(await model.status() === 'idle', 'Status: Model should be idle')
+  t.ok((await model.status()) === 'idle', 'Status: Model should be idle')
 })
 
 /**
@@ -371,13 +409,15 @@ test('Model emits error events when an error occurs during processing', async (t
   // Create a custom binding that throws an error on append
   const binding = {
     createInstance: () => ({ id: 1 }),
-    runJob: () => { throw new Error('Forced error for testing') },
-    loadWeights: () => { },
-    activate: () => { },
-    cancel: () => { },
-    destroyInstance: () => { },
-    setLogger: () => { },
-    releaseLogger: () => { }
+    runJob: () => {
+      throw new Error('Forced error for testing')
+    },
+    loadWeights: () => {},
+    activate: () => {},
+    cancel: () => {},
+    destroyInstance: () => {},
+    setLogger: () => {},
+    releaseLogger: () => {}
   }
   const model = createMockedModel({ binding })
 
@@ -389,10 +429,16 @@ test('Model emits error events when an error occurs during processing', async (t
     t.fail('Should have failed the response')
   } catch (error) {
     // The error should be a QvacErrorAddonWhisper
-    t.ok(error.constructor.name === 'QvacErrorAddonWhisper', 'Error should be a QvacErrorAddonWhisper')
+    t.ok(
+      error.constructor.name === 'QvacErrorAddonWhisper',
+      'Error should be a QvacErrorAddonWhisper'
+    )
     // The test is mainly about ensuring errors are caught and wrapped properly
     // The specific error code is less important than the error handling mechanism
-    t.ok(error.message.includes('Forced error') || typeof error.code === 'number', 'Error should contain forced error message or have error code')
+    t.ok(
+      error.message.includes('Forced error') || typeof error.code === 'number',
+      'Error should contain forced error message or have error code'
+    )
   }
 })
 
@@ -407,7 +453,7 @@ test('FakeDL returns correct file list and data streams', async (t) => {
 
   const fileList = await fakeDL.list('/')
   t.ok(
-    ['0.bin', '1.bin', '2.bin', '3.bin', 'conf.json'].every(f => fileList.includes(f)),
+    ['0.bin', '1.bin', '2.bin', '3.bin', 'conf.json'].every((f) => fileList.includes(f)),
     'File list should match expected files'
   )
 
@@ -434,19 +480,24 @@ test('AddonInterface full sequence: status, append, and job boundaries', async (
   }
 
   const binding = new MockedBinding()
-  const addon = new WhisperInterface(binding, {
-    contextParams: {
-      model: 'ggml-tiny.bin'
+  const addon = new WhisperInterface(
+    binding,
+    {
+      contextParams: {
+        model: 'ggml-tiny.bin'
+      },
+      whisperConfig: {
+        language: 'en',
+        duration_ms: 0,
+        temperature: 0.0
+      },
+      miscConfig: {
+        caption_enabled: false
+      }
     },
-    whisperConfig: {
-      language: 'en',
-      duration_ms: 0,
-      temperature: 0.0
-    },
-    miscConfig: {
-      caption_enabled: false
-    }
-  }, onOutput, transitionCb)
+    onOutput,
+    transitionCb
+  )
 
   let status = await addon.status()
   t.ok(status === 'loading', 'Initial addon status should be "loading"')
@@ -468,7 +519,13 @@ test('AddonInterface full sequence: status, append, and job boundaries', async (
   await wait()
   console.log(JSON.stringify(events))
   t.ok(
-    events.find(e => e.event === 'JobEnded' && e.jobId === 1 && e.output && typeof e.output.totalTime === 'number'),
+    events.find(
+      (e) =>
+        e.event === 'JobEnded' &&
+        e.jobId === 1 &&
+        e.output &&
+        typeof e.output.totalTime === 'number'
+    ),
     'JobEnded callback should be emitted for job 1'
   )
 
@@ -488,11 +545,11 @@ test('AddonInterface full sequence: status, append, and job boundaries', async (
   t.ok(appendResult5 === 2, 'Job ID should be 2 for the end-of-job signal of job 2')
   await wait()
   t.ok(
-    events.find(e => e.event === 'Output' && e.jobId === 2 && e.output.data === 6),
+    events.find((e) => e.event === 'Output' && e.jobId === 2 && e.output.data === 6),
     'Output callback should report merged audio length for job 2'
   )
   t.ok(
-    events.find(e => e.event === 'JobEnded' && e.jobId === 2),
+    events.find((e) => e.event === 'JobEnded' && e.jobId === 2),
     'JobEnded callback should be emitted for job 2'
   )
 
@@ -501,7 +558,7 @@ test('AddonInterface full sequence: status, append, and job boundaries', async (
   t.ok(appendResult6 === 3, 'Job ID should increment to 3 for a redundant end-of-job signal')
   await wait()
   t.ok(
-    events.find(e => e.event === 'JobEnded' && e.jobId === 3),
+    events.find((e) => e.event === 'JobEnded' && e.jobId === 3),
     'JobEnded callback should be emitted for job 3'
   )
 

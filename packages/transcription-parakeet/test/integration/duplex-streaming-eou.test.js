@@ -46,7 +46,7 @@ const FEED_CHUNK_MS = 500
 // usual. 3 s gives a comfortable margin over the 2 s lookahead.
 const INTER_UTTERANCE_SILENCE_MS = 3000
 
-function loadAudioSample () {
+function loadAudioSample() {
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
@@ -66,31 +66,44 @@ function loadAudioSample () {
   return audio
 }
 
-function pushableStream () {
+function pushableStream() {
   const queue = []
   let waiter = null
   let ended = false
   return {
-    push (chunk) {
+    push(chunk) {
       if (ended) return
       queue.push(chunk)
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    end () {
+    end() {
       ended = true
-      if (waiter) { const w = waiter; waiter = null; w() }
+      if (waiter) {
+        const w = waiter
+        waiter = null
+        w()
+      }
     },
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
-        if (queue.length > 0) { yield queue.shift(); continue }
+        if (queue.length > 0) {
+          yield queue.shift()
+          continue
+        }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
 }
 
-async function feedDuplex (model, audio) {
+async function feedDuplex(model, audio) {
   const samplesPerChunk = Math.floor((FEED_CHUNK_MS / 1000) * SAMPLE_RATE)
   const stream = pushableStream()
   const segments = []
@@ -100,7 +113,7 @@ async function feedDuplex (model, audio) {
 
   const response = await model.runStreaming(stream)
   const updateDone = response
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const seg of items) {
         if (!seg) continue
@@ -123,7 +136,7 @@ async function feedDuplex (model, audio) {
     stream.push(chunk)
     lastChunkPushedAt = Date.now()
     if (i + samplesPerChunk < audio.length) {
-      await new Promise(resolve => setTimeout(resolve, FEED_CHUNK_MS))
+      await new Promise((resolve) => setTimeout(resolve, FEED_CHUNK_MS))
     }
   }
   endCalledAt = Date.now()
@@ -133,67 +146,95 @@ async function feedDuplex (model, audio) {
   return { segments, eotBeforeEnd, lastChunkPushedAt, endCalledAt }
 }
 
-test('duplex runStreaming + EOU — emits isEndOfTurn boundaries from <EOU> tokens', { timeout: 600000 }, async (t) => {
-  const loggerBinding = setupJsLogger(binding)
-
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'eou')
-    if (!modelPath) return
-
-    const audio = loadAudioSample()
-    if (!audio) {
-      t.pass('sample.raw not found - skipping')
-      return
-    }
-
-    const model = new TranscriptionParakeet({
-      files: { model: modelPath },
-      config: {
-        parakeetConfig: {
-          streaming: true,
-          streamingChunkMs: STREAM_CHUNK_MS,
-          maxThreads: 4,
-          useGPU: false
-        }
-      }
-    })
+test(
+  'duplex runStreaming + EOU — emits isEndOfTurn boundaries from <EOU> tokens',
+  { timeout: 600000 },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
 
     try {
-      await model.load()
+      const modelPath = await loadGgufOrSkip(t, 'eou')
+      if (!modelPath) return
 
-      console.log(`[duplex-eou] audio duration: ${(audio.length / SAMPLE_RATE).toFixed(2)}s`)
-      console.log(`[duplex-eou] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`)
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
 
-      const { segments, eotBeforeEnd, lastChunkPushedAt, endCalledAt } =
-        await feedDuplex(model, audio)
+      const model = new TranscriptionParakeet({
+        files: { model: modelPath },
+        config: {
+          parakeetConfig: {
+            streaming: true,
+            streamingChunkMs: STREAM_CHUNK_MS,
+            maxThreads: 4,
+            useGPU: false
+          }
+        }
+      })
 
-      const allEot = segments.filter(s => s.isEndOfTurn === true)
-      const transcript = segments
-        .filter(s => s.text)
-        .map(s => s.text)
-        .join(' ')
-        .trim()
+      try {
+        await model.load()
 
-      console.log(`[duplex-eou] segments=${segments.length} chars=${transcript.length}`)
-      console.log(`[duplex-eou] eot total=${allEot.length} before stream.end()=${eotBeforeEnd.length}`)
-      console.log(`[duplex-eou] last push -> end gap: ${endCalledAt - lastChunkPushedAt}ms`)
-      console.log(`[duplex-eou] transcript: "${transcript.substring(0, 200)}${transcript.length > 200 ? '...' : ''}"`)
+        console.log(`[duplex-eou] audio duration: ${(audio.length / SAMPLE_RATE).toFixed(2)}s`)
+        console.log(
+          `[duplex-eou] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`
+        )
 
-      t.ok(segments.length > 0,
-        `duplex runStreaming should emit at least one segment (got ${segments.length})`)
-      t.ok(transcript.length > 0,
-        `duplex runStreaming transcript should be non-empty (got ${transcript.length} chars)`)
-      // Primary assertion: the duplex path must surface EOU boundaries.
-      t.ok(allEot.length > 0,
-        `duplex runStreaming should mark at least one end-of-turn boundary on the EOU model (got ${allEot.length})`)
-      // Diagnostic: distinguishes "EOU only at finalize" (the SDK live
-      // mic bug we suspect) from "EOU works mid-stream too".
-      t.ok(eotBeforeEnd.length > 0,
-        `duplex runStreaming should emit at least one EOU before stream.end() so live mic consumers see boundaries mid-stream (got ${eotBeforeEnd.length})`)
+        const { segments, eotBeforeEnd, lastChunkPushedAt, endCalledAt } = await feedDuplex(
+          model,
+          audio
+        )
+
+        const allEot = segments.filter((s) => s.isEndOfTurn === true)
+        const transcript = segments
+          .filter((s) => s.text)
+          .map((s) => s.text)
+          .join(' ')
+          .trim()
+
+        console.log(`[duplex-eou] segments=${segments.length} chars=${transcript.length}`)
+        console.log(
+          `[duplex-eou] eot total=${allEot.length} before stream.end()=${eotBeforeEnd.length}`
+        )
+        console.log(`[duplex-eou] last push -> end gap: ${endCalledAt - lastChunkPushedAt}ms`)
+        console.log(
+          `[duplex-eou] transcript: "${transcript.substring(0, 200)}${transcript.length > 200 ? '...' : ''}"`
+        )
+
+        t.ok(
+          segments.length > 0,
+          `duplex runStreaming should emit at least one segment (got ${segments.length})`
+        )
+        t.ok(
+          transcript.length > 0,
+          `duplex runStreaming transcript should be non-empty (got ${transcript.length} chars)`
+        )
+        // Primary assertion: the duplex path must surface EOU boundaries.
+        t.ok(
+          allEot.length > 0,
+          `duplex runStreaming should mark at least one end-of-turn boundary on the EOU model (got ${allEot.length})`
+        )
+        // Diagnostic: distinguishes "EOU only at finalize" (the SDK live
+        // mic bug we suspect) from "EOU works mid-stream too".
+        t.ok(
+          eotBeforeEnd.length > 0,
+          `duplex runStreaming should emit at least one EOU before stream.end() so live mic consumers see boundaries mid-stream (got ${eotBeforeEnd.length})`
+        )
+      } finally {
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
+      }
     } finally {
-      try { await model.unload() } catch (e) { /* ignore */ }
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
     }
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
-})
+)

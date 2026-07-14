@@ -16,29 +16,33 @@ const delegatedProviderInfoSchema = z.object({
  * Loaded local model: routing plugin known on this node, so modelType +
  * handler vocabulary are authoritative.
  */
-const localLoadedModelInfoSchema = z.object({
-  modelId: z.string(),
-  isDelegated: z.literal(false),
-  modelType: z.string(),
-  handlers: z.array(z.string()),
-  displayName: z.string().optional(),
-  addonPackage: z.string().optional(),
-  loadedAt: z.coerce.date(),
-  name: z.string().optional(),
-  path: z.string().optional()
-})
+const localLoadedModelInfoSchema = z
+  .object({
+    modelId: z.string(),
+    isDelegated: z.literal(false),
+    modelType: z.string(),
+    handlers: z.array(z.string()),
+    displayName: z.string().optional(),
+    addonPackage: z.string().optional(),
+    loadedAt: z.coerce.date(),
+    name: z.string().optional(),
+    path: z.string().optional()
+  })
+  .meta({ title: 'LocalLoadedModelInfo' })
 
 /**
  * Loaded delegated model: this node only stores routing info, so `modelType`,
  * `displayName`, `addonPackage`, `loadedAt`, `name`, and `path` are absent,
  * and `handlers` is always empty.
  */
-const delegatedLoadedModelInfoSchema = z.object({
-  modelId: z.string(),
-  isDelegated: z.literal(true),
-  handlers: z.array(z.string()),
-  providerInfo: delegatedProviderInfoSchema
-})
+const delegatedLoadedModelInfoSchema = z
+  .object({
+    modelId: z.string(),
+    isDelegated: z.literal(true),
+    handlers: z.array(z.string()),
+    providerInfo: delegatedProviderInfoSchema
+  })
+  .meta({ title: 'DelegatedLoadedModelInfo' })
 
 export const loadedModelInfoSchema = z.discriminatedUnion('isDelegated', [
   localLoadedModelInfoSchema,

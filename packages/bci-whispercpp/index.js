@@ -8,12 +8,7 @@ const { createJobHandler, exclusiveRunQueue, QvacResponse } = require('@qvac/inf
 const { BCIInterface } = require('./bci')
 const { QvacErrorAddonBCI, ERR_CODES } = require('./lib/error')
 const { computeWER } = require('./lib/wer')
-const {
-  toUint8,
-  sliceBody,
-  buildWindowBuffer,
-  stitchSegments
-} = require('./lib/stream')
+const { toUint8, sliceBody, buildWindowBuffer, stitchSegments } = require('./lib/stream')
 
 // Default prebuilds folder for dynamically-loaded ggml backend `.so`
 // files. Consumed by the native addon on Android only (no-op
@@ -68,7 +63,7 @@ class BCIWhispercpp {
    * @param {Object} [config.contextParams] - whisper context params
    * @param {Object} [config.miscConfig] - miscellaneous config
    */
-  constructor ({ files, logger = null, opts = {} }, config = {}) {
+  constructor({ files, logger = null, opts = {} }, config = {}) {
     if (!files || typeof files.model !== 'string' || files.model.length === 0) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
@@ -76,8 +71,10 @@ class BCIWhispercpp {
       })
     }
 
-    if (files.embedder !== undefined &&
-        (typeof files.embedder !== 'string' || files.embedder.length === 0)) {
+    if (
+      files.embedder !== undefined &&
+      (typeof files.embedder !== 'string' || files.embedder.length === 0)
+    ) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
         adds: 'files.embedder must be a non-empty string when provided'
@@ -121,7 +118,7 @@ class BCIWhispercpp {
    * to fully unwind (unload/destroy) should `await this._streamDriverPromise`
    * after calling this.
    */
-  _teardownActiveStream (reason) {
+  _teardownActiveStream(reason) {
     this._streamAborted = true
     this._streamWindowHandler = null
     if (this._streamWindowReject) {
@@ -136,11 +133,11 @@ class BCIWhispercpp {
     }
   }
 
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load () {
+  async load() {
     if (this.state.destroyed) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_NOT_LOADED,
@@ -155,7 +152,7 @@ class BCIWhispercpp {
     this.state.configLoaded = true
   }
 
-  async _load () {
+  async _load() {
     if (!fs.existsSync(this._files.model)) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
@@ -192,9 +189,10 @@ class BCIWhispercpp {
       // native libs. Defaulting to the in-package prebuilds dir keeps
       // mobile builds working out of the box, parity with transcription-
       // whispercpp 0.9.0.
-      backendsDir: typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0
-        ? this._config.backendsDir
-        : PREBUILDS_DIR
+      backendsDir:
+        typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0
+          ? this._config.backendsDir
+          : PREBUILDS_DIR
     }
 
     if (this._config.bciConfig) {
@@ -252,7 +250,7 @@ class BCIWhispercpp {
    * @param {string} filePath - path to .bin neural signal file
    * @returns {Promise<QvacResponse>}
    */
-  async transcribeFile (filePath) {
+  async transcribeFile(filePath) {
     const data = fs.readFileSync(filePath)
     return this.transcribe(new Uint8Array(data))
   }
@@ -264,7 +262,7 @@ class BCIWhispercpp {
    * @param {Uint8Array} neuralData - binary neural signal
    * @returns {Promise<QvacResponse>}
    */
-  async transcribe (neuralData) {
+  async transcribe(neuralData) {
     this._assertReadyForInference()
     return await this._enqueueInference(async () => {
       const response = this._job.start()
@@ -331,7 +329,7 @@ class BCIWhispercpp {
    *   full running transcript ('full').
    * @returns {Promise<QvacResponse>}
    */
-  async transcribeStream (neuralStream, streamOpts = {}) {
+  async transcribeStream(neuralStream, streamOpts = {}) {
     this._assertReadyForInference()
     if (this._streamResponse !== null) {
       throw new QvacErrorAddonBCI({ code: ERR_CODES.STREAM_ALREADY_ACTIVE })
@@ -343,27 +341,31 @@ class BCIWhispercpp {
     return await this._enqueueInference(async () => {
       this._streamAborted = false
       const response = new QvacResponse({
-        cancelHandler: async () => { await this.cancel() }
+        cancelHandler: async () => {
+          await this.cancel()
+        }
       })
       this._streamResponse = response
 
-      const driver = this._runStreamDriver(iterable, opts, response).catch((err) => {
-        if (this._streamResponse === response) {
-          this._streamResponse = null
-        }
-        response.failed(err)
-      }).finally(() => {
-        if (this._streamDriverPromise === driver) {
-          this._streamDriverPromise = null
-        }
-      })
+      const driver = this._runStreamDriver(iterable, opts, response)
+        .catch((err) => {
+          if (this._streamResponse === response) {
+            this._streamResponse = null
+          }
+          response.failed(err)
+        })
+        .finally(() => {
+          if (this._streamDriverPromise === driver) {
+            this._streamDriverPromise = null
+          }
+        })
       this._streamDriverPromise = driver
 
       return response
     })
   }
 
-  async _runStreamDriver (iterable, opts, response) {
+  async _runStreamDriver(iterable, opts, response) {
     let channels = null
     let headerCarry = new Uint8Array(0)
     const body = []
@@ -442,8 +444,10 @@ class BCIWhispercpp {
         body.push(chunk)
         bodyBytes += chunk.byteLength
 
-        while (!this._streamAborted &&
-          Math.floor(bodyBytes / bytesPerTimestep) >= (windowStartTs + opts.windowTimesteps)) {
+        while (
+          !this._streamAborted &&
+          Math.floor(bodyBytes / bytesPerTimestep) >= windowStartTs + opts.windowTimesteps
+        ) {
           await decodeRange(windowStartTs, opts.windowTimesteps)
           if (this._streamAborted) return
           windowStartTs += opts.hopTimesteps
@@ -480,7 +484,7 @@ class BCIWhispercpp {
     }
   }
 
-  async _decodeWindow (windowBytes) {
+  async _decodeWindow(windowBytes) {
     return await new Promise((resolve, reject) => {
       const collected = []
       const cleanup = () => {
@@ -494,9 +498,10 @@ class BCIWhispercpp {
       this._streamWindowHandler = (event, data, error) => {
         if (event === 'Error') {
           cleanup()
-          const err = error instanceof Error
-            ? error
-            : new Error(typeof error === 'string' ? error : 'window decode failed')
+          const err =
+            error instanceof Error
+              ? error
+              : new Error(typeof error === 'string' ? error : 'window decode failed')
           reject(err)
           return
         }
@@ -516,14 +521,15 @@ class BCIWhispercpp {
         }
       }
 
-      this.addon.runJob({ input: windowBytes })
-        .then(accepted => {
+      this.addon
+        .runJob({ input: windowBytes })
+        .then((accepted) => {
           if (!accepted) {
             cleanup()
             reject(new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING }))
           }
         })
-        .catch(err => {
+        .catch((err) => {
           cleanup()
           reject(err)
         })
@@ -536,7 +542,7 @@ class BCIWhispercpp {
    * mirroring whispercpp's `_checkParamsExists` pattern. Returns a new
    * opts object; does not mutate the caller's input.
    */
-  _validateStreamOpts (streamOpts) {
+  _validateStreamOpts(streamOpts) {
     const opts = {
       windowTimesteps: streamOpts.windowTimesteps ?? DEFAULT_WINDOW_TIMESTEPS,
       hopTimesteps: streamOpts.hopTimesteps ?? DEFAULT_HOP_TIMESTEPS,
@@ -577,7 +583,7 @@ class BCIWhispercpp {
     return opts
   }
 
-  _normalizeNeuralStream (input) {
+  _normalizeNeuralStream(input) {
     if (input == null) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.INVALID_STREAM_INPUT,
@@ -599,10 +605,12 @@ class BCIWhispercpp {
    * response settles. Separate from _withExclusiveRun (lifecycle ops) so
    * destroy/unload can still preempt.
    */
-  async _enqueueInference (runFn) {
+  async _enqueueInference(runFn) {
     const prev = this._inferenceQueueWaiter
     let releaseSlot
-    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    this._inferenceQueueWaiter = new Promise((resolve) => {
+      releaseSlot = resolve
+    })
     await prev
     let response
     try {
@@ -611,11 +619,16 @@ class BCIWhispercpp {
       releaseSlot()
       throw err
     }
-    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    response
+      .await()
+      .finally(() => {
+        releaseSlot()
+      })
+      .catch(() => {})
     return response
   }
 
-  _assertReadyForInference () {
+  _assertReadyForInference() {
     if (this.state.destroyed || !this.state.configLoaded || !this.addon) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_NOT_LOADED,
@@ -624,11 +637,15 @@ class BCIWhispercpp {
     }
   }
 
-  _isConfigurationError (err) {
+  _isConfigurationError(err) {
     if (err && err.code === 'ERR_ASSERTION') return true
     if (err instanceof TypeError) return true
     const msg = String(err?.message || '')
-    return msg.includes('is required') || msg.includes('is not a valid parameter') || msg.includes('must be')
+    return (
+      msg.includes('is required') ||
+      msg.includes('is not a valid parameter') ||
+      msg.includes('must be')
+    )
   }
 
   /**
@@ -640,7 +657,7 @@ class BCIWhispercpp {
    * reserved for batch `transcribe()` calls and not used while a stream
    * is active. When `_streamWindowHandler` is null the batch path runs.
    */
-  _outputCallback (addon, event, jobId, data, error) {
+  _outputCallback(addon, event, jobId, data, error) {
     if (this._streamWindowHandler) {
       this._streamWindowHandler(event, data, error)
       return
@@ -666,7 +683,7 @@ class BCIWhispercpp {
     this.logger.debug('Received event for job ' + jobId + ': ' + event)
   }
 
-  async cancel () {
+  async cancel() {
     this._teardownActiveStream('Stream cancelled')
     if (this.addon?.cancel) {
       await this.addon.cancel()
@@ -679,7 +696,7 @@ class BCIWhispercpp {
     }
   }
 
-  async unload () {
+  async unload() {
     return await this._withExclusiveRun(async () => {
       this._teardownActiveStream('Model was unloaded')
       if (this._streamDriverPromise) {
@@ -697,7 +714,7 @@ class BCIWhispercpp {
     })
   }
 
-  async destroy () {
+  async destroy() {
     return await this._withExclusiveRun(async () => {
       this._teardownActiveStream('Model was destroyed')
       if (this._streamDriverPromise) {

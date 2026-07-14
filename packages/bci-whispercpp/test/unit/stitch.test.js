@@ -147,9 +147,7 @@ test('[stitchSegments] fully-overlapped leading segment is dropped; non-overlapp
 })
 
 test('[stitchSegments] partial overlap inside a single segment trims text and advances t0 proportionally', (t) => {
-  const segs = [
-    { text: 'the store today', t0: 0, t1: 300 }
-  ]
+  const segs = [{ text: 'the store today', t0: 0, t1: 300 }]
   const { deltaSegments, merged, bestK } = stitchSegments('went to the', segs, 40, 500)
   t.is(bestK, 1)
   t.is(merged, 'went to the store today')
@@ -194,7 +192,7 @@ test('[stitchSegments] punctuation-normalised overlap still preserves original c
 
 test('[normalizeWord] lowercases and strips non-alphanumeric except apostrophe', (t) => {
   t.is(normalizeWord('Hello,'), 'hello')
-  t.is(normalizeWord('Don\'t!'), 'don\'t')
+  t.is(normalizeWord("Don't!"), "don't")
   t.is(normalizeWord('...'), '')
   t.is(normalizeWord('Foo123'), 'foo123')
 })
