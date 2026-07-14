@@ -175,7 +175,7 @@ jobs:
     uses: ./.github/workflows/prebuilds-caller.yml
     secrets: inherit
     with:
-      changed-packages: ${{ needs.changes.outputs.packages }}
+      changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
