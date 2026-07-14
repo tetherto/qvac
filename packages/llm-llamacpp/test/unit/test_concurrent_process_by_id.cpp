@@ -376,15 +376,17 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
 }
 
 /// cancelById(id) must also stop a tagged job that runs on the single-prompt
-/// path: a prefill-only prompt is not concurrent-eligible (see
-/// isConcurrentEligible) yet arrives with a job id like any other run. Cancel
-/// semantics are "request never happened": an interrupted prefill rolls the
-/// KV cache back to the pre-request cursor — here, an empty cache.
+/// path. That path now only exists on a model without a batch scheduler
+/// (parallel=1): a live-only prefill there arrives with a job id like any
+/// other run (at parallel >= 2 it is rejected, and a cache-persisting prefill
+/// takes a lane instead). Cancel semantics are "request never happened": an
+/// interrupted prefill rolls the KV cache back to the pre-request cursor —
+/// here, an empty cache.
 TEST_F(ConcurrentProcessByIdTest, CancelByIdStopsSinglePathPrefill) {
   REQUIRE_MODEL(model_);
-  // The KV pool is split per sequence (ctx_size / parallel = 1024), and the
-  // single path prefills into one sequence: the prompt must fit that share
-  // while still spanning several prefill batches so a cancel can land mid-run.
+  // No scheduler at parallel=1: the single path owns the whole KV pool. The
+  // prompt still spans several prefill batches so a cancel can land mid-run.
+  config_["parallel"] = "1";
   config_["ctx_size"] = "4096";
   auto model = loadModel();
 
@@ -475,6 +477,9 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdBeforeFirstTokenCancelsJob) {
 /// cache rolled back, and the consumed cancel must not leak into a later run.
 TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowStopsPrefill) {
   REQUIRE_MODEL(model_);
+  // parallel=1: the dequeue-window race on the single path only exists where
+  // that path still runs (no scheduler; see CancelByIdStopsSinglePathPrefill).
+  config_["parallel"] = "1";
   config_["ctx_size"] = "4096";
   auto model = loadModel();
 
@@ -508,6 +513,8 @@ TEST_F(ConcurrentProcessByIdTest, WholeModelCancelInDequeueWindowStopsPrefill) {
 /// and must land when the job arms — not be dropped as an unknown id.
 TEST_F(ConcurrentProcessByIdTest, CancelByIdInDequeueWindowStopsPrefill) {
   REQUIRE_MODEL(model_);
+  // parallel=1, same rationale as WholeModelCancelInDequeueWindowStopsPrefill.
+  config_["parallel"] = "1";
   config_["ctx_size"] = "4096";
   auto model = loadModel();
 

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <llama.h>
@@ -137,18 +138,20 @@ public:
   std::any process(const std::any& input) final;
 
   /// Multi-job entry carrying the admitting job id. An eligible single Prompt
-  /// (text generation, not finetune, not prefill-only) routes through the
-  /// scheduler as a one-item batch so it overlaps with other concurrent jobs;
-  /// its `seqId` is recorded against @p id so `cancelById` can target it.
-  /// Ineligible inputs or a model without a scheduler fall back to the
-  /// single-job path.
+  /// (text generation or a cache-persisting prefill; see isConcurrentEligible)
+  /// routes through the scheduler as a one-item batch so it overlaps with
+  /// other concurrent jobs; its `seqId` is recorded against @p id so
+  /// `cancelById` can target it. Finetune and a model without a scheduler
+  /// fall back to the single-job path; a live-only prefill is rejected on a
+  /// parallel model (its warmed single-context state would be unreachable and
+  /// running it would race peers on the shared context).
   std::any
   process(const std::any& input, qvac_lib_inference_addon_cpp::JobId id) final;
 
   /// Cancel the in-flight job admitted under @p id: a concurrent job by
-  /// cancelling its scheduler slot, a single-path job (prefill-only, or no
-  /// scheduler) by stopping the single-prompt context. No-op when @p id is
-  /// unknown (already finished or never admitted).
+  /// cancelling its scheduler slot, a single-path job (no scheduler) by
+  /// stopping the single-prompt context. No-op when @p id is unknown
+  /// (already finished or never admitted).
   void cancelById(qvac_lib_inference_addon_cpp::JobId id) const final;
 
   /// Scheduler dequeue announcement (see IModelJobLifecycle): registers the
@@ -271,8 +274,10 @@ private:
   void cancelImpl() const;
 
   /// True for a single Prompt that may run on the scheduler concurrently:
-  /// text generation, not a finetune job, not prefill-only. Prefill-only and
-  /// finetune jobs keep the single path so their existing semantics hold.
+  /// text generation, or a prefill that persists its cache to disk
+  /// (saveCacheToDisk with a cacheKey). Finetune and live-only prefill (whose
+  /// sole product is warm state in the shared single context, which a lane
+  /// cannot deliver) stay off the concurrent path.
   static bool isConcurrentEligible(const Prompt& prompt);
 
   /// Route a single Prompt through the scheduler as a one-item batch, recording
@@ -450,6 +455,14 @@ private:
   mutable std::unordered_map<
       qvac_lib_inference_addon_cpp::JobId, batching::ObservedRequestStats>
       jobStats_;
+
+  /// Cache keys being persisted by in-flight scheduler runs. Reserved at
+  /// admission in processPromptBatchImpl and released when the run returns;
+  /// a second request saving the same key while it is reserved would race on
+  /// the same file, so its admission is refused. Guarded by
+  /// `inflightSaveKeysMtx_`.
+  std::mutex inflightSaveKeysMtx_;
+  std::unordered_set<std::string> inflightSaveKeys_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();
