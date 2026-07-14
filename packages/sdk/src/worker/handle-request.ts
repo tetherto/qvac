@@ -1,4 +1,9 @@
-import { PROFILING_KEY, type Request, type ProfilingRequestMeta } from '@qvac/core/surface'
+import {
+  PROFILING_KEY,
+  type Request,
+  type Response,
+  type ProfilingRequestMeta
+} from '@qvac/core/surface'
 import { nowMs } from '@qvac/core/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/core/engine'
 import type RPC from 'bare-rpc'
@@ -12,8 +17,9 @@ import {
 } from './handler-utils'
 import { createServerProfiler, type ServerProfiler } from '@/server/rpc/profiling'
 import { isTerminalChunk } from '@/server/rpc/rpc-utils'
+import { createProgressThrottle } from '@/server/rpc/progress-throttle'
 
-type Transport = 'reply' | 'stream' | 'duplex' | undefined
+type Transport = 'reply' | 'stream' | 'progress' | 'duplex' | undefined
 
 export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   let profiler: ServerProfiler | undefined
@@ -55,8 +61,8 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     attachProfilingMetaToRequest(request, profilingMeta)
     transport = dispatchTransport(request)
 
-    if (transport === 'stream') {
-      await streamToWire(req, request, profiler)
+    if (transport === 'stream' || transport === 'progress') {
+      await streamToWire(req, request, profiler, transport === 'progress')
     } else if (transport === 'duplex') {
       throw new PluginHandlerTypeMismatchError(request.type, 'reply or stream', 'duplex')
     } else {
@@ -66,7 +72,7 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       req.reply(profiler.serialize(response, true), 'utf-8')
     }
   } catch (error) {
-    if (transport === 'stream') {
+    if (transport === 'stream' || transport === 'progress') {
       sendStreamErrorResponse(req.createResponseStream(), error, profiler)
     } else {
       sendErrorResponse(req, error, profiler)
@@ -77,24 +83,39 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
 async function streamToWire(
   req: RPC.IncomingRequest,
   request: Request,
-  profiler: ServerProfiler
+  profiler: ServerProfiler,
+  throttleProgress: boolean
 ): Promise<void> {
   const wire = req.createResponseStream()
   profiler.startHandler()
   let sentFinalChunk = false
 
+  // A progress stream (a reply op that streams because of `withProgress`) can
+  // emit hundreds of updates, so batch them on a time window before writing to
+  // keep IPC and UI churn down. Native data streams like completion tokens pass
+  // through immediately and are never throttled.
+  const throttle = throttleProgress
+    ? createProgressThrottle<Response>((updates) => {
+        wire.write(updates.map((u) => profiler.serialize(u, false)).join('\n') + '\n', 'utf-8')
+      })
+    : undefined
+
   try {
     for await (const response of stream(request)) {
       if (isTerminalChunk(response)) {
+        throttle?.flush()
         profiler.endHandler()
         wire.write(profiler.serialize(response, true) + '\n', 'utf-8')
         sentFinalChunk = true
+      } else if (throttle) {
+        throttle.push(response)
       } else {
         wire.write(profiler.serialize(response, false) + '\n', 'utf-8')
       }
     }
 
     if (!sentFinalChunk) {
+      throttle?.flush()
       profiler.endHandler()
       const trailer = profiler.serialize()
       if (trailer) {
@@ -104,6 +125,7 @@ async function streamToWire(
 
     wire.end()
   } catch (error) {
+    throttle?.flush()
     profiler.endHandler()
     sendStreamErrorResponse(wire, error, profiler)
   }
