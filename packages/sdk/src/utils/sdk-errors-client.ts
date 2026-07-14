@@ -1,4 +1,5 @@
 import { addCodes, type ErrorCodesMap } from '@qvac/error'
+import { ERROR_CODES, RAG_ERROR_CODES } from '@qvac/core/surface'
 
 // Client-side error codes (50,001-52,000 range for this SDK)
 export const SDK_CLIENT_ERROR_CODES = {
@@ -235,6 +236,19 @@ const clientErrorDefinitions: ErrorCodesMap = {
   }
 }
 
-addCodes(clientErrorDefinitions, { name: 'qvac-sdk-client', version: '1.2.0' })
+// Core registers the cross-RPC codes it owns into the shared @qvac/error registry
+// when its surface loads. Register only the SDK-exclusive client codes here so the
+// two registrations do not collide. Codes the SDK keeps under its own value (the
+// transport-specific ones) have numbers absent from core, so they survive the
+// filter; the shared cross-RPC codes defer to core's registration.
+const coreOwnedCodes = new Set<number>([
+  ...Object.values(ERROR_CODES),
+  ...Object.values(RAG_ERROR_CODES)
+])
+const sdkOwnedDefinitions: ErrorCodesMap = Object.fromEntries(
+  Object.entries(clientErrorDefinitions).filter(([code]) => !coreOwnedCodes.has(Number(code)))
+)
+
+addCodes(sdkOwnedDefinitions, { name: 'qvac-sdk-client', version: '1.2.0' })
 
 export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS }
