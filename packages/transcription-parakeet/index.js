@@ -66,7 +66,7 @@ class TranscriptionParakeet {
    * @param {Object} [opts.logger=null] - Optional structured logger
    * @param {boolean} [opts.exclusiveRun=true] - Whether to run exclusively
    */
-  constructor ({ files = {}, config = {}, logger = null, exclusiveRun = true }) {
+  constructor({ files = {}, config = {}, logger = null, exclusiveRun = true }) {
     this.logger = new QvacLogger(logger)
     this.exclusiveRun = !!exclusiveRun
     this._runQueueWaiter = Promise.resolve()
@@ -93,7 +93,7 @@ class TranscriptionParakeet {
    * so callers can pre-stage the file asynchronously between
    * construction and `load()`.
    */
-  validateModelFiles () {
+  validateModelFiles() {
     const modelPath = this._config.modelPath
     if (modelPath && !fs.existsSync(modelPath)) {
       this.logger.warn('Model file not found', { path: modelPath })
@@ -105,7 +105,7 @@ class TranscriptionParakeet {
    * @returns {Object} configurationParams for createInstance / reload / activate
    * @private
    */
-  _buildConfigurationParams () {
+  _buildConfigurationParams() {
     // modelType is intentionally not passed: the binding reads
     // `parakeet.model.type` from the GGUF metadata at load() time and
     // overrides cfg_.modelType so the right dispatch (ASR vs
@@ -149,11 +149,11 @@ class TranscriptionParakeet {
     }
   }
 
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load () {
+  async load() {
     if (this.state.destroyed) {
       throw new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
     }
@@ -166,7 +166,7 @@ class TranscriptionParakeet {
     this.state.weightsLoaded = true
   }
 
-  async run (input) {
+  async run(input) {
     if (this.exclusiveRun) {
       return await this._withExclusiveRun(() => this._runInternal(input))
     }
@@ -199,19 +199,21 @@ class TranscriptionParakeet {
    * @returns {Promise<QvacResponse>} - response object exposing
    *   `onUpdate(seg => ...).await()`
    */
-  async runStreaming (audioStream, streamingConfig = {}) {
+  async runStreaming(audioStream, streamingConfig = {}) {
     if (this.exclusiveRun) {
-      return await this._withExclusiveRun(
-        () => this._runStreamingInternal(audioStream, streamingConfig)
+      return await this._withExclusiveRun(() =>
+        this._runStreamingInternal(audioStream, streamingConfig)
       )
     }
     return await this._runStreamingInternal(audioStream, streamingConfig)
   }
 
-  async _withExclusiveRun (fn) {
+  async _withExclusiveRun(fn) {
     const prev = this._runQueueWaiter || Promise.resolve()
     let release
-    this._runQueueWaiter = new Promise(resolve => { release = resolve })
+    this._runQueueWaiter = new Promise((resolve) => {
+      release = resolve
+    })
     await prev
     try {
       return await fn()
@@ -223,7 +225,7 @@ class TranscriptionParakeet {
   /**
    * Load model and activate addon.
    */
-  async _load () {
+  async _load() {
     const configurationParams = this._buildConfigurationParams()
 
     this.logger.info('Creating Parakeet addon with configuration:', configurationParams)
@@ -238,7 +240,7 @@ class TranscriptionParakeet {
    * @param {AsyncIterable<Buffer>} audioStream - Stream of audio data (16kHz mono, Float32 or s16le)
    * @returns {Promise<QvacResponse>} - Response object for tracking the transcription job
    */
-  async _runInternal (audioStream) {
+  async _runInternal(audioStream) {
     const response = this._job.start()
 
     let normalized
@@ -256,7 +258,7 @@ class TranscriptionParakeet {
     return response
   }
 
-  async _runStreamingInternal (audioStream, streamingConfig) {
+  async _runStreamingInternal(audioStream, streamingConfig) {
     const normalized = this._normalizeAudioStream(audioStream)
     const response = this._job.start()
 
@@ -275,7 +277,7 @@ class TranscriptionParakeet {
     return response
   }
 
-  async _pumpStreamingAudio (audioStream) {
+  async _pumpStreamingAudio(audioStream) {
     this.logger.debug('Start pumping audio into duplex streaming session')
     for await (const chunk of audioStream) {
       let audioData
@@ -300,7 +302,7 @@ class TranscriptionParakeet {
    * @param {AsyncIterable<Buffer>} audioStream - Audio data stream
    * @private
    */
-  async _handleAudioStream (audioStream) {
+  async _handleAudioStream(audioStream) {
     this.logger.debug('Start handling audio stream')
     for await (const chunk of audioStream) {
       this.logger.debug('Appending audio chunk', { chunkLength: chunk.length })
@@ -327,7 +329,7 @@ class TranscriptionParakeet {
     await this.addon.append({ type: END_OF_INPUT })
   }
 
-  _normalizeAudioStream (audioStream) {
+  _normalizeAudioStream(audioStream) {
     if (!audioStream) {
       throw new Error('audioStream is required')
     }
@@ -351,7 +353,7 @@ class TranscriptionParakeet {
     throw new Error('Unsupported audio input. Expected stream, TypedArray, or chunk array.')
   }
 
-  _outputCallback (addon, event, jobId, data, error) {
+  _outputCallback(addon, event, jobId, data, error) {
     if (event === 'Error') {
       this._job.fail(error instanceof Error ? error : new Error(String(error)))
     } else if (event === 'Output') {
@@ -367,7 +369,7 @@ class TranscriptionParakeet {
    * @param {Object} [newConfig={}] - New configuration parameters
    * @param {Object} [newConfig.parakeetConfig] - Parakeet-specific settings
    */
-  async reload (newConfig = {}) {
+  async reload(newConfig = {}) {
     return await this._withExclusiveRun(async () => {
       this.logger.debug('Reloading addon with new configuration', newConfig)
 
@@ -392,7 +394,7 @@ class TranscriptionParakeet {
    * @returns {ParakeetInterface} The instantiated addon interface
    * @private
    */
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     this.logger.info('Creating Parakeet interface with configuration:', configurationParams)
     const binding = require('./binding')
     return new ParakeetInterface(
@@ -406,7 +408,7 @@ class TranscriptionParakeet {
   /**
    * Override unload to call destroyInstance for proper cleanup.
    */
-  async unload () {
+  async unload() {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
       this._job.fail(new Error('Model was unloaded'))
@@ -418,7 +420,7 @@ class TranscriptionParakeet {
     })
   }
 
-  async cancel (jobId) {
+  async cancel(jobId) {
     if (this.addon?.cancel) {
       await this.addon.cancel(jobId)
     }
@@ -427,7 +429,7 @@ class TranscriptionParakeet {
     }
   }
 
-  async status () {
+  async status() {
     return this.addon?.status()
   }
 
@@ -439,19 +441,19 @@ class TranscriptionParakeet {
    * `null` before load / after unload.
    * @returns {{ backendDevice: string, backendId: number, backendName: string, backendDescription: string }|null}
    */
-  getBackendInfo () {
+  getBackendInfo() {
     return this.addon?.getBackendInfo?.() ?? null
   }
 
-  async pause () {
+  async pause() {
     await this.addon?.pause()
   }
 
-  async unpause () {
+  async unpause() {
     await this.addon?.activate()
   }
 
-  async destroy () {
+  async destroy() {
     return await this._withExclusiveRun(async () => {
       await this.cancel()
       this._job.fail(new Error('Model was destroyed'))
