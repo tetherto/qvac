@@ -12,7 +12,7 @@ const state = Object.freeze({
 
 const END_OF_INPUT = 'end of job'
 
-function nextSafeId (current) {
+function nextSafeId(current) {
   return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
 }
 
@@ -30,7 +30,7 @@ class WhisperInterface {
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
    * @param {Function} transitionCb - to be called on addon state changes (LISTENING, IDLE, STOPPED, etc )
    */
-  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+  constructor(binding, configurationParams, outputCb, transitionCb = null) {
     this._binding = binding
     this._outputCb = outputCb
     this._transitionCb = transitionCb
@@ -51,24 +51,22 @@ class WhisperInterface {
     )
   }
 
-  _setState (newState) {
+  _setState(newState) {
     this._state = newState
     if (this._transitionCb) {
       this._transitionCb(this, newState)
     }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const isError = typeof error === 'string' && error.length > 0
-    const isStats = data && typeof data === 'object' && (
-      'totalTime' in data ||
-      'audioDurationMs' in data ||
-      'totalSamples' in data
-    )
-    const isTranscriptOutput = (
+    const isStats =
+      data &&
+      typeof data === 'object' &&
+      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+    const isTranscriptOutput =
       (Array.isArray(data) && data.length > 0) ||
       (data && typeof data === 'object' && typeof data.text === 'string')
-    )
     const isVadEvent = data && typeof data === 'object' && data.type === 'vad'
     const isEndOfTurnEvent = data && typeof data === 'object' && data.type === 'endOfTurn'
 
@@ -97,10 +95,10 @@ class WhisperInterface {
     if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
       if (this._outputCb != null) {
-        const isTranscriptArray = Array.isArray(data) && data.length > 0 &&
-          typeof data[0]?.text === 'string'
-        const isSingleTranscript = !Array.isArray(data) &&
-          data && typeof data === 'object' && typeof data.text === 'string'
+        const isTranscriptArray =
+          Array.isArray(data) && data.length > 0 && typeof data[0]?.text === 'string'
+        const isSingleTranscript =
+          !Array.isArray(data) && data && typeof data === 'object' && typeof data.text === 'string'
         if (isTranscriptArray) {
           for (const segment of data) {
             this._outputCb(addon, 'Output', jobId, [segment], null)
@@ -115,13 +113,7 @@ class WhisperInterface {
     }
 
     if (this._outputCb != null) {
-      this._outputCb(
-        addon,
-        mappedEvent,
-        jobId,
-        data,
-        isError ? error : null
-      )
+      this._outputCb(addon, mappedEvent, jobId, data, isError ? error : null)
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
@@ -130,7 +122,7 @@ class WhisperInterface {
     }
   }
 
-  _emitSyntheticError (jobId, error) {
+  _emitSyntheticError(jobId, error) {
     if (this._outputCb == null) {
       return
     }
@@ -142,7 +134,7 @@ class WhisperInterface {
    * frees memory allocated for configuration and weights,
    * and moves addon to the UNLOADED state.
    */
-  async unload () {
+  async unload() {
     await this.destroyInstance()
   }
 
@@ -151,7 +143,7 @@ class WhisperInterface {
    * Can only be invoked after unload()
    * @param {Object} configurationParams - all the required configuration for inference setup
    */
-  async load (configurationParams) {
+  async load(configurationParams) {
     checkConfig(configurationParams)
     this._audioFormat = configurationParams?.audio_format || this._audioFormat
     await this.destroyInstance()
@@ -171,7 +163,7 @@ class WhisperInterface {
    * and moves addon to the LOADING state.
    * @param {Object} configurationParams - all the required configuration for inference setup
    */
-  async reload (configurationParams) {
+  async reload(configurationParams) {
     checkConfig(configurationParams)
     this._audioFormat = configurationParams?.audio_format || this._audioFormat
     await this.cancel()
@@ -197,7 +189,7 @@ class WhisperInterface {
    * @param {Uint8Array} weightsData.contents
    * @param {Boolean} weightsData.completed
    */
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     try {
       this._binding.loadWeights(this._handle, weightsData)
     } catch (err) {
@@ -213,7 +205,7 @@ class WhisperInterface {
    * Unloads weights for the model.
    * Can only be invoked after instance has loaded weights
    */
-  async unloadWeights () {
+  async unloadWeights() {
     // Whisper bundles weights in the model file; keep API compatibility.
     return true
   }
@@ -221,7 +213,7 @@ class WhisperInterface {
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
-  async activate () {
+  async activate() {
     try {
       this._binding.activate(this._handle)
       this._setState(state.LISTENING)
@@ -237,7 +229,7 @@ class WhisperInterface {
   /**
    * Pauses current inference process
    */
-  async pause () {
+  async pause() {
     throw new QvacErrorAddonWhisper({
       code: ERR_CODES.FAILED_TO_PAUSE,
       adds: 'pause is not supported in runJob mode'
@@ -247,7 +239,7 @@ class WhisperInterface {
   /**
    * Stops current inference process
    */
-  async stop () {
+  async stop() {
     throw new QvacErrorAddonWhisper({
       code: ERR_CODES.FAILED_TO_RESET,
       adds: 'stop is not supported in runJob mode'
@@ -257,7 +249,7 @@ class WhisperInterface {
   /**
    * Cancel a inference process by jobId, if no jobId is provided it cancel the whole queue
    */
-  async cancel (jobId) {
+  async cancel(jobId) {
     try {
       const pendingJobId = this._bufferedAudio.length > 0 ? this._nextJobId : null
       const targetJobId = jobId ?? this._activeJobId ?? pendingJobId
@@ -300,7 +292,7 @@ class WhisperInterface {
    * @param {String} data.input
    * @returns {Number} - job ID
    */
-  async append (data) {
+  async append(data) {
     try {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId
@@ -363,7 +355,7 @@ class WhisperInterface {
    * Addon process status
    * @returns {String}
    */
-  async status () {
+  async status() {
     try {
       return this._state
     } catch (err) {
@@ -378,7 +370,7 @@ class WhisperInterface {
   /**
    * Stops addon process and clears resources (including memory).
    */
-  async destroyInstance () {
+  async destroyInstance() {
     // Already destroyed, nothing to do
     if (this._handle === null) {
       return
@@ -405,7 +397,7 @@ class WhisperInterface {
     }
   }
 
-  async runJob (data) {
+  async runJob(data) {
     const currentJobId = this._nextJobId
     const previousJobId = this._activeJobId
     const previousState = this._state
@@ -434,7 +426,7 @@ class WhisperInterface {
     }
   }
 
-  startStreaming (config = {}) {
+  startStreaming(config = {}) {
     try {
       this._activeJobId = this._nextJobId
       this._nextJobId = nextSafeId(this._nextJobId)
@@ -454,7 +446,7 @@ class WhisperInterface {
     }
   }
 
-  appendStreamingAudio (data) {
+  appendStreamingAudio(data) {
     try {
       if (!(data.input instanceof Uint8Array)) {
         throw new Error('Audio input must be Uint8Array')
@@ -473,7 +465,7 @@ class WhisperInterface {
     }
   }
 
-  endStreaming () {
+  endStreaming() {
     try {
       this._binding.endStreaming(this._handle)
     } catch (err) {
@@ -485,17 +477,14 @@ class WhisperInterface {
     }
   }
 
-  _concatBufferedAudio () {
+  _concatBufferedAudio() {
     if (this._bufferedAudio.length === 0) {
       return new Uint8Array()
     }
     if (this._bufferedAudio.length === 1) {
       return this._bufferedAudio[0]
     }
-    const totalLength = this._bufferedAudio.reduce(
-      (sum, chunk) => sum + chunk.byteLength,
-      0
-    )
+    const totalLength = this._bufferedAudio.reduce((sum, chunk) => sum + chunk.byteLength, 0)
     const merged = new Uint8Array(totalLength)
     let offset = 0
     for (const chunk of this._bufferedAudio) {
