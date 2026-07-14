@@ -5,6 +5,8 @@ export type OpenAiFinishReason = 'stop' | 'length' | 'tool_calls'
 
 export interface DrainedCompletion {
   text: string
+  /** Concatenated `thinkingDelta` text; empty when the SDK captured no reasoning. */
+  thinking: string
   toolCalls: ToolCall[]
   stats: CompletionStats | undefined
   /**
@@ -28,13 +30,17 @@ export interface DrainedCompletion {
  * accounting are derived in one place instead of drifting per route.
  *
  * Pass `onToken` to stream content deltas as they arrive (SSE paths); omit
- * it for blocking responses.
+ * it for blocking responses. Pass `onThinking` to stream reasoning deltas the
+ * same way — only produced when the caller enabled `captureThinking` on the
+ * SDK request.
  */
 export async function drainCompletion(
   result: CompletionRun,
-  onToken?: (token: string) => void
+  onToken?: (token: string) => void,
+  onThinking?: (token: string) => void
 ): Promise<DrainedCompletion> {
   let text = ''
+  let thinking = ''
   const toolCalls: ToolCall[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
@@ -43,6 +49,9 @@ export async function drainCompletion(
     if (event.type === 'contentDelta') {
       text += event.text
       onToken?.(event.text)
+    } else if (event.type === 'thinkingDelta') {
+      thinking += event.text
+      onThinking?.(event.text)
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
     } else if (event.type === 'completionStats') {
@@ -65,7 +74,7 @@ export async function drainCompletion(
   const finishReason: OpenAiFinishReason =
     toolCalls.length > 0 ? 'tool_calls' : stopReason === 'length' ? 'length' : 'stop'
 
-  return { text, toolCalls, stats, stopReason, completionTokens, finishReason }
+  return { text, thinking, toolCalls, stats, stopReason, completionTokens, finishReason }
 }
 
 export function completionTokensFromStats(

@@ -76,7 +76,15 @@ describe('chat completions (blocking)', () => {
       max_completion_tokens: 8
     })
     const body = res.json() as any
-    assert.ok(body.choices[0].message.content.length > 0)
+    const message = body.choices[0].message
+    // A reasoning model can spend the whole tiny budget inside its `<think>`
+    // block, which is routed to `reasoning_content`, so assert generation
+    // happened in either channel rather than requiring visible content.
+    const produced =
+      (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
+    assert.ok(produced > 0)
+    assert.equal(body.usage.completion_tokens, 8)
+    assert.equal(body.choices[0].finish_reason, 'length')
   })
 
   it('finish_reason=length when max_tokens exceeded (blocking)', async () => {
@@ -88,6 +96,38 @@ describe('chat completions (blocking)', () => {
     const body = res.json() as any
     assert.equal(body.choices[0].finish_reason, 'length')
     assert.equal(body.usage.completion_tokens, 1)
+  })
+
+  it('routes reasoning to reasoning_content and keeps content free of think tags', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is 17 + 25? Think step by step.' }],
+      max_tokens: 512
+    })
+    const body = res.json() as any
+    const message = body.choices[0].message
+    assert.ok(
+      typeof message.reasoning_content === 'string' && message.reasoning_content.length > 0,
+      'expected reasoning to be surfaced on reasoning_content'
+    )
+    assert.ok(
+      !String(message.content ?? '').includes('<think>'),
+      'content must not contain raw <think> tags'
+    )
+  })
+
+  it('reports prompt and completion token usage from SDK stats', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'Say hello and nothing else.' }],
+      max_tokens: 512
+    })
+    const body = res.json() as any
+    assert.ok(body.usage.prompt_tokens > 0, 'expected non-zero prompt_tokens')
+    assert.equal(
+      body.usage.total_tokens,
+      body.usage.prompt_tokens + body.usage.completion_tokens
+    )
   })
 })
 
@@ -126,6 +166,22 @@ describe('chat completions (streaming)', () => {
     assert.ok(['stop', 'tool_calls'].includes(last.choices[0].finish_reason))
     const contentChunks = chunks.filter((c) => c.choices[0].delta.content)
     assert.ok(contentChunks.length > 0)
+  })
+
+  it('streams reasoning on reasoning_content deltas, not content', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is 17 + 25? Think step by step.' }],
+      stream: true,
+      max_tokens: 256
+    })
+    const chunks = collectSSE(res.payload)
+      .map((e) => e.data)
+      .filter((d) => d !== '[DONE]') as any[]
+    const reasoningChunks = chunks.filter((c) => c.choices[0].delta.reasoning_content)
+    assert.ok(reasoningChunks.length > 0, 'expected reasoning_content deltas')
+    const contentText = chunks.map((c) => c.choices[0].delta.content ?? '').join('')
+    assert.ok(!contentText.includes('<think>'), 'content deltas must not contain <think> tags')
   })
 })
 

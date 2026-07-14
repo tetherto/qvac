@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { completion } from '@qvac/sdk'
+import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '../lib/http-error.js'
 import { initSSE, sendSSE, endSSE } from '../lib/sse.js'
 import { drainCompletion, type OpenAiFinishReason } from '../adapters/openai/completion-result.js'
@@ -17,6 +17,7 @@ import {
 import { InvalidResponseFormatError, UnsupportedImageContentError } from '../schemas/common.js'
 import { sdkToolCallsToOpenaiDeltas } from '../adapters/openai/tool-calls.js'
 import {
+  buildUsage,
   chatCompletionChunk,
   chatCompletionResponse,
   type ChatCompletionDelta,
@@ -66,6 +67,38 @@ function randomId(): string {
   return Math.random().toString(36).slice(2, 12)
 }
 
+/**
+ * Compact one-line render of the SDK completion stats for the request log.
+ * Only fields the SDK actually reported are included, so the line stays honest
+ * about what was measured (TTFT, decode rate, prompt/cache/generated tokens,
+ * backend device).
+ */
+function formatStats(stats: CompletionStats | undefined): string {
+  if (!stats) {
+    return ''
+  }
+  const parts: string[] = []
+  if (typeof stats.timeToFirstToken === 'number') {
+    parts.push(`ttft=${Math.round(stats.timeToFirstToken)}ms`)
+  }
+  if (typeof stats.tokensPerSecond === 'number') {
+    parts.push(`tps=${stats.tokensPerSecond.toFixed(1)}`)
+  }
+  if (typeof stats.promptTokens === 'number') {
+    parts.push(`prompt=${stats.promptTokens}`)
+  }
+  if (typeof stats.cacheTokens === 'number') {
+    parts.push(`cache=${stats.cacheTokens}`)
+  }
+  if (typeof stats.generatedTokens === 'number') {
+    parts.push(`gen=${stats.generatedTokens}`)
+  }
+  if (stats.backendDevice !== undefined) {
+    parts.push(`backend=${stats.backendDevice}`)
+  }
+  return parts.length > 0 ? ` ${parts.join(' ')}` : ''
+}
+
 const descriptions = {
   completion: `
 OpenAI-compatible chat completion. Accepts a chat-style \`messages\` array,
@@ -83,9 +116,15 @@ ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
 \`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,
 \`presence_penalty\`, \`stop\`.
 
-**Token accounting**: \`usage.prompt_tokens\` is reported as 0;
-\`completion_tokens\` comes from \`CompletionStats.generatedTokens\` when the
-SDK provides it, otherwise from a whitespace split of the output.
+**Reasoning**: models that emit \`<think>\` blocks (e.g. Qwen3.5) have their
+reasoning routed to \`reasoning_content\` (a \`message.reasoning_content\` field
+on blocking responses, \`delta.reasoning_content\` chunks when streaming) so it
+never appears in \`content\`.
+
+**Token accounting**: \`usage.prompt_tokens\`, \`completion_tokens\` and
+\`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
+provides them; \`completion_tokens\` falls back to a whitespace split of the
+output otherwise.
 `.trim()
 }
 
@@ -135,16 +174,18 @@ async function runBlocking(
       modelId: p.sdkModelId,
       history,
       stream: false,
+      captureThinking: true,
       ...(p.tools !== undefined ? { tools: p.tools } : {}),
       ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
       ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
     })
     req.bindCancel(result.requestId)
 
-    const { text, toolCalls, completionTokens, finishReason } = await drainCompletion(result)
+    const { text, thinking, toolCalls, stats, completionTokens, finishReason } =
+      await drainCompletion(result)
 
     req.server.qvac.logger.info(
-      `  completion done tokens=${completionTokens} finish=${finishReason}`
+      `  completion done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
     )
 
     reply.send(
@@ -153,8 +194,11 @@ async function runBlocking(
         created: Math.floor(Date.now() / 1000),
         model: p.modelAlias,
         text,
+        ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
+        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {}),
         finishReason
       })
     )
@@ -174,6 +218,7 @@ async function runStreaming(
       modelId: p.sdkModelId,
       history,
       stream: true,
+      captureThinking: true,
       ...(p.tools !== undefined ? { tools: p.tools } : {}),
       ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
       ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
@@ -202,28 +247,29 @@ async function runStreaming(
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-    const { toolCalls, completionTokens, finishReason } = await drainCompletion(result, (token) =>
-      sendSSE(raw, chunk({ content: token }, null))
+    const { toolCalls, stats, completionTokens, finishReason } = await drainCompletion(
+      result,
+      (token) => sendSSE(raw, chunk({ content: token }, null)),
+      (token) => sendSSE(raw, chunk({ reasoning_content: token }, null))
     )
     const hasToolCalls = toolCalls.length > 0
 
     req.server.qvac.logger.info(
-      `  streaming done tokens=${completionTokens} finish=${finishReason}`
+      `  streaming done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
     )
+
+    const usage = buildUsage({
+      completionTokens,
+      ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+      ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {})
+    })
 
     if (hasToolCalls) {
       const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls) ?? []
       sendSSE(raw, chunk({ tool_calls: openaiToolCalls }, null))
-      sendSSE(raw, chunk({}, 'tool_calls'))
+      sendSSE(raw, chunk({}, 'tool_calls', usage))
     } else {
-      sendSSE(
-        raw,
-        chunk({}, finishReason, {
-          prompt_tokens: 0,
-          completion_tokens: completionTokens,
-          total_tokens: completionTokens
-        })
-      )
+      sendSSE(raw, chunk({}, finishReason, usage))
     }
 
     endSSE(raw)
