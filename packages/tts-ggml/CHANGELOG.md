@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`tts-cpp` >= 2026-07-13#2, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (chatterbox q4 CPU mean RTF 2.70 -> 2.28 on ubuntu-24.04-arm).
+
 ### Added
 
 - **Chatterbox S3Gen classifier-free-guidance rate (`cfgRate`) (QVAC-21908).**
