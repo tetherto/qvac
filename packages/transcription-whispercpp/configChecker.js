@@ -1,22 +1,18 @@
 /*
  * @param {Object} configObject - the configuration object to check
-*
-* all objects most contain structure like this
-* {
-*   whisperConfig:{
-*    vadParams:{},
-*   },
-*    contextParams:{}
-*    miscConfig:{}
+ *
+ * all objects most contain structure like this
+ * {
+ *   whisperConfig:{
+ *    vadParams:{},
+ *   },
+ *    contextParams:{}
+ *    miscConfig:{}
  * }
  * @returns {void} or throws an error if the config object is invalid
  */
-function checkConfig (configObject) {
-  const listOfConfigs = [
-    'whisperConfig',
-    'contextParams',
-    'miscConfig'
-  ]
+function checkConfig(configObject) {
+  const listOfConfigs = ['whisperConfig', 'contextParams', 'miscConfig']
 
   for (const config of listOfConfigs) {
     if (!configObject[config]) {
@@ -74,12 +70,7 @@ function checkConfig (configObject) {
     'samples_overlap'
   ]
 
-  const listOfContextParams = [
-    'model',
-    'use_gpu',
-    'flash_attn',
-    'gpu_device'
-  ]
+  const listOfContextParams = ['model', 'use_gpu', 'flash_attn', 'gpu_device']
 
   const listOfMiscParams = [
     'caption_enabled',
@@ -117,7 +108,7 @@ function checkConfig (configObject) {
   if (typeof configObject.whisperConfig.suppress_regex === 'string') {
     _validateSuppressRegex(configObject.whisperConfig.suppress_regex)
   }
-};
+}
 
 const MAX_SUPPRESS_REGEX_LENGTH = 512
 
@@ -125,7 +116,7 @@ const MAX_SUPPRESS_REGEX_LENGTH = 512
 // Reject grouping constructs entirely to prevent nested quantifier patterns like (a+)+.
 const SAFE_SUPPRESS_REGEX = /^[^()]*$/
 
-function _validateSuppressRegex (pattern) {
+function _validateSuppressRegex(pattern) {
   if (pattern.length > MAX_SUPPRESS_REGEX_LENGTH) {
     throw new Error(
       'suppress_regex exceeds maximum length of ' + MAX_SUPPRESS_REGEX_LENGTH + ' characters'
