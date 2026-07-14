@@ -33,20 +33,28 @@ const NO_GPU = os.hasEnv('NO_GPU') && os.getEnv('NO_GPU') === 'true'
 
 const { manifest, getSamplePath } = getTestPaths()
 
-const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
+const MODEL_PATH =
+  (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
   getModelPath('ggml-bci-windowed.bin')
 const EMBEDDER_PATH = path.join(path.dirname(MODEL_PATH), 'bci-embedder.bin')
 const hasModel = fs.existsSync(MODEL_PATH)
 
-function backendIdToName (id) {
+function backendIdToName(id) {
   switch (id) {
-    case 0: return 'CPU'
-    case 1: return 'Metal'
-    case 2: return 'CUDA'
-    case 3: return 'Vulkan'
-    case 4: return 'OpenCL'
-    case 99: return 'other-GPU'
-    default: return `unknown(${id})`
+    case 0:
+      return 'CPU'
+    case 1:
+      return 'Metal'
+    case 2:
+      return 'CUDA'
+    case 3:
+      return 'Vulkan'
+    case 4:
+      return 'OpenCL'
+    case 99:
+      return 'other-GPU'
+    default:
+      return `unknown(${id})`
   }
 }
 
@@ -54,7 +62,7 @@ function backendIdToName (id) {
 //   - darwin / ios:   Metal
 //   - linux / win32:  CUDA or Vulkan
 //   - android:        Vulkan / OpenCL
-function expectsGpu () {
+function expectsGpu() {
   return (
     platform === 'darwin' ||
     platform === 'ios' ||
@@ -64,9 +72,11 @@ function expectsGpu () {
   )
 }
 
-function assertGpuBackend (t, stats) {
+function assertGpuBackend(t, stats) {
   if (!stats) {
-    t.fail('BCI/GPU: no response.stats returned (cannot verify backend). Did you pass opts:{stats:true}?')
+    t.fail(
+      'BCI/GPU: no response.stats returned (cannot verify backend). Did you pass opts:{stats:true}?'
+    )
     return
   }
   const dev = stats.backendDevice
@@ -80,9 +90,10 @@ function assertGpuBackend (t, stats) {
   }
 
   if (dev !== 1) {
-    const msg = `BCI/${platform}: expected GPU backend, got ${name} (backendDevice=${dev}, backendId=${id}). ` +
-                'use_gpu=true was requested but whisper fell back to CPU. ' +
-                'Inspect the addon load-time backend init log.'
+    const msg =
+      `BCI/${platform}: expected GPU backend, got ${name} (backendDevice=${dev}, backendId=${id}). ` +
+      'use_gpu=true was requested but whisper fell back to CPU. ' +
+      'Inspect the addon load-time backend init log.'
     if (RELAX) {
       t.comment(`WARNING (relaxed): ${msg}`)
       t.pass('BCI/GPU smoke completed (relaxed)')
@@ -97,71 +108,97 @@ function assertGpuBackend (t, stats) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `BCI/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.ok(id === 2 || id === 3, `BCI/${platform}: expected CUDA(2) or Vulkan(3) backendId, got ${name}`)
+    t.ok(
+      id === 2 || id === 3,
+      `BCI/${platform}: expected CUDA(2) or Vulkan(3) backendId, got ${name}`
+    )
   } else if (platform === 'android') {
-    t.ok(id === 3 || id === 4, `BCI/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`)
+    t.ok(
+      id === 3 || id === 4,
+      `BCI/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`
+    )
   }
 }
 
-function assertCpuBackend (t, stats) {
+function assertCpuBackend(t, stats) {
   if (!stats) {
-    t.fail('BCI/CPU: no response.stats returned (cannot verify backend). Did you pass opts:{stats:true}?')
+    t.fail(
+      'BCI/CPU: no response.stats returned (cannot verify backend). Did you pass opts:{stats:true}?'
+    )
     return
   }
   const dev = stats.backendDevice
   const id = stats.backendId
   console.log(`[BCI/CPU] backendDevice=${dev} backendId=${id} (${backendIdToName(id)})`)
-  t.is(dev, 0, `BCI: use_gpu:false must resolve to backendDevice=0 (CPU), got ${backendIdToName(id)}`)
+  t.is(
+    dev,
+    0,
+    `BCI: use_gpu:false must resolve to backendDevice=0 (CPU), got ${backendIdToName(id)}`
+  )
   t.is(id, 0, `BCI: use_gpu:false must resolve to backendId=0 (CPU), got ${backendIdToName(id)}`)
 }
 
-function firstSample () {
+function firstSample() {
   const sample = manifest.samples && manifest.samples[0]
   if (!sample) return null
   const samplePath = getSamplePath(sample.file)
   return fs.existsSync(samplePath) ? { sample, samplePath } : null
 }
 
-async function runBci (useGpu, samplePath, sample) {
-  const bci = new BCIWhispercpp({
-    files: { model: MODEL_PATH, embedder: EMBEDDER_PATH },
-    opts: { stats: true }
-  }, {
-    whisperConfig: { language: 'en', temperature: 0.0 },
-    miscConfig: { caption_enabled: false },
-    contextParams: { use_gpu: useGpu },
-    ...(typeof sample?.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})
-  })
+async function runBci(useGpu, samplePath, sample) {
+  const bci = new BCIWhispercpp(
+    {
+      files: { model: MODEL_PATH, embedder: EMBEDDER_PATH },
+      opts: { stats: true }
+    },
+    {
+      whisperConfig: { language: 'en', temperature: 0.0 },
+      miscConfig: { caption_enabled: false },
+      contextParams: { use_gpu: useGpu },
+      ...(typeof sample?.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})
+    }
+  )
   await bci.load()
   try {
     const response = await bci.transcribeFile(samplePath)
     const output = await response.await()
     const segments = flattenSegments(output)
-    const text = segments.map(s => s.text).join('').trim()
+    const text = segments
+      .map((s) => s.text)
+      .join('')
+      .trim()
     return { stats: response.stats, text }
   } finally {
     await bci.destroy()
   }
 }
 
-test('[BCI] GPU smoke - use_gpu=true must engage the GPU backend on GPU-capable platforms', { timeout: 120000, skip: NO_GPU || !hasModel }, async (t) => {
-  const picked = firstSample()
-  if (!picked) {
-    t.pass('Skipped: no neural-signal fixture available')
-    return
+test(
+  '[BCI] GPU smoke - use_gpu=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 120000, skip: NO_GPU || !hasModel },
+  async (t) => {
+    const picked = firstSample()
+    if (!picked) {
+      t.pass('Skipped: no neural-signal fixture available')
+      return
+    }
+    const { stats, text } = await runBci(true, picked.samplePath, picked.sample)
+    t.ok(typeof text === 'string' && text.length > 0, 'BCI/GPU produced a transcription')
+    assertGpuBackend(t, stats)
   }
-  const { stats, text } = await runBci(true, picked.samplePath, picked.sample)
-  t.ok(typeof text === 'string' && text.length > 0, 'BCI/GPU produced a transcription')
-  assertGpuBackend(t, stats)
-})
+)
 
-test('[BCI] CPU smoke - use_gpu=false must run on the CPU backend', { timeout: 120000, skip: !hasModel }, async (t) => {
-  const picked = firstSample()
-  if (!picked) {
-    t.pass('Skipped: no neural-signal fixture available')
-    return
+test(
+  '[BCI] CPU smoke - use_gpu=false must run on the CPU backend',
+  { timeout: 120000, skip: !hasModel },
+  async (t) => {
+    const picked = firstSample()
+    if (!picked) {
+      t.pass('Skipped: no neural-signal fixture available')
+      return
+    }
+    const { stats, text } = await runBci(false, picked.samplePath, picked.sample)
+    t.ok(typeof text === 'string' && text.length > 0, 'BCI/CPU produced a transcription')
+    assertCpuBackend(t, stats)
   }
-  const { stats, text } = await runBci(false, picked.samplePath, picked.sample)
-  t.ok(typeof text === 'string' && text.length > 0, 'BCI/CPU produced a transcription')
-  assertCpuBackend(t, stats)
-})
+)

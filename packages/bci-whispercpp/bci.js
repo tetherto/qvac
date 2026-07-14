@@ -18,7 +18,7 @@ const END_OF_INPUT = 'end of job'
 // runaway producers.
 const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
 
-function nextSafeId (current) {
+function nextSafeId(current) {
   return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
 }
 
@@ -33,7 +33,7 @@ class BCIInterface {
    * @param {Function} outputCb - callback for inference events (Output, JobEnded, Error)
    * @param {Function} [transitionCb] - callback for state changes
    */
-  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+  constructor(binding, configurationParams, outputCb, transitionCb = null) {
     this._binding = binding
     this._outputCb = outputCb
     this._transitionCb = transitionCb
@@ -52,24 +52,22 @@ class BCIInterface {
     )
   }
 
-  _setState (newState) {
+  _setState(newState) {
     this._state = newState
     if (this._transitionCb) {
       this._transitionCb(this, newState)
     }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const isError = typeof error === 'string' && error.length > 0
-    const isStats = data && typeof data === 'object' && (
-      'totalTime' in data ||
-      'tokensPerSecond' in data ||
-      'totalWallMs' in data
-    )
-    const isTranscriptOutput = (
+    const isStats =
+      data &&
+      typeof data === 'object' &&
+      ('totalTime' in data || 'tokensPerSecond' in data || 'totalWallMs' in data)
+    const isTranscriptOutput =
       (Array.isArray(data) && data.length > 0) ||
       (data && typeof data === 'object' && typeof data.text === 'string')
-    )
 
     let mappedEvent = event
     if (event === 'Error' || isError || String(event).includes('Error')) {
@@ -91,10 +89,10 @@ class BCIInterface {
       this._setState(state.PROCESSING)
 
       if (this._outputCb != null) {
-        const isTranscriptArray = Array.isArray(data) && data.length > 0 &&
-          typeof data[0]?.text === 'string'
-        const isSingleTranscript = !Array.isArray(data) &&
-          data && typeof data === 'object' && typeof data.text === 'string'
+        const isTranscriptArray =
+          Array.isArray(data) && data.length > 0 && typeof data[0]?.text === 'string'
+        const isSingleTranscript =
+          !Array.isArray(data) && data && typeof data === 'object' && typeof data.text === 'string'
         if (isTranscriptArray) {
           for (const segment of data) {
             this._outputCb(addon, 'Output', jobId, [segment], null)
@@ -118,11 +116,11 @@ class BCIInterface {
     }
   }
 
-  async unload () {
+  async unload() {
     await this.destroyInstance()
   }
 
-  async load (configurationParams) {
+  async load(configurationParams) {
     checkConfig(configurationParams)
     await this.destroyInstance()
     this._handle = this._binding.createInstance(
@@ -134,7 +132,7 @@ class BCIInterface {
     this._setState(state.LOADING)
   }
 
-  async reload (configurationParams) {
+  async reload(configurationParams) {
     checkConfig(configurationParams)
     await this.cancel()
 
@@ -147,7 +145,7 @@ class BCIInterface {
     await this.load(configurationParams)
   }
 
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     try {
       this._binding.loadWeights(this._handle, weightsData)
     } catch (err) {
@@ -159,11 +157,11 @@ class BCIInterface {
     }
   }
 
-  async unloadWeights () {
+  async unloadWeights() {
     return true
   }
 
-  async activate () {
+  async activate() {
     try {
       this._binding.activate(this._handle)
       this._setState(state.LISTENING)
@@ -176,7 +174,7 @@ class BCIInterface {
     }
   }
 
-  async cancel (jobId) {
+  async cancel(jobId) {
     try {
       await this._binding.cancel(this._handle, jobId)
       this._bufferedSignal = []
@@ -200,7 +198,7 @@ class BCIInterface {
    * @param {Uint8Array} [data.input] - binary neural signal data
    * @returns {number} job ID
    */
-  async append (data) {
+  async append(data) {
     try {
       if (data?.type === END_OF_INPUT) {
         if (this._bufferedSignal.length === 0) {
@@ -273,7 +271,7 @@ class BCIInterface {
    * @param {Object} data
    * @param {Uint8Array} data.input - binary neural signal data
    */
-  async runJob (data) {
+  async runJob(data) {
     if (!data || !(data.input instanceof Uint8Array)) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.INVALID_NEURAL_INPUT,
@@ -318,11 +316,11 @@ class BCIInterface {
     return accepted
   }
 
-  async status () {
+  async status() {
     return this._state
   }
 
-  async destroyInstance () {
+  async destroyInstance() {
     if (this._handle === null) {
       return
     }
@@ -345,16 +343,14 @@ class BCIInterface {
     }
   }
 
-  _concatBufferedSignal () {
+  _concatBufferedSignal() {
     if (this._bufferedSignal.length === 0) {
       return new Uint8Array()
     }
     if (this._bufferedSignal.length === 1) {
       return this._bufferedSignal[0]
     }
-    const totalLength = this._bufferedSignal.reduce(
-      (sum, chunk) => sum + chunk.byteLength, 0
-    )
+    const totalLength = this._bufferedSignal.reduce((sum, chunk) => sum + chunk.byteLength, 0)
     const merged = new Uint8Array(totalLength)
     let offset = 0
     for (const chunk of this._bufferedSignal) {

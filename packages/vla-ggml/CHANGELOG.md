@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
 ## [0.11.2] - 2026-07-08
 
 ### Changed
