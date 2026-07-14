@@ -61,6 +61,7 @@ jobs:
       packages: ${{ steps.pkglist.outputs.packages }}
       packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
       any: ${{ steps.filter.outputs.pkg-any }}
+      sdk-pod-any: ${{ steps.filter.outputs.sdk-pod-any }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -74,6 +75,17 @@ jobs:
             pkg-any:
               - "packages/**"
               - ".github/workflows/prebuilds-*.yml"
+            # Gate for the sdk-pod-checks job below.
+            sdk-pod-any:
+              - "packages/sdk/**"
+              - "packages/bare-sdk/**"
+              - "packages/cli/**"
+              - "packages/rag/**"
+              - "packages/logging/**"
+              - "packages/error/**"
+              - "packages/ai-sdk-provider/**"
+              - "plugins/opencode/**"
+              - "plugins/openclaw/**"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
               - ".github/workflows/prebuilds-bci-whispercpp.yml"
@@ -127,7 +139,7 @@ jobs:
       - name: Build package lists
         id: pkglist
         run: |
-          CHANGED=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "pkg-any"))')
+          CHANGED=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "pkg-any" and . != "sdk-pod-any"))')
           echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
           echo "packages-with-path=$(echo "$CHANGED" | jq -c '
             map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})
@@ -173,8 +185,19 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
+  # Calls pr-checks-sdk-pod.yml unchanged, via its new workflow_call trigger.
+  sdk-pod-checks:
+    needs: [authorize, label-gate, changes]
+    if: |
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.changes.outputs.sdk-pod-any == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+
   merge-guard:
-    needs: [authorize, label-gate, sanity-checks, prebuilds-caller]
+    needs: [authorize, label-gate, sanity-checks, prebuilds-caller, sdk-pod-checks]
     if: always() && !cancelled()
     permissions:
       contents: read
@@ -183,3 +206,4 @@ jobs:
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
       build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
+      general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
