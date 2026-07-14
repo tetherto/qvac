@@ -48,6 +48,33 @@ class BatchHandler {
     )
   }
 
+  /** Whether a batch item is a `{ id?, prompt, runOptions? }` wrapper. */
+  static _isWrapped(item) {
+    return item && typeof item === 'object' && !Array.isArray(item) && Array.isArray(item.prompt)
+  }
+
+  /**
+   * Admission policy for a whole batch, derived from per-item `runOptions`.
+   * The group is admitted as one native job, so items that set
+   * `rejectWhenBusy` must agree; conflicting values are a caller error.
+   * Returns the agreed value, or `undefined` when no item sets it (caller
+   * falls back to the instance default).
+   */
+  static groupRejectWhenBusy(batchInput) {
+    let policy
+    for (const item of batchInput) {
+      const value = BatchHandler._isWrapped(item) ? item.runOptions?.rejectWhenBusy : undefined
+      if (value === undefined) continue
+      if (policy !== undefined && policy !== value) {
+        throw new TypeError(
+          'Conflicting rejectWhenBusy across batch items: the batch is admitted as one job'
+        )
+      }
+      policy = value
+    }
+    return policy
+  }
+
   get isActive() {
     return this._groups.size > 0
   }
@@ -161,8 +188,7 @@ class BatchHandler {
 
   _unwrapItems(batchInput) {
     return batchInput.map((item) => {
-      const isWrapped =
-        item && typeof item === 'object' && !Array.isArray(item) && Array.isArray(item.prompt)
+      const isWrapped = BatchHandler._isWrapped(item)
       const prompt = isWrapped ? item.prompt : item
       const itemRunOptions = isWrapped && item.runOptions !== undefined ? item.runOptions : {}
       const unwrapped = { messages: this._parsePrompt(prompt, itemRunOptions) }

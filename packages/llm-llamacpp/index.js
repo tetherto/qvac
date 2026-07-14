@@ -264,7 +264,8 @@ class LlmLlamacpp {
     this._maxConcurrency = Math.max(1, Number(config?.parallel) || 1)
     /// Admission policy when at capacity: true throws RUN_BUSY, false lets the
     /// native multi-job scheduler admit/queue it. Overridable per call via
-    /// `runOptions.rejectWhenBusy`. Defaults to throwing on the sequential
+    /// `runOptions.rejectWhenBusy` (batch runs derive one group policy from
+    /// their items' runOptions). Defaults to throwing on the sequential
     /// path (`parallel: 1`, backward compat) and to queueing when the
     /// multi-job scheduler is active (`parallel >= 2`).
     this._rejectWhenBusy = opts?.rejectWhenBusy ?? this._maxConcurrency === 1
@@ -351,7 +352,14 @@ class LlmLlamacpp {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
-    if (this._rejectWhenBusy && this.addon.activeJobs() >= this._maxConcurrency) {
+    // Same fast-fail pre-check as the single path, with the group policy
+    // derived from the items' runOptions (they must agree — a batch is one
+    // native job). Evaluated before the capacity check so a conflicting
+    // batch is refused even when slots are free.
+    if (
+      (BatchHandler.groupRejectWhenBusy(batchInput) ?? this._rejectWhenBusy) &&
+      this.addon.activeJobs() >= this._maxConcurrency
+    ) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
