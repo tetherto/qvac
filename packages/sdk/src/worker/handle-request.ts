@@ -149,8 +149,18 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     rpcInput.on('error', () => session.requestStream.destroy())
     rpcInput.resume()
 
+    profiler.startHandler()
     for await (const chunk of session.responseStream) {
       rpcOutput.write(chunk, 'utf-8')
+    }
+    profiler.endHandler()
+
+    // Emit the profiler trailer on its own line after core's newline-framed
+    // responses, so the client's duplexProfiled sees server metadata like the
+    // reply and stream paths do.
+    const trailer = profiler.serialize()
+    if (trailer) {
+      rpcOutput.write(trailer + '\n', 'utf-8')
     }
     rpcOutput.end()
   } catch (error) {
