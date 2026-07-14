@@ -809,7 +809,14 @@ std::any LlamaModel::process(const std::any& input) {
 }
 
 bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
-  return !prompt.finetuningParams.has_value() && !prompt.prefill;
+  if (prompt.finetuningParams.has_value()) {
+    return false;
+  }
+  // A prefill earns a lane exactly when its product survives the slot
+  // teardown: the cache file persisted under its key. A live-only prefill's
+  // product is warm state in the shared single context, which a lane wipes.
+  return !prompt.prefill ||
+         (prompt.saveCacheToDisk && !prompt.cacheKey.empty());
 }
 
 std::any LlamaModel::process(
@@ -858,6 +865,21 @@ std::any LlamaModel::process(
       return process(input);
     }
     if (!isConcurrentEligible(prompt)) {
+      // Live-only prefill: its warmed single-context state is unreachable by
+      // lane-based followups, and running it beside admitted peers would race
+      // on the shared context. Reject on a parallel model; without a
+      // scheduler the single path is the only worker and stays safe.
+      {
+        std::shared_lock rejectLock(stateMtx_);
+        if (state_ && state_->batchScheduler_) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              toString(qvac_errors::general_error::InvalidArgument),
+              "prefill without saveCacheToDisk and a cacheKey cannot run on "
+              "a parallel model: its warmed context is unreachable by "
+              "concurrent jobs; persist the cache or load with parallel=1");
+        }
+      }
       return processSinglePath();
     }
   }
@@ -1238,17 +1260,34 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
 
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
+  // This call's cacheKey reservations, released when the run returns (any
+  // path). Reserving in the shared inflightSaveKeys_ set refuses both a
+  // duplicate inside this batch and a concurrent caller saving the same key —
+  // either would race two writers on one file.
   std::unordered_set<std::string> saveCacheKeys;
+  ScopeGuard keysGuard([this, &saveCacheKeys] {
+    if (saveCacheKeys.empty()) {
+      return;
+    }
+    std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+    for (const auto& key : saveCacheKeys) {
+      inflightSaveKeys_.erase(key);
+    }
+  });
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
-    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty() &&
-        !saveCacheKeys.insert(prompt.cacheKey).second) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: duplicate cacheKey '" + prompt.cacheKey +
-              "' with saveCacheToDisk in the same batch would overwrite "
-              "itself; each saved cache must use a distinct key");
+    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty()) {
+      std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+      if (!inflightSaveKeys_.insert(prompt.cacheKey).second) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(qvac_errors::general_error::InvalidArgument),
+            "processPromptBatch: cacheKey '" + prompt.cacheKey +
+                "' is already being saved by an in-flight request; "
+                "concurrent saves would overwrite each other — use a "
+                "distinct key per save");
+      }
+      saveCacheKeys.insert(prompt.cacheKey);
     }
     if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
