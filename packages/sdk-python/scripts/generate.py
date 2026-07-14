@@ -171,6 +171,7 @@ def run_datamodel_codegen(output_dir: Path) -> None:
             "3.10",
             "--disable-timestamp",
             "--disable-warnings",
+            "--use-double-quotes",
         ],
         check=True,
     )

@@ -21,15 +21,15 @@ from pydantic import (
 class FieldQvacSdkWireContract(RootModel[Any]):
     root: Any = Field(
         ...,
-        description='Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.',
-        title='@qvac/sdk wire contract',
+        description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+        title="@qvac/sdk wire contract",
     )
 
 
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(BaseModel):
     path: str = Field(
         ...,
-        description='Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).',
+        description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).",
     )
 
 
@@ -37,38 +37,38 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(BaseModel):
     role: str = Field(
         ..., description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'
     )
-    content: str = Field(..., description='Message content.')
+    content: str = Field(..., description="Message content.")
     attachments: (
         list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None
-    ) = Field(None, description='Optional file attachments for multimodal models.')
+    ) = Field(None, description="Optional file attachments for multimodal models.")
 
 
 class BatchCompletionStreamRequestPromptsItemGenerationParams(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     temp: float | None = Field(
-        None, description='Sampling temperature (typically 0–2).'
+        None, description="Sampling temperature (typically 0–2)."
     )
     top_p: float | None = Field(
-        None, description='Top-p (nucleus) sampling cutoff (0–1).'
+        None, description="Top-p (nucleus) sampling cutoff (0–1)."
     )
     top_k: float | None = Field(
-        None, description='Top-k sampling — keep only the top K tokens.'
+        None, description="Top-k sampling — keep only the top K tokens."
     )
     predict: float | None = Field(
         None,
-        description='Max tokens to predict. `-1` = until stop token, `-2` = until context filled.',
+        description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
     )
-    seed: float | None = Field(None, description='Random seed for reproducibility.')
+    seed: float | None = Field(None, description="Random seed for reproducibility.")
     frequency_penalty: float | None = Field(
-        None, description='Penalty applied to tokens based on frequency so far.'
+        None, description="Penalty applied to tokens based on frequency so far."
     )
     presence_penalty: float | None = Field(
-        None, description='Penalty applied to tokens that have already appeared.'
+        None, description="Penalty applied to tokens that have already appeared."
     )
     repeat_penalty: float | None = Field(
-        None, description='Penalty applied to repeated tokens.'
+        None, description="Penalty applied to repeated tokens."
     )
     reasoning_budget: conint(ge=-1, le=2147483647) | None = Field(
         None,
@@ -76,22 +76,22 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(BaseModel):
     )
     remove_thinking_from_context: bool | None = Field(
         None,
-        description='When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.',
+        description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
     )
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatText(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['text']
+    type: Literal["text"]
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['json_object']
+    type: Literal["json_object"]
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema(
@@ -100,7 +100,7 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaS
     root: dict[str, Any] = Field(
         ...,
         description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title='BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema',
+        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
     )
 
 
@@ -108,23 +108,23 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema(
     BaseModel
 ):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     name: constr(min_length=1) = Field(
         ...,
-        description='Schema identifier; OpenAI-compatibility only — not used by the addon.',
+        description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
     )
     description: str | None = Field(
         None,
-        description='Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.',
+        description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
     )
     schema_: (
         BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema
     ) = Field(
         ...,
-        alias='schema',
+        alias="schema",
         description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title='BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema',
+        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
     )
     strict: bool | None = Field(
         None,
@@ -134,26 +134,26 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema(
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['json_schema']
+    type: Literal["json_schema"]
     json_schema: (
         BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema
     ) = Field(
         ...,
-        title='BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema',
+        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema",
     )
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType(
     Enum
 ):
-    string = 'string'
-    number = 'number'
-    integer = 'integer'
-    boolean = 'boolean'
-    object = 'object'
-    array = 'array'
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
@@ -163,7 +163,7 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
         BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType
     ) = Field(
         ...,
-        title='BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType',
+        title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType",
     )
     description: str | None = None
     enum: list[str] | None = None
@@ -181,48 +181,48 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
         str, BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue
     ] = Field(
         ...,
-        title='BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties',
+        title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties",
     )
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParameters(BaseModel):
-    type: Literal['object']
+    type: Literal["object"]
     properties: BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties = (
         Field(
             ...,
-            title='BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties',
+            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties",
         )
     )
     required: list[str] | None = None
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItem(BaseModel):
-    type: Literal['function']
+    type: Literal["function"]
     name: str
     description: str
     parameters: BatchCompletionStreamRequestPromptsItemToolsItemParameters = Field(
-        ..., title='BatchCompletionStreamRequestPromptsItemToolsItemParameters'
+        ..., title="BatchCompletionStreamRequestPromptsItemToolsItemParameters"
     )
 
 
 class BatchCompletionStreamRequestPromptsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: constr(min_length=1) | None = Field(
         None,
-        description='Optional caller-supplied id used to correlate streamed chunks and final results.',
+        description="Optional caller-supplied id used to correlate streamed chunks and final results.",
     )
     history: list[BatchCompletionStreamRequestPromptsItemHistoryItem] = Field(
-        ..., description='Array of conversation messages sent to the model.'
+        ..., description="Array of conversation messages sent to the model."
     )
     generation_params: (
         BatchCompletionStreamRequestPromptsItemGenerationParams | None
     ) = Field(
         None,
-        alias='generationParams',
-        description='Optional per-prompt sampling / generation parameters.',
-        title='BatchCompletionStreamRequestPromptsItemGenerationParams',
+        alias="generationParams",
+        description="Optional per-prompt sampling / generation parameters.",
+        title="BatchCompletionStreamRequestPromptsItemGenerationParams",
     )
     response_format: (
         BatchCompletionStreamRequestPromptsItemResponseFormatText
@@ -231,88 +231,88 @@ class BatchCompletionStreamRequestPromptsItem(BaseModel):
         | None
     ) = Field(
         None,
-        alias='responseFormat',
-        description='Optional per-prompt structured-output constraint.',
+        alias="responseFormat",
+        description="Optional per-prompt structured-output constraint.",
     )
     tools: list[BatchCompletionStreamRequestPromptsItemToolsItem] | None = Field(
-        None, description='Resolved per-prompt tools the model can call.'
+        None, description="Resolved per-prompt tools the model can call."
     )
 
 
 class BatchCompletionStreamRequestToolDialect(Enum):
-    hermes = 'hermes'
-    pythonic = 'pythonic'
-    json = 'json'
-    harmony = 'harmony'
-    qwen35 = 'qwen35'
-    gemma4 = 'gemma4'
+    hermes = "hermes"
+    pythonic = "pythonic"
+    json = "json"
+    harmony = "harmony"
+    qwen35 = "qwen35"
+    gemma4 = "gemma4"
 
 
 class BatchCompletionStreamRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the model to use for batch completion.',
+        alias="modelId",
+        description="The identifier of the model to use for batch completion.",
     )
     prompts: list[BatchCompletionStreamRequestPromptsItem] = Field(
         ...,
-        description='Batch prompts submitted to the addon in one run.',
+        description="Batch prompts submitted to the addon in one run.",
         min_length=1,
     )
     stream: bool | None = Field(
         None,
-        description='Whether to stream tokens (`true`) or return all events on completion. Defaults to true.',
+        description="Whether to stream tokens (`true`) or return all events on completion. Defaults to true.",
     )
     capture_thinking: bool | None = Field(
         None,
-        alias='captureThinking',
-        description='When `true`, capture and emit reasoning/thinking deltas separately from content deltas.',
+        alias="captureThinking",
+        description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas.",
     )
     emit_raw_deltas: bool | None = Field(
         None,
-        alias='emitRawDeltas',
-        description='When `true`, also emit raw per-token deltas in addition to normalized content deltas.',
+        alias="emitRawDeltas",
+        description="When `true`, also emit raw per-token deltas in addition to normalized content deltas.",
     )
     tool_dialect: BatchCompletionStreamRequestToolDialect | None = Field(
         None,
-        alias='toolDialect',
-        description='Override auto-detected tool-call dialect for all prompts.',
-        title='BatchCompletionStreamRequestToolDialect',
+        alias="toolDialect",
+        description="Override auto-detected tool-call dialect for all prompts.",
+        title="BatchCompletionStreamRequestToolDialect",
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight batch request.',
+        alias="requestId",
+        description="Stable identifier for this in-flight batch request.",
     )
-    type: Literal['batchCompletionStream']
+    type: Literal["batchCompletionStream"]
 
 
 class BatchCompletionStreamResponseEventsItemEventContentDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['contentDelta']
+    type: Literal["contentDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
 
 class BatchCompletionStreamResponseEventsItemEventRawDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rawDelta']
+    type: Literal["rawDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
 
 class BatchCompletionStreamResponseEventsItemEventThinkingDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['thinkingDelta']
+    type: Literal["thinkingDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
@@ -321,20 +321,20 @@ class BatchCompletionStreamResponseEventsItemEventToolCallCallArguments(
     RootModel[dict[str, Any]]
 ):
     root: dict[str, Any] = Field(
-        ..., title='BatchCompletionStreamResponseEventsItemEventToolCallCallArguments'
+        ..., title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments"
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventToolCallCall(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: str
     name: str
     arguments: BatchCompletionStreamResponseEventsItemEventToolCallCallArguments = (
         Field(
             ...,
-            title='BatchCompletionStreamResponseEventsItemEventToolCallCallArguments',
+            title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments",
         )
     )
     raw: str | None = None
@@ -342,27 +342,27 @@ class BatchCompletionStreamResponseEventsItemEventToolCallCall(BaseModel):
 
 class BatchCompletionStreamResponseEventsItemEventToolCall(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['toolCall']
+    type: Literal["toolCall"]
     seq: conint(ge=0, le=9007199254740991)
     call: BatchCompletionStreamResponseEventsItemEventToolCallCall = Field(
-        ..., title='BatchCompletionStreamResponseEventsItemEventToolCallCall'
+        ..., title="BatchCompletionStreamResponseEventsItemEventToolCallCall"
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode(Enum):
-    parse_error = 'PARSE_ERROR'
-    validation_error = 'VALIDATION_ERROR'
-    unknown_tool = 'UNKNOWN_TOOL'
+    parse_error = "PARSE_ERROR"
+    validation_error = "VALIDATION_ERROR"
+    unknown_tool = "UNKNOWN_TOOL"
 
 
 class BatchCompletionStreamResponseEventsItemEventToolErrorError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     code: BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode = Field(
-        ..., title='BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode'
+        ..., title="BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode"
     )
     message: str
     raw: str | None = None
@@ -370,121 +370,121 @@ class BatchCompletionStreamResponseEventsItemEventToolErrorError(BaseModel):
 
 class BatchCompletionStreamResponseEventsItemEventToolError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['toolError']
+    type: Literal["toolError"]
     seq: conint(ge=0, le=9007199254740991)
     error: BatchCompletionStreamResponseEventsItemEventToolErrorError = Field(
-        ..., title='BatchCompletionStreamResponseEventsItemEventToolErrorError'
+        ..., title="BatchCompletionStreamResponseEventsItemEventToolErrorError"
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice(
     Enum
 ):
-    cpu = 'cpu'
-    gpu = 'gpu'
+    cpu = "cpu"
+    gpu = "gpu"
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias='timeToFirstToken')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    cache_tokens: float | None = Field(None, alias='cacheTokens')
-    prompt_tokens: float | None = Field(None, alias='promptTokens')
-    generated_tokens: float | None = Field(None, alias='generatedTokens')
-    avg_concurrent_seq: float | None = Field(None, alias='avgConcurrentSeq')
+    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    cache_tokens: float | None = Field(None, alias="cacheTokens")
+    prompt_tokens: float | None = Field(None, alias="promptTokens")
+    generated_tokens: float | None = Field(None, alias="generatedTokens")
+    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
     backend_device: (
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
         | None
     ) = Field(
         None,
-        alias='backendDevice',
-        title='BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice',
+        alias="backendDevice",
+        title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice",
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionStats']
+    type: Literal["completionStats"]
     seq: conint(ge=0, le=9007199254740991)
     stats: BatchCompletionStreamResponseEventsItemEventCompletionStatsStats = Field(
-        ..., title='BatchCompletionStreamResponseEventsItemEventCompletionStatsStats'
+        ..., title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStats"
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     message: str
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    full_text: str = Field(..., alias='fullText')
+    full_text: str = Field(..., alias="fullText")
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionDone']
+    type: Literal["completionDone"]
     seq: conint(ge=0, le=9007199254740991)
-    stop_reason: Literal['error'] = Field(..., alias='stopReason')
+    stop_reason: Literal["error"] = Field(..., alias="stopReason")
     error: BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError = Field(
         ...,
-        title='BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError',
+        title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError",
     )
     raw: BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw | None = (
         Field(
             None,
-            title='BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw',
+            title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw",
         )
     )
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason(Enum):
-    eos = 'eos'
-    length = 'length'
-    stop_sequence = 'stopSequence'
-    cancelled = 'cancelled'
+    eos = "eos"
+    length = "length"
+    stop_sequence = "stopSequence"
+    cancelled = "cancelled"
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    full_text: str = Field(..., alias='fullText')
+    full_text: str = Field(..., alias="fullText")
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDone(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionDone']
+    type: Literal["completionDone"]
     seq: conint(ge=0, le=9007199254740991)
     stop_reason: (
         BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason | None
     ) = Field(
         None,
-        alias='stopReason',
-        title='BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason',
+        alias="stopReason",
+        title="BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason",
     )
     raw: BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw | None = Field(
-        None, title='BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw'
+        None, title="BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw"
     )
 
 
 class BatchCompletionStreamResponseEventsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: str
     event: (
@@ -500,290 +500,290 @@ class BatchCompletionStreamResponseEventsItem(BaseModel):
 
 
 class BatchCompletionStreamResponseStatsBackendDevice(Enum):
-    cpu = 'cpu'
-    gpu = 'gpu'
+    cpu = "cpu"
+    gpu = "gpu"
 
 
 class BatchCompletionStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias='timeToFirstToken')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    cache_tokens: float | None = Field(None, alias='cacheTokens')
-    prompt_tokens: float | None = Field(None, alias='promptTokens')
-    generated_tokens: float | None = Field(None, alias='generatedTokens')
-    avg_concurrent_seq: float | None = Field(None, alias='avgConcurrentSeq')
+    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    cache_tokens: float | None = Field(None, alias="cacheTokens")
+    prompt_tokens: float | None = Field(None, alias="promptTokens")
+    generated_tokens: float | None = Field(None, alias="generatedTokens")
+    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
     backend_device: BatchCompletionStreamResponseStatsBackendDevice | None = Field(
         None,
-        alias='backendDevice',
-        title='BatchCompletionStreamResponseStatsBackendDevice',
+        alias="backendDevice",
+        title="BatchCompletionStreamResponseStatsBackendDevice",
     )
 
 
 class BatchCompletionStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['batchCompletionStream']
+    type: Literal["batchCompletionStream"]
     done: bool | None = None
     ids: list[str] | None = None
     events: list[BatchCompletionStreamResponseEventsItem]
     stats: BatchCompletionStreamResponseStats | None = Field(
-        None, title='BatchCompletionStreamResponseStats'
+        None, title="BatchCompletionStreamResponseStats"
     )
 
 
 class BciTranscribeRequestNeuralDataBase64(BaseModel):
-    type: Literal['base64'] = Field(
-        ..., description='Inline base64-encoded neural bytes.'
+    type: Literal["base64"] = Field(
+        ..., description="Inline base64-encoded neural bytes."
     )
     value: str = Field(
-        ..., description='Base64-encoded contents of a BCI neural `.bin` recording.'
+        ..., description="Base64-encoded contents of a BCI neural `.bin` recording."
     )
 
 
 class BciTranscribeRequestNeuralDataFilePath(BaseModel):
-    type: Literal['filePath'] = Field(..., description='Local neural `.bin` file path.')
+    type: Literal["filePath"] = Field(..., description="Local neural `.bin` file path.")
     value: str = Field(
-        ..., description='Path to a BCI neural `.bin` recording on the provider.'
+        ..., description="Path to a BCI neural `.bin` recording on the provider."
     )
 
 
 class BciTranscribeRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Identifier returned by `loadModel()` for a loaded BCI model.',
+        alias="modelId",
+        description="Identifier returned by `loadModel()` for a loaded BCI model.",
     )
     metadata: bool | None = Field(
         None,
-        description='When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.',
+        description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.",
     )
     neural_data: (
         BciTranscribeRequestNeuralDataBase64 | BciTranscribeRequestNeuralDataFilePath
     ) = Field(
         ...,
-        alias='neuralData',
-        description='Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.',
+        alias="neuralData",
+        description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
     )
-    type: Literal['bciTranscribe']
+    type: Literal["bciTranscribe"]
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class BciTranscribeResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    real_time_factor: float | None = Field(None, alias='realTimeFactor')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    total_tokens: float | None = Field(None, alias='totalTokens')
-    total_segments: float | None = Field(None, alias='totalSegments')
-    whisper_encode_time: float | None = Field(None, alias='whisperEncodeTime')
-    whisper_decode_time: float | None = Field(None, alias='whisperDecodeTime')
-    encoder_time: float | None = Field(None, alias='encoderTime')
-    decoder_time: float | None = Field(None, alias='decoderTime')
-    mel_spec_time: float | None = Field(None, alias='melSpecTime')
-    backend_device: float | None = Field(None, alias='backendDevice')
-    backend_id: float | None = Field(None, alias='backendId')
-    gpu_unsupported: float | None = Field(None, alias='gpuUnsupported')
-    gpu_mem_total_mb: float | None = Field(None, alias='gpuMemTotalMb')
-    gpu_mem_free_mb: float | None = Field(None, alias='gpuMemFreeMb')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    real_time_factor: float | None = Field(None, alias="realTimeFactor")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    total_tokens: float | None = Field(None, alias="totalTokens")
+    total_segments: float | None = Field(None, alias="totalSegments")
+    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
+    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
+    encoder_time: float | None = Field(None, alias="encoderTime")
+    decoder_time: float | None = Field(None, alias="decoderTime")
+    mel_spec_time: float | None = Field(None, alias="melSpecTime")
+    backend_device: float | None = Field(None, alias="backendDevice")
+    backend_id: float | None = Field(None, alias="backendId")
+    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
+    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
+    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
 
 
 class BciTranscribeResponseSegment(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias='startMs')
-    end_ms: float = Field(..., alias='endMs')
+    start_ms: float = Field(..., alias="startMs")
+    end_ms: float = Field(..., alias="endMs")
     append: bool
     id: float
 
 
 class BciTranscribeResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
     stats: BciTranscribeResponseStats | None = Field(
-        None, title='BciTranscribeResponseStats'
+        None, title="BciTranscribeResponseStats"
     )
     error: str | None = None
     segment: BciTranscribeResponseSegment | None = Field(
-        None, title='BciTranscribeResponseSegment'
+        None, title="BciTranscribeResponseSegment"
     )
-    type: Literal['bciTranscribe']
+    type: Literal["bciTranscribe"]
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
-    delta = 'delta'
-    full = 'full'
+    delta = "delta"
+    full = "full"
 
 
 class BciTranscribeStreamRequestStreamOpts(BaseModel):
     window_timesteps: conint(le=9007199254740991, gt=0) | None = Field(
         None,
-        alias='windowTimesteps',
-        description='Decode window size in timesteps (addon default: 1500).',
+        alias="windowTimesteps",
+        description="Decode window size in timesteps (addon default: 1500).",
     )
     hop_timesteps: conint(le=9007199254740991, gt=0) | None = Field(
         None,
-        alias='hopTimesteps',
-        description='How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.',
+        alias="hopTimesteps",
+        description="How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.",
     )
     emit: BciTranscribeStreamRequestStreamOptsEmit | None = Field(
         None,
         description="'delta' (default) emits only the newly-discovered tail per window; 'full' emits the full running transcript each update.",
-        title='BciTranscribeStreamRequestStreamOptsEmit',
+        title="BciTranscribeStreamRequestStreamOptsEmit",
     )
 
 
 class BciTranscribeStreamRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Identifier returned by `loadModel()` for a loaded BCI model.',
+        alias="modelId",
+        description="Identifier returned by `loadModel()` for a loaded BCI model.",
     )
     metadata: bool | None = Field(
         None,
-        description='When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.',
+        description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.",
     )
-    type: Literal['bciTranscribeStream']
+    type: Literal["bciTranscribeStream"]
     stream_opts: BciTranscribeStreamRequestStreamOpts | None = Field(
-        None, alias='streamOpts', title='BciTranscribeStreamRequestStreamOpts'
+        None, alias="streamOpts", title="BciTranscribeStreamRequestStreamOpts"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight duplex BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight duplex BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class BciTranscribeStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    real_time_factor: float | None = Field(None, alias='realTimeFactor')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    total_tokens: float | None = Field(None, alias='totalTokens')
-    total_segments: float | None = Field(None, alias='totalSegments')
-    whisper_encode_time: float | None = Field(None, alias='whisperEncodeTime')
-    whisper_decode_time: float | None = Field(None, alias='whisperDecodeTime')
-    encoder_time: float | None = Field(None, alias='encoderTime')
-    decoder_time: float | None = Field(None, alias='decoderTime')
-    mel_spec_time: float | None = Field(None, alias='melSpecTime')
-    backend_device: float | None = Field(None, alias='backendDevice')
-    backend_id: float | None = Field(None, alias='backendId')
-    gpu_unsupported: float | None = Field(None, alias='gpuUnsupported')
-    gpu_mem_total_mb: float | None = Field(None, alias='gpuMemTotalMb')
-    gpu_mem_free_mb: float | None = Field(None, alias='gpuMemFreeMb')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    real_time_factor: float | None = Field(None, alias="realTimeFactor")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    total_tokens: float | None = Field(None, alias="totalTokens")
+    total_segments: float | None = Field(None, alias="totalSegments")
+    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
+    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
+    encoder_time: float | None = Field(None, alias="encoderTime")
+    decoder_time: float | None = Field(None, alias="decoderTime")
+    mel_spec_time: float | None = Field(None, alias="melSpecTime")
+    backend_device: float | None = Field(None, alias="backendDevice")
+    backend_id: float | None = Field(None, alias="backendId")
+    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
+    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
+    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
 
 
 class BciTranscribeStreamResponseSegment(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias='startMs')
-    end_ms: float = Field(..., alias='endMs')
+    start_ms: float = Field(..., alias="startMs")
+    end_ms: float = Field(..., alias="endMs")
     append: bool
     id: float
 
 
 class BciTranscribeStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
     stats: BciTranscribeStreamResponseStats | None = Field(
-        None, title='BciTranscribeStreamResponseStats'
+        None, title="BciTranscribeStreamResponseStats"
     )
     error: str | None = None
     segment: BciTranscribeStreamResponseSegment | None = Field(
-        None, title='BciTranscribeStreamResponseSegment'
+        None, title="BciTranscribeStreamResponseSegment"
     )
-    type: Literal['bciTranscribeStream']
+    type: Literal["bciTranscribeStream"]
 
 
 class CancelRequestRequest(BaseModel):
-    type: Literal['cancel']
-    operation: Literal['request'] = Field(..., description='Operation type')
+    type: Literal["cancel"]
+    operation: Literal["request"] = Field(..., description="Operation type")
     request_id: constr(min_length=1) = Field(
         ...,
-        alias='requestId',
-        description='Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).',
+        alias="requestId",
+        description="Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).",
     )
     clear_cache: bool | None = Field(
         None,
-        alias='clearCache',
-        description='Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.',
+        alias="clearCache",
+        description="Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.",
     )
 
 
 class CancelRequestBroadKind(Enum):
-    completion = 'completion'
-    batch_completion = 'batchCompletion'
-    embeddings = 'embeddings'
-    transcribe = 'transcribe'
-    translate = 'translate'
-    diffusion = 'diffusion'
-    tts = 'tts'
-    ocr = 'ocr'
-    vla = 'vla'
-    finetune = 'finetune'
-    load_model = 'loadModel'
-    download_asset = 'downloadAsset'
-    rag = 'rag'
+    completion = "completion"
+    batch_completion = "batchCompletion"
+    embeddings = "embeddings"
+    transcribe = "transcribe"
+    translate = "translate"
+    diffusion = "diffusion"
+    tts = "tts"
+    ocr = "ocr"
+    vla = "vla"
+    finetune = "finetune"
+    load_model = "loadModel"
+    download_asset = "downloadAsset"
+    rag = "rag"
 
 
 class CancelRequestBroad(BaseModel):
-    type: Literal['cancel']
-    operation: Literal['broad'] = Field(..., description='Operation type')
+    type: Literal["cancel"]
+    operation: Literal["broad"] = Field(..., description="Operation type")
     model_id: str = Field(
-        ..., alias='modelId', description='Cancel every in-flight request on this model'
+        ..., alias="modelId", description="Cancel every in-flight request on this model"
     )
     kind: CancelRequestBroadKind | None = Field(
         None,
-        description='Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.',
-        title='CancelRequestBroadKind',
+        description="Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
+        title="CancelRequestBroadKind",
     )
 
 
 class CancelResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['cancel']
+    type: Literal["cancel"]
     success: bool
     cancelled: conint(ge=0, le=9007199254740991) | None = None
     error: str | None = None
 
 
 class ClassifyRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     image: str
     top_k: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='topK'
+        None, alias="topK"
     )
     width: conint(ge=-9007199254740991, le=9007199254740991) | None = None
     height: conint(ge=-9007199254740991, le=9007199254740991) | None = None
     channels: Literal[3] | None = None
-    type: Literal['classify']
+    type: Literal["classify"]
 
 
 class ClassifyResponseResultsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     label: str
     confidence: float
@@ -791,9 +791,9 @@ class ClassifyResponseResultsItem(BaseModel):
 
 class ClassifyResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['classify']
+    type: Literal["classify"]
     results: list[ClassifyResponseResultsItem]
     done: bool | None = None
 
@@ -801,7 +801,7 @@ class ClassifyResponse(BaseModel):
 class CompletionStreamRequestHistoryItemAttachmentsItem(BaseModel):
     path: str = Field(
         ...,
-        description='Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).',
+        description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).",
     )
 
 
@@ -809,24 +809,24 @@ class CompletionStreamRequestHistoryItem(BaseModel):
     role: str = Field(
         ..., description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'
     )
-    content: str = Field(..., description='Message content.')
+    content: str = Field(..., description="Message content.")
     attachments: list[CompletionStreamRequestHistoryItemAttachmentsItem] | None = Field(
-        None, description='Optional file attachments for multimodal models.'
+        None, description="Optional file attachments for multimodal models."
     )
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
-    string = 'string'
-    number = 'number'
-    integer = 'integer'
-    boolean = 'boolean'
-    object = 'object'
-    array = 'array'
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValue(BaseModel):
     type: CompletionStreamRequestToolsItemParametersPropertiesValueType = Field(
-        ..., title='CompletionStreamRequestToolsItemParametersPropertiesValueType'
+        ..., title="CompletionStreamRequestToolsItemParametersPropertiesValueType"
     )
     description: str | None = None
     enum: list[str] | None = None
@@ -836,53 +836,53 @@ class CompletionStreamRequestToolsItemParametersProperties(
     RootModel[dict[str, CompletionStreamRequestToolsItemParametersPropertiesValue]]
 ):
     root: dict[str, CompletionStreamRequestToolsItemParametersPropertiesValue] = Field(
-        ..., title='CompletionStreamRequestToolsItemParametersProperties'
+        ..., title="CompletionStreamRequestToolsItemParametersProperties"
     )
 
 
 class CompletionStreamRequestToolsItemParameters(BaseModel):
-    type: Literal['object']
+    type: Literal["object"]
     properties: CompletionStreamRequestToolsItemParametersProperties = Field(
-        ..., title='CompletionStreamRequestToolsItemParametersProperties'
+        ..., title="CompletionStreamRequestToolsItemParametersProperties"
     )
     required: list[str] | None = None
 
 
 class CompletionStreamRequestToolsItem(BaseModel):
-    type: Literal['function']
+    type: Literal["function"]
     name: str
     description: str
     parameters: CompletionStreamRequestToolsItemParameters = Field(
-        ..., title='CompletionStreamRequestToolsItemParameters'
+        ..., title="CompletionStreamRequestToolsItemParameters"
     )
 
 
 class CompletionStreamRequestGenerationParams(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     temp: float | None = Field(
-        None, description='Sampling temperature (typically 0–2).'
+        None, description="Sampling temperature (typically 0–2)."
     )
     top_p: float | None = Field(
-        None, description='Top-p (nucleus) sampling cutoff (0–1).'
+        None, description="Top-p (nucleus) sampling cutoff (0–1)."
     )
     top_k: float | None = Field(
-        None, description='Top-k sampling — keep only the top K tokens.'
+        None, description="Top-k sampling — keep only the top K tokens."
     )
     predict: float | None = Field(
         None,
-        description='Max tokens to predict. `-1` = until stop token, `-2` = until context filled.',
+        description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
     )
-    seed: float | None = Field(None, description='Random seed for reproducibility.')
+    seed: float | None = Field(None, description="Random seed for reproducibility.")
     frequency_penalty: float | None = Field(
-        None, description='Penalty applied to tokens based on frequency so far.'
+        None, description="Penalty applied to tokens based on frequency so far."
     )
     presence_penalty: float | None = Field(
-        None, description='Penalty applied to tokens that have already appeared.'
+        None, description="Penalty applied to tokens that have already appeared."
     )
     repeat_penalty: float | None = Field(
-        None, description='Penalty applied to repeated tokens.'
+        None, description="Penalty applied to repeated tokens."
     )
     reasoning_budget: conint(ge=-1, le=2147483647) | None = Field(
         None,
@@ -890,31 +890,31 @@ class CompletionStreamRequestGenerationParams(BaseModel):
     )
     remove_thinking_from_context: bool | None = Field(
         None,
-        description='When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.',
+        description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
     )
 
 
 class CompletionStreamRequestToolDialect(Enum):
-    hermes = 'hermes'
-    pythonic = 'pythonic'
-    json = 'json'
-    harmony = 'harmony'
-    qwen35 = 'qwen35'
-    gemma4 = 'gemma4'
+    hermes = "hermes"
+    pythonic = "pythonic"
+    json = "json"
+    harmony = "harmony"
+    qwen35 = "qwen35"
+    gemma4 = "gemma4"
 
 
 class CompletionStreamRequestResponseFormatText(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['text']
+    type: Literal["text"]
 
 
 class CompletionStreamRequestResponseFormatJsonObject(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['json_object']
+    type: Literal["json_object"]
 
 
 class CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema(
@@ -923,27 +923,27 @@ class CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema(
     root: dict[str, Any] = Field(
         ...,
         description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title='CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema',
+        title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
     )
 
 
 class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     name: constr(min_length=1) = Field(
         ...,
-        description='Schema identifier; OpenAI-compatibility only — not used by the addon.',
+        description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
     )
     description: str | None = Field(
         None,
-        description='Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.',
+        description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
     )
     schema_: CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema = Field(
         ...,
-        alias='schema',
+        alias="schema",
         description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title='CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema',
+        title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
     )
     strict: bool | None = Field(
         None,
@@ -953,53 +953,53 @@ class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(BaseModel):
 
 class CompletionStreamRequestResponseFormatJsonSchema(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['json_schema']
+    type: Literal["json_schema"]
     json_schema: CompletionStreamRequestResponseFormatJsonSchemaJsonSchema = Field(
-        ..., title='CompletionStreamRequestResponseFormatJsonSchemaJsonSchema'
+        ..., title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"
     )
 
 
 class CompletionStreamRequest(BaseModel):
     history: list[CompletionStreamRequestHistoryItem] = Field(
-        ..., description='Array of conversation messages sent to the model.'
+        ..., description="Array of conversation messages sent to the model."
     )
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the model to use for completion.',
+        alias="modelId",
+        description="The identifier of the model to use for completion.",
     )
-    kv_cache: bool | constr(min_length=1) | None = Field(None, alias='kvCache')
+    kv_cache: bool | constr(min_length=1) | None = Field(None, alias="kvCache")
     tools: list[CompletionStreamRequestToolsItem] | None = Field(
         None,
-        description='Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.',
+        description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
     )
     stream: bool = Field(
         ...,
-        description='Whether to stream tokens (`true`) or return the complete response once (`false`).',
+        description="Whether to stream tokens (`true`) or return the complete response once (`false`).",
     )
     generation_params: CompletionStreamRequestGenerationParams | None = Field(
         None,
-        alias='generationParams',
-        description='Optional sampling / generation parameters.',
-        title='CompletionStreamRequestGenerationParams',
+        alias="generationParams",
+        description="Optional sampling / generation parameters.",
+        title="CompletionStreamRequestGenerationParams",
     )
     capture_thinking: bool | None = Field(
         None,
-        alias='captureThinking',
-        description='When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.',
+        alias="captureThinking",
+        description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
     )
     emit_raw_deltas: bool | None = Field(
         None,
-        alias='emitRawDeltas',
-        description='When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.',
+        alias="emitRawDeltas",
+        description="When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
     )
     tool_dialect: CompletionStreamRequestToolDialect | None = Field(
         None,
-        alias='toolDialect',
+        alias="toolDialect",
         description="Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
-        title='CompletionStreamRequestToolDialect',
+        title="CompletionStreamRequestToolDialect",
     )
     response_format: (
         CompletionStreamRequestResponseFormatText
@@ -1008,40 +1008,40 @@ class CompletionStreamRequest(BaseModel):
         | None
     ) = Field(
         None,
-        alias='responseFormat',
-        description='Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.',
+        alias="responseFormat",
+        description="Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.',
+        alias="requestId",
+        description="Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
     )
-    type: Literal['completionStream']
+    type: Literal["completionStream"]
 
 
 class CompletionStreamResponseEventsItemContentDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['contentDelta']
+    type: Literal["contentDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
 
 class CompletionStreamResponseEventsItemRawDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rawDelta']
+    type: Literal["rawDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
 
 class CompletionStreamResponseEventsItemThinkingDelta(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['thinkingDelta']
+    type: Literal["thinkingDelta"]
     seq: conint(ge=0, le=9007199254740991)
     text: str
 
@@ -1050,45 +1050,45 @@ class CompletionStreamResponseEventsItemToolCallCallArguments(
     RootModel[dict[str, Any]]
 ):
     root: dict[str, Any] = Field(
-        ..., title='CompletionStreamResponseEventsItemToolCallCallArguments'
+        ..., title="CompletionStreamResponseEventsItemToolCallCallArguments"
     )
 
 
 class CompletionStreamResponseEventsItemToolCallCall(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: str
     name: str
     arguments: CompletionStreamResponseEventsItemToolCallCallArguments = Field(
-        ..., title='CompletionStreamResponseEventsItemToolCallCallArguments'
+        ..., title="CompletionStreamResponseEventsItemToolCallCallArguments"
     )
     raw: str | None = None
 
 
 class CompletionStreamResponseEventsItemToolCall(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['toolCall']
+    type: Literal["toolCall"]
     seq: conint(ge=0, le=9007199254740991)
     call: CompletionStreamResponseEventsItemToolCallCall = Field(
-        ..., title='CompletionStreamResponseEventsItemToolCallCall'
+        ..., title="CompletionStreamResponseEventsItemToolCallCall"
     )
 
 
 class CompletionStreamResponseEventsItemToolErrorErrorCode(Enum):
-    parse_error = 'PARSE_ERROR'
-    validation_error = 'VALIDATION_ERROR'
-    unknown_tool = 'UNKNOWN_TOOL'
+    parse_error = "PARSE_ERROR"
+    validation_error = "VALIDATION_ERROR"
+    unknown_tool = "UNKNOWN_TOOL"
 
 
 class CompletionStreamResponseEventsItemToolErrorError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     code: CompletionStreamResponseEventsItemToolErrorErrorCode = Field(
-        ..., title='CompletionStreamResponseEventsItemToolErrorErrorCode'
+        ..., title="CompletionStreamResponseEventsItemToolErrorErrorCode"
     )
     message: str
     raw: str | None = None
@@ -1096,116 +1096,116 @@ class CompletionStreamResponseEventsItemToolErrorError(BaseModel):
 
 class CompletionStreamResponseEventsItemToolError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['toolError']
+    type: Literal["toolError"]
     seq: conint(ge=0, le=9007199254740991)
     error: CompletionStreamResponseEventsItemToolErrorError = Field(
-        ..., title='CompletionStreamResponseEventsItemToolErrorError'
+        ..., title="CompletionStreamResponseEventsItemToolErrorError"
     )
 
 
 class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
-    cpu = 'cpu'
-    gpu = 'gpu'
+    cpu = "cpu"
+    gpu = "gpu"
 
 
 class CompletionStreamResponseEventsItemCompletionStatsStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias='timeToFirstToken')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    cache_tokens: float | None = Field(None, alias='cacheTokens')
-    prompt_tokens: float | None = Field(None, alias='promptTokens')
-    generated_tokens: float | None = Field(None, alias='generatedTokens')
-    avg_concurrent_seq: float | None = Field(None, alias='avgConcurrentSeq')
+    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    cache_tokens: float | None = Field(None, alias="cacheTokens")
+    prompt_tokens: float | None = Field(None, alias="promptTokens")
+    generated_tokens: float | None = Field(None, alias="generatedTokens")
+    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
     backend_device: (
         CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None
     ) = Field(
         None,
-        alias='backendDevice',
-        title='CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice',
+        alias="backendDevice",
+        title="CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice",
     )
 
 
 class CompletionStreamResponseEventsItemCompletionStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionStats']
+    type: Literal["completionStats"]
     seq: conint(ge=0, le=9007199254740991)
     stats: CompletionStreamResponseEventsItemCompletionStatsStats = Field(
-        ..., title='CompletionStreamResponseEventsItemCompletionStatsStats'
+        ..., title="CompletionStreamResponseEventsItemCompletionStatsStats"
     )
 
 
 class CompletionStreamResponseEventsItemCompletionDoneErrorError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     message: str
 
 
 class CompletionStreamResponseEventsItemCompletionDoneErrorRaw(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    full_text: str = Field(..., alias='fullText')
+    full_text: str = Field(..., alias="fullText")
 
 
 class CompletionStreamResponseEventsItemCompletionDoneError(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionDone']
+    type: Literal["completionDone"]
     seq: conint(ge=0, le=9007199254740991)
-    stop_reason: Literal['error'] = Field(..., alias='stopReason')
+    stop_reason: Literal["error"] = Field(..., alias="stopReason")
     error: CompletionStreamResponseEventsItemCompletionDoneErrorError = Field(
-        ..., title='CompletionStreamResponseEventsItemCompletionDoneErrorError'
+        ..., title="CompletionStreamResponseEventsItemCompletionDoneErrorError"
     )
     raw: CompletionStreamResponseEventsItemCompletionDoneErrorRaw | None = Field(
-        None, title='CompletionStreamResponseEventsItemCompletionDoneErrorRaw'
+        None, title="CompletionStreamResponseEventsItemCompletionDoneErrorRaw"
     )
 
 
 class CompletionStreamResponseEventsItemCompletionDoneStopReason(Enum):
-    eos = 'eos'
-    length = 'length'
-    stop_sequence = 'stopSequence'
-    cancelled = 'cancelled'
+    eos = "eos"
+    length = "length"
+    stop_sequence = "stopSequence"
+    cancelled = "cancelled"
 
 
 class CompletionStreamResponseEventsItemCompletionDoneRaw(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    full_text: str = Field(..., alias='fullText')
+    full_text: str = Field(..., alias="fullText")
 
 
 class CompletionStreamResponseEventsItemCompletionDone(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionDone']
+    type: Literal["completionDone"]
     seq: conint(ge=0, le=9007199254740991)
     stop_reason: CompletionStreamResponseEventsItemCompletionDoneStopReason | None = (
         Field(
             None,
-            alias='stopReason',
-            title='CompletionStreamResponseEventsItemCompletionDoneStopReason',
+            alias="stopReason",
+            title="CompletionStreamResponseEventsItemCompletionDoneStopReason",
         )
     )
     raw: CompletionStreamResponseEventsItemCompletionDoneRaw | None = Field(
-        None, title='CompletionStreamResponseEventsItemCompletionDoneRaw'
+        None, title="CompletionStreamResponseEventsItemCompletionDoneRaw"
     )
 
 
 class CompletionStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['completionStream']
+    type: Literal["completionStream"]
     done: bool | None = None
     events: list[
         CompletionStreamResponseEventsItemContentDelta
@@ -1220,46 +1220,46 @@ class CompletionStreamResponse(BaseModel):
 
 
 class ModelType(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
 
 
 class PluginId(Enum):
-    llm = '@qvac/sdk/llamacpp-completion/plugin'
-    embedding = '@qvac/sdk/llamacpp-embedding/plugin'
-    whisper = '@qvac/sdk/whispercpp-transcription/plugin'
-    bci = '@qvac/sdk/bci-whispercpp-transcription/plugin'
-    nmt = '@qvac/sdk/nmtcpp-translation/plugin'
-    tts = '@qvac/sdk/tts-ggml/plugin'
-    ocr = '@qvac/sdk/ggml-ocr/plugin'
-    diffusion = '@qvac/sdk/sdcpp-generation/plugin'
-    vla = '@qvac/sdk/ggml-vla/plugin'
-    classification = '@qvac/sdk/ggml-classification/plugin'
+    llm = "@qvac/sdk/llamacpp-completion/plugin"
+    embedding = "@qvac/sdk/llamacpp-embedding/plugin"
+    whisper = "@qvac/sdk/whispercpp-transcription/plugin"
+    bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
+    nmt = "@qvac/sdk/nmtcpp-translation/plugin"
+    tts = "@qvac/sdk/tts-ggml/plugin"
+    ocr = "@qvac/sdk/ggml-ocr/plugin"
+    diffusion = "@qvac/sdk/sdcpp-generation/plugin"
+    vla = "@qvac/sdk/ggml-vla/plugin"
+    classification = "@qvac/sdk/ggml-classification/plugin"
 
 
 class SupportedAudioFormat(Enum):
-    mp3 = '.mp3'
-    m4_a = '.m4a'
-    ogg = '.ogg'
-    wav = '.wav'
-    flac = '.flac'
-    aac = '.aac'
-    raw = '.raw'
+    mp3 = ".mp3"
+    m4_a = ".m4a"
+    ogg = ".ogg"
+    wav = ".wav"
+    flac = ".flac"
+    aac = ".aac"
+    raw = ".raw"
 
 
 class ToolsMode(Enum):
-    static = 'static'
-    dynamic = 'dynamic'
+    static = "static"
+    dynamic = "dynamic"
 
 
 class Verbosity(Enum):
@@ -1270,73 +1270,73 @@ class Verbosity(Enum):
 
 
 class DeleteCacheAllRequest(BaseModel):
-    type: Literal['deleteCache']
+    type: Literal["deleteCache"]
     all: Literal[True]
 
 
 class DeleteCacheKvEntryRequest(BaseModel):
-    type: Literal['deleteCache']
-    kv_cache_key: str = Field(..., alias='kvCacheKey')
-    model_id: str | None = Field(None, alias='modelId')
+    type: Literal["deleteCache"]
+    kv_cache_key: str = Field(..., alias="kvCacheKey")
+    model_id: str | None = Field(None, alias="modelId")
 
 
 class DeleteCacheResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['deleteCache']
+    type: Literal["deleteCache"]
     success: bool
     error: str | None = None
 
 
 class DiffusionStreamRequestSamplingMethod(Enum):
-    euler = 'euler'
-    euler_a = 'euler_a'
-    heun = 'heun'
-    dpm2 = 'dpm2'
-    dpm__2m = 'dpm++2m'
-    dpm__2mv2 = 'dpm++2mv2'
-    dpm__2s_a = 'dpm++2s_a'
-    lcm = 'lcm'
-    ipndm = 'ipndm'
-    ipndm_v = 'ipndm_v'
-    ddim_trailing = 'ddim_trailing'
-    tcd = 'tcd'
-    res_multistep = 'res_multistep'
-    res_2s = 'res_2s'
+    euler = "euler"
+    euler_a = "euler_a"
+    heun = "heun"
+    dpm2 = "dpm2"
+    dpm__2m = "dpm++2m"
+    dpm__2mv2 = "dpm++2mv2"
+    dpm__2s_a = "dpm++2s_a"
+    lcm = "lcm"
+    ipndm = "ipndm"
+    ipndm_v = "ipndm_v"
+    ddim_trailing = "ddim_trailing"
+    tcd = "tcd"
+    res_multistep = "res_multistep"
+    res_2s = "res_2s"
 
 
 class DiffusionStreamRequestScheduler(Enum):
-    discrete = 'discrete'
-    karras = 'karras'
-    exponential = 'exponential'
-    ays = 'ays'
-    gits = 'gits'
-    sgm_uniform = 'sgm_uniform'
-    simple = 'simple'
-    lcm = 'lcm'
-    smoothstep = 'smoothstep'
-    kl_optimal = 'kl_optimal'
-    bong_tangent = 'bong_tangent'
+    discrete = "discrete"
+    karras = "karras"
+    exponential = "exponential"
+    ays = "ays"
+    gits = "gits"
+    sgm_uniform = "sgm_uniform"
+    simple = "simple"
+    lcm = "lcm"
+    smoothstep = "smoothstep"
+    kl_optimal = "kl_optimal"
+    bong_tangent = "bong_tangent"
 
 
 class InitImage(
     RootModel[
         constr(
-            pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             min_length=1,
         )
     ]
 ):
     root: constr(
-        pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         min_length=1,
     )
 
 
 class DiffusionStreamRequestUpscale(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     repeats: conint(le=9007199254740991, gt=0) | None = None
 
@@ -1344,69 +1344,69 @@ class DiffusionStreamRequestUpscale(BaseModel):
 class DiffusionStreamRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the diffusion model to use for generation.',
+        alias="modelId",
+        description="The identifier of the diffusion model to use for generation.",
     )
     prompt: str = Field(
-        ..., description='Positive prompt describing the image to generate.'
+        ..., description="Positive prompt describing the image to generate."
     )
     negative_prompt: str | None = Field(
-        None, description='Optional negative prompt describing what to avoid.'
+        None, description="Optional negative prompt describing what to avoid."
     )
     width: conint(le=9007199254740991, multiple_of=8, gt=0) | None = Field(
-        None, description='Image width in pixels (must be a multiple of 8).'
+        None, description="Image width in pixels (must be a multiple of 8)."
     )
     height: conint(le=9007199254740991, multiple_of=8, gt=0) | None = Field(
-        None, description='Image height in pixels (must be a multiple of 8).'
+        None, description="Image height in pixels (must be a multiple of 8)."
     )
     steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description='Number of sampling steps to run.'
+        None, description="Number of sampling steps to run."
     )
     cfg_scale: float | None = Field(
         None,
-        description='Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7',
+        description="Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
     )
     img_cfg_scale: float | None = Field(
         -1,
-        description='Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale',
+        description="Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
     )
     guidance: float | None = Field(
         None,
-        description='Distilled guidance for FLUX models; typical range 1–10, default 3.5',
+        description="Distilled guidance for FLUX models; typical range 1–10, default 3.5",
     )
     sampling_method: DiffusionStreamRequestSamplingMethod | None = Field(
         None,
-        description='Sampling algorithm used by the diffusion scheduler.',
-        title='DiffusionStreamRequestSamplingMethod',
+        description="Sampling algorithm used by the diffusion scheduler.",
+        title="DiffusionStreamRequestSamplingMethod",
     )
     scheduler: DiffusionStreamRequestScheduler | None = Field(
         None,
-        description='Noise schedule to apply when sampling.',
-        title='DiffusionStreamRequestScheduler',
+        description="Noise schedule to apply when sampling.",
+        title="DiffusionStreamRequestScheduler",
     )
     seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         None,
-        description='Random seed; when omitted the SDK picks one and returns it in stats.',
+        description="Random seed; when omitted the SDK picks one and returns it in stats.",
     )
     batch_count: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description='Number of images to generate in this call.'
+        None, description="Number of images to generate in this call."
     )
     vae_tiling: bool | None = Field(
         None,
-        description='Enable VAE tiling for large images on constrained VRAM (overrides model config).',
+        description="Enable VAE tiling for large images on constrained VRAM (overrides model config).",
     )
     cache_preset: str | None = Field(
-        None, description='Optional name of a cached sampler preset to reuse.'
+        None, description="Optional name of a cached sampler preset to reuse."
     )
     init_image: (
         constr(
-            pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             min_length=1,
         )
         | None
     ) = Field(
         None,
-        description='Base64-encoded image for img2img generation. Mutually exclusive with init_images.',
+        description="Base64-encoded image for img2img generation. Mutually exclusive with init_images.",
     )
     init_images: list[InitImage] | None = Field(
         None,
@@ -1415,116 +1415,116 @@ class DiffusionStreamRequest(BaseModel):
     )
     increase_ref_index: bool | None = Field(
         None,
-        description='FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens.',
+        description="FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens.",
     )
     auto_resize_ref_image: bool | None = Field(
         None,
-        description='FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions.',
+        description="FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions.",
     )
-    lora: constr(pattern=r'^(\/|[A-Za-z]:[\\/]|\\\\)', min_length=1) | None = Field(
+    lora: constr(pattern=r"^(\/|[A-Za-z]:[\\/]|\\\\)", min_length=1) | None = Field(
         None,
-        description='Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).',
+        description="Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
     )
     strength: confloat(ge=0.0, le=1.0) | None = Field(
         None,
-        description='img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.',
+        description="img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
     )
     upscale: bool | DiffusionStreamRequestUpscale | None = Field(
         None,
         description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig.",
     )
-    type: Literal['diffusionStream']
+    type: Literal["diffusionStream"]
 
 
 class DiffusionStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     model_load_ms: float | None = Field(
         None,
-        alias='modelLoadMs',
-        description='Time in milliseconds spent loading the diffusion model.',
+        alias="modelLoadMs",
+        description="Time in milliseconds spent loading the diffusion model.",
     )
     generation_ms: float | None = Field(
         None,
-        alias='generationMs',
-        description='Wall-clock time in milliseconds spent generating images.',
+        alias="generationMs",
+        description="Wall-clock time in milliseconds spent generating images.",
     )
     total_generation_ms: float | None = Field(
         None,
-        alias='totalGenerationMs',
-        description='Total generation time in milliseconds across all images in the batch.',
+        alias="totalGenerationMs",
+        description="Total generation time in milliseconds across all images in the batch.",
     )
     total_wall_ms: float | None = Field(
         None,
-        alias='totalWallMs',
-        description='Total wall-clock time in milliseconds including model load and sampling.',
+        alias="totalWallMs",
+        description="Total wall-clock time in milliseconds including model load and sampling.",
     )
     total_steps: float | None = Field(
         None,
-        alias='totalSteps',
-        description='Total number of diffusion sampling steps executed.',
+        alias="totalSteps",
+        description="Total number of diffusion sampling steps executed.",
     )
     total_generations: float | None = Field(
         None,
-        alias='totalGenerations',
-        description='Total number of generation passes executed.',
+        alias="totalGenerations",
+        description="Total number of generation passes executed.",
     )
     total_images: float | None = Field(
-        None, alias='totalImages', description='Total number of images produced.'
+        None, alias="totalImages", description="Total number of images produced."
     )
     total_pixels: float | None = Field(
         None,
-        alias='totalPixels',
-        description='Total number of pixels generated across all images.',
+        alias="totalPixels",
+        description="Total number of pixels generated across all images.",
     )
     width: float | None = Field(
-        None, description='Width in pixels of each generated image.'
+        None, description="Width in pixels of each generated image."
     )
     height: float | None = Field(
-        None, description='Height in pixels of each generated image.'
+        None, description="Height in pixels of each generated image."
     )
     seed: float | None = Field(
         None,
-        description='Seed that produced these outputs (randomized when not supplied by the caller).',
+        description="Seed that produced these outputs (randomized when not supplied by the caller).",
     )
 
 
 class DiffusionStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['diffusionStream']
+    type: Literal["diffusionStream"]
     step: float | None = None
-    total_steps: float | None = Field(None, alias='totalSteps')
-    elapsed_ms: float | None = Field(None, alias='elapsedMs')
+    total_steps: float | None = Field(None, alias="totalSteps")
+    elapsed_ms: float | None = Field(None, alias="elapsedMs")
     data: str | None = None
-    output_index: float | None = Field(None, alias='outputIndex')
+    output_index: float | None = Field(None, alias="outputIndex")
     done: bool | None = None
     stats: DiffusionStreamResponseStats | None = Field(
-        None, title='DiffusionStreamResponseStats'
+        None, title="DiffusionStreamResponseStats"
     )
 
 
 class DownloadAssetRequest(BaseModel):
-    type: Literal['downloadAsset']
-    asset_src: str = Field(..., alias='assetSrc')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["downloadAsset"]
+    asset_src: str = Field(..., alias="assetSrc")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight download, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this download with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight download, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this download with `cancel({ requestId })`.",
     )
 
 
 class DownloadAssetResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['downloadAsset']
+    type: Literal["downloadAsset"]
     success: bool
-    asset_id: str | None = Field(None, alias='assetId')
+    asset_id: str | None = Field(None, alias="assetId")
     error: str | None = None
 
 
@@ -1534,74 +1534,74 @@ class TextItem(RootModel[constr(min_length=1)]):
 
 class EmbedRequest(BaseModel):
     model_id: str = Field(
-        ..., alias='modelId', description='The identifier of the embedding model to use'
+        ..., alias="modelId", description="The identifier of the embedding model to use"
     )
     text: constr(min_length=1) | list[TextItem] = Field(
         ...,
-        description='The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.',
+        description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
     )
-    type: Literal['embed']
+    type: Literal["embed"]
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight embed, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight embed, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class EmbedResponseStatsBackendDevice(Enum):
-    cpu = 'cpu'
-    gpu = 'gpu'
+    cpu = "cpu"
+    gpu = "gpu"
 
 
 class EmbedResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     total_time: float | None = Field(
-        None, alias='totalTime', description='Total embedding time in milliseconds'
+        None, alias="totalTime", description="Total embedding time in milliseconds"
     )
     tokens_per_second: float | None = Field(
-        None, alias='tokensPerSecond', description='Tokens processed per second'
+        None, alias="tokensPerSecond", description="Tokens processed per second"
     )
     total_tokens: float | None = Field(
-        None, alias='totalTokens', description='Total tokens processed'
+        None, alias="totalTokens", description="Total tokens processed"
     )
     backend_device: EmbedResponseStatsBackendDevice | None = Field(
         None,
-        alias='backendDevice',
-        description='Compute backend used for inference',
-        title='EmbedResponseStatsBackendDevice',
+        alias="backendDevice",
+        description="Compute backend used for inference",
+        title="EmbedResponseStatsBackendDevice",
     )
     context_size: float | None = Field(
-        None, alias='contextSize', description='Context size in tokens'
+        None, alias="contextSize", description="Context size in tokens"
     )
 
 
 class EmbedResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['embed']
+    type: Literal["embed"]
     success: bool
     embedding: list[float] | list[list[float]] = Field(
         ...,
-        description='The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array.',
+        description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array.",
     )
     stats: EmbedResponseStats | None = Field(
-        None, description='Performance statistics', title='EmbedResponseStats'
+        None, description="Performance statistics", title="EmbedResponseStats"
     )
     error: str | None = None
 
 
 class ErrorResponseTypedFields(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title='ErrorResponseTypedFields')
+    root: dict[str, Any] = Field(..., title="ErrorResponseTypedFields")
 
 
 class ErrorResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['error']
+    type: Literal["error"]
     message: str
     stack: str | None = None
     timestamp: str | None = None
@@ -1609,242 +1609,242 @@ class ErrorResponse(BaseModel):
     code: float | None = None
     cause: Any | None = None
     typed_fields: ErrorResponseTypedFields | None = Field(
-        None, alias='typedFields', title='ErrorResponseTypedFields'
+        None, alias="typedFields", title="ErrorResponseTypedFields"
     )
 
 
 class FinetuneRunRequestOptionsValidationNone(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['none']
+    type: Literal["none"]
 
 
 class FinetuneRunRequestOptionsValidationSplit(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['split']
+    type: Literal["split"]
     fraction: confloat(ge=0.0, le=1.0) | None = None
 
 
 class FinetuneRunRequestOptionsValidationDataset(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['dataset']
+    type: Literal["dataset"]
     path: constr(min_length=1)
 
 
 class FinetuneRunRequestOptionsLrScheduler(Enum):
-    constant = 'constant'
-    cosine = 'cosine'
-    linear = 'linear'
+    constant = "constant"
+    cosine = "cosine"
+    linear = "linear"
 
 
 class FinetuneRunRequestOptions(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    train_dataset_dir: constr(min_length=1) = Field(..., alias='trainDatasetDir')
+    train_dataset_dir: constr(min_length=1) = Field(..., alias="trainDatasetDir")
     validation: (
         FinetuneRunRequestOptionsValidationNone
         | FinetuneRunRequestOptionsValidationSplit
         | FinetuneRunRequestOptionsValidationDataset
     )
     output_parameters_dir: constr(min_length=1) = Field(
-        ..., alias='outputParametersDir'
+        ..., alias="outputParametersDir"
     )
     number_of_epochs: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='numberOfEpochs'
+        None, alias="numberOfEpochs"
     )
-    learning_rate: PositiveFloat | None = Field(None, alias='learningRate')
+    learning_rate: PositiveFloat | None = Field(None, alias="learningRate")
     context_length: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='contextLength'
+        None, alias="contextLength"
     )
     batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='batchSize'
+        None, alias="batchSize"
     )
     micro_batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='microBatchSize'
+        None, alias="microBatchSize"
     )
-    assistant_loss_only: bool | None = Field(None, alias='assistantLossOnly')
-    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias='loraRank')
-    lora_alpha: PositiveFloat | None = Field(None, alias='loraAlpha')
-    lora_init_std: PositiveFloat | None = Field(None, alias='loraInitStd')
+    assistant_loss_only: bool | None = Field(None, alias="assistantLossOnly")
+    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias="loraRank")
+    lora_alpha: PositiveFloat | None = Field(None, alias="loraAlpha")
+    lora_init_std: PositiveFloat | None = Field(None, alias="loraInitStd")
     lora_seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='loraSeed'
+        None, alias="loraSeed"
     )
-    lora_modules: constr(min_length=1) | None = Field(None, alias='loraModules')
+    lora_modules: constr(min_length=1) | None = Field(None, alias="loraModules")
     checkpoint_save_dir: constr(min_length=1) | None = Field(
-        None, alias='checkpointSaveDir'
+        None, alias="checkpointSaveDir"
     )
     checkpoint_save_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='checkpointSaveSteps'
+        None, alias="checkpointSaveSteps"
     )
     chat_template_path: constr(min_length=1) | None = Field(
-        None, alias='chatTemplatePath'
+        None, alias="chatTemplatePath"
     )
     lr_scheduler: FinetuneRunRequestOptionsLrScheduler | None = Field(
-        None, alias='lrScheduler', title='FinetuneRunRequestOptionsLrScheduler'
+        None, alias="lrScheduler", title="FinetuneRunRequestOptionsLrScheduler"
     )
-    lr_min: confloat(ge=0.0) | None = Field(None, alias='lrMin')
-    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias='warmupRatio')
-    warmup_ratio_set: bool | None = Field(None, alias='warmupRatioSet')
+    lr_min: confloat(ge=0.0) | None = Field(None, alias="lrMin")
+    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias="warmupRatio")
+    warmup_ratio_set: bool | None = Field(None, alias="warmupRatioSet")
     warmup_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='warmupSteps'
+        None, alias="warmupSteps"
     )
-    warmup_steps_set: bool | None = Field(None, alias='warmupStepsSet')
-    weight_decay: confloat(ge=0.0) | None = Field(None, alias='weightDecay')
+    warmup_steps_set: bool | None = Field(None, alias="warmupStepsSet")
+    weight_decay: confloat(ge=0.0) | None = Field(None, alias="weightDecay")
 
 
 class FinetuneRunRequestOperation(Enum):
-    start = 'start'
-    resume = 'resume'
+    start = "start"
+    resume = "resume"
 
 
 class FinetuneRunRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    model_id: str = Field(..., alias='modelId')
-    options: FinetuneRunRequestOptions = Field(..., title='FinetuneRunRequestOptions')
-    type: Literal['finetune']
+    model_id: str = Field(..., alias="modelId")
+    options: FinetuneRunRequestOptions = Field(..., title="FinetuneRunRequestOptions")
+    type: Literal["finetune"]
     operation: FinetuneRunRequestOperation | None = Field(
-        None, title='FinetuneRunRequestOperation'
+        None, title="FinetuneRunRequestOperation"
     )
-    with_progress: bool | None = Field(None, alias='withProgress')
+    with_progress: bool | None = Field(None, alias="withProgress")
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight finetune, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight finetune, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class FinetuneGetStateRequestOptionsValidationNone(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['none']
+    type: Literal["none"]
 
 
 class FinetuneGetStateRequestOptionsValidationSplit(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['split']
+    type: Literal["split"]
     fraction: confloat(ge=0.0, le=1.0) | None = None
 
 
 class FinetuneGetStateRequestOptionsValidationDataset(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['dataset']
+    type: Literal["dataset"]
     path: constr(min_length=1)
 
 
 class FinetuneGetStateRequestOptionsLrScheduler(Enum):
-    constant = 'constant'
-    cosine = 'cosine'
-    linear = 'linear'
+    constant = "constant"
+    cosine = "cosine"
+    linear = "linear"
 
 
 class FinetuneGetStateRequestOptions(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    train_dataset_dir: constr(min_length=1) = Field(..., alias='trainDatasetDir')
+    train_dataset_dir: constr(min_length=1) = Field(..., alias="trainDatasetDir")
     validation: (
         FinetuneGetStateRequestOptionsValidationNone
         | FinetuneGetStateRequestOptionsValidationSplit
         | FinetuneGetStateRequestOptionsValidationDataset
     )
     output_parameters_dir: constr(min_length=1) = Field(
-        ..., alias='outputParametersDir'
+        ..., alias="outputParametersDir"
     )
     number_of_epochs: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='numberOfEpochs'
+        None, alias="numberOfEpochs"
     )
-    learning_rate: PositiveFloat | None = Field(None, alias='learningRate')
+    learning_rate: PositiveFloat | None = Field(None, alias="learningRate")
     context_length: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='contextLength'
+        None, alias="contextLength"
     )
     batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='batchSize'
+        None, alias="batchSize"
     )
     micro_batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='microBatchSize'
+        None, alias="microBatchSize"
     )
-    assistant_loss_only: bool | None = Field(None, alias='assistantLossOnly')
-    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias='loraRank')
-    lora_alpha: PositiveFloat | None = Field(None, alias='loraAlpha')
-    lora_init_std: PositiveFloat | None = Field(None, alias='loraInitStd')
+    assistant_loss_only: bool | None = Field(None, alias="assistantLossOnly")
+    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias="loraRank")
+    lora_alpha: PositiveFloat | None = Field(None, alias="loraAlpha")
+    lora_init_std: PositiveFloat | None = Field(None, alias="loraInitStd")
     lora_seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='loraSeed'
+        None, alias="loraSeed"
     )
-    lora_modules: constr(min_length=1) | None = Field(None, alias='loraModules')
+    lora_modules: constr(min_length=1) | None = Field(None, alias="loraModules")
     checkpoint_save_dir: constr(min_length=1) | None = Field(
-        None, alias='checkpointSaveDir'
+        None, alias="checkpointSaveDir"
     )
     checkpoint_save_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='checkpointSaveSteps'
+        None, alias="checkpointSaveSteps"
     )
     chat_template_path: constr(min_length=1) | None = Field(
-        None, alias='chatTemplatePath'
+        None, alias="chatTemplatePath"
     )
     lr_scheduler: FinetuneGetStateRequestOptionsLrScheduler | None = Field(
-        None, alias='lrScheduler', title='FinetuneGetStateRequestOptionsLrScheduler'
+        None, alias="lrScheduler", title="FinetuneGetStateRequestOptionsLrScheduler"
     )
-    lr_min: confloat(ge=0.0) | None = Field(None, alias='lrMin')
-    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias='warmupRatio')
-    warmup_ratio_set: bool | None = Field(None, alias='warmupRatioSet')
+    lr_min: confloat(ge=0.0) | None = Field(None, alias="lrMin")
+    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias="warmupRatio")
+    warmup_ratio_set: bool | None = Field(None, alias="warmupRatioSet")
     warmup_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='warmupSteps'
+        None, alias="warmupSteps"
     )
-    warmup_steps_set: bool | None = Field(None, alias='warmupStepsSet')
-    weight_decay: confloat(ge=0.0) | None = Field(None, alias='weightDecay')
+    warmup_steps_set: bool | None = Field(None, alias="warmupStepsSet")
+    weight_decay: confloat(ge=0.0) | None = Field(None, alias="weightDecay")
 
 
 class FinetuneGetStateRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     options: FinetuneGetStateRequestOptions = Field(
-        ..., title='FinetuneGetStateRequestOptions'
+        ..., title="FinetuneGetStateRequestOptions"
     )
-    type: Literal['finetune']
-    operation: Literal['getState']
+    type: Literal["finetune"]
+    operation: Literal["getState"]
 
 
 class FinetuneStopRequestOperation(Enum):
-    pause = 'pause'
-    cancel = 'cancel'
+    pause = "pause"
+    cancel = "cancel"
 
 
 class FinetuneStopRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    model_id: str = Field(..., alias='modelId')
-    type: Literal['finetune']
+    model_id: str = Field(..., alias="modelId")
+    type: Literal["finetune"]
     operation: FinetuneStopRequestOperation = Field(
-        ..., title='FinetuneStopRequestOperation'
+        ..., title="FinetuneStopRequestOperation"
     )
 
 
 class FinetuneResponseStatus(Enum):
-    idle = 'IDLE'
-    running = 'RUNNING'
-    paused = 'PAUSED'
-    cancelled = 'CANCELLED'
-    completed = 'COMPLETED'
+    idle = "IDLE"
+    running = "RUNNING"
+    paused = "PAUSED"
+    cancelled = "CANCELLED"
+    completed = "COMPLETED"
 
 
 class FinetuneResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     train_loss: float | None = None
     train_loss_uncertainty: float | Any | None = None
@@ -1861,16 +1861,16 @@ class FinetuneResponseStats(BaseModel):
 
 class FinetuneResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['finetune']
-    status: FinetuneResponseStatus = Field(..., title='FinetuneResponseStatus')
-    stats: FinetuneResponseStats | None = Field(None, title='FinetuneResponseStats')
+    type: Literal["finetune"]
+    status: FinetuneResponseStatus = Field(..., title="FinetuneResponseStatus")
+    stats: FinetuneResponseStats | None = Field(None, title="FinetuneResponseStats")
 
 
 class FinetuneProgressResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     is_train: bool
     loss: float | Any | None
@@ -1883,54 +1883,54 @@ class FinetuneProgressResponse(BaseModel):
     total_batches: conint(ge=0, le=9007199254740991)
     elapsed_ms: confloat(ge=0.0)
     eta_ms: confloat(ge=0.0)
-    type: Literal['finetune:progress']
-    model_id: str = Field(..., alias='modelId')
+    type: Literal["finetune:progress"]
+    model_id: str = Field(..., alias="modelId")
 
 
 class GetLoadedModelInfoRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
-    type: Literal['getLoadedModelInfo']
+    model_id: str = Field(..., alias="modelId")
+    type: Literal["getLoadedModelInfo"]
 
 
 class LocalLoadedModelInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    model_id: str = Field(..., alias='modelId')
-    is_delegated: Literal[False] = Field(..., alias='isDelegated')
-    model_type: str = Field(..., alias='modelType')
+    model_id: str = Field(..., alias="modelId")
+    is_delegated: Literal[False] = Field(..., alias="isDelegated")
+    model_type: str = Field(..., alias="modelType")
     handlers: list[str]
-    display_name: str | None = Field(None, alias='displayName')
-    addon_package: str | None = Field(None, alias='addonPackage')
-    loaded_at: Any = Field(..., alias='loadedAt')
+    display_name: str | None = Field(None, alias="displayName")
+    addon_package: str | None = Field(None, alias="addonPackage")
+    loaded_at: Any = Field(..., alias="loadedAt")
     name: str | None = None
     path: str | None = None
 
 
 class DelegatedLoadedModelInfoProviderInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    provider_public_key: str = Field(..., alias='providerPublicKey')
+    provider_public_key: str = Field(..., alias="providerPublicKey")
 
 
 class DelegatedLoadedModelInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    model_id: str = Field(..., alias='modelId')
-    is_delegated: Literal[True] = Field(..., alias='isDelegated')
+    model_id: str = Field(..., alias="modelId")
+    is_delegated: Literal[True] = Field(..., alias="isDelegated")
     handlers: list[str]
     provider_info: DelegatedLoadedModelInfoProviderInfo = Field(
-        ..., alias='providerInfo', title='DelegatedLoadedModelInfoProviderInfo'
+        ..., alias="providerInfo", title="DelegatedLoadedModelInfoProviderInfo"
     )
 
 
 class GetLoadedModelInfoResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['getLoadedModelInfo']
+    type: Literal["getLoadedModelInfo"]
     info: LocalLoadedModelInfo | DelegatedLoadedModelInfo
 
 
@@ -1939,234 +1939,234 @@ class GetModelInfoRequest(BaseModel):
         ...,
         description="The model's registry name (as found in the SDK's built-in catalog).",
     )
-    type: Literal['getModelInfo']
+    type: Literal["getModelInfo"]
 
 
 class GetModelInfoResponseModelInfoAddon(Enum):
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    parakeet = 'parakeet'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    vad = 'vad'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
-    other = 'other'
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    parakeet = "parakeet"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    vad = "vad"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+    other = "other"
 
 
 class GetModelInfoResponseModelInfoCacheFilesItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    filename: str = Field(..., description='Name of the cached file on disk.')
-    path: str = Field(..., description='Absolute path to the cached file.')
+    filename: str = Field(..., description="Name of the cached file on disk.")
+    path: str = Field(..., description="Absolute path to the cached file.")
     expected_size: float = Field(
         ...,
-        alias='expectedSize',
-        description='Expected file size in bytes from the model metadata.',
+        alias="expectedSize",
+        description="Expected file size in bytes from the model metadata.",
     )
     sha256_checksum: str = Field(
         ...,
-        alias='sha256Checksum',
-        description='Expected SHA-256 checksum of the file.',
+        alias="sha256Checksum",
+        description="Expected SHA-256 checksum of the file.",
     )
     is_cached: bool = Field(
         ...,
-        alias='isCached',
-        description='Whether the file is currently present in the cache.',
+        alias="isCached",
+        description="Whether the file is currently present in the cache.",
     )
     actual_size: float | None = Field(
         None,
-        alias='actualSize',
-        description='Actual size of the cached file on disk, in bytes.',
+        alias="actualSize",
+        description="Actual size of the cached file on disk, in bytes.",
     )
     cached_at: Any | None = Field(
-        None, alias='cachedAt', description='Timestamp when the file was last cached.'
+        None, alias="cachedAt", description="Timestamp when the file was last cached."
     )
 
 
 class GetModelInfoResponseModelInfoLoadedInstancesItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     registry_id: str = Field(
         ...,
-        alias='registryId',
-        description='Identifier of the registered loaded instance.',
+        alias="registryId",
+        description="Identifier of the registered loaded instance.",
     )
     loaded_at: Any = Field(
-        ..., alias='loadedAt', description='Timestamp when the instance was loaded.'
+        ..., alias="loadedAt", description="Timestamp when the instance was loaded."
     )
     config: Any | None = Field(
         None,
-        description='Opaque model-specific configuration the instance was loaded with.',
+        description="Opaque model-specific configuration the instance was loaded with.",
     )
 
 
 class GetModelInfoResponseModelInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    name: str = Field(..., description='Catalog name of the model.')
+    name: str = Field(..., description="Catalog name of the model.")
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Unique identifier used to reference the model in SDK calls.',
+        alias="modelId",
+        description="Unique identifier used to reference the model in SDK calls.",
     )
     registry_path: str | None = Field(
         None,
-        alias='registryPath',
-        description='Registry-relative path (set for registry-backed models).',
+        alias="registryPath",
+        description="Registry-relative path (set for registry-backed models).",
     )
     registry_source: str | None = Field(
         None,
-        alias='registrySource',
-        description='Registry source identifier, e.g. `huggingface`.',
+        alias="registrySource",
+        description="Registry source identifier, e.g. `huggingface`.",
     )
     blob_core_key: str | None = Field(
         None,
-        alias='blobCoreKey',
-        description='Hyperdrive blob core key for the model file.',
+        alias="blobCoreKey",
+        description="Hyperdrive blob core key for the model file.",
     )
     blob_block_offset: float | None = Field(
         None,
-        alias='blobBlockOffset',
-        description='Starting block offset of the model file in the blob.',
+        alias="blobBlockOffset",
+        description="Starting block offset of the model file in the blob.",
     )
     blob_block_length: float | None = Field(
         None,
-        alias='blobBlockLength',
-        description='Number of blocks occupied by the model file in the blob.',
+        alias="blobBlockLength",
+        description="Number of blocks occupied by the model file in the blob.",
     )
     blob_byte_offset: float | None = Field(
         None,
-        alias='blobByteOffset',
-        description='Starting byte offset of the model file within its block.',
+        alias="blobByteOffset",
+        description="Starting byte offset of the model file within its block.",
     )
     engine: str | None = Field(
-        None, description='Inference engine identifier, e.g. `llamacpp-completion`.'
+        None, description="Inference engine identifier, e.g. `llamacpp-completion`."
     )
     quantization: str | None = Field(
-        None, description='Quantization identifier, e.g. `Q4_K_M`.'
+        None, description="Quantization identifier, e.g. `Q4_K_M`."
     )
     params: str | None = Field(
-        None, description='Parameter-count label for the model, e.g. `7B`.'
+        None, description="Parameter-count label for the model, e.g. `7B`."
     )
     expected_size: float = Field(
         ...,
-        alias='expectedSize',
-        description='Expected total size of the model file in bytes.',
+        alias="expectedSize",
+        description="Expected total size of the model file in bytes.",
     )
     sha256_checksum: str = Field(
         ...,
-        alias='sha256Checksum',
-        description='Expected SHA-256 checksum of the model file.',
+        alias="sha256Checksum",
+        description="Expected SHA-256 checksum of the model file.",
     )
     addon: GetModelInfoResponseModelInfoAddon = Field(
         ...,
-        description='Inference addon / capability category this model belongs to.',
-        title='GetModelInfoResponseModelInfoAddon',
+        description="Inference addon / capability category this model belongs to.",
+        title="GetModelInfoResponseModelInfoAddon",
     )
     is_cached: bool = Field(
         ...,
-        alias='isCached',
-        description='Whether the model file is present in the local cache.',
+        alias="isCached",
+        description="Whether the model file is present in the local cache.",
     )
     is_loaded: bool = Field(
         ...,
-        alias='isLoaded',
-        description='Whether the model is currently loaded into memory.',
+        alias="isLoaded",
+        description="Whether the model is currently loaded into memory.",
     )
     cache_files: list[GetModelInfoResponseModelInfoCacheFilesItem] = Field(
         ...,
-        alias='cacheFiles',
-        description='Individual cache file entries that make up this model.',
+        alias="cacheFiles",
+        description="Individual cache file entries that make up this model.",
     )
     actual_size: float | None = Field(
         None,
-        alias='actualSize',
-        description='Actual total size of the cached model on disk, in bytes.',
+        alias="actualSize",
+        description="Actual total size of the cached model on disk, in bytes.",
     )
     cached_at: Any | None = Field(
-        None, alias='cachedAt', description='Timestamp when the model was last cached.'
+        None, alias="cachedAt", description="Timestamp when the model was last cached."
     )
     loaded_instances: list[GetModelInfoResponseModelInfoLoadedInstancesItem] | None = (
         Field(
             None,
-            alias='loadedInstances',
-            description='Loaded instances associated with this model (one per live load).',
+            alias="loadedInstances",
+            description="Loaded instances associated with this model (one per live load).",
         )
     )
 
 
 class GetModelInfoResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['getModelInfo']
+    type: Literal["getModelInfo"]
     model_info: GetModelInfoResponseModelInfo = Field(
-        ..., alias='modelInfo', title='GetModelInfoResponseModelInfo'
+        ..., alias="modelInfo", title="GetModelInfoResponseModelInfo"
     )
 
 
 class HeartbeatRequestDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
 
 
 class HeartbeatRequest(BaseModel):
-    type: Literal['heartbeat']
+    type: Literal["heartbeat"]
     delegate: HeartbeatRequestDelegate | None = Field(
-        None, title='HeartbeatRequestDelegate'
+        None, title="HeartbeatRequestDelegate"
     )
 
 
 class HeartbeatResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['heartbeat']
+    type: Literal["heartbeat"]
     number: float
 
 
 class LoadModelSrcRequestLlamacppCompletionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
@@ -2178,69 +2178,69 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode(Enum):
-    static = 'static'
-    dynamic = 'dynamic'
+    static = "static"
+    dynamic = "dynamic"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(Enum):
-    integrated = 'integrated'
-    dedicated = 'dedicated'
+    integrated = "integrated"
+    dedicated = "dedicated"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
-    none = 'none'
-    layer = 'layer'
-    row = 'row'
+    none = "none"
+    layer = "layer"
+    row = "row"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(Enum):
-    disabled = 'disabled'
-    batched = 'batched'
-    sequential = 'sequential'
+    disabled = "disabled"
+    batched = "batched"
+    sequential = "sequential"
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(BaseModel):
@@ -2256,7 +2256,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(BaseModel):
     system_prompt: str | None = None
     no_mmap: bool | None = None
     verbosity: LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity | None = Field(
-        None, title='LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity'
+        None, title="LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
     )
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
@@ -2268,93 +2268,93 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(BaseModel):
     tools_mode: LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode | None = (
         Field(
             None,
-            alias='toolsMode',
+            alias="toolsMode",
             description='Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.',
-            title='LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode',
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode",
         )
     )
-    cache_type_k: str | None = Field(None, alias='cache-type-k')
-    cache_type_v: str | None = Field(None, alias='cache-type-v')
+    cache_type_k: str | None = Field(None, alias="cache-type-k")
+    cache_type_v: str | None = Field(None, alias="cache-type-v")
     main_gpu: (
         conint(ge=0, le=9007199254740991)
         | LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu
         | None
-    ) = Field(None, alias='main-gpu')
+    ) = Field(None, alias="main-gpu")
     split_mode: LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None = (
         Field(
             None,
-            alias='split-mode',
-            title='LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode',
+            alias="split-mode",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         )
     )
-    tensor_split: str | None = Field(None, alias='tensor-split')
-    opencl_cache_dir: str | None = Field(None, alias='openclCacheDir')
+    tensor_split: str | None = Field(None, alias="tensor-split")
+    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
     reasoning_budget: conint(ge=-1, le=2147483647) | None = None
     projection_model_src: (
         str | LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc | None
-    ) = Field(None, alias='projectionModelSrc')
+    ) = Field(None, alias="projectionModelSrc")
     image_tile_mode: (
         LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None
     ) = Field(
-        None, title='LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode'
+        None, title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
     )
-    mmproj_use_gpu: bool | None = Field(None, alias='mmproj-use-gpu')
+    mmproj_use_gpu: bool | None = Field(None, alias="mmproj-use-gpu")
 
 
 class LoadModelSrcRequestLlamacppCompletion(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestLlamacppCompletionDelegate | None = Field(
-        None, title='LoadModelSrcRequestLlamacppCompletionDelegate'
+        None, title="LoadModelSrcRequestLlamacppCompletionDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['llamacpp-completion'] = Field(..., alias='modelType')
+    model_type: Literal["llamacpp-completion"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestLlamacppCompletionModelConfig = Field(
         ...,
-        alias='modelConfig',
-        title='LoadModelSrcRequestLlamacppCompletionModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestLlamacppCompletionModelConfig",
     )
 
 
 class LoadModelSrcRequestWhispercppTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
-    greedy = 'greedy'
-    beam_search = 'beam_search'
+    greedy = "greedy"
+    beam_search = "beam_search"
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(BaseModel):
@@ -2367,8 +2367,8 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(BaseModel):
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
-    f32le = 'f32le'
-    s16le = 's16le'
+    f32le = "f32le"
+    s16le = "s16le"
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(BaseModel):
@@ -2383,45 +2383,45 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(BaseModel)
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -2429,7 +2429,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(BaseModel
 class LoadModelSrcRequestWhispercppTranscriptionModelConfig(BaseModel):
     strategy: LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy | None = (
         Field(
-            None, title='LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy'
+            None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"
         )
     )
     n_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = None
@@ -2471,80 +2471,80 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(BaseModel):
     vad_params: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams | None
     ) = Field(
-        None, title='LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams'
+        None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"
     )
     audio_format: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat | None
     ) = Field(
-        None, title='LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat'
+        None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"
     )
     context_params: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams | None
     ) = Field(
         None,
-        alias='contextParams',
-        title='LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams',
+        alias="contextParams",
+        title="LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams",
     )
     misc_config: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig | None
     ) = Field(
         None,
-        alias='miscConfig',
-        title='LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig',
+        alias="miscConfig",
+        title="LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig",
     )
     vad_model_src: (
         str | LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc | None
-    ) = Field(None, alias='vadModelSrc')
+    ) = Field(None, alias="vadModelSrc")
 
 
 class LoadModelSrcRequestWhispercppTranscription(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestWhispercppTranscriptionDelegate | None = Field(
-        None, title='LoadModelSrcRequestWhispercppTranscriptionDelegate'
+        None, title="LoadModelSrcRequestWhispercppTranscriptionDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['whispercpp-transcription'] = Field(..., alias='modelType')
+    model_type: Literal["whispercpp-transcription"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestWhispercppTranscriptionModelConfig = Field(
         ...,
-        alias='modelConfig',
-        title='LoadModelSrcRequestWhispercppTranscriptionModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
     )
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
@@ -2587,29 +2587,29 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(BaseMod
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc(
@@ -2617,17 +2617,17 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc(
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -2637,234 +2637,234 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(BaseModel):
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig | None
     ) = Field(
         None,
-        alias='whisperConfig',
-        title='LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig',
+        alias="whisperConfig",
+        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig",
     )
     bci_config: (
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig | None
     ) = Field(
         None,
-        alias='bciConfig',
-        title='LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig',
+        alias="bciConfig",
+        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig",
     )
     context_params: (
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams | None
     ) = Field(
         None,
-        alias='contextParams',
-        title='LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams',
+        alias="contextParams",
+        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams",
     )
     misc_config: (
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig | None
     ) = Field(
         None,
-        alias='miscConfig',
-        title='LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig',
+        alias="miscConfig",
+        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig",
     )
-    backends_dir: str | None = Field(None, alias='backendsDir')
+    backends_dir: str | None = Field(None, alias="backendsDir")
     embedder_model_src: (
         str
         | LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc
         | None
-    ) = Field(None, alias='embedderModelSrc')
+    ) = Field(None, alias="embedderModelSrc")
 
 
 class LoadModelSrcRequestBciWhispercppTranscription(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None = Field(
-        None, title='LoadModelSrcRequestBciWhispercppTranscriptionDelegate'
+        None, title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['bci-whispercpp-transcription'] = Field(..., alias='modelType')
+    model_type: Literal["bci-whispercpp-transcription"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestBciWhispercppTranscriptionModelConfig = Field(
         ...,
-        alias='modelConfig',
-        title='LoadModelSrcRequestBciWhispercppTranscriptionModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
     )
 
 
 class LoadModelSrcRequestParakeetTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     max_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='maxThreads'
+        None, alias="maxThreads"
     )
-    use_gpu: bool | None = Field(None, alias='useGPU')
+    use_gpu: bool | None = Field(None, alias="useGPU")
     sample_rate: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='sampleRate'
+        None, alias="sampleRate"
     )
     channels: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    caption_enabled: bool | None = Field(None, alias='captionEnabled')
-    timestamps_enabled: bool | None = Field(None, alias='timestampsEnabled')
+    caption_enabled: bool | None = Field(None, alias="captionEnabled")
+    timestamps_enabled: bool | None = Field(None, alias="timestampsEnabled")
     seed: conint(ge=-9007199254740991, le=9007199254740991) | None = None
     streaming: bool | None = None
     streaming_chunk_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='streamingChunkMs'
+        None, alias="streamingChunkMs"
     )
     streaming_history_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='streamingHistoryMs'
+        None, alias="streamingHistoryMs"
     )
-    streaming_emit_partials: bool | None = Field(None, alias='streamingEmitPartials')
-    streaming_energy_vad: bool | None = Field(None, alias='streamingEnergyVad')
+    streaming_emit_partials: bool | None = Field(None, alias="streamingEmitPartials")
+    streaming_energy_vad: bool | None = Field(None, alias="streamingEnergyVad")
     streaming_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamingLeftContextMs'
+        None, alias="streamingLeftContextMs"
     )
     streaming_right_lookahead_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamingRightLookaheadMs'
+        None, alias="streamingRightLookaheadMs"
     )
     streaming_spk_cache_enable: bool | None = Field(
-        None, alias='streamingSpkCacheEnable'
+        None, alias="streamingSpkCacheEnable"
     )
     streaming_spk_cache_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='streamingSpkCacheLen'
+        None, alias="streamingSpkCacheLen"
     )
     streaming_fifo_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='streamingFifoLen'
+        None, alias="streamingFifoLen"
     )
     streaming_chunk_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamingChunkLeftContextMs'
+        None, alias="streamingChunkLeftContextMs"
     )
     streaming_chunk_right_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamingChunkRightContextMs'
+        None, alias="streamingChunkRightContextMs"
     )
     streaming_spk_cache_update_period: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='streamingSpkCacheUpdatePeriod'
+        None, alias="streamingSpkCacheUpdatePeriod"
     )
-    backends_dir: str | None = Field(None, alias='backendsDir')
-    opencl_cache_dir: str | None = Field(None, alias='openclCacheDir')
-    parakeet_encoder_src: Any | None = Field(None, alias='parakeetEncoderSrc')
-    parakeet_decoder_src: Any | None = Field(None, alias='parakeetDecoderSrc')
-    parakeet_vocab_src: Any | None = Field(None, alias='parakeetVocabSrc')
-    parakeet_preprocessor_src: Any | None = Field(None, alias='parakeetPreprocessorSrc')
-    parakeet_ctc_model_src: Any | None = Field(None, alias='parakeetCtcModelSrc')
-    parakeet_tokenizer_src: Any | None = Field(None, alias='parakeetTokenizerSrc')
-    parakeet_sortformer_src: Any | None = Field(None, alias='parakeetSortformerSrc')
-    parakeet_model_src: Any | None = Field(None, alias='parakeetModelSrc')
-    model_type: Any | None = Field(None, alias='modelType')
+    backends_dir: str | None = Field(None, alias="backendsDir")
+    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
+    parakeet_encoder_src: Any | None = Field(None, alias="parakeetEncoderSrc")
+    parakeet_decoder_src: Any | None = Field(None, alias="parakeetDecoderSrc")
+    parakeet_vocab_src: Any | None = Field(None, alias="parakeetVocabSrc")
+    parakeet_preprocessor_src: Any | None = Field(None, alias="parakeetPreprocessorSrc")
+    parakeet_ctc_model_src: Any | None = Field(None, alias="parakeetCtcModelSrc")
+    parakeet_tokenizer_src: Any | None = Field(None, alias="parakeetTokenizerSrc")
+    parakeet_sortformer_src: Any | None = Field(None, alias="parakeetSortformerSrc")
+    parakeet_model_src: Any | None = Field(None, alias="parakeetModelSrc")
+    model_type: Any | None = Field(None, alias="modelType")
 
 
 class LoadModelSrcRequestParakeetTranscription(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestParakeetTranscriptionDelegate | None = Field(
-        None, title='LoadModelSrcRequestParakeetTranscriptionDelegate'
+        None, title="LoadModelSrcRequestParakeetTranscriptionDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['parakeet-transcription'] = Field(..., alias='modelType')
+    model_type: Literal["parakeet-transcription"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestParakeetTranscriptionModelConfig | None = Field(
         None,
-        alias='modelConfig',
-        title='LoadModelSrcRequestParakeetTranscriptionModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
     )
 
 
 class LoadModelSrcRequestLlamacppEmbeddingDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
-    gpu = 'gpu'
-    cpu = 'cpu'
+    gpu = "gpu"
+    cpu = "cpu"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling(Enum):
-    none = 'none'
-    mean = 'mean'
-    cls = 'cls'
-    last = 'last'
-    rank = 'rank'
+    none = "none"
+    mean = "mean"
+    cls = "cls"
+    last = "last"
+    rank = "rank"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention(Enum):
-    causal = 'causal'
-    non_causal = 'non-causal'
+    causal = "causal"
+    non_causal = "non-causal"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention(Enum):
-    on = 'on'
-    off = 'off'
-    auto = 'auto'
+    on = "on"
+    off = "off"
+    auto = "auto"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu(Enum):
-    integrated = 'integrated'
-    dedicated = 'dedicated'
+    integrated = "integrated"
+    dedicated = "dedicated"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode(Enum):
-    none = 'none'
-    layer = 'layer'
-    row = 'row'
+    none = "none"
+    layer = "layer"
+    row = "row"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
@@ -2876,334 +2876,334 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(BaseModel):
     gpu_layers: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='gpuLayers'
+        None, alias="gpuLayers"
     )
     device: LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice | None = Field(
-        None, title='LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice'
+        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"
     )
     batch_size: conint(ge=1, le=9007199254740991) | None = Field(
-        None, alias='batchSize'
+        None, alias="batchSize"
     )
     pooling: LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling | None = Field(
-        None, title='LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling'
+        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"
     )
     attention: LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention | None = Field(
-        None, title='LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention'
+        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"
     )
     embd_normalize: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='embdNormalize'
+        None, alias="embdNormalize"
     )
     flash_attention: (
         LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention | None
     ) = Field(
         None,
-        alias='flashAttention',
-        title='LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention',
+        alias="flashAttention",
+        title="LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention",
     )
     main_gpu: (
         conint(ge=0, le=9007199254740991)
         | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu
         | None
-    ) = Field(None, alias='mainGpu')
+    ) = Field(None, alias="mainGpu")
     split_mode: LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode | None = Field(
         None,
-        alias='splitMode',
-        title='LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode',
+        alias="splitMode",
+        title="LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode",
     )
-    tensor_split: str | None = Field(None, alias='tensorSplit')
+    tensor_split: str | None = Field(None, alias="tensorSplit")
     verbosity: LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity | None = Field(
-        None, title='LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity'
+        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"
     )
-    opencl_cache_dir: str | None = Field(None, alias='openclCacheDir')
+    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
 
 
 class LoadModelSrcRequestLlamacppEmbedding(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestLlamacppEmbeddingDelegate | None = Field(
-        None, title='LoadModelSrcRequestLlamacppEmbeddingDelegate'
+        None, title="LoadModelSrcRequestLlamacppEmbeddingDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['llamacpp-embedding'] = Field(..., alias='modelType')
+    model_type: Literal["llamacpp-embedding"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestLlamacppEmbeddingModelConfig = Field(
         ...,
-        alias='modelConfig',
-        title='LoadModelSrcRequestLlamacppEmbeddingModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestLlamacppEmbeddingModelConfig",
     )
 
 
 class LoadModelSrcRequestNmtcppTranslationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
-    full = 'full'
+    full = "full"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom(Enum):
-    en = 'en'
-    ar = 'ar'
-    bg = 'bg'
-    ca = 'ca'
-    cs = 'cs'
-    de = 'de'
-    es = 'es'
-    et = 'et'
-    fi = 'fi'
-    fr = 'fr'
-    hu = 'hu'
-    is_ = 'is'
-    it = 'it'
-    ja = 'ja'
-    ko = 'ko'
-    lt = 'lt'
-    lv = 'lv'
-    nl = 'nl'
-    pl = 'pl'
-    pt = 'pt'
-    ru = 'ru'
-    sk = 'sk'
-    sl = 'sl'
-    uk = 'uk'
-    zh = 'zh'
-    az = 'az'
-    be = 'be'
-    bn = 'bn'
-    bs = 'bs'
-    da = 'da'
-    el = 'el'
-    fa = 'fa'
-    gu = 'gu'
-    he = 'he'
-    hi = 'hi'
-    hr = 'hr'
-    id = 'id'
-    kn = 'kn'
-    ml = 'ml'
-    ms = 'ms'
-    mt = 'mt'
-    nb = 'nb'
-    nn = 'nn'
-    no = 'no'
-    re = 're'
-    ro = 'ro'
-    sq = 'sq'
-    sr = 'sr'
-    sv = 'sv'
-    ta = 'ta'
-    te = 'te'
-    th = 'th'
-    tr = 'tr'
-    vi = 'vi'
+    en = "en"
+    ar = "ar"
+    bg = "bg"
+    ca = "ca"
+    cs = "cs"
+    de = "de"
+    es = "es"
+    et = "et"
+    fi = "fi"
+    fr = "fr"
+    hu = "hu"
+    is_ = "is"
+    it = "it"
+    ja = "ja"
+    ko = "ko"
+    lt = "lt"
+    lv = "lv"
+    nl = "nl"
+    pl = "pl"
+    pt = "pt"
+    ru = "ru"
+    sk = "sk"
+    sl = "sl"
+    uk = "uk"
+    zh = "zh"
+    az = "az"
+    be = "be"
+    bn = "bn"
+    bs = "bs"
+    da = "da"
+    el = "el"
+    fa = "fa"
+    gu = "gu"
+    he = "he"
+    hi = "hi"
+    hr = "hr"
+    id = "id"
+    kn = "kn"
+    ml = "ml"
+    ms = "ms"
+    mt = "mt"
+    nb = "nb"
+    nn = "nn"
+    no = "no"
+    re = "re"
+    ro = "ro"
+    sq = "sq"
+    sr = "sr"
+    sv = "sv"
+    ta = "ta"
+    te = "te"
+    th = "th"
+    tr = "tr"
+    vi = "vi"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo(Enum):
-    en = 'en'
-    ar = 'ar'
-    bg = 'bg'
-    ca = 'ca'
-    cs = 'cs'
-    de = 'de'
-    es = 'es'
-    et = 'et'
-    fi = 'fi'
-    fr = 'fr'
-    hu = 'hu'
-    is_ = 'is'
-    it = 'it'
-    ja = 'ja'
-    ko = 'ko'
-    lt = 'lt'
-    lv = 'lv'
-    nl = 'nl'
-    pl = 'pl'
-    pt = 'pt'
-    ru = 'ru'
-    sk = 'sk'
-    sl = 'sl'
-    uk = 'uk'
-    zh = 'zh'
-    az = 'az'
-    be = 'be'
-    bn = 'bn'
-    bs = 'bs'
-    da = 'da'
-    el = 'el'
-    fa = 'fa'
-    gu = 'gu'
-    he = 'he'
-    hi = 'hi'
-    hr = 'hr'
-    id = 'id'
-    kn = 'kn'
-    ml = 'ml'
-    ms = 'ms'
-    mt = 'mt'
-    nb = 'nb'
-    nn = 'nn'
-    no = 'no'
-    re = 're'
-    ro = 'ro'
-    sq = 'sq'
-    sr = 'sr'
-    sv = 'sv'
-    ta = 'ta'
-    te = 'te'
-    th = 'th'
-    tr = 'tr'
-    vi = 'vi'
+    en = "en"
+    ar = "ar"
+    bg = "bg"
+    ca = "ca"
+    cs = "cs"
+    de = "de"
+    es = "es"
+    et = "et"
+    fi = "fi"
+    fr = "fr"
+    hu = "hu"
+    is_ = "is"
+    it = "it"
+    ja = "ja"
+    ko = "ko"
+    lt = "lt"
+    lv = "lv"
+    nl = "nl"
+    pl = "pl"
+    pt = "pt"
+    ru = "ru"
+    sk = "sk"
+    sl = "sl"
+    uk = "uk"
+    zh = "zh"
+    az = "az"
+    be = "be"
+    bn = "bn"
+    bs = "bs"
+    da = "da"
+    el = "el"
+    fa = "fa"
+    gu = "gu"
+    he = "he"
+    hi = "hi"
+    hr = "hr"
+    id = "id"
+    kn = "kn"
+    ml = "ml"
+    ms = "ms"
+    mt = "mt"
+    nb = "nb"
+    nn = "nn"
+    no = "no"
+    re = "re"
+    ro = "ro"
+    sq = "sq"
+    sr = "sr"
+    sv = "sv"
+    ta = "ta"
+    te = "te"
+    th = "th"
+    tr = "tr"
+    vi = "vi"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode(Enum):
-    full = 'full'
+    full = "full"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
@@ -3211,17 +3211,17 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -3229,29 +3229,29 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc(
@@ -3259,17 +3259,17 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -3277,29 +3277,29 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc(
@@ -3307,17 +3307,17 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -3327,7 +3327,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(BaseMode
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None
     ) = Field(
         None,
-        title='LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode',
+        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode",
     )
     beamsize: float | None = None
     lengthpenalty: float | None = None
@@ -3339,23 +3339,23 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(BaseMode
     topp: float | None = None
     model_src: (
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc
-    ) = Field(..., alias='modelSrc')
+    ) = Field(..., alias="modelSrc")
     src_vocab_src: (
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc
         | None
-    ) = Field(None, alias='srcVocabSrc')
+    ) = Field(None, alias="srcVocabSrc")
     dst_vocab_src: (
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc
         | None
-    ) = Field(None, alias='dstVocabSrc')
+    ) = Field(None, alias="dstVocabSrc")
     normalize: float | None = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(BaseModel):
     mode: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None = Field(
-        None, title='LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode'
+        None, title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
     )
     beamsize: float | None = None
     lengthpenalty: float | None = None
@@ -3365,96 +3365,96 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(BaseModel):
     temperature: float | None = None
     topk: float | None = None
     topp: float | None = None
-    engine: Literal['Bergamot']
+    engine: Literal["Bergamot"]
     from_: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom = Field(
         ...,
-        alias='from',
-        title='LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom',
+        alias="from",
+        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom",
     )
     to: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo = Field(
-        ..., title='LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo'
+        ..., title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
     )
     src_vocab_src: (
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc | None
-    ) = Field(None, alias='srcVocabSrc')
+    ) = Field(None, alias="srcVocabSrc")
     dst_vocab_src: (
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc | None
-    ) = Field(None, alias='dstVocabSrc')
+    ) = Field(None, alias="dstVocabSrc")
     normalize: float | None = None
     pivot_model: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel | None
     ) = Field(
         None,
-        alias='pivotModel',
-        title='LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel',
+        alias="pivotModel",
+        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel",
     )
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode(Enum):
-    full = 'full'
+    full = "full"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom(Enum):
-    asm_beng = 'asm_Beng'
-    ben_beng = 'ben_Beng'
-    brx_deva = 'brx_Deva'
-    doi_deva = 'doi_Deva'
-    eng_latn = 'eng_Latn'
-    gom_deva = 'gom_Deva'
-    guj_gujr = 'guj_Gujr'
-    hin_deva = 'hin_Deva'
-    kan_knda = 'kan_Knda'
-    kas_arab = 'kas_Arab'
-    kas_deva = 'kas_Deva'
-    mai_deva = 'mai_Deva'
-    mal_mlym = 'mal_Mlym'
-    mar_deva = 'mar_Deva'
-    mni_beng = 'mni_Beng'
-    mni_mtei = 'mni_Mtei'
-    npi_deva = 'npi_Deva'
-    ory_orya = 'ory_Orya'
-    pan_guru = 'pan_Guru'
-    san_deva = 'san_Deva'
-    sat_olck = 'sat_Olck'
-    snd_arab = 'snd_Arab'
-    snd_deva = 'snd_Deva'
-    tam_taml = 'tam_Taml'
-    tel_telu = 'tel_Telu'
-    urd_arab = 'urd_Arab'
+    asm_beng = "asm_Beng"
+    ben_beng = "ben_Beng"
+    brx_deva = "brx_Deva"
+    doi_deva = "doi_Deva"
+    eng_latn = "eng_Latn"
+    gom_deva = "gom_Deva"
+    guj_gujr = "guj_Gujr"
+    hin_deva = "hin_Deva"
+    kan_knda = "kan_Knda"
+    kas_arab = "kas_Arab"
+    kas_deva = "kas_Deva"
+    mai_deva = "mai_Deva"
+    mal_mlym = "mal_Mlym"
+    mar_deva = "mar_Deva"
+    mni_beng = "mni_Beng"
+    mni_mtei = "mni_Mtei"
+    npi_deva = "npi_Deva"
+    ory_orya = "ory_Orya"
+    pan_guru = "pan_Guru"
+    san_deva = "san_Deva"
+    sat_olck = "sat_Olck"
+    snd_arab = "snd_Arab"
+    snd_deva = "snd_Deva"
+    tam_taml = "tam_Taml"
+    tel_telu = "tel_Telu"
+    urd_arab = "urd_Arab"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
-    asm_beng = 'asm_Beng'
-    ben_beng = 'ben_Beng'
-    brx_deva = 'brx_Deva'
-    doi_deva = 'doi_Deva'
-    eng_latn = 'eng_Latn'
-    gom_deva = 'gom_Deva'
-    guj_gujr = 'guj_Gujr'
-    hin_deva = 'hin_Deva'
-    kan_knda = 'kan_Knda'
-    kas_arab = 'kas_Arab'
-    kas_deva = 'kas_Deva'
-    mai_deva = 'mai_Deva'
-    mal_mlym = 'mal_Mlym'
-    mar_deva = 'mar_Deva'
-    mni_beng = 'mni_Beng'
-    mni_mtei = 'mni_Mtei'
-    npi_deva = 'npi_Deva'
-    ory_orya = 'ory_Orya'
-    pan_guru = 'pan_Guru'
-    san_deva = 'san_Deva'
-    sat_olck = 'sat_Olck'
-    snd_arab = 'snd_Arab'
-    snd_deva = 'snd_Deva'
-    tam_taml = 'tam_Taml'
-    tel_telu = 'tel_Telu'
-    urd_arab = 'urd_Arab'
+    asm_beng = "asm_Beng"
+    ben_beng = "ben_Beng"
+    brx_deva = "brx_Deva"
+    doi_deva = "doi_Deva"
+    eng_latn = "eng_Latn"
+    gom_deva = "gom_Deva"
+    guj_gujr = "guj_Gujr"
+    hin_deva = "hin_Deva"
+    kan_knda = "kan_Knda"
+    kas_arab = "kas_Arab"
+    kas_deva = "kas_Deva"
+    mai_deva = "mai_Deva"
+    mal_mlym = "mal_Mlym"
+    mar_deva = "mar_Deva"
+    mni_beng = "mni_Beng"
+    mni_mtei = "mni_Mtei"
+    npi_deva = "npi_Deva"
+    ory_orya = "ory_Orya"
+    pan_guru = "pan_Guru"
+    san_deva = "san_Deva"
+    sat_olck = "sat_Olck"
+    snd_arab = "snd_Arab"
+    snd_deva = "snd_Deva"
+    tam_taml = "tam_Taml"
+    tel_telu = "tel_Telu"
+    urd_arab = "urd_Arab"
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(BaseModel):
     mode: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None = Field(
-        None, title='LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode'
+        None, title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
     )
     beamsize: float | None = None
     lengthpenalty: float | None = None
@@ -3464,1048 +3464,1048 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(BaseModel):
     temperature: float | None = None
     topk: float | None = None
     topp: float | None = None
-    engine: Literal['IndicTrans']
+    engine: Literal["IndicTrans"]
     from_: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom = Field(
         ...,
-        alias='from',
-        title='LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom',
+        alias="from",
+        title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom",
     )
     to: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo = Field(
-        ..., title='LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo'
+        ..., title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"
     )
 
 
 class LoadModelSrcRequestNmtcppTranslation(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestNmtcppTranslationDelegate | None = Field(
-        None, title='LoadModelSrcRequestNmtcppTranslationDelegate'
+        None, title="LoadModelSrcRequestNmtcppTranslationDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['nmtcpp-translation'] = Field(..., alias='modelType')
+    model_type: Literal["nmtcpp-translation"] = Field(..., alias="modelType")
     model_config_: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamot
         | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans
-    ) = Field(..., alias='modelConfig')
+    ) = Field(..., alias="modelConfig")
 
 
 class LoadModelSrcRequestTtsGgmlDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
-    en = 'en'
-    es = 'es'
-    fr = 'fr'
-    de = 'de'
-    it = 'it'
-    ja = 'ja'
-    pt = 'pt'
-    nl = 'nl'
-    pl = 'pl'
-    tr = 'tr'
-    sv = 'sv'
-    da = 'da'
-    fi = 'fi'
-    no = 'no'
-    el = 'el'
-    ms = 'ms'
-    sw = 'sw'
-    ar = 'ar'
-    ko = 'ko'
-    he = 'he'
-    ru = 'ru'
-    zh = 'zh'
-    hi = 'hi'
+    en = "en"
+    es = "es"
+    fr = "fr"
+    de = "de"
+    it = "it"
+    ja = "ja"
+    pt = "pt"
+    nl = "nl"
+    pl = "pl"
+    tr = "tr"
+    sv = "sv"
+    da = "da"
+    fi = "fi"
+    no = "no"
+    el = "el"
+    ms = "ms"
+    sw = "sw"
+    ar = "ar"
+    ko = "ko"
+    he = "he"
+    ru = "ru"
+    zh = "zh"
+    hi = "hi"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    tts_engine: Literal['chatterbox'] = Field(..., alias='ttsEngine')
+    tts_engine: Literal["chatterbox"] = Field(..., alias="ttsEngine")
     language: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage = Field(
-        ..., title='LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage'
+        ..., title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"
     )
     voice: str | None = None
-    use_gpu: bool | None = Field(None, alias='useGPU')
+    use_gpu: bool | None = Field(None, alias="useGPU")
     stream_chunk_tokens: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamChunkTokens'
+        None, alias="streamChunkTokens"
     )
     stream_first_chunk_tokens: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='streamFirstChunkTokens'
+        None, alias="streamFirstChunkTokens"
     )
-    cfm_steps: conint(ge=0, le=9007199254740991) | None = Field(None, alias='cfmSteps')
+    cfm_steps: conint(ge=0, le=9007199254740991) | None = Field(None, alias="cfmSteps")
     threads: conint(le=9007199254740991, gt=0) | None = None
     n_gpu_layers: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='nGpuLayers'
+        None, alias="nGpuLayers"
     )
     seed: conint(ge=-9007199254740991, le=9007199254740991) | None = None
     s3gen_model_src: (
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc | None
-    ) = Field(None, alias='s3genModelSrc')
+    ) = Field(None, alias="s3genModelSrc")
     reference_audio_src: (
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc | None
-    ) = Field(None, alias='referenceAudioSrc')
+    ) = Field(None, alias="referenceAudioSrc")
     mecab_dict_src: (
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc | None
-    ) = Field(None, alias='mecabDictSrc')
+    ) = Field(None, alias="mecabDictSrc")
     cangjie_tsv_src: (
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc | None
-    ) = Field(None, alias='cangjieTsvSrc')
+    ) = Field(None, alias="cangjieTsvSrc")
     lavasr_enhancer_model_src: (
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
         | None
-    ) = Field(None, alias='lavasrEnhancerModelSrc')
+    ) = Field(None, alias="lavasrEnhancerModelSrc")
     lavasr_denoiser_model_src: (
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
         | None
-    ) = Field(None, alias='lavasrDenoiserModelSrc')
+    ) = Field(None, alias="lavasrDenoiserModelSrc")
     tts_supertonic_multilingual: Any | None = Field(
-        None, alias='ttsSupertonicMultilingual'
+        None, alias="ttsSupertonicMultilingual"
     )
-    tts_tokenizer_src: Any | None = Field(None, alias='ttsTokenizerSrc')
-    tts_speech_encoder_src: Any | None = Field(None, alias='ttsSpeechEncoderSrc')
-    tts_embed_tokens_src: Any | None = Field(None, alias='ttsEmbedTokensSrc')
+    tts_tokenizer_src: Any | None = Field(None, alias="ttsTokenizerSrc")
+    tts_speech_encoder_src: Any | None = Field(None, alias="ttsSpeechEncoderSrc")
+    tts_embed_tokens_src: Any | None = Field(None, alias="ttsEmbedTokensSrc")
     tts_conditional_decoder_src: Any | None = Field(
-        None, alias='ttsConditionalDecoderSrc'
+        None, alias="ttsConditionalDecoderSrc"
     )
-    tts_language_model_src: Any | None = Field(None, alias='ttsLanguageModelSrc')
-    tts_text_encoder_src: Any | None = Field(None, alias='ttsTextEncoderSrc')
+    tts_language_model_src: Any | None = Field(None, alias="ttsLanguageModelSrc")
+    tts_text_encoder_src: Any | None = Field(None, alias="ttsTextEncoderSrc")
     tts_duration_predictor_src: Any | None = Field(
-        None, alias='ttsDurationPredictorSrc'
+        None, alias="ttsDurationPredictorSrc"
     )
-    tts_vector_estimator_src: Any | None = Field(None, alias='ttsVectorEstimatorSrc')
-    tts_vocoder_src: Any | None = Field(None, alias='ttsVocoderSrc')
-    tts_unicode_indexer_src: Any | None = Field(None, alias='ttsUnicodeIndexerSrc')
-    tts_tts_config_src: Any | None = Field(None, alias='ttsTtsConfigSrc')
-    tts_voice_style_src: Any | None = Field(None, alias='ttsVoiceStyleSrc')
+    tts_vector_estimator_src: Any | None = Field(None, alias="ttsVectorEstimatorSrc")
+    tts_vocoder_src: Any | None = Field(None, alias="ttsVocoderSrc")
+    tts_unicode_indexer_src: Any | None = Field(None, alias="ttsUnicodeIndexerSrc")
+    tts_tts_config_src: Any | None = Field(None, alias="ttsTtsConfigSrc")
+    tts_voice_style_src: Any | None = Field(None, alias="ttsVoiceStyleSrc")
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage(Enum):
-    en = 'en'
-    ko = 'ko'
-    ja = 'ja'
-    ar = 'ar'
-    bg = 'bg'
-    cs = 'cs'
-    da = 'da'
-    de = 'de'
-    el = 'el'
-    es = 'es'
-    et = 'et'
-    fi = 'fi'
-    fr = 'fr'
-    hi = 'hi'
-    hr = 'hr'
-    hu = 'hu'
-    id = 'id'
-    it = 'it'
-    lt = 'lt'
-    lv = 'lv'
-    nl = 'nl'
-    pl = 'pl'
-    pt = 'pt'
-    ro = 'ro'
-    ru = 'ru'
-    sk = 'sk'
-    sl = 'sl'
-    sv = 'sv'
-    tr = 'tr'
-    uk = 'uk'
-    vi = 'vi'
+    en = "en"
+    ko = "ko"
+    ja = "ja"
+    ar = "ar"
+    bg = "bg"
+    cs = "cs"
+    da = "da"
+    de = "de"
+    el = "el"
+    es = "es"
+    et = "et"
+    fi = "fi"
+    fr = "fr"
+    hi = "hi"
+    hr = "hr"
+    hu = "hu"
+    id = "id"
+    it = "it"
+    lt = "lt"
+    lv = "lv"
+    nl = "nl"
+    pl = "pl"
+    pt = "pt"
+    ro = "ro"
+    ru = "ru"
+    sk = "sk"
+    sl = "sl"
+    sv = "sv"
+    tr = "tr"
+    uk = "uk"
+    vi = "vi"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    tts_engine: Literal['supertonic'] = Field(..., alias='ttsEngine')
+    tts_engine: Literal["supertonic"] = Field(..., alias="ttsEngine")
     language: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage = Field(
-        ..., title='LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage'
+        ..., title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"
     )
     voice: str | None = None
-    tts_speed: float | None = Field(None, alias='ttsSpeed')
-    tts_num_inference_steps: float | None = Field(None, alias='ttsNumInferenceSteps')
-    use_gpu: bool | None = Field(None, alias='useGPU')
+    tts_speed: float | None = Field(None, alias="ttsSpeed")
+    tts_num_inference_steps: float | None = Field(None, alias="ttsNumInferenceSteps")
+    use_gpu: bool | None = Field(None, alias="useGPU")
     output_sample_rate: conint(ge=8000, le=192000) | None = Field(
-        None, alias='outputSampleRate'
+        None, alias="outputSampleRate"
     )
     lavasr_enhancer_model_src: (
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
         | None
-    ) = Field(None, alias='lavasrEnhancerModelSrc')
+    ) = Field(None, alias="lavasrEnhancerModelSrc")
     lavasr_denoiser_model_src: (
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
         | None
-    ) = Field(None, alias='lavasrDenoiserModelSrc')
+    ) = Field(None, alias="lavasrDenoiserModelSrc")
     tts_supertonic_multilingual: Any | None = Field(
-        None, alias='ttsSupertonicMultilingual'
+        None, alias="ttsSupertonicMultilingual"
     )
-    tts_tokenizer_src: Any | None = Field(None, alias='ttsTokenizerSrc')
-    tts_speech_encoder_src: Any | None = Field(None, alias='ttsSpeechEncoderSrc')
-    tts_embed_tokens_src: Any | None = Field(None, alias='ttsEmbedTokensSrc')
+    tts_tokenizer_src: Any | None = Field(None, alias="ttsTokenizerSrc")
+    tts_speech_encoder_src: Any | None = Field(None, alias="ttsSpeechEncoderSrc")
+    tts_embed_tokens_src: Any | None = Field(None, alias="ttsEmbedTokensSrc")
     tts_conditional_decoder_src: Any | None = Field(
-        None, alias='ttsConditionalDecoderSrc'
+        None, alias="ttsConditionalDecoderSrc"
     )
-    tts_language_model_src: Any | None = Field(None, alias='ttsLanguageModelSrc')
-    tts_text_encoder_src: Any | None = Field(None, alias='ttsTextEncoderSrc')
+    tts_language_model_src: Any | None = Field(None, alias="ttsLanguageModelSrc")
+    tts_text_encoder_src: Any | None = Field(None, alias="ttsTextEncoderSrc")
     tts_duration_predictor_src: Any | None = Field(
-        None, alias='ttsDurationPredictorSrc'
+        None, alias="ttsDurationPredictorSrc"
     )
-    tts_vector_estimator_src: Any | None = Field(None, alias='ttsVectorEstimatorSrc')
-    tts_vocoder_src: Any | None = Field(None, alias='ttsVocoderSrc')
-    tts_unicode_indexer_src: Any | None = Field(None, alias='ttsUnicodeIndexerSrc')
-    tts_tts_config_src: Any | None = Field(None, alias='ttsTtsConfigSrc')
-    tts_voice_style_src: Any | None = Field(None, alias='ttsVoiceStyleSrc')
+    tts_vector_estimator_src: Any | None = Field(None, alias="ttsVectorEstimatorSrc")
+    tts_vocoder_src: Any | None = Field(None, alias="ttsVocoderSrc")
+    tts_unicode_indexer_src: Any | None = Field(None, alias="ttsUnicodeIndexerSrc")
+    tts_tts_config_src: Any | None = Field(None, alias="ttsTtsConfigSrc")
+    tts_voice_style_src: Any | None = Field(None, alias="ttsVoiceStyleSrc")
 
 
 class LoadModelSrcRequestTtsGgml(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestTtsGgmlDelegate | None = Field(
-        None, title='LoadModelSrcRequestTtsGgmlDelegate'
+        None, title="LoadModelSrcRequestTtsGgmlDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['tts-ggml'] = Field(..., alias='modelType')
+    model_type: Literal["tts-ggml"] = Field(..., alias="modelType")
     model_config_: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
-    ) = Field(..., alias='modelConfig')
+    ) = Field(..., alias="modelConfig")
 
 
 class LoadModelSrcRequestGgmlOcrDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(Enum):
-    easyocr = 'easyocr'
-    doctr = 'doctr'
+    easyocr = "easyocr"
+    doctr = "doctr"
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
-    cpu = 'cpu'
-    vulkan = 'vulkan'
-    metal = 'metal'
-    opencl = 'opencl'
+    cpu = "cpu"
+    vulkan = "vulkan"
+    metal = "metal"
+    opencl = "opencl"
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestGgmlOcrModelConfig(BaseModel):
-    lang_list: list[str] | None = Field(None, alias='langList')
+    lang_list: list[str] | None = Field(None, alias="langList")
     pipeline_type: LoadModelSrcRequestGgmlOcrModelConfigPipelineType | None = Field(
         None,
-        alias='pipelineType',
-        title='LoadModelSrcRequestGgmlOcrModelConfigPipelineType',
+        alias="pipelineType",
+        title="LoadModelSrcRequestGgmlOcrModelConfigPipelineType",
     )
-    mag_ratio: float | None = Field(None, alias='magRatio')
-    canvas_size: float | None = Field(None, alias='canvasSize')
+    mag_ratio: float | None = Field(None, alias="magRatio")
+    canvas_size: float | None = Field(None, alias="canvasSize")
     default_rotation_angles: list[float] | None = Field(
-        None, alias='defaultRotationAngles'
+        None, alias="defaultRotationAngles"
     )
-    contrast_retry: bool | None = Field(None, alias='contrastRetry')
-    low_confidence_threshold: float | None = Field(None, alias='lowConfidenceThreshold')
-    recognizer_batch_size: float | None = Field(None, alias='recognizerBatchSize')
-    n_threads: float | None = Field(None, alias='nThreads')
+    contrast_retry: bool | None = Field(None, alias="contrastRetry")
+    low_confidence_threshold: float | None = Field(None, alias="lowConfidenceThreshold")
+    recognizer_batch_size: float | None = Field(None, alias="recognizerBatchSize")
+    n_threads: float | None = Field(None, alias="nThreads")
     backend_device: LoadModelSrcRequestGgmlOcrModelConfigBackendDevice | None = Field(
         None,
-        alias='backendDevice',
-        title='LoadModelSrcRequestGgmlOcrModelConfigBackendDevice',
+        alias="backendDevice",
+        title="LoadModelSrcRequestGgmlOcrModelConfigBackendDevice",
     )
-    gpu_device: float | None = Field(None, alias='gpuDevice')
+    gpu_device: float | None = Field(None, alias="gpuDevice")
     detector_model_src: (
         str | LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc | None
-    ) = Field(None, alias='detectorModelSrc')
+    ) = Field(None, alias="detectorModelSrc")
 
 
 class LoadModelSrcRequestGgmlOcr(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestGgmlOcrDelegate | None = Field(
-        None, title='LoadModelSrcRequestGgmlOcrDelegate'
+        None, title="LoadModelSrcRequestGgmlOcrDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['ggml-ocr'] = Field(..., alias='modelType')
+    model_type: Literal["ggml-ocr"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestGgmlOcrModelConfig = Field(
-        ..., alias='modelConfig', title='LoadModelSrcRequestGgmlOcrModelConfig'
+        ..., alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"
     )
 
 
 class LoadModelSrcRequestSdcppGenerationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
-    diffusion = 'diffusion'
-    upscale = 'upscale'
-    video = 'video'
+    diffusion = "diffusion"
+    upscale = "upscale"
+    video = "video"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
-    gpu = 'gpu'
-    cpu = 'cpu'
+    gpu = "gpu"
+    cpu = "cpu"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMainGpu(Enum):
-    integrated = 'integrated'
-    dedicated = 'dedicated'
+    integrated = "integrated"
+    dedicated = "dedicated"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigPrediction(Enum):
-    auto = 'auto'
-    eps = 'eps'
-    v = 'v'
-    edm_v = 'edm_v'
-    flow = 'flow'
-    flux2_flow = 'flux2_flow'
+    auto = "auto"
+    eps = "eps"
+    v = "v"
+    edm_v = "edm_v"
+    flow = "flow"
+    flux2_flow = "flux2_flow"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigType(Enum):
-    auto = 'auto'
-    f32 = 'f32'
-    f16 = 'f16'
-    bf16 = 'bf16'
-    q2_k = 'q2_k'
-    q3_k = 'q3_k'
-    q4_0 = 'q4_0'
-    q4_1 = 'q4_1'
-    q4_k = 'q4_k'
-    q5_0 = 'q5_0'
-    q5_1 = 'q5_1'
-    q5_k = 'q5_k'
-    q6_k = 'q6_k'
-    q8_0 = 'q8_0'
+    auto = "auto"
+    f32 = "f32"
+    f16 = "f16"
+    bf16 = "bf16"
+    q2_k = "q2_k"
+    q3_k = "q3_k"
+    q4_0 = "q4_0"
+    q4_1 = "q4_1"
+    q4_k = "q4_k"
+    q5_0 = "q5_0"
+    q5_1 = "q5_1"
+    q5_k = "q5_k"
+    q6_k = "q6_k"
+    q8_0 = "q8_0"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigRng(Enum):
-    cpu = 'cpu'
-    cuda = 'cuda'
-    std_default = 'std_default'
+    cpu = "cpu"
+    cuda = "cuda"
+    std_default = "std_default"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng(Enum):
-    cpu = 'cpu'
-    cuda = 'cuda'
-    std_default = 'std_default'
+    cpu = "cpu"
+    cuda = "cuda"
+    std_default = "std_default"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode(Enum):
-    auto = 'auto'
-    immediately = 'immediately'
-    at_runtime = 'at_runtime'
+    auto = "auto"
+    immediately = "immediately"
+    at_runtime = "at_runtime"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -4513,29 +4513,29 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(BaseModel):
 class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
@@ -4543,105 +4543,105 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
@@ -4649,29 +4649,29 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(BaseModel):
 class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(
     Enum
 ):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
@@ -4679,72 +4679,72 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon
-        | Literal['vad']
+        | Literal["vad"]
         | None
     ) = None
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['esrgan'] | None = Field(
+    type: Literal["esrgan"] | None = Field(
         None,
-        description='Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale }).',
+        description="Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale }).",
     )
     model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc | None
@@ -4754,31 +4754,31 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(BaseModel):
     )
     tile_size: conint(le=9007199254740991, gt=0) | None = Field(
         None,
-        description='ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.',
+        description="ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.",
     )
     direct: bool | None = Field(
         None,
-        description='Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others.',
+        description="Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others.",
     )
     offload_params_to_cpu: bool | None = Field(
         None,
-        description='Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs.',
+        description="Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs.",
     )
     threads: Literal[-1] | conint(le=9007199254740991, gt=0) | None = Field(
         None,
-        description='Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.',
+        description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
     )
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
     mode: LoadModelSrcRequestSdcppGenerationModelConfigMode | None = Field(
-        'diffusion',
+        "diffusion",
         description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
-        title='LoadModelSrcRequestSdcppGenerationModelConfigMode',
+        title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
     )
     threads: float | None = None
     device: LoadModelSrcRequestSdcppGenerationModelConfigDevice | None = Field(
-        None, title='LoadModelSrcRequestSdcppGenerationModelConfigDevice'
+        None, title="LoadModelSrcRequestSdcppGenerationModelConfigDevice"
     )
     main_gpu: (
         conint(ge=0, le=9007199254740991)
@@ -4786,84 +4786,84 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
         | None
     ) = Field(
         None,
-        alias='main-gpu',
+        alias="main-gpu",
         description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
     )
     prediction: LoadModelSrcRequestSdcppGenerationModelConfigPrediction | None = Field(
         None,
-        description='Prediction type; auto-detected from model when omitted',
-        title='LoadModelSrcRequestSdcppGenerationModelConfigPrediction',
+        description="Prediction type; auto-detected from model when omitted",
+        title="LoadModelSrcRequestSdcppGenerationModelConfigPrediction",
     )
     type: LoadModelSrcRequestSdcppGenerationModelConfigType | None = Field(
         None,
-        description='Weight quantization type override; auto-detected when omitted',
-        title='LoadModelSrcRequestSdcppGenerationModelConfigType',
+        description="Weight quantization type override; auto-detected when omitted",
+        title="LoadModelSrcRequestSdcppGenerationModelConfigType",
     )
     rng: LoadModelSrcRequestSdcppGenerationModelConfigRng | None = Field(
-        None, title='LoadModelSrcRequestSdcppGenerationModelConfigRng'
+        None, title="LoadModelSrcRequestSdcppGenerationModelConfigRng"
     )
     sampler_rng: LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None = Field(
-        None, title='LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng'
+        None, title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
     )
     clip_on_cpu: bool | None = Field(
-        None, description='Force CLIP text encoder to run on CPU'
+        None, description="Force CLIP text encoder to run on CPU"
     )
-    vae_on_cpu: bool | None = Field(None, description='Force VAE decoder to run on CPU')
+    vae_on_cpu: bool | None = Field(None, description="Force VAE decoder to run on CPU")
     vae_tiling: bool | None = Field(
-        None, description='Enable VAE tiling for large images on limited VRAM'
+        None, description="Enable VAE tiling for large images on limited VRAM"
     )
     offload_to_cpu: bool | None = Field(
         None,
-        description='Keep model weights in CPU memory and offload them during GPU compute',
+        description="Keep model weights in CPU memory and offload them during GPU compute",
     )
     flash_attn: bool | None = Field(
-        None, description='Enable flash attention to reduce memory usage'
+        None, description="Enable flash attention to reduce memory usage"
     )
     diffusion_fa: bool | None = Field(
-        None, description='Enable flash attention for the diffusion transformer only'
+        None, description="Enable flash attention for the diffusion transformer only"
     )
     lora_apply_mode: (
         LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode | None
     ) = Field(
         None,
         description="How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
-        title='LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode',
+        title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
     )
     verbosity: float | None = None
     clip_l_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc | None
     ) = Field(
         None,
-        alias='clipLModelSrc',
-        description='CLIP-L text encoder model — required for SD3',
+        alias="clipLModelSrc",
+        description="CLIP-L text encoder model — required for SD3",
     )
     clip_g_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc | None
     ) = Field(
         None,
-        alias='clipGModelSrc',
-        description='CLIP-G text encoder model — required for SDXL and SD3',
+        alias="clipGModelSrc",
+        description="CLIP-G text encoder model — required for SDXL and SD3",
     )
     t5_xxl_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc | None
     ) = Field(
         None,
-        alias='t5XxlModelSrc',
-        description='T5-XXL text encoder model — required for SD3',
+        alias="t5XxlModelSrc",
+        description="T5-XXL text encoder model — required for SD3",
     )
     llm_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None
     ) = Field(
         None,
-        alias='llmModelSrc',
-        description='LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).',
+        alias="llmModelSrc",
+        description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
     )
     vae_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None
     ) = Field(
         None,
-        alias='vaeModelSrc',
-        description='VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.',
+        alias="vaeModelSrc",
+        description="VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
     )
     high_noise_diffusion_model_src: (
         str
@@ -4871,22 +4871,22 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
         | None
     ) = Field(
         None,
-        alias='highNoiseDiffusionModelSrc',
-        description='High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models',
+        alias="highNoiseDiffusionModelSrc",
+        description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
     )
     clip_vision_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None
     ) = Field(
         None,
-        alias='clipVisionModelSrc',
-        description='OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).',
+        alias="clipVisionModelSrc",
+        description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
     )
     audio_vae_model_src: (
         str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None
     ) = Field(
         None,
-        alias='audioVaeModelSrc',
-        description='Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.',
+        alias="audioVaeModelSrc",
+        description="Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
     )
     embeddings_connectors_model_src: (
         str
@@ -4894,211 +4894,211 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
         | None
     ) = Field(
         None,
-        alias='embeddingsConnectorsModelSrc',
-        description='Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.',
+        alias="embeddingsConnectorsModelSrc",
+        description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
     )
     upscaler: LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None = Field(
         None,
         description="ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `model_src`. In `mode: 'upscale'` only the tuning fields (tile_size, direct, offload_params_to_cpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `model_src` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `model_src` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
-        title='LoadModelSrcRequestSdcppGenerationModelConfigUpscaler',
+        title="LoadModelSrcRequestSdcppGenerationModelConfigUpscaler",
     )
 
 
 class LoadModelSrcRequestSdcppGeneration(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestSdcppGenerationDelegate | None = Field(
-        None, title='LoadModelSrcRequestSdcppGenerationDelegate'
+        None, title="LoadModelSrcRequestSdcppGenerationDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['sdcpp-generation'] = Field(..., alias='modelType')
+    model_type: Literal["sdcpp-generation"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestSdcppGenerationModelConfig | None = Field(
-        None, alias='modelConfig', title='LoadModelSrcRequestSdcppGenerationModelConfig'
+        None, alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
     )
 
 
 class LoadModelSrcRequestGgmlVlaDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
-    auto = 'auto'
-    cpu = 'cpu'
+    auto = "auto"
+    cpu = "cpu"
 
 
 class LoadModelSrcRequestGgmlVlaModelConfig(BaseModel):
     backend: LoadModelSrcRequestGgmlVlaModelConfigBackend | None = Field(
         None,
         description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-        title='LoadModelSrcRequestGgmlVlaModelConfigBackend',
+        title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
     )
     verbosity: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         None,
-        description='Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).',
+        description="Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
     )
 
 
 class LoadModelSrcRequestGgmlVla(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestGgmlVlaDelegate | None = Field(
-        None, title='LoadModelSrcRequestGgmlVlaDelegate'
+        None, title="LoadModelSrcRequestGgmlVlaDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['ggml-vla'] = Field(..., alias='modelType')
+    model_type: Literal["ggml-vla"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestGgmlVlaModelConfig | None = Field(
-        None, alias='modelConfig', title='LoadModelSrcRequestGgmlVlaModelConfig'
+        None, alias="modelConfig", title="LoadModelSrcRequestGgmlVlaModelConfig"
     )
 
 
 class LoadModelSrcRequestGgmlClassificationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelSrcRequestGgmlClassificationModelConfig(BaseModel):
-    model_path: str | None = Field(None, alias='modelPath')
+    model_path: str | None = Field(None, alias="modelPath")
     top_k: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias='topK'
+        None, alias="topK"
     )
-    native_logger: bool | None = Field(None, alias='nativeLogger')
+    native_logger: bool | None = Field(None, alias="nativeLogger")
 
 
 class LoadModelSrcRequestGgmlClassification(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelSrcRequestGgmlClassificationDelegate | None = Field(
-        None, title='LoadModelSrcRequestGgmlClassificationDelegate'
+        None, title="LoadModelSrcRequestGgmlClassificationDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: Literal['ggml-classification'] = Field(..., alias='modelType')
+    model_type: Literal["ggml-classification"] = Field(..., alias="modelType")
     model_config_: LoadModelSrcRequestGgmlClassificationModelConfig | None = Field(
         None,
-        alias='modelConfig',
-        title='LoadModelSrcRequestGgmlClassificationModelConfig',
+        alias="modelConfig",
+        title="LoadModelSrcRequestGgmlClassificationModelConfig",
     )
 
 
 class LoadModelCustomPluginRequestDelegate(BaseModel):
-    provider_public_key: constr(pattern=r'^[0-9a-fA-F]{64}$') = Field(
+    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
         ...,
-        alias='providerPublicKey',
-        description='Hex-encoded public key of the remote provider to delegate to.',
+        alias="providerPublicKey",
+        description="Hex-encoded public key of the remote provider to delegate to.",
     )
     timeout: confloat(ge=100.0) | None = Field(
-        None, description='Per-call timeout in milliseconds for the delegated request.'
+        None, description="Per-call timeout in milliseconds for the delegated request."
     )
     health_check_timeout: confloat(ge=100.0) | None = Field(
         None,
-        alias='healthCheckTimeout',
-        description='Timeout in milliseconds for the health-check probe before delegating.',
+        alias="healthCheckTimeout",
+        description="Timeout in milliseconds for the health-check probe before delegating.",
     )
     fallback_to_local: bool | None = Field(
         False,
-        alias='fallbackToLocal',
-        description='When `true`, fall back to local execution if the delegated provider is unreachable.',
+        alias="fallbackToLocal",
+        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
     )
     force_new_connection: bool | None = Field(
         False,
-        alias='forceNewConnection',
-        description='When `true`, skip any cached delegation connection and open a fresh one.',
+        alias="forceNewConnection",
+        description="When `true`, skip any cached delegation connection and open a fresh one.",
     )
 
 
 class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title='LoadModelCustomPluginRequestModelConfig')
+    root: dict[str, Any] = Field(..., title="LoadModelCustomPluginRequestModelConfig")
 
 
 class LoadModelCustomPluginRequest(BaseModel):
-    type: Literal['loadModel']
-    model_src: str = Field(..., alias='modelSrc')
-    model_name: str | None = Field(None, alias='modelName')
-    with_progress: bool | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_src: str = Field(..., alias="modelSrc")
+    model_name: str | None = Field(None, alias="modelName")
+    with_progress: bool | None = Field(None, alias="withProgress")
     seed: bool | None = None
     delegate: LoadModelCustomPluginRequestDelegate | None = Field(
-        None, title='LoadModelCustomPluginRequestDelegate'
+        None, title="LoadModelCustomPluginRequestDelegate"
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.',
+        alias="requestId",
+        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
     )
-    model_type: str = Field(..., alias='modelType')
+    model_type: str = Field(..., alias="modelType")
     model_config_: LoadModelCustomPluginRequestModelConfig | None = Field(
-        None, alias='modelConfig', title='LoadModelCustomPluginRequestModelConfig'
+        None, alias="modelConfig", title="LoadModelCustomPluginRequestModelConfig"
     )
 
 
@@ -5131,17 +5131,17 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
         | LoadModelCustomPluginRequest
-    ) = Field(..., title='LoadModelSrcRequest')
+    ) = Field(..., title="LoadModelSrcRequest")
 
 
 class ReloadConfigRequestModelType(Enum):
-    whisper = 'whisper'
-    whispercpp_transcription = 'whispercpp-transcription'
+    whisper = "whisper"
+    whispercpp_transcription = "whispercpp-transcription"
 
 
 class ReloadConfigRequestModelConfigStrategy(Enum):
-    greedy = 'greedy'
-    beam_search = 'beam_search'
+    greedy = "greedy"
+    beam_search = "beam_search"
 
 
 class ReloadConfigRequestModelConfigVadParams(BaseModel):
@@ -5154,8 +5154,8 @@ class ReloadConfigRequestModelConfigVadParams(BaseModel):
 
 
 class ReloadConfigRequestModelConfigAudioFormat(Enum):
-    f32le = 'f32le'
-    s16le = 's16le'
+    f32le = "f32le"
+    s16le = "s16le"
 
 
 class ReloadConfigRequestModelConfigContextParams(BaseModel):
@@ -5170,48 +5170,48 @@ class ReloadConfigRequestModelConfigMiscConfig(BaseModel):
 
 
 class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    parakeet_transcription = 'parakeet-transcription'
-    ggml_ocr = 'ggml-ocr'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    parakeet = 'parakeet'
-    tts = 'tts'
-    ocr = 'ocr'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
 
 
 class ReloadConfigRequestModelConfigVadModelSrc(BaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias='modelId')
-    registry_path: str | None = Field(None, alias='registryPath')
-    registry_source: str | None = Field(None, alias='registrySource')
-    blob_core_key: str | None = Field(None, alias='blobCoreKey')
-    blob_index: float | None = Field(None, alias='blobIndex')
+    model_id: str | None = Field(None, alias="modelId")
+    registry_path: str | None = Field(None, alias="registryPath")
+    registry_source: str | None = Field(None, alias="registrySource")
+    blob_core_key: str | None = Field(None, alias="blobCoreKey")
+    blob_index: float | None = Field(None, alias="blobIndex")
     engine: str | None = None
-    expected_size: float | None = Field(None, alias='expectedSize')
-    sha256_checksum: str | None = Field(None, alias='sha256Checksum')
-    addon: ReloadConfigRequestModelConfigVadModelSrcAddon | Literal['vad'] | None = None
+    expected_size: float | None = Field(None, alias="expectedSize")
+    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    addon: ReloadConfigRequestModelConfigVadModelSrcAddon | Literal["vad"] | None = None
 
 
 class ReloadConfigRequestModelConfig(BaseModel):
     strategy: ReloadConfigRequestModelConfigStrategy | None = Field(
-        None, title='ReloadConfigRequestModelConfigStrategy'
+        None, title="ReloadConfigRequestModelConfigStrategy"
     )
     n_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = None
     n_max_text_ctx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
@@ -5250,70 +5250,70 @@ class ReloadConfigRequestModelConfig(BaseModel):
         None
     )
     vad_params: ReloadConfigRequestModelConfigVadParams | None = Field(
-        None, title='ReloadConfigRequestModelConfigVadParams'
+        None, title="ReloadConfigRequestModelConfigVadParams"
     )
     audio_format: ReloadConfigRequestModelConfigAudioFormat | None = Field(
-        None, title='ReloadConfigRequestModelConfigAudioFormat'
+        None, title="ReloadConfigRequestModelConfigAudioFormat"
     )
     context_params: ReloadConfigRequestModelConfigContextParams | None = Field(
-        None, alias='contextParams', title='ReloadConfigRequestModelConfigContextParams'
+        None, alias="contextParams", title="ReloadConfigRequestModelConfigContextParams"
     )
     misc_config: ReloadConfigRequestModelConfigMiscConfig | None = Field(
-        None, alias='miscConfig', title='ReloadConfigRequestModelConfigMiscConfig'
+        None, alias="miscConfig", title="ReloadConfigRequestModelConfigMiscConfig"
     )
     vad_model_src: str | ReloadConfigRequestModelConfigVadModelSrc | None = Field(
-        None, alias='vadModelSrc'
+        None, alias="vadModelSrc"
     )
 
 
 class ReloadConfigRequest(BaseModel):
-    type: Literal['loadModel']
-    model_id: constr(pattern=r'^[0-9a-f]{16}$') = Field(..., alias='modelId')
-    model_src: Any | None = Field(None, alias='modelSrc')
-    with_progress: Any | None = Field(None, alias='withProgress')
+    type: Literal["loadModel"]
+    model_id: constr(pattern=r"^[0-9a-f]{16}$") = Field(..., alias="modelId")
+    model_src: Any | None = Field(None, alias="modelSrc")
+    with_progress: Any | None = Field(None, alias="withProgress")
     delegate: Any | None = None
     seed: Any | None = None
     model_type: ReloadConfigRequestModelType = Field(
         ...,
-        alias='modelType',
+        alias="modelType",
         description='Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
-        title='ReloadConfigRequestModelType',
+        title="ReloadConfigRequestModelType",
     )
     model_config_: ReloadConfigRequestModelConfig = Field(
-        ..., alias='modelConfig', title='ReloadConfigRequestModelConfig'
+        ..., alias="modelConfig", title="ReloadConfigRequestModelConfig"
     )
 
 
 class LoadModelResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loadModel']
+    type: Literal["loadModel"]
     success: bool
-    model_id: str | None = Field(None, alias='modelId')
+    model_id: str | None = Field(None, alias="modelId")
     error: str | None = None
 
 
 class LoggingStreamRequest(BaseModel):
     id: str
-    type: Literal['loggingStream']
+    type: Literal["loggingStream"]
 
 
 class LoggingStreamResponseLevel(Enum):
-    error = 'error'
-    warn = 'warn'
-    info = 'info'
-    debug = 'debug'
-    off = 'off'
+    error = "error"
+    warn = "warn"
+    info = "info"
+    debug = "debug"
+    off = "off"
 
 
 class LoggingStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['loggingStream']
+    type: Literal["loggingStream"]
     id: str
-    level: LoggingStreamResponseLevel = Field(..., title='LoggingStreamResponseLevel')
+    level: LoggingStreamResponseLevel = Field(..., title="LoggingStreamResponseLevel")
     namespace: str
     message: str
     timestamp: float
@@ -5321,415 +5321,415 @@ class LoggingStreamResponse(BaseModel):
 
 class ModelProgressResponseShardInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    current_shard: float = Field(..., alias='currentShard')
-    total_shards: float = Field(..., alias='totalShards')
-    shard_name: str = Field(..., alias='shardName')
-    overall_downloaded: float = Field(..., alias='overallDownloaded')
-    overall_total: float = Field(..., alias='overallTotal')
-    overall_percentage: float = Field(..., alias='overallPercentage')
+    current_shard: float = Field(..., alias="currentShard")
+    total_shards: float = Field(..., alias="totalShards")
+    shard_name: str = Field(..., alias="shardName")
+    overall_downloaded: float = Field(..., alias="overallDownloaded")
+    overall_total: float = Field(..., alias="overallTotal")
+    overall_percentage: float = Field(..., alias="overallPercentage")
 
 
 class ModelProgressResponseFileSetInfo(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    set_key: str = Field(..., alias='setKey')
-    current_file: str = Field(..., alias='currentFile')
-    file_index: float = Field(..., alias='fileIndex')
-    total_files: float = Field(..., alias='totalFiles')
-    overall_downloaded: float = Field(..., alias='overallDownloaded')
-    overall_total: float = Field(..., alias='overallTotal')
-    overall_percentage: float = Field(..., alias='overallPercentage')
+    set_key: str = Field(..., alias="setKey")
+    current_file: str = Field(..., alias="currentFile")
+    file_index: float = Field(..., alias="fileIndex")
+    total_files: float = Field(..., alias="totalFiles")
+    overall_downloaded: float = Field(..., alias="overallDownloaded")
+    overall_total: float = Field(..., alias="overallTotal")
+    overall_percentage: float = Field(..., alias="overallPercentage")
 
 
 class ModelProgressResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['modelProgress']
+    type: Literal["modelProgress"]
     downloaded: float
     total: float
     percentage: float
-    download_key: str = Field(..., alias='downloadKey')
+    download_key: str = Field(..., alias="downloadKey")
     shard_info: ModelProgressResponseShardInfo | None = Field(
-        None, alias='shardInfo', title='ModelProgressResponseShardInfo'
+        None, alias="shardInfo", title="ModelProgressResponseShardInfo"
     )
     file_set_info: ModelProgressResponseFileSetInfo | None = Field(
-        None, alias='fileSetInfo', title='ModelProgressResponseFileSetInfo'
+        None, alias="fileSetInfo", title="ModelProgressResponseFileSetInfo"
     )
 
 
 class ModelRegistryGetModelRequest(BaseModel):
-    type: Literal['modelRegistryGetModel']
-    registry_path: str = Field(..., alias='registryPath')
-    registry_source: str = Field(..., alias='registrySource')
+    type: Literal["modelRegistryGetModel"]
+    registry_path: str = Field(..., alias="registryPath")
+    registry_source: str = Field(..., alias="registrySource")
 
 
 class ModelRegistryGetModelResponseModelAddon(Enum):
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    vad = 'vad'
-    tts = 'tts'
-    ocr = 'ocr'
-    parakeet = 'parakeet'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
-    other = 'other'
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    vad = "vad"
+    tts = "tts"
+    ocr = "ocr"
+    parakeet = "parakeet"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+    other = "other"
 
 
 class ModelRegistryGetModelResponseModelEngine(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    ggml_ocr = 'ggml-ocr'
-    parakeet_transcription = 'parakeet-transcription'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    onnx_vad = 'onnx-vad'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    ggml_ocr = "ggml-ocr"
+    parakeet_transcription = "parakeet-transcription"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    onnx_vad = "onnx-vad"
 
 
 class ModelRegistryGetModelResponseModel(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    name: str = Field(..., description='Catalog name of the model entry.')
+    name: str = Field(..., description="Catalog name of the model entry.")
     registry_path: str = Field(
-        ..., alias='registryPath', description='Registry-relative path to the model.'
+        ..., alias="registryPath", description="Registry-relative path to the model."
     )
     registry_source: str = Field(
         ...,
-        alias='registrySource',
-        description='Registry source identifier, e.g. `huggingface`.',
+        alias="registrySource",
+        description="Registry source identifier, e.g. `huggingface`.",
     )
     blob_core_key: str = Field(
         ...,
-        alias='blobCoreKey',
-        description='Hyperdrive blob core key for the model file.',
+        alias="blobCoreKey",
+        description="Hyperdrive blob core key for the model file.",
     )
     blob_block_offset: float = Field(
         ...,
-        alias='blobBlockOffset',
-        description='Starting block offset of the model file in the blob.',
+        alias="blobBlockOffset",
+        description="Starting block offset of the model file in the blob.",
     )
     blob_block_length: float = Field(
         ...,
-        alias='blobBlockLength',
-        description='Number of blocks occupied by the model file.',
+        alias="blobBlockLength",
+        description="Number of blocks occupied by the model file.",
     )
     blob_byte_offset: float = Field(
         ...,
-        alias='blobByteOffset',
-        description='Starting byte offset of the model file within its block.',
+        alias="blobByteOffset",
+        description="Starting byte offset of the model file within its block.",
     )
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Unique identifier used to reference the model in SDK calls.',
+        alias="modelId",
+        description="Unique identifier used to reference the model in SDK calls.",
     )
     addon: ModelRegistryGetModelResponseModelAddon = Field(
         ...,
-        description='Inference addon / capability category this model belongs to.',
-        title='ModelRegistryGetModelResponseModelAddon',
+        description="Inference addon / capability category this model belongs to.",
+        title="ModelRegistryGetModelResponseModelAddon",
     )
     expected_size: float = Field(
         ...,
-        alias='expectedSize',
-        description='Expected total size of the model file in bytes.',
+        alias="expectedSize",
+        description="Expected total size of the model file in bytes.",
     )
     sha256_checksum: str = Field(
         ...,
-        alias='sha256Checksum',
-        description='Expected SHA-256 checksum of the model file.',
+        alias="sha256Checksum",
+        description="Expected SHA-256 checksum of the model file.",
     )
     engine: ModelRegistryGetModelResponseModelEngine = Field(
         ...,
-        description='Canonical inference engine identifier.',
-        title='ModelRegistryGetModelResponseModelEngine',
+        description="Canonical inference engine identifier.",
+        title="ModelRegistryGetModelResponseModelEngine",
     )
     quantization: str = Field(
-        ..., description='Quantization identifier, e.g. `Q4_K_M`.'
+        ..., description="Quantization identifier, e.g. `Q4_K_M`."
     )
     params: str = Field(
-        ..., description='Parameter-count label for the model, e.g. `7B`.'
+        ..., description="Parameter-count label for the model, e.g. `7B`."
     )
 
 
 class ModelRegistryGetModelResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['modelRegistryGetModel']
+    type: Literal["modelRegistryGetModel"]
     success: bool
     model: ModelRegistryGetModelResponseModel | None = Field(
-        None, title='ModelRegistryGetModelResponseModel'
+        None, title="ModelRegistryGetModelResponseModel"
     )
     error: str | None = None
 
 
 class ModelRegistryListRequest(BaseModel):
-    type: Literal['modelRegistryList']
+    type: Literal["modelRegistryList"]
 
 
 class ModelRegistryListResponseModelsItemAddon(Enum):
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    vad = 'vad'
-    tts = 'tts'
-    ocr = 'ocr'
-    parakeet = 'parakeet'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
-    other = 'other'
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    vad = "vad"
+    tts = "tts"
+    ocr = "ocr"
+    parakeet = "parakeet"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+    other = "other"
 
 
 class ModelRegistryListResponseModelsItemEngine(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    ggml_ocr = 'ggml-ocr'
-    parakeet_transcription = 'parakeet-transcription'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    onnx_vad = 'onnx-vad'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    ggml_ocr = "ggml-ocr"
+    parakeet_transcription = "parakeet-transcription"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    onnx_vad = "onnx-vad"
 
 
 class ModelRegistryListResponseModelsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    name: str = Field(..., description='Catalog name of the model entry.')
+    name: str = Field(..., description="Catalog name of the model entry.")
     registry_path: str = Field(
-        ..., alias='registryPath', description='Registry-relative path to the model.'
+        ..., alias="registryPath", description="Registry-relative path to the model."
     )
     registry_source: str = Field(
         ...,
-        alias='registrySource',
-        description='Registry source identifier, e.g. `huggingface`.',
+        alias="registrySource",
+        description="Registry source identifier, e.g. `huggingface`.",
     )
     blob_core_key: str = Field(
         ...,
-        alias='blobCoreKey',
-        description='Hyperdrive blob core key for the model file.',
+        alias="blobCoreKey",
+        description="Hyperdrive blob core key for the model file.",
     )
     blob_block_offset: float = Field(
         ...,
-        alias='blobBlockOffset',
-        description='Starting block offset of the model file in the blob.',
+        alias="blobBlockOffset",
+        description="Starting block offset of the model file in the blob.",
     )
     blob_block_length: float = Field(
         ...,
-        alias='blobBlockLength',
-        description='Number of blocks occupied by the model file.',
+        alias="blobBlockLength",
+        description="Number of blocks occupied by the model file.",
     )
     blob_byte_offset: float = Field(
         ...,
-        alias='blobByteOffset',
-        description='Starting byte offset of the model file within its block.',
+        alias="blobByteOffset",
+        description="Starting byte offset of the model file within its block.",
     )
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Unique identifier used to reference the model in SDK calls.',
+        alias="modelId",
+        description="Unique identifier used to reference the model in SDK calls.",
     )
     addon: ModelRegistryListResponseModelsItemAddon = Field(
         ...,
-        description='Inference addon / capability category this model belongs to.',
-        title='ModelRegistryListResponseModelsItemAddon',
+        description="Inference addon / capability category this model belongs to.",
+        title="ModelRegistryListResponseModelsItemAddon",
     )
     expected_size: float = Field(
         ...,
-        alias='expectedSize',
-        description='Expected total size of the model file in bytes.',
+        alias="expectedSize",
+        description="Expected total size of the model file in bytes.",
     )
     sha256_checksum: str = Field(
         ...,
-        alias='sha256Checksum',
-        description='Expected SHA-256 checksum of the model file.',
+        alias="sha256Checksum",
+        description="Expected SHA-256 checksum of the model file.",
     )
     engine: ModelRegistryListResponseModelsItemEngine = Field(
         ...,
-        description='Canonical inference engine identifier.',
-        title='ModelRegistryListResponseModelsItemEngine',
+        description="Canonical inference engine identifier.",
+        title="ModelRegistryListResponseModelsItemEngine",
     )
     quantization: str = Field(
-        ..., description='Quantization identifier, e.g. `Q4_K_M`.'
+        ..., description="Quantization identifier, e.g. `Q4_K_M`."
     )
     params: str = Field(
-        ..., description='Parameter-count label for the model, e.g. `7B`.'
+        ..., description="Parameter-count label for the model, e.g. `7B`."
     )
 
 
 class ModelRegistryListResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['modelRegistryList']
+    type: Literal["modelRegistryList"]
     success: bool
     models: list[ModelRegistryListResponseModelsItem] | None = None
     error: str | None = None
 
 
 class ModelRegistrySearchRequestAddon(Enum):
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    vad = 'vad'
-    tts = 'tts'
-    ocr = 'ocr'
-    parakeet = 'parakeet'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
-    other = 'other'
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    vad = "vad"
+    tts = "tts"
+    ocr = "ocr"
+    parakeet = "parakeet"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+    other = "other"
 
 
 class ModelRegistrySearchRequest(BaseModel):
-    type: Literal['modelRegistrySearch']
+    type: Literal["modelRegistrySearch"]
     filter: str | None = None
     engine: str | None = None
     quantization: str | None = None
     addon: ModelRegistrySearchRequestAddon | None = Field(
-        None, title='ModelRegistrySearchRequestAddon'
+        None, title="ModelRegistrySearchRequestAddon"
     )
 
 
 class ModelRegistrySearchResponseModelsItemAddon(Enum):
-    llm = 'llm'
-    whisper = 'whisper'
-    bci = 'bci'
-    embeddings = 'embeddings'
-    nmt = 'nmt'
-    vad = 'vad'
-    tts = 'tts'
-    ocr = 'ocr'
-    parakeet = 'parakeet'
-    diffusion = 'diffusion'
-    vla = 'vla'
-    classification = 'classification'
-    other = 'other'
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    vad = "vad"
+    tts = "tts"
+    ocr = "ocr"
+    parakeet = "parakeet"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+    other = "other"
 
 
 class ModelRegistrySearchResponseModelsItemEngine(Enum):
-    llamacpp_completion = 'llamacpp-completion'
-    whispercpp_transcription = 'whispercpp-transcription'
-    bci_whispercpp_transcription = 'bci-whispercpp-transcription'
-    llamacpp_embedding = 'llamacpp-embedding'
-    nmtcpp_translation = 'nmtcpp-translation'
-    onnx_tts = 'onnx-tts'
-    tts_ggml = 'tts-ggml'
-    ggml_ocr = 'ggml-ocr'
-    parakeet_transcription = 'parakeet-transcription'
-    sdcpp_generation = 'sdcpp-generation'
-    ggml_vla = 'ggml-vla'
-    ggml_classification = 'ggml-classification'
-    onnx_vad = 'onnx-vad'
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    ggml_ocr = "ggml-ocr"
+    parakeet_transcription = "parakeet-transcription"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    onnx_vad = "onnx-vad"
 
 
 class ModelRegistrySearchResponseModelsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    name: str = Field(..., description='Catalog name of the model entry.')
+    name: str = Field(..., description="Catalog name of the model entry.")
     registry_path: str = Field(
-        ..., alias='registryPath', description='Registry-relative path to the model.'
+        ..., alias="registryPath", description="Registry-relative path to the model."
     )
     registry_source: str = Field(
         ...,
-        alias='registrySource',
-        description='Registry source identifier, e.g. `huggingface`.',
+        alias="registrySource",
+        description="Registry source identifier, e.g. `huggingface`.",
     )
     blob_core_key: str = Field(
         ...,
-        alias='blobCoreKey',
-        description='Hyperdrive blob core key for the model file.',
+        alias="blobCoreKey",
+        description="Hyperdrive blob core key for the model file.",
     )
     blob_block_offset: float = Field(
         ...,
-        alias='blobBlockOffset',
-        description='Starting block offset of the model file in the blob.',
+        alias="blobBlockOffset",
+        description="Starting block offset of the model file in the blob.",
     )
     blob_block_length: float = Field(
         ...,
-        alias='blobBlockLength',
-        description='Number of blocks occupied by the model file.',
+        alias="blobBlockLength",
+        description="Number of blocks occupied by the model file.",
     )
     blob_byte_offset: float = Field(
         ...,
-        alias='blobByteOffset',
-        description='Starting byte offset of the model file within its block.',
+        alias="blobByteOffset",
+        description="Starting byte offset of the model file within its block.",
     )
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='Unique identifier used to reference the model in SDK calls.',
+        alias="modelId",
+        description="Unique identifier used to reference the model in SDK calls.",
     )
     addon: ModelRegistrySearchResponseModelsItemAddon = Field(
         ...,
-        description='Inference addon / capability category this model belongs to.',
-        title='ModelRegistrySearchResponseModelsItemAddon',
+        description="Inference addon / capability category this model belongs to.",
+        title="ModelRegistrySearchResponseModelsItemAddon",
     )
     expected_size: float = Field(
         ...,
-        alias='expectedSize',
-        description='Expected total size of the model file in bytes.',
+        alias="expectedSize",
+        description="Expected total size of the model file in bytes.",
     )
     sha256_checksum: str = Field(
         ...,
-        alias='sha256Checksum',
-        description='Expected SHA-256 checksum of the model file.',
+        alias="sha256Checksum",
+        description="Expected SHA-256 checksum of the model file.",
     )
     engine: ModelRegistrySearchResponseModelsItemEngine = Field(
         ...,
-        description='Canonical inference engine identifier.',
-        title='ModelRegistrySearchResponseModelsItemEngine',
+        description="Canonical inference engine identifier.",
+        title="ModelRegistrySearchResponseModelsItemEngine",
     )
     quantization: str = Field(
-        ..., description='Quantization identifier, e.g. `Q4_K_M`.'
+        ..., description="Quantization identifier, e.g. `Q4_K_M`."
     )
     params: str = Field(
-        ..., description='Parameter-count label for the model, e.g. `7B`.'
+        ..., description="Parameter-count label for the model, e.g. `7B`."
     )
 
 
 class ModelRegistrySearchResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['modelRegistrySearch']
+    type: Literal["modelRegistrySearch"]
     success: bool
     models: list[ModelRegistrySearchResponseModelsItem] | None = None
     error: str | None = None
 
 
 class OcrStreamRequestImageBase64(BaseModel):
-    type: Literal['base64']
+    type: Literal["base64"]
     value: str
 
 
 class OcrStreamRequestImageFilePath(BaseModel):
-    type: Literal['filePath']
+    type: Literal["filePath"]
     value: str
 
 
@@ -5738,17 +5738,17 @@ class OcrStreamRequestOptions(BaseModel):
 
 
 class OcrStreamRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     image: OcrStreamRequestImageBase64 | OcrStreamRequestImageFilePath
     options: OcrStreamRequestOptions | None = Field(
-        None, title='OcrStreamRequestOptions'
+        None, title="OcrStreamRequestOptions"
     )
-    type: Literal['ocrStream']
+    type: Literal["ocrStream"]
 
 
 class OcrStreamResponseBlocksItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str
     bbox: list[Any] | None = None
@@ -5757,164 +5757,164 @@ class OcrStreamResponseBlocksItem(BaseModel):
 
 class OcrStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    detection_time: float | None = Field(None, alias='detectionTime')
-    recognition_time: float | None = Field(None, alias='recognitionTime')
-    total_time: float | None = Field(None, alias='totalTime')
+    detection_time: float | None = Field(None, alias="detectionTime")
+    recognition_time: float | None = Field(None, alias="recognitionTime")
+    total_time: float | None = Field(None, alias="totalTime")
 
 
 class OcrStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['ocrStream']
+    type: Literal["ocrStream"]
     blocks: list[OcrStreamResponseBlocksItem] | None = None
     done: bool | None = None
     error: str | None = None
-    stats: OcrStreamResponseStats | None = Field(None, title='OcrStreamResponseStats')
+    stats: OcrStreamResponseStats | None = Field(None, title="OcrStreamResponseStats")
 
 
 class PluginInvokeRequest(BaseModel):
-    type: Literal['pluginInvoke']
-    model_id: str = Field(..., alias='modelId')
+    type: Literal["pluginInvoke"]
+    model_id: str = Field(..., alias="modelId")
     handler: str
     params: Any
 
 
 class PluginInvokeResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['pluginInvoke']
+    type: Literal["pluginInvoke"]
     result: Any
 
 
 class PluginInvokeStreamRequest(BaseModel):
-    type: Literal['pluginInvokeStream']
-    model_id: str = Field(..., alias='modelId')
+    type: Literal["pluginInvokeStream"]
+    model_id: str = Field(..., alias="modelId")
     handler: str
     params: Any
 
 
 class PluginInvokeStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['pluginInvokeStream']
+    type: Literal["pluginInvokeStream"]
     result: Any
     done: bool | None = None
 
 
 class ProvideRequestFirewallMode(Enum):
-    allow = 'allow'
-    deny = 'deny'
+    allow = "allow"
+    deny = "deny"
 
 
 class ProvideRequestFirewall(BaseModel):
     mode: ProvideRequestFirewallMode | None = Field(
-        'allow', title='ProvideRequestFirewallMode'
+        "allow", title="ProvideRequestFirewallMode"
     )
-    public_keys: list[str] | None = Field([], alias='publicKeys')
+    public_keys: list[str] | None = Field([], alias="publicKeys")
 
 
 class ProvideRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     firewall: ProvideRequestFirewall | None = Field(
-        None, title='ProvideRequestFirewall'
+        None, title="ProvideRequestFirewall"
     )
-    type: Literal['provide']
+    type: Literal["provide"]
 
 
 class ProvideResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['provide']
+    type: Literal["provide"]
     success: bool
     error: str | None = None
-    public_key: str | None = Field(None, alias='publicKey')
+    public_key: str | None = Field(None, alias="publicKey")
 
 
 class RagRequestChunkChunkOptsChunkStrategy(Enum):
-    character = 'character'
-    paragraph = 'paragraph'
+    character = "character"
+    paragraph = "paragraph"
 
 
 class RagRequestChunkChunkOptsSplitStrategy(Enum):
-    character = 'character'
-    word = 'word'
-    token = 'token'
-    sentence = 'sentence'
-    line = 'line'
+    character = "character"
+    word = "word"
+    token = "token"
+    sentence = "sentence"
+    line = "line"
 
 
 class RagRequestChunkChunkOpts(BaseModel):
-    chunk_size: float | None = Field(None, alias='chunkSize')
-    chunk_overlap: float | None = Field(None, alias='chunkOverlap')
+    chunk_size: float | None = Field(None, alias="chunkSize")
+    chunk_overlap: float | None = Field(None, alias="chunkOverlap")
     chunk_strategy: RagRequestChunkChunkOptsChunkStrategy | None = Field(
-        None, alias='chunkStrategy', title='RagRequestChunkChunkOptsChunkStrategy'
+        None, alias="chunkStrategy", title="RagRequestChunkChunkOptsChunkStrategy"
     )
     split_strategy: RagRequestChunkChunkOptsSplitStrategy | None = Field(
-        None, alias='splitStrategy', title='RagRequestChunkChunkOptsSplitStrategy'
+        None, alias="splitStrategy", title="RagRequestChunkChunkOptsSplitStrategy"
     )
 
 
 class RagRequestChunk(BaseModel):
     documents: str | list[str]
     chunk_opts: RagRequestChunkChunkOpts | None = Field(
-        None, alias='chunkOpts', title='RagRequestChunkChunkOpts'
+        None, alias="chunkOpts", title="RagRequestChunkChunkOpts"
     )
-    type: Literal['rag']
-    operation: Literal['chunk']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    type: Literal["rag"]
+    operation: Literal["chunk"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestIngestChunkOptsChunkStrategy(Enum):
-    character = 'character'
-    paragraph = 'paragraph'
+    character = "character"
+    paragraph = "paragraph"
 
 
 class RagRequestIngestChunkOptsSplitStrategy(Enum):
-    character = 'character'
-    word = 'word'
-    token = 'token'
-    sentence = 'sentence'
-    line = 'line'
+    character = "character"
+    word = "word"
+    token = "token"
+    sentence = "sentence"
+    line = "line"
 
 
 class RagRequestIngestChunkOpts(BaseModel):
-    chunk_size: float | None = Field(None, alias='chunkSize')
-    chunk_overlap: float | None = Field(None, alias='chunkOverlap')
+    chunk_size: float | None = Field(None, alias="chunkSize")
+    chunk_overlap: float | None = Field(None, alias="chunkOverlap")
     chunk_strategy: RagRequestIngestChunkOptsChunkStrategy | None = Field(
-        None, alias='chunkStrategy', title='RagRequestIngestChunkOptsChunkStrategy'
+        None, alias="chunkStrategy", title="RagRequestIngestChunkOptsChunkStrategy"
     )
     split_strategy: RagRequestIngestChunkOptsSplitStrategy | None = Field(
-        None, alias='splitStrategy', title='RagRequestIngestChunkOptsSplitStrategy'
+        None, alias="splitStrategy", title="RagRequestIngestChunkOptsSplitStrategy"
     )
 
 
 class RagRequestIngest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     workspace: str | None = None
     documents: str | list[str]
     chunk: bool | None = True
     chunk_opts: RagRequestIngestChunkOpts | None = Field(
-        None, alias='chunkOpts', title='RagRequestIngestChunkOpts'
+        None, alias="chunkOpts", title="RagRequestIngestChunkOpts"
     )
-    progress_interval: PositiveFloat | None = Field(None, alias='progressInterval')
-    on_progress: Any | None = Field(None, alias='onProgress')
-    with_progress: bool | None = Field(None, alias='withProgress')
-    type: Literal['rag']
-    operation: Literal['ingest']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    progress_interval: PositiveFloat | None = Field(None, alias="progressInterval")
+    on_progress: Any | None = Field(None, alias="onProgress")
+    with_progress: bool | None = Field(None, alias="withProgress")
+    type: Literal["rag"]
+    operation: Literal["ingest"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestSaveEmbeddingsDocumentsItemMetadata(RootModel[dict[str, Any]]):
     root: dict[str, Any] = Field(
-        ..., title='RagRequestSaveEmbeddingsDocumentsItemMetadata'
+        ..., title="RagRequestSaveEmbeddingsDocumentsItemMetadata"
     )
 
 
@@ -5922,78 +5922,78 @@ class RagRequestSaveEmbeddingsDocumentsItem(BaseModel):
     id: str
     content: str
     embedding: list[float]
-    embedding_model_id: str = Field(..., alias='embeddingModelId')
+    embedding_model_id: str = Field(..., alias="embeddingModelId")
     metadata: RagRequestSaveEmbeddingsDocumentsItemMetadata | None = Field(
-        None, title='RagRequestSaveEmbeddingsDocumentsItemMetadata'
+        None, title="RagRequestSaveEmbeddingsDocumentsItemMetadata"
     )
 
 
 class RagRequestSaveEmbeddings(BaseModel):
-    model_id: str | None = Field(None, alias='modelId')
+    model_id: str | None = Field(None, alias="modelId")
     workspace: str | None = None
     documents: list[RagRequestSaveEmbeddingsDocumentsItem]
-    progress_interval: PositiveFloat | None = Field(None, alias='progressInterval')
-    on_progress: Any | None = Field(None, alias='onProgress')
-    with_progress: bool | None = Field(None, alias='withProgress')
-    type: Literal['rag']
-    operation: Literal['saveEmbeddings']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    progress_interval: PositiveFloat | None = Field(None, alias="progressInterval")
+    on_progress: Any | None = Field(None, alias="onProgress")
+    with_progress: bool | None = Field(None, alias="withProgress")
+    type: Literal["rag"]
+    operation: Literal["saveEmbeddings"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestSearch(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     workspace: str | None = None
     query: constr(min_length=1)
-    top_k: PositiveFloat | None = Field(5, alias='topK')
+    top_k: PositiveFloat | None = Field(5, alias="topK")
     n: PositiveFloat | None = 3
-    type: Literal['rag']
-    operation: Literal['search']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    type: Literal["rag"]
+    operation: Literal["search"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestDeleteEmbeddings(BaseModel):
-    model_id: str | None = Field(None, alias='modelId')
+    model_id: str | None = Field(None, alias="modelId")
     workspace: str | None = None
     ids: list[str] = Field(..., min_length=1)
-    type: Literal['rag']
-    operation: Literal['deleteEmbeddings']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    type: Literal["rag"]
+    operation: Literal["deleteEmbeddings"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestReindex(BaseModel):
-    model_id: str | None = Field(None, alias='modelId')
+    model_id: str | None = Field(None, alias="modelId")
     workspace: str | None = None
-    on_progress: Any | None = Field(None, alias='onProgress')
-    with_progress: bool | None = Field(None, alias='withProgress')
-    type: Literal['rag']
-    operation: Literal['reindex']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    on_progress: Any | None = Field(None, alias="onProgress")
+    with_progress: bool | None = Field(None, alias="withProgress")
+    type: Literal["rag"]
+    operation: Literal["reindex"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestListWorkspaces(BaseModel):
-    type: Literal['rag']
-    operation: Literal['listWorkspaces']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    type: Literal["rag"]
+    operation: Literal["listWorkspaces"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestCloseWorkspace(BaseModel):
     workspace: str | None = None
-    delete_on_close: bool | None = Field(None, alias='deleteOnClose')
-    type: Literal['rag']
-    operation: Literal['closeWorkspace']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    delete_on_close: bool | None = Field(None, alias="deleteOnClose")
+    type: Literal["rag"]
+    operation: Literal["closeWorkspace"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagRequestDeleteWorkspace(BaseModel):
     workspace: constr(min_length=1)
-    type: Literal['rag']
-    operation: Literal['deleteWorkspace']
-    request_id: constr(min_length=1) | None = Field(None, alias='requestId')
+    type: Literal["rag"]
+    operation: Literal["deleteWorkspace"]
+    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
 
 
 class RagResponseChunkChunksItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: str
     content: str
@@ -6001,26 +6001,26 @@ class RagResponseChunkChunksItem(BaseModel):
 
 class RagResponseChunk(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['chunk']
+    operation: Literal["chunk"]
     chunks: list[RagResponseChunkChunksItem]
 
 
 class RagResponseIngestProcessedItemStatus(Enum):
-    fulfilled = 'fulfilled'
-    rejected = 'rejected'
+    fulfilled = "fulfilled"
+    rejected = "rejected"
 
 
 class RagResponseIngestProcessedItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     status: RagResponseIngestProcessedItemStatus = Field(
-        ..., title='RagResponseIngestProcessedItemStatus'
+        ..., title="RagResponseIngestProcessedItemStatus"
     )
     id: str | None = None
     error: str | None = None
@@ -6028,27 +6028,27 @@ class RagResponseIngestProcessedItem(BaseModel):
 
 class RagResponseIngest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['ingest']
+    operation: Literal["ingest"]
     processed: list[RagResponseIngestProcessedItem]
-    dropped_indices: list[float] = Field(..., alias='droppedIndices')
+    dropped_indices: list[float] = Field(..., alias="droppedIndices")
 
 
 class RagResponseSaveEmbeddingsProcessedItemStatus(Enum):
-    fulfilled = 'fulfilled'
-    rejected = 'rejected'
+    fulfilled = "fulfilled"
+    rejected = "rejected"
 
 
 class RagResponseSaveEmbeddingsProcessedItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     status: RagResponseSaveEmbeddingsProcessedItemStatus = Field(
-        ..., title='RagResponseSaveEmbeddingsProcessedItemStatus'
+        ..., title="RagResponseSaveEmbeddingsProcessedItemStatus"
     )
     id: str | None = None
     error: str | None = None
@@ -6056,18 +6056,18 @@ class RagResponseSaveEmbeddingsProcessedItem(BaseModel):
 
 class RagResponseSaveEmbeddings(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['saveEmbeddings']
+    operation: Literal["saveEmbeddings"]
     processed: list[RagResponseSaveEmbeddingsProcessedItem]
 
 
 class RagResponseSearchResultsItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     id: str
     content: str
@@ -6076,53 +6076,53 @@ class RagResponseSearchResultsItem(BaseModel):
 
 class RagResponseSearch(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['search']
+    operation: Literal["search"]
     results: list[RagResponseSearchResultsItem]
 
 
 class RagResponseDeleteEmbeddings(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['deleteEmbeddings']
+    operation: Literal["deleteEmbeddings"]
 
 
 class RagResponseReindexResultDetails(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title='RagResponseReindexResultDetails')
+    root: dict[str, Any] = Field(..., title="RagResponseReindexResultDetails")
 
 
 class RagResponseReindexResult(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     reindexed: bool
     details: RagResponseReindexResultDetails | None = Field(
-        None, title='RagResponseReindexResultDetails'
+        None, title="RagResponseReindexResultDetails"
     )
 
 
 class RagResponseReindex(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['reindex']
-    result: RagResponseReindexResult = Field(..., title='RagResponseReindexResult')
+    operation: Literal["reindex"]
+    result: RagResponseReindexResult = Field(..., title="RagResponseReindexResult")
 
 
 class RagResponseListWorkspacesWorkspacesItem(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     name: str
     open: bool
@@ -6130,48 +6130,48 @@ class RagResponseListWorkspacesWorkspacesItem(BaseModel):
 
 class RagResponseListWorkspaces(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['listWorkspaces']
+    operation: Literal["listWorkspaces"]
     workspaces: list[RagResponseListWorkspacesWorkspacesItem]
 
 
 class RagResponseCloseWorkspace(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['closeWorkspace']
+    operation: Literal["closeWorkspace"]
 
 
 class RagResponseDeleteWorkspace(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag']
+    type: Literal["rag"]
     success: bool
     error: str | None = None
-    operation: Literal['deleteWorkspace']
+    operation: Literal["deleteWorkspace"]
 
 
 class RagProgressResponseOperation(Enum):
-    ingest = 'ingest'
-    save_embeddings = 'saveEmbeddings'
-    reindex = 'reindex'
+    ingest = "ingest"
+    save_embeddings = "saveEmbeddings"
+    reindex = "reindex"
 
 
 class RagProgressResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['rag:progress']
+    type: Literal["rag:progress"]
     operation: RagProgressResponseOperation = Field(
-        ..., title='RagProgressResponseOperation'
+        ..., title="RagProgressResponseOperation"
     )
     workspace: str
     stage: str
@@ -6181,205 +6181,205 @@ class RagProgressResponse(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    type: Literal['resume']
+    type: Literal["resume"]
 
 
 class ResumeResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['resume']
+    type: Literal["resume"]
 
 
 class StateRequest(BaseModel):
-    type: Literal['state']
+    type: Literal["state"]
 
 
 class StateResponseState(Enum):
-    active = 'active'
-    suspending = 'suspending'
-    suspended = 'suspended'
-    resuming = 'resuming'
+    active = "active"
+    suspending = "suspending"
+    suspended = "suspended"
+    resuming = "resuming"
 
 
 class StateResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['state']
-    state: StateResponseState = Field(..., title='StateResponseState')
+    type: Literal["state"]
+    state: StateResponseState = Field(..., title="StateResponseState")
 
 
 class StopProvideRequest(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['stopProvide']
+    type: Literal["stopProvide"]
 
 
 class StopProvideResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['stopProvide']
+    type: Literal["stopProvide"]
     success: bool
     error: str | None = None
 
 
 class SuspendRequest(BaseModel):
-    type: Literal['suspend']
+    type: Literal["suspend"]
 
 
 class SuspendResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['suspend']
+    type: Literal["suspend"]
 
 
 class TextToSpeechRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
-    input_type: str | None = Field('text', alias='inputType')
+    model_id: str = Field(..., alias="modelId")
+    input_type: str | None = Field("text", alias="inputType")
     text: constr(min_length=1)
     stream: bool | None = True
-    sentence_stream: bool | None = Field(False, alias='sentenceStream')
-    sentence_stream_locale: str | None = Field(None, alias='sentenceStreamLocale')
+    sentence_stream: bool | None = Field(False, alias="sentenceStream")
+    sentence_stream_locale: str | None = Field(None, alias="sentenceStreamLocale")
     sentence_stream_max_chunk_scalars: PositiveFloat | None = Field(
-        None, alias='sentenceStreamMaxChunkScalars'
+        None, alias="sentenceStreamMaxChunkScalars"
     )
-    type: Literal['textToSpeech']
+    type: Literal["textToSpeech"]
 
 
 class TextToSpeechResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    total_samples: float | None = Field(None, alias='totalSamples')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    total_samples: float | None = Field(None, alias="totalSamples")
 
 
 class TextToSpeechResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['textToSpeech']
+    type: Literal["textToSpeech"]
     buffer: list[float]
     done: bool
     stats: TextToSpeechResponseStats | None = Field(
-        None, title='TextToSpeechResponseStats'
+        None, title="TextToSpeechResponseStats"
     )
     chunk_index: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='chunkIndex'
+        None, alias="chunkIndex"
     )
-    sentence_chunk: str | None = Field(None, alias='sentenceChunk')
+    sentence_chunk: str | None = Field(None, alias="sentenceChunk")
 
 
 class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
-    latin = 'latin'
-    cjk = 'cjk'
-    multilingual = 'multilingual'
+    latin = "latin"
+    cjk = "cjk"
+    multilingual = "multilingual"
 
 
 class TextToSpeechStreamRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
-    input_type: str | None = Field('text', alias='inputType')
-    accumulate_sentences: bool | None = Field(None, alias='accumulateSentences')
+    model_id: str = Field(..., alias="modelId")
+    input_type: str | None = Field("text", alias="inputType")
+    accumulate_sentences: bool | None = Field(None, alias="accumulateSentences")
     sentence_delimiter_preset: (
         TextToSpeechStreamRequestSentenceDelimiterPreset | None
     ) = Field(
         None,
-        alias='sentenceDelimiterPreset',
-        title='TextToSpeechStreamRequestSentenceDelimiterPreset',
+        alias="sentenceDelimiterPreset",
+        title="TextToSpeechStreamRequestSentenceDelimiterPreset",
     )
-    max_buffer_scalars: PositiveFloat | None = Field(None, alias='maxBufferScalars')
-    flush_after_ms: PositiveFloat | None = Field(None, alias='flushAfterMs')
-    type: Literal['textToSpeechStream']
+    max_buffer_scalars: PositiveFloat | None = Field(None, alias="maxBufferScalars")
+    flush_after_ms: PositiveFloat | None = Field(None, alias="flushAfterMs")
+    type: Literal["textToSpeechStream"]
 
 
 class TextToSpeechStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    total_samples: float | None = Field(None, alias='totalSamples')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    total_samples: float | None = Field(None, alias="totalSamples")
 
 
 class TextToSpeechStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['textToSpeechStream']
+    type: Literal["textToSpeechStream"]
     buffer: list[float]
     done: bool
     stats: TextToSpeechStreamResponseStats | None = Field(
-        None, title='TextToSpeechStreamResponseStats'
+        None, title="TextToSpeechStreamResponseStats"
     )
     chunk_index: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='chunkIndex'
+        None, alias="chunkIndex"
     )
-    sentence_chunk: str | None = Field(None, alias='sentenceChunk')
+    sentence_chunk: str | None = Field(None, alias="sentenceChunk")
 
 
 class TranscribeRequestAudioChunkBase64(BaseModel):
-    type: Literal['base64']
+    type: Literal["base64"]
     value: str
 
 
 class TranscribeRequestAudioChunkFilePath(BaseModel):
-    type: Literal['filePath']
+    type: Literal["filePath"]
     value: str
 
 
 class TranscribeRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     prompt: str | None = None
     metadata: bool | None = None
     audio_chunk: (
         TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath
-    ) = Field(..., alias='audioChunk')
-    type: Literal['transcribe']
+    ) = Field(..., alias="audioChunk")
+    type: Literal["transcribe"]
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class TranscribeResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    real_time_factor: float | None = Field(None, alias='realTimeFactor')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    total_tokens: float | None = Field(None, alias='totalTokens')
-    total_segments: float | None = Field(None, alias='totalSegments')
-    whisper_encode_time: float | None = Field(None, alias='whisperEncodeTime')
-    whisper_decode_time: float | None = Field(None, alias='whisperDecodeTime')
-    encoder_time: float | None = Field(None, alias='encoderTime')
-    decoder_time: float | None = Field(None, alias='decoderTime')
-    mel_spec_time: float | None = Field(None, alias='melSpecTime')
-    backend_device: float | None = Field(None, alias='backendDevice')
-    backend_id: float | None = Field(None, alias='backendId')
-    gpu_unsupported: float | None = Field(None, alias='gpuUnsupported')
-    gpu_mem_total_mb: float | None = Field(None, alias='gpuMemTotalMb')
-    gpu_mem_free_mb: float | None = Field(None, alias='gpuMemFreeMb')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    real_time_factor: float | None = Field(None, alias="realTimeFactor")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    total_tokens: float | None = Field(None, alias="totalTokens")
+    total_segments: float | None = Field(None, alias="totalSegments")
+    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
+    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
+    encoder_time: float | None = Field(None, alias="encoderTime")
+    decoder_time: float | None = Field(None, alias="decoderTime")
+    mel_spec_time: float | None = Field(None, alias="melSpecTime")
+    backend_device: float | None = Field(None, alias="backendDevice")
+    backend_id: float | None = Field(None, alias="backendId")
+    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
+    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
+    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
 
 
 class TranscribeResponseSegment(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias='startMs')
-    end_ms: float = Field(..., alias='endMs')
+    start_ms: float = Field(..., alias="startMs")
+    end_ms: float = Field(..., alias="endMs")
     append: bool
     id: float
 
 
 class TranscribeResponseVad(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     speaking: bool
     probability: float
@@ -6387,129 +6387,129 @@ class TranscribeResponseVad(BaseModel):
 
 class TranscribeResponseEndOfTurnWhisper(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    source: Literal['whisper']
-    silence_duration_ms: float = Field(..., alias='silenceDurationMs')
+    source: Literal["whisper"]
+    silence_duration_ms: float = Field(..., alias="silenceDurationMs")
 
 
 class TranscribeResponseEndOfTurnParakeet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    source: Literal['parakeet']
+    source: Literal["parakeet"]
 
 
 class TranscribeResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
-    stats: TranscribeResponseStats | None = Field(None, title='TranscribeResponseStats')
+    stats: TranscribeResponseStats | None = Field(None, title="TranscribeResponseStats")
     error: str | None = None
     segment: TranscribeResponseSegment | None = Field(
-        None, title='TranscribeResponseSegment'
+        None, title="TranscribeResponseSegment"
     )
-    vad: TranscribeResponseVad | None = Field(None, title='TranscribeResponseVad')
+    vad: TranscribeResponseVad | None = Field(None, title="TranscribeResponseVad")
     end_of_turn: (
         TranscribeResponseEndOfTurnWhisper | TranscribeResponseEndOfTurnParakeet | None
-    ) = Field(None, alias='endOfTurn')
-    type: Literal['transcribe']
+    ) = Field(None, alias="endOfTurn")
+    type: Literal["transcribe"]
 
 
 class TranscribeStreamRequestParakeetStreamingConfig(BaseModel):
-    chunk_ms: conint(le=9007199254740991, gt=0) | None = Field(None, alias='chunkMs')
+    chunk_ms: conint(le=9007199254740991, gt=0) | None = Field(None, alias="chunkMs")
     history_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='historyMs'
+        None, alias="historyMs"
     )
     left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='leftContextMs'
+        None, alias="leftContextMs"
     )
     right_lookahead_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='rightLookaheadMs'
+        None, alias="rightLookaheadMs"
     )
-    emit_partials: bool | None = Field(None, alias='emitPartials')
-    emit_energy_vad: bool | None = Field(None, alias='emitEnergyVad')
-    spk_cache_enable: bool | None = Field(None, alias='spkCacheEnable')
+    emit_partials: bool | None = Field(None, alias="emitPartials")
+    emit_energy_vad: bool | None = Field(None, alias="emitEnergyVad")
+    spk_cache_enable: bool | None = Field(None, alias="spkCacheEnable")
     spk_cache_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='spkCacheLen'
+        None, alias="spkCacheLen"
     )
-    fifo_len: conint(le=9007199254740991, gt=0) | None = Field(None, alias='fifoLen')
+    fifo_len: conint(le=9007199254740991, gt=0) | None = Field(None, alias="fifoLen")
     chunk_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='chunkLeftContextMs'
+        None, alias="chunkLeftContextMs"
     )
     chunk_right_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias='chunkRightContextMs'
+        None, alias="chunkRightContextMs"
     )
     spk_cache_update_period: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='spkCacheUpdatePeriod'
+        None, alias="spkCacheUpdatePeriod"
     )
 
 
 class TranscribeStreamRequest(BaseModel):
-    model_id: str = Field(..., alias='modelId')
+    model_id: str = Field(..., alias="modelId")
     prompt: str | None = None
     metadata: bool | None = None
-    type: Literal['transcribeStream']
-    emit_vad_events: bool | None = Field(None, alias='emitVadEvents')
+    type: Literal["transcribeStream"]
+    emit_vad_events: bool | None = Field(None, alias="emitVadEvents")
     end_of_turn_silence_ms: conint(ge=0, le=9007199254740991) | None = Field(
         None,
-        alias='endOfTurnSilenceMs',
-        description='Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.',
+        alias="endOfTurnSilenceMs",
+        description="Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.",
     )
     vad_run_interval_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias='vadRunIntervalMs'
+        None, alias="vadRunIntervalMs"
     )
     parakeet_streaming_config: TranscribeStreamRequestParakeetStreamingConfig | None = (
         Field(
             None,
-            alias='parakeetStreamingConfig',
-            title='TranscribeStreamRequestParakeetStreamingConfig',
+            alias="parakeetStreamingConfig",
+            title="TranscribeStreamRequestParakeetStreamingConfig",
         )
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight duplex transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight duplex transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class TranscribeStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias='audioDuration')
-    real_time_factor: float | None = Field(None, alias='realTimeFactor')
-    tokens_per_second: float | None = Field(None, alias='tokensPerSecond')
-    total_tokens: float | None = Field(None, alias='totalTokens')
-    total_segments: float | None = Field(None, alias='totalSegments')
-    whisper_encode_time: float | None = Field(None, alias='whisperEncodeTime')
-    whisper_decode_time: float | None = Field(None, alias='whisperDecodeTime')
-    encoder_time: float | None = Field(None, alias='encoderTime')
-    decoder_time: float | None = Field(None, alias='decoderTime')
-    mel_spec_time: float | None = Field(None, alias='melSpecTime')
-    backend_device: float | None = Field(None, alias='backendDevice')
-    backend_id: float | None = Field(None, alias='backendId')
-    gpu_unsupported: float | None = Field(None, alias='gpuUnsupported')
-    gpu_mem_total_mb: float | None = Field(None, alias='gpuMemTotalMb')
-    gpu_mem_free_mb: float | None = Field(None, alias='gpuMemFreeMb')
+    audio_duration: float | None = Field(None, alias="audioDuration")
+    real_time_factor: float | None = Field(None, alias="realTimeFactor")
+    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
+    total_tokens: float | None = Field(None, alias="totalTokens")
+    total_segments: float | None = Field(None, alias="totalSegments")
+    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
+    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
+    encoder_time: float | None = Field(None, alias="encoderTime")
+    decoder_time: float | None = Field(None, alias="decoderTime")
+    mel_spec_time: float | None = Field(None, alias="melSpecTime")
+    backend_device: float | None = Field(None, alias="backendDevice")
+    backend_id: float | None = Field(None, alias="backendId")
+    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
+    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
+    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
 
 
 class TranscribeStreamResponseSegment(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias='startMs')
-    end_ms: float = Field(..., alias='endMs')
+    start_ms: float = Field(..., alias="startMs")
+    end_ms: float = Field(..., alias="endMs")
     append: bool
     id: float
 
 
 class TranscribeStreamResponseVad(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     speaking: bool
     probability: float
@@ -6517,589 +6517,589 @@ class TranscribeStreamResponseVad(BaseModel):
 
 class TranscribeStreamResponseEndOfTurnWhisper(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    source: Literal['whisper']
-    silence_duration_ms: float = Field(..., alias='silenceDurationMs')
+    source: Literal["whisper"]
+    silence_duration_ms: float = Field(..., alias="silenceDurationMs")
 
 
 class TranscribeStreamResponseEndOfTurnParakeet(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    source: Literal['parakeet']
+    source: Literal["parakeet"]
 
 
 class TranscribeStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
     stats: TranscribeStreamResponseStats | None = Field(
-        None, title='TranscribeStreamResponseStats'
+        None, title="TranscribeStreamResponseStats"
     )
     error: str | None = None
     segment: TranscribeStreamResponseSegment | None = Field(
-        None, title='TranscribeStreamResponseSegment'
+        None, title="TranscribeStreamResponseSegment"
     )
     vad: TranscribeStreamResponseVad | None = Field(
-        None, title='TranscribeStreamResponseVad'
+        None, title="TranscribeStreamResponseVad"
     )
     end_of_turn: (
         TranscribeStreamResponseEndOfTurnWhisper
         | TranscribeStreamResponseEndOfTurnParakeet
         | None
-    ) = Field(None, alias='endOfTurn')
-    type: Literal['transcribeStream']
+    ) = Field(None, alias="endOfTurn")
+    type: Literal["transcribeStream"]
 
 
 class TranslateNmtRequestModelType(Enum):
-    nmt = 'nmt'
-    nmtcpp_translation = 'nmtcpp-translation'
+    nmt = "nmt"
+    nmtcpp_translation = "nmtcpp-translation"
 
 
 class TranslateNmtRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the NMT translation model to use.',
+        alias="modelId",
+        description="The identifier of the NMT translation model to use.",
     )
     text: constr(min_length=1) | list[TextItem] = Field(
         ...,
-        description='The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.',
+        description="The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.",
     )
     stream: bool = Field(
         ...,
-        description='Whether to stream tokens (`true`) or resolve the complete translation once (`false`).',
+        description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
     )
     model_type: TranslateNmtRequestModelType = Field(
         ...,
-        alias='modelType',
-        description='NMT model-type variant identifier.',
-        title='TranslateNmtRequestModelType',
+        alias="modelType",
+        description="NMT model-type variant identifier.",
+        title="TranslateNmtRequestModelType",
     )
-    type: Literal['translate']
+    type: Literal["translate"]
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class TranslateLlmRequestModelType(Enum):
-    llm = 'llm'
-    llamacpp_completion = 'llamacpp-completion'
+    llm = "llm"
+    llamacpp_completion = "llamacpp-completion"
 
 
 class TranslateLlmRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the LLM model used for translation.',
+        alias="modelId",
+        description="The identifier of the LLM model used for translation.",
     )
-    text: constr(min_length=1) = Field(..., description='The input text to translate.')
+    text: constr(min_length=1) = Field(..., description="The input text to translate.")
     stream: bool = Field(
         ...,
-        description='Whether to stream tokens (`true`) or resolve the complete translation once (`false`).',
+        description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
     )
     model_type: TranslateLlmRequestModelType = Field(
         ...,
-        alias='modelType',
-        description='LLM model-type variant identifier.',
-        title='TranslateLlmRequestModelType',
+        alias="modelType",
+        description="LLM model-type variant identifier.",
+        title="TranslateLlmRequestModelType",
     )
     from_: str | None = Field(
         None,
-        alias='from',
-        description='Source language code. When omitted, the SDK attempts to auto-detect the source language.',
+        alias="from",
+        description="Source language code. When omitted, the SDK attempts to auto-detect the source language.",
     )
-    to: str = Field(..., description='Target language code.')
+    to: str = Field(..., description="Target language code.")
     context: str | None = Field(
         None,
-        description='Optional translation context passed to the LLM as a system hint.',
+        description="Optional translation context passed to the LLM as a system hint.",
     )
-    type: Literal['translate']
+    type: Literal["translate"]
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
 
 
 class TranslateResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     total_time: float | None = Field(
-        None, alias='totalTime', description='Total translation time in milliseconds.'
+        None, alias="totalTime", description="Total translation time in milliseconds."
     )
     total_tokens: float | None = Field(
         None,
-        alias='totalTokens',
-        description='Total tokens produced by the translation.',
+        alias="totalTokens",
+        description="Total tokens produced by the translation.",
     )
     tokens_per_second: float | None = Field(
-        None, alias='tokensPerSecond', description='Tokens generated per second.'
+        None, alias="tokensPerSecond", description="Tokens generated per second."
     )
     time_to_first_token: float | None = Field(
         None,
-        alias='timeToFirstToken',
-        description='Time to first token in milliseconds (LLM translation only).',
+        alias="timeToFirstToken",
+        description="Time to first token in milliseconds (LLM translation only).",
     )
     decode_time: float | None = Field(
         None,
-        alias='decodeTime',
-        description='Time spent in the NMT decoder in milliseconds.',
+        alias="decodeTime",
+        description="Time spent in the NMT decoder in milliseconds.",
     )
     encode_time: float | None = Field(
         None,
-        alias='encodeTime',
-        description='Time spent in the NMT encoder in milliseconds.',
+        alias="encodeTime",
+        description="Time spent in the NMT encoder in milliseconds.",
     )
     cache_tokens: float | None = Field(
         None,
-        alias='cacheTokens',
-        description='Tokens served from the KV cache during LLM translation.',
+        alias="cacheTokens",
+        description="Tokens served from the KV cache during LLM translation.",
     )
 
 
 class TranslateResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['translate']
+    type: Literal["translate"]
     token: str
     done: bool | None = None
-    stats: TranslateResponseStats | None = Field(None, title='TranslateResponseStats')
+    stats: TranslateResponseStats | None = Field(None, title="TranslateResponseStats")
     error: str | None = None
 
 
 class UnloadModelRequest(BaseModel):
-    type: Literal['unloadModel']
-    model_id: str = Field(..., alias='modelId')
-    clear_storage: bool | None = Field(False, alias='clearStorage')
+    type: Literal["unloadModel"]
+    model_id: str = Field(..., alias="modelId")
+    clear_storage: bool | None = Field(False, alias="clearStorage")
 
 
 class UnloadModelResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['unloadModel']
+    type: Literal["unloadModel"]
     success: bool
     error: str | None = None
-    has_active_models: bool | None = Field(None, alias='hasActiveModels')
-    has_active_providers: bool | None = Field(None, alias='hasActiveProviders')
+    has_active_models: bool | None = Field(None, alias="hasActiveModels")
+    has_active_providers: bool | None = Field(None, alias="hasActiveProviders")
 
 
 class UpscaleStreamRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
+        alias="modelId",
         description="Identifier of the loaded upscaler model. The model must have been loaded with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`.",
     )
     image: constr(
-        pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         min_length=1,
-    ) = Field(..., description='Base64-encoded PNG/JPEG bytes of the source image.')
+    ) = Field(..., description="Base64-encoded PNG/JPEG bytes of the source image.")
     repeats: conint(le=9007199254740991, gt=0) | None = Field(
         None,
         description="Number of ESRGAN passes to run sequentially. Each pass multiplies dimensions by the model's native scale factor; only the final image is emitted (`outputs.length === 1`). Defaults to 1.",
     )
-    type: Literal['upscaleStream']
+    type: Literal["upscaleStream"]
 
 
 class UpscaleStreamResponseStatsBackendDevice(Enum):
-    cpu = 'cpu'
-    gpu = 'gpu'
+    cpu = "cpu"
+    gpu = "gpu"
 
 
 class UpscaleStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     model_load_ms: float | None = Field(
         None,
-        alias='modelLoadMs',
-        description='Wall-clock time in milliseconds spent loading the upscaler model.',
+        alias="modelLoadMs",
+        description="Wall-clock time in milliseconds spent loading the upscaler model.",
     )
     upscale_ms: float | None = Field(
         None,
-        alias='upscaleMs',
-        description='Wall-clock time in milliseconds for the most recent upscale job.',
+        alias="upscaleMs",
+        description="Wall-clock time in milliseconds for the most recent upscale job.",
     )
     total_upscale_ms: float | None = Field(
         None,
-        alias='totalUpscaleMs',
-        description='Cumulative upscale time in milliseconds across all jobs.',
+        alias="totalUpscaleMs",
+        description="Cumulative upscale time in milliseconds across all jobs.",
     )
     total_wall_ms: float | None = Field(
         None,
-        alias='totalWallMs',
-        description='Total wall-clock time in milliseconds including model load and upscaling.',
+        alias="totalWallMs",
+        description="Total wall-clock time in milliseconds including model load and upscaling.",
     )
     total_upscales: float | None = Field(
-        None, alias='totalUpscales', description='Cumulative number of upscale calls.'
+        None, alias="totalUpscales", description="Cumulative number of upscale calls."
     )
     total_images: float | None = Field(
-        None, alias='totalImages', description='Cumulative number of images produced.'
+        None, alias="totalImages", description="Cumulative number of images produced."
     )
     total_pixels: float | None = Field(
         None,
-        alias='totalPixels',
-        description='Cumulative number of pixels produced across all images.',
+        alias="totalPixels",
+        description="Cumulative number of pixels produced across all images.",
     )
     width: float | None = Field(
-        None, description='Width of the most recent emitted PNG.'
+        None, description="Width of the most recent emitted PNG."
     )
     height: float | None = Field(
-        None, description='Height of the most recent emitted PNG.'
+        None, description="Height of the most recent emitted PNG."
     )
     repeats: float | None = Field(
-        None, description='Number of ESRGAN passes used by the most recent upscale job.'
+        None, description="Number of ESRGAN passes used by the most recent upscale job."
     )
     backend_device: UpscaleStreamResponseStatsBackendDevice | None = Field(
         None,
-        alias='backendDevice',
-        description='Actual compute device used by the ESRGAN upscaler. Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` falls back to `cpu` because the mobile GPU/OpenCL path is unstable).',
-        title='UpscaleStreamResponseStatsBackendDevice',
+        alias="backendDevice",
+        description="Actual compute device used by the ESRGAN upscaler. Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` falls back to `cpu` because the mobile GPU/OpenCL path is unstable).",
+        title="UpscaleStreamResponseStatsBackendDevice",
     )
 
 
 class UpscaleStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['upscaleStream']
+    type: Literal["upscaleStream"]
     data: str | None = None
-    output_index: float | None = Field(None, alias='outputIndex')
+    output_index: float | None = Field(None, alias="outputIndex")
     done: bool | None = None
     stats: UpscaleStreamResponseStats | None = Field(
-        None, title='UpscaleStreamResponseStats'
+        None, title="UpscaleStreamResponseStats"
     )
 
 
 class VideoStreamRequestSamplingMethod(Enum):
-    euler = 'euler'
-    euler_a = 'euler_a'
-    heun = 'heun'
-    dpm2 = 'dpm2'
-    dpm__2m = 'dpm++2m'
-    dpm__2mv2 = 'dpm++2mv2'
-    dpm__2s_a = 'dpm++2s_a'
-    lcm = 'lcm'
-    ipndm = 'ipndm'
-    ipndm_v = 'ipndm_v'
-    ddim_trailing = 'ddim_trailing'
-    tcd = 'tcd'
-    res_multistep = 'res_multistep'
-    res_2s = 'res_2s'
+    euler = "euler"
+    euler_a = "euler_a"
+    heun = "heun"
+    dpm2 = "dpm2"
+    dpm__2m = "dpm++2m"
+    dpm__2mv2 = "dpm++2mv2"
+    dpm__2s_a = "dpm++2s_a"
+    lcm = "lcm"
+    ipndm = "ipndm"
+    ipndm_v = "ipndm_v"
+    ddim_trailing = "ddim_trailing"
+    tcd = "tcd"
+    res_multistep = "res_multistep"
+    res_2s = "res_2s"
 
 
 class VideoStreamRequestScheduler(Enum):
-    discrete = 'discrete'
-    karras = 'karras'
-    exponential = 'exponential'
-    ays = 'ays'
-    gits = 'gits'
-    sgm_uniform = 'sgm_uniform'
-    simple = 'simple'
-    lcm = 'lcm'
-    smoothstep = 'smoothstep'
-    kl_optimal = 'kl_optimal'
-    bong_tangent = 'bong_tangent'
+    discrete = "discrete"
+    karras = "karras"
+    exponential = "exponential"
+    ays = "ays"
+    gits = "gits"
+    sgm_uniform = "sgm_uniform"
+    simple = "simple"
+    lcm = "lcm"
+    smoothstep = "smoothstep"
+    kl_optimal = "kl_optimal"
+    bong_tangent = "bong_tangent"
 
 
 class VideoStreamRequestHighNoiseSampler(Enum):
-    euler = 'euler'
-    euler_a = 'euler_a'
-    heun = 'heun'
-    dpm2 = 'dpm2'
-    dpm__2m = 'dpm++2m'
-    dpm__2mv2 = 'dpm++2mv2'
-    dpm__2s_a = 'dpm++2s_a'
-    lcm = 'lcm'
-    ipndm = 'ipndm'
-    ipndm_v = 'ipndm_v'
-    ddim_trailing = 'ddim_trailing'
-    tcd = 'tcd'
-    res_multistep = 'res_multistep'
-    res_2s = 'res_2s'
+    euler = "euler"
+    euler_a = "euler_a"
+    heun = "heun"
+    dpm2 = "dpm2"
+    dpm__2m = "dpm++2m"
+    dpm__2mv2 = "dpm++2mv2"
+    dpm__2s_a = "dpm++2s_a"
+    lcm = "lcm"
+    ipndm = "ipndm"
+    ipndm_v = "ipndm_v"
+    ddim_trailing = "ddim_trailing"
+    tcd = "tcd"
+    res_multistep = "res_multistep"
+    res_2s = "res_2s"
 
 
 class VideoStreamRequestHighNoiseScheduler(Enum):
-    discrete = 'discrete'
-    karras = 'karras'
-    exponential = 'exponential'
-    ays = 'ays'
-    gits = 'gits'
-    sgm_uniform = 'sgm_uniform'
-    simple = 'simple'
-    lcm = 'lcm'
-    smoothstep = 'smoothstep'
-    kl_optimal = 'kl_optimal'
-    bong_tangent = 'bong_tangent'
+    discrete = "discrete"
+    karras = "karras"
+    exponential = "exponential"
+    ays = "ays"
+    gits = "gits"
+    sgm_uniform = "sgm_uniform"
+    simple = "simple"
+    lcm = "lcm"
+    smoothstep = "smoothstep"
+    kl_optimal = "kl_optimal"
+    bong_tangent = "bong_tangent"
 
 
 class ControlFrame(
     RootModel[
         constr(
-            pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             min_length=1,
         )
     ]
 ):
     root: constr(
-        pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         min_length=1,
     )
 
 
 class VideoStreamRequestCacheMode(Enum):
-    disabled = 'disabled'
-    easycache = 'easycache'
-    ucache = 'ucache'
-    dbcache = 'dbcache'
-    taylorseer = 'taylorseer'
-    cache_dit = 'cache-dit'
+    disabled = "disabled"
+    easycache = "easycache"
+    ucache = "ucache"
+    dbcache = "dbcache"
+    taylorseer = "taylorseer"
+    cache_dit = "cache-dit"
 
 
 class VideoStreamRequestMode(Enum):
-    txt2vid = 'txt2vid'
-    img2vid = 'img2vid'
+    txt2vid = "txt2vid"
+    img2vid = "img2vid"
 
 
 class VideoStreamRequest(BaseModel):
     model_id: str = Field(
         ...,
-        alias='modelId',
-        description='The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices.',
+        alias="modelId",
+        description="The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices.",
     )
     request_id: constr(min_length=1) | None = Field(
         None,
-        alias='requestId',
-        description='Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.',
+        alias="requestId",
+        description="Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
     )
     prompt: str = Field(
-        ..., description='Positive prompt describing the video to generate.'
+        ..., description="Positive prompt describing the video to generate."
     )
     negative_prompt: str | None = Field(
-        None, description='Optional negative prompt describing what to avoid.'
+        None, description="Optional negative prompt describing what to avoid."
     )
     width: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
         None,
-        description='Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.',
+        description="Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
     )
     height: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
         None,
-        description='Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.',
+        description="Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
     )
     video_frames: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         None,
-        description='Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.',
+        description="Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
     )
     fps: confloat(le=120.0, gt=0.0) | None = Field(
         None,
-        description='AVI framerate metadata in frames per second; must be in (0, 120].',
+        description="AVI framerate metadata in frames per second; must be in (0, 120].",
     )
     seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
         None,
-        description='Random seed; when omitted the SDK picks one and returns it in stats.',
+        description="Random seed; when omitted the SDK picks one and returns it in stats.",
     )
     steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description='Low-noise or single-expert denoising step count.'
+        None, description="Low-noise or single-expert denoising step count."
     )
     sampling_method: VideoStreamRequestSamplingMethod | None = Field(
         None,
-        description='Sampling algorithm used by the low-noise diffusion scheduler.',
-        title='VideoStreamRequestSamplingMethod',
+        description="Sampling algorithm used by the low-noise diffusion scheduler.",
+        title="VideoStreamRequestSamplingMethod",
     )
     scheduler: VideoStreamRequestScheduler | None = Field(
         None,
-        description='Noise schedule to apply for the low-noise diffusion path.',
-        title='VideoStreamRequestScheduler',
+        description="Noise schedule to apply for the low-noise diffusion path.",
+        title="VideoStreamRequestScheduler",
     )
-    cfg_scale: float | None = Field(None, description='Classifier-free guidance scale.')
+    cfg_scale: float | None = Field(None, description="Classifier-free guidance scale.")
     flow_shift: float | None = Field(
-        None, description='Per-request flow-matching guidance shift override.'
+        None, description="Per-request flow-matching guidance shift override."
     )
     high_noise_steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description='Wan 2.2 high-noise expert step count.'
+        None, description="Wan 2.2 high-noise expert step count."
     )
     high_noise_sampler: VideoStreamRequestHighNoiseSampler | None = Field(
         None,
-        description='Wan 2.2 high-noise expert sampler.',
-        title='VideoStreamRequestHighNoiseSampler',
+        description="Wan 2.2 high-noise expert sampler.",
+        title="VideoStreamRequestHighNoiseSampler",
     )
     high_noise_scheduler: VideoStreamRequestHighNoiseScheduler | None = Field(
         None,
-        description='Wan 2.2 high-noise expert scheduler.',
-        title='VideoStreamRequestHighNoiseScheduler',
+        description="Wan 2.2 high-noise expert scheduler.",
+        title="VideoStreamRequestHighNoiseScheduler",
     )
     high_noise_cfg_scale: float | None = Field(
-        None, description='Wan 2.2 high-noise expert CFG scale.'
+        None, description="Wan 2.2 high-noise expert CFG scale."
     )
     high_noise_flow_shift: float | None = Field(
-        None, description='Wan 2.2 high-noise expert flow shift override.'
+        None, description="Wan 2.2 high-noise expert flow shift override."
     )
     moe_boundary: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description='Wan 2.2 mixture-of-experts boundary in [0, 1].'
+        None, description="Wan 2.2 mixture-of-experts boundary in [0, 1]."
     )
     vace_strength: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description='Control-frame guidance strength.'
+        None, description="Control-frame guidance strength."
     )
     control_frames: list[ControlFrame] | None = Field(
         None,
-        description='Optional array of base64-encoded control-frame images.',
+        description="Optional array of base64-encoded control-frame images.",
         min_length=1,
     )
     vae_tiling: bool | None = Field(
-        None, description='Enable VAE tiling for large videos on constrained VRAM.'
+        None, description="Enable VAE tiling for large videos on constrained VRAM."
     )
     vae_tile_size: PositiveFloat | constr(min_length=1) | None = Field(
-        None, description='VAE tile size override.'
+        None, description="VAE tile size override."
     )
     vae_tile_overlap: float | None = Field(
-        None, description='VAE tile overlap override.'
+        None, description="VAE tile overlap override."
     )
     temporal_tiling: bool | None = Field(
         None,
-        description='LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).',
+        description="LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).",
     )
     cache_mode: VideoStreamRequestCacheMode | None = Field(
-        None, description='Step-caching algorithm.', title='VideoStreamRequestCacheMode'
+        None, description="Step-caching algorithm.", title="VideoStreamRequestCacheMode"
     )
     cache_preset: str | None = Field(
-        None, description='Optional name of a cached sampler preset to reuse.'
+        None, description="Optional name of a cached sampler preset to reuse."
     )
     cache_threshold: float | None = Field(
-        None, description='Direct cache reuse threshold override.'
+        None, description="Direct cache reuse threshold override."
     )
     mode: VideoStreamRequestMode = Field(
         ...,
         description="Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
-        title='VideoStreamRequestMode',
+        title="VideoStreamRequestMode",
     )
     init_image: (
         constr(
-            pattern=r'^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$',
+            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             min_length=1,
         )
         | None
     ) = Field(
         None,
-        description='Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.',
+        description="Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
     )
     strength: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description='img2vid denoise strength in [0, 1]; rejected for txt2vid.'
+        None, description="img2vid denoise strength in [0, 1]; rejected for txt2vid."
     )
-    type: Literal['videoStream']
+    type: Literal["videoStream"]
 
 
 class VideoStreamResponseStats(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
     model_load_ms: float | None = Field(
         None,
-        alias='modelLoadMs',
-        description='Time in milliseconds spent loading the diffusion model.',
+        alias="modelLoadMs",
+        description="Time in milliseconds spent loading the diffusion model.",
     )
     generation_ms: float | None = Field(
         None,
-        alias='generationMs',
-        description='Wall-clock time in milliseconds spent generating images.',
+        alias="generationMs",
+        description="Wall-clock time in milliseconds spent generating images.",
     )
     total_generation_ms: float | None = Field(
         None,
-        alias='totalGenerationMs',
-        description='Total generation time in milliseconds across all images in the batch.',
+        alias="totalGenerationMs",
+        description="Total generation time in milliseconds across all images in the batch.",
     )
     total_wall_ms: float | None = Field(
         None,
-        alias='totalWallMs',
-        description='Total wall-clock time in milliseconds including model load and sampling.',
+        alias="totalWallMs",
+        description="Total wall-clock time in milliseconds including model load and sampling.",
     )
     total_steps: float | None = Field(
         None,
-        alias='totalSteps',
-        description='Total number of diffusion sampling steps executed.',
+        alias="totalSteps",
+        description="Total number of diffusion sampling steps executed.",
     )
     total_generations: float | None = Field(
         None,
-        alias='totalGenerations',
-        description='Total number of generation passes executed.',
+        alias="totalGenerations",
+        description="Total number of generation passes executed.",
     )
     total_images: float | None = Field(
-        None, alias='totalImages', description='Total number of images produced.'
+        None, alias="totalImages", description="Total number of images produced."
     )
     total_pixels: float | None = Field(
         None,
-        alias='totalPixels',
-        description='Total number of pixels generated across all images.',
+        alias="totalPixels",
+        description="Total number of pixels generated across all images.",
     )
     width: float | None = Field(
-        None, description='Width in pixels of each generated image.'
+        None, description="Width in pixels of each generated image."
     )
     height: float | None = Field(
-        None, description='Height in pixels of each generated image.'
+        None, description="Height in pixels of each generated image."
     )
     seed: float | None = Field(
         None,
-        description='Seed that produced these outputs (randomized when not supplied by the caller).',
+        description="Seed that produced these outputs (randomized when not supplied by the caller).",
     )
     total_videos: float | None = Field(
-        None, alias='totalVideos', description='Total number of videos produced.'
+        None, alias="totalVideos", description="Total number of videos produced."
     )
     total_video_frames: float | None = Field(
         None,
-        alias='totalVideoFrames',
-        description='Total number of video frames produced.',
+        alias="totalVideoFrames",
+        description="Total number of video frames produced.",
     )
     video_frames: float | None = Field(
         None,
-        alias='videoFrames',
-        description='Frame count of the most recent generated video.',
+        alias="videoFrames",
+        description="Frame count of the most recent generated video.",
     )
     fps: float | None = Field(
         None,
-        description='Frames-per-second metadata for the most recent generated video.',
+        description="Frames-per-second metadata for the most recent generated video.",
     )
     has_audio: bool | None = Field(
         None,
-        alias='hasAudio',
-        description='True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.',
+        alias="hasAudio",
+        description="True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
     )
     audio_sample_rate: float | None = Field(
         None,
-        alias='audioSampleRate',
-        description='Sample rate (Hz) of the muxed audio track; 0 when there is no audio.',
+        alias="audioSampleRate",
+        description="Sample rate (Hz) of the muxed audio track; 0 when there is no audio.",
     )
 
 
 class VideoStreamResponse(BaseModel):
     model_config = ConfigDict(
-        extra='forbid',
+        extra="forbid",
     )
-    type: Literal['videoStream']
+    type: Literal["videoStream"]
     step: float | None = None
-    total_steps: float | None = Field(None, alias='totalSteps')
-    elapsed_ms: float | None = Field(None, alias='elapsedMs')
+    total_steps: float | None = Field(None, alias="totalSteps")
+    elapsed_ms: float | None = Field(None, alias="elapsedMs")
     data: str | None = None
-    output_index: float | None = Field(None, alias='outputIndex')
+    output_index: float | None = Field(None, alias="outputIndex")
     done: bool | None = None
     stats: VideoStreamResponseStats | None = Field(
-        None, title='VideoStreamResponseStats'
+        None, title="VideoStreamResponseStats"
     )
 
 
 class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
-    root: CancelRequestRequest | CancelRequestBroad = Field(..., title='CancelRequest')
+    root: CancelRequestRequest | CancelRequestBroad = Field(..., title="CancelRequest")
 
 
 class Request_2(RootModel[DeleteCacheAllRequest | DeleteCacheKvEntryRequest]):
     root: DeleteCacheAllRequest | DeleteCacheKvEntryRequest = Field(
-        ..., title='DeleteCacheRequest'
+        ..., title="DeleteCacheRequest"
     )
 
 
@@ -7107,13 +7107,13 @@ class Request_3(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
     root: FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest = Field(
-        ..., title='FinetuneRequest'
+        ..., title="FinetuneRequest"
     )
 
 
 class Request_4(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
     root: LoadModelSrcRequest | ReloadConfigRequest = Field(
-        ..., title='LoadModelRequest'
+        ..., title="LoadModelRequest"
     )
 
 
@@ -7140,7 +7140,7 @@ class Request_5(
         | RagRequestListWorkspaces
         | RagRequestCloseWorkspace
         | RagRequestDeleteWorkspace
-    ) = Field(..., title='RagRequest')
+    ) = Field(..., title="RagRequest")
 
 
 class Response_1(
@@ -7166,7 +7166,7 @@ class Response_1(
         | RagResponseListWorkspaces
         | RagResponseCloseWorkspace
         | RagResponseDeleteWorkspace
-    ) = Field(..., title='RagResponse')
+    ) = Field(..., title="RagResponse")
 
 
 class Response(
@@ -7256,14 +7256,14 @@ class Response(
         | VideoStreamResponse
     ) = Field(
         ...,
-        description='Any response emitted by the server, including progress updates and error envelopes.',
-        title='AnyResponse',
+        description="Any response emitted by the server, including progress updates and error envelopes.",
+        title="AnyResponse",
     )
 
 
 class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
     root: TranslateNmtRequest | TranslateLlmRequest = Field(
-        ..., title='TranslateRequest'
+        ..., title="TranslateRequest"
     )
 
 
@@ -7346,6 +7346,6 @@ class Request(
         | VideoStreamRequest
     ) = Field(
         ...,
-        description='Any request accepted by the server, in wire (pre-parse) shape.',
-        title='AnyRequest',
+        description="Any request accepted by the server, in wire (pre-parse) shape.",
+        title="AnyRequest",
     )

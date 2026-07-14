@@ -46,12 +46,8 @@ jobs:
       - name: Contract check (generated client up to date)
         run: .venv/bin/python3 scripts/generate.py --check
 
-      # Excludes src/qvac/_generated/models/ — datamodel-code-generator
-      # formats that itself, with settings that don't match a plain black
-      # invocation (it preserves single-quoted strings; a bare `black`
-      # normalizes to double), so checking it here would always disagree.
       - name: Format check
-        run: .venv/bin/python3 -m black --check src/qvac --extend-exclude '_generated/models/' scripts/ tests/
+        run: .venv/bin/python3 -m black --check src/qvac scripts/ tests/
 
       # test_poc_smoke.py/test_poc_progress.py need a real Bare worker + a
       # downloaded model; they skip themselves unless a built worker exists
