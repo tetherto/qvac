@@ -17,7 +17,7 @@ const TranscriptionWhispercpp = require('../index.js')
 /**
  * Download model if not present
  */
-async function downloadRealModel (url, filepath, minSize = 1000000) {
+async function downloadRealModel(url, filepath, minSize = 1000000) {
   if (fs.existsSync(filepath)) {
     const stats = fs.statSync(filepath)
     if (stats.size >= minSize) {
@@ -32,12 +32,23 @@ async function downloadRealModel (url, filepath, minSize = 1000000) {
   console.log(`⬇ Downloading model: ${filepath}...`)
   try {
     const { spawnSync } = require('bare-subprocess')
-    const result = spawnSync('curl', [
-      '-L', '-o', filepath, url,
-      '--fail', '--silent', '--show-error',
-      '--connect-timeout', '30',
-      '--max-time', '300'
-    ], { stdio: ['inherit', 'inherit', 'pipe'] })
+    const result = spawnSync(
+      'curl',
+      [
+        '-L',
+        '-o',
+        filepath,
+        url,
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--connect-timeout',
+        '30',
+        '--max-time',
+        '300'
+      ],
+      { stdio: ['inherit', 'inherit', 'pipe'] }
+    )
 
     if (result.status === 0 && fs.existsSync(filepath)) {
       const stats = fs.statSync(filepath)
@@ -56,7 +67,7 @@ async function downloadRealModel (url, filepath, minSize = 1000000) {
 /**
  * Transcribe audio with specific offset, duration and audio_ctx
  */
-async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioCtx) {
+async function transcribeChunk(model, audioStream, offsetMs, durationMs, audioCtx) {
   await model.reload({
     whisperConfig: {
       offset_ms: offsetMs,
@@ -77,10 +88,10 @@ async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioC
   return results
 }
 
-function createFullAudioStream (audioBuffer) {
+function createFullAudioStream(audioBuffer) {
   const { Readable } = require('streamx')
   return new Readable({
-    read (cb) {
+    read(cb) {
       this.push(audioBuffer)
       this.push(null)
       cb(null)
@@ -88,7 +99,7 @@ function createFullAudioStream (audioBuffer) {
   })
 }
 
-async function main () {
+async function main() {
   const modelsDir = path.join(__dirname, '..', 'models')
   const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
   const audioPath = path.join(__dirname, 'samples', '10min-16k-s16le.raw')
@@ -137,11 +148,13 @@ async function main () {
   // Calculate audio duration and chunks
   const WHISPER_SAMPLE_RATE = 16000
   const BYTES_PER_SAMPLE = 2
-  const totalDurationSeconds = (audioStats.size / BYTES_PER_SAMPLE) / WHISPER_SAMPLE_RATE
+  const totalDurationSeconds = audioStats.size / BYTES_PER_SAMPLE / WHISPER_SAMPLE_RATE
   const CHUNK_SIZE_SECONDS = 30
   const chunksToProcess = Math.ceil(totalDurationSeconds / CHUNK_SIZE_SECONDS)
 
-  console.log(`Audio: ${totalDurationSeconds.toFixed(1)}s, Chunks: ${chunksToProcess} x ${CHUNK_SIZE_SECONDS}s`)
+  console.log(
+    `Audio: ${totalDurationSeconds.toFixed(1)}s, Chunks: ${chunksToProcess} x ${CHUNK_SIZE_SECONDS}s`
+  )
   console.log('Processing all chunks\n')
 
   const allResults = []
@@ -152,7 +165,9 @@ async function main () {
     const chunkDuration = Math.min(CHUNK_SIZE_SECONDS, totalDurationSeconds - offsetSeconds)
     const audioCtx = i === 0 ? 0 : Math.min(Math.floor(50 * chunkDuration + 1), 1500)
 
-    console.log(`[${i + 1}/${chunksToProcess}] offset=${offsetSeconds.toFixed(1)}s duration=${chunkDuration.toFixed(1)}s audio_ctx=${audioCtx}`)
+    console.log(
+      `[${i + 1}/${chunksToProcess}] offset=${offsetSeconds.toFixed(1)}s duration=${chunkDuration.toFixed(1)}s audio_ctx=${audioCtx}`
+    )
 
     const audioStream = createFullAudioStream(fullAudioBuffer)
     const startTime = Date.now()
@@ -167,7 +182,11 @@ async function main () {
     totalProcessingTime += Date.now() - startTime
 
     if (results.length > 0) {
-      const text = results.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim()
+      const text = results
+        .map((s) => s.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
       console.log(`  → ${text}\n`)
       allResults.push(...results)
     } else {
@@ -175,9 +194,15 @@ async function main () {
     }
   }
 
-  console.log(`Processing completed: ${(totalProcessingTime / 1000).toFixed(1)}s, ${allResults.length} segments`)
+  console.log(
+    `Processing completed: ${(totalProcessingTime / 1000).toFixed(1)}s, ${allResults.length} segments`
+  )
 
-  const fullText = allResults.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim()
+  const fullText = allResults
+    .map((s) => s.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (fullText.length) {
     console.log('\n=== FULL TRANSCRIPTION ===')
     console.log(fullText)
@@ -191,7 +216,7 @@ async function main () {
   await model.destroy()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   console.error(err.stack)
   process.exit(1)

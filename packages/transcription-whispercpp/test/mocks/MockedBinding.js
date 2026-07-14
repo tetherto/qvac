@@ -8,7 +8,7 @@ const state = Object.freeze({
 })
 
 class MockedBinding {
-  constructor () {
+  constructor() {
     this._handle = null
     this._state = state.LOADING
     this.isVadTest = false
@@ -24,23 +24,23 @@ class MockedBinding {
     this.lastStreamingConfig = null
   }
 
-  enableVadTestMode () {
+  enableVadTestMode() {
     this.isVadTest = true
   }
 
-  setScriptedOutputs (outputs) {
+  setScriptedOutputs(outputs) {
     this._scriptedOutputs = Array.isArray(outputs) ? outputs : null
   }
 
-  setJobDelayMs (delayMs) {
+  setJobDelayMs(delayMs) {
     this._jobDelayMs = Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0
   }
 
-  setStreamingErrorOnSegment (segmentIndex) {
+  setStreamingErrorOnSegment(segmentIndex) {
     this._streamingErrorOnSegment = segmentIndex
   }
 
-  createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
+  createInstance(interfaceType, configurationParams, outputCb, transitionCb = null) {
     console.log('Constructing the whisper addon')
     this._interfaceType = interfaceType
     this.outputCb = outputCb
@@ -50,18 +50,18 @@ class MockedBinding {
   }
 
   // Legacy no-op kept so older tests can still call it.
-  setBaseInferenceCallback (callback) {
+  setBaseInferenceCallback(callback) {
     this._baseInferenceCallback = callback
   }
 
   // Mimic addon-cpp 1.1.5 callback shape: no trailing native job id.
-  _callCallbacks (event, output, error) {
+  _callCallbacks(event, output, error) {
     if (this.outputCb) {
       this.outputCb(this._interfaceType, event, output, error)
     }
   }
 
-  loadWeights (handle, data) {
+  loadWeights(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log(`Loading weights: ${data.filename || data}`)
     // After creating the addon, we allow weights to be loaded. The loadWeights
@@ -70,7 +70,7 @@ class MockedBinding {
     return true
   }
 
-  activate (handle) {
+  activate(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Activated the addon')
     this._state = state.LISTENING
@@ -86,7 +86,7 @@ class MockedBinding {
     // Will be in IDLE status while waiting for next job
   }
 
-  reload (handle, configurationParams) {
+  reload(handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._configurationParams = configurationParams
     this._state = state.LOADING
@@ -95,7 +95,7 @@ class MockedBinding {
     }
   }
 
-  cancel (handle, jobId) {
+  cancel(handle, jobId) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log(`Cancel job id: ${jobId}`)
     this._runToken += 1
@@ -109,14 +109,14 @@ class MockedBinding {
     }
   }
 
-  status (handle) {
+  status(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     return this._state
     // Returns whether the plugin status is LOADING, PROCESSING, LISTENING, IDLE,
     // STOPPED, or PAUSED
   }
 
-  runJob (handle, data) {
+  runJob(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._busy) {
       return false
@@ -138,9 +138,16 @@ class MockedBinding {
           this._callCallbacks('Output', output, null, jobId)
         }
       } else if (this.isVadTest) {
-        const mockTranscription = data.input.length > 0
-          ? { text: `Mock transcription for ${data.input.length} bytes of audio`, toAppend: false, start: 0, end: 1, id: 0 }
-          : { text: 'Silent audio detected', toAppend: false, start: 0, end: 1, id: 0 }
+        const mockTranscription =
+          data.input.length > 0
+            ? {
+                text: `Mock transcription for ${data.input.length} bytes of audio`,
+                toAppend: false,
+                start: 0,
+                end: 1,
+                id: 0
+              }
+            : { text: 'Silent audio detected', toAppend: false, start: 0, end: 1, id: 0 }
         this._callCallbacks('Output', mockTranscription, null, jobId)
       } else {
         this._callCallbacks('Output', { data: data.input.length }, null, jobId)
@@ -149,7 +156,12 @@ class MockedBinding {
       if (!this._busy || runToken !== this._runToken) {
         return
       }
-      this._callCallbacks('JobEnded', { totalTime: 0.01, audioDurationMs: data.input.length, totalSamples: data.input.length }, null, jobId)
+      this._callCallbacks(
+        'JobEnded',
+        { totalTime: 0.01, audioDurationMs: data.input.length, totalSamples: data.input.length },
+        null,
+        jobId
+      )
       this._busy = false
       this._currentJobId = null
       this._state = state.LISTENING
@@ -164,7 +176,7 @@ class MockedBinding {
     return true
   }
 
-  append (handle, data) {
+  append(handle, data) {
     // Legacy API for compatibility in older tests.
     if (data.type !== 'audio') {
       return 1
@@ -172,19 +184,19 @@ class MockedBinding {
     return this.runJob(handle, data) ? 1 : 0
   }
 
-  setLogger (handle, logger) {
+  setLogger(handle, logger) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Set logger:', logger)
     // Mock implementation - just log that it was called
   }
 
-  releaseLogger (handle) {
+  releaseLogger(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Released logger')
     // Mock implementation - just log that it was called
   }
 
-  startStreaming (handle, config) {
+  startStreaming(handle, config) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streaming) throw new Error('Streaming session already active')
     this.lastStreamingConfig = config
@@ -200,13 +212,13 @@ class MockedBinding {
     if (this.transitionCb) this.transitionCb(this, this._state)
   }
 
-  appendStreamingAudio (handle, data) {
+  appendStreamingAudio(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (!this._streaming) throw new Error('No active streaming session')
     this._streamingChunks.push(data)
   }
 
-  endStreaming (handle) {
+  endStreaming(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (!this._streaming) return false
     this._streaming = false
@@ -216,7 +228,8 @@ class MockedBinding {
     this._streamingChunks = []
 
     const emitStreamResults = () => {
-      const hasError = this._streamingErrorOnSegment >= 0 &&
+      const hasError =
+        this._streamingErrorOnSegment >= 0 &&
         this._scriptedOutputs &&
         this._streamingErrorOnSegment < this._scriptedOutputs.length
 
@@ -228,15 +241,23 @@ class MockedBinding {
       }
 
       if (hasError) {
-        this._callCallbacks('Error', null, new Error('One or more segments failed during processing'))
+        this._callCallbacks(
+          'Error',
+          null,
+          new Error('One or more segments failed during processing')
+        )
       } else {
         const totalSamples = chunks.reduce((sum, c) => sum + (c.input?.length || 0), 0)
-        this._callCallbacks('JobEnded', {
-          totalTime: 0.01 * Math.max(1, chunks.length),
-          audioDurationMs: totalSamples,
-          totalSamples,
-          processCalls: chunks.length
-        }, null)
+        this._callCallbacks(
+          'JobEnded',
+          {
+            totalTime: 0.01 * Math.max(1, chunks.length),
+            audioDurationMs: totalSamples,
+            totalSamples,
+            processCalls: chunks.length
+          },
+          null
+        )
       }
 
       this._currentJobId = null
@@ -248,7 +269,7 @@ class MockedBinding {
     return true
   }
 
-  destroyInstance (handle) {
+  destroyInstance(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._runToken += 1
     this._busy = false

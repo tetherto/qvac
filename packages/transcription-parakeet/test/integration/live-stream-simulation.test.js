@@ -33,7 +33,7 @@ const {
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
 
-function loadAudio (samplePath) {
+function loadAudio(samplePath) {
   const rawBuffer = fs.readFileSync(samplePath)
   const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
   const audioData = new Float32Array(pcmData.length)
@@ -45,27 +45,40 @@ function loadAudio (samplePath) {
  * Pushable async-iterable: producers `push(chunk)` / `end()`,
  * consumers `for await (const c of stream)`.
  */
-function pushableStream () {
+function pushableStream() {
   const queue = []
   let waiter = null
   let ended = false
-  function push (chunk) {
+  function push(chunk) {
     if (ended) return
     queue.push(chunk)
-    if (waiter) { const w = waiter; waiter = null; w() }
+    if (waiter) {
+      const w = waiter
+      waiter = null
+      w()
+    }
   }
-  function end () {
+  function end() {
     ended = true
-    if (waiter) { const w = waiter; waiter = null; w() }
+    if (waiter) {
+      const w = waiter
+      waiter = null
+      w()
+    }
   }
   return {
     push,
     end,
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
-        if (queue.length > 0) { yield queue.shift(); continue }
+        if (queue.length > 0) {
+          yield queue.shift()
+          continue
+        }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
@@ -77,7 +90,7 @@ function pushableStream () {
  * `{ chunksFed, totalSamplesFed, segments, firstUpdateTime,
  *    feedDurationMs }`.
  */
-async function streamAudio (model, audioData, chunkDurationMs, delayMs) {
+async function streamAudio(model, audioData, chunkDurationMs, delayMs) {
   const sampleRate = 16000
   const samplesPerChunk = Math.floor((chunkDurationMs / 1000) * sampleRate)
   const totalChunks = Math.ceil(audioData.length / samplesPerChunk)
@@ -89,13 +102,15 @@ async function streamAudio (model, audioData, chunkDurationMs, delayMs) {
   const runPromise = (async () => {
     const response = await model.run(stream)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         if (firstUpdateTime === null) firstUpdateTime = Date.now()
         const items = Array.isArray(out) ? out : [out]
         for (const seg of items) {
           if (seg && seg.text) {
             const txt = seg.text
-            console.log(`[onUpdate] segment: "${txt.substring(0, 60)}${txt.length > 60 ? '...' : ''}"`)
+            console.log(
+              `[onUpdate] segment: "${txt.substring(0, 60)}${txt.length > 60 ? '...' : ''}"`
+            )
             segments.push(seg)
           }
         }
@@ -112,7 +127,7 @@ async function streamAudio (model, audioData, chunkDurationMs, delayMs) {
     chunksFed++
     totalSamplesFed += chunk.length
     if (delayMs > 0 && i + samplesPerChunk < audioData.length) {
-      await new Promise(resolve => setTimeout(resolve, delayMs))
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
   }
   stream.end()
@@ -176,8 +191,13 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
     console.log('\n  Output:')
     console.log(`    Segments received: ${segments.length}`)
     if (segments.length > 0) {
-      const fullText = segments.map(s => s.text).join(' ').trim()
-      console.log(`    Full text: "${fullText.substring(0, 100)}${fullText.length > 100 ? '...' : ''}"`)
+      const fullText = segments
+        .map((s) => s.text)
+        .join(' ')
+        .trim()
+      console.log(
+        `    Full text: "${fullText.substring(0, 100)}${fullText.length > 100 ? '...' : ''}"`
+      )
     }
     console.log('='.repeat(60) + '\n')
 
@@ -185,8 +205,16 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
     t.ok(totalSamplesFed > 0, 'Should have fed samples (totalSamplesFed > 0)')
     t.ok(segments.length > 0, 'Should receive transcription segments')
   } finally {
-    try { await model.unload() } catch (e) { /* ignore */ }
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -217,23 +245,37 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
     await model.load()
 
     console.log('Feeding audio rapidly (100ms chunks, no delay)...')
-    const { chunksFed, totalSamplesFed, segments, feedDurationMs } =
-      await streamAudio(model, audioData, 100, 0)
+    const { chunksFed, totalSamplesFed, segments, feedDurationMs } = await streamAudio(
+      model,
+      audioData,
+      100,
+      0
+    )
 
     console.log('\n' + '='.repeat(60))
     console.log('📊 RAPID FEED RESULTS')
     console.log('='.repeat(60))
     console.log(`  Chunks fed: ${chunksFed}`)
     console.log(`  Feed time: ${feedDurationMs}ms`)
-    console.log(`  Throughput: ${(totalSamplesFed / (feedDurationMs / 1000)).toFixed(0)} samples/sec`)
+    console.log(
+      `  Throughput: ${(totalSamplesFed / (feedDurationMs / 1000)).toFixed(0)} samples/sec`
+    )
     console.log(`  Segments: ${segments.length}`)
     console.log('='.repeat(60) + '\n')
 
     t.ok(chunksFed > 10, 'Should have fed many chunks (rapid feeding)')
     t.ok(segments.length > 0, 'Should produce transcription despite rapid feeding')
   } finally {
-    try { await model.unload() } catch (e) { /* ignore */ }
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -267,9 +309,16 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
     })
     try {
       await model.load()
-      const { chunksFed, segments, feedDurationMs } =
-        await streamAudio(model, audioData, chunkSizeMs, 0)
-      const fullText = segments.map(s => s.text).join(' ').trim()
+      const { chunksFed, segments, feedDurationMs } = await streamAudio(
+        model,
+        audioData,
+        chunkSizeMs,
+        0
+      )
+      const fullText = segments
+        .map((s) => s.text)
+        .join(' ')
+        .trim()
       results.push({
         chunkSizeMs,
         chunksFed,
@@ -279,7 +328,11 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
       })
       console.log(`  Chunks: ${chunksFed}, Time: ${feedDurationMs}ms, Segments: ${segments.length}`)
     } finally {
-      try { await model.unload() } catch (e) { /* ignore */ }
+      try {
+        await model.unload()
+      } catch (e) {
+        /* ignore */
+      }
     }
   }
 
@@ -287,12 +340,21 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
   console.log('📊 VARIABLE CHUNK SIZE SUMMARY')
   console.log('='.repeat(60))
   for (const result of results) {
-    console.log(`  ${result.chunkSizeMs}ms chunks: ${result.chunksFed} chunks, ${result.feedTime}ms, ${result.segments} segments`)
+    console.log(
+      `  ${result.chunkSizeMs}ms chunks: ${result.chunksFed} chunks, ${result.feedTime}ms, ${result.segments} segments`
+    )
   }
   console.log('='.repeat(60) + '\n')
 
   t.ok(results.length === CHUNK_SIZES_MS.length, 'Should test all chunk sizes')
-  t.ok(results.every(r => r.segments > 0), 'All chunk sizes should produce output')
+  t.ok(
+    results.every((r) => r.segments > 0),
+    'All chunk sizes should produce output'
+  )
 
-  try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+  try {
+    loggerBinding.releaseLogger()
+  } catch (e) {
+    /* ignore */
+  }
 })

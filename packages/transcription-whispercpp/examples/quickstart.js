@@ -16,9 +16,9 @@ binding.setLogger((priority, message) => {
 // Usage: node examples/quickstart.js [audioDir] [modelPath] [vadModelPath]
 // Defaults stream ./examples/sample.raw through a tiny model in ./examples
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
-  const [,, vadModelPathArg, audioPathArg] = args
+  const [, , vadModelPathArg, audioPathArg] = args
 
   const modelsDir = path.join(__dirname, '..', 'models')
   const audioFilePath = audioPathArg || path.join(__dirname, 'samples', 'sample.raw')
@@ -26,11 +26,15 @@ async function main () {
   // ignore optional vadModelPathArg to keep API stable
 
   if (!fs.existsSync(modelPath)) {
-    console.error(`Model file not found at ${modelPath}. Download or provide a path as the second argument.`)
+    console.error(
+      `Model file not found at ${modelPath}. Download or provide a path as the second argument.`
+    )
     process.exit(1)
   }
   if (!fs.existsSync(audioFilePath)) {
-    console.error(`Audio file not found at ${audioFilePath}. Provide a directory containing sample.raw as the first argument.`)
+    console.error(
+      `Audio file not found at ${audioFilePath}. Provide a directory containing sample.raw as the first argument.`
+    )
     process.exit(1)
   }
 
@@ -95,7 +99,10 @@ async function main () {
   console.log('[JS] iterate() chunks received:', full.length)
 
   if (full.length) {
-    const text = full.map(s => s.text).join(' ').trim()
+    const text = full
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
     console.log('\n=== TRANSCRIPTION (from run/iterate) ===')
     console.log(text)
     console.log('=======================================\n')
@@ -107,7 +114,7 @@ async function main () {
   binding.releaseLogger()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err)
   binding.releaseLogger()
   process.exit(1)

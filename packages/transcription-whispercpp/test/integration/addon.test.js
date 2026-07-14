@@ -92,19 +92,23 @@ test('[low level] Real C++ addon bindings work correctly', async (t) => {
 
     const sawJobEnded = await Promise.race([
       jobEndedPromise.then(() => true),
-      new Promise(resolve => setTimeout(() => resolve(false), 5000))
+      new Promise((resolve) => setTimeout(() => resolve(false), 5000))
     ])
     t.ok(sawJobEnded, 'JobEnded should be emitted for low-level run')
 
     // destroyInstance() performs native cancellation/cleanup internally.
-    try { await model.destroyInstance() } catch {}
+    try {
+      await model.destroyInstance()
+    } catch {}
 
     console.log('All tests passed!')
   } catch (error) {
     console.error('Unexpected error in addon bindings test:', error.message)
     throw error
   } finally {
-    try { if (model) await model.destroyInstance() } catch {}
+    try {
+      if (model) await model.destroyInstance()
+    } catch {}
   }
 })
 
@@ -168,7 +172,9 @@ test('[low level] Real addon state transitions work correctly', async (t) => {
     await model.destroyInstance()
     t.pass('State transitions test completed')
   } finally {
-    try { if (model) await model.destroyInstance() } catch {}
+    try {
+      if (model) await model.destroyInstance()
+    } catch {}
   }
 })
 
@@ -181,19 +187,17 @@ test('Real addon can handle multiple audio chunks', { timeout: 120000 }, async (
   ]
 
   try {
-    const result = await runTranscription(
-      {
-        audioInput: chunks,
-        modelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          vadParams: {
-            threshold: 0.6
-          }
+    const result = await runTranscription({
+      audioInput: chunks,
+      modelPath,
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
         }
       }
-    )
+    })
 
     if (result.passed) {
       t.pass('Multiple chunks test completed')
@@ -218,7 +222,9 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   t.ok(fs.existsSync(audioPath), 'Test audio should exist')
 
   if (whisperResult.isReal) {
-    console.log(' Testing with REAL whisper model (VAD disabled) - expecting successful transcription')
+    console.log(
+      ' Testing with REAL whisper model (VAD disabled) - expecting successful transcription'
+    )
 
     const result = await runTranscription(
       {
@@ -253,19 +259,17 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   } else {
     console.log(' Could not download real models - testing with placeholder models instead')
 
-    const result = await runTranscription(
-      {
-        audioInput: audioPath,
-        modelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          vadParams: {
-            threshold: 0.6
-          }
+    const result = await runTranscription({
+      audioInput: audioPath,
+      modelPath,
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
         }
       }
-    )
+    })
 
     if (result.data.error) {
       t.pass(' Correctly handled placeholder models with expected errors')
@@ -316,7 +320,9 @@ test('Runtime stats are populated when opts.stats=true', { timeout: 120000 }, as
     t.is(typeof response.stats.totalSamples, 'number', 'totalSamples should be a number')
     t.ok(response.stats.totalSamples > 0, 'totalSamples should be > 0')
   } finally {
-    try { await model.unload() } catch {}
+    try {
+      await model.unload()
+    } catch {}
   }
 })
 
@@ -350,7 +356,10 @@ test('Real addon with VAD enabled - advanced case', { timeout: 120000 }, async (
 
     console.log(`VAD+Whisper Transcription result: ${result.output}`)
     if (result.data.segmentCount > 0) {
-      console.log('VAD+Whisper Transcription [segments]:', JSON.stringify(result.data.segments.slice(0, 3), null, 2))
+      console.log(
+        'VAD+Whisper Transcription [segments]:',
+        JSON.stringify(result.data.segments.slice(0, 3), null, 2)
+      )
     }
 
     if (result.passed && result.data.segmentCount > 0) {
@@ -370,19 +379,17 @@ test('Real addon error handling - failure cases', { timeout: 120000 }, async (t)
 
   // Test 1: Invalid model path
   t.test('Invalid model path handling', async (t) => {
-    const result = await runTranscription(
-      {
-        audioInput: new Uint8Array([1, 2, 3, 4, 5]),
-        modelPath: '/nonexistent/path/model.bin',
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          vadParams: {
-            threshold: 0.6
-          }
+    const result = await runTranscription({
+      audioInput: new Uint8Array([1, 2, 3, 4, 5]),
+      modelPath: '/nonexistent/path/model.bin',
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
         }
       }
-    )
+    })
 
     if (result.data.error) {
       console.log(' Expected error caught:', result.data.error)
@@ -437,13 +444,11 @@ test('Real addon error handling - failure cases', { timeout: 120000 }, async (t)
 
     for (const testCase of invalidConfigs) {
       console.log(` Testing ${testCase.name}...`)
-      const result = await runTranscription(
-        {
-          whisperConfig: testCase.whisperConfig,
-          modelPath
-          // No audioInput - we're just testing config validation
-        }
-      )
+      const result = await runTranscription({
+        whisperConfig: testCase.whisperConfig,
+        modelPath
+        // No audioInput - we're just testing config validation
+      })
 
       // Config validation should fail during _load() via checkConfig()
       if (result.passed) {
@@ -465,19 +470,17 @@ test('Real addon error handling - failure cases', { timeout: 120000 }, async (t)
       makePcmNoise(128) // more noise
     ]
 
-    const result = await runTranscription(
-      {
-        audioInput: chunks,
-        modelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          vadParams: {
-            threshold: 0.6
-          }
+    const result = await runTranscription({
+      audioInput: chunks,
+      modelPath,
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        vadParams: {
+          threshold: 0.6
         }
       }
-    )
+    })
 
     if (result.data.error) {
       console.log('Exception handling for noisy/silent data:', result.data.error)
@@ -500,17 +503,15 @@ test('Caption mode transcription (VAD disabled)', { timeout: 120000 }, async (t)
   t.ok(fs.existsSync(audioPath), 'Test audio should exist')
 
   try {
-    const result = await runTranscription(
-      {
-        audioInput: audioPath,
-        modelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          audio_format: 's16le'
-        }
+    const result = await runTranscription({
+      audioInput: audioPath,
+      modelPath,
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        audio_format: 's16le'
       }
-    )
+    })
 
     console.log(' Caption Output:', result.output)
     if (whisperResult.isReal) {
@@ -531,7 +532,9 @@ test('Caption mode transcription (VAD disabled)', { timeout: 120000 }, async (t)
     console.log(` Caption mode test error: ${error.message}`)
     t.pass('Caption mode handled error gracefully')
   } finally {
-    try { loggerBinding.releaseLogger() } catch {}
+    try {
+      loggerBinding.releaseLogger()
+    } catch {}
   }
 })
 
@@ -550,26 +553,24 @@ test('Caption mode transcription (VAD enabled)', { timeout: 120000 }, async (t) 
   generateTestAudio(audioPath)
 
   try {
-    const result = await runTranscription(
-      {
-        audioInput: audioPath,
-        modelPath,
-        vadModelPath,
-        whisperConfig: {
-          language: 'en',
-          temperature: 0.0,
-          audio_format: 's16le',
-          vadParams: {
-            threshold: 0.6,
-            min_speech_duration_ms: 300,
-            min_silence_duration_ms: 200,
-            max_speech_duration_s: 30.0,
-            speech_pad_ms: 50,
-            samples_overlap: 0.15
-          }
+    const result = await runTranscription({
+      audioInput: audioPath,
+      modelPath,
+      vadModelPath,
+      whisperConfig: {
+        language: 'en',
+        temperature: 0.0,
+        audio_format: 's16le',
+        vadParams: {
+          threshold: 0.6,
+          min_speech_duration_ms: 300,
+          min_silence_duration_ms: 200,
+          max_speech_duration_s: 30.0,
+          speech_pad_ms: 50,
+          samples_overlap: 0.15
         }
       }
-    )
+    })
 
     console.log(' Caption+VAD Output:', result.output)
     if (result.data.error) {
@@ -579,13 +580,17 @@ test('Caption mode transcription (VAD enabled)', { timeout: 120000 }, async (t) 
       t.pass('Successfully received transcription output in caption mode with VAD')
     } else {
       t.ok(result.data.segmentCount >= 0, 'Should receive some result in caption mode with VAD')
-      t.pass('Caption+VAD mode handled without transcription output (may be expected with test audio)')
+      t.pass(
+        'Caption+VAD mode handled without transcription output (may be expected with test audio)'
+      )
     }
   } catch (error) {
     console.log(` Caption+VAD mode test error: ${error.message}`)
     t.pass('Caption+VAD mode handled error gracefully')
   } finally {
-    try { loggerBinding.releaseLogger() } catch {}
+    try {
+      loggerBinding.releaseLogger()
+    } catch {}
   }
 })
 
@@ -594,7 +599,7 @@ test('Audio format transcription tests (s16le and f32le)', { timeout: 120000 }, 
   console.log('==================================')
 
   // Helper function to test a specific audio format using runTranscription
-  async function testAudioFormat (audioFile, audioFormat, description) {
+  async function testAudioFormat(audioFile, audioFormat, description) {
     console.log(`\n=== Testing ${description} ===`)
     console.log(`Audio file: ${audioFile}`)
     console.log(`Audio format: ${audioFormat}`)
@@ -659,11 +664,7 @@ test('Audio format transcription tests (s16le and f32le)', { timeout: 120000 }, 
     return
   }
 
-  const s16leResult = await testAudioFormat(
-    s16leFile,
-    's16le',
-    's16le format (sample.raw)'
-  )
+  const s16leResult = await testAudioFormat(s16leFile, 's16le', 's16le format (sample.raw)')
 
   const f32leResult = await testAudioFormat(
     f32leFile,

@@ -24,7 +24,7 @@ const { setupLogger, validatePaths, printResults } = require('./utils.js')
 
 const SAMPLE_RATE = 16000
 
-function parseArgs () {
+function parseArgs() {
   const args = { model: null, audio: null }
   const argv = Bare.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
@@ -36,10 +36,13 @@ function parseArgs () {
 }
 
 const silentLogger = {
-  debug () {}, info () {}, warn () {}, error () {}
+  debug() {},
+  info() {},
+  warn() {},
+  error() {}
 }
 
-async function decodeToFloat32 (audioPath) {
+async function decodeToFloat32(audioPath) {
   const decoder = new FFmpegDecoder({
     config: { streamIndex: 0 },
     logger: silentLogger
@@ -52,9 +55,11 @@ async function decodeToFloat32 (audioPath) {
     const response = await decoder.run(audioStream)
 
     response.on('output', (data) => {
-      const view = new DataView(data.outputArray.buffer,
+      const view = new DataView(
+        data.outputArray.buffer,
         data.outputArray.byteOffset,
-        data.outputArray.byteLength)
+        data.outputArray.byteLength
+      )
       const n = Math.floor(data.outputArray.byteLength / 2)
       const f32 = new Float32Array(n)
       for (let i = 0; i < n; i++) {
@@ -81,7 +86,7 @@ async function decodeToFloat32 (audioPath) {
   }
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.model || !args.audio) {
     console.error('Usage: bare examples/decode-audio.js --model <gguf> --audio <file>')
@@ -110,7 +115,7 @@ async function main () {
   const segments = []
   const response = await model.run(audioData)
   await response
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const s of items) {
         if (s && s.text && s.toAppend) segments.push(s)
@@ -123,7 +128,7 @@ async function main () {
   addonLogging.releaseLogger()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)
