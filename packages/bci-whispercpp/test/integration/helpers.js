@@ -5,6 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 const { computeWER } = require('@qvac/bci-whispercpp/wer')
+const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -52,7 +53,11 @@ try {
               real_time_factor: null,
               wall_time_ms: null,
               tps: null,
-              total_time_ms: null
+              total_time_ms: null,
+              avg_rss_mb: null,
+              peak_rss_mb: null,
+              rss_after_load_mb: null,
+              reclaimed_mb: null
             },
             metrics
           ),
@@ -147,6 +152,10 @@ function _scheduleReportWrite() {
   process.on('exit', _flushPerfReport)
 }
 
+function roundToTwo(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? roundTo(value, 2) : null
+}
+
 /**
  * Record a BCI inference stats row through the shared perf reporter.
  *
@@ -155,7 +164,11 @@ function _scheduleReportWrite() {
  *                         label when it contains [CPU] or [GPU].
  * @param {Object} stats - response.stats from the addon: { totalTime,
  *                         tokensPerSecond, totalWallMs, realTimeFactor?, ... }.
- * @param {Object} [extra] - Optional { wallMs, output, executionProvider }.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider,
+ *                            avgRssMb, peakRssMb, rssAfterLoadMb, reclaimedMb }
+ *                            overrides. rssAfterLoadMb lets the aggregator floor
+ *                            the mobile peak at the post-load footprint,
+ *                            matching the desktop peak floor.
  */
 function recordBciStats(label, stats, extra) {
   if (!stats || typeof stats !== 'object') return
@@ -185,7 +198,11 @@ function recordBciStats(label, stats, extra) {
       wall_time_ms: wallMs,
       tps,
       total_time_ms: totalTimeMs,
-      backend_id: backendId
+      backend_id: backendId,
+      avg_rss_mb: roundToTwo(extra && extra.avgRssMb),
+      peak_rss_mb: roundToTwo(extra && extra.peakRssMb),
+      rss_after_load_mb: roundToTwo(extra && extra.rssAfterLoadMb),
+      reclaimed_mb: roundToTwo(extra && extra.reclaimedMb)
     },
     {
       execution_provider: ep,
