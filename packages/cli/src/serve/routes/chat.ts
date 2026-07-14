@@ -39,7 +39,9 @@ async function prepare(
   // Only pay the dialect lookup when a prior assistant tool call must be
   // replayed; the model's native dialect is what keeps the replayed frame from
   // provoking a malformed tool call on the next turn.
-  const dialect = messagesHaveToolCalls(body.messages as Parameters<typeof messagesHaveToolCalls>[0])
+  const dialect = messagesHaveToolCalls(
+    body.messages as Parameters<typeof messagesHaveToolCalls>[0]
+  )
     ? await resolveToolDialect(sdkModelId)
     : 'hermes'
 

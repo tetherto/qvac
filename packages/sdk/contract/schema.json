@@ -3118,7 +3118,8 @@
                 },
                 "toolDialect": {
                   "type": "string",
-                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"]
+                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+                  "title": "LocalLoadedModelInfoToolDialect"
                 }
               },
               "required": ["modelId", "isDelegated", "modelType", "handlers", "loadedAt"],

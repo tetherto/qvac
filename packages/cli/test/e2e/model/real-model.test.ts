@@ -80,8 +80,7 @@ describe('chat completions (blocking)', () => {
     // A reasoning model can spend the whole tiny budget inside its `<think>`
     // block, which is routed to `reasoning_content`, so assert generation
     // happened in either channel rather than requiring visible content.
-    const produced =
-      (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
+    const produced = (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
     assert.ok(produced > 0)
     assert.equal(body.usage.completion_tokens, 8)
     assert.equal(body.choices[0].finish_reason, 'length')
@@ -124,10 +123,7 @@ describe('chat completions (blocking)', () => {
     })
     const body = res.json() as any
     assert.ok(body.usage.prompt_tokens > 0, 'expected non-zero prompt_tokens')
-    assert.equal(
-      body.usage.total_tokens,
-      body.usage.prompt_tokens + body.usage.completion_tokens
-    )
+    assert.equal(body.usage.total_tokens, body.usage.prompt_tokens + body.usage.completion_tokens)
   })
 })
 
@@ -244,7 +240,10 @@ describe('chat completions (tools / structured output)', () => {
             {
               id: 'call_1',
               type: 'function',
-              function: { name: 'bash', arguments: '{"command":"find src -name \\"*.ts\\" | wc -l"}' }
+              function: {
+                name: 'bash',
+                arguments: '{"command":"find src -name \\"*.ts\\" | wc -l"}'
+              }
             }
           ]
         },

@@ -220,7 +220,10 @@ function parseToolCallArguments(rawArguments: string): Record<string, unknown> {
 }
 
 function renderHermesCall(tc: NonNullable<OpenAIMessage['tool_calls']>[number]): string {
-  const callObj = { name: tc.function.name, arguments: parseToolCallArguments(tc.function.arguments) }
+  const callObj = {
+    name: tc.function.name,
+    arguments: parseToolCallArguments(tc.function.arguments)
+  }
   return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
 }
 
