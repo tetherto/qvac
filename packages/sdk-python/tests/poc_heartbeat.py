@@ -182,7 +182,7 @@ class QvacWorker:
             try:
                 await asyncio.wait_for(self._server.wait_closed(), timeout=5)
             except asyncio.TimeoutError:
-                pass
+                pass  # best-effort teardown; a slow-to-close socket isn't fatal
         if self._log_fh:
             self._log_fh.close()
         if os.path.exists(self._sock_path):

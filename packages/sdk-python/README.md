@@ -13,11 +13,13 @@ Generated Python client for the QVAC SDK's worker RPC.
 - `_generated/__init__.py` — a flat, stable re-export of every model under its
   contract title (`LoadModelRequest`, `HeartbeatResponse`, ...), regardless of
   which internal module `datamodel-code-generator` happened to place it in.
-- `_generated/methods.py` — one typed function per `manifest.json` entry,
+- `_generated/methods.py` — one typed async function per `manifest.json` entry,
   grouped by call shape:
-  - `request-reply` → `def heartbeat(transport, params: HeartbeatRequest) -> HeartbeatResponse`
-  - `server-stream` → `def transcribe(transport, params: TranscribeRequest) -> Iterator[TranscribeResponse]`
-  - `duplex` → `def transcribe_stream(transport, params: TranscribeStreamRequest, up: Iterable[bytes]) -> Iterator[TranscribeStreamResponse]`
+  - `request-reply` → `async def heartbeat(transport, params: HeartbeatRequest) -> HeartbeatResponse`
+  - `server-stream` → `async def transcribe(transport, params: TranscribeRequest) -> AsyncIterator[TranscribeResponse]`
+  - `duplex` → `async def transcribe_stream(transport, params: TranscribeStreamRequest, up: AsyncIterable[bytes]) -> AsyncIterator[TranscribeStreamResponse]`
+  - Constant enums (`ModelType`, `PluginId`, ...) come through `qvac.schemas` too, alongside the
+    request/response models.
 
 Regenerate with:
 

@@ -51,9 +51,11 @@ jobs:
       # invocation (it preserves single-quoted strings; a bare `black`
       # normalizes to double), so checking it here would always disagree.
       - name: Format check
-        run: .venv/bin/python3 -m black --check src/qvac/_transport.py src/qvac/_generated/__init__.py src/qvac/_generated/methods.py scripts/ tests/
+        run: .venv/bin/python3 -m black --check src/qvac --extend-exclude '_generated/models/' scripts/ tests/
 
-      # test_poc_smoke.py needs a real Bare worker + a downloaded model; it
-      # skips itself unless QVAC_POC_SDK_DIR is set, which it isn't here.
+      # test_poc_smoke.py/test_poc_progress.py need a real Bare worker + a
+      # downloaded model; they skip themselves unless a built worker exists
+      # at WORKER (QVAC_POC_SDK_DIR override or its monorepo-relative
+      # default), which none does here.
       - name: Test
         run: .venv/bin/python3 -m pytest tests/ -v
