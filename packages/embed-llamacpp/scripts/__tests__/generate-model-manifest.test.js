@@ -140,6 +140,23 @@ test('Hugging Face LFS redirects require canonical metadata', async () => {
   assert.equal(calls.length, 1)
 })
 
+test('direct Hugging Face GGUF responses require canonical metadata', async () => {
+  const { CanonicalMetadataError, download } = manifestGenerator
+  const calls = []
+
+  await assert.rejects(
+    download('https://huggingface.co/org/repo/resolve/revision/model.gguf', '/unused', {
+      request: requestSequence([response(200, {}, 'model')], calls)
+    }),
+    (err) => {
+      assert.ok(err instanceof CanonicalMetadataError)
+      assert.match(err.message, /incomplete Hugging Face LFS metadata/)
+      return true
+    }
+  )
+  assert.equal(calls.length, 1)
+})
+
 test('metadata parsing failures consume the response before rejecting', async () => {
   const { CanonicalMetadataError, download } = manifestGenerator
   const calls = []

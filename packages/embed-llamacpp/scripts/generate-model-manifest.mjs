@@ -30,6 +30,7 @@ const MANIFEST_PATH = resolve(__dirname, '../test/integration/models.manifest.js
 const HUGGING_FACE_HOSTNAME = 'huggingface.co'
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308])
 const URL_IN_TEXT_PATTERN = /https?:\/\/[^\s"'<>]+/gi
+const MODEL_ARTIFACT_PATH_PATTERN = /\.gguf$/i
 
 export class CanonicalMetadataError extends Error {
   constructor(message, options) {
@@ -162,9 +163,14 @@ function canonicalMetadataFromResponse(sourceUrl, redirectUrl, headers) {
   if (!isTrustedHuggingFaceUrl(sourceUrl)) return null
 
   const isResolveUrl = sourceUrl.pathname.split('/').includes('resolve')
+  const isModelArtifact = MODEL_ARTIFACT_PATH_PATTERN.test(sourceUrl.pathname)
   const redirectsOffHost = redirectUrl !== null && !isTrustedHuggingFaceUrl(redirectUrl)
 
-  return parseCanonicalLfsMetadata(headers, sourceUrl, isResolveUrl && redirectsOffHost)
+  return parseCanonicalLfsMetadata(
+    headers,
+    sourceUrl,
+    isModelArtifact || (isResolveUrl && redirectsOffHost)
+  )
 }
 
 function mergeCanonicalMetadata(current, next, sourceUrl) {
