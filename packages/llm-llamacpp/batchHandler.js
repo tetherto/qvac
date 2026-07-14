@@ -21,7 +21,7 @@ class BatchHandler {
   /**
    * @param {Object} deps
    * @param {Function} deps.parsePrompt - (prompt, runOptions) -> addon messages
-   * @param {Function} deps.cancelHandler - cancels the in-flight work
+   * @param {Function} deps.cancelHandler - (jobId) => cancels that group's native job
    * @param {Function} deps.runJob - (items) => Promise<{accepted, ids, id}> admission result
    */
   constructor({ parsePrompt, cancelHandler, runJob }) {
@@ -73,7 +73,11 @@ class BatchHandler {
         throw new Error(`Batch prompt id already in flight: ${item.id}`)
       }
     }
-    const response = new QvacResponse({ cancelHandler: this._cancelHandler })
+    // The group's native job id, learned at admission. Single-threaded JS
+    // guarantees it is set before any consumer can call cancel() on the
+    // returned response, so the handler never fires with null.
+    let jobId = null
+    const response = new QvacResponse({ cancelHandler: () => this._cancelHandler(jobId) })
 
     let result
     try {
@@ -88,6 +92,7 @@ class BatchHandler {
       throw err
     }
 
+    jobId = result.id
     response.ids = result.ids
     this._groups.set(result.id, { ids: result.ids, response, pendingResult: null })
     for (const id of result.ids) this._chunkRoutes.set(id, result.id)

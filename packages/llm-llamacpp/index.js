@@ -272,7 +272,7 @@ class LlmLlamacpp {
     this._jobSinks = new Map()
     this._batchHandler = new BatchHandler({
       parsePrompt: promptToAddonMessages,
-      cancelHandler: () => this.addon?.cancel(),
+      cancelHandler: (jobId) => this.addon?.cancelJob(jobId),
       runJob: (items) => this.addon.runJob(items)
     })
     // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
