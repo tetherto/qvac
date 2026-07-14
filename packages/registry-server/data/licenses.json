@@ -53,5 +53,10 @@
     "spdxId": "nvidia-open-model-license",
     "name": "NVIDIA Open Model License Agreement",
     "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
+  },
+  {
+    "spdxId": "ltx-2-community",
+    "name": "LTX-2 Community License Agreement",
+    "url": "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"
   }
 ]
