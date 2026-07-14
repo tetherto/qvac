@@ -64,7 +64,9 @@ test('sdcpp plugin resolveConfig: rejects audioVaeModelSrc without LTX layout (W
         modelType: 'sdcpp-generation'
       }
     )
-    t.fail('expected ModelLoadFailedError for audioVaeModelSrc without embeddingsConnectorsModelSrc')
+    t.fail(
+      'expected ModelLoadFailedError for audioVaeModelSrc without embeddingsConnectorsModelSrc'
+    )
   } catch (err) {
     t.ok(err instanceof ModelLoadFailedError)
     t.is(resolveCalls, 0, 'guard fires before any companion download')
