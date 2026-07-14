@@ -22,14 +22,16 @@ export {
 export { setConfig, setRuntimeContext } from './runtime/state'
 export { initialize, cleanupForTerminate } from './runtime/lifecycle'
 
-// The wire transport a request needs — reply, stream, or duplex; undefined for an
-// unknown type. A host reads it to pick the matching response before calling
-// `send`/`stream`/`duplex`. It is request-aware: a reply operation that supports
-// progress streams when the caller asked for progress (`withProgress`), matching
-// how `stream` dispatches it.
+// The wire transport a request needs: reply, stream, progress, or duplex.
+// Returns undefined for an unknown type. A host reads it to pick the matching
+// response before calling `send`/`stream`/`duplex`. It is request-aware: a reply
+// operation that supports progress reports `progress` when the caller asked for
+// progress (`withProgress`). Both `stream` and `progress` run through `stream()`;
+// the separate `progress` value tells a host to throttle progress updates, which
+// a native data stream such as completion tokens must never do.
 export function dispatchTransport(request: Request) {
   const entry = registry[request.type]
   if (!entry) return undefined
   if (entry.type !== 'reply') return entry.type
-  return handlerSupportsProgress(entry, request) ? 'stream' : 'reply'
+  return handlerSupportsProgress(entry, request) ? 'progress' : 'reply'
 }
