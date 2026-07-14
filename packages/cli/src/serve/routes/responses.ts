@@ -215,6 +215,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           modelId: params.sdkModelId,
           history: params.history,
           stream: true,
+          // Auto-cache the conversation prefix so multi-turn responses only
+          // prefill the new tail rather than re-processing the whole history.
+          kvCache: true,
           ...(params.tools !== undefined ? { tools: params.tools } : {}),
           ...(params.generationParams !== undefined
             ? { generationParams: params.generationParams }
@@ -229,6 +232,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           modelId: params.sdkModelId,
           history: params.history,
           stream: false,
+          // See the streaming branch: auto-cache the conversation prefix.
+          kvCache: true,
           ...(params.tools !== undefined ? { tools: params.tools } : {}),
           ...(params.generationParams !== undefined
             ? { generationParams: params.generationParams }
