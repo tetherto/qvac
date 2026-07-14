@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Bumped the `parakeet-cpp` `version>=` floors from `2026-07-07` to `2026-07-13`,
+  consuming merged registry PR
+  [tetherto/qvac-registry-vcpkg#245](https://github.com/tetherto/qvac-registry-vcpkg/pull/245)
+  (qvac-ext-lib-whisper.cpp
+  [PR #85](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/85)). The EOU
+  RNN-T decoder now runs as ggml graphs on the active GPU backend
+  (Metal / CUDA / Vulkan) instead of scalar host code: span-batched joint
+  (16 frames per launch), persistent LSTM/pred state and full-window
+  enc-projection on device, on-device argmax and `<EOU>` state reset. Scalar
+  host decode remains for CPU and ggml-opencl. RTX 4000 Vulkan (q8_0, 20 s
+  file): EOU RTF `0.0052` → `0.0031`, decoder ~54 → ~14.5 ms; CTC / TDT /
+  Sortformer unchanged. No addon API changes; the GPU decode engages
+  automatically under `useGPU`. Manifest-only: `default-registry.baseline` is
+  unchanged.
+
 ## [0.9.1] - 2026-07-08
 
 ### Fixed
