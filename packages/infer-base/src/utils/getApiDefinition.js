@@ -16,7 +16,7 @@ const platformDefinitions = {
  *
  * @returns {string} One of 'vulkan', 'metal', 'vulkan-32'
  */
-function getApiDefinition () {
+function getApiDefinition() {
   return platformDefinitions[platform()] ?? 'vulkan'
 }
 

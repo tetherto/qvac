@@ -125,6 +125,10 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
      [](SdCtxConfig& c, const std::string& v) {
        c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
      }},
+    {"vae_decode_only",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.vaeDecodeOnly = parseBool(v, "vae_decode_only");
+     }},
 
     // -- Weight precision
     // -------------------------------------------------------

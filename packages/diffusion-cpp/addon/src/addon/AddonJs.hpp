@@ -82,6 +82,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.diffusionModelPath = args.getMapEntry(1, "diffusionModelPath");
   config.highNoiseDiffusionModelPath =
       args.getMapEntry(1, "highNoiseDiffusionModelPath");
+  config.uncondDiffusionModelPath =
+      args.getMapEntry(1, "uncondDiffusionModelPath");
   config.clipLPath = args.getMapEntry(1, "clipLPath");
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");

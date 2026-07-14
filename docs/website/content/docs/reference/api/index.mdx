@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.14.x (latest)
+title: API Summary — v0.15.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,11 +12,23 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 48 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 49 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
 ## Functions
+
+### `batchCompletion`
+
+No description available
+
+**Signature**:
+
+```ts
+function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;
+```
+
+---
 
 ### `bciTranscribe`
 
@@ -1778,7 +1790,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_PLUGIN_SPECIFIER` | 50612 | Invalid plugin specifiers (must end with /plugin):\\n… |
 | `BARE_IMPORTS_MAP_NOT_FOUND` | 50613 | bare-imports.json not found.\\n\\n Expected at: …\\n\\n Make sure … is installed in your project. |
 | `BARE_RUNTIME_BINARY_NOT_FOUND` | 50614 | Could not load the Bare runtime binary for …-…. The platform package "bare-runtime-…-…" (or one of its dependencies) is missing from node_modules — commonly seen with pnpm, which does not always install nested optional dependencies. Fix it by installing the platform package directly (e.g. \\ |
-| `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity must be at least … |
+| `PROFILER_INVALID_CAPACITY` | 50800 | Profiler invalid capacity |
 
 ### Server errors
 
@@ -1878,4 +1890,4 @@ and read `error.code` / `error.cause`. Code ranges:
 | `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
 | `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
 | `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
-| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | QVAC model registry query failed… |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Qvac model registry query failed |

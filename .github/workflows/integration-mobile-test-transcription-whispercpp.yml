@@ -8,6 +8,11 @@ name: Mobile Integration Tests (Transcription WhisperCPP)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/transcription-whispercpp@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref to checkout"
         type: string
@@ -99,6 +104,8 @@ jobs:
           addon-npm-name: '@qvac/transcription-whispercpp'
           prebuild-artifact-prefix: 'whisper-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build
@@ -171,6 +178,11 @@ jobs:
           platform: ${{ matrix.platform }}
           step-summary-title: 'Mobile Performance: whisper (${{ matrix.platform }})'
           artifact-name: perf-report-whispercpp-${{ matrix.platform }}-${{ github.run_number }}
+          # iOS (and multi-device Android pools) write the PERF_REPORT markers
+          # into bare_console.log inside Customer_Artifacts.zip; unzip them so
+          # extract-from-log.js can find the per-device performance reports.
+          # Without this iOS produces no benchmark rows. Mirrors parakeet.
+          unzip-customer-artifacts: 'true'
 
       - name: Comment results on PR
         if: always() && !cancelled()

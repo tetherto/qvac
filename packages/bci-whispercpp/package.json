@@ -1,14 +1,14 @@
 {
   "name": "@qvac/bci-whispercpp",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by whisper.cpp",
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"
   },
   "scripts": {
-    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
-    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/JSAdapter.cpp addon/src/js-interface/binding.cpp addon/src/model-interface/bci/BCIConfig.cpp addon/src/model-interface/bci/BCIModel.cpp addon/src/model-interface/bci/NeuralProcessor.cpp addon/src/addon/AddonJs.hpp addon/src/js-interface/JSAdapter.hpp addon/src/addon/BCIErrors.hpp addon/src/model-interface/BCITypes.hpp addon/src/model-interface/bci/BCIConfig.hpp addon/src/model-interface/bci/BCIModel.hpp addon/src/model-interface/bci/NeuralProcessor.hpp",
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
@@ -67,7 +67,9 @@
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.1.2",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {

@@ -31,10 +31,28 @@ The preferred input is the same JSON artifact shape emitted by
     },
     "tokensPerSecond": {
       "mean": 98.7
+    },
+    "memory": {
+      "avgRssMb": 812.4,
+      "peakRssMb": 905.7,
+      "rssAfterLoadMb": 800.1,
+      "rssAfterUnloadMb": 288.6,
+      "reclaimedMb": 511.5
     }
   }
 }
 ```
+
+The optional `summary.memory` block captures process resident-set-size (RSS)
+usage for the model/platform/quantization under test:
+
+- `avgRssMb` — average RSS sampled during inference.
+- `peakRssMb` — peak RSS observed across all runs (never below the post-load footprint).
+- `reclaimedMb` — memory returned to the OS after the model is unloaded
+  (`rssAfterLoadMb - rssAfterUnloadMb`, clamped at 0).
+
+Rows without a `memory` block render as `n/a` in the aggregated report, so older
+artifacts remain valid.
 
 File naming convention:
 

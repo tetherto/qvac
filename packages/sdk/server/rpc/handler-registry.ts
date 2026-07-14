@@ -43,6 +43,7 @@ import { handleSuspend } from '@/server/rpc/handlers/suspend'
 import { handleResume } from '@/server/rpc/handlers/resume'
 import { handleState } from '@/server/rpc/handlers/state'
 import type { HandlerEntry } from './handler-utils'
+import type { methodShapes, MethodName } from './method-shapes'
 
 function ragSupportsProgress(request: Request): boolean {
   if (request.type !== 'rag') return false
@@ -179,4 +180,6 @@ export const registry: Record<string, HandlerEntry> = {
     handler: handleFinetune,
     supportsProgress: finetuneSupportsProgress
   }
+} satisfies {
+  [K in MethodName]: HandlerEntry & { type: (typeof methodShapes)[K] }
 }

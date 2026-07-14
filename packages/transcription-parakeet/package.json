@@ -1,14 +1,14 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
     "bare": ">=1.20.0"
   },
   "scripts": {
-    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
-    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "lint": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" \"lib/**/*.js\"",
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "clean": "rm -rf build/ prebuilds/",
@@ -33,6 +33,8 @@
     "convert-models": "bash scripts/convert-nemo.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/download-models.sh && bash scripts/convert-nemo.sh",
     "download-models:registry": "node scripts/download-parakeet-models.js",
+    "stage-models:integration": "node scripts/stage-integration-models.mjs",
+    "generate-model-manifest": "node scripts/generate-model-manifest.mjs",
     "example": "bare examples/transcribe.js",
     "example:diarize": "bare examples/diarized-transcribe.js",
     "example:mic": "bare examples/live-mic.js",
@@ -83,7 +85,9 @@
     "cmake-vcpkg": "^1.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "standard": "^17.1.2",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
@@ -109,6 +113,9 @@
   },
   "types": "index.d.ts",
   "lint-staged": {
-    "*.js": "standard --fix"
+    "*.js": [
+      "prettier --write",
+      "lunte"
+    ]
   }
 }

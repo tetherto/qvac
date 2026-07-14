@@ -20,7 +20,7 @@ const PROMPT = [
   { role: 'user', content: 'List three random animals.' }
 ]
 
-async function setupModel (t, configOverrides = {}) {
+async function setupModel(t, configOverrides = {}) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -55,13 +55,17 @@ async function setupModel (t, configOverrides = {}) {
   return { model }
 }
 
-async function collectResponse (response) {
+async function collectResponse(response) {
   const chunks = []
-  await response.onUpdate(data => { chunks.push(data) }).await()
+  await response
+    .onUpdate((data) => {
+      chunks.push(data)
+    })
+    .await()
   return chunks.join('')
 }
 
-safeTest('generationParams | predict controls output length', { timeout: 600_000 }, async t => {
+safeTest('generationParams | predict controls output length', { timeout: 600_000 }, async (t) => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const responseShort = await model.run(PROMPT, {
@@ -79,24 +83,34 @@ safeTest('generationParams | predict controls output length', { timeout: 600_000
   t.ok(shortTokens > 0, `predict=8 generated ${shortTokens} tokens`)
   t.ok(longTokens > 0, `predict=48 generated ${longTokens} tokens`)
   t.ok(shortTokens <= 8, `predict=8 respects limit (got ${shortTokens})`)
-  t.ok(longTokens > shortTokens, `predict=48 (${longTokens} tokens) > predict=8 (${shortTokens} tokens)`)
+  t.ok(
+    longTokens > shortTokens,
+    `predict=48 (${longTokens} tokens) > predict=8 (${shortTokens} tokens)`
+  )
   t.ok(outputLong.length > outputShort.length, 'longer predict produces longer text output')
 })
 
-safeTest('generationParams | load-time defaults restored after override', { timeout: 600_000 }, async t => {
-  const { model } = await setupModel(t, { n_predict: '32', seed: '42' })
+safeTest(
+  'generationParams | load-time defaults restored after override',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model } = await setupModel(t, { n_predict: '32', seed: '42' })
 
-  const responseOverride = await model.run(PROMPT, {
-    generationParams: { predict: 5 }
-  })
-  await collectResponse(responseOverride)
-  const overrideTokens = Number(responseOverride?.stats?.generatedTokens || 0)
+    const responseOverride = await model.run(PROMPT, {
+      generationParams: { predict: 5 }
+    })
+    await collectResponse(responseOverride)
+    const overrideTokens = Number(responseOverride?.stats?.generatedTokens || 0)
 
-  const responseDefault = await model.run(PROMPT)
-  await collectResponse(responseDefault)
-  const defaultTokens = Number(responseDefault?.stats?.generatedTokens || 0)
+    const responseDefault = await model.run(PROMPT)
+    await collectResponse(responseDefault)
+    const defaultTokens = Number(responseDefault?.stats?.generatedTokens || 0)
 
-  t.ok(overrideTokens <= 5, `override predict=5 respected (got ${overrideTokens})`)
-  t.ok(defaultTokens > overrideTokens, `default run (${defaultTokens} tokens) exceeds overridden run (${overrideTokens} tokens)`)
-  t.is(defaultTokens, 32, `default run tokens (${defaultTokens}) should be 32`)
-})
+    t.ok(overrideTokens <= 5, `override predict=5 respected (got ${overrideTokens})`)
+    t.ok(
+      defaultTokens > overrideTokens,
+      `default run (${defaultTokens} tokens) exceeds overridden run (${overrideTokens} tokens)`
+    )
+    t.is(defaultTokens, 32, `default run tokens (${defaultTokens}) should be 32`)
+  }
+)
