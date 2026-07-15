@@ -166,7 +166,7 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
         title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType",
     )
     description: str | None = None
-    enum: list[str] | None = None
+    enum: list[str | float | bool | None] | None = None
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
@@ -829,7 +829,7 @@ class CompletionStreamRequestToolsItemParametersPropertiesValue(BaseModel):
         ..., title="CompletionStreamRequestToolsItemParametersPropertiesValueType"
     )
     description: str | None = None
-    enum: list[str] | None = None
+    enum: list[str | float | bool | None] | None = None
 
 
 class CompletionStreamRequestToolsItemParametersProperties(
