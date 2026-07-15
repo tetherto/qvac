@@ -60,6 +60,7 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
 
     const images = []
     const progressTicks = []
+    let stats = null
 
     // ── Load ─────────────────────────────────────────────────────────────────
     console.log('\n=== Loading model ===')
@@ -112,6 +113,8 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
       const genMs = Date.now() - tGen
       console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
 
+      stats = response.stats
+
       if (!isWarmup) {
         t.comment(
           recordPerformance(
@@ -144,7 +147,6 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
     // ── Runtime stats (new phase-breakdown fields) ────────────────────────────
-    const stats = response.stats
     t.ok(stats, 'stats object is populated')
     t.ok(
       typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
