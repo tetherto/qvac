@@ -15,6 +15,48 @@ const PREBUILDS_DIR = path.join(__dirname, 'prebuilds')
 
 const END_OF_INPUT = 'end of job'
 
+const MS_PER_SECOND = 1000
+const DEFAULT_AUDIO_FORMAT = 's16le'
+
+// Default VAD threshold for the batch/reload path when the caller omits
+// `vad_params.threshold`.
+const DEFAULT_VAD_THRESHOLD = 0.6
+
+// Whisper decoder defaults applied when the caller leaves a field unset.
+const DEFAULT_WHISPER_CONFIG = Object.freeze({
+  language: 'en',
+  durationMs: 0,
+  temperature: 0.0,
+  suppressNst: true,
+  nThreads: 0
+})
+
+// SDK-level keys that configure the JS wrapper but are not valid
+// `whisper_full_params`, so they must be stripped before the config reaches
+// (and is validated by) the native addon.
+const NON_ADDON_WHISPER_KEYS = [
+  'audio_format',
+  'contextParams',
+  'miscConfig',
+  'vadModelPath',
+  'vad_params',
+  'backendsDir',
+  'max_seconds'
+]
+
+// Default VAD knobs for `runStreaming`. Mirrors the native
+// StreamingProcessor::Config defaults (StreamingProcessor.hpp); the streaming
+// path intentionally uses a lower detection threshold than the batch default.
+const DEFAULT_STREAMING_VAD_CONFIG = Object.freeze({
+  vadThreshold: 0.5,
+  minSilenceDurationMs: 500,
+  minSpeechDurationMs: 250,
+  maxSpeechDurationS: 30,
+  speechPadMs: 30,
+  samplesOverlap: 0.1,
+  endOfTurnSilenceMs: 0
+})
+
 /**
  * GGML client implementation for the Whisper transcription model
  */
@@ -157,46 +199,8 @@ class TranscriptionWhispercpp {
   async _load(_closeLoader = false, _reportProgressCallback) {
     this.logger.debug('TranscriptionWhispercpp _load (local model files)')
 
-    const whisperConfig = {
-      ...this.params,
-      language: this.params.language || 'en',
-      duration_ms: this.params.max_seconds ? this.params.max_seconds * 1000 : 0,
-      temperature: this.params.temperature || 0.0,
-      suppress_nst: this.params.suppress_nst ?? true,
-      n_threads: this.params.n_threads || 0
-    }
+    const configurationParams = this._buildConfigurationParams()
 
-    // Remove SDK-level params that aren't valid for C++ addon
-    delete whisperConfig.audio_format
-    delete whisperConfig.contextParams
-    delete whisperConfig.miscConfig
-    delete whisperConfig.vadModelPath
-    delete whisperConfig.vad_params
-    delete whisperConfig.backendsDir
-
-    // VAD model is required for whisper transcription
-    const vadModelPath = this._resolveVadModelPath()
-    if (vadModelPath) {
-      whisperConfig.vad_model_path = vadModelPath
-      whisperConfig.vadParams = this.params.vad_params || { threshold: 0.6 }
-    }
-
-    const configurationParams = {
-      contextParams: {
-        model: this._config.path || this._getModelFilePath(),
-        ...(this._config.contextParams || {})
-      },
-      whisperConfig,
-      miscConfig: {
-        caption_enabled: false,
-        ...(this._config.miscConfig || {})
-      },
-      audio_format: this._config.audio_format || this.params.audio_format || 's16le',
-      backendsDir: this.params.backendsDir || PREBUILDS_DIR
-    }
-
-    // this entrypoint serves as the model configuration.
-    // must contain whisperConfig, vadParams, and contextParams
     _checkParamsExists(configurationParams)
     this.addon = this._createAddon(configurationParams)
 
@@ -206,6 +210,70 @@ class TranscriptionWhispercpp {
 
   _getModelFilePath() {
     return this._files.model
+  }
+
+  /**
+   * Build the wire-format config consumed by the native addon from the
+   * instance params/config, applying whisper decoder defaults and stripping
+   * SDK-only keys. Shared by both `_load` and `reload` so the two paths cannot
+   * drift.
+   * @param {Object} [overrides] - reload-time overrides (`whisperConfig`, `miscConfig`, `audio_format`)
+   */
+  _buildConfigurationParams(overrides = {}) {
+    return {
+      contextParams: {
+        model: this._config.path || this._getModelFilePath(),
+        ...(this._config.contextParams || {})
+      },
+      whisperConfig: this._buildWhisperConfig(overrides.whisperConfig || {}),
+      miscConfig: overrides.miscConfig || {
+        caption_enabled: false,
+        ...(this._config.miscConfig || {})
+      },
+      audio_format:
+        overrides.audio_format ||
+        this._config.audio_format ||
+        this.params.audio_format ||
+        DEFAULT_AUDIO_FORMAT,
+      backendsDir: this.params.backendsDir || PREBUILDS_DIR
+    }
+  }
+
+  _buildWhisperConfig(overrideWhisperConfig) {
+    const whisperConfig = {
+      ...this.params,
+      language: this.params.language || DEFAULT_WHISPER_CONFIG.language,
+      duration_ms: this._resolveDurationMs(overrideWhisperConfig),
+      temperature: this.params.temperature ?? DEFAULT_WHISPER_CONFIG.temperature,
+      suppress_nst: this.params.suppress_nst ?? DEFAULT_WHISPER_CONFIG.suppressNst,
+      n_threads: this.params.n_threads || DEFAULT_WHISPER_CONFIG.nThreads
+    }
+    this._stripNonAddonKeys(whisperConfig)
+    this._applyVadConfig(whisperConfig, overrideWhisperConfig)
+    return whisperConfig
+  }
+
+  _resolveDurationMs(overrideWhisperConfig) {
+    const fromMaxSeconds = this.params.max_seconds
+      ? this.params.max_seconds * MS_PER_SECOND
+      : DEFAULT_WHISPER_CONFIG.durationMs
+    return overrideWhisperConfig.duration_ms ?? fromMaxSeconds
+  }
+
+  _stripNonAddonKeys(whisperConfig) {
+    for (const key of NON_ADDON_WHISPER_KEYS) {
+      delete whisperConfig[key]
+    }
+  }
+
+  _applyVadConfig(whisperConfig, overrideWhisperConfig) {
+    const vadModelPath = this._resolveVadModelPath()
+    if (!vadModelPath) {
+      return
+    }
+    whisperConfig.vad_model_path = vadModelPath
+    whisperConfig.vadParams = overrideWhisperConfig.vad_params ||
+      this.params.vad_params || { threshold: DEFAULT_VAD_THRESHOLD }
   }
 
   /**
@@ -288,30 +356,13 @@ class TranscriptionWhispercpp {
       })
     }
 
-    const vadParams = this.params?.vad_params || {}
-
-    const streamingConfig = {
-      vadModelPath,
-      vadThreshold: vadParams.threshold || 0.5,
-      minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
-      minSpeechDurationMs: vadParams.min_speech_duration_ms || 250,
-      maxSpeechDurationS: vadParams.max_speech_duration_s || 30,
-      speechPadMs: vadParams.speech_pad_ms || 30,
-      samplesOverlap: vadParams.samples_overlap || 0.1,
-      emitVadEvents: Boolean(streamingOpts.emitVadEvents || streamingOpts.conversationMode),
-      endOfTurnSilenceMs: streamingOpts.endOfTurnSilenceMs || 0
-    }
-    if (streamingOpts.vadRunIntervalMs !== undefined) {
-      streamingConfig.vadRunIntervalMs = streamingOpts.vadRunIntervalMs
-    }
-
+    const streamingConfig = this._buildStreamingConfig(vadModelPath, streamingOpts)
     this.addon.startStreaming(streamingConfig)
 
     this._pendingWhisperJobId = null
     const response = this._job.start()
     const finalized = response.await().finally(() => {
-      this.addon._activeJobId = null
-      this.addon._setState('listening')
+      this.addon.finishStreaming()
     })
     finalized.catch(() => {})
     response.await = () => finalized
@@ -321,6 +372,26 @@ class TranscriptionWhispercpp {
       this._job.fail(error)
     })
     return response
+  }
+
+  _buildStreamingConfig(vadModelPath, streamingOpts) {
+    const vadParams = this.params?.vad_params || {}
+    const defaults = DEFAULT_STREAMING_VAD_CONFIG
+    const streamingConfig = {
+      vadModelPath,
+      vadThreshold: vadParams.threshold || defaults.vadThreshold,
+      minSilenceDurationMs: vadParams.min_silence_duration_ms || defaults.minSilenceDurationMs,
+      minSpeechDurationMs: vadParams.min_speech_duration_ms || defaults.minSpeechDurationMs,
+      maxSpeechDurationS: vadParams.max_speech_duration_s || defaults.maxSpeechDurationS,
+      speechPadMs: vadParams.speech_pad_ms || defaults.speechPadMs,
+      samplesOverlap: vadParams.samples_overlap || defaults.samplesOverlap,
+      emitVadEvents: Boolean(streamingOpts.emitVadEvents || streamingOpts.conversationMode),
+      endOfTurnSilenceMs: streamingOpts.endOfTurnSilenceMs || defaults.endOfTurnSilenceMs
+    }
+    if (streamingOpts.vadRunIntervalMs !== undefined) {
+      streamingConfig.vadRunIntervalMs = streamingOpts.vadRunIntervalMs
+    }
+    return streamingConfig
   }
 
   /** Append-only path to the native addon; job lifecycle lives in callers / `_outputCallback`. */
@@ -397,45 +468,11 @@ class TranscriptionWhispercpp {
         this.params = { ...this.params, ...newConfig.whisperConfig }
       }
 
-      const whisperConfig = {
-        ...this.params,
-        ...newConfig.whisperConfig,
-        language: newConfig.whisperConfig?.language || this.params.language || 'en',
-        duration_ms:
-          newConfig.whisperConfig?.duration_ms ??
-          (this.params.max_seconds ? this.params.max_seconds * 1000 : 0),
-        temperature: newConfig.whisperConfig?.temperature ?? this.params.temperature ?? 0.0,
-        suppress_nst: newConfig.whisperConfig?.suppress_nst ?? this.params.suppress_nst ?? true,
-        n_threads: newConfig.whisperConfig?.n_threads ?? this.params.n_threads ?? 0
-      }
-
-      // Remove SDK-level params that aren't valid for C++ addon
-      delete whisperConfig.audio_format
-      delete whisperConfig.contextParams
-      delete whisperConfig.miscConfig
-      delete whisperConfig.vadModelPath
-      delete whisperConfig.vad_params
-      delete whisperConfig.backendsDir
-
-      // VAD model configuration
-      const vadModelPath = this._resolveVadModelPath()
-      if (vadModelPath) {
-        whisperConfig.vad_model_path = vadModelPath
-        whisperConfig.vadParams = newConfig.whisperConfig?.vad_params ||
-          this.params.vad_params || { threshold: 0.6 }
-      }
-
-      const configurationParams = {
-        contextParams: {
-          model: this._config.path || this._getModelFilePath()
-        },
-        whisperConfig,
-        miscConfig: newConfig.miscConfig || {
-          caption_enabled: false
-        },
-        audio_format: newConfig.audio_format || this.params.audio_format || 's16le',
-        backendsDir: this.params.backendsDir || PREBUILDS_DIR
-      }
+      const configurationParams = this._buildConfigurationParams({
+        whisperConfig: newConfig.whisperConfig,
+        miscConfig: newConfig.miscConfig,
+        audio_format: newConfig.audio_format
+      })
 
       _checkParamsExists(configurationParams)
       this._pendingWhisperJobId = null
