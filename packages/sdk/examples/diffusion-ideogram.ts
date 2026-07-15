@@ -20,6 +20,8 @@ function formatMb(bytes: number) {
   return (bytes / 1e6).toFixed(1)
 }
 
+// Ideogram 4 expects a JSON-serialized structured caption with explicit
+// bounding boxes. Plain-text prompts produce degenerate or placeholder output.
 const structuredPrompt = {
   high_level_description:
     'A bright product photo of one yellow coffee mug on a clean office desk with a tiny readable label that says IDEO.',

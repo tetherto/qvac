@@ -164,7 +164,9 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'Unconditional diffusion model — Ideogram 4 only. Requires diffusion mode, ' +
-        'llmModelSrc (Qwen3-VL), and vaeModelSrc.'
+        'llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured ' +
+        'caption with explicit bounding boxes as the generation prompt. Plain-text ' +
+        "prompts produce degenerate output or the model's placeholder response."
     ),
   clipVisionModelSrc: modelSrcInputSchema
     .optional()
