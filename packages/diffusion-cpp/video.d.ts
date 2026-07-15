@@ -197,6 +197,12 @@ export interface VideoRuntimeStats {
   denoiseMs: number
   /** VAE decode phase after denoising, most recent job (ms) */
   vaeMs: number
+  /**
+   * Post-generate work after VAE decode — per-frame PNG fan-out, AVI encode +
+   * audio mux, and output callback — for the most recent job (ms). Completes
+   * the breakdown so conditionerMs + denoiseMs + vaeMs + postProcessMs === generationMs.
+   */
+  postProcessMs: number
   /** Denoising throughput, most recent job (steps per second) */
   stepsPerSecond: number
 }

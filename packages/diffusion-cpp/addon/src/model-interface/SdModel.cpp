@@ -899,6 +899,14 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("vaeMs", phase.vaeMs);
   lastStats_.emplace_back("stepsPerSecond", phase.stepsPerSecond);
 
+  // Post-generate work (PNG encode, optional ESRGAN upscale, output callbacks)
+  // that runs after generate_image() returns but still counts toward
+  // generationMs. Emitting it makes the phase breakdown exhaustive:
+  //   conditionerMs + denoiseMs + vaeMs + postProcessMs == generationMs.
+  const double postProcessMs =
+      std::chrono::duration<double, std::milli>(t1 - tGen).count();
+  lastStats_.emplace_back("postProcessMs", postProcessMs);
+
   // Return empty -- images are already delivered via outputCallback,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
   return std::any{};
@@ -1199,6 +1207,14 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   lastStats_.emplace_back("denoiseMs", phase.denoiseMs);
   lastStats_.emplace_back("vaeMs", phase.vaeMs);
   lastStats_.emplace_back("stepsPerSecond", phase.stepsPerSecond);
+
+  // Post-generate work (per-frame PNG fan-out, AVI encode + audio mux, output
+  // callback) that runs after generate_video() returns but still counts toward
+  // generationMs. Emitting it makes the phase breakdown exhaustive:
+  //   conditionerMs + denoiseMs + vaeMs + postProcessMs == generationMs.
+  const double postProcessMs =
+      std::chrono::duration<double, std::milli>(t1 - tGen).count();
+  lastStats_.emplace_back("postProcessMs", postProcessMs);
 
   return std::any{};
 }

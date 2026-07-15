@@ -146,21 +146,37 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
     // ── Runtime stats (new phase-breakdown fields) ────────────────────────────
     const stats = response.stats
     t.ok(stats, 'stats object is populated')
-    t.ok(typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
-      `conditionerMs is a positive number (got ${stats.conditionerMs})`)
-    t.ok(typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
-      `denoiseMs is a positive number (got ${stats.denoiseMs})`)
-    t.ok(typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
-      `vaeMs is a positive number (got ${stats.vaeMs})`)
-    t.ok(typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
-      `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`)
+    t.ok(
+      typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+      `conditionerMs is a positive number (got ${stats.conditionerMs})`
+    )
+    t.ok(
+      typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+      `denoiseMs is a positive number (got ${stats.denoiseMs})`
+    )
+    t.ok(
+      typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+      `vaeMs is a positive number (got ${stats.vaeMs})`
+    )
+    t.ok(
+      typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
+      `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
+    )
+    t.ok(
+      typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+      `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
+    )
 
-    // Phase times should sum to the total generation time (within ±10% tolerance)
-    const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs
-    const tolerance = stats.generationMs * 0.1
+    // The four phases are exhaustive: conditioner + denoise + vae + postProcess
+    // spans t0..t1, which is exactly generationMs. Only int-rounding of
+    // generationMs and sub-ms jitter clamps separate them, so hold a tight bound.
+    const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
+    const tolerance = Math.max(2, stats.generationMs * 0.01)
     const diff = Math.abs(totalPhaseMs - stats.generationMs)
-    t.ok(diff <= tolerance,
-      `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`)
+    t.ok(
+      diff <= tolerance,
+      `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
+    )
 
     // Save output for CI artifact upload — filename encodes test origin
     // Saved to modelDir so mobile has write permission to the same path

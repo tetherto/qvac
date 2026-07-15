@@ -357,11 +357,12 @@ export interface GenerationParams {
  * across the lifetime of the model instance; per-job fields (generationMs, width,
  * height, seed) reflect only the most recent generation.
  *
- * The per-job phase breakdown (conditionerMs, denoiseMs, vaeMs) splits the most
- * recent generation into its conditioning (text-encode), denoising, and VAE
- * decode phases, and stepsPerSecond is the measured denoising throughput for
- * that job. These are derived from the native progress sequence rather than
- * from the cumulative totals.
+ * The per-job phase breakdown (conditionerMs, denoiseMs, vaeMs, postProcessMs)
+ * splits the most recent generation into its conditioning (text-encode),
+ * denoising, VAE decode, and post-generate (encode/upscale/output) phases;
+ * these four sum to generationMs. stepsPerSecond is the measured denoising
+ * throughput for that job. All are derived from the native progress sequence
+ * rather than from the cumulative totals.
  *
  * Other derivable rates (msPerStep, megapixelsPerSecond) are intentionally
  * omitted — callers can compute them from the primitives provided:
@@ -397,6 +398,12 @@ export interface RuntimeStats {
   denoiseMs: number
   /** VAE decode phase after denoising, most recent job (ms) */
   vaeMs: number
+  /**
+   * Post-generate work after VAE decode — PNG encode, optional ESRGAN upscale,
+   * and output callbacks — for the most recent job (ms). Completes the phase
+   * breakdown so conditionerMs + denoiseMs + vaeMs + postProcessMs === generationMs.
+   */
+  postProcessMs: number
   /** Denoising throughput, most recent job (steps per second) */
   stepsPerSecond: number
 }

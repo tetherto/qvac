@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <any>
 #include <cstdint>
 #include <filesystem>
@@ -143,24 +144,29 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   const double conditionerMs = findStat("conditionerMs");
   const double denoiseMs = findStat("denoiseMs");
   const double vaeMs = findStat("vaeMs");
+  const double postProcessMs = findStat("postProcessMs");
   const double stepsPerSecond = findStat("stepsPerSecond");
 
   EXPECT_GT(conditionerMs, 0.0)
       << "conditionerMs must be positive (text encoding time)";
   EXPECT_GT(denoiseMs, 0.0)
       << "denoiseMs must be positive (10-step denoise time)";
-  EXPECT_GT(vaeMs, 0.0)
-      << "vaeMs must be positive (VAE decode time)";
+  EXPECT_GT(vaeMs, 0.0) << "vaeMs must be positive (VAE decode time)";
+  EXPECT_GE(postProcessMs, 0.0)
+      << "postProcessMs must be non-negative (PNG encode + output time)";
   EXPECT_GT(stepsPerSecond, 0.0)
       << "stepsPerSecond must be positive (should be ~2–4 steps/sec)";
 
-  // Sum of phases should approximately equal the total generation time.
-  // Allow ±10% tolerance for scheduling jitter.
-  const double totalPhaseMs = conditionerMs + denoiseMs + vaeMs;
-  const int64_t generationMsInt = static_cast<int64_t>(findStat("generationMs"));
-  const double tolerance = generationMsInt * 0.1;
+  // The four phases are exhaustive and telescope to t0..t1, which is exactly
+  // generationMs. Only the int cast of generationMs and sub-ms jitter clamps
+  // separate them, so hold a tight bound rather than a loose percentage.
+  const double totalPhaseMs = conditionerMs + denoiseMs + vaeMs + postProcessMs;
+  const int64_t generationMsInt =
+      static_cast<int64_t>(findStat("generationMs"));
+  const double tolerance = std::max(2.0, generationMsInt * 0.01);
   EXPECT_NEAR(totalPhaseMs, generationMsInt, tolerance)
-      << "Phase times should sum to total generation time within 10%: "
+      << "Phase times should sum to total generation time: "
       << "conditioner=" << conditionerMs << " + denoise=" << denoiseMs
-      << " + vae=" << vaeMs << " vs generation=" << generationMsInt;
+      << " + vae=" << vaeMs << " + postProcess=" << postProcessMs
+      << " vs generation=" << generationMsInt;
 }

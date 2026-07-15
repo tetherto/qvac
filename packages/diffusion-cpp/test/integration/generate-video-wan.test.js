@@ -339,21 +339,54 @@ test(
       // ── Runtime stats (new phase-breakdown fields) ────────────────────────
       const stats = response.stats
       t.ok(stats, 'stats object is populated')
-      t.ok(typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
-        `conditionerMs is a positive number (got ${stats.conditionerMs})`)
-      t.ok(typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
-        `denoiseMs is a positive number (got ${stats.denoiseMs})`)
-      t.ok(typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
-        `vaeMs is a positive number (got ${stats.vaeMs})`)
-      t.ok(typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
-        `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`)
+      t.ok(
+        typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+        `conditionerMs is a positive number (got ${stats.conditionerMs})`
+      )
+      t.ok(
+        typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+        `vaeMs is a positive number (got ${stats.vaeMs})`
+      )
+      t.ok(
+        typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
+        `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
+      )
 
-      // Phase times should sum to the total generation time (within ±10% tolerance)
-      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs
-      const tolerance = stats.generationMs * 0.1
+      // denoiseMs and stepsPerSecond need at least one denoise interval, i.e. a
+      // step==0 start tick plus a per-step tick. A 1-step run may emit a single
+      // denoise tick (computePhaseStats then reports 0 for both by design), so
+      // only assert these when the sampler runs more than one step.
+      if (SMOKE_STEPS > 1) {
+        t.ok(
+          typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+          `denoiseMs is a positive number (got ${stats.denoiseMs})`
+        )
+        t.ok(
+          typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+          `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
+        )
+      } else {
+        t.ok(
+          typeof stats.denoiseMs === 'number' && stats.denoiseMs >= 0,
+          `denoiseMs is a non-negative number (got ${stats.denoiseMs})`
+        )
+        t.ok(
+          typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond >= 0,
+          `stepsPerSecond is a non-negative number (got ${stats.stepsPerSecond})`
+        )
+      }
+
+      // The four phases are exhaustive: conditioner + denoise + vae + postProcess
+      // spans t0..t1, which is exactly generationMs (for video, postProcess also
+      // covers per-frame PNG + AVI mux). Only int-rounding and sub-ms jitter
+      // clamps separate them, so hold a tight bound.
+      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
+      const tolerance = Math.max(2, stats.generationMs * 0.01)
       const diff = Math.abs(totalPhaseMs - stats.generationMs)
-      t.ok(diff <= tolerance,
-        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`)
+      t.ok(
+        diff <= tolerance,
+        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
+      )
 
       console.log('\n' + '='.repeat(60))
       console.log('TEST SUMMARY')
