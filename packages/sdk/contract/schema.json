@@ -466,7 +466,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": "string"
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -1415,7 +1428,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": "string"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },

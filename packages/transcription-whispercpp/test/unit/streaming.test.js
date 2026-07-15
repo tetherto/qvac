@@ -334,3 +334,25 @@ test('Second streaming session waits on exclusive queue until first completes', 
 
   await model.cancel()
 })
+
+test('finishStreaming clears the active job and returns to listening', (t) => {
+  const configurationParams = {
+    whisperConfig: { language: 'en' },
+    contextParams: { model: 'ggml-tiny.bin' },
+    miscConfig: { caption_enabled: false }
+  }
+  const addon = new WhisperInterface(
+    new MockedBinding(),
+    configurationParams,
+    () => {},
+    transitionCb
+  )
+
+  addon.startStreaming({ vadModelPath: 'ggml-silero-v5.1.2.bin' })
+  t.is(addon._activeJobId, 1, 'startStreaming should reserve an active job id')
+  t.is(addon._state, 'processing', 'startStreaming should move to processing')
+
+  addon.finishStreaming()
+  t.is(addon._activeJobId, null, 'finishStreaming should clear the active job id')
+  t.is(addon._state, 'listening', 'finishStreaming should return to listening')
+})
