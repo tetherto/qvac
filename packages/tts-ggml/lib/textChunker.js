@@ -112,13 +112,15 @@ function countScalars(s) {
   return [...s].length
 }
 
+const MIN_HARD_SPLIT_SCALARS = 10
+
 /**
  * @param {string} text
  * @param {number} maxScalars
  * @returns {string[]}
  */
 function hardSplitByMaxScalars(text, maxScalars) {
-  if (maxScalars < 10) maxScalars = 10
+  if (maxScalars < MIN_HARD_SPLIT_SCALARS) maxScalars = MIN_HARD_SPLIT_SCALARS
   const g = [...text]
   if (g.length <= maxScalars) return [text]
   const out = []
@@ -160,6 +162,20 @@ function mergeUpToMaxScalars(pieces, maxScalars) {
   return out.filter((s) => s.trim().length > 0)
 }
 
+// Default per-chunk grapheme caps, shared with textStreamAccumulator's buffer
+// sizing. Korean packs more meaning per grapheme, so it flushes shorter chunks.
+const KOREAN_MAX_CHUNK_SCALARS = 120
+const DEFAULT_MAX_CHUNK_SCALARS = 300
+
+/**
+ * @param {string} [language]
+ * @returns {number}
+ */
+function defaultMaxChunkScalars(language) {
+  const lang = (language || 'en').toLowerCase()
+  return lang === 'ko' ? KOREAN_MAX_CHUNK_SCALARS : DEFAULT_MAX_CHUNK_SCALARS
+}
+
 /**
  * Split long text into synthesis-sized chunks for sentence streaming.
  *
@@ -175,7 +191,8 @@ function mergeUpToMaxScalars(pieces, maxScalars) {
 function splitTtsText(text, options = {}) {
   const mergeToMaxScalars = options.mergeToMaxScalars !== false
   const language = (options.language || 'en').toLowerCase()
-  const maxScalars = options.maxScalars != null ? options.maxScalars : language === 'ko' ? 120 : 300
+  const maxScalars =
+    options.maxScalars != null ? options.maxScalars : defaultMaxChunkScalars(language)
 
   const raw = text.trim()
   if (!raw) return []
@@ -215,5 +232,8 @@ module.exports = {
   intlSentenceSegmentationAvailable,
   splitByIntlSentences,
   splitByAsciiAndCjkPunctuation,
-  countScalars
+  countScalars,
+  defaultMaxChunkScalars,
+  KOREAN_MAX_CHUNK_SCALARS,
+  DEFAULT_MAX_CHUNK_SCALARS
 }

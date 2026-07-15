@@ -420,8 +420,15 @@ test('Chatterbox: cfgRate forwards to ttsParams; omitted when unset', (t) => {
   t.is(override._buildTtsParams().cfgRate, 0.7, 'explicit cfgRate forwarded to the addon')
 
   const disabled = new TTSGgml({ files, config: { language: 'en' }, cfgRate: 0 })
-  t.is(disabled._buildTtsParams().cfgRate, 0, 'cfgRate=0 (disable CFG) forwarded as-is, not treated as unset')
+  t.is(
+    disabled._buildTtsParams().cfgRate,
+    0,
+    'cfgRate=0 (disable CFG) forwarded as-is, not treated as unset'
+  )
 
   const defaulted = new TTSGgml({ files, config: { language: 'en' } })
-  t.absent(defaulted._buildTtsParams().cfgRate, 'cfgRate omitted when unset so the engine keeps the model\'s baked rate')
+  t.absent(
+    defaulted._buildTtsParams().cfgRate,
+    "cfgRate omitted when unset so the engine keeps the model's baked rate"
+  )
 })

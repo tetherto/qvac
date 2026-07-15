@@ -3,6 +3,7 @@
 const path = require('bare-path')
 
 const { QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT } = require('./lib/error')
+const { pcmS16ToFloat32, mergeFloat32Chunks } = require('./lib/audio')
 
 const state = Object.freeze({
   LOADING: 'loading',
@@ -106,17 +107,8 @@ class ParakeetInterface {
   }
 
   /**
-   * Per-platform fallback for `backendsDir` when the host didn't pass
-   * one. Mirrors the qvac/packages/llm-llamacpp resolution shape
-   * (`path.join(__dirname, 'prebuilds')`) so a host that already
-   * threads `prebuilds/` through that addon doesn't need to special-
-   * case parakeet. The native addon expects the directory that
-   * directly contains the `lib<prefix>ggml-*.so` files; cmake-bare
-   * installs them under `prebuilds/<bare-target>/<module-name>/`,
-   * but the addon-side `BACKENDS_SUBDIR` compile define joins the
-   * `<bare-target>/<module-name>` shape on its own. Keep this in
-   * sync with the `BACKENDS_SUBDIR_VALUE` derivation in
-   * CMakeLists.txt.
+   * Fall back to `<package_dir>/prebuilds` for `backendsDir` when the
+   * host didn't pass one (see the constructor's `backendsDir` doc).
    * @private
    */
   _applyDefaults(configurationParams) {
@@ -136,8 +128,6 @@ class ParakeetInterface {
 
   _createNativeInstance(configurationParams) {
     this._config = configurationParams
-    // Wrapper job ids are owned in JS, so recreating the native instance only
-    // clears native state and buffered audio.
     this._activeJobId = null
     this._onCancelComplete = null
     this._bufferedAudio = []
@@ -150,46 +140,51 @@ class ParakeetInterface {
     )
   }
 
+  _looksLikeStats(data) {
+    return (
+      !!data &&
+      typeof data === 'object' &&
+      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+    )
+  }
+
+  _looksLikeTranscript(data) {
+    return (
+      Array.isArray(data) || (!!data && typeof data === 'object' && typeof data.text === 'string')
+    )
+  }
+
+  _mapAddonEvent(event, data, isError) {
+    const eventStr = typeof event === 'string' ? event : String(event)
+    if (eventStr === 'Error' || eventStr === 'JobEnded' || eventStr === 'Output') return eventStr
+    if (isError || eventStr.includes('Error')) return 'Error'
+    if (eventStr.includes('RuntimeStats')) return 'JobEnded'
+    if (eventStr.includes('Output')) return 'Output'
+    if (this._looksLikeStats(data)) return 'JobEnded'
+    if (this._looksLikeTranscript(data)) return 'Output'
+    return event
+  }
+
+  _resolvePendingCancel() {
+    if (!this._onCancelComplete) return false
+    const resolve = this._onCancelComplete
+    this._onCancelComplete = null
+    resolve()
+    return true
+  }
+
   _addonOutputCallback(addon, event, data, error) {
     const isError = typeof error === 'string' && error.length > 0
-    const eventStr = typeof event === 'string' ? event : String(event)
-
-    let mappedEvent = event
-    if (eventStr === 'Error' || eventStr === 'JobEnded' || eventStr === 'Output') {
-      mappedEvent = eventStr
-    } else if (isError || eventStr.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (eventStr.includes('RuntimeStats')) {
-      mappedEvent = 'JobEnded'
-    } else if (eventStr.includes('Output')) {
-      mappedEvent = 'Output'
-    } else {
-      const isStats =
-        data &&
-        typeof data === 'object' &&
-        ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
-      const isTranscriptOutput =
-        Array.isArray(data) || (data && typeof data === 'object' && typeof data.text === 'string')
-      if (isStats) mappedEvent = 'JobEnded'
-      else if (isTranscriptOutput) mappedEvent = 'Output'
-    }
-
+    const mappedEvent = this._mapAddonEvent(event, data, isError)
     const isTerminal = mappedEvent === 'Error' || mappedEvent === 'JobEnded'
 
     const jobId = this._activeJobId
     if (jobId === null) {
-      if (isTerminal && this._onCancelComplete) {
-        const resolve = this._onCancelComplete
-        this._onCancelComplete = null
-        resolve()
-      }
+      if (isTerminal) this._resolvePendingCancel()
       return
     }
 
-    if (isTerminal && this._onCancelComplete) {
-      const resolve = this._onCancelComplete
-      this._onCancelComplete = null
-      resolve()
+    if (isTerminal && this._resolvePendingCancel()) {
       return
     }
 
@@ -201,7 +196,7 @@ class ParakeetInterface {
       this._outputCallback(addon, mappedEvent, jobId, data, isError ? error : null)
     }
 
-    if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
+    if (isTerminal) {
       this._activeJobId = null
       this._setState(state.LISTENING)
     }
@@ -268,57 +263,56 @@ class ParakeetInterface {
   async append(data) {
     try {
       if (data?.type === END_OF_INPUT) {
-        const currentJobId = this._nextJobId
-        const input = this._concatBufferedAudio()
-        const previousState = this._state
-        let accepted = false
-        try {
-          accepted = this._binding.runJob(this._handle, {
-            type: 'audio',
-            input
-          })
-        } catch (error) {
-          this._setState(previousState)
-          throw error
-        }
-        if (!accepted) {
-          this._setState(previousState)
-          throw new Error('Cannot set new job: a job is already set or being processed')
-        }
-
-        this._activeJobId = currentJobId
-        this._nextJobId = nextSafeId(this._nextJobId)
-        this._bufferedAudio = []
-        this._bufferedBytes = 0
-        this._setState(state.PROCESSING)
-        return currentJobId
+        return this._submitBufferedJob()
       }
-
       if (data?.type === 'audio') {
-        const normalized = this._normalizeAudioInput(data.data)
-        if (this._bufferedBytes + normalized.byteLength > MAX_BUFFERED_BYTES) {
-          throw createParakeetError(ERR_CODES.BUFFER_LIMIT_EXCEEDED, MAX_BUFFERED_BYTES + ' bytes')
-        }
-        this._bufferedAudio.push(normalized)
-        this._bufferedBytes += normalized.byteLength
-        return this._nextJobId
+        return this._bufferAudioChunk(data.data)
       }
-
       throw new Error(`Unknown append input type: ${data?.type}`)
     } catch (error) {
       throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
     }
   }
 
+  _submitBufferedJob() {
+    const currentJobId = this._nextJobId
+    const input = this._concatBufferedAudio()
+    const previousState = this._state
+    let accepted = false
+    try {
+      accepted = this._binding.runJob(this._handle, { type: 'audio', input })
+    } catch (error) {
+      this._setState(previousState)
+      throw error
+    }
+    if (!accepted) {
+      this._setState(previousState)
+      throw new Error('Cannot set new job: a job is already set or being processed')
+    }
+
+    this._activeJobId = currentJobId
+    this._nextJobId = nextSafeId(this._nextJobId)
+    this._bufferedAudio = []
+    this._bufferedBytes = 0
+    this._setState(state.PROCESSING)
+    return currentJobId
+  }
+
+  _bufferAudioChunk(rawData) {
+    const normalized = this._normalizeAudioInput(rawData)
+    if (this._bufferedBytes + normalized.byteLength > MAX_BUFFERED_BYTES) {
+      throw createParakeetError(ERR_CODES.BUFFER_LIMIT_EXCEEDED, MAX_BUFFERED_BYTES + ' bytes')
+    }
+    this._bufferedAudio.push(normalized)
+    this._bufferedBytes += normalized.byteLength
+    return this._nextJobId
+  }
+
   /**
    * Get current model status (JS-side state-machine value).
    *
-   * NOTE: returns the JavaScript-tracked state of this addon wrapper, not
-   * a native query into inference-addon-cpp -- the framework does
-   * not surface a `status` RPC and `binding.cpp` does not export
-   * `JsInterface::status`. Values reflect transitions driven by this
-   * wrapper itself (`listening` / `processing` / `idle` / `paused` /
-   * `stopped` / `loading`).
+   * NOTE: returns the JS wrapper state, not a native query -- there is no
+   * `status` RPC in inference-addon-cpp.
    * @returns {Promise<string>} - 'loading', 'listening', 'processing', 'idle', 'paused', 'stopped'
    */
   async status() {
@@ -332,10 +326,8 @@ class ParakeetInterface {
   /**
    * Pause processing.
    *
-   * NOTE: JS-side bookkeeping only. Flips the wrapper's state machine to
-   * `'paused'` but does NOT signal the native engine -- there is no
-   * `JsInterface::pause` export. Use `cancel()` (or `stop()`) if you need
-   * the active inference call to actually abort.
+   * NOTE: JS-side bookkeeping only; does not signal the native engine.
+   * Use `cancel()` or `stop()` to actually abort inference.
    * @returns {Promise<void>}
    */
   async pause() {
@@ -574,20 +566,9 @@ class ParakeetInterface {
     try {
       if (this._activeJobId === null) return
       const jobId = this._activeJobId
-      // The native cleanupStreamingSession returns
-      // { cleaned, audioDurationMs, totalSamples } captured right before
-      // the worker thread joined, so the synthetic JobEnded below carries
-      // the actual audio duration / sample count instead of zeros. The
-      // C++ binding reads them off ParakeetStreamingProcessor::audioSeconds
-      // (joined-worker, race-free at this point).
+      // Native teardown returns stats captured before the worker joined.
       const teardown = this._binding.endStreaming(this._handle) || {}
-      // The native StreamingProcessor doesn't emit a synthetic JobEnded
-      // (the addon framework's runtimeStats path is bypassed entirely),
-      // so the JS-side state machine has to mark the job as finished
-      // manually. We pretend a regular JobEnded landed: clear the
-      // active job, push a JobEnded event with the stats we just
-      // recovered so the public TranscriptionParakeet response resolves
-      // with a non-zero `audioDurationMs` / `totalSamples` payload.
+      // Streaming bypasses the runtimeStats path, so emit JobEnded manually.
       this._activeJobId = null
       this._setState(state.LISTENING)
       if (this._outputCallback) {
@@ -629,11 +610,7 @@ class ParakeetInterface {
     }
     if (ArrayBuffer.isView(data)) {
       if (data instanceof Int16Array) {
-        const audio = new Float32Array(data.length)
-        for (let i = 0; i < data.length; i++) {
-          audio[i] = data[i] / 32768.0
-        }
-        return audio
+        return pcmS16ToFloat32(data)
       }
       return new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4))
     }
@@ -650,14 +627,7 @@ class ParakeetInterface {
     if (this._bufferedAudio.length === 1) {
       return this._bufferedAudio[0]
     }
-    const totalLength = this._bufferedAudio.reduce((sum, chunk) => sum + chunk.length, 0)
-    const merged = new Float32Array(totalLength)
-    let offset = 0
-    for (const chunk of this._bufferedAudio) {
-      merged.set(chunk, offset)
-      offset += chunk.length
-    }
-    return merged
+    return mergeFloat32Chunks(this._bufferedAudio)
   }
 }
 
