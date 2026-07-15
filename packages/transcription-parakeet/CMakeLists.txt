@@ -409,6 +409,7 @@ if(BUILD_TESTING)
     add_executable(
         parakeet_tests
         addon/tests/test_core.cpp
+        addon/tests/test_config_and_audio.cpp
         addon/tests/AddonCppTest.cpp
         addon/src/model-interface/parakeet/ParakeetModel.cpp
         addon/src/model-interface/parakeet/ParakeetConfig.cpp

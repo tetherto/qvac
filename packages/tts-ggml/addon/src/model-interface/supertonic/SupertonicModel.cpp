@@ -20,6 +20,7 @@
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
+#include "model-interface/PcmConversion.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml::supertonic {
@@ -54,7 +55,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
-    opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
+    opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
 
@@ -88,16 +89,6 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
 
   detail::applyVulkanPipelineCache(opts, cfg);
   return opts;
-}
-
-std::vector<int16_t> pcmFloatToInt16(const float* pcm, size_t samples) {
-  std::vector<int16_t> out;
-  out.resize(samples);
-  for (size_t i = 0; i < samples; ++i) {
-    float s = std::clamp(pcm[i], -1.0f, 1.0f);
-    out[i] = static_cast<int16_t>(std::lround(s * 32767.0f));
-  }
-  return out;
 }
 
 }
@@ -146,12 +137,12 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
   }
-  // Defense-in-depth: the JS layer (index.js::_validateConfig) runs the
-  // same conflict check before this method is reached, so direct C++
-  // callers are the only ones who can actually trip this branch.
-  // Mirror the Chatterbox suffix verbatim so users see an identical
-  // hint regardless of which engine they instantiated.  `layers != 0`
-  // matches llama.cpp's "-1 = offload all" sentinel convention.
+  // Defense-in-depth: the JS binding runs the same useGPU/nGpuLayers conflict
+  // check before this method is reached, so direct C++ callers are the only
+  // ones who can actually trip this branch. Mirror the Chatterbox suffix
+  // verbatim so users see an identical hint regardless of which engine they
+  // instantiated. `layers != 0` matches llama.cpp's "-1 = offload all"
+  // sentinel convention.
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpuFlag   = *cfg.useGpu;
     const int  layers         = *cfg.nGpuLayers;

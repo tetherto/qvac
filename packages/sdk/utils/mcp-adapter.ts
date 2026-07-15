@@ -16,8 +16,9 @@ export type McpToolsResult = {
 const VALID_TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array'] as const
 
 type ValidType = (typeof VALID_TYPES)[number]
-type PropEntry = { type: ValidType; description?: string; enum?: string[] }
-type PropInput = { type?: unknown; description?: string; enum?: string[] }
+type JsonSchemaEnumValue = string | number | boolean | null
+type PropEntry = { type: ValidType; description?: string; enum?: JsonSchemaEnumValue[] }
+type PropInput = { type?: unknown; description?: string; enum?: JsonSchemaEnumValue[] }
 
 function isValidType(value: unknown): value is ValidType {
   return typeof value === 'string' && VALID_TYPES.includes(value as ValidType)
