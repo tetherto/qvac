@@ -131,6 +131,10 @@ public:
   void stop() final {
     if (state_ != nullptr) {
       state_->stopped = true;
+      if (state_->asyncHandle != nullptr) {
+        // Flush remaining queued events synchronously
+        jsOutputCallback(state_->asyncHandle);
+      }
     }
   }
 
@@ -191,7 +195,7 @@ private:
   static void jsOutputCallback(uv_async_t* handle) try {
     auto& state = *reinterpret_cast<State*>(
         uv_handle_get_data(reinterpret_cast<uv_handle_t*>(handle)));
-    if (state.stopped.load()) {
+    if (state.stopped.load() && state.outputQueue->empty()) {
       return;
     }
     js_handle_scope_t* scope;
@@ -208,8 +212,7 @@ private:
       std::scoped_lock lk{state.mtx};
       outputQueue = std::move(state.outputQueue->clear());
     }
-    for (size_t i = 0; !state.stopped.load() && i < outputQueue.size();
-         i++) {
+    for (size_t i = 0; i < outputQueue.size(); i++) {
       js_handle_scope_t* innerScope;
       JS(js_open_handle_scope(state.env, &innerScope));
       auto scopeCleanup =

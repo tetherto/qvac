@@ -53,6 +53,11 @@ public:
 
   ~OutputQueue() = default;
 
+  bool empty() {
+    std::scoped_lock lk{mtx_};
+    return outputQueue_.empty();
+  }
+
   /// @brief Atomically drains and returns all pending tagged entries.
   std::vector<std::pair<JobId, std::any>> clear() {
     std::scoped_lock lk{mtx_};
