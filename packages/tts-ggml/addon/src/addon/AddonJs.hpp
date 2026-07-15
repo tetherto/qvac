@@ -89,7 +89,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   const EngineType engineType = adapter.readEngineType(configurationParams, env);
 
   unique_ptr<model::IModel> model;
-  int sampleRate = 24000;
+  int sampleRate = chatterbox::kChatterboxNativeSampleRate;
 
   // The output sample rate is baked into the JS output handlers at instance
   // creation. Final-rate precedence:
@@ -113,7 +113,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     sampleRate =
-        outSr > 0 ? outSr : (enhanced ? kLavasrEnhancedSampleRate : 24000);
+        outSr > 0
+            ? outSr
+            : (enhanced ? kLavasrEnhancedSampleRate
+                        : chatterbox::kChatterboxNativeSampleRate);
     model = make_unique<ChatterboxModel>(std::move(cfg));
   }
 

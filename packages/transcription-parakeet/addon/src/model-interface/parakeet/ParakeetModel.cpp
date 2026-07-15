@@ -29,95 +29,107 @@ using namespace qvac_lib_inference_addon_cpp;
 
 namespace {
 
-// Stable numeric mapping from parakeet::Engine::backend_name()
-// to the integer code surfaced on JS as `RuntimeStats.backendId`.
-// Match by prefix because ggml_backend_name() returns indexed strings
-// like "CUDA0" / "Vulkan0" / "MTL0" when multiple GPUs of the same
-// family are present. Keep in sync with index.d.ts BackendId comment.
-//
-// Metal note: ggml-metal at the qvac-parakeet pin (upstream 58c38058)
-// reports the device as `"MTL0"` from `ggml_backend_name()` despite
-// parakeet's own header advertising the name as `"Metal"`. Treat both
-// forms (and any future indexed `MetalN` variant) as the Metal family.
+// backendId family codes surfaced on JS as `RuntimeStats.backendId`; kept
+// in sync with index.d.ts. Device classes for backend_device_ / getBackend
+// DeviceClass().
+enum BackendId {
+  BackendCpu = 0,
+  BackendMetal = 1,
+  BackendCuda = 2,
+  BackendVulkan = 3,
+  BackendOpenCl = 4,
+  BackendOther = 99
+};
+enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1 };
+
+// n_gpu_layers value that offloads every layer to the GPU backend.
+constexpr int OFFLOAD_ALL_LAYERS_TO_GPU = 999;
+
+// Match by prefix: ggml_backend_name() returns indexed strings like "CUDA0"
+// / "Vulkan0" / "MTL0" on multi-GPU hosts. Metal reports as "MTL0" from
+// ggml despite parakeet advertising "Metal", so accept both forms.
 int backendIdFromName(const std::string& name) {
-  if (name == "CPU") return 0;
-  if (name.rfind("Metal",  0) == 0 || name.rfind("MTL", 0) == 0) return 1;
-  if (name.rfind("CUDA",   0) == 0) return 2;
-  if (name.rfind("Vulkan", 0) == 0) return 3;
-  if (name.rfind("OpenCL", 0) == 0) return 4;
-  return 99;
+  if (name == "CPU")
+    return BackendCpu;
+  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
+    return BackendMetal;
+  if (name.rfind("CUDA", 0) == 0)
+    return BackendCuda;
+  if (name.rfind("Vulkan", 0) == 0)
+    return BackendVulkan;
+  if (name.rfind("OpenCL", 0) == 0)
+    return BackendOpenCl;
+  return BackendOther;
 }
 
-// Maps a ggml backend *registry* name (e.g. "CUDA", "Vulkan", "Metal",
-// "OpenCL") to the same numeric family code as backendIdFromName, so the
-// device the engine selected can be matched against the ggml device registry
-// to recover its human-readable description.
+// Maps a ggml backend *registry* name to the same family code so the engine's
+// device can be matched against the ggml device registry for its description.
 int backendIdFromRegName(std::string regName) {
   std::transform(
       regName.begin(), regName.end(), regName.begin(), [](unsigned char c) {
         return std::tolower(c);
       });
   if (regName.rfind("metal", 0) == 0)
-    return 1;
+    return BackendMetal;
   if (regName.rfind("cuda", 0) == 0)
-    return 2;
+    return BackendCuda;
   if (regName.rfind("vulkan", 0) == 0)
-    return 3;
+    return BackendVulkan;
   if (regName.rfind("opencl", 0) == 0)
-    return 4;
-  return 99;
+    return BackendOpenCl;
+  return BackendOther;
 }
 
-// Human-readable description of the active GPU device (e.g.
-// "NVIDIA GeForce RTX 3090", "Apple M2 Pro"), recovered from the ggml device
-// registry after the engine has registered its backends. This is the fallback
-// the perf reporter uses on CI runners where nvidia-smi / procfs are
-// unavailable but the ggml backend (CUDA / Vulkan / Metal) still knows the
-// device name via cudaGetDeviceProperties / VkPhysicalDeviceProperties /
-// MTLDevice.name. Returns "" when the active backend is CPU or no GPU device
-// is registered. Best-effort on a multi-GPU host: prefers the first device
-// whose backend family matches what the engine reported, else the first
-// GPU/IGPU device.
-std::string captureBackendDescription(int backendId, int backendDevice) {
-  if (backendDevice != 1) {
-    return ""; // CPU backend: no GPU hardware name to report.
-  }
+bool isGpuDevice(ggml_backend_dev_t dev) {
+  const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
+  return type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+         type == GGML_BACKEND_DEVICE_TYPE_IGPU;
+}
 
-  ggml_backend_dev_t firstGpu = nullptr;
+std::string deviceDescriptionOrName(ggml_backend_dev_t dev) {
+  const char* desc = ggml_backend_dev_description(dev);
+  if (desc != nullptr && desc[0] != '\0')
+    return desc;
+  const char* name = ggml_backend_dev_name(dev);
+  return (name != nullptr) ? name : "";
+}
+
+int backendIdOfDevice(ggml_backend_dev_t dev) {
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+  return backendIdFromRegName(regName != nullptr ? regName : "");
+}
+
+// Finds the ggml GPU device whose backend family matches backendId, setting
+// firstGpuOut to the first GPU device seen as a fallback.
+ggml_backend_dev_t
+findGpuDeviceForBackend(int backendId, ggml_backend_dev_t& firstGpuOut) {
+  firstGpuOut = nullptr;
   const size_t devCount = ggml_backend_dev_count();
   for (size_t i = 0; i < devCount; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    if (dev == nullptr) {
+    if (dev == nullptr || !isGpuDevice(dev))
       continue;
-    }
-    const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
-    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
-        type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      continue;
-    }
-    if (firstGpu == nullptr) {
-      firstGpu = dev;
-    }
-    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
-    const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
-    if (backendIdFromRegName(regName != nullptr ? regName : "") == backendId) {
-      const char* desc = ggml_backend_dev_description(dev);
-      if (desc != nullptr && desc[0] != '\0') {
-        return desc;
-      }
-      const char* devName = ggml_backend_dev_name(dev);
-      return (devName != nullptr) ? devName : "";
-    }
+    if (firstGpuOut == nullptr)
+      firstGpuOut = dev;
+    if (backendIdOfDevice(dev) == backendId)
+      return dev;
   }
+  return nullptr;
+}
 
-  if (firstGpu != nullptr) {
-    const char* desc = ggml_backend_dev_description(firstGpu);
-    if (desc != nullptr && desc[0] != '\0') {
-      return desc;
-    }
-    const char* devName = ggml_backend_dev_name(firstGpu);
-    return (devName != nullptr) ? devName : "";
-  }
+// Human-readable GPU device name recovered from the ggml device registry;
+// "" on CPU or when no GPU is registered. Prefers the device whose backend
+// family matches the engine, else the first GPU/IGPU device.
+std::string captureBackendDescription(int backendId, int backendDevice) {
+  if (backendDevice != DeviceGpu)
+    return "";
+  ggml_backend_dev_t firstGpu = nullptr;
+  ggml_backend_dev_t matched = findGpuDeviceForBackend(backendId, firstGpu);
+  if (matched != nullptr)
+    return deviceDescriptionOrName(matched);
+  if (firstGpu != nullptr)
+    return deviceDescriptionOrName(firstGpu);
   return "";
 }
 
@@ -143,23 +155,9 @@ int64_t measureMs(Fn&& fn) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  ggml -> qvac-logging bridge
-// ─────────────────────────────────────────────────────────────────────────
-// ggml's metal / vulkan / opencl backends log via fprintf-to-stderr by
-// default, which bypasses the binding's QLOG() pipe and bleeds into
-// example output (`ggml_metal_library_compile_pipeline: ...` lines on
-// every kernel JIT). We install a process-wide ggml log callback that
-// rewrites each line as a QLOG() call so:
-//   - by default (no `setLogger()` from JS), QLOG is a no-op and ggml
-//     stays silent;
-//   - with `--native-logs` (a.k.a. `binding.setLogger(...)`), ggml info
-//     / warning / error lines flow through the same JS logger as the
-//     binding's own messages, prefixed by `[C++ INFO]` etc.
-//
-// Multi-part lines (GGML_LOG_LEVEL_CONT, used e.g. when a metal
-// pipeline compile splits into two prints) are buffered and flushed
-// together so QLOG sees one logical line per ggml line.
+// Routes ggml's stderr logging through the binding's QLOG() pipe so it obeys
+// --native-logs (or stays silent by default). Multi-part CONT lines are
+// buffered and flushed together so QLOG sees one logical line per ggml line.
 
 std::mutex& ggmlLogBufMutex() {
   static std::mutex m;
@@ -185,14 +183,7 @@ logger::Priority ggmlLevelToPriority(ggml_log_level level) {
   }
 }
 
-void ggmlLogTrampoline(ggml_log_level level, const char * text, void * /*user_data*/) {
-  if (!text) return;
-  std::lock_guard<std::mutex> lk(ggmlLogBufMutex());
-  if (level != GGML_LOG_LEVEL_CONT)
-    ggmlLogBufLevel() = level;
-  ggmlLogBuf().append(text);
-  // Flush whole lines as they arrive; ggml emits both `\n`-terminated
-  // strings and bare fragments, so we drain every newline we see.
+void flushCompleteLogLines() {
   for (size_t nl = ggmlLogBuf().find('\n'); nl != std::string::npos;
        nl = ggmlLogBuf().find('\n')) {
     std::string line = ggmlLogBuf().substr(0, nl);
@@ -202,6 +193,17 @@ void ggmlLogTrampoline(ggml_log_level level, const char * text, void * /*user_da
   }
 }
 
+void ggmlLogTrampoline(
+    ggml_log_level level, const char* text, void* /*user_data*/) {
+  if (!text)
+    return;
+  std::lock_guard<std::mutex> lk(ggmlLogBufMutex());
+  if (level != GGML_LOG_LEVEL_CONT)
+    ggmlLogBufLevel() = level;
+  ggmlLogBuf().append(text);
+  flushCompleteLogLines();
+}
+
 void installGgmlLogTrampolineOnce() {
   static std::once_flag once;
   std::call_once(once, [] {
@@ -209,11 +211,147 @@ void installGgmlLogTrampolineOnce() {
   });
 }
 
-} // namespace
+constexpr float PCM_S16_SCALE = 1.0F / 32768.0F;
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Constructor / destructor
-// ─────────────────────────────────────────────────────────────────────────
+float pcmS16ToFloat32(int16_t sample) {
+  return static_cast<float>(sample) * PCM_S16_SCALE;
+}
+
+int16_t readLittleEndianS16(uint8_t lo, uint8_t hi) {
+  return static_cast<int16_t>(lo | (hi << 8));
+}
+
+std::vector<float> decodeS16lePcm(const std::vector<uint8_t>& bytes) {
+  const size_t nSamples = bytes.size() / 2;
+  std::vector<float> out(nSamples);
+  for (size_t i = 0; i < nSamples; ++i) {
+    out[i] =
+        pcmS16ToFloat32(readLittleEndianS16(bytes[i * 2], bytes[i * 2 + 1]));
+  }
+  return out;
+}
+
+std::string formatSpeakerSegment(int speakerId, double startS, double endS) {
+  std::ostringstream os;
+  os << "Speaker " << speakerId << ": "
+     << formatSeconds(static_cast<float>(startS)) << " - "
+     << formatSeconds(static_cast<float>(endS));
+  return os.str();
+}
+
+template <typename Segments>
+std::string formatDiarizationSegments(const Segments& segments) {
+  std::ostringstream os;
+  bool first = true;
+  for (const auto& s : segments) {
+    if (!first)
+      os << "\n";
+    first = false;
+    os << formatSpeakerSegment(s.speaker_id, s.start_s, s.end_s);
+  }
+  return os.str();
+}
+
+Transcript
+makeDiarizationTranscript(const parakeet::StreamingDiarizationSegment& seg) {
+  Transcript t;
+  t.text = formatSpeakerSegment(seg.speaker_id, seg.start_s, seg.end_s);
+  t.start = static_cast<float>(seg.start_s);
+  t.end = static_cast<float>(seg.end_s);
+  t.toAppend = true;
+  return t;
+}
+
+Transcript makeAsrTranscript(const parakeet::StreamingSegment& seg) {
+  Transcript t;
+  t.text = seg.text;
+  t.start = static_cast<float>(seg.start_s);
+  t.end = static_cast<float>(seg.end_s);
+  t.toAppend = true;
+  t.isEndOfTurn = seg.is_eou_boundary;
+  t.startsWord = seg.starts_word;
+  return t;
+}
+
+std::string joinTranscriptText(
+    const std::vector<Transcript>& segments, const char* separator) {
+  std::ostringstream os;
+  for (size_t i = 0; i < segments.size(); ++i) {
+    if (i > 0)
+      os << separator;
+    os << segments[i].text;
+  }
+  return os.str();
+}
+
+parakeet::EngineOptions
+buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
+  parakeet::EngineOptions eopts;
+  eopts.model_gguf_path = ggufPath.string();
+  // n_threads = 0 lets ggml pick hardware_concurrency; maxThreads is honoured
+  // only when explicitly set non-zero.
+  eopts.n_threads = cfg.maxThreads > 0 ? cfg.maxThreads : 0;
+  eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
+  eopts.verbose = false;
+  // Compose the backends-scan dir from the host prebuilds root plus the
+  // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
+  // compile-time search path.
+  if (!cfg.backendsDir.empty()) {
+    fs::path backendsDirPath(cfg.backendsDir);
+#ifdef BACKENDS_SUBDIR
+    backendsDirPath =
+        (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+    eopts.backends_dir = backendsDirPath.string();
+  }
+  // Empty -> leave $GGML_OPENCL_CACHE_DIR alone (Android-only, read once).
+  eopts.opencl_cache_dir = cfg.openclCacheDir;
+  return eopts;
+}
+
+parakeet::SortformerStreamingOptions buildSortformerStreamingOptions(
+    const ParakeetConfig& cfg, int sampleRate, float onset,
+    float minDurationOn) {
+  parakeet::SortformerStreamingOptions opts;
+  opts.sample_rate = sampleRate;
+  opts.chunk_ms = cfg.streamingChunkMs > 0
+                      ? cfg.streamingChunkMs
+                      : ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
+  opts.history_ms = cfg.streamingHistoryMs > 0
+                        ? cfg.streamingHistoryMs
+                        : ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
+  opts.threshold = onset;
+  opts.min_segment_ms = static_cast<int>(minDurationOn * 1000.0F);
+  opts.emit_partials = cfg.streamingEmitPartials;
+  // AOSC (v2.1+ Sortformer only); parakeet-cpp ignores it on v1/v2 GGUFs.
+  opts.spkcache_enable = cfg.streamingSpkCacheEnable;
+  opts.spkcache_len = cfg.streamingSpkCacheLen;
+  opts.fifo_len = cfg.streamingFifoLen;
+  opts.chunk_left_context_ms = cfg.streamingChunkLeftContextMs;
+  opts.chunk_right_context_ms = cfg.streamingChunkRightContextMs;
+  opts.spkcache_update_period = cfg.streamingSpkCacheUpdatePeriod;
+  return opts;
+}
+
+parakeet::StreamingOptions
+buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate) {
+  parakeet::StreamingOptions opts;
+  opts.sample_rate = sampleRate;
+  opts.chunk_ms = cfg.streamingChunkMs > 0
+                      ? cfg.streamingChunkMs
+                      : ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
+  if (cfg.streamingLeftContextMs > 0) {
+    opts.left_context_ms = cfg.streamingLeftContextMs;
+  }
+  if (cfg.streamingRightLookaheadMs >= 0) {
+    opts.right_lookahead_ms = cfg.streamingRightLookaheadMs;
+  }
+  opts.emit_partials = cfg.streamingEmitPartials;
+  opts.enable_energy_vad = cfg.streamingEnergyVad;
+  return opts;
+}
+
+} // namespace
 
 ParakeetModel::ParakeetModel(const ParakeetConfig& config) : cfg_(config) {
   if (cfg_.sampleRate != 0) {
@@ -225,20 +363,12 @@ ParakeetModel::~ParakeetModel() {
   try {
     unload();
   } catch (...) {
-    // destructors must not throw
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Lifecycle
-// ─────────────────────────────────────────────────────────────────────────
-
 void ParakeetModel::initializeBackend() {
-  // Backend init for ggml is handled inside Engine's constructor (which
-  // picks Metal / Vulkan / OpenCL / CPU based on which ggml backends are
-  // compiled in). All we need to do here is route ggml's own log lines
-  // through the binding's QLOG() pipe so they obey --native-logs (or
-  // stay silent by default) instead of bleeding to stderr.
+  // Engine's constructor selects the ggml backend; here we only route ggml's
+  // own log lines through QLOG() so they obey --native-logs.
   installGgmlLogTrampolineOnce();
 }
 
@@ -249,10 +379,8 @@ std::filesystem::path ParakeetModel::writeBufferToTempFile() {
         "ParakeetModel::load: no GGUF bytes received before load()");
   }
 
-  // Generate a per-process unique temp filename. We avoid std::tmpnam
-  // because it's racy + deprecated, and we want a deterministic-ish
-  // suffix so multiple ParakeetModel instances in the same process
-  // don't collide.
+  // Per-process unique temp filename (std::tmpnam is racy/deprecated) so
+  // multiple ParakeetModel instances in one process don't collide.
   const auto pid = static_cast<unsigned long>(std::random_device{}());
   const auto when = std::chrono::steady_clock::now().time_since_epoch().count();
   std::ostringstream name;
@@ -293,6 +421,94 @@ void ParakeetModel::cleanupTempFile() {
   }
 }
 
+std::filesystem::path ParakeetModel::resolveGgufPath() {
+  // Prefer an existing cfg_.modelPath (skips the temp-file copy); otherwise
+  // materialise streamed setWeightsForFile() bytes into a temp file.
+  if (!cfg_.modelPath.empty() && fs::exists(cfg_.modelPath)) {
+    return cfg_.modelPath;
+  }
+  if (gguf_completed_ && !gguf_buffer_.empty()) {
+    gguf_temp_path_ = writeBufferToTempFile();
+    return gguf_temp_path_;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "ParakeetModel::load: no GGUF available "
+      "(no setWeightsForFile() bytes and modelPath is missing or empty)");
+}
+
+void ParakeetModel::detectModelType() {
+  if (!engine_)
+    return;
+  // The engine reports `parakeet.model.type` from GGUF metadata, so callers
+  // don't pass modelType; keep cfg_.modelType only if it's unrecognised.
+  const std::string detected = engine_->model_type();
+  if (detected == "ctc")
+    cfg_.modelType = ModelType::CTC;
+  else if (detected == "tdt")
+    cfg_.modelType = ModelType::TDT;
+  else if (detected == "eou")
+    cfg_.modelType = ModelType::EOU;
+  else if (detected == "sortformer")
+    cfg_.modelType = ModelType::SORTFORMER;
+}
+
+void ParakeetModel::captureBackend() {
+  if (!engine_)
+    return;
+  backend_device_ = engine_->backend_device() == parakeet::BackendDevice::GPU
+                        ? DeviceGpu
+                        : DeviceCpu;
+  backend_name_ = engine_->backend_name();
+  backend_id_ = backendIdFromName(backend_name_);
+  backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
+  backend_description_ =
+      captureBackendDescription(backend_id_, backend_device_);
+
+  QLOG(
+      logger::Priority::INFO,
+      std::string("Parakeet engine loaded; model_type=") +
+          engine_->model_type() + " backend=" + backend_name_ +
+          " (device=" + (backend_device_ == DeviceGpu ? "GPU" : "CPU") +
+          ", id=" + std::to_string(backend_id_) + ", gpu='" +
+          backend_description_ + "')");
+}
+
+void ParakeetModel::warnOnGpuFallback() const {
+  if (cfg_.useGPU && backend_device_ != DeviceGpu &&
+      !backend_gpu_unsupported_) {
+    QLOG(
+        logger::Priority::WARNING,
+        "Parakeet: useGPU=true was requested but the active backend is CPU. "
+        "The platform's GPU backend either isn't compiled in or refused to "
+        "initialise (e.g. missing OpenCL ICD, Adreno-tier policy, simulator "
+        "without Metal). Falling back to CPU.");
+  }
+}
+
+void ParakeetModel::openStreamingSessionOrThrow() {
+  try {
+    openStreamingSession();
+  } catch (const std::exception& e) {
+    QLOG(
+        logger::Priority::ERROR,
+        std::string("Failed to open streaming session: ") + e.what());
+    throw;
+  }
+}
+
+void ParakeetModel::warnOnSampleRateMismatch() const {
+  // The engine's mel preprocessor is hardcoded to 16 kHz, so warn if the
+  // caller asked for anything else.
+  if (sample_rate_ != static_cast<int>(SAMPLE_RATE)) {
+    QLOG(
+        logger::Priority::WARNING,
+        "Parakeet engine assumes 16 kHz audio; cfg.sampleRate=" +
+            std::to_string(sample_rate_) +
+            " will be ignored at the engine boundary");
+  }
+}
+
 void ParakeetModel::load() {
   if (is_loaded_) return;
 
@@ -301,135 +517,24 @@ void ParakeetModel::load() {
            std::to_string(static_cast<int>(cfg_.modelType)) + ")");
 
   modelLoadMs_ = measureMs([&] {
-    fs::path ggufPath;
-
-    // Two ways to source the GGUF:
-    //   1. Caller streamed bytes via setWeightsForFile() -- we materialise
-    //      them to a temp file. This is the path the addon framework
-    //      uses by default.
-    //   2. Caller pre-set `cfg_.modelPath` to an existing GGUF on disk.
-    //      We skip the temp-file dance and load from the path directly.
-    // Prefer cfg_.modelPath when it points at an existing file -- avoids
-    // the temp-file copy entirely. setWeightsForFile() bytes are the
-    // fallback for callers that don't have direct filesystem access.
-    if (!cfg_.modelPath.empty() && fs::exists(cfg_.modelPath)) {
-      ggufPath = cfg_.modelPath;
-    } else if (gguf_completed_ && !gguf_buffer_.empty()) {
-      gguf_temp_path_ = writeBufferToTempFile();
-      ggufPath = gguf_temp_path_;
-    } else {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          "ParakeetModel::load: no GGUF available "
-          "(no setWeightsForFile() bytes and modelPath is missing or empty)");
-    }
-
+    const fs::path ggufPath = resolveGgufPath();
     installGgmlLogTrampolineOnce();
-    parakeet::EngineOptions eopts;
-    eopts.model_gguf_path = ggufPath.string();
-    // n_threads = 0 lets ggml pick hardware_concurrency, matching the
-    // standalone CLI's default. cfg_.maxThreads is honoured only when
-    // explicitly set non-zero.
-    eopts.n_threads       = cfg_.maxThreads > 0 ? cfg_.maxThreads : 0;
-    // Engine picks the GPU backend based on ggml's compile-time backends
-    // when n_gpu_layers > 0; we leave it at 0 for back-compat with the
-    // legacy CPU-only path and bump only when cfg_.useGPU is true.
-    eopts.n_gpu_layers    = cfg_.useGPU ? 999 : 0;
-    eopts.verbose         = false;
-    // Compose the actual backends-scan directory from the host-
-    // provided prebuilds root plus the cmake-bare per-target subdir
-    // (BACKENDS_SUBDIR, e.g. `android-arm64/qvac__transcription-parakeet`).
-    // Mirrors the exact shape qvac/packages/llm-llamacpp uses in
-    // addon/src/model-interface/LlamaLazyInitializeBackend.cpp so a
-    // host that already passes `path.join(__dirname, 'prebuilds')`
-    // gets the same resolution semantics across both addons. Empty
-    // backendsDir -> leave eopts.backends_dir empty so parakeet-cpp
-    // falls back to ggml's compile-time default search path
-    // (`ggml_backend_load_all()` rather than `..._from_path()`).
-    if (!cfg_.backendsDir.empty()) {
-      fs::path backendsDirPath(cfg_.backendsDir);
-#ifdef BACKENDS_SUBDIR
-      backendsDirPath =
-          (backendsDirPath / fs::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-      eopts.backends_dir = backendsDirPath.string();
-    }
-    // Forwarded as-is. Empty string -> leave $GGML_OPENCL_CACHE_DIR
-    // alone (the env-set-by-host path still wins). Only consumed on
-    // Android by parakeet::set_opencl_cache_dir(); other platforms
-    // ignore it. Process-singleton scoped: a second Engine ctor with
-    // a different value is silently ignored on the parakeet-cpp side
-    // because ggml-opencl only reads the env var once at first init.
-    eopts.opencl_cache_dir = cfg_.openclCacheDir;
-
-    {
-      std::lock_guard<std::mutex> lk(engine_mutex_);
-      engine_ = std::make_unique<parakeet::Engine>(eopts);
-    }
+    const parakeet::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
+    std::lock_guard<std::mutex> lk(engine_mutex_);
+    engine_ = std::make_unique<parakeet::Engine>(eopts);
   });
 
   is_loaded_ = true;
-
-  // Auto-detect modelType from the loaded GGUF's metadata. The engine
-  // returns "ctc" / "tdt" / "eou" / "sortformer" reflecting the
-  // `parakeet.model.type` GGUF metadata field, so JS callers don't
-  // need to pass `modelType` themselves -- the binding picks the
-  // right dispatch (ASR vs Sortformer) automatically. We only fall
-  // back to whatever cfg_.modelType the caller passed if the engine
-  // reports something unrecognised.
-  if (engine_) {
-    const std::string detected = engine_->model_type();
-    if (detected == "ctc")        cfg_.modelType = ModelType::CTC;
-    else if (detected == "tdt")   cfg_.modelType = ModelType::TDT;
-    else if (detected == "eou")   cfg_.modelType = ModelType::EOU;
-    else if (detected == "sortformer") cfg_.modelType = ModelType::SORTFORMER;
-
-    backend_device_ =
-        engine_->backend_device() == parakeet::BackendDevice::GPU ? 1 : 0;
-    backend_name_   = engine_->backend_name();
-    backend_id_     = backendIdFromName(backend_name_);
-    backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
-    backend_description_ =
-        captureBackendDescription(backend_id_, backend_device_);
-
-    QLOG(
-        logger::Priority::INFO,
-        std::string("Parakeet engine loaded; model_type=") + detected +
-            " backend=" + backend_name_ +
-            " (device=" + (backend_device_ == 1 ? "GPU" : "CPU") +
-            ", id=" + std::to_string(backend_id_) + ", gpu='" +
-            backend_description_ + "')");
-    if (cfg_.useGPU && backend_device_ != 1 && !backend_gpu_unsupported_) {
-      QLOG(logger::Priority::WARNING,
-           "Parakeet: useGPU=true was requested but the active backend is CPU. "
-           "The platform's GPU backend either isn't compiled in or refused to "
-           "initialise (e.g. missing OpenCL ICD, Adreno-tier policy, simulator "
-           "without Metal). Falling back to CPU.");
-    }
-  }
+  detectModelType();
+  captureBackend();
+  warnOnGpuFallback();
 
   if (cfg_.streaming) {
-    try {
-      openStreamingSession();
-    } catch (const std::exception& e) {
-      QLOG(logger::Priority::ERROR,
-           std::string("Failed to open streaming session: ") + e.what());
-      throw;
-    }
+    openStreamingSessionOrThrow();
   }
 
-  // Best-effort sample-rate sanity check. The engine itself doesn't expose
-  // its mel preprocessor's expected sample rate today (it's hardcoded to
-  // 16 kHz inside qvac-parakeet.cpp), so we just warn if the caller asked
-  // for something else.
-  if (sample_rate_ != static_cast<int>(SAMPLE_RATE)) {
-    QLOG(logger::Priority::WARNING,
-         "Parakeet engine assumes 16 kHz audio; cfg.sampleRate=" +
-             std::to_string(sample_rate_) +
-             " will be ignored at the engine boundary");
-  }
+  warnOnSampleRateMismatch();
 
-  // Free the staging buffer; we kept it only to feed the engine.
   gguf_buffer_.clear();
   gguf_buffer_.shrink_to_fit();
 
@@ -449,12 +554,8 @@ void ParakeetModel::unload() {
 }
 
 void ParakeetModel::reload() {
-  // reload() requires a persistent cfg_.modelPath. unload() clears
-  // gguf_buffer_, so a model originally loaded from a streamed byte
-  // buffer (loadWeights()) without a backing file on disk would fail to
-  // re-open here. The JS layer always writes the bytes to a temp file
-  // before calling load(), so cfg_.modelPath is set in practice; surface
-  // a clear error if a future caller skips that step.
+  // Requires a persistent modelPath: unload() drops the in-memory GGUF
+  // buffer, so a stream-only load has nothing to re-open.
   if (cfg_.modelPath.empty()) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError,
@@ -484,19 +585,9 @@ void ParakeetModel::endOfStream() {
   }
   streaming_finalized_ = true;
 
-  // Drain any segments emitted by finalize() into output_ + on_segment_
-  // so the trailing partial chunk surfaces in the next runtimeStats()
-  // tick / next process() return.
-  std::vector<Transcript> drained;
-  {
-    std::lock_guard<std::mutex> lk(streaming_mutex_);
-    drained.swap(pending_streaming_segments_);
-  }
-  for (auto& seg : drained) {
-    output_.push_back(seg);
-    if (on_segment_) on_segment_(seg);
-    ++totalTranscriptions_;
-  }
+  // Surface segments emitted by finalize() so the trailing partial chunk
+  // reaches the next process() return.
+  emitStreamingSegments(takePendingStreamingSegments());
 }
 
 void ParakeetModel::reset() {
@@ -513,24 +604,17 @@ void ParakeetModel::warmup() {
   try {
     runAsrProcess(silence);
   } catch (...) {
-    // warmup failures are non-fatal
   }
   output_.clear();
   is_warmed_up_ = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Cancellation
-// ─────────────────────────────────────────────────────────────────────────
-
 void ParakeetModel::throwIfCancelled() const {
   const auto active = activeGeneration_.load(std::memory_order_relaxed);
   const auto cancel = cancelGeneration_.load(std::memory_order_relaxed);
   if (active != 0 && cancel >= active) {
-    // The framework's GeneralErrorCode set doesn't include
-    // OperationCanceled; we raise InternalError with the recognised
-    // ERR_JOB_CANCELLED text so isCancellationError() can detect it
-    // upstream.
+    // The framework has no OperationCanceled code, so raise InternalError
+    // with ERR_JOB_CANCELLED text that isCancellationError() recognises.
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InternalError, ERR_JOB_CANCELLED);
   }
@@ -544,17 +628,9 @@ bool ParakeetModel::isCancellationError(const std::exception& e) {
 void ParakeetModel::cancel() const {
   const auto active = activeGeneration_.load(std::memory_order_relaxed);
   cancelGeneration_.store(active, std::memory_order_relaxed);
-  // Streaming sessions own their own cancel() that interrupts any
-  // in-flight feed_pcm_f32. Best-effort -- the JobRunner's framework
-  // also waits for processingSync.
-  //
-  // cancel() is documented as concurrent with process()/unload()/reload(),
-  // and openStreamingSession() / closeStreamingSession() / endOfStream() /
-  // ~ParakeetModel all .reset() the unique_ptrs from another thread.
-  // Snapshot raw pointers under session_mutex_ so we don't race against a
-  // concurrent .reset(); the engine's session-internal cancel() is itself
-  // thread-safe with concurrent feed/finalize, so we can release the lock
-  // before invoking it.
+  // cancel() may race with the open/close/unload lifecycle, so snapshot the
+  // session pointers under session_mutex_ and invoke the engine's own
+  // (thread-safe) cancel() outside the lock.
   parakeet::StreamSession*           asr  = nullptr;
   parakeet::SortformerStreamSession* diar = nullptr;
   {
@@ -566,16 +642,10 @@ void ParakeetModel::cancel() const {
   if (diar) { try { diar->cancel(); } catch (...) {} }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Weight loading
-// ─────────────────────────────────────────────────────────────────────────
-
 void ParakeetModel::set_weights_for_file(const std::string& filename,
                                          std::span<const uint8_t> contents,
                                          bool completed) {
-  // We expect a single GGUF; any other extension is rejected with the
-  // same error code the legacy binding used so JS callers see no shape
-  // change.
+  // Only a single GGUF is accepted; other extensions are rejected.
   const std::string lower = [&] {
     std::string s = filename;
     std::transform(s.begin(), s.end(), s.begin(), ::tolower);
@@ -604,11 +674,7 @@ void ParakeetModel::set_weights_for_file(
     const std::string& filename,
     std::unique_ptr<std::basic_streambuf<char>> streambuf) {
   if (!streambuf) return;
-  // Drain the streambuf without relying on seekg/tellg (which not all
-  // streambuf implementations support; bare's stream wrappers and
-  // simple test fakes both lack seekoff overrides). We read in 64 KiB
-  // chunks until sgetn returns less than the requested size, which
-  // signals EOF.
+  // Drain via sgetn in fixed chunks (not all streambufs support seekg/tellg).
   std::vector<uint8_t> buf;
   std::array<char, 64 * 1024> tmp{};
   while (true) {
@@ -631,10 +697,6 @@ void ParakeetModel::setWeightsForFile(
   set_weights_for_file(filename, std::move(streambuf));
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Static helpers
-// ─────────────────────────────────────────────────────────────────────────
-
 std::vector<float>
 ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
                                    const std::string& audioFormat) {
@@ -643,20 +705,8 @@ ParakeetModel::preprocessAudioData(const std::vector<uint8_t>& audioData,
         qvac_errors::general_error::InvalidArgument,
         "ParakeetModel::preprocessAudioData: only s16le PCM is supported");
   }
-  const size_t nSamples = audioData.size() / 2;
-  std::vector<float> out(nSamples);
-  constexpr float inv = 1.0f / 32768.0f;
-  for (size_t i = 0; i < nSamples; ++i) {
-    const int16_t s = static_cast<int16_t>(
-        audioData[i * 2] | (audioData[i * 2 + 1] << 8));
-    out[i] = static_cast<float>(s) * inv;
-  }
-  return out;
+  return decodeS16lePcm(audioData);
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-//  Engine dispatch
-// ─────────────────────────────────────────────────────────────────────────
 
 std::string ParakeetModel::runAsrProcess(const Input& input) {
   if (input.empty()) return ERR_AUDIO_SHORT;
@@ -672,13 +722,8 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
       engine->transcribe_samples(input.data(),
                                  static_cast<int>(input.size()),
                                  sample_rate_);
-  // Record per-stage timings verbatim from the engine. The earlier
-  // fallback (substitute the entire transcribe_samples wall-clock when
-  // encoder_ms == 0) silently mis-attributed mel + decoder time as
-  // encoder time, inflating the encoder bucket roughly 3-5x on the
-  // first call. Engines that don't report encoder_ms record 0; callers
-  // that need the full-pipeline wall clock can derive it from
-  // melSpecMs_ + encoderMs_ + decoderMs_.
+  // Record per-stage timings verbatim; engines that don't report a stage
+  // record 0 rather than mis-attributing wall-clock across buckets.
   encoderMs_         += static_cast<int64_t>(result.encoder_ms);
   decoderMs_         += static_cast<int64_t>(result.decode_ms);
   melSpecMs_         += static_cast<int64_t>(result.preprocess_ms);
@@ -712,20 +757,8 @@ std::string ParakeetModel::runSortformerProcess(const Input& input) {
 
   if (diar.segments.empty()) return ERR_NO_SPEAKERS;
 
-  std::ostringstream os;
-  for (size_t i = 0; i < diar.segments.size(); ++i) {
-    const auto& s = diar.segments[i];
-    if (i > 0) os << "\n";
-    os << "Speaker " << s.speaker_id << ": "
-       << formatSeconds(static_cast<float>(s.start_s)) << " - "
-       << formatSeconds(static_cast<float>(s.end_s));
-  }
-  return os.str();
+  return formatDiarizationSegments(diar.segments);
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-//  Streaming session lifecycle
-// ─────────────────────────────────────────────────────────────────────────
 
 std::unique_ptr<parakeet::StreamSession> ParakeetModel::createDuplexAsrSession(
     const parakeet::StreamingOptions& opts,
@@ -780,95 +813,71 @@ void ParakeetModel::openStreamingSession() {
   }
 
   if (cfg_.modelType == ModelType::SORTFORMER) {
-    parakeet::SortformerStreamingOptions opts;
-    opts.sample_rate    = sample_rate_;
-    opts.chunk_ms       = cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 2000;
-    opts.history_ms     = cfg_.streamingHistoryMs > 0 ? cfg_.streamingHistoryMs : 30000;
-    opts.threshold      = diarConfig_.onset;
-    opts.min_segment_ms = static_cast<int>(diarConfig_.minDurationOn * 1000.0f);
-    opts.emit_partials  = cfg_.streamingEmitPartials;
-    // AOSC (v2.1+ Sortformer only; ignored for v1/v2 GGUFs). The engine
-    // detects v2.1 via the GGUF metadata tag `parakeet.model_variant` and
-    // only consults these fields then -- safe to forward unconditionally.
-    opts.spkcache_enable = cfg_.streamingSpkCacheEnable;
-    opts.spkcache_len = cfg_.streamingSpkCacheLen;
-    opts.fifo_len = cfg_.streamingFifoLen;
-    opts.chunk_left_context_ms = cfg_.streamingChunkLeftContextMs;
-    opts.chunk_right_context_ms = cfg_.streamingChunkRightContextMs;
-    opts.spkcache_update_period = cfg_.streamingSpkCacheUpdatePeriod;
-
-    auto session = engine->diarize_start(
-        opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
-          // Synthetic terminator (fired on finalize when audio ended on a
-          // chunk boundary): nothing to emit.
-          if (seg.speaker_id < 0)
-            return;
-          Transcript t;
-          std::ostringstream os;
-          os << "Speaker " << seg.speaker_id << ": "
-             << formatSeconds(static_cast<float>(seg.start_s)) << " - "
-             << formatSeconds(static_cast<float>(seg.end_s));
-          t.text     = os.str();
-          t.start    = static_cast<float>(seg.start_s);
-          t.end      = static_cast<float>(seg.end_s);
-          t.toAppend = true;
-          {
-            std::lock_guard<std::mutex> lk(streaming_mutex_);
-            pending_streaming_segments_.push_back(std::move(t));
-          }
-        });
-    {
-      std::lock_guard<std::mutex> lk(session_mutex_);
-      diar_session_ = std::move(session);
-    }
+    openSortformerStreamingSession(*engine);
   } else {
-    if (cfg_.streamingHistoryMs > 0) {
-      QLOG(logger::Priority::WARNING,
-           "streamingHistoryMs is Sortformer-only and is ignored for ASR streaming sessions");
-    }
-    parakeet::StreamingOptions opts;
-    opts.sample_rate    = sample_rate_;
-    // Match the documented default (2000 ms) when the caller leaves
-    // streamingChunkMs at its zero sentinel; the previous 1000 ms fallback
-    // diverged from README / index.d.ts / ParakeetConfig advertisements.
-    opts.chunk_ms       = cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 2000;
-    if (cfg_.streamingLeftContextMs > 0) {
-      opts.left_context_ms = cfg_.streamingLeftContextMs;
-    }
-    if (cfg_.streamingRightLookaheadMs >= 0) {
-      opts.right_lookahead_ms = cfg_.streamingRightLookaheadMs;
-    }
-    opts.emit_partials  = cfg_.streamingEmitPartials;
-    opts.enable_energy_vad = cfg_.streamingEnergyVad;
+    openAsrStreamingSession(*engine);
+  }
+}
 
-    auto session = engine->stream_start(
-        opts, [this](const parakeet::StreamingSegment& seg) {
-          if (seg.text.empty() && !seg.is_eou_boundary)
-            return;
-          Transcript t;
-          t.text        = seg.text;
-          t.start       = static_cast<float>(seg.start_s);
-          t.end         = static_cast<float>(seg.end_s);
-          t.toAppend    = true;
-          t.isEndOfTurn = seg.is_eou_boundary;
-          t.startsWord  = seg.starts_word;
-          {
-            std::lock_guard<std::mutex> lk(streaming_mutex_);
-            pending_streaming_segments_.push_back(std::move(t));
-          }
-        });
-    {
-      std::lock_guard<std::mutex> lk(session_mutex_);
-      asr_session_ = std::move(session);
-    }
+void ParakeetModel::openSortformerStreamingSession(parakeet::Engine& engine) {
+  const parakeet::SortformerStreamingOptions opts =
+      buildSortformerStreamingOptions(
+          cfg_, sample_rate_, diarConfig_.onset, diarConfig_.minDurationOn);
+  auto session = engine.diarize_start(
+      opts, [this](const parakeet::StreamingDiarizationSegment& seg) {
+        // Negative speaker_id is the synthetic finalize terminator.
+        if (seg.speaker_id < 0)
+          return;
+        pushPendingSegment(makeDiarizationTranscript(seg));
+      });
+  std::lock_guard<std::mutex> lk(session_mutex_);
+  diar_session_ = std::move(session);
+}
+
+void ParakeetModel::openAsrStreamingSession(parakeet::Engine& engine) {
+  if (cfg_.streamingHistoryMs > 0) {
+    QLOG(
+        logger::Priority::WARNING,
+        "streamingHistoryMs is Sortformer-only and is ignored for ASR "
+        "streaming sessions");
+  }
+  const parakeet::StreamingOptions opts =
+      buildAsrStreamingOptions(cfg_, sample_rate_);
+  auto session =
+      engine.stream_start(opts, [this](const parakeet::StreamingSegment& seg) {
+        if (seg.text.empty() && !seg.is_eou_boundary)
+          return;
+        pushPendingSegment(makeAsrTranscript(seg));
+      });
+  std::lock_guard<std::mutex> lk(session_mutex_);
+  asr_session_ = std::move(session);
+}
+
+void ParakeetModel::pushPendingSegment(Transcript segment) {
+  std::lock_guard<std::mutex> lk(streaming_mutex_);
+  pending_streaming_segments_.push_back(std::move(segment));
+}
+
+std::vector<Transcript> ParakeetModel::takePendingStreamingSegments() {
+  std::vector<Transcript> drained;
+  std::lock_guard<std::mutex> lk(streaming_mutex_);
+  drained.swap(pending_streaming_segments_);
+  return drained;
+}
+
+void ParakeetModel::emitStreamingSegments(
+    const std::vector<Transcript>& segments) {
+  for (const auto& seg : segments) {
+    output_.push_back(seg);
+    if (on_segment_)
+      on_segment_(seg);
+    ++totalTranscriptions_;
   }
 }
 
 void ParakeetModel::closeStreamingSession() {
-  // Snapshot-and-release pattern: take ownership of the unique_ptrs under
-  // session_mutex_ so a concurrent cancel() can't observe a half-destroyed
-  // session, then run the (potentially blocking) session->cancel() and
-  // ~Session calls outside the lock.
+  // Take ownership of the sessions under session_mutex_ so a concurrent
+  // cancel() can't see a half-destroyed session, then destroy outside it.
   std::unique_ptr<parakeet::StreamSession> asrToDestroy;
   std::unique_ptr<parakeet::SortformerStreamSession> diarToDestroy;
   {
@@ -898,91 +907,38 @@ void ParakeetModel::closeStreamingSession() {
   streaming_finalized_     = false;
 }
 
-std::string ParakeetModel::runStreamingProcess(const Input& input) {
-  if (input.empty()) return ERR_AUDIO_SHORT;
-  if (streaming_finalized_) {
-    QLOG(logger::Priority::WARNING,
-         "process() called after streaming session was finalized; ignoring");
-    return std::string();
-  }
-
-  // The JS append() layer batches every chunk for a job in JS memory and
-  // forwards the concatenated buffer in a single 'end of job' runJob call
-  // (see parakeet.js); the framework's IModel interface has no separate
-  // end-of-stream hook, so process() is invoked exactly once per JS run().
-  // Feed the batch, then immediately finalize the session so
-  // flush_remainder() processes the trailing right_lookahead window. Without
-  // the finalize, ~chunk_ms + right_lookahead_ms of audio (3 s on default
-  // settings) sit in StreamSession::pending and the terminal <EOU> never
-  // reaches eou_decode_window.
-  const int64_t t = measureMs([&] {
+int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
+  // Feed the batch then finalize so flush_remainder() drains the trailing
+  // right_lookahead window (otherwise the terminal <EOU> never surfaces).
+  return measureMs([&] {
     if (cfg_.modelType == ModelType::SORTFORMER) {
       if (diar_session_) {
         diar_session_->feed_pcm_f32(input.data(),
                                     static_cast<int>(input.size()));
-        try { diar_session_->finalize(); } catch (...) {}
+        try {
+          diar_session_->finalize();
+        } catch (...) {
+        }
       }
     } else {
       if (asr_session_) {
         asr_session_->feed_pcm_f32(input.data(),
                                    static_cast<int>(input.size()));
-        try { asr_session_->finalize(); } catch (...) {}
+        try {
+          asr_session_->finalize();
+        } catch (...) {
+        }
       }
     }
   });
-  encoderMs_ += t;
-  streaming_audio_seconds_ +=
-      static_cast<double>(input.size()) / static_cast<double>(sample_rate_);
+}
 
-  // Drain segments collected via the streaming callback during the feed
-  // (and during the finalize() flush above).
-  std::vector<Transcript> drained;
-  {
-    std::lock_guard<std::mutex> lk(streaming_mutex_);
-    drained.swap(pending_streaming_segments_);
-  }
-
-  if (drained.empty()) {
-    return cfg_.modelType == ModelType::SORTFORMER ? ERR_NO_SPEAKERS
-                                                   : ERR_NO_SPEECH;
-  }
-
-  for (auto& seg : drained) {
-    output_.push_back(seg);
-    if (on_segment_) on_segment_(seg);
-    ++totalTranscriptions_;
-  }
-
-  // Concatenate text from drained segments for back-compat with callers
-  // that read process()'s return string directly. Sortformer segments
-  // are already pre-formatted ("Speaker N: ..."); join with newlines so
-  // the JS-side parser keeps working unchanged.
-  std::ostringstream os;
-  const char* sep = (cfg_.modelType == ModelType::SORTFORMER) ? "\n" : " ";
-  for (size_t i = 0; i < drained.size(); ++i) {
-    if (i > 0) os << sep;
-    os << drained[i].text;
-  }
-
-  // The session was finalized above, so feed_pcm_f32 would throw on the
-  // next process() call. Reopen a fresh session for the next job; each JS
-  // run() on this framework path is treated as an independent utterance.
-  //
-  // IMPORTANT (cross-call streaming state): the close+reopen below WIPES
-  // engine-side streaming state that consumers may believe survives across
-  // process() calls -- specifically:
-  //   * Sortformer cross-chunk speaker history (the engine starts over)
-  //   * EOU rolling window / partial decode state for ASR
-  //   * the streaming session's internal sample-position clock
-  // i.e. README / index.d.ts / ParakeetConfig::streaming language about
-  // "preserves speaker IDs across appends" applies to a SINGLE run() call
-  // (which the JS append() layer batches into one process() invocation),
-  // NOT across multiple run() calls on the same model instance. Use the
-  // duplex `runStreaming()` API (ParakeetStreamingProcessor) when you
-  // need a single long-lived session that survives across many append()
-  // batches without resetting -- the duplex path owns its own
-  // parakeet::StreamSession that is never closed mid-flight by the
-  // framework.
+void ParakeetModel::reopenStreamingSession() {
+  // Each framework-path run() is an independent utterance, so the finalized
+  // session is closed and reopened. This WIPES engine-side cross-chunk state
+  // (Sortformer speaker history, EOU window); "preserves state across
+  // appends" holds only within a single run(). Use runStreaming() for a
+  // long-lived session.
   closeStreamingSession();
   try {
     openStreamingSession();
@@ -990,13 +946,37 @@ std::string ParakeetModel::runStreamingProcess(const Input& input) {
     QLOG(logger::Priority::WARNING,
          std::string("Failed to reopen streaming session: ") + e.what());
   }
-
-  return os.str();
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  IModel API
-// ─────────────────────────────────────────────────────────────────────────
+std::string ParakeetModel::runStreamingProcess(const Input& input) {
+  if (input.empty())
+    return ERR_AUDIO_SHORT;
+  if (streaming_finalized_) {
+    QLOG(
+        logger::Priority::WARNING,
+        "process() called after streaming session was finalized; ignoring");
+    return std::string();
+  }
+
+  encoderMs_ += feedStreamingChunk(input);
+  streaming_audio_seconds_ +=
+      static_cast<double>(input.size()) / static_cast<double>(sample_rate_);
+
+  std::vector<Transcript> drained = takePendingStreamingSegments();
+  if (drained.empty()) {
+    return cfg_.modelType == ModelType::SORTFORMER ? ERR_NO_SPEAKERS
+                                                   : ERR_NO_SPEECH;
+  }
+
+  emitStreamingSegments(drained);
+  // Sortformer segments are pre-formatted ("Speaker N: ..."); join with
+  // newlines so the JS parser keeps working. ASR joins with spaces.
+  const char* separator = isSortformer() ? "\n" : " ";
+  std::string joined = joinTranscriptText(drained, separator);
+
+  reopenStreamingSession();
+  return joined;
+}
 
 void ParakeetModel::process(const Input& input) {
   throwIfCancelled();
@@ -1026,9 +1006,8 @@ void ParakeetModel::process(const Input& input) {
           (cfg_.modelType == ModelType::SORTFORMER ? diar_session_ != nullptr
                                                    : asr_session_ != nullptr);
       if (cfg_.streaming && hasSession) {
-        // runStreamingProcess drains the per-segment callback queue
-        // straight into output_ + on_segment_, so we must skip the
-        // legacy single-Transcript push below.
+        // runStreamingProcess already pushes per-segment Transcripts, so
+        // skip the single-Transcript push below.
         text = runStreamingProcess(input);
         streamed = true;
       } else if (cfg_.modelType == ModelType::SORTFORMER) {
@@ -1048,11 +1027,8 @@ void ParakeetModel::process(const Input& input) {
   processed_time_ += duration;
 
   if (streamed) {
-    // Streaming path already pushed per-segment Transcripts during
-    // runStreamingProcess's drain. If the engine emitted nothing at
-    // all for this chunk (silence sentinel), emit a single placeholder
-    // so the JS side still gets one Output per process() with an
-    // unambiguous "no speech" signal -- matches legacy behaviour.
+    // On a silence sentinel the streaming drain emitted nothing, so push a
+    // single "no speech" placeholder to keep one Output per process().
     if (text.empty() || isSentinel(text)) {
       Transcript transcript;
       transcript.text     = text.empty() ? ERR_NO_SPEECH : text;
@@ -1122,16 +1098,13 @@ std::string ParakeetModel::getName() const {
 }
 
 RuntimeStats ParakeetModel::runtimeStats() const {
-  // RuntimeStats is a `vector<pair<string, variant<double, int64_t>>>` --
-  // a flat key/value list.
   RuntimeStats stats;
   stats.emplace_back("processCalls",        static_cast<int64_t>(processCalls_));
   stats.emplace_back("totalSamples",        static_cast<int64_t>(totalSamples_));
   stats.emplace_back("totalTokens",         static_cast<int64_t>(totalTokens_));
   stats.emplace_back("totalTranscriptions", static_cast<int64_t>(totalTranscriptions_));
   stats.emplace_back("totalWallMs",         static_cast<int64_t>(totalWallMs_));
-  // Legacy alias of totalWallMs; the addon-cpp output handlers and
-  // AddonCppTest expect this key by name.
+  // Legacy alias of totalWallMs; addon-cpp output handlers expect this key.
   stats.emplace_back("totalTime",           static_cast<int64_t>(totalWallMs_));
   stats.emplace_back("modelLoadMs",         static_cast<int64_t>(modelLoadMs_));
   stats.emplace_back("encoderMs",           static_cast<int64_t>(encoderMs_));
@@ -1139,12 +1112,8 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("melSpecMs",           static_cast<int64_t>(melSpecMs_));
   stats.emplace_back("totalEncodedFrames",  static_cast<int64_t>(totalEncodedFrames_));
 
-  // Active backend, captured once at load() and stable for the
-  // lifetime of the model. `backendDevice` is the post-fallback
-  // device class (0 = CPU, 1 = GPU); `backendId` identifies which
-  // GPU backend is engaged (see backendIdFromName above for the
-  // mapping). Both are int64 to fit RuntimeStats's variant; the JS
-  // side reads them from runtimeStats() (a.k.a. response.stats).
+  // Active backend captured at load(): backendDevice is the device class
+  // (0 = CPU, 1 = GPU); backendId identifies the GPU backend family.
   stats.emplace_back("backendDevice",       static_cast<int64_t>(backend_device_));
   stats.emplace_back("backendId",           static_cast<int64_t>(backend_id_));
   stats.emplace_back(
