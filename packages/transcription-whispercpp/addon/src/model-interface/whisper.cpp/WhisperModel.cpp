@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <mutex>
@@ -34,6 +35,11 @@ constexpr unsigned int K_BYTE_SHIFT_8 = 8U;
 constexpr unsigned int K_BYTE_SHIFT_16 = 16U;
 constexpr unsigned int K_BYTE_SHIFT_24 = 24U;
 constexpr float K_S16_NORMALIZATION_DIVISOR = 32768.0F;
+
+// Legacy inter-segment yield on the inference thread, present since the initial
+// monorepo import with no documented rationale. Preserved verbatim rather than
+// removed to avoid an unverified runtime behavior change.
+constexpr std::chrono::milliseconds K_SEGMENT_EMIT_YIELD{1};
 } // namespace
 
 static bool shouldAbortWhisper(void* userData) {
@@ -104,25 +110,20 @@ void ensureBackendsLoadedAndroid(const std::string& backendsDir) {
 #endif // __ANDROID__
 
 namespace {
-// Return the index, within whisper_backend_init_gpu()'s *filtered* GPU/IGPU
-// device list, of a registered *Adreno* OpenCL device — or -1 if none.
-//
-// This is the Adreno guard. On Adreno (Android) ggml registers BOTH a Vulkan
-// device and an OpenCL device for the same physical GPU, and
-// ggml_backend_load_all_from_path() loads Vulkan *before* OpenCL
-// (ggml-backend-reg.cpp), so whisper_backend_init_gpu()'s default
-// (gpu_device=0) lands on the Vulkan device — whose Adreno driver SIGSEGVs in
-// vkCmdBindPipeline during ggml compute. Steering to the Adreno OpenCL device
-// avoids that.
-//
-// Selection mirrors llm-llamacpp's BackendSelection gate (`isOpenCl &&
-// isAdreno`, see packages/llm-llamacpp/addon/src/utils/BackendSelection.cpp):
-// the device's backend must be OpenCL AND its description must be an Adreno
-// GPU. Gating on the Adreno *description* (not merely "some OpenCL device
-// exists") keeps Mali on Vulkan even if a Mali/Intel OpenCL ICD ever
-// enumerates, and leaves desktop (Metal / discrete Vulkan) untouched —
-// returning -1 there so the default selection stands.
-int adrenoOpenclGpuDeviceIndex() {
+std::string toLowerCopy(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return value;
+}
+
+// Walk the ggml device registry in registration order and invoke `visit` with
+// each GPU/IGPU device and its position in the *filtered* GPU/IGPU list. Both
+// GPU and IGPU are included because ggml-vulkan reports integrated GPUs (Mali,
+// Adreno-via-Vulkan, Intel iGPU) as IGPU; skipping them would hide real GPU
+// execution. `visit` returns true to stop the walk early.
+void forEachGpuDevice(
+    const std::function<bool(int, ggml_backend_dev_t)>& visit) {
   const size_t devCount = ggml_backend_dev_count();
   int filteredIdx = 0;
   for (size_t i = 0; i < devCount; ++i) {
@@ -135,29 +136,66 @@ int adrenoOpenclGpuDeviceIndex() {
         devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
       continue;
     }
-    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
-    const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
-    const char* devDesc = ggml_backend_dev_description(dev);
-    std::string regNameLower = (regName != nullptr) ? regName : "";
-    std::string devDescLower = (devDesc != nullptr) ? devDesc : "";
-    std::transform(
-        regNameLower.begin(),
-        regNameLower.end(),
-        regNameLower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-    std::transform(
-        devDescLower.begin(),
-        devDescLower.end(),
-        devDescLower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-    const bool isOpenCl = regNameLower.find("opencl") != std::string::npos;
-    const bool isAdreno = devDescLower.find("adreno") != std::string::npos;
-    if (isOpenCl && isAdreno) {
-      return filteredIdx;
+    if (visit(filteredIdx, dev)) {
+      return;
     }
     ++filteredIdx;
   }
-  return -1;
+}
+
+// Return the GPU/IGPU device at `index` in the filtered list, matching the
+// indexing whisper_backend_init_gpu() applies to `gpu_device`, or nullptr.
+ggml_backend_dev_t nthGpuDevice(int index) {
+  ggml_backend_dev_t match = nullptr;
+  forEachGpuDevice([&](int filteredIdx, ggml_backend_dev_t dev) {
+    if (filteredIdx != index) {
+      return false;
+    }
+    match = dev;
+    return true;
+  });
+  return match;
+}
+
+// A device is the Adreno OpenCL GPU when its backend is OpenCL AND its
+// description names an Adreno GPU. Gating on the Adreno *description* (not
+// merely "some OpenCL device exists") keeps Mali on Vulkan even if a
+// Mali/Intel OpenCL ICD ever enumerates, and leaves desktop (Metal / discrete
+// Vulkan) untouched. Mirrors llm-llamacpp's BackendSelection gate (see
+// packages/llm-llamacpp/addon/src/utils/BackendSelection.cpp).
+bool isAdrenoOpenclDevice(ggml_backend_dev_t dev) {
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regName = (reg != nullptr) ? ggml_backend_reg_name(reg) : "";
+  const char* devDesc = ggml_backend_dev_description(dev);
+  const std::string regNameLower =
+      toLowerCopy(regName != nullptr ? regName : "");
+  const std::string devDescLower =
+      toLowerCopy(devDesc != nullptr ? devDesc : "");
+  const bool isOpenCl = regNameLower.find("opencl") != std::string::npos;
+  const bool isAdreno = devDescLower.find("adreno") != std::string::npos;
+  return isOpenCl && isAdreno;
+}
+
+// Return the filtered GPU/IGPU index of a registered Adreno OpenCL device, or
+// -1 if none.
+//
+// This is the Adreno guard. On Adreno (Android) ggml registers BOTH a Vulkan
+// device and an OpenCL device for the same physical GPU, and
+// ggml_backend_load_all_from_path() loads Vulkan *before* OpenCL
+// (ggml-backend-reg.cpp), so whisper_backend_init_gpu()'s default
+// (gpu_device=0) lands on the Vulkan device — whose Adreno driver SIGSEGVs in
+// vkCmdBindPipeline during ggml compute. Steering to the Adreno OpenCL device
+// avoids that.
+int adrenoOpenclGpuDeviceIndex() {
+  int adrenoIndex = -1;
+  forEachGpuDevice([&](int filteredIdx, ggml_backend_dev_t dev) {
+    if (!isAdrenoOpenclDevice(dev)) {
+      return false;
+    }
+    adrenoIndex = filteredIdx;
+    return true;
+  });
+  return adrenoIndex;
 }
 } // namespace
 
@@ -334,37 +372,11 @@ void WhisperModel::captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex) {
     return;
   }
 
-  // Mirror whisper_backend_init_gpu() (src/whisper.cpp) EXACTLY so the
-  // backend we report is the one whisper actually initialised against:
-  //  - walk devices in ggml registry order,
-  //  - consider BOTH GGML_BACKEND_DEVICE_TYPE_GPU and _IGPU. This is
-  //    essential: ggml-vulkan reports *integrated* GPUs (Mali,
-  //    Adreno-via-Vulkan, Intel iGPU) as IGPU, while ggml-opencl /
-  //    ggml-metal / ggml-cuda report GPU. Skipping IGPU would make
-  //    every Vulkan-on-mobile device (e.g. Pixel/Mali) look like a CPU
-  //    fallback even though whisper is running on the GPU.
-  //  - `gpu_device` is an index into the *filtered* GPU/IGPU list (not
-  //    a raw ggml_backend_dev_get index), matching whisper's `cnt`.
-  ggml_backend_dev_t dev = nullptr;
-  int cnt = 0;
-  const size_t devCount = ggml_backend_dev_count();
-  for (size_t i = 0; i < devCount; ++i) {
-    ggml_backend_dev_t candidate = ggml_backend_dev_get(i);
-    if (candidate == nullptr) {
-      continue;
-    }
-    const enum ggml_backend_dev_type devType = ggml_backend_dev_type(candidate);
-    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
-        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      continue;
-    }
-    if (cnt == gpuDeviceIndex) {
-      dev = candidate;
-    }
-    if (++cnt > gpuDeviceIndex) {
-      break;
-    }
-  }
+  // Resolve the device whisper actually initialised against:
+  // whisper_backend_init_gpu() (src/whisper.cpp) treats `gpu_device` as an
+  // index into the filtered GPU/IGPU list, so nthGpuDevice() must use the same
+  // filtering to report the backend whisper really picked.
+  ggml_backend_dev_t dev = nthGpuDevice(gpuDeviceIndex);
 
   if (dev == nullptr) {
     // Parity with parakeet's CPU-fallback WARNING (see
@@ -390,12 +402,8 @@ void WhisperModel::captureActiveBackendInfo(bool useGpu, int gpuDeviceIndex) {
   const char* devName = ggml_backend_dev_name(dev);
   const char* devDesc = ggml_backend_dev_description(dev);
 
-  std::string regNameLower = (regName != nullptr) ? regName : "";
-  std::transform(
-      regNameLower.begin(),
-      regNameLower.end(),
-      regNameLower.begin(),
-      [](unsigned char c) { return std::tolower(c); });
+  const std::string regNameLower =
+      toLowerCopy(regName != nullptr ? regName : "");
 
   backend_device_ = 1;
   backend_id_ = backendIdFromRegName(regNameLower);
@@ -517,7 +525,7 @@ static void onNewSegment(
     }
 
     whisper->emitSegment(transcript);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::this_thread::sleep_for(K_SEGMENT_EMIT_YIELD);
     whisper->addTranscription(transcript);
 
     // Stats: count tokens/segments as they are emitted
@@ -748,60 +756,68 @@ void WhisperModel::setConfig(const WhisperConfig& config) {
   }
 }
 
+namespace {
+std::vector<float> decodeF32le(const std::vector<uint8_t>& audioData) {
+  if ((audioData.size() % K_F32_SAMPLE_BYTES) != 0) {
+    throw qvac_errors::whisper_error::makeStatus(
+        qvac_errors::whisper_error::Code::MisalignedBuffer,
+        "f32le buffer length must be a multiple of 4");
+  }
+  std::vector<float> samples;
+  samples.reserve(audioData.size() / K_F32_SAMPLE_BYTES);
+  for (std::size_t i = 0; i < audioData.size(); i += K_F32_SAMPLE_BYTES) {
+    const auto bits =
+        static_cast<uint32_t>(audioData.at(i)) |
+        (static_cast<uint32_t>(audioData.at(i + 1)) << K_BYTE_SHIFT_8) |
+        (static_cast<uint32_t>(audioData.at(i + 2)) << K_BYTE_SHIFT_16) |
+        (static_cast<uint32_t>(audioData.at(i + 3)) << K_BYTE_SHIFT_24);
+    float sample = 0.0F;
+    std::memcpy(&sample, &bits, sizeof(sample));
+    if (!std::isfinite(sample)) {
+      throw qvac_errors::whisper_error::makeStatus(
+          qvac_errors::whisper_error::Code::NonFiniteSample,
+          "Encountered non-finite f32 sample");
+    }
+    samples.push_back(sample);
+  }
+  return samples;
+}
+
+std::vector<float> decodeS16le(const std::vector<uint8_t>& audioData) {
+  if ((audioData.size() % K_S16_SAMPLE_BYTES) != 0) {
+    throw qvac_errors::whisper_error::makeStatus(
+        qvac_errors::whisper_error::Code::MisalignedBuffer,
+        "s16le buffer length must be a multiple of 2");
+  }
+  std::vector<float> samples;
+  samples.reserve(audioData.size() / K_S16_SAMPLE_BYTES);
+  for (std::size_t i = 0; i < audioData.size(); i += K_S16_SAMPLE_BYTES) {
+    const auto lowByte = static_cast<uint16_t>(audioData.at(i));
+    const auto highByte = static_cast<uint16_t>(audioData.at(i + 1));
+    const auto bits = static_cast<uint16_t>(
+        lowByte | static_cast<uint16_t>(highByte << K_BYTE_SHIFT_8));
+    const auto sample = static_cast<int16_t>(bits);
+    samples.push_back(
+        static_cast<float>(sample) / K_S16_NORMALIZATION_DIVISOR);
+  }
+  return samples;
+}
+} // namespace
+
 std::vector<float> WhisperModel::preprocessAudioData(
     const std::vector<uint8_t>& audioData, const std::string& audioFormat) {
-  std::vector<float> samples;
   if (audioData.empty()) {
-    return samples;
+    return {};
   }
-
   if (audioFormat == "f32le" || audioFormat == "decoded") {
-    if ((audioData.size() % K_F32_SAMPLE_BYTES) != 0) {
-      throw qvac_errors::whisper_error::makeStatus(
-          qvac_errors::whisper_error::Code::MisalignedBuffer,
-          "f32le buffer length must be a multiple of 4");
-    }
-    samples.reserve(audioData.size() / K_F32_SAMPLE_BYTES);
-
-    for (std::size_t i = 0; i < audioData.size(); i += K_F32_SAMPLE_BYTES) {
-      const auto bits =
-          static_cast<uint32_t>(audioData.at(i)) |
-          (static_cast<uint32_t>(audioData.at(i + 1)) << K_BYTE_SHIFT_8) |
-          (static_cast<uint32_t>(audioData.at(i + 2)) << K_BYTE_SHIFT_16) |
-          (static_cast<uint32_t>(audioData.at(i + 3)) << K_BYTE_SHIFT_24);
-      float sample = 0.0F;
-      std::memcpy(&sample, &bits, sizeof(sample));
-      if (!std::isfinite(sample)) {
-        throw qvac_errors::whisper_error::makeStatus(
-            qvac_errors::whisper_error::Code::NonFiniteSample,
-            "Encountered non-finite f32 sample");
-      }
-      samples.push_back(sample);
-    }
-  } else if (audioFormat == "s16le") {
-    if ((audioData.size() % K_S16_SAMPLE_BYTES) != 0) {
-      throw qvac_errors::whisper_error::makeStatus(
-          qvac_errors::whisper_error::Code::MisalignedBuffer,
-          "s16le buffer length must be a multiple of 2");
-    }
-    samples.reserve(audioData.size() / K_S16_SAMPLE_BYTES);
-
-    for (std::size_t i = 0; i < audioData.size(); i += K_S16_SAMPLE_BYTES) {
-      const auto lowByte = static_cast<uint16_t>(audioData.at(i));
-      const auto highByte = static_cast<uint16_t>(audioData.at(i + 1));
-      const auto bits = static_cast<uint16_t>(
-          lowByte | static_cast<uint16_t>(highByte << K_BYTE_SHIFT_8));
-      const auto sample = static_cast<int16_t>(bits);
-      samples.push_back(
-          static_cast<float>(sample) / K_S16_NORMALIZATION_DIVISOR);
-    }
-  } else {
-    throw qvac_errors::whisper_error::makeStatus(
-        qvac_errors::whisper_error::Code::UnsupportedAudioFormat,
-        std::string("Unsupported audio_format: ") + audioFormat);
+    return decodeF32le(audioData);
   }
-
-  return samples;
+  if (audioFormat == "s16le") {
+    return decodeS16le(audioData);
+  }
+  throw qvac_errors::whisper_error::makeStatus(
+      qvac_errors::whisper_error::Code::UnsupportedAudioFormat,
+      std::string("Unsupported audio_format: ") + audioFormat);
 }
 
 } // namespace qvac_lib_inference_addon_whisper

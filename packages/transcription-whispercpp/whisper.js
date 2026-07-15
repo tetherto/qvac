@@ -19,6 +19,57 @@ function nextSafeId(current) {
 // 500 MB — ~2.7 hours of 16 kHz s16le mono audio
 const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
 
+function isErrorString(error) {
+  return typeof error === 'string' && error.length > 0
+}
+
+function isStatsPayload(data) {
+  return (
+    Boolean(data) &&
+    typeof data === 'object' &&
+    ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+  )
+}
+
+function isVadPayload(data) {
+  return Boolean(data) && typeof data === 'object' && data.type === 'vad'
+}
+
+function isEndOfTurnPayload(data) {
+  return Boolean(data) && typeof data === 'object' && data.type === 'endOfTurn'
+}
+
+function isTranscriptPayload(data) {
+  return (
+    (Array.isArray(data) && data.length > 0) ||
+    (Boolean(data) && typeof data === 'object' && typeof data.text === 'string')
+  )
+}
+
+// Normalizes a raw addon callback into an event name, or null when the payload
+// is a no-op empty result that must not be forwarded.
+function classifyEvent(event, data, error) {
+  if (isVadPayload(data)) {
+    return 'VadState'
+  }
+  if (isEndOfTurnPayload(data)) {
+    return 'EndOfTurn'
+  }
+  if (event === 'Error' || isErrorString(error) || String(event).includes('Error')) {
+    return 'Error'
+  }
+  if (event === 'JobEnded' || isStatsPayload(data) || String(event).includes('RuntimeStats')) {
+    return 'JobEnded'
+  }
+  if (event === 'Output' || isTranscriptPayload(data)) {
+    return 'Output'
+  }
+  if (Array.isArray(data) && data.length === 0) {
+    return null
+  }
+  return event
+}
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -59,31 +110,8 @@ class WhisperInterface {
   }
 
   _addonOutputCallback(addon, event, data, error) {
-    const isError = typeof error === 'string' && error.length > 0
-    const isStats =
-      data &&
-      typeof data === 'object' &&
-      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
-    const isTranscriptOutput =
-      (Array.isArray(data) && data.length > 0) ||
-      (data && typeof data === 'object' && typeof data.text === 'string')
-    const isVadEvent = data && typeof data === 'object' && data.type === 'vad'
-    const isEndOfTurnEvent = data && typeof data === 'object' && data.type === 'endOfTurn'
-
-    let mappedEvent = event
-    if (isVadEvent) {
-      mappedEvent = 'VadState'
-    } else if (isEndOfTurnEvent) {
-      mappedEvent = 'EndOfTurn'
-    } else if (event === 'Error' || isError || String(event).includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
-      mappedEvent = 'JobEnded'
-    } else if (event === 'Output' || isTranscriptOutput) {
-      mappedEvent = 'Output'
-    } else if (Array.isArray(data) && data.length === 0) {
-      // WhisperModel::process returns an empty vector to avoid duplicate
-      // segment emissions; skip forwarding this noop event.
+    const mappedEvent = classifyEvent(event, data, error)
+    if (mappedEvent === null) {
       return
     }
 
@@ -94,26 +122,14 @@ class WhisperInterface {
 
     if (mappedEvent === 'Output') {
       this._setState(state.PROCESSING)
-      if (this._outputCb != null) {
-        const isTranscriptArray =
-          Array.isArray(data) && data.length > 0 && typeof data[0]?.text === 'string'
-        const isSingleTranscript =
-          !Array.isArray(data) && data && typeof data === 'object' && typeof data.text === 'string'
-        if (isTranscriptArray) {
-          for (const segment of data) {
-            this._outputCb(addon, 'Output', jobId, [segment], null)
-          }
-        } else if (isSingleTranscript) {
-          this._outputCb(addon, 'Output', jobId, [data], null)
-        } else {
-          this._outputCb(addon, 'Output', jobId, data, null)
-        }
+      if (this._outputCb) {
+        this._emitTranscript(addon, jobId, data)
       }
       return
     }
 
-    if (this._outputCb != null) {
-      this._outputCb(addon, mappedEvent, jobId, data, isError ? error : null)
+    if (this._outputCb) {
+      this._outputCb(addon, mappedEvent, jobId, data, isErrorString(error) ? error : null)
     }
 
     if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
@@ -122,8 +138,33 @@ class WhisperInterface {
     }
   }
 
+  _emitTranscript(addon, jobId, data) {
+    const isTranscriptArray =
+      Array.isArray(data) && data.length > 0 && typeof data[0]?.text === 'string'
+    const isSingleTranscript =
+      !Array.isArray(data) &&
+      Boolean(data) &&
+      typeof data === 'object' &&
+      typeof data.text === 'string'
+    if (isTranscriptArray) {
+      this._emitSegments(addon, jobId, data)
+      return
+    }
+    if (isSingleTranscript) {
+      this._outputCb(addon, 'Output', jobId, [data], null)
+      return
+    }
+    this._outputCb(addon, 'Output', jobId, data, null)
+  }
+
+  _emitSegments(addon, jobId, segments) {
+    for (const segment of segments) {
+      this._outputCb(addon, 'Output', jobId, [segment], null)
+    }
+  }
+
   _emitSyntheticError(jobId, error) {
-    if (this._outputCb == null) {
+    if (!this._outputCb) {
       return
     }
     this._outputCb(this, 'Error', jobId, undefined, error)
@@ -475,6 +516,16 @@ class WhisperInterface {
         cause: err
       })
     }
+  }
+
+  /**
+   * Finalize a streaming run once its response has settled: clear the active
+   * job and return to LISTENING. Exposed so the SDK layer can reset streaming
+   * state without reaching into private fields.
+   */
+  finishStreaming() {
+    this._activeJobId = null
+    this._setState(state.LISTENING)
   }
 
   _concatBufferedAudio() {
