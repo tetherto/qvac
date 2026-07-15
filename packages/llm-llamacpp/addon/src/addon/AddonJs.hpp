@@ -4,8 +4,10 @@
 #include <atomic>
 #include <cmath>
 #include <functional>
+#include <future>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -55,6 +57,20 @@ inline std::function<void(const std::string&)> makeQueueOutputCallback(
         qvac_lib_inference_addon_cpp::kNoJobId) {
   return [&instance, id](const std::string& s) {
     instance.addonCpp->outputQueue->queueResult(std::any(s), id);
+  };
+}
+
+/// Tags streamed tokens with a job id that is only known after admission: the
+/// scheduler mints the id and runJob returns it, but the prompt (and this
+/// callback) must be built first. The future is fulfilled right after
+/// admission on the JS thread; a worker that races ahead blocks on get() for
+/// at most that hand-off (tokens only start after prefill, so in practice it
+/// never waits).
+inline std::function<void(const std::string&)> makeQueueOutputCallback(
+    qvac_lib_inference_addon_cpp::AddonJs& instance,
+    std::shared_future<qvac_lib_inference_addon_cpp::JobId> idFuture) {
+  return [&instance, idFuture = std::move(idFuture)](const std::string& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s), idFuture.get());
   };
 }
 
@@ -576,17 +592,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/// Job ids are minted here, native-side, so the JS caller never supplies or
-/// tracks one. One shared mint for every admission — run() and the exclusive
-/// finetune alike — because the multi-job scheduler is a tagged-only path: it
-/// rejects the kNoJobId sentinel and duplicate live ids. Starts at 1 to stay
-/// clear of kNoJobId (0). Monotonic across instances, which is harmless: the
-/// JS side maps each returned id within its own instance.
-inline qvac_lib_inference_addon_cpp::JobId mintJobId() {
-  static std::atomic<qvac_lib_inference_addon_cpp::JobId> nextJobId{1};
-  return nextJobId.fetch_add(1, std::memory_order_relaxed);
-}
-
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -595,12 +600,10 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto inputsArray = js::Array{env, args.get(1, "inputsArray")};
 
-  // Streamed output is tagged with the minted id and the id is handed back in
-  // the result — for a batch too, so several batch groups can be in flight and
-  // each routes its terminal events (result, jobEnded stats) to its own
-  // response.
-  const JobId jobId = mintJobId();
-
+  // The scheduler mints the job id at admission and runJob returns it; the id
+  // is handed back in the result — for a batch too, so several batch groups
+  // can be in flight and each routes its terminal events (result, jobEnded
+  // stats) to its own response.
   const bool isBatch = inputsArray.size(env) > 0 &&
                        inputsArray.get<js::Object>(env, 0)
                            .getOptionalProperty<js::Array>(env, "messages")
@@ -618,26 +621,40 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     JsBatchIds batchIds;
     batchIds.reset(inputsArray.size(env));
     auto prompts = parseBatchInputs(env, instance, inputsArray, batchIds);
-    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)), jobId);
+    const optional<JobId> jobId =
+        instance.addonCpp->runJob(any(std::move(prompts)));
 
     js::Object result = js::Object::create(env);
-    result.setProperty(env, "accepted", acceptedJs);
-    result.setProperty(env, "ids", batchIds.toJsArray(env));
     result.setProperty(
-        env, "id", js::Number::create(env, static_cast<double>(jobId)));
+        env, "accepted", js::Boolean::create(env, jobId.has_value()));
+    result.setProperty(env, "ids", batchIds.toJsArray(env));
+    if (jobId.has_value()) {
+      result.setProperty(
+          env, "id", js::Number::create(env, static_cast<double>(*jobId)));
+    }
     return result;
   }
 
+  // Streamed tokens are tagged with the admission-minted id via the deferred
+  // future: fulfilled right below, before any token can be produced.
+  auto idPromise = make_shared<promise<JobId>>();
   vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
-  LlamaModel::Prompt prompt =
-      parsePromptInputs(env, inputs, makeQueueOutputCallback(instance, jobId));
+  LlamaModel::Prompt prompt = parsePromptInputs(
+      env,
+      inputs,
+      makeQueueOutputCallback(instance, idPromise->get_future().share()));
 
-  js_value_t* acceptedJs = instance.runJob(any(std::move(prompt)), jobId);
+  const optional<JobId> jobId =
+      instance.addonCpp->runJob(any(std::move(prompt)));
+  idPromise->set_value(jobId.value_or(kNoJobId));
 
   js::Object result = js::Object::create(env);
-  result.setProperty(env, "accepted", acceptedJs);
   result.setProperty(
-      env, "id", js::Number::create(env, static_cast<double>(jobId)));
+      env, "accepted", js::Boolean::create(env, jobId.has_value()));
+  if (jobId.has_value()) {
+    result.setProperty(
+        env, "id", js::Number::create(env, static_cast<double>(*jobId)));
+  }
   return result;
 }
 JSCATCH
@@ -696,11 +713,11 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
 
   // Finetune reloads weights, so it runs as an exclusive job — the scheduler
   // enforces the finetune<->inference mutual exclusion (see runExclusiveJob).
-  // The exclusive path is tagged like any other admission (the scheduler
-  // rejects the kNoJobId sentinel); finetune's streamed events stay untagged
-  // (makeQueueOutputCallback without id), so JS keeps routing them to the
-  // finetune handler.
-  return instance.runExclusiveJob(any(std::move(prompt)), mintJobId());
+  // The exclusive admission mints its id like any other; JS only checks the
+  // returned value's truthiness (id when admitted, false when refused), and
+  // finetune's streamed events stay untagged (makeQueueOutputCallback without
+  // id), so JS keeps routing them to the finetune handler.
+  return instance.runExclusiveJob(any(std::move(prompt)));
 }
 JSCATCH
 
