@@ -532,7 +532,7 @@ export const executor = createExecutor({
               'addon-logging-ocr'
             ],
             'OCR disabled on iOS (ONNX/CoreML OOM)'
-          ),
+          )
         ]
       : []),
 
