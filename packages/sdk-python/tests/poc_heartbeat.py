@@ -28,6 +28,7 @@ Wire format (bare-rpc: lib/messages.js, lib/constants.js):
   in-band as a normal reply {"type":"error","message":...}.
 """
 
+import array
 import asyncio
 import json
 import os
@@ -35,15 +36,41 @@ import subprocess
 import sys
 import tempfile
 import traceback
-import array
 import wave
 from pathlib import Path
+from typing import cast
 
 _SRC_DIR = str(Path(__file__).resolve().parent.parent / "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# These import qvac itself, which only resolves once the sys.path
+# insert above has run -- this is a standalone script, not an
+# installed package, so they can't move above it.
+from poc_transport import PocTransport  # noqa: E402
+
+from qvac.methods import (  # noqa: E402
+    completion_stream,
+    embed,
+    heartbeat,
+    load_model,
+    text_to_speech_stream,
+    transcribe,
+    transcribe_stream,
+)
+from qvac.models import QWEN3_600M_INST_Q4  # noqa: E402
+from qvac.schemas import (  # noqa: E402
+    CompletionStreamRequest,
+    EmbedRequest,
+    HeartbeatRequest,
+    LoadModelRequest,
+    ModelType,
+    TextToSpeechStreamRequest,
+    TranscribeRequest,
+    TranscribeStreamRequest,
+)
 
 # ============================================================================
 # 0. Where the worker and the Bare runtime live
@@ -196,7 +223,7 @@ class QvacWorker:
 
     def worker_logs(self) -> str:
         try:
-            with open(self._log_path, "r", errors="replace") as f:
+            with open(self._log_path, errors="replace") as f:
                 return f.read()
         except OSError:
             return ""
@@ -208,6 +235,7 @@ class QvacWorker:
         return self._id
 
     async def _send_frame(self, body: bytes):
+        assert self._writer is not None, "_send_frame called before start()"
         self._writer.write(len(body).to_bytes(4, "little") + body)
         await self._writer.drain()
 
@@ -246,6 +274,7 @@ class QvacWorker:
         )
 
     async def _recv(self, n: int) -> bytes:
+        assert self._reader is not None, "_recv called before start()"
         try:
             return await self._reader.readexactly(n)
         except asyncio.IncompleteReadError:
@@ -403,28 +432,6 @@ async def _as_async_iter(items):
 #    itself is never touched below except to construct the transport.
 # ============================================================================
 
-from poc_transport import PocTransport
-from qvac.models import QWEN3_600M_INST_Q4
-from qvac.schemas import (
-    CompletionStreamRequest,
-    EmbedRequest,
-    HeartbeatRequest,
-    LoadModelRequest,
-    ModelType,
-    TextToSpeechStreamRequest,
-    TranscribeRequest,
-    TranscribeStreamRequest,
-)
-from qvac.methods import (
-    completion_stream,
-    embed,
-    heartbeat,
-    load_model,
-    text_to_speech_stream,
-    transcribe,
-    transcribe_stream,
-)
-
 
 def _dump_failure(w, label, e):
     print(f"\n[poc] {label} failed: {e}", file=sys.stderr)
@@ -486,7 +493,10 @@ async def demo_embed(w, model):
     response = await embed(transport, request)
     if not response.success:
         raise RuntimeError(f"embed failed: {response.error}")
-    vec = response.embedding
+    # embedding is list[float] | list[list[float]], keyed on whether the
+    # request's `text` was a string or an array -- always a string above,
+    # so this is always the flat shape.
+    vec = cast("list[float]", response.embedding)
     print(
         f"[embed] 'hello world' -> dim={len(vec)}, first 5={[round(x, 4) for x in vec[:5]]}"
     )

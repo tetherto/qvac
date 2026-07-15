@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PACKAGE_ROOT / "scripts"
 
 spec = importlib.util.spec_from_file_location("generate", SCRIPTS_DIR / "generate.py")
+assert spec is not None and spec.loader is not None
 generate = importlib.util.module_from_spec(spec)
 sys.modules["generate"] = generate
 spec.loader.exec_module(generate)
@@ -29,7 +31,7 @@ def manifest_methods() -> list[dict]:
 
 
 @pytest.fixture(scope="module")
-def fresh_build() -> Path:
+def fresh_build() -> Iterator[Path]:
     with tempfile.TemporaryDirectory() as tmp:
         output_root = Path(tmp) / "_generated"
         generate.build(output_root)

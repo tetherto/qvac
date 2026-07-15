@@ -17,7 +17,6 @@ import os
 import wave
 
 import pytest
-
 from poc_heartbeat import DEFAULT_AUDIO, SDK, WORKER
 
 pytestmark = pytest.mark.skipif(
@@ -42,8 +41,8 @@ def transport(worker):
 
 
 async def _load(transport, model_src, model_type, model_config=None):
-    from qvac.schemas import LoadModelRequest
     from qvac.methods import load_model
+    from qvac.schemas import LoadModelRequest
 
     request = LoadModelRequest.model_validate(
         {
@@ -59,9 +58,9 @@ async def _load(transport, model_src, model_type, model_config=None):
 
 
 async def test_completion_stream_produces_real_text(transport) -> None:
+    from qvac.methods import completion_stream
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import CompletionStreamRequest, ModelType
-    from qvac.methods import completion_stream
 
     model_id = await _load(
         transport, QWEN3_600M_INST_Q4.src, ModelType.llamacpp_completion
@@ -84,9 +83,9 @@ async def test_completion_stream_produces_real_text(transport) -> None:
 
 
 async def test_embed_produces_real_vector(transport) -> None:
+    from qvac.methods import embed
     from qvac.models import EMBEDDINGGEMMA_300M_Q4_0
     from qvac.schemas import EmbedRequest, ModelType
-    from qvac.methods import embed
 
     model_id = await _load(
         transport, EMBEDDINGGEMMA_300M_Q4_0.src, ModelType.llamacpp_embedding
@@ -102,9 +101,9 @@ async def test_embed_produces_real_vector(transport) -> None:
 
 
 async def test_transcribe_produces_real_text(transport) -> None:
+    from qvac.methods import transcribe
     from qvac.models import PARAKEET_CTC_0_6B_Q4_0
     from qvac.schemas import ModelType, TranscribeRequest
-    from qvac.methods import transcribe
 
     model_id = await _load(
         transport, PARAKEET_CTC_0_6B_Q4_0.src, ModelType.parakeet_transcription
@@ -161,9 +160,9 @@ async def test_transcribe_stream_duplex_produces_real_text(transport) -> None:
     real-time cadence (see transcription-parakeet's live-stream-simulation.test.js /
     duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep` between
     writes, matching the SDK e2e runner's `writeInChunks(delayMs)`."""
+    from qvac.methods import transcribe_stream
     from qvac.models import PARAKEET_CTC_0_6B_Q4_0
     from qvac.schemas import ModelType, TranscribeStreamRequest
-    from qvac.methods import transcribe_stream
 
     model_id = await _load(
         transport, PARAKEET_CTC_0_6B_Q4_0.src, ModelType.parakeet_transcription
@@ -199,9 +198,9 @@ async def test_transcribe_stream_duplex_produces_real_text(transport) -> None:
 
 
 async def test_text_to_speech_stream_duplex_produces_real_audio(transport) -> None:
+    from qvac.methods import text_to_speech_stream
     from qvac.models import TTS_EN_SUPERTONIC_Q4_0
     from qvac.schemas import ModelType, TextToSpeechStreamRequest
-    from qvac.methods import text_to_speech_stream
 
     model_id = await _load(
         transport,
@@ -236,8 +235,8 @@ async def test_classify_produces_real_labels(transport) -> None:
     registry/http resolution that would otherwise turn it into a real path."""
     import base64
 
-    from qvac.schemas import ClassifyRequest, ModelType
     from qvac.methods import classify
+    from qvac.schemas import ClassifyRequest, ModelType
 
     model_id = await _load(transport, "", ModelType.ggml_classification)
 
@@ -258,9 +257,9 @@ async def test_classify_produces_real_labels(transport) -> None:
 
 
 async def test_ocr_stream_produces_real_text(transport) -> None:
+    from qvac.methods import ocr_stream
     from qvac.models import OCR_CRAFT, OCR_LATIN
     from qvac.schemas import ModelType, OcrStreamRequest
-    from qvac.methods import ocr_stream
 
     model_id = await _load(
         transport,
@@ -288,9 +287,9 @@ async def test_ocr_stream_produces_real_text(transport) -> None:
 async def test_translate_produces_real_text(transport) -> None:
     """Uses the dedicated NMT engine (IndicTrans), not an LLM-based translator --
     smaller model, and the language pair is baked into which model is loaded."""
+    from qvac.methods import translate
     from qvac.models import MARIAN_HI_EN_INDIC_200M_Q4_0
     from qvac.schemas import ModelType, TranslateRequest
-    from qvac.methods import translate
 
     model_id = await _load(
         transport,
@@ -323,9 +322,13 @@ async def test_rag_ingest_and_search_round_trips_real_embeddings(transport) -> N
     `.root` to reach the operation-specific response fields."""
     import uuid
 
+    # RagResponseIngest/Search are per-operation union members of RagResponse,
+    # not one of the per-method Request/Response types qvac.schemas promotes --
+    # qvac._generated.models is the flat namespace one level down that has them.
+    from qvac._generated.models import RagResponseIngest, RagResponseSearch
+    from qvac.methods import rag
     from qvac.models import EMBEDDINGGEMMA_300M_Q4_0
     from qvac.schemas import ModelType, RagRequest
-    from qvac.methods import rag
 
     model_id = await _load(
         transport, EMBEDDINGGEMMA_300M_Q4_0.src, ModelType.llamacpp_embedding
@@ -344,6 +347,7 @@ async def test_rag_ingest_and_search_round_trips_real_embeddings(transport) -> N
             }
         )
         ingest_response = (await rag(transport, ingest_request)).root
+        assert isinstance(ingest_response, RagResponseIngest)
         assert ingest_response.success, ingest_response.error
         assert ingest_response.processed
         assert all(p.status.value == "fulfilled" for p in ingest_response.processed)
@@ -360,6 +364,7 @@ async def test_rag_ingest_and_search_round_trips_real_embeddings(transport) -> N
             }
         )
         search_response = (await rag(transport, search_request)).root
+        assert isinstance(search_response, RagResponseSearch)
         assert search_response.success, search_response.error
         assert search_response.results, "expected at least one real search result"
         assert any("QVAC" in r.content for r in search_response.results)
@@ -378,9 +383,9 @@ async def test_rag_ingest_and_search_round_trips_real_embeddings(transport) -> N
 async def test_diffusion_stream_produces_real_image(transport) -> None:
     """Smallest config actually exercised by the SDK e2e suite (FLUX.2-klein at
     256x256, 2 steps) -- fast enough for a unit test, still a real generation."""
+    from qvac.methods import diffusion_stream
     from qvac.models import FLUX_2_KLEIN_4B_Q4_0, FLUX_2_KLEIN_4B_VAE, QWEN3_4B_Q4_K_M
     from qvac.schemas import DiffusionStreamRequest, ModelType
-    from qvac.methods import diffusion_stream
 
     model_id = await _load(
         transport,
@@ -418,9 +423,9 @@ async def test_diffusion_stream_produces_real_image(transport) -> None:
 async def test_upscale_stream_produces_real_image(transport) -> None:
     import base64
 
+    from qvac.methods import upscale_stream
     from qvac.models import REALESRGAN_X4PLUS_ANIME_6B
     from qvac.schemas import ModelType, UpscaleStreamRequest
-    from qvac.methods import upscale_stream
 
     model_id = await _load(
         transport,
@@ -464,9 +469,9 @@ def _bci_load_config():
 
 
 async def test_bci_transcribe_produces_real_text(transport) -> None:
+    from qvac.methods import bci_transcribe
     from qvac.models import BCI_WINDOWED
     from qvac.schemas import BciTranscribeRequest, ModelType
-    from qvac.methods import bci_transcribe
 
     model_id = await _load(
         transport,
@@ -493,9 +498,9 @@ async def test_bci_transcribe_produces_real_text(transport) -> None:
 async def test_bci_transcribe_stream_duplex_produces_real_text(transport) -> None:
     """The BCI addon's sliding-window driver is fed arbitrary-size chunks with
     no real-time pacing requirement, unlike parakeet's transcribeStream."""
+    from qvac.methods import bci_transcribe_stream
     from qvac.models import BCI_WINDOWED
     from qvac.schemas import BciTranscribeStreamRequest, ModelType
-    from qvac.methods import bci_transcribe_stream
 
     model_id = await _load(
         transport,
@@ -531,9 +536,9 @@ async def test_bci_transcribe_stream_duplex_produces_real_text(transport) -> Non
 
 
 async def test_get_model_info_returns_real_registry_metadata(transport) -> None:
+    from qvac.methods import get_model_info
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import GetModelInfoRequest
-    from qvac.methods import get_model_info
 
     request = GetModelInfoRequest.model_validate(
         {"type": "getModelInfo", "name": QWEN3_600M_INST_Q4.name}
@@ -543,9 +548,9 @@ async def test_get_model_info_returns_real_registry_metadata(transport) -> None:
 
 
 async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> None:
+    from qvac.methods import get_loaded_model_info
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import GetLoadedModelInfoRequest, ModelType
-    from qvac.methods import get_loaded_model_info
 
     model_id = await _load(
         transport, QWEN3_600M_INST_Q4.src, ModelType.llamacpp_completion
@@ -559,9 +564,9 @@ async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> Non
 
 
 async def test_download_asset_succeeds_on_a_real_registry_src(transport) -> None:
+    from qvac.methods import download_asset
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import DownloadAssetRequest
-    from qvac.methods import download_asset
 
     request = DownloadAssetRequest.model_validate(
         {"type": "downloadAsset", "assetSrc": QWEN3_600M_INST_Q4.src}
@@ -581,9 +586,9 @@ async def test_finetune_completes_a_real_training_run(transport, tmp_path) -> No
     GGML_ASSERT(opt_pars.adamw.alpha > 0.0f) crash, since the addon has no
     default. Mirrors the exact known-good config from the SDK e2e suite's own
     `finetune-executor.ts` `buildOptions()`."""
+    from qvac.methods import finetune
     from qvac.models import QWEN3_1_7B_INST_Q4
     from qvac.schemas import FinetuneRequest, ModelType
-    from qvac.methods import finetune
 
     model_id = await _load(
         transport,

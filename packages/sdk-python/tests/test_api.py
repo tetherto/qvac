@@ -5,27 +5,35 @@ end-to-end coverage)."""
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterable
+from typing import Any
+
 import pytest
 
 from qvac import api
 
 
 class FakeTransport:
-    def __init__(self, response):
-        self.response = response
-        self.sent = None
+    """Implements the `Transport` protocol; `response` shape varies per test
+    (a single dict for call/call_duplex, an iterable of dicts for
+    call_stream), so it's typed `Any` rather than a fixed union."""
 
-    async def call(self, payload):
+    def __init__(self, response: Any) -> None:
+        self.response = response
+        self.sent: dict[str, Any] | None = None
+
+    async def call(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.sent = payload
         return self.response
 
-    async def call_stream(self, payload):
+    async def call_stream(self, payload: dict[str, Any]):
         self.sent = payload
         for item in self.response:
             yield item
 
-    async def call_duplex(self, payload, up):
+    async def call_duplex(self, payload: dict[str, Any], up: AsyncIterable[bytes]):
         raise NotImplementedError
+        yield  # pragma: no cover -- unreachable; makes this an async generator
 
 
 async def test_cancel_by_request_id():
@@ -162,6 +170,7 @@ async def test_model_registry_search_model_type_wins_over_addon():
         {"type": "modelRegistrySearch", "success": True, "models": []}
     )
     await api.model_registry_search(transport, model_type="llm", addon="whisper")
+    assert transport.sent is not None
     assert transport.sent["addon"] == "llm"
 
 
