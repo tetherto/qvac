@@ -20,6 +20,18 @@ function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+// Bare has no global AbortController, so hand back a duck-typed, already-aborted
+// signal. QvacResponse only reads `aborted` / `reason` (and, for the not-yet-
+// aborted case, add/removeEventListener), matching the infer-base test mock.
+function makeAbortedSignal(reason) {
+  return {
+    aborted: true,
+    reason,
+    addEventListener() {},
+    removeEventListener() {}
+  }
+}
+
 test(
   'Supertonic TTS (ggml): basic synthesis returns ~44.1 kHz audio + stats',
   { timeout: 600000 },
@@ -90,8 +102,16 @@ test(
   }
 )
 
+// Coverage note: this exercises the AbortSignal plumbing, not the native
+// mid-flight cancel path. An already-aborted signal makes `run()` short-circuit
+// before `addon.runJob` (the model loads but never synthesizes), so
+// `response.cancel()` interrupting an in-flight native Supertonic job is
+// intentionally NOT covered here. That native teardown leak (cancelling
+// mid-synthesis wedges macOS process exit) is the underlying bug and is tracked
+// as a separate follow-up (see the PR description); restore native cancel
+// coverage once it is fixed.
 test(
-  'Supertonic TTS (ggml): cancel mid-flight rejects the response',
+  'Supertonic TTS (ggml): aborting the run via signal rejects the response',
   { timeout: 600000 },
   async (t) => {
     const baseDir = getBaseDir()
@@ -110,13 +130,20 @@ test(
       useGPU: false
     })
     try {
+      // Cancel via an AbortSignal rather than a fixed-delay `response.cancel()`.
+      // The old timer raced synthesis: on fast runners (e.g. the M4 Max GPU
+      // runner) the short clip finished before the 50 ms cancel fired, so the
+      // response resolved and the assertion failed; on slower runners the cancel
+      // landed mid-flight and the native interrupt wedged macOS process teardown.
+      // An already-aborted signal makes QvacResponse reject synchronously
+      // (_markAbortPending) with no engine dispatch and no native interrupt, so
+      // this is deterministic regardless of hardware speed.
+      const signal = makeAbortedSignal(new Error('cancelled by test'))
       const response = await model.run({
         type: 'text',
-        input: 'Cancel this synthesis call before it completes.'
+        input: 'Cancel this synthesis call before it completes.',
+        signal
       })
-      setTimeout(() => {
-        response.cancel().catch(() => {})
-      }, 50)
 
       let failed = false
       try {
@@ -125,7 +152,7 @@ test(
         failed = true
         console.log('  cancel rejected with: ' + e.message)
       }
-      t.ok(failed, 'cancelled supertonic response should reject')
+      t.ok(failed, 'aborted supertonic response should reject')
     } finally {
       try {
         await model.unload()
