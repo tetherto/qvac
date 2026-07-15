@@ -5,6 +5,7 @@ import {
   generationParamsSchema,
   toolDialectSchema
 } from '@/schemas/completion-stream'
+import { toolSchema } from '@/schemas/tools'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 import { contractValidate } from './utils/contract-validator'
 
@@ -63,6 +64,31 @@ test('toolDialectSchema: accepts qwen35 and gemma4', (t) => {
 
 test('toolDialectSchema: rejects unknown dialects', (t) => {
   t.is(toolDialectSchema.safeParse('unknown').success, false)
+})
+
+test('toolSchema: accepts non-string JSON Schema enum values', (t) => {
+  const result = toolSchema.safeParse({
+    type: 'function',
+    name: 'get_sensor_readings_history_by_interval',
+    description: 'Retrieve historical sensor readings.',
+    parameters: {
+      type: 'object',
+      properties: {
+        interval: {
+          type: 'integer',
+          description: 'The time interval in seconds for the data returned.',
+          enum: [15, 120, 300, 900, 3600, 14400, 86400, 604800]
+        },
+        includeMeta: {
+          type: 'boolean',
+          enum: [true, false]
+        }
+      },
+      required: ['interval']
+    }
+  })
+
+  t.is(result.success, true)
 })
 
 test('completionStreamResponseSchema: round-trips backendDevice through completionStats event', (t) => {
