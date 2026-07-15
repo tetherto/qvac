@@ -172,7 +172,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       )
 
       if (streaming) {
-        // OpenAI only streams a usage object when the client opts in.
         const includeUsage = body.stream_options?.include_usage === true
         await runStreaming(req, reply, prepared, includeUsage)
         return
@@ -281,8 +280,6 @@ async function runStreaming(
       sendSSE(raw, chunk({}, finishReason))
     }
 
-    // OpenAI streams usage only when the client set stream_options.include_usage,
-    // and as a trailing chunk with an empty choices array after finish_reason.
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,

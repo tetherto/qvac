@@ -52,8 +52,7 @@ export function handleGetLoadedModelInfo(
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),
     ...(entry.local.path && { path: entry.local.path }),
-    // Mirror the completion op's dialect resolution so callers replaying a tool
-    // call see the same dialect the normalizer will parse.
+    // Same detection the completion normalizer uses, so callers see the dialect it parses.
     ...(handlers.includes('completionStream') && {
       toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)
     })

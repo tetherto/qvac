@@ -16,9 +16,8 @@ const delegatedProviderInfoSchema = z.object({
 /**
  * Loaded local model: routing plugin known on this node, so modelType +
  * handler vocabulary are authoritative. `toolDialect` is the tool-call dialect
- * the completion normalizer will apply to this model (present only for
- * completion-capable models); a stateless OpenAI-style server needs it to
- * replay a prior assistant tool call in the model's own dialect.
+ * the completion normalizer parses for this model (completion-capable models
+ * only), letting a consumer replay a prior tool call in the model's own dialect.
  */
 const localLoadedModelInfoSchema = z
   .object({
