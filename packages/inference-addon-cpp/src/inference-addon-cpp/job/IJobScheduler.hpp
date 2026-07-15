@@ -3,6 +3,7 @@
 #include <any>
 #include <cstddef>
 #include <memory>
+#include <optional>
 
 #include "JobId.hpp"
 
@@ -29,18 +30,18 @@ struct IJobScheduler {
   /// constructor, so a caller-supplied scheduler can be built queue-free.
   virtual void start(std::shared_ptr<OutputQueue> outputQueue) = 0;
 
-  /// Admit a job identified by @p id. Which ids are valid depends on the
-  /// implementation's path: the untagged path (SingleJobScheduler) accepts only
-  /// kNoJobId and rejects any tagged id; the tagged path (MultiJobScheduler)
-  /// rejects kNoJobId and any id already live (queued or in flight). Returns
-  /// false when at capacity or when @p id is not admissible; the caller must
-  /// not queue any output for a rejected job.
-  virtual bool runJob(std::any input, JobId id) = 0;
+  /// Admit a job. The scheduler assigns the job's id and returns it: the
+  /// tagged path (MultiJobScheduler) mints a fresh id (never kNoJobId, never
+  /// reused for the scheduler's lifetime) so outputs stay correlatable and no
+  /// two jobs — live or finished — can ever share one; the untagged path
+  /// (SingleJobScheduler) identifies its single slot as kNoJobId. Returns
+  /// nullopt when at capacity; no output is ever queued for a rejected job.
+  virtual std::optional<JobId> runJob(std::any input) = 0;
 
   /// Admit an exclusive job: one that must run with the model to itself (e.g. a
-  /// finetune, which reloads weights). Rejected unless the scheduler is
-  /// otherwise idle; while it runs, every runJob admission is rejected.
-  virtual bool runExclusiveJob(std::any input, JobId id) = 0;
+  /// finetune, which reloads weights). Rejected (nullopt) unless the scheduler
+  /// is otherwise idle; while it runs, every runJob admission is rejected.
+  virtual std::optional<JobId> runExclusiveJob(std::any input) = 0;
 
   /// Cancel one job by id. Single-job implementations ignore @p id.
   virtual void cancel(JobId id) = 0;

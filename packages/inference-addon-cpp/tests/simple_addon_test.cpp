@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -368,9 +369,9 @@ public:
       : boundModel_(boundModel) {}
 
   void start(std::shared_ptr<OutputQueue> /*outputQueue*/) override {}
-  bool runJob(std::any /*input*/, JobId /*id*/) override { return true; }
-  bool runExclusiveJob(std::any /*input*/, JobId /*id*/) override {
-    return true;
+  std::optional<JobId> runJob(std::any /*input*/) override { return kNoJobId; }
+  std::optional<JobId> runExclusiveJob(std::any /*input*/) override {
+    return kNoJobId;
   }
   void cancel(JobId /*id*/) override {}
   void cancelAll() override {}

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 
 #include "../Logger.hpp"
@@ -92,16 +93,19 @@ public:
     outputCallback_->stop();
   }
 
-  /// @returns False if the job cannot be run (e.g. at capacity or a job is
+  /// @returns The id the scheduler assigned to the admitted job (kNoJobId on
+  /// the untagged single-job path, a fresh never-reused id on the multi-job
+  /// path), or nullopt if the job cannot be run (e.g. at capacity or a job is
   /// already being processed)
-  bool runJob(std::any input, JobId id = kNoJobId) {
-    return jobScheduler_->runJob(std::move(input), id);
+  std::optional<JobId> runJob(std::any input) {
+    return jobScheduler_->runJob(std::move(input));
   }
 
-  /// @returns False if the exclusive job cannot be run because other jobs are
-  /// queued or in flight (see IJobScheduler::runExclusiveJob).
-  bool runExclusiveJob(std::any input, JobId id = kNoJobId) {
-    return jobScheduler_->runExclusiveJob(std::move(input), id);
+  /// @returns The assigned id, or nullopt if the exclusive job cannot be run
+  /// because other jobs are queued or in flight (see
+  /// IJobScheduler::runExclusiveJob).
+  std::optional<JobId> runExclusiveJob(std::any input) {
+    return jobScheduler_->runExclusiveJob(std::move(input));
   }
   void cancelJob(JobId id = kNoJobId) { jobScheduler_->cancel(id); }
   void cancelAllJobs() { jobScheduler_->cancelAll(); }

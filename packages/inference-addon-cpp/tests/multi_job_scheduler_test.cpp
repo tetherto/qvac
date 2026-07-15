@@ -476,6 +476,11 @@ int countTerminalEvents(const Outputs& outputs) {
 
 } // namespace
 
+// The scheduler mints job ids itself: 1, 2, 3, ... in admission order, per
+// instance (pinned by MintsMonotonicIdsStartingAtOne). Tests that must seed
+// per-id behaviour before admission (throwForId, addJobStats) rely on that
+// determinism; submitting from the single test thread makes the sequence
+// exact.
 class MultiJobSchedulerTest : public ::testing::Test {
 protected:
   std::unique_ptr<MockOutputCallback> callback_;
@@ -570,8 +575,8 @@ TEST_F(MultiJobSchedulerTest, AdmitsJobsConcurrently) {
   constexpr unsigned kConcurrency = 4;
   build(kConcurrency, std::chrono::milliseconds{300});
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
 
   const int observed =
@@ -588,8 +593,8 @@ TEST_F(MultiJobSchedulerTest, RejectsBeyondCapacity) {
   constexpr unsigned kConcurrency = 3;
   build(kConcurrency, std::chrono::milliseconds{500});
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
   // Must observe the pool genuinely full before probing overflow, else a slow
   // machine could reject simply because a job had not started yet.
@@ -597,7 +602,7 @@ TEST_F(MultiJobSchedulerTest, RejectsBeyondCapacity) {
       waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
       static_cast<int>(kConcurrency));
 
-  EXPECT_FALSE(scheduler_->runJob(std::string("overflow"), kConcurrency + 1))
+  EXPECT_FALSE(scheduler_->runJob(std::string("overflow")).has_value())
       << "Admission must reject once at capacity";
 
   scheduler_->cancelAll();
@@ -608,8 +613,8 @@ TEST_F(MultiJobSchedulerTest, CancelOneLeavesOthersRunning) {
   constexpr unsigned kConcurrency = 3;
   build(kConcurrency, std::chrono::milliseconds{10000});
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
   ASSERT_EQ(
       waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
@@ -641,8 +646,8 @@ TEST_F(MultiJobSchedulerTest, CancelByIdWithoutCancelByIdModelIsNoOp) {
   constexpr unsigned kConcurrency = 2;
   buildNoCancelById(kConcurrency, std::chrono::milliseconds{10000});
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
   ASSERT_EQ(
       waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
@@ -664,8 +669,8 @@ TEST_F(MultiJobSchedulerTest, CancelAllStopsEveryJob) {
   constexpr unsigned kConcurrency = 4;
   build(kConcurrency, std::chrono::milliseconds{10000});
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
   ASSERT_EQ(
       waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
@@ -689,15 +694,15 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
   build(kConcurrency, std::chrono::milliseconds{0});
 
   std::atomic_bool stop{false};
-  std::atomic<uint64_t> nextId{1};
+  std::atomic<JobId> lastAdmitted{kNoJobId};
 
   std::vector<std::thread> cancelThreads;
   for (int thread = 0; thread < 4; ++thread) {
-    cancelThreads.emplace_back([this, &stop, &nextId] {
+    cancelThreads.emplace_back([this, &stop, &lastAdmitted] {
       while (!stop.load()) {
-        const JobId id = nextId.load();
-        if (id > 1) {
-          scheduler_->cancel(id - 1);
+        const JobId id = lastAdmitted.load();
+        if (id != kNoJobId) {
+          scheduler_->cancel(id);
         }
         scheduler_->cancelAll();
         std::this_thread::yield();
@@ -707,9 +712,10 @@ TEST_F(MultiJobSchedulerTest, HighContentionNoSlotTear) {
 
   int admitted = 0;
   for (int iteration = 0; iteration < 2000; ++iteration) {
-    const JobId id = nextId.fetch_add(1);
-    if (scheduler_->runJob(std::string("job"), id)) {
+    const std::optional<JobId> id = scheduler_->runJob(std::string("job"));
+    if (id.has_value()) {
       ++admitted;
+      lastAdmitted.store(*id);
     }
     if (iteration % 16 == 0) {
       std::this_thread::yield();
@@ -759,30 +765,37 @@ TEST_F(MultiJobSchedulerTest, ExclusiveJobRunsAlone) {
   constexpr unsigned kConcurrency = 4;
   build(kConcurrency, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 2));
+  const std::optional<JobId> first = scheduler_->runJob(std::string("job"));
+  const std::optional<JobId> second = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
   ASSERT_EQ(
       waitForActive(*model_, 2, std::chrono::seconds{2}), 2);
 
   // Refused even though 2 of 4 slots are free: exclusivity, not capacity.
-  EXPECT_FALSE(scheduler_->runExclusiveJob(std::string("finetune"), 100))
+  EXPECT_FALSE(scheduler_->runExclusiveJob(std::string("finetune")).has_value())
       << "exclusive job admitted while inference was in flight";
 
   // Per-id cancel (not cancelAll) so whole-model cancel stays unset and a later
   // exclusive job can still run.
-  scheduler_->cancel(1);
-  scheduler_->cancel(2);
+  scheduler_->cancel(*first);
+  scheduler_->cancel(*second);
   waitForIdle(*scheduler_, std::chrono::seconds{2});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
-  EXPECT_TRUE(scheduler_->runExclusiveJob(std::string("finetune"), 100));
+  const std::optional<JobId> finetune =
+      scheduler_->runExclusiveJob(std::string("finetune"));
+  ASSERT_TRUE(finetune.has_value());
+  EXPECT_NE(*finetune, *first);
+  EXPECT_NE(*finetune, *second)
+      << "an exclusive job must mint a fresh id, never reuse a finished one";
   ASSERT_EQ(
       waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
 
-  EXPECT_FALSE(scheduler_->runJob(std::string("job"), 3))
+  EXPECT_FALSE(scheduler_->runJob(std::string("job")).has_value())
       << "inference admitted while an exclusive job was running";
 
-  scheduler_->cancel(100);
+  scheduler_->cancel(*finetune);
 }
 
 // (g) Bounded queue: with queueCapacity beyond the worker pool, jobs past the
@@ -795,11 +808,11 @@ TEST_F(MultiJobSchedulerTest, QueuesBeyondWorkerCount) {
   constexpr unsigned kQueue = 2;
   buildWithQueue(kConcurrency, kQueue, std::chrono::milliseconds{150});
 
-  for (JobId id = 1; id <= 4; ++id) {  // pool (2) + queue (2)
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id))
-        << "job " << id << " within pool+queue must be admitted";
+  for (int job = 1; job <= 4; ++job) {  // pool (2) + queue (2)
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value())
+        << "job " << job << " within pool+queue must be admitted";
   }
-  EXPECT_FALSE(scheduler_->runJob(std::string("job"), 5))
+  EXPECT_FALSE(scheduler_->runJob(std::string("job")).has_value())
       << "admission past pool+queue must be rejected";
 
   // Only pool-many run at once; the rest wait in the queue.
@@ -822,14 +835,17 @@ TEST_F(MultiJobSchedulerTest, StartsQueuedJobsInFifoOrder) {
   StartTrackingTestModel* tracking = buildTrackingWithQueue(
       kConcurrency, kQueue, std::chrono::milliseconds{30});
 
-  for (JobId id = 1; id <= 4; ++id) { // pool (1) + queue (3)
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id))
-        << "job " << id << " within pool+queue must be admitted";
+  std::vector<JobId> admissionOrder;
+  for (int job = 1; job <= 4; ++job) { // pool (1) + queue (3)
+    const std::optional<JobId> id = scheduler_->runJob(std::string("job"));
+    ASSERT_TRUE(id.has_value())
+        << "job " << job << " within pool+queue must be admitted";
+    admissionOrder.push_back(*id);
   }
 
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
-  EXPECT_EQ(tracking->startOrder(), (std::vector<JobId>{1, 2, 3, 4}))
+  EXPECT_EQ(tracking->startOrder(), admissionOrder)
       << "queued jobs must start in FIFO (submission) order";
 }
 
@@ -851,10 +867,12 @@ std::unordered_set<JobId> erroredIds(
 TEST_F(MultiJobSchedulerTest, OneJobThrowsPeersSurvive) {
   constexpr unsigned kConcurrency = 4;
   build(kConcurrency, std::chrono::milliseconds{50});
+  // The second admission below mints id 2 (deterministic minting, see note on
+  // the fixture), so the failure can be seeded before the job exists.
   model_->throwForId(2);
 
-  for (JobId id = 1; id <= kConcurrency; ++id) {
-    EXPECT_TRUE(scheduler_->runJob(std::string("job"), id));
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   }
 
   waitForIdle(*scheduler_, std::chrono::seconds{5});
@@ -880,13 +898,15 @@ TEST_F(MultiJobSchedulerTest, OneJobThrowsPeersSurvive) {
 TEST_F(MultiJobSchedulerTest, ExclusiveJobThrowClearsExclusive) {
   constexpr unsigned kConcurrency = 2;
   build(kConcurrency, std::chrono::milliseconds{50});
-  model_->throwForId(99);
+  // The first admission mints id 1, so the exclusive job's failure can be
+  // seeded before it is admitted.
+  model_->throwForId(1);
 
-  ASSERT_TRUE(scheduler_->runExclusiveJob(std::string("finetune"), 99));
+  ASSERT_TRUE(scheduler_->runExclusiveJob(std::string("finetune")).has_value());
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 
   EXPECT_EQ(scheduler_->activeJobs(), 0u);
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1))
+  EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value())
       << "a thrown exclusive job must not leave the scheduler wedged";
   scheduler_->cancelAll();
 }
@@ -897,26 +917,28 @@ TEST_F(MultiJobSchedulerTest, CancelQueuedJobNeverRuns) {
   StartTrackingTestModel* tracking =
       buildTrackingWithQueue(1, 1, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  const std::optional<JobId> running = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(running.has_value());
   ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
   ASSERT_EQ(scheduler_->activeJobs(), 2u);
 
-  scheduler_->cancel(2);
+  scheduler_->cancel(*queued);
   EXPECT_EQ(scheduler_->activeJobs(), 1u)
       << "cancelling a queued job must release its admission slot immediately";
 
-  scheduler_->cancel(1);
+  scheduler_->cancel(*running);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
-  EXPECT_FALSE(tracking->started(2))
+  EXPECT_FALSE(tracking->started(*queued))
       << "a cancelled queued job must never reach process()";
   const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
-  EXPECT_EQ(erroredIds(outputs).count(2), 1u)
+  EXPECT_EQ(erroredIds(outputs).count(*queued), 1u)
       << "a cancelled queued job must surface a terminal error";
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    if (entry.first == 2) {
+    if (entry.first == *queued) {
       EXPECT_EQ(entry.second.type(), typeid(Output::Error))
           << "no result/jobEnded may be emitted for a cancelled queued job";
     }
@@ -929,22 +951,26 @@ TEST_F(MultiJobSchedulerTest, CancelAllDropsQueuedJobs) {
   StartTrackingTestModel* tracking =
       buildTrackingWithQueue(1, 2, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 3));
+  const std::optional<JobId> queuedA =
+      scheduler_->runJob(std::string("queued"));
+  const std::optional<JobId> queuedB =
+      scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queuedA.has_value());
+  ASSERT_TRUE(queuedB.has_value());
   ASSERT_EQ(scheduler_->activeJobs(), 3u);
 
   scheduler_->cancelAll();
 
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
-  EXPECT_FALSE(tracking->started(2));
-  EXPECT_FALSE(tracking->started(3))
+  EXPECT_FALSE(tracking->started(*queuedA));
+  EXPECT_FALSE(tracking->started(*queuedB))
       << "queued jobs must never start after cancelAll";
   const std::unordered_set<JobId> errored = erroredIds(outputQueue_->clear());
-  EXPECT_EQ(errored.count(2), 1u);
-  EXPECT_EQ(errored.count(3), 1u)
+  EXPECT_EQ(errored.count(*queuedA), 1u);
+  EXPECT_EQ(errored.count(*queuedB), 1u)
       << "dropped queued jobs must surface terminal errors";
 }
 
@@ -955,17 +981,19 @@ TEST_F(MultiJobSchedulerTest, JobStartingAnnouncesBeforeProcess) {
   RegistrationGatedTestModel* gated =
       buildGatedWithQueue(1, 1, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  const std::optional<JobId> running = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(running.has_value());
   ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(gated->announcedBeforeEntered(1))
+  EXPECT_TRUE(gated->announcedBeforeEntered(*running))
       << "jobStarting must run before process(input, id)";
-  EXPECT_EQ(gated->announceCount(1), 1u);
+  EXPECT_EQ(gated->announceCount(*running), 1u);
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
-  scheduler_->cancel(2);
-  scheduler_->cancel(1);
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
+  scheduler_->cancel(*queued);
+  scheduler_->cancel(*running);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
-  EXPECT_FALSE(gated->announced(2))
+  EXPECT_FALSE(gated->announced(*queued))
       << "a job dropped from the queue never starts, so it must not be "
          "announced";
 }
@@ -981,7 +1009,8 @@ TEST_F(MultiJobSchedulerTest, CancelAllLandsOnRegistrationGatedModel) {
   RegistrationGatedTestModel* gated =
       buildGatedWithQueue(1, 0, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  const std::optional<JobId> job = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(job.has_value());
   ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
 
   scheduler_->cancelAll();
@@ -994,7 +1023,7 @@ TEST_F(MultiJobSchedulerTest, CancelAllLandsOnRegistrationGatedModel) {
       [](const Outputs& seen) { return countTerminalEvents(seen) >= 1; },
       std::chrono::seconds{5});
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
+    if (entry.first == *job && entry.second.type() == typeid(std::string)) {
       sawResult = true;
       EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
           << "the in-flight job must observe the cancel, not run to "
@@ -1011,10 +1040,11 @@ TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
   RegistrationGatedTestModel* gated =
       buildGatedWithQueue(1, 0, std::chrono::milliseconds{10000});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  const std::optional<JobId> job = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(job.has_value());
   ASSERT_EQ(waitForGatedActive(*gated, 1, std::chrono::seconds{2}), 1);
 
-  scheduler_->cancel(1);
+  scheduler_->cancel(*job);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
@@ -1024,7 +1054,7 @@ TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
       [](const Outputs& seen) { return countTerminalEvents(seen) >= 1; },
       std::chrono::seconds{5});
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    if (entry.first == 1 && entry.second.type() == typeid(std::string)) {
+    if (entry.first == *job && entry.second.type() == typeid(std::string)) {
       sawResult = true;
       EXPECT_EQ(std::any_cast<std::string>(entry.second), "cancelled")
           << "cancel(id) on a dequeued job must reach it via cancelById";
@@ -1039,14 +1069,15 @@ TEST_F(MultiJobSchedulerTest, DestructorFailsQueuedJobs) {
   StartTrackingTestModel* tracking =
       buildTrackingWithQueue(1, 1, std::chrono::milliseconds{500});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
 
-  scheduler_.reset(); // joins while job 1 is in flight; job 2 still queued
+  scheduler_.reset(); // joins while the first job is in flight; second queued
 
-  EXPECT_FALSE(tracking->started(2));
-  EXPECT_EQ(erroredIds(outputQueue_->clear()).count(2), 1u)
+  EXPECT_FALSE(tracking->started(*queued));
+  EXPECT_EQ(erroredIds(outputQueue_->clear()).count(*queued), 1u)
       << "a queued job dropped at teardown must surface a terminal error";
 }
 
@@ -1054,7 +1085,7 @@ TEST_F(MultiJobSchedulerTest, DestructorFailsQueuedJobs) {
 // before joining, so a worker stuck in a long process() returns promptly.
 TEST_F(MultiJobSchedulerTest, DestructorCancelsInFlightJobs) {
   build(1, std::chrono::milliseconds{5000});
-  ASSERT_TRUE(scheduler_->runJob(std::string("slow"), JobId{1}));
+  ASSERT_TRUE(scheduler_->runJob(std::string("slow")).has_value());
 
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -1117,50 +1148,57 @@ double statValue(const RuntimeStats& stats, const std::string& key) {
 TEST_F(MultiJobSchedulerTest, TaggedJobEndedUsesPerJobStats) {
   JobStatsTestModel* stats =
       buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
-  stats->addJobStats(5);
+  // The first admission mints id 1, so its stats can be seeded up front.
+  stats->addJobStats(1);
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 5));
+  const std::optional<JobId> job = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(job.has_value());
+  ASSERT_EQ(*job, 1u);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 
   const auto snapshot = jobEndedStatsFor(
       drainUntil(
           *outputQueue_,
           [](const Outputs& seen) {
-            return jobEndedStatsFor(seen, 5).has_value();
+            return jobEndedStatsFor(seen, 1).has_value();
           },
           std::chrono::seconds{5}),
-      5);
-  ASSERT_TRUE(snapshot.has_value()) << "job 5 must end with a stats snapshot";
+      1);
+  ASSERT_TRUE(snapshot.has_value()) << "job 1 must end with a stats snapshot";
   EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"))
       << "the per-job snapshot's model-level entries come through";
   EXPECT_EQ(countStatKey(*snapshot, "TPS"), 1u);
   EXPECT_DOUBLE_EQ(statValue(*snapshot, "TPS"), 42.0)
       << "the payload must be the job's own snapshot, not the generic one";
-  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{5})
+  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{1})
       << "per-job stats must be consumed exactly once, under the job's id";
 }
 
 // Per-job stats reclaim on error: a tagged job that ends via the throw path
-// must not leave its per-job stats entry behind, or a later job reusing this
-// id would receive the stale snapshot instead of its own.
+// must not leave its per-job stats entry behind — ids are never reissued, so
+// an entry not reclaimed here could never be consumed and would leak.
 TEST_F(MultiJobSchedulerTest, ThrownJobReclaimsPerJobStats) {
   JobStatsTestModel* stats =
       buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
-  stats->addJobStats(7);
-  stats->throwForId(7);
+  // The first admission mints id 1, so its failure and stats can be seeded up
+  // front.
+  stats->addJobStats(1);
+  stats->throwForId(1);
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 7));
+  const std::optional<JobId> job = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(job.has_value());
+  ASSERT_EQ(*job, 1u);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   // The reclaim happens right before the error event is queued, so once that
   // event is observable the entry must already be gone.
   const Outputs outputs = drainUntil(
       *outputQueue_,
-      [](const Outputs& seen) { return erroredIds(seen).count(7) != 0; },
+      [](const Outputs& seen) { return erroredIds(seen).count(1) != 0; },
       std::chrono::seconds{5});
-  ASSERT_EQ(erroredIds(outputs).count(7), 1u)
+  ASSERT_EQ(erroredIds(outputs).count(1), 1u)
       << "the thrown job must surface its terminal error";
 
-  EXPECT_FALSE(stats->hasJobStats(7))
+  EXPECT_FALSE(stats->hasJobStats(1))
       << "a job that ends in error must not leak its per-job stats entry";
 }
 
@@ -1170,102 +1208,66 @@ TEST_F(MultiJobSchedulerTest, UnknownPerJobStatsFallBackToGenericSnapshot) {
   JobStatsTestModel* stats =
       buildJobStatsWithQueue(2, 0, std::chrono::milliseconds{20});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 6));
+  const std::optional<JobId> job = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(job.has_value());
   waitForIdle(*scheduler_, std::chrono::seconds{5});
 
+  const JobId id = *job;
   const auto snapshot = jobEndedStatsFor(
       drainUntil(
           *outputQueue_,
-          [](const Outputs& seen) {
-            return jobEndedStatsFor(seen, 6).has_value();
+          [id](const Outputs& seen) {
+            return jobEndedStatsFor(seen, id).has_value();
           },
           std::chrono::seconds{5}),
-      6);
-  ASSERT_TRUE(snapshot.has_value()) << "job 6 must end with a stats snapshot";
+      id);
+  ASSERT_TRUE(snapshot.has_value()) << "the job must end with a stats snapshot";
   EXPECT_TRUE(hasStatKey(*snapshot, "globalStat"));
   EXPECT_DOUBLE_EQ(statValue(*snapshot, "TPS"), 1.0)
       << "with no per-job stats the aggregate values must stay untouched";
-  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{6});
+  EXPECT_EQ(stats->consumedIds(), std::vector<JobId>{id});
 }
 
-// (n) The multi-job path is the tagged path: the untagged sentinel carries no
-// identity to correlate or cancel by, so it must be refused (return false, the
-// existing "false = rejected" idiom), not admitted.
-TEST_F(MultiJobSchedulerTest, RejectsNoJobIdSentinel) {
-  build(2, std::chrono::milliseconds{50});
+// (n) The minting contract: admission assigns ids 1, 2, 3, ... — never the
+// kNoJobId sentinel, strictly increasing — and a rejected admission consumes
+// no id. The fixture tests that pre-seed per-id behaviour rely on exactly
+// this determinism.
+TEST_F(MultiJobSchedulerTest, MintsMonotonicIdsStartingAtOne) {
+  buildWithQueue(1, 1, std::chrono::milliseconds{100});
 
-  EXPECT_FALSE(scheduler_->runJob(std::string("job"), kNoJobId))
-      << "runJob must reject the untagged sentinel on the tagged path";
-  EXPECT_EQ(scheduler_->activeJobs(), 0u)
-      << "a rejected sentinel job must not be admitted";
-}
+  const std::optional<JobId> first = scheduler_->runJob(std::string("job"));
+  const std::optional<JobId> second = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
+  EXPECT_EQ(*first, 1u);
+  EXPECT_EQ(*second, 2u);
 
-// (o) Duplicate id of a QUEUED job: the second submission is refused, and the
-// original queued job still runs exactly once (no silent no-op overwrite of the
-// queued-index entry). A single worker holds the pool so the second job would
-// have to queue behind the first.
-TEST_F(MultiJobSchedulerTest, RejectsDuplicateOfQueuedJob) {
-  StartTrackingTestModel* tracking =
-      buildTrackingWithQueue(1, 2, std::chrono::milliseconds{60});
+  // Pool (1) + queue (1) are full: rejected without minting.
+  EXPECT_FALSE(scheduler_->runJob(std::string("overflow")).has_value());
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("inflight"), 1));
-  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
-  ASSERT_EQ(scheduler_->activeJobs(), 2u);
-
-  EXPECT_FALSE(scheduler_->runJob(std::string("dup"), 2))
-      << "a duplicate of a queued id must be rejected";
-  EXPECT_EQ(scheduler_->activeJobs(), 2u)
-      << "a rejected duplicate must not inflate the admitted count";
-
-  scheduler_->cancel(1);
   waitForIdle(*scheduler_, std::chrono::seconds{5});
-  ASSERT_EQ(scheduler_->activeJobs(), 0u);
-
-  const std::vector<JobId> order = tracking->startOrder();
-  EXPECT_EQ(std::count(order.begin(), order.end(), JobId{2}), 1)
-      << "the queued job must run exactly once, not be duplicated";
-}
-
-// (p) Duplicate id of an IN-FLIGHT job: while a long-running job holds id 1, a
-// second runJob with id 1 must be refused. Uses the blocking-model pattern to
-// pin the job in flight.
-TEST_F(MultiJobSchedulerTest, RejectsDuplicateOfInFlightJob) {
-  build(2, std::chrono::milliseconds{10000});
-
-  EXPECT_TRUE(scheduler_->runJob(std::string("job"), 1));
-  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-
-  EXPECT_FALSE(scheduler_->runJob(std::string("dup"), 1))
-      << "a duplicate of an in-flight id must be rejected";
-  EXPECT_EQ(scheduler_->activeJobs(), 1u)
-      << "a rejected duplicate must not inflate the admitted count";
-
+  const std::optional<JobId> third = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(third.has_value());
+  EXPECT_EQ(*third, 3u)
+      << "ids continue from the last mint: a finished id is never reissued "
+         "and a rejected admission consumes none";
   scheduler_->cancelAll();
 }
 
-// (q) The idle-path exclusive admission is also the tagged path: runExclusiveJob
-// must refuse the untagged sentinel from an idle scheduler.
-TEST_F(MultiJobSchedulerTest, ExclusiveRejectsNoJobIdSentinel) {
-  build(2, std::chrono::milliseconds{50});
-
-  EXPECT_FALSE(scheduler_->runExclusiveJob(std::string("finetune"), kNoJobId))
-      << "runExclusiveJob must reject the untagged sentinel";
-  EXPECT_EQ(scheduler_->activeJobs(), 0u);
-}
-
-// (r) An id is only reserved while its job is live: once the job completes, the
-// same id is admissible again (uniqueness must track live ids, not ban an id
-// forever).
-TEST_F(MultiJobSchedulerTest, IdReusableAfterCompletion) {
+// (r) An id identifies one job forever: after a job completes, later
+// admissions mint fresh ids — the finished id is never reissued, so a
+// terminal event published late can never be attributed to a newer job.
+TEST_F(MultiJobSchedulerTest, IdNeverReusedAfterCompletion) {
   build(2, std::chrono::milliseconds{20});
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("first"), 7));
+  const std::optional<JobId> first = scheduler_->runJob(std::string("first"));
+  ASSERT_TRUE(first.has_value());
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("second"), 7))
-      << "an id must be admissible again once its prior job has completed";
+  const std::optional<JobId> second = scheduler_->runJob(std::string("second"));
+  ASSERT_TRUE(second.has_value());
+  EXPECT_GT(*second, *first) << "a finished job's id must never be minted again";
   scheduler_->cancelAll();
 }
 
@@ -1290,32 +1292,40 @@ TEST_F(MultiJobSchedulerTest, CancelMiddleQueuedJobKeepsPeers) {
   StartTrackingTestModel* tracking =
       buildTrackingWithQueue(1, 3, std::chrono::milliseconds{400});
 
-  // Job 1 occupies the single worker long enough to queue three peers and
-  // cancel the middle one, then completes on its own so the queue drains.
-  EXPECT_TRUE(scheduler_->runJob(std::string("inflight"), 1));
+  // The first job occupies the single worker long enough to queue three peers
+  // and cancel the middle one, then completes on its own so the queue drains.
+  const std::optional<JobId> inflight =
+      scheduler_->runJob(std::string("inflight"));
+  ASSERT_TRUE(inflight.has_value());
   ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 2));
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 3));
-  EXPECT_TRUE(scheduler_->runJob(std::string("queued"), 4));
+  const std::optional<JobId> queuedA =
+      scheduler_->runJob(std::string("queued"));
+  const std::optional<JobId> queuedB =
+      scheduler_->runJob(std::string("queued"));
+  const std::optional<JobId> queuedC =
+      scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queuedA.has_value());
+  ASSERT_TRUE(queuedB.has_value());
+  ASSERT_TRUE(queuedC.has_value());
   ASSERT_EQ(scheduler_->activeJobs(), 4u);
 
-  scheduler_->cancel(3);
+  scheduler_->cancel(*queuedB);
   EXPECT_EQ(scheduler_->activeJobs(), 3u)
       << "cancelling a queued job must release its admission slot immediately";
 
   waitForIdle(*scheduler_, std::chrono::seconds{5});
   ASSERT_EQ(scheduler_->activeJobs(), 0u);
 
-  EXPECT_FALSE(tracking->started(3))
+  EXPECT_FALSE(tracking->started(*queuedB))
       << "a cancelled queued job must never reach process()";
-  EXPECT_TRUE(tracking->started(2));
-  EXPECT_TRUE(tracking->started(4))
+  EXPECT_TRUE(tracking->started(*queuedA));
+  EXPECT_TRUE(tracking->started(*queuedC))
       << "queued peers of a cancelled middle job must still run";
 
   const std::vector<std::pair<JobId, std::any>> outputs = outputQueue_->clear();
   int terminalForCancelled = 0;
   for (const std::pair<JobId, std::any>& entry : outputs) {
-    if (entry.first == 3) {
+    if (entry.first == *queuedB) {
       EXPECT_EQ(entry.second.type(), typeid(Output::Error))
           << "no result/jobEnded may be emitted for a cancelled queued job";
       ++terminalForCancelled;
@@ -1324,7 +1334,9 @@ TEST_F(MultiJobSchedulerTest, CancelMiddleQueuedJobKeepsPeers) {
   EXPECT_EQ(terminalForCancelled, 1)
       << "a cancelled queued job must surface exactly one terminal error";
 
-  EXPECT_EQ(tracking->startOrder(), (std::vector<JobId>{1, 2, 4}))
+  EXPECT_EQ(
+      tracking->startOrder(),
+      (std::vector<JobId>{*inflight, *queuedA, *queuedC}))
       << "survivors must keep FIFO (submission) order after the middle erase";
 }
 
@@ -1345,7 +1357,7 @@ TEST_F(MultiJobSchedulerTest, SlotReleasedBeforeTerminalEventsPublished) {
   probeRaw->setSampler([this] { return scheduler_->activeJobs(); });
   scheduler_->start(outputQueue_);
 
-  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   // A successful job publishes two events: its result and its jobEnded.
   ASSERT_TRUE(probeRaw->waitForSamples(2, std::chrono::seconds{5}));
 
@@ -1372,7 +1384,7 @@ TEST_F(MultiJobSchedulerTest, SlotReleasedBeforeErrorEventPublished) {
   probeRaw->setSampler([this] { return scheduler_->activeJobs(); });
   scheduler_->start(outputQueue_);
 
-  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
   ASSERT_TRUE(probeRaw->waitForSamples(1, std::chrono::seconds{5}));
 
   for (const std::size_t active : probeRaw->samples()) {
@@ -1395,7 +1407,7 @@ TEST_F(MultiJobSchedulerTest, PublicationThrowReleasesSlotOnce) {
       model_.get(), 1, model_.get(), model_.get(), 0);
   scheduler_->start(outputQueue_);
 
-  ASSERT_TRUE(scheduler_->runJob(std::string("job"), JobId{1}));
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
 
   // The job's first publication throws; once the worker has settled it the
   // admitted count must be back at exactly zero, not underflowed.
@@ -1408,7 +1420,7 @@ TEST_F(MultiJobSchedulerTest, PublicationThrowReleasesSlotOnce) {
   EXPECT_EQ(scheduler_->activeJobs(), 0u)
       << "slot released twice: admitted count underflowed";
 
-  EXPECT_TRUE(scheduler_->runJob(std::string("follow-up"), JobId{2}))
+  EXPECT_TRUE(scheduler_->runJob(std::string("follow-up")).has_value())
       << "admission wedged after a publication throw";
 }
 

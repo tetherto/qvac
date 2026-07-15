@@ -20,6 +20,13 @@ class AddonJs {
   js_blobs::WeightsLoader<char> weights_loader_;
   js::ThreadQueuedRefDeleter weights_deleter_ = {};
 
+  js_value_t* admissionToJs(const std::optional<JobId>& id) {
+    if (!id.has_value()) {
+      return js::Boolean::create(env_, false);
+    }
+    return js::Number::create(env_, *id);
+  }
+
 public:
   const std::shared_ptr<AddonCpp> addonCpp;
 
@@ -36,18 +43,18 @@ public:
 
   ~AddonJs() = default;
 
-  /// @returns JavaScript Boolean that indicates if the job was run
-  /// successfully. Can be false because a job is already set or being
-  /// processed.
-  js_value_t* runJob(std::any input, JobId id = kNoJobId) {
-    return js::Boolean::create(env_, addonCpp->runJob(std::move(input), id));
+  /// @returns JS number: the job id the scheduler assigned (0 on the untagged
+  /// single-job path). JS Boolean false when the job was rejected, e.g.
+  /// because a job is already set or being processed.
+  js_value_t* runJob(std::any input) {
+    return admissionToJs(addonCpp->runJob(std::move(input)));
   }
 
-  /// @returns JavaScript Boolean: false when the exclusive job (e.g. finetune)
-  /// is refused because inference jobs are queued or in flight.
-  js_value_t* runExclusiveJob(std::any input, JobId id = kNoJobId) {
-    return js::Boolean::create(
-        env_, addonCpp->runExclusiveJob(std::move(input), id));
+  /// @returns JS number (the assigned job id), or JS Boolean false when the
+  /// exclusive job (e.g. finetune) is refused because inference jobs are
+  /// queued or in flight.
+  js_value_t* runExclusiveJob(std::any input) {
+    return admissionToJs(addonCpp->runExclusiveJob(std::move(input)));
   }
 
   /**

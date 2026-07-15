@@ -248,7 +248,7 @@ function onOutput(handle, event, data, error) {
 
 ### 3. Single Job by Default, Opt-In Multi-Job
 
-By default the framework processes one job at a time (`SingleJobScheduler`), rejecting a `runJob()` call while another is in flight. To run multiple jobs concurrently, build a `MultiJobScheduler` (sized to a worker count, with an optional bounded queue) and pass it to the `AddonCpp` constructor — `runJob()` then admits jobs tagged with a `JobId` so their outputs can be correlated, up to the pool + queue capacity.
+By default the framework processes one job at a time (`SingleJobScheduler`), rejecting a `runJob()` call while another is in flight. To run multiple jobs concurrently, build a `MultiJobScheduler` (sized to a worker count, with an optional bounded queue) and pass it to the `AddonCpp` constructor — `runJob()` then admits jobs up to the pool + queue capacity, minting and returning a `JobId` for each (never reused) so their outputs can be correlated.
 
 ---
 
