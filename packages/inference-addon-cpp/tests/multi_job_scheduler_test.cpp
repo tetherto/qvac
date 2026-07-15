@@ -397,6 +397,47 @@ public:
   }
 };
 
+/// Lifecycle model whose jobStarting() throws for seeded ids: exercises the
+/// worker's exception boundary around the dequeue-time announcement. Its
+/// process(input, id) records entry and echoes the input.
+class ThrowingLifecycleTestModel final : public model::IModel,
+                                         public model::IModelMultiprocessor,
+                                         public model::IModelJobLifecycle {
+  mutable std::mutex mtx_;
+  std::unordered_set<JobId> throwIds_;
+  std::unordered_set<JobId> entered_;
+
+public:
+  void throwOnStart(JobId id) {
+    std::lock_guard lock(mtx_);
+    throwIds_.insert(id);
+  }
+
+  std::string getName() const override { return "ThrowingLifecycleTestModel"; }
+
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+
+  std::any process(const std::any& input) override { return input; }
+
+  void jobStarting(JobId id) override {
+    std::lock_guard lock(mtx_);
+    if (throwIds_.count(id) != 0) {
+      throw std::runtime_error("jobStarting failed");
+    }
+  }
+
+  std::any process(const std::any& input, JobId id) override {
+    std::lock_guard lock(mtx_);
+    entered_.insert(id);
+    return input;
+  }
+
+  bool entered(JobId id) const {
+    std::lock_guard lock(mtx_);
+    return entered_.count(id) != 0;
+  }
+};
+
 /// Blocks until @p target jobs are concurrently active on the gated model or
 /// the timeout lapses.
 int waitForGatedActive(const RegistrationGatedTestModel& model, int target,
@@ -1061,6 +1102,57 @@ TEST_F(MultiJobSchedulerTest, CancelByIdLandsOnRegistrationGatedModel) {
     }
   }
   EXPECT_TRUE(sawResult) << "the cancelled job must still publish its result";
+}
+
+// (k5) A throwing jobStarting() hook must not escape the worker thread (an
+// unhandled exception at the std::thread entry calls std::terminate): the job
+// it belonged to fails with exactly one terminal error, its slot / id /
+// exclusivity are released, process(input, id) is never entered for it, and
+// the worker survives to run later jobs.
+TEST(MultiJobSchedulerLifecycleTest, ThrowingJobStartingFailsOnlyThatJob) {
+  ThrowingLifecycleTestModel model;
+  MockOutputCallback callback;
+  auto outputQueue = std::make_shared<OutputQueue>(callback, model);
+  MultiJobScheduler scheduler(
+      &model, 1, /*cancel=*/nullptr, /*cancelById=*/nullptr, 1);
+  scheduler.start(outputQueue);
+
+  // The first admission mints id 1 (deterministic minting), so the failure
+  // can be seeded before the job exists. Exclusive, so the test also proves
+  // the failure releases exclusivity, not just the slot.
+  model.throwOnStart(1);
+  const std::optional<JobId> doomed =
+      scheduler.runExclusiveJob(std::string("doomed"));
+  ASSERT_TRUE(doomed.has_value());
+
+  waitForIdle(scheduler, std::chrono::seconds{5});
+  EXPECT_EQ(scheduler.activeJobs(), 0u)
+      << "the failed job's slot must be released";
+  EXPECT_FALSE(model.entered(*doomed))
+      << "process() must never run for a job whose jobStarting threw";
+
+  // Slot and exclusivity released, worker alive: a follow-up job must be
+  // admitted (not refused as busy/exclusive) and complete normally.
+  const std::optional<JobId> follower = scheduler.runJob(std::string("later"));
+  ASSERT_TRUE(follower.has_value())
+      << "a failed jobStarting must not wedge admission";
+
+  const Outputs outputs = drainUntil(
+      *outputQueue,
+      [](const Outputs& seen) { return countTerminalEvents(seen) >= 2; },
+      std::chrono::seconds{5});
+  int doomedErrors = 0;
+  for (const std::pair<JobId, std::any>& entry : outputs) {
+    if (entry.first == *doomed &&
+        entry.second.type() == typeid(Output::Error)) {
+      ++doomedErrors;
+    }
+  }
+  EXPECT_EQ(doomedErrors, 1)
+      << "the doomed job must surface exactly one terminal error";
+  EXPECT_EQ(erroredIds(outputs).count(*follower), 0u);
+  EXPECT_TRUE(model.entered(*follower))
+      << "the worker must survive to process later jobs";
 }
 
 // (l) Destroying the scheduler while a job waits in the queue must fail that

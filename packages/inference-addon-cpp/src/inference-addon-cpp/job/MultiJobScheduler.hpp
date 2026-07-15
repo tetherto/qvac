@@ -49,7 +49,9 @@ namespace qvac_lib_inference_addon_cpp {
 /// job to the model (IModelJobLifecycle::jobStarting) under the same lock the
 /// cancel paths take, so every cancel finds each admitted job either still
 /// queued (dropped here) or already announced (cancellable model-side) — never
-/// in between.
+/// in between. A throwing announcement fails only its own job: the worker
+/// releases the job's slot and exclusivity, publishes its terminal error, and
+/// moves on to the next job.
 ///
 /// runExclusiveJob admits a job that must run with the model to itself (a
 /// finetune reloads weights): it is refused unless the scheduler is idle, and
@@ -105,6 +107,20 @@ class MultiJobScheduler final : public IJobScheduler {
     outputQueue_->queueJobEnded(id);
   }
 
+  /// Backs a job out after its dequeue-time jobStarting() announcement threw:
+  /// releases the slot, in-flight id and exclusivity under the still-held
+  /// dequeue @p lock, then unlocks so the caller can publish the job's one
+  /// terminal error without holding the scheduler lock.
+  void dropStartingJob(
+      std::unique_lock<std::mutex>& lock, const PendingJob& job) {
+    --admittedCount_;
+    inFlight_.erase(job.id);
+    if (job.exclusive) {
+      exclusiveActive_ = false;
+    }
+    lock.unlock();
+  }
+
   /// Unlinks every still-queued job, releasing its slot and exclusivity;
   /// returns the dropped ids so the caller can queue their terminal errors
   /// outside the lock.
@@ -152,7 +168,22 @@ class MultiJobScheduler final : public IJobScheduler {
         // cancel that no longer finds the job queued always finds it
         // registered model-side — no cancel can fall into the gap between
         // dequeue and the model's own bookkeeping in process().
-        lifecycle_->jobStarting(job.id);
+        // The hook is not noexcept and the job is already retained
+        // (admittedCount_, inFlight_, exclusivity), so a throw here needs the
+        // same per-job isolation as process() — unhandled it would escape the
+        // thread entry function and terminate the whole process.
+        try {
+          lifecycle_->jobStarting(job.id);
+        } catch (const std::exception& exception) {
+          dropStartingJob(lock, job);
+          outputQueue_->queueException(exception, job.id);
+          continue;
+        } catch (...) {
+          dropStartingJob(lock, job);
+          outputQueue_->queueException(
+              std::runtime_error("Unknown exception in jobStarting"), job.id);
+          continue;
+        }
       }
       lock.unlock();
 

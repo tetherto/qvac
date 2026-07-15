@@ -108,7 +108,10 @@ struct IModelCancelById {
 /// here — registering the job with the model in this hook closes the window
 /// where a cancel would otherwise fall between dequeue and the model's own
 /// registration and silently do nothing. Implementations must be quick and
-/// must not call back into the scheduler.
+/// must not call back into the scheduler. A throw from jobStarting(id) fails
+/// that job: the scheduler releases the job's slot, publishes its terminal
+/// error and never enters process(input, id) for it — the worker (and the
+/// process) survive.
 struct IModelJobLifecycle {
   virtual ~IModelJobLifecycle() = default;
   IModelJobLifecycle() = default;
