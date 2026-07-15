@@ -19,18 +19,24 @@ const PROMPT = [
   { role: 'user', content: 'What is the capital of France? Answer in one word.' }
 ]
 
-function extractBufferDevices (logs) {
+function extractBufferDevices(logs) {
   const deviceNames = new Set()
   for (const line of logs) {
-    const match = line.match(/\b((?:Vulkan|CUDA|Metal|ROCm|SYCL|OpenCL)\d*)\b\s+model buffer size\s*=/i)
+    const match = line.match(
+      /\b((?:Vulkan|CUDA|Metal|ROCm|SYCL|OpenCL)\d*)\b\s+model buffer size\s*=/i
+    )
     if (match) deviceNames.add(match[1])
   }
   return deviceNames
 }
 
-async function collectResponse (response) {
+async function collectResponse(response) {
   const chunks = []
-  await response.onUpdate(data => { chunks.push(data) }).await()
+  await response
+    .onUpdate((data) => {
+      chunks.push(data)
+    })
+    .await()
   return chunks.join('').trim()
 }
 
@@ -45,7 +51,7 @@ const BASE_CONFIG = {
   verbosity: '2'
 }
 
-async function runMultiGpuTest (t, extraConfig, assertDevices) {
+async function runMultiGpuTest(t, extraConfig, assertDevices) {
   if (!hasMultiGpu) {
     t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
     return
@@ -86,35 +92,57 @@ async function runMultiGpuTest (t, extraConfig, assertDevices) {
   }
 }
 
-function assertMultiDevice (label) {
+function assertMultiDevice(label) {
   return (t, devices) => {
-    t.ok(devices.size >= 2, `${label} should be on >= 2 devices (found: ${[...devices].join(', ')})`)
+    t.ok(
+      devices.size >= 2,
+      `${label} should be on >= 2 devices (found: ${[...devices].join(', ')})`
+    )
   }
 }
 
-function assertSingleDevice (t, devices) {
-  t.ok(devices.size <= 1, `layers should stay on a single device (found: ${[...devices].join(', ')})`)
+function assertSingleDevice(t, devices) {
+  t.ok(
+    devices.size <= 1,
+    `layers should stay on a single device (found: ${[...devices].join(', ')})`
+  )
 }
 
-safeTest('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000, skip }, async t => {
-  await runMultiGpuTest(t, { 'split-mode': 'layer' }, assertMultiDevice('layers'))
-})
+safeTest(
+  'multi-gpu: split-mode=layer distributes layers across GPUs',
+  { timeout: 600_000, skip },
+  async (t) => {
+    await runMultiGpuTest(t, { 'split-mode': 'layer' }, assertMultiDevice('layers'))
+  }
+)
 
-safeTest('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000, skip }, async t => {
-  await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
-})
+safeTest(
+  'multi-gpu: split-mode=row distributes tensors across GPUs',
+  { timeout: 600_000, skip },
+  async (t) => {
+    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
+  }
+)
 
-safeTest('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000, skip }, async t => {
-  await runMultiGpuTest(t, {}, assertSingleDevice)
-})
+safeTest(
+  'multi-gpu: default (no split-mode) pins layers to a single device',
+  { timeout: 600_000, skip },
+  async (t) => {
+    await runMultiGpuTest(t, {}, assertSingleDevice)
+  }
+)
 
-safeTest('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000, skip }, async t => {
-  await runMultiGpuTest(
-    t,
-    { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },
-    assertMultiDevice('layers')
-  )
-})
+safeTest(
+  'multi-gpu: split-mode=layer with tensor-split and main-gpu',
+  { timeout: 600_000, skip },
+  async (t) => {
+    await runMultiGpuTest(
+      t,
+      { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },
+      assertMultiDevice('layers')
+    )
+  }
+)
 
 setImmediate(() => {
   setTimeout(() => {}, 500)

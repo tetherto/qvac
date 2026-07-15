@@ -3,12 +3,10 @@
 
 /**
  * Aggregate GGML TTS RTF benchmark artifacts (desktop + mobile + manual) into
- * a single findings table (Markdown + JSON). Mirrors the ONNX TTS aggregator
- * (aggregate-onnx-tts-rtf.js) so the two TTS backends share table conventions
- * and reviewers can compare them side-by-side.
+ * a single findings table (Markdown + JSON).
  *
- * GGML differences vs ONNX:
- *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl
+ * GGML backend notes:
+ *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
  *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
  *     opencl (Adreno android, manual / off the default cascade)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
@@ -25,7 +23,7 @@ const fs = require('fs')
 const path = require('path')
 
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
-const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl']
+const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic3']
 const NOISY_STDDEV_RATIO = 0.15
 
 function parseArgs (argv) {

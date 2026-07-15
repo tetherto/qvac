@@ -105,29 +105,35 @@ const QUANT_COMPONENTS = [
   }
 ]
 
-const LTX_MODELS_DIR = (proc.env && proc.env.LTX_MODELS_DIR) ||
-  path.resolve(__dirname, '../../models')
+const LTX_MODELS_DIR =
+  (proc.env && proc.env.LTX_MODELS_DIR) || path.resolve(__dirname, '../../models')
 const allowDownload = !!(proc.env && proc.env.LTX_DOWNLOAD === 'true')
 
 // Returns the smallest file in `dir` whose basename matches `re`, or null.
 // Smallest == lowest-bit quant == fastest to load for the smoke test.
-function smallestMatch (dir, re) {
+function smallestMatch(dir, re) {
   let best = null
   try {
     for (const name of fs.readdirSync(dir)) {
       if (!re.test(name)) continue
       const full = path.join(dir, name)
       let size
-      try { size = fs.statSync(full).size } catch (_) { continue }
+      try {
+        size = fs.statSync(full).size
+      } catch (_) {
+        continue
+      }
       if (!best || size < best.size) best = { name, size, path: full }
     }
-  } catch (_) { /* dir missing */ }
+  } catch (_) {
+    /* dir missing */
+  }
   return best
 }
 
 // Resolves a quant component to a local path: env override > smallest match.
 // Returns null when nothing local is available (caller may download).
-function resolveQuantLocal (comp) {
+function resolveQuantLocal(comp) {
   const override = proc.env && proc.env[comp.envVar]
   if (override) {
     const full = path.isAbsolute(override) ? override : path.join(LTX_MODELS_DIR, override)
@@ -136,7 +142,7 @@ function resolveQuantLocal (comp) {
   return smallestMatch(LTX_MODELS_DIR, comp.glob)
 }
 
-function localModelsPresent () {
+function localModelsPresent() {
   try {
     const fixedOk = FIXED_FILES.every((f) => fs.existsSync(path.join(LTX_MODELS_DIR, f.name)))
     const quantOk = QUANT_COMPONENTS.every((c) => resolveQuantLocal(c) !== null)
@@ -152,9 +158,18 @@ const modelsPresent = localModelsPresent()
 const skip = isMobile || noGpu || (!modelsPresent && !allowDownload)
 
 console.log(
-  '[LTX Video Test] Platform:', os.platform(), 'Arch:', os.arch(),
-  'NO_GPU:', noGpu, 'modelsPresent:', modelsPresent,
-  'allowDownload:', allowDownload, '→ Skip:', skip
+  '[LTX Video Test] Platform:',
+  os.platform(),
+  'Arch:',
+  os.arch(),
+  'NO_GPU:',
+  noGpu,
+  'modelsPresent:',
+  modelsPresent,
+  'allowDownload:',
+  allowDownload,
+  '→ Skip:',
+  skip
 )
 
 const platform = detectPlatform()
@@ -162,7 +177,7 @@ const platform = detectPlatform()
 // Detects an MJPG AVI buffer with a basic RIFF/AVI/idx1 sniff. We only validate
 // structural markers — strict bit-for-bit AVI parsing lives in the C++
 // test_avi_writer.cpp suite. (Kept local to mirror generate-video-wan.test.js.)
-function sniffAvi (buf) {
+function sniffAvi(buf) {
   if (!(buf instanceof Uint8Array) || buf.length < 64) return null
 
   const ascii = (i, n) => {
@@ -181,8 +196,10 @@ function sniffAvi (buf) {
   let hasIdx1 = false
   for (let i = 12; i < buf.length - 4; i++) {
     if (
-      buf[i] === 0x69 && buf[i + 1] === 0x64 &&
-      buf[i + 2] === 0x78 && buf[i + 3] === 0x31 // 'idx1'
+      buf[i] === 0x69 &&
+      buf[i + 1] === 0x64 &&
+      buf[i + 2] === 0x78 &&
+      buf[i + 3] === 0x31 // 'idx1'
     ) {
       hasIdx1 = true
       break
@@ -192,8 +209,10 @@ function sniffAvi (buf) {
   let frameMarkers = 0
   for (let i = 12; i < buf.length - 4; i++) {
     if (
-      buf[i] === 0x30 && buf[i + 1] === 0x30 &&
-      buf[i + 2] === 0x64 && buf[i + 3] === 0x63 // '00dc'
+      buf[i] === 0x30 &&
+      buf[i + 1] === 0x30 &&
+      buf[i + 2] === 0x64 &&
+      buf[i + 3] === 0x63 // '00dc'
     ) {
       frameMarkers++
     }
@@ -222,7 +241,8 @@ const SMOKE_STEPS = 1
 const SMOKE_FPS = 24
 const SMOKE_SEED = 42
 
-test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
+test(
+  'LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
   // Generous timeout: on a cold model cache the ~23 GB LTX weight set is pulled
   // inside the test via ensureModelPath; cached runs load + generate in <90s.
   { timeout: 1800000, skip },
@@ -326,7 +346,9 @@ test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
         seed: SMOKE_SEED
       })
 
-      response.on('stats', (s) => { stats = s })
+      response.on('stats', (s) => {
+        stats = s
+      })
 
       await response
         .onUpdate((data) => {
@@ -338,7 +360,9 @@ test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
                 progressTicks.push(tick)
               }
-            } catch (_) { /* not JSON */ }
+            } catch (_) {
+              /* not JSON */
+            }
           }
         })
         .await()
@@ -347,11 +371,13 @@ test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
 
       // ── Progress assertions ─────────────────────────────────────────────
-      t.ok(progressTicks.length > 0,
-        `Received progress ticks (got ${progressTicks.length})`)
-      t.ok(progressTicks.every((p) =>
-        Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
-      ), 'every progress tick carries finite step + total >= 1')
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      t.ok(
+        progressTicks.every(
+          (p) => Number.isFinite(p.step) && Number.isFinite(p.total) && p.total >= 1
+        ),
+        'every progress tick carries finite step + total >= 1'
+      )
 
       // ── AVI buffer assertions ──────────────────────────────────────────
       t.ok(avi instanceof Uint8Array, 'received an AVI Uint8Array on the output stream')
@@ -363,20 +389,23 @@ test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
         t.ok(sniff.hdrlList, 'hdrl LIST chunk follows the AVI marker at offset 12')
         t.ok(sniff.hasIdx1, 'AVI contains an idx1 (frame index) chunk')
         t.ok(
-          sniff.frameMarkers >= SMOKE_FRAMES &&
-          sniff.frameMarkers <= SMOKE_FRAMES * 2,
+          sniff.frameMarkers >= SMOKE_FRAMES && sniff.frameMarkers <= SMOKE_FRAMES * 2,
           `AVI carries ${SMOKE_FRAMES}..${SMOKE_FRAMES * 2} '00dc' markers ` +
-          `(got ${sniff.frameMarkers})`
+            `(got ${sniff.frameMarkers})`
         )
-        t.ok(sniff.riffSizeMatchesBuffer,
-          'RIFF size header matches the actual buffer length (no trailing data)')
+        t.ok(
+          sniff.riffSizeMatchesBuffer,
+          'RIFF size header matches the actual buffer length (no trailing data)'
+        )
       }
 
       // ── Audio assertions (LTX is a joint audio+video model) ─────────────
       if (stats) {
         const hasAudio = stats.hasAudio === 1 || stats.hasAudio === true
         t.ok(hasAudio, 'LTX produced a synchronized audio track (stats.hasAudio)')
-        console.log(`Audio: ${hasAudio ? `yes (${stats.audioSampleRate} Hz, muxed into AVI)` : 'none'}`)
+        console.log(
+          `Audio: ${hasAudio ? `yes (${stats.audioSampleRate} Hz, muxed into AVI)` : 'none'}`
+        )
       }
 
       // Save artifact for manual inspection.
@@ -398,12 +427,16 @@ test('LTX-2.3 T2V — smoke (txt2vid+audio) generates a structurally valid AVI',
       console.log(` Progress ticks  : ${progressTicks.length}`)
       console.log(` AVI size        : ${avi ? avi.length : 0} bytes`)
       console.log(` Frame markers   : ${sniff ? sniff.frameMarkers : 'n/a'}`)
-      console.log(` Has audio       : ${stats ? (stats.hasAudio === 1 || stats.hasAudio === true) : 'n/a'}`)
+      console.log(
+        ` Has audio       : ${stats ? stats.hasAudio === 1 || stats.hasAudio === true : 'n/a'}`
+      )
       console.log('='.repeat(60))
     } finally {
       console.log('\n=== Cleanup ===')
       await model.unload()
-      try { binding.releaseLogger() } catch (_) {}
+      try {
+        binding.releaseLogger()
+      } catch (_) {}
       console.log('Done.')
     }
   }

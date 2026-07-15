@@ -555,21 +555,6 @@ const METRIC_COLUMNS = {
     { key: 'whisper_decode_time_ms', label: 'Decode (ms)' },
     { key: 'audio_duration_ms', label: 'Audio (ms)' }
   ],
-  // ONNX TTS RTF benchmark — one row per (engine, variant, backend, useGPU)
-  // configuration. Mirrors the per-engine `aggregate-onnx-tts-rtf.js`
-  // desktop aggregator's column set so the rendered Step Summary matches
-  // what engineers see in `summarize` runs.
-  'onnx-tts': [
-    { key: 'real_time_factor', label: 'Mean RTF' },
-    { key: 'rtf_p50', label: 'P50 RTF' },
-    { key: 'rtf_p95', label: 'P95 RTF' },
-    { key: 'wall_time_ms', label: 'Wall (ms)' },
-    { key: 'cold_rtf', label: 'Cold RTF' },
-    { key: 'model_load_ms', label: 'Load (ms)' },
-    { key: 'tps', label: 'Tokens/sec' },
-    { key: 'ttfa_ms', label: 'TTFA (ms)' },
-    { key: 'inter_chunk_p95_ms', label: 'Inter-chunk P95 (ms)' }
-  ],
   diffusion: [
     { key: 'model_load_ms', label: 'Load (ms)' },
     { key: 'generation_ms', label: 'Gen (ms)' },

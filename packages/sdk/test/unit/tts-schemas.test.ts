@@ -48,10 +48,7 @@ test('ttsConfigSchema: requires MeCab dictionary for Chatterbox Japanese', (t) =
   t.is(r.success, false)
   if (!r.success) {
     t.is(r.error.issues[0]?.path.join('.'), 'mecabDictSrc')
-    t.is(
-      r.error.issues[0]?.message,
-      'mecabDictSrc is required when Chatterbox language is "ja".'
-    )
+    t.is(r.error.issues[0]?.message, 'mecabDictSrc is required when Chatterbox language is "ja".')
   }
 })
 
@@ -65,10 +62,7 @@ test('ttsConfigSchema: requires Cangjie TSV for Chatterbox Chinese', (t) => {
   t.is(r.success, false)
   if (!r.success) {
     t.is(r.error.issues[0]?.path.join('.'), 'cangjieTsvSrc')
-    t.is(
-      r.error.issues[0]?.message,
-      'cangjieTsvSrc is required when Chatterbox language is "zh".'
-    )
+    t.is(r.error.issues[0]?.message, 'cangjieTsvSrc is required when Chatterbox language is "zh".')
   }
 })
 

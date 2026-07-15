@@ -16,6 +16,9 @@ on:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
 
 permissions:
@@ -107,6 +110,10 @@ jobs:
             pkg:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/*nmtcpp*.yml"
+              - ".github/actions/cache-models/**"
+              - "vcpkg-overlays/triplets/**"
+              - "vcpkg-overlays/toolchains/**"
+              - "vcpkg-overlays/ports/qvac-fabric/**"
   verify-fabric-lockstep:
     needs: [authorize, changes]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
@@ -273,7 +280,7 @@ jobs:
       - prebuild-artifact-reuse
       - label-gate
     if: |-
-      always() && needs.sanity-checks.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
+      always() && !cancelled() && needs.sanity-checks.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -281,7 +288,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   prebuild-artifact-save:
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs:
       - prebuild
       - detect-native-changes
@@ -313,7 +320,7 @@ jobs:
       - ci-router
       - label-gate
     if: |-
-      always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+      always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -339,7 +346,7 @@ jobs:
       - ci-router
       - label-gate
     if: |-
-      always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+      always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:

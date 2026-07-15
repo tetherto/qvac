@@ -5,6 +5,7 @@ const os = require('bare-os')
 const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
+const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -45,25 +46,31 @@ try {
     }
 
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         const entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            real_time_factor: null,
-            wall_time_ms: null,
-            tps: null,
-            whisper_encode_time_ms: null,
-            whisper_decode_time_ms: null,
-            audio_duration_ms: null,
-            total_time_ms: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              real_time_factor: null,
+              wall_time_ms: null,
+              tps: null,
+              whisper_encode_time_ms: null,
+              whisper_decode_time_ms: null,
+              audio_duration_ms: null,
+              total_time_ms: null,
+              avg_rss_mb: null,
+              peak_rss_mb: null,
+              reclaimed_mb: null
+            },
+            metrics
+          ),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
         }
         _results.push(entry)
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -73,7 +80,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         const dirs = []
         if (global.testDir) dirs.push(global.testDir)
@@ -85,7 +92,9 @@ try {
         dirs.push('/tmp')
         for (let di = 0; di < dirs.length; di++) {
           try {
-            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(dirs[di], { recursive: true })
+            } catch (_) {}
             const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -94,8 +103,8 @@ try {
           }
         }
       },
-      writeStepSummary () {},
-      writeToConsole () {
+      writeStepSummary() {},
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           const CHUNK = 800
@@ -105,14 +114,25 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -125,16 +145,24 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 let _reportScheduled = false
 
-function _flushPerfReport () {
+function _flushPerfReport() {
   if (_perfReporter.length === 0) return
-  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
-  try { _perfReporter.writeToConsole() } catch (_) {}
+  try {
+    _perfReporter.writeReport(_reportPath)
+  } catch (_) {}
+  try {
+    _perfReporter.writeToConsole()
+  } catch (_) {}
 }
 
-function _scheduleReportWrite () {
+function _scheduleReportWrite() {
   if (_reportScheduled) return
   _reportScheduled = true
   process.on('exit', _flushPerfReport)
+}
+
+function roundToTwo(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? roundTo(value, 2) : null
 }
 
 /**
@@ -147,10 +175,10 @@ function _scheduleReportWrite () {
  *                         { realTimeFactor, totalTime, audioDurationMs,
  *                           tokensPerSecond, whisperEncodeMs, whisperDecodeMs,
  *                           totalWallMs, ... }
- * @param {Object} [extra] - Optional { wallMs, output, executionProvider }
- *                            overrides.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider,
+ *                            avgRssMb, peakRssMb, reclaimedMb } overrides.
  */
-function recordWhisperStats (label, stats, extra) {
+function recordWhisperStats(label, stats, extra) {
   if (!stats || typeof stats !== 'object') return
   const epOverride = extra && extra.executionProvider
   const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
@@ -158,39 +186,62 @@ function recordWhisperStats (label, stats, extra) {
   const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
   const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
   const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
-  const wallMs = (extra && typeof extra.wallMs === 'number')
-    ? Math.round(extra.wallMs)
-    : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
+  const wallMs =
+    extra && typeof extra.wallMs === 'number'
+      ? Math.round(extra.wallMs)
+      : typeof stats.totalWallMs === 'number'
+        ? Math.round(stats.totalWallMs)
+        : totalTimeMs
   const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
-  const encodeMs = typeof stats.whisperEncodeMs === 'number' ? Math.round(stats.whisperEncodeMs) : null
-  const decodeMs = typeof stats.whisperDecodeMs === 'number' ? Math.round(stats.whisperDecodeMs) : null
-  const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+  const encodeMs =
+    typeof stats.whisperEncodeMs === 'number' ? Math.round(stats.whisperEncodeMs) : null
+  const decodeMs =
+    typeof stats.whisperDecodeMs === 'number' ? Math.round(stats.whisperDecodeMs) : null
+  const audioMs =
+    typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+  // The active ggml backend id captured once per load() and echoed in every
+  // stats snapshot (0=CPU 1=Metal 2=CUDA 3=Vulkan 4=OpenCL 99=other). Recorded
+  // so the aggregator can label the REAL backend per device instead of guessing
+  // from the platform — e.g. Adreno Android lands on OpenCL(4), Mali on Vulkan(3).
+  const backendId = typeof stats.backendId === 'number' ? stats.backendId : null
 
-  _perfReporter.record(label, {
-    real_time_factor: rtf,
-    wall_time_ms: wallMs,
-    tps,
-    whisper_encode_time_ms: encodeMs,
-    whisper_decode_time_ms: decodeMs,
-    audio_duration_ms: audioMs,
-    total_time_ms: totalTimeMs
-  }, {
-    execution_provider: ep,
-    output: extra && extra.output ? String(extra.output) : null
-  })
+  _perfReporter.record(
+    label,
+    {
+      real_time_factor: rtf,
+      wall_time_ms: wallMs,
+      tps,
+      whisper_encode_time_ms: encodeMs,
+      whisper_decode_time_ms: decodeMs,
+      audio_duration_ms: audioMs,
+      total_time_ms: totalTimeMs,
+      avg_rss_mb: roundToTwo(extra && extra.avgRssMb),
+      peak_rss_mb: roundToTwo(extra && extra.peakRssMb),
+      reclaimed_mb: roundToTwo(extra && extra.reclaimedMb),
+      backend_id: backendId
+    },
+    {
+      execution_provider: ep,
+      output: extra && extra.output ? String(extra.output) : null
+    }
+  )
   _scheduleReportWrite()
 
   if (isMobile) {
-    try { _perfReporter.writeReport() } catch (_) {}
-    try { _perfReporter.writeToConsole() } catch (_) {}
+    try {
+      _perfReporter.writeReport()
+    } catch (_) {}
+    try {
+      _perfReporter.writeToConsole()
+    } catch (_) {}
   }
 }
 
-function detectPlatform () {
+function detectPlatform() {
   return `${platform}-${arch}`
 }
 
-async function downloadWithHttp (url, destPath, maxRedirects = 10) {
+async function downloadWithHttp(url, destPath, maxRedirects = 10) {
   const https = require('bare-https')
   const { URL } = require('bare-url')
 
@@ -269,11 +320,11 @@ async function downloadWithHttp (url, destPath, maxRedirects = 10) {
   })
 }
 
-async function downloadFile (url, destPath) {
+async function downloadFile(url, destPath) {
   return downloadWithHttp(url, destPath)
 }
 
-async function ensureWhisperModel (modelPath) {
+async function ensureWhisperModel(modelPath) {
   const modelName = path.basename(modelPath)
   const diskPath = path.dirname(modelPath)
 
@@ -311,14 +362,16 @@ async function ensureWhisperModel (modelPath) {
   }
 }
 
-async function ensureVADModel (vadModelPath) {
+async function ensureVADModel(vadModelPath) {
   const modelName = path.basename(vadModelPath)
   const diskPath = path.dirname(vadModelPath)
 
   if (fs.existsSync(vadModelPath)) {
     const stats = fs.statSync(vadModelPath)
     if (stats.size > 500000) {
-      console.log(`Using cached VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+      console.log(
+        `Using cached VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`
+      )
       return true
     }
   }
@@ -336,7 +389,9 @@ async function ensureVADModel (vadModelPath) {
     if (fs.existsSync(vadModelPath)) {
       const stats = fs.statSync(vadModelPath)
       if (stats.size > 500000) {
-        console.log(`Downloaded VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+        console.log(
+          `Downloaded VAD model: ${modelName} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`
+        )
         return true
       }
     }
@@ -349,14 +404,14 @@ async function ensureVADModel (vadModelPath) {
   }
 }
 
-async function waitUntilIdle (model, maxMs = 30000) {
+async function waitUntilIdle(model, maxMs = 30000) {
   const start = Date.now()
   while (Date.now() - start < maxMs) {
     try {
       const s = await model.status()
       if (s === 'IDLE') return true
     } catch {}
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return false
 }
@@ -366,7 +421,7 @@ async function waitUntilIdle (model, maxMs = 30000) {
  * @param {string|Buffer|Uint8Array|Array|Readable} audioInput - Audio input in various formats
  * @returns {Readable} Readable stream
  */
-function createAudioStream (audioInput) {
+function createAudioStream(audioInput) {
   if (typeof audioInput === 'string') {
     const audioBuffer = fs.readFileSync(audioInput)
     // Create stream from Buffer with chunking to simulate streaming behavior
@@ -399,7 +454,7 @@ function createAudioStream (audioInput) {
  * @param {number} sampleRate - Sample rate in Hz (default: 16000)
  * @returns {number} Duration in milliseconds
  */
-function calculateAudioDuration (audioBuffer, audioFormat = 's16le', sampleRate = 16000) {
+function calculateAudioDuration(audioBuffer, audioFormat = 's16le', sampleRate = 16000) {
   let bytesPerSample
   if (audioFormat === 's16le') {
     bytesPerSample = 2
@@ -424,12 +479,18 @@ function calculateAudioDuration (audioBuffer, audioFormat = 's16le', sampleRate 
  * @param {number} [amplitude=0.3] - Amplitude (0-1)
  * @returns {string} The filepath of the generated audio file
  */
-function generateTestAudio (filepath, sampleRate = 16000, duration = 3, frequency = 440, amplitude = 0.3) {
+function generateTestAudio(
+  filepath,
+  sampleRate = 16000,
+  duration = 3,
+  frequency = 440,
+  amplitude = 0.3
+) {
   if (fs.existsSync(filepath)) return filepath
   const samples = sampleRate * duration
   const buffer = Buffer.alloc(samples * 2)
   for (let i = 0; i < samples; i++) {
-    const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude
+    const sample = Math.sin((2 * Math.PI * frequency * i) / sampleRate) * amplitude
     buffer.writeInt16LE(Math.round(sample * 32767), i * 2)
   }
   fs.writeFileSync(filepath, buffer)
@@ -442,7 +503,7 @@ function generateTestAudio (filepath, sampleRate = 16000, duration = 3, frequenc
  * @param {number} [amplitude=1000] - Maximum amplitude of noise
  * @returns {Uint8Array} PCM noise data as Uint8Array
  */
-function makePcmNoise (numSamples, amplitude = 1000) {
+function makePcmNoise(numSamples, amplitude = 1000) {
   const buf = Buffer.alloc(numSamples * 2)
   for (let i = 0; i < numSamples; i++) {
     const sample = Math.floor((Math.random() * 2 - 1) * amplitude)
@@ -456,7 +517,7 @@ function makePcmNoise (numSamples, amplitude = 1000) {
  * @param {Object} [binding] - Optional binding instance (will require if not provided)
  * @returns {Object} The binding instance with logger configured
  */
-function setupJsLogger (binding = null) {
+function setupJsLogger(binding = null) {
   const actualBinding = binding || require('../../binding')
   const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
   actualBinding.setLogger((priority, message) => {
@@ -473,12 +534,21 @@ function setupJsLogger (binding = null) {
  * @param {string} actual - Actual/hypothesis transcription
  * @returns {number} WER as a decimal (0.0 = perfect, 1.0 = 100% error)
  */
-function wordErrorRate (expected, actual) {
+function wordErrorRate(expected, actual) {
   // Normalize text: lowercase, collapse whitespace, trim
-  const normalize = (text) => text.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
+  const normalize = (text) =>
+    text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
 
-  const r = normalize(expected).split(/\s+/).filter(w => w.length > 0)
-  const h = normalize(actual).split(/\s+/).filter(w => w.length > 0)
+  const r = normalize(expected)
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+  const h = normalize(actual)
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
 
   if (r.length === 0) {
     return h.length === 0 ? 0 : 1
@@ -516,7 +586,7 @@ function wordErrorRate (expected, actual) {
  * @param {number} [threshold=0.3] - Maximum acceptable WER (default 30%)
  * @returns {Object} Validation result with wer, passed, and details
  */
-function validateAccuracy (expected, actual, threshold = 0.3) {
+function validateAccuracy(expected, actual, threshold = 0.3) {
   const wer = wordErrorRate(expected, actual)
   const passed = wer <= threshold
 
@@ -541,7 +611,7 @@ function validateAccuracy (expected, actual, threshold = 0.3) {
  * @param {string} options.desktopDir - Directory to look in on desktop (default: 'examples/samples')
  * @returns {string} - Full path to the asset file
  */
-function getAssetPath (filename, options = {}) {
+function getAssetPath(filename, options = {}) {
   const { desktopDir = 'examples/samples' } = options
 
   // Mobile environment - use asset loading from testAssets
@@ -553,7 +623,9 @@ function getAssetPath (filename, options = {}) {
       return resolvedPath
     }
     // Asset not found in manifest
-    throw new Error(`Asset not found in testAssets: ${filename}. Make sure ${filename} is in test/mobile/testAssets/ directory and rebuild the app.`)
+    throw new Error(
+      `Asset not found in testAssets: ${filename}. Make sure ${filename} is in test/mobile/testAssets/ directory and rebuild the app.`
+    )
   }
 
   // Desktop environment - check multiple locations
@@ -580,7 +652,7 @@ function getAssetPath (filename, options = {}) {
  * @param {string} [modelsDir] - Optional models directory (defaults to '../../models')
  * @returns {Object} Object with modelsDir, samplesDir, modelPath, vadModelPath, and audioPath
  */
-function getTestPaths (modelsDir = null) {
+function getTestPaths(modelsDir = null) {
   // On mobile, use global.testDir if available (set by mobile test framework)
   const writableRoot = global.testDir || (isMobile ? os.tmpdir() : null)
 
@@ -633,7 +705,7 @@ function getTestPaths (modelsDir = null) {
  * @param {Function} [params.onUpdate] - Optional callback for real-time updates: (outputArr) => void
  * @returns {Promise<Object>} Result object with passed, output, and data
  */
-async function runTranscription (params, expectation = {}) {
+async function runTranscription(params, expectation = {}) {
   if (!params) {
     return {
       output: 'Error: Missing required parameter: params',
@@ -761,8 +833,8 @@ async function runTranscription (params, expectation = {}) {
     }
 
     const fullText = segments
-      .map(s => (s && s.text) ? s.text : '')
-      .filter(t => t.trim().length > 0)
+      .map((s) => (s && s.text ? s.text : ''))
+      .filter((t) => t.trim().length > 0)
       .join(' ')
       .trim()
       .replace(/\s+/g, ' ')
@@ -814,9 +886,15 @@ async function runTranscription (params, expectation = {}) {
     // Round stats for readability
     const roundedStats = jobStats
       ? {
-          totalTime: jobStats.totalTime ? Number(jobStats.totalTime.toFixed(4)) : jobStats.totalTime,
-          tokensPerSecond: jobStats.tokensPerSecond ? Number(jobStats.tokensPerSecond.toFixed(2)) : jobStats.tokensPerSecond,
-          realTimeFactor: jobStats.realTimeFactor ? Number(jobStats.realTimeFactor.toFixed(5)) : jobStats.realTimeFactor,
+          totalTime: jobStats.totalTime
+            ? Number(jobStats.totalTime.toFixed(4))
+            : jobStats.totalTime,
+          tokensPerSecond: jobStats.tokensPerSecond
+            ? Number(jobStats.tokensPerSecond.toFixed(2))
+            : jobStats.tokensPerSecond,
+          realTimeFactor: jobStats.realTimeFactor
+            ? Number(jobStats.realTimeFactor.toFixed(5))
+            : jobStats.realTimeFactor,
           audioDurationMs: jobStats.audioDurationMs,
           totalSamples: jobStats.totalSamples
         }
@@ -827,11 +905,12 @@ async function runTranscription (params, expectation = {}) {
       ? `duration: ${durationMs.toFixed(0)}ms, RTF: ${jobStats.realTimeFactor?.toFixed(4) || 'N/A'}`
       : `duration: ${durationMs.toFixed(0)}ms (calculated)`
 
-    const audioInputPreview = typeof params.audioInput === 'string'
-      ? path.basename(params.audioInput)
-      : (Buffer.isBuffer(params.audioInput) || params.audioInput instanceof Uint8Array
+    const audioInputPreview =
+      typeof params.audioInput === 'string'
+        ? path.basename(params.audioInput)
+        : Buffer.isBuffer(params.audioInput) || params.audioInput instanceof Uint8Array
           ? `${(params.audioInput.length / 1024).toFixed(1)}KB`
-          : 'stream')
+          : 'stream'
 
     const output = `Transcribed ${segmentCount} segments (${statsInfo}) from audio: "${audioInputPreview}"`
 

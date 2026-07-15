@@ -8,7 +8,7 @@ const state = Object.freeze({
 })
 
 class MockedBinding {
-  constructor ({ jobDelayMs = 10 } = {}) {
+  constructor({ jobDelayMs = 10 } = {}) {
     this._handle = null
     this._state = state.LOADING
     this.outputCb = null
@@ -17,18 +17,18 @@ class MockedBinding {
     this._jobDelayMs = jobDelayMs
   }
 
-  createInstance (interfaceType, configurationParams, outputCb) {
+  createInstance(interfaceType, configurationParams, outputCb) {
     console.log('Constructing the TTS addon')
     this.outputCb = outputCb
     this._handle = { id: Date.now() }
     return this._handle
   }
 
-  setBaseInferenceCallback (callback) {
+  setBaseInferenceCallback(callback) {
     this._baseInferenceCallback = callback
   }
 
-  _callCallbacks (event, data, error) {
+  _callCallbacks(event, data, error) {
     // addon-cpp 1.1.5 emits event, data, error only; job ownership stays in JS.
     if (this.outputCb) {
       this.outputCb(this, event, data, error)
@@ -38,18 +38,18 @@ class MockedBinding {
     }
   }
 
-  activate (handle) {
+  activate(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Activated the TTS addon')
     this._state = state.LISTENING
   }
 
-  cancel (handle) {
+  cancel(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._cancelRequested = true
   }
 
-  runJob (handle, data) {
+  runJob(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
 
     if (this._state !== state.LISTENING) {
@@ -77,74 +77,78 @@ class MockedBinding {
       }
 
       this._callCallbacks('AudioResult', { outputArray: mockAudioSamples }, null)
-      this._callCallbacks('RuntimeStats', {
-        totalTime: 0.12,
-        tokensPerSecond: 120,
-        realTimeFactor: 0.08,
-        audioDurationMs: sampleCount / 24,
-        totalSamples: sampleCount
-      }, null)
+      this._callCallbacks(
+        'RuntimeStats',
+        {
+          totalTime: 0.12,
+          tokensPerSecond: 120,
+          realTimeFactor: 0.08,
+          audioDurationMs: sampleCount / 24,
+          totalSamples: sampleCount
+        },
+        null
+      )
       this._state = state.LISTENING
     }, this._jobDelayMs)
     return true
   }
 
-  loadWeights (handle, weightsData) {
+  loadWeights(handle, weightsData) {
     if (handle !== this._handle) throw new Error('Invalid handle')
   }
 
-  destroyInstance (handle) {
+  destroyInstance(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._handle = null
     this._state = state.IDLE
   }
 
-  unload (handle) {
+  unload(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this.destroyInstance(handle)
   }
 
-  status () {
+  status() {
     return this._state
   }
 
-  pause () {
+  pause() {
     throw new Error('pause() is not supported in addon-cpp 1.x')
   }
 
-  stop () {
+  stop() {
     throw new Error('stop() is not supported in addon-cpp 1.x')
   }
 
-  load () {
+  load() {
     throw new Error('load() is not supported in addon-cpp 1.x')
   }
 
-  reload () {
+  reload() {
     throw new Error('reload() is not supported in addon-cpp 1.x')
   }
 
-  append () {
+  append() {
     throw new Error('append() is not supported in addon-cpp 1.x')
   }
 
-  unloadWeights () {
+  unloadWeights() {
     throw new Error('unloadWeights() is not supported in addon-cpp 1.x')
   }
 
-  set transitionCb (_) {
+  set transitionCb(_) {
     // no-op in addon-cpp 1.x mock
   }
 
-  get transitionCb () {
+  get transitionCb() {
     return null
   }
 
-  get state () {
+  get state() {
     return this._state
   }
 
-  set state (nextState) {
+  set state(nextState) {
     if (Object.values(state).includes(nextState)) {
       this._state = nextState
     }

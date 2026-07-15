@@ -15,6 +15,9 @@ struct VadSegmentsDeleter {
   }
 };
 using VadSegmentsPtr = std::unique_ptr<whisper_vad_segments, VadSegmentsDeleter>;
+
+// whisper.cpp VAD segment timestamps are reported in centiseconds.
+constexpr float K_CENTISECONDS_TO_SECONDS = 0.01F;
 } // namespace
 
 namespace qvac_lib_inference_addon_whisper {
@@ -184,13 +187,7 @@ void StreamingProcessor::emitConversationEvents(
   }
 }
 
-void StreamingProcessor::processLoop() {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "StreamingProcessor: thread started (VAD-based segmentation)");
-
-  model_.prepareForStreaming();
-
+whisper_vad_params StreamingProcessor::buildVadParams() const {
   whisper_vad_params vadParams = whisper_vad_default_params();
   vadParams.threshold = config_.vadThreshold;
   vadParams.min_speech_duration_ms = config_.minSpeechDurationMs;
@@ -198,160 +195,164 @@ void StreamingProcessor::processLoop() {
   vadParams.max_speech_duration_s = config_.maxSpeechDurationS;
   vadParams.speech_pad_ms = config_.speechPadMs;
   vadParams.samples_overlap = config_.samplesOverlap;
+  return vadParams;
+}
 
-  while (true) {
-    bool done = false;
-    bool wasCancelled = false;
+float StreamingProcessor::speechPadSeconds() const {
+  return static_cast<float>(config_.speechPadMs) / 1000.0F;
+}
 
-    {
-      std::unique_lock lock(mtx_);
-      cv_.wait(lock, [this]() {
-        return ended_ || !pendingAudio_.empty();
-      });
+float StreamingProcessor::segmentEndSeconds(
+    whisper_vad_segments* segments, int index) const {
+  return whisper_vad_segments_get_segment_t1(segments, index) *
+         K_CENTISECONDS_TO_SECONDS;
+}
 
-      if (processBuffer_.empty()) {
-        processBufferStartSample_ = totalSamplesReceived_;
-      }
-      const std::int64_t pendingSampleCount =
-          static_cast<std::int64_t>(pendingAudio_.size());
-      processBuffer_.insert(
-          processBuffer_.end(), pendingAudio_.begin(), pendingAudio_.end());
-      pendingAudio_.clear();
-      totalSamplesReceived_ += pendingSampleCount;
+int StreamingProcessor::secondsToSample(float seconds) const {
+  return static_cast<int>(seconds * static_cast<float>(config_.sampleRate));
+}
 
-      done = ended_;
-      wasCancelled = cancelled_;
+bool StreamingProcessor::hasEnoughNewAudioForVad(
+    int bufferSize, bool done) const {
+  const int newSamplesSinceLastRun = bufferSize - bufferSizeAtLastVadRun_;
+  return newSamplesSinceLastRun >= config_.vadRunIntervalSamples || done;
+}
+
+void StreamingProcessor::drainPendingAudio(bool& done, bool& wasCancelled) {
+  std::unique_lock lock(mtx_);
+  cv_.wait(lock, [this]() { return ended_ || !pendingAudio_.empty(); });
+
+  if (processBuffer_.empty()) {
+    processBufferStartSample_ = totalSamplesReceived_;
+  }
+  const std::int64_t pendingSampleCount =
+      static_cast<std::int64_t>(pendingAudio_.size());
+  processBuffer_.insert(
+      processBuffer_.end(), pendingAudio_.begin(), pendingAudio_.end());
+  pendingAudio_.clear();
+  totalSamplesReceived_ += pendingSampleCount;
+
+  done = ended_;
+  wasCancelled = cancelled_;
+}
+
+void StreamingProcessor::updateSpeakingState(
+    whisper_vad_segments* segments, int nSeg, float totalDurationS,
+    int bufferSize) {
+  bool speaking = false;
+  if (nSeg > 0) {
+    const float lastSegmentT1S = segmentEndSeconds(segments, nSeg - 1);
+    speaking = lastSegmentT1S + speechPadSeconds() >= totalDurationS;
+    lastSpeechEndSample_ =
+        processBufferStartSample_ +
+        std::min(secondsToSample(lastSegmentT1S), bufferSize);
+    hasSeenSpeech_ = true;
+  }
+  // whisper.cpp's public VAD API gives us the speech decision here; it does
+  // not expose per-run probabilities in the installed header.
+  emitConversationEvents(speaking, speaking ? 1.0F : 0.0F);
+}
+
+int StreamingProcessor::findLastCompleteSegment(
+    whisper_vad_segments* segments, int nSeg, float totalDurationS,
+    bool done) const {
+  int lastComplete = -1;
+  for (int i = 0; i < nSeg; i++) {
+    if (segmentEndSeconds(segments, i) + speechPadSeconds() < totalDurationS) {
+      lastComplete = i;
     }
+  }
+  // When the stream has ended, the trailing segment is final even without the
+  // usual speech-pad margin.
+  if (done && nSeg > 0) {
+    lastComplete = nSeg - 1;
+  }
+  return lastComplete;
+}
 
-    if (wasCancelled) {
-      break;
+void StreamingProcessor::dispatchCompleteSegments(
+    whisper_vad_segments* segments, int lastComplete, int bufferSize) {
+  for (int i = 0; i <= lastComplete; i++) {
+    const float t0S =
+        whisper_vad_segments_get_segment_t0(segments, i) *
+        K_CENTISECONDS_TO_SECONDS;
+    const float t1S = segmentEndSeconds(segments, i);
+    const int startSample = std::max(0, secondsToSample(t0S));
+    const int endSample = std::min(secondsToSample(t1S), bufferSize);
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "StreamingProcessor: segment " + std::to_string(i) + " [" +
+            std::to_string(t0S) + "s - " + std::to_string(t1S) +
+            "s] samples=[" + std::to_string(startSample) + ", " +
+            std::to_string(endSample) + "]");
+    if (endSample > startSample) {
+      processAudioRange(startSample, endSample);
     }
+  }
+}
 
-    int bufferSize = static_cast<int>(processBuffer_.size());
+void StreamingProcessor::trimProcessedAudio(
+    whisper_vad_segments* segments, int lastComplete, int bufferSize) {
+  const float lastT1S = segmentEndSeconds(segments, lastComplete);
+  const int trimPoint = std::min(secondsToSample(lastT1S), bufferSize);
+  processBuffer_.erase(
+      processBuffer_.begin(), processBuffer_.begin() + trimPoint);
+  processBufferStartSample_ += trimPoint;
+  bufferSizeAtLastVadRun_ = 0;
+}
 
-    // Only run VAD when enough new audio has arrived since the last run
-    bool shouldRunVad =
-        (bufferSize - bufferSizeAtLastVadRun_) >=
-            config_.vadRunIntervalSamples ||
-        done;
+void StreamingProcessor::forceProcessOnOverflow() {
+  if (static_cast<int>(processBuffer_.size()) < config_.maxBufferSamples) {
+    return;
+  }
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "StreamingProcessor: buffer overflow, force-processing " +
+          std::to_string(processBuffer_.size()) + " samples");
+  processAudioRange(0, static_cast<int>(processBuffer_.size()));
+  processBuffer_.clear();
+  processBufferStartSample_ = totalSamplesReceived_;
+  bufferSizeAtLastVadRun_ = 0;
+}
 
-    if (shouldRunVad && bufferSize > 0) {
-      bufferSizeAtLastVadRun_ = bufferSize;
+void StreamingProcessor::runVadSegmentation(
+    const whisper_vad_params& vadParams, bool done) {
+  const int bufferSize = static_cast<int>(processBuffer_.size());
 
-      VadSegmentsPtr segments(whisper_vad_segments_from_samples(
-          vadCtx_, vadParams, processBuffer_.data(), bufferSize));
+  if (!hasEnoughNewAudioForVad(bufferSize, done) || bufferSize <= 0) {
+    return;
+  }
 
-      if (segments) {
-        int nSeg = whisper_vad_segments_n_segments(segments.get());
-        float totalDurationS =
-            static_cast<float>(bufferSize) /
-            static_cast<float>(config_.sampleRate);
+  bufferSizeAtLastVadRun_ = bufferSize;
+  VadSegmentsPtr segments(whisper_vad_segments_from_samples(
+      vadCtx_, vadParams, processBuffer_.data(), bufferSize));
 
-        constexpr float CS_TO_SEC = 0.01F;
+  if (segments) {
+    const int nSeg = whisper_vad_segments_n_segments(segments.get());
+    const float totalDurationS =
+        static_cast<float>(bufferSize) /
+        static_cast<float>(config_.sampleRate);
 
-        bool speaking = false;
-        if (nSeg > 0) {
-          float lastSegmentT1S =
-              whisper_vad_segments_get_segment_t1(segments.get(), nSeg - 1) *
-              CS_TO_SEC;
-          float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
-          speaking = lastSegmentT1S + marginS >= totalDurationS;
-          lastSpeechEndSample_ =
-              processBufferStartSample_ +
-              std::min(
-                  static_cast<int>(
-                      lastSegmentT1S * static_cast<float>(config_.sampleRate)),
-                  bufferSize);
-          hasSeenSpeech_ = true;
-        }
-        // whisper.cpp's public VAD API gives us the speech decision here; it
-        // does not expose per-run probabilities in the installed header.
-        emitConversationEvents(speaking, speaking ? 1.0F : 0.0F);
+    updateSpeakingState(segments.get(), nSeg, totalDurationS, bufferSize);
 
-        int lastComplete = -1;
-        for (int i = 0; i < nSeg; i++) {
-          float t1S =
-              whisper_vad_segments_get_segment_t1(segments.get(), i) *
-              CS_TO_SEC;
-          float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
-          if (t1S + marginS < totalDurationS) {
-            lastComplete = i;
-          }
-        }
-
-        if (done && nSeg > 0) {
-          lastComplete = nSeg - 1;
-        }
-
-        if (lastComplete >= 0) {
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-              "StreamingProcessor: VAD found " + std::to_string(nSeg) +
-                  " segment(s), " + std::to_string(lastComplete + 1) +
-                  " complete, totalDuration=" +
-                  std::to_string(totalDurationS) + "s");
-
-          for (int i = 0; i <= lastComplete; i++) {
-            float t0S =
-                whisper_vad_segments_get_segment_t0(segments.get(), i) *
-                CS_TO_SEC;
-            float t1S =
-                whisper_vad_segments_get_segment_t1(segments.get(), i) *
-                CS_TO_SEC;
-            int startSample = std::max(
-                0,
-                static_cast<int>(
-                    t0S * static_cast<float>(config_.sampleRate)));
-            int endSample = std::min(
-                static_cast<int>(
-                    t1S * static_cast<float>(config_.sampleRate)),
-                bufferSize);
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "StreamingProcessor: segment " + std::to_string(i) +
-                    " [" + std::to_string(t0S) + "s - " +
-                    std::to_string(t1S) + "s] samples=[" +
-                    std::to_string(startSample) + ", " +
-                    std::to_string(endSample) + "]");
-            if (endSample > startSample) {
-              processAudioRange(startSample, endSample);
-            }
-          }
-
-          float lastT1S =
-              whisper_vad_segments_get_segment_t1(
-                  segments.get(), lastComplete) *
-              CS_TO_SEC;
-          int trimPoint = std::min(
-              static_cast<int>(
-                  lastT1S * static_cast<float>(config_.sampleRate)),
-              bufferSize);
-          processBuffer_.erase(
-              processBuffer_.begin(), processBuffer_.begin() + trimPoint);
-          processBufferStartSample_ += trimPoint;
-          bufferSizeAtLastVadRun_ = 0;
-        }
-      }
-
-      // Safety: force-process if buffer exceeds max even after VAD
-      if (static_cast<int>(processBuffer_.size()) >=
-          config_.maxBufferSamples) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-            "StreamingProcessor: buffer overflow, force-processing " +
-                std::to_string(processBuffer_.size()) + " samples");
-        processAudioRange(0, static_cast<int>(processBuffer_.size()));
-        processBuffer_.clear();
-        processBufferStartSample_ = totalSamplesReceived_;
-        bufferSizeAtLastVadRun_ = 0;
-      }
-    }
-
-    if (done) {
-      break;
+    const int lastComplete =
+        findLastCompleteSegment(segments.get(), nSeg, totalDurationS, done);
+    if (lastComplete >= 0) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "StreamingProcessor: VAD found " + std::to_string(nSeg) +
+              " segment(s), " + std::to_string(lastComplete + 1) +
+              " complete, totalDuration=" + std::to_string(totalDurationS) +
+              "s");
+      dispatchCompleteSegments(segments.get(), lastComplete, bufferSize);
+      trimProcessedAudio(segments.get(), lastComplete, bufferSize);
     }
   }
 
+  forceProcessOnOverflow();
+}
+
+void StreamingProcessor::finalizeStream() {
   {
     std::lock_guard lock(mtx_);
     if (cancelled_) {
@@ -363,7 +364,6 @@ void StreamingProcessor::processLoop() {
     }
   }
 
-  // Process any remaining audio in the buffer
   if (!processBuffer_.empty()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -386,6 +386,34 @@ void StreamingProcessor::processLoop() {
         "StreamingProcessor: stream ended, queueing job completion");
     outputQueue_->queueJobEnded();
   }
+}
+
+void StreamingProcessor::processLoop() {
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "StreamingProcessor: thread started (VAD-based segmentation)");
+
+  model_.prepareForStreaming();
+
+  const whisper_vad_params vadParams = buildVadParams();
+
+  while (true) {
+    bool done = false;
+    bool wasCancelled = false;
+    drainPendingAudio(done, wasCancelled);
+
+    if (wasCancelled) {
+      break;
+    }
+
+    runVadSegmentation(vadParams, done);
+
+    if (done) {
+      break;
+    }
+  }
+
+  finalizeStream();
 }
 
 } // namespace qvac_lib_inference_addon_whisper

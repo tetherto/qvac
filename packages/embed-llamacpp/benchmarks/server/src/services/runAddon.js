@@ -18,7 +18,8 @@ const runAddon = async (payload) => {
   setLogger((priority, message) => {
     const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'OFF']
     // Only log errors and warnings from C++
-    if (priority <= 1) { // ERROR or WARN
+    if (priority <= 1) {
+      // ERROR or WARN
       process.stderr.write(`[C++ ${levels[priority]}] ${message}\n`)
     }
   })
@@ -90,15 +91,19 @@ const runAddon = async (payload) => {
 
       // Extract embeddings array - structure is embeddings[0] = array of embeddings
       const batchEmbeddings = embeddings[0]
-      const outputs = batchEmbeddings.map(emb => Array.from(emb))
+      const outputs = batchEmbeddings.map((emb) => Array.from(emb))
 
-      logger.debug(`Generated ${outputs.length} embeddings with ${outputs[0]?.length || 0} dimensions`)
+      logger.debug(
+        `Generated ${outputs.length} embeddings with ${outputs[0]?.length || 0} dimensions`
+      )
 
       const [runSec, runNano] = process.hrtime(runStart)
       const runMs = runSec * 1e3 + runNano / 1e6
       const throughput = runMs > 0 ? (inputs.length / (runMs / 1000)).toFixed(1) : '0'
 
-      logger.info(`Processed ${inputs.length} inputs in ${runMs.toFixed(2)}ms (${throughput} sent/s)`)
+      logger.info(
+        `Processed ${inputs.length} inputs in ${runMs.toFixed(2)}ms (${throughput} sent/s)`
+      )
 
       return {
         outputs,

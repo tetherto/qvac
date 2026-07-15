@@ -15,7 +15,7 @@ const MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
 }
 
-async function waitForLog (logs, predicate, timeoutMs = 5000) {
+async function waitForLog(logs, predicate, timeoutMs = 5000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     const match = logs.find(predicate)

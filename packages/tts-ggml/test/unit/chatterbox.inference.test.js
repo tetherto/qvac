@@ -8,8 +8,8 @@ const process = require('bare-process')
 
 global.process = process
 
-function createMockedModel ({
-  onOutput = () => { },
+function createMockedModel({
+  onOutput = () => {},
   binding = undefined,
   exclusiveRun = false
 } = {}) {
@@ -34,7 +34,7 @@ function createMockedModel ({
   return model
 }
 
-async function waitWithTimeout (promise, timeoutMs, message) {
+async function waitWithTimeout(promise, timeoutMs, message) {
   let timeoutId
   const timeoutPromise = new Promise((resolve, reject) => {
     timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
@@ -59,13 +59,19 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
 
   const response = await model.run({ type: 'text', input: 'Hello world' })
   const outputs = []
-  await response.onUpdate(data => outputs.push(data)).await()
+  await response.onUpdate((data) => outputs.push(data)).await()
 
   t.ok(outputs.length > 0, 'Response should emit at least one update')
-  t.ok(outputs.some(d => d.outputArray), 'Response should contain outputArray payload')
+  t.ok(
+    outputs.some((d) => d.outputArray),
+    'Response should contain outputArray payload'
+  )
   t.ok(response.stats.totalSamples > 0, 'Response stats should include total samples')
   t.ok(events.length > 0, 'Raw addon callback should have been called')
-  t.ok(callbackArity.every(length => length === 4), 'Native callbacks should not include a native jobId argument')
+  t.ok(
+    callbackArity.every((length) => length === 4),
+    'Native callbacks should not include a native jobId argument'
+  )
   await model.unload()
 })
 
@@ -79,11 +85,7 @@ test('Chatterbox: exclusiveRun does not deadlock run()', async (t) => {
     'run() timed out under exclusiveRun'
   )
 
-  await waitWithTimeout(
-    response.await(),
-    1000,
-    'response.await() timed out under exclusiveRun'
-  )
+  await waitWithTimeout(response.await(), 1000, 'response.await() timed out under exclusiveRun')
 
   t.ok(response.stats.totalSamples > 0, 'Exclusive run should still produce runtime stats')
   await model.unload()
@@ -125,11 +127,7 @@ test('Chatterbox: exclusiveRun does not deadlock reload() or unload()', async (t
     'response.await() after reload timed out under exclusiveRun'
   )
 
-  await waitWithTimeout(
-    model.unload(),
-    1000,
-    'unload() timed out under exclusiveRun'
-  )
+  await waitWithTimeout(model.unload(), 1000, 'unload() timed out under exclusiveRun')
   t.pass('exclusiveRun operations complete without deadlock')
 })
 
@@ -151,7 +149,7 @@ test('Chatterbox: reload during in-flight job does not stay busy', async (t) => 
   t.ok(rejected, 'Reload should reject the in-flight response')
 
   // Let stale callbacks from the destroyed addon drain before submitting a new job.
-  await new Promise(resolve => setTimeout(resolve, 150))
+  await new Promise((resolve) => setTimeout(resolve, 150))
 
   const afterReload = await model.run({ type: 'text', input: 'hello after reload' })
   await afterReload.await()
@@ -164,7 +162,11 @@ test('Chatterbox: static methods return expected values', async (t) => {
   const modelKey = TTSGgml.getModelKey({})
   t.is(modelKey, 'tts-ggml', 'getModelKey should return "tts-ggml"')
   t.ok(TTSGgml.inferenceManagerConfig, 'inferenceManagerConfig should exist')
-  t.is(TTSGgml.inferenceManagerConfig.noAdditionalDownload, true, 'noAdditionalDownload should be true')
+  t.is(
+    TTSGgml.inferenceManagerConfig.noAdditionalDownload,
+    true,
+    'noAdditionalDownload should be true'
+  )
 })
 
 test('Chatterbox: modelDir fills in the two GGUF paths', async (t) => {
@@ -225,10 +227,17 @@ test('Chatterbox: nCtx forwards to ttsParams; omitted when unset', (t) => {
   t.is(capped._buildTtsParams().nCtx, 1024, 'explicit nCtx forwarded to the addon')
 
   const uncapped = new TTSGgml({ files, config: { language: 'en' }, nCtx: 0 })
-  t.is(uncapped._buildTtsParams().nCtx, 0, 'nCtx=0 (full GGUF context escape hatch) forwarded as-is')
+  t.is(
+    uncapped._buildTtsParams().nCtx,
+    0,
+    'nCtx=0 (full GGUF context escape hatch) forwarded as-is'
+  )
 
   const defaulted = new TTSGgml({ files, config: { language: 'en' } })
-  t.absent(defaulted._buildTtsParams().nCtx, 'nCtx omitted when unset so the addon applies its 2048 default')
+  t.absent(
+    defaulted._buildTtsParams().nCtx,
+    'nCtx omitted when unset so the addon applies its 2048 default'
+  )
 })
 
 test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset', (t) => {
@@ -241,7 +250,10 @@ test('Chatterbox: kvCacheType forwards to ttsParams; omitted when unset', (t) =>
   t.is(explicit._buildTtsParams().kvCacheType, 'f32', 'explicit kvCacheType forwarded to the addon')
 
   const defaulted = new TTSGgml({ files, config: { language: 'en' } })
-  t.absent(defaulted._buildTtsParams().kvCacheType, 'kvCacheType omitted when unset so the addon applies its f16 default')
+  t.absent(
+    defaulted._buildTtsParams().kvCacheType,
+    'kvCacheType omitted when unset so the addon applies its f16 default'
+  )
 })
 
 test('Chatterbox: enhancer GGUF path forwards lavasrEnhancerPath (no enhance flag)', (t) => {
@@ -265,15 +277,16 @@ test('Chatterbox: enhancer GGUF path forwards lavasrEnhancerPath (no enhance fla
 
 test('Chatterbox: unknown enhancer.type is rejected at construction', (t) => {
   t.exception(
-    () => new TTSGgml({
-      files: {
-        t3Model: './models/chatterbox-t3-turbo.gguf',
-        s3genModel: './models/chatterbox-s3gen.gguf',
-        lavasrEnhancer: '/abs/enh.gguf'
-      },
-      config: { language: 'en' },
-      enhancer: { type: 'nope' }
-    }),
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrEnhancer: '/abs/enh.gguf'
+        },
+        config: { language: 'en' },
+        enhancer: { type: 'nope' }
+      }),
     /unknown enhancer\.type/,
     'a typo in enhancer.type throws instead of silently disabling enhancement'
   )
@@ -333,15 +346,16 @@ test('Chatterbox: denoiserPath via denoiser block forwards the path', (t) => {
 
 test('Chatterbox: unknown denoiser.type is rejected at construction', (t) => {
   t.exception(
-    () => new TTSGgml({
-      files: {
-        t3Model: './models/chatterbox-t3-turbo.gguf',
-        s3genModel: './models/chatterbox-s3gen.gguf',
-        lavasrDenoiser: '/abs/den.gguf'
-      },
-      config: { language: 'en' },
-      denoiser: { type: 'nope' }
-    }),
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        config: { language: 'en' },
+        denoiser: { type: 'nope' }
+      }),
     /unknown denoiser\.type/,
     'a typo in denoiser.type throws instead of silently disabling denoising'
   )
@@ -349,15 +363,16 @@ test('Chatterbox: unknown denoiser.type is rejected at construction', (t) => {
 
 test('Chatterbox: denoiser + streamChunkTokens is rejected (streaming denoise is a follow-up)', (t) => {
   t.exception(
-    () => new TTSGgml({
-      files: {
-        t3Model: './models/chatterbox-t3-turbo.gguf',
-        s3genModel: './models/chatterbox-s3gen.gguf',
-        lavasrDenoiser: '/abs/den.gguf'
-      },
-      streamChunkTokens: 25,
-      config: { language: 'en' }
-    }),
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        streamChunkTokens: 25,
+        config: { language: 'en' }
+      }),
     /denoiser is not yet supported with Chatterbox native chunk streaming/,
     'denoiser + native chunk streaming throws (unlike the enhancer, which supports it)'
   )
@@ -385,8 +400,28 @@ test('Chatterbox: outputSampleRate forwards to ttsParams; omitted when unset', (
   }
 
   const withRate = new TTSGgml({ files, config: { language: 'en', outputSampleRate: 22050 } })
-  t.is(withRate._buildTtsParams().outputSampleRate, 22050, 'outputSampleRate forwarded to native params')
+  t.is(
+    withRate._buildTtsParams().outputSampleRate,
+    22050,
+    'outputSampleRate forwarded to native params'
+  )
 
   const noRate = new TTSGgml({ files, config: { language: 'en' } })
   t.absent(noRate._buildTtsParams().outputSampleRate, 'no outputSampleRate when unset')
+})
+
+test('Chatterbox: cfgRate forwards to ttsParams; omitted when unset', (t) => {
+  const files = {
+    t3Model: './models/chatterbox-t3-turbo.gguf',
+    s3genModel: './models/chatterbox-s3gen.gguf'
+  }
+
+  const override = new TTSGgml({ files, config: { language: 'en' }, cfgRate: 0.7 })
+  t.is(override._buildTtsParams().cfgRate, 0.7, 'explicit cfgRate forwarded to the addon')
+
+  const disabled = new TTSGgml({ files, config: { language: 'en' }, cfgRate: 0 })
+  t.is(disabled._buildTtsParams().cfgRate, 0, 'cfgRate=0 (disable CFG) forwarded as-is, not treated as unset')
+
+  const defaulted = new TTSGgml({ files, config: { language: 'en' } })
+  t.absent(defaulted._buildTtsParams().cfgRate, 'cfgRate omitted when unset so the engine keeps the model\'s baked rate')
 })

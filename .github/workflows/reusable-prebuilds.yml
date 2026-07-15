@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, onnx, parakeet, tts-ggml, tts-onnx,
+# llm-llamacpp, nmtcpp, onnx, parakeet, tts-ggml,
 # whispercpp, ocr-onnx. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"

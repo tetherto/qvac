@@ -9,7 +9,7 @@ const { ParakeetInterface } = require('../../parakeet')
 const process = require('bare-process')
 global.process = process
 
-function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
+function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
   TranscriptionParakeet.prototype.validateModelFiles = () => undefined
 
   const model = new TranscriptionParakeet({
@@ -25,12 +25,17 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
     }
   })
 
-  model._createAddon = configurationParams => {
+  model._createAddon = (configurationParams) => {
     const _binding = binding || new MockedBinding()
-    const addon = new ParakeetInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
-      model._outputCallback(addon, event, jobId, output, error)
-      onOutput(addon, event, jobId, output, error)
-    }, transitionCb)
+    const addon = new ParakeetInterface(
+      _binding,
+      configurationParams,
+      (addon, event, jobId, output, error) => {
+        model._outputCallback(addon, event, jobId, output, error)
+        onOutput(addon, event, jobId, output, error)
+      },
+      transitionCb
+    )
 
     return addon
   }
@@ -62,13 +67,13 @@ test('Inference returns correct output for audio input', async (t) => {
   await wait()
 
   // Check that we received an Output event for the audio chunk.
-  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
+  const outputEvent = events.find((e) => e.event === 'Output' && e.jobId === 1)
   t.ok(outputEvent, 'Should receive an Output event for the audio chunk')
   t.ok(outputEvent.output, 'Output event should have output property')
   t.ok(Array.isArray(outputEvent.output), 'Output should be an array of segments')
 
   // Check that we received a JobEnded event.
-  const jobEndedEvent = events.find(e => e.event === 'JobEnded' && e.jobId === 1)
+  const jobEndedEvent = events.find((e) => e.event === 'JobEnded' && e.jobId === 1)
   t.ok(jobEndedEvent, 'Should receive a JobEnded event for job 1')
 })
 
@@ -84,16 +89,16 @@ test('Model state transitions are handled correctly', async (t) => {
   const response = await model.run(sampleAudio)
   await response._finishPromise
 
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   await model.pause()
-  t.ok(await model.status() === 'paused', 'Status: Model should be paused')
+  t.ok((await model.status()) === 'paused', 'Status: Model should be paused')
 
   await model.unpause()
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   await model.addon.activate()
-  t.ok(await model.status() === 'listening', 'Status: Model should be listening')
+  t.ok((await model.status()) === 'listening', 'Status: Model should be listening')
 
   // After destroy, the instance is invalid - we verify via transition callback
   await model.addon.destroyInstance()
@@ -107,14 +112,16 @@ test('Model emits error events when an error occurs during processing', async (t
   // Create a custom binding that throws an error on append
   const binding = {
     createInstance: () => ({ id: 1 }),
-    runJob: () => { throw new Error('Forced error for testing') },
-    loadWeights: () => { },
-    activate: () => { },
-    pause: () => { },
-    stop: () => { },
-    cancel: () => { },
+    runJob: () => {
+      throw new Error('Forced error for testing')
+    },
+    loadWeights: () => {},
+    activate: () => {},
+    pause: () => {},
+    stop: () => {},
+    cancel: () => {},
     status: () => 'idle',
-    destroyInstance: () => { }
+    destroyInstance: () => {}
   }
   const model = createMockedModel({ binding })
 
@@ -126,8 +133,14 @@ test('Model emits error events when an error occurs during processing', async (t
     t.fail('Should have rejected the response')
   } catch (error) {
     // The error should be a QvacErrorAddonParakeet
-    t.ok(error.constructor.name === 'QvacErrorAddonParakeet', 'Error should be a QvacErrorAddonParakeet')
-    t.ok(error.message.includes('Forced error') || typeof error.code === 'number', 'Error should contain forced error message or have error code')
+    t.ok(
+      error.constructor.name === 'QvacErrorAddonParakeet',
+      'Error should be a QvacErrorAddonParakeet'
+    )
+    t.ok(
+      error.message.includes('Forced error') || typeof error.code === 'number',
+      'Error should contain forced error message or have error code'
+    )
   }
 })
 
@@ -141,11 +154,16 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   }
 
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf',
-    maxThreads: 4,
-    useGPU: false
-  }, onOutput, transitionCb)
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf',
+      maxThreads: 4,
+      useGPU: false
+    },
+    onOutput,
+    transitionCb
+  )
 
   let status = await addon.status()
   t.ok(status === 'loading', 'Initial addon status should be "loading"')
@@ -171,10 +189,10 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   t.ok(appendResult2 === 1, 'Job ID should remain 1 for the end-of-job signal')
 
   await wait()
-  const outputEvent = events.find(e => e.event === 'Output' && e.jobId === 1)
+  const outputEvent = events.find((e) => e.event === 'Output' && e.jobId === 1)
   t.ok(outputEvent, 'Output callback should be triggered for audio chunk')
   t.ok(
-    events.find(e => e.event === 'JobEnded' && e.jobId === 1),
+    events.find((e) => e.event === 'JobEnded' && e.jobId === 1),
     'JobEnded callback should be emitted for job 1'
   )
 
@@ -194,7 +212,7 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 
   await wait()
   t.ok(
-    events.find(e => e.event === 'JobEnded' && e.jobId === 2),
+    events.find((e) => e.event === 'JobEnded' && e.jobId === 2),
     'JobEnded callback should be emitted for job 2'
   )
 
@@ -203,9 +221,13 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 
 test('ParakeetInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   addon._activeJobId = 42
   addon._nextJobId = 43
@@ -220,14 +242,22 @@ test('ParakeetInterface runJob preserves active job when native rejects new job'
   t.is(accepted, false, 'runJob should report rejected when native side is busy')
   t.is(addon._activeJobId, 42, 'Current active job ID should remain unchanged')
   t.is(addon._nextJobId, 43, 'Next job counter should not advance on rejection')
-  t.is(await addon.status(), 'processing', 'State should remain unchanged for the current active job')
+  t.is(
+    await addon.status(),
+    'processing',
+    'State should remain unchanged for the current active job'
+  )
 })
 
 test('ParakeetInterface cancel clears active job only after cancel resolves', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   addon._activeJobId = 7
   addon._setState('processing')
@@ -250,11 +280,15 @@ test('ParakeetInterface cancel clears active job only after cancel resolves', as
 test('ParakeetInterface cancels buffered job before native run starts', async (t) => {
   const events = []
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, (handle, event, jobId, output, error) => {
-    events.push({ event, jobId, output, error })
-  })
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    (handle, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
+    }
+  )
 
   const pendingJobId = await addon.append({
     type: 'audio',
@@ -267,16 +301,22 @@ test('ParakeetInterface cancels buffered job before native run starts', async (t
   t.is(addon._bufferedAudio.length, 0, 'Buffered cancel should clear queued audio')
   t.is(await addon.status(), 'listening', 'Buffered cancel should return to listening state')
   t.ok(
-    events.find(e => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'),
+    events.find(
+      (e) => e.event === 'Error' && e.jobId === pendingJobId && e.error === 'Job cancelled'
+    ),
     'Buffered cancel should fail the pending JS-owned job'
   )
 })
 
 test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   addon._activeJobId = 2
   addon._nextJobId = 3
@@ -295,9 +335,13 @@ test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t
 })
 
 test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
-  const addon = new ParakeetInterface(new MockedBinding(), {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    new MockedBinding(),
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   let threw = false
   try {
@@ -305,16 +349,23 @@ test('ParakeetInterface unloadWeights throws unsupported operation error', async
   } catch (error) {
     threw = true
     t.is(error.code, 24007, 'unloadWeights should map to FAILED_TO_RESET')
-    t.ok(String(error.message).includes('unloadWeights is not supported'), 'Error should explain supported alternatives')
+    t.ok(
+      String(error.message).includes('unloadWeights is not supported'),
+      'Error should explain supported alternatives'
+    )
   }
   t.ok(threw, 'unloadWeights should throw')
 })
 
 test('ParakeetInterface destroyInstance awaits active cancel before teardown', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   addon._activeJobId = 9
   addon._setState('processing')
@@ -343,9 +394,13 @@ test('ParakeetInterface destroyInstance awaits active cancel before teardown', a
 
 test('ParakeetInterface destroyInstance skips cancel with no active job', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   let cancelCalls = 0
   binding.cancel = async () => {
@@ -359,9 +414,13 @@ test('ParakeetInterface destroyInstance skips cancel with no active job', async 
 
 test('ParakeetInterface reload preserves wrapper job numbering across native recreation', async (t) => {
   const binding = new MockedBinding()
-  const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
-  }, () => {})
+  const addon = new ParakeetInterface(
+    binding,
+    {
+      modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
+    },
+    () => {}
+  )
 
   addon._nextJobId = 7
   addon._activeJobId = 6
@@ -377,5 +436,9 @@ test('ParakeetInterface reload preserves wrapper job numbering across native rec
   t.is(addon._nextJobId, 7, 'reload should preserve JS-owned job numbering')
   t.is(addon._activeJobId, null, 'reload should clear the previous active job')
   t.is(addon._bufferedAudio.length, 0, 'reload should discard buffered audio from the old instance')
-  t.is(await addon.status(), 'loading', 'reload should leave the addon in loading state until activation')
+  t.is(
+    await addon.status(),
+    'loading',
+    'reload should leave the addon in loading state until activation'
+  )
 })

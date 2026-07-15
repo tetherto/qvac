@@ -86,7 +86,7 @@ const shutdown = async () => {
 
   // Close server and exit
   return new Promise((resolve) => {
-    server.close(err => {
+    server.close((err) => {
       if (err) {
         logger.error('Error during shutdown', err)
         resolve(1)

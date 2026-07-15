@@ -228,7 +228,7 @@ jobs:
           OCR_GGML_DOCTR_RECOGNIZER: models/crnn_mobilenet_v3_small.gguf
 
       - name: Upload performance report
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
         with:
           name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}

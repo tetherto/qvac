@@ -81,14 +81,18 @@ const translateRequestIdField = z
   )
 
 export const translateRequestSchema = z.discriminatedUnion('modelType', [
-  translateParamsNmtSchema.extend({
-    type: z.literal('translate'),
-    requestId: translateRequestIdField
-  }),
-  translateParamsLlmSchema.extend({
-    type: z.literal('translate'),
-    requestId: translateRequestIdField
-  })
+  translateParamsNmtSchema
+    .extend({
+      type: z.literal('translate'),
+      requestId: translateRequestIdField
+    })
+    .meta({ title: 'TranslateNmtRequest' }),
+  translateParamsLlmSchema
+    .extend({
+      type: z.literal('translate'),
+      requestId: translateRequestIdField
+    })
+    .meta({ title: 'TranslateLlmRequest' })
 ])
 
 // Valid model types for translation (aliases and canonical)

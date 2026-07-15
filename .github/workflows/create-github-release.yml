@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       repo_name:
-        description: "Short repository name for tag prefix (e.g., 'llamacpp-llm', 'onnx-tts')"
+        description: "Short repository name for tag prefix (e.g., 'llamacpp-llm', 'tts-ggml')"
         required: true
         type: string
       release_name:

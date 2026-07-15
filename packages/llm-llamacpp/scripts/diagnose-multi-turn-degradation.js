@@ -25,7 +25,7 @@ const CHAIN = [
   { prompt: 'Subtract 4 from the result. Reply with the number only.', expected: '20' }
 ]
 
-function makeInference () {
+function makeInference() {
   return new LlmLlamacpp({
     files: { model: [MODEL_PATH] },
     config: {
@@ -45,15 +45,18 @@ function makeInference () {
   })
 }
 
-async function runChain (label, removeThinking) {
+async function runChain(label, removeThinking) {
   const inference = makeInference()
   await inference.load()
 
   const conversation = []
   const cacheKey = path.resolve(
     __dirname,
-    `../test/model/qwen3-diag-${label.toLowerCase()}-${Date.now()}.bin`)
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+    `../test/model/qwen3-diag-${label.toLowerCase()}-${Date.now()}.bin`
+  )
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
 
   const turns = []
   for (let i = 0; i < CHAIN.length; i++) {
@@ -66,46 +69,65 @@ async function runChain (label, removeThinking) {
       generationParams: { remove_thinking_from_context: removeThinking }
     })
     let response = ''
-    await result.onUpdate(token => { response += token }).await()
+    await result
+      .onUpdate((token) => {
+        response += token
+      })
+      .await()
     const stats = result.stats || {}
 
     const closed = /<\/think>/.test(response)
     const visible = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
     const reasoningMatch = response.match(/<think>([\s\S]*?)<\/think>/)
     const reasoning = reasoningMatch ? reasoningMatch[1] : ''
-    const correct =
-        closed && new RegExp(`\\b${expected}\\b`).test(visible)
+    const correct = closed && new RegExp(`\\b${expected}\\b`).test(visible)
 
     conversation.push({ role: 'assistant', content: response })
-    turns.push({ idx: i + 1, prompt, expected, response, reasoning, visible, stats, closed, correct })
+    turns.push({
+      idx: i + 1,
+      prompt,
+      expected,
+      response,
+      reasoning,
+      visible,
+      stats,
+      closed,
+      correct
+    })
   }
 
   await inference.unload()
-  try { fs.unlinkSync(cacheKey) } catch (_) {}
+  try {
+    fs.unlinkSync(cacheKey)
+  } catch (_) {}
   return turns
 }
 
-function dump (label, turns) {
+function dump(label, turns) {
   console.log(`\n${'='.repeat(70)}`)
   console.log(`  ${label}`)
   console.log('='.repeat(70))
   for (const t of turns) {
-    console.log(`\n--- Turn ${t.idx} | expected="${t.expected}" | answered="${t.visible}" | correct=${t.correct} ---`)
+    console.log(
+      `\n--- Turn ${t.idx} | expected="${t.expected}" | answered="${t.visible}" | correct=${t.correct} ---`
+    )
     const stats = t.stats
-    console.log(`  cacheTokens=${stats.CacheTokens || '?'} ` +
-      `generatedTokens=${stats.generatedTokens || '?'} ` +
-      `promptTokens=${stats.promptTokens || '?'} ` +
-      `discards=${stats.thinkingBlockDiscards || 0}`)
+    console.log(
+      `  cacheTokens=${stats.CacheTokens || '?'} ` +
+        `generatedTokens=${stats.generatedTokens || '?'} ` +
+        `promptTokens=${stats.promptTokens || '?'} ` +
+        `discards=${stats.thinkingBlockDiscards || 0}`
+    )
     console.log(`  reasoning body (${t.reasoning.length} chars):`)
     // Print the reasoning body indented so it's easy to scan
-    const lines = t.reasoning.split('\n').filter(l => l.trim())
+    const lines = t.reasoning.split('\n').filter((l) => l.trim())
     for (const line of lines) {
       console.log(`    ${line}`)
     }
   }
 }
 
-async function main () {
+async function main() {
   console.log('[diag] running 3-turn arithmetic chain on Qwen3-0.6B...\n')
 
   const onTurns = await runChain('ON', true)
@@ -125,7 +147,7 @@ async function main () {
   console.log(onTurns[2].reasoning)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[diag] fatal:', err)
   process.exit(3)
 })

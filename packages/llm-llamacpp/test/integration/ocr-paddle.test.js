@@ -18,11 +18,13 @@ const useCpu = isDarwinX64 || isLinuxArm64
 const PADDLE_OCR_CONFIG = {
   llmModel: {
     modelName: 'PaddleOCR-VL-1.5.gguf',
-    downloadUrl: 'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5.gguf'
+    downloadUrl:
+      'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5.gguf'
   },
   projModel: {
     modelName: 'PaddleOCR-VL-1.5-mmproj.gguf',
-    downloadUrl: 'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj.gguf'
+    downloadUrl:
+      'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj.gguf'
   },
   ctx_size: '4096'
 }
@@ -32,11 +34,10 @@ const TEST_CONSTANTS = {
   maxTokens: isMobile ? '768' : '1800'
 }
 
-const DEVICE_CONFIGS = (isMobile || useCpu)
-  ? [{ id: 'cpu', device: 'cpu' }]
-  : [{ id: 'gpu', device: 'gpu' }]
+const DEVICE_CONFIGS =
+  isMobile || useCpu ? [{ id: 'cpu', device: 'cpu' }] : [{ id: 'gpu', device: 'gpu' }]
 
-function getConfig (device) {
+function getConfig(device) {
   return {
     gpu_layers: '98',
     temp: '0.1',
@@ -47,7 +48,7 @@ function getConfig (device) {
   }
 }
 
-async function setupPaddleInference (t, device = 'gpu') {
+async function setupPaddleInference(t, device = 'gpu') {
   const [modelName, dirPath] = await ensureModel(PADDLE_OCR_CONFIG.llmModel)
   const modelPath = path.join(dirPath, modelName)
   t.ok(fs.existsSync(modelPath), 'LLM model file should exist')
@@ -71,7 +72,7 @@ async function setupPaddleInference (t, device = 'gpu') {
   return { inference }
 }
 
-async function runOcr (inference, imageFilePath, prompt) {
+async function runOcr(inference, imageFilePath, prompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
@@ -84,11 +85,13 @@ async function runOcr (inference, imageFilePath, prompt) {
   const generatedText = []
   let error = null
 
-  response.onUpdate(data => {
-    generatedText.push(data)
-  }).onError(err => {
-    error = err
-  })
+  response
+    .onUpdate((data) => {
+      generatedText.push(data)
+    })
+    .onError((err) => {
+      error = err
+    })
 
   await response.await()
 
@@ -103,54 +106,61 @@ async function runOcr (inference, imageFilePath, prompt) {
   }
 }
 
-test('PaddleOCR-VL can extract text from document image', { timeout: TEST_CONSTANTS.timeout }, async t => {
-  for (const deviceConfig of DEVICE_CONFIGS) {
-    const label = `[${deviceConfig.id.toUpperCase()}]`
+test(
+  'PaddleOCR-VL can extract text from document image',
+  { timeout: TEST_CONSTANTS.timeout },
+  async (t) => {
+    for (const deviceConfig of DEVICE_CONFIGS) {
+      const label = `[${deviceConfig.id.toUpperCase()}]`
 
-    const { inference } = await setupPaddleInference(t, deviceConfig.device)
+      const { inference } = await setupPaddleInference(t, deviceConfig.device)
 
-    const imageFilePath = getMediaPath('news-paper.jpg')
-    t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
+      const imageFilePath = getMediaPath('news-paper.jpg')
+      t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
 
-    const { generatedText, startTime, endTime } = await runOcr(inference, imageFilePath)
-    const totalTime = endTime - startTime
+      const { generatedText, startTime, endTime } = await runOcr(inference, imageFilePath)
+      const totalTime = endTime - startTime
 
-    t.comment(`${label} Generated text (${generatedText.length} chars): ${generatedText.substring(0, 500)}...`)
-    t.comment(`${label} Total time: ${(totalTime / 1000).toFixed(2)}s`)
+      t.comment(
+        `${label} Generated text (${generatedText.length} chars): ${generatedText.substring(0, 500)}...`
+      )
+      t.comment(`${label} Total time: ${(totalTime / 1000).toFixed(2)}s`)
 
-    t.ok(generatedText.length > 0, `${label} Should generate OCR output`)
+      t.ok(generatedText.length > 0, `${label} Should generate OCR output`)
 
-    const lowerText = generatedText.toLowerCase()
-    const expectedKeywords = ['titanic', 'new york', 'iceberg']
-    const foundKeywords = expectedKeywords.filter(kw => lowerText.includes(kw))
+      const lowerText = generatedText.toLowerCase()
+      const expectedKeywords = ['titanic', 'new york', 'iceberg']
+      const foundKeywords = expectedKeywords.filter((kw) => lowerText.includes(kw))
 
-    t.ok(
-      foundKeywords.length >= 1,
-      `${label} OCR output should contain at least one expected keyword. ` +
-      `Found: ${foundKeywords.join(', ') || 'none'}. ` +
-      `Expected any of: ${expectedKeywords.join(', ')}`
-    )
+      t.ok(
+        foundKeywords.length >= 1,
+        `${label} OCR output should contain at least one expected keyword. ` +
+          `Found: ${foundKeywords.join(', ') || 'none'}. ` +
+          `Expected any of: ${expectedKeywords.join(', ')}`
+      )
+    }
   }
-})
+)
 
-test('PaddleOCR-VL produces consistent OCR on repeated runs', { timeout: TEST_CONSTANTS.timeout }, async t => {
-  for (const deviceConfig of DEVICE_CONFIGS) {
-    const label = `[${deviceConfig.id.toUpperCase()}]`
+test(
+  'PaddleOCR-VL produces consistent OCR on repeated runs',
+  { timeout: TEST_CONSTANTS.timeout },
+  async (t) => {
+    for (const deviceConfig of DEVICE_CONFIGS) {
+      const label = `[${deviceConfig.id.toUpperCase()}]`
 
-    const { inference } = await setupPaddleInference(t, deviceConfig.device)
+      const { inference } = await setupPaddleInference(t, deviceConfig.device)
 
-    const imageFilePath = getMediaPath('news-paper.jpg')
-    t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
+      const imageFilePath = getMediaPath('news-paper.jpg')
+      t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
 
-    const { generatedText: text1 } = await runOcr(inference, imageFilePath)
-    t.ok(text1.length > 0, `${label} first run produced output (${text1.length} chars)`)
+      const { generatedText: text1 } = await runOcr(inference, imageFilePath)
+      t.ok(text1.length > 0, `${label} first run produced output (${text1.length} chars)`)
 
-    const { generatedText: text2 } = await runOcr(inference, imageFilePath)
-    t.ok(text2.length > 0, `${label} second run produced output (${text2.length} chars)`)
+      const { generatedText: text2 } = await runOcr(inference, imageFilePath)
+      t.ok(text2.length > 0, `${label} second run produced output (${text2.length} chars)`)
 
-    t.ok(
-      text1.length > 10 && text2.length > 10,
-      `${label} both runs produced substantial output`
-    )
+      t.ok(text1.length > 10 && text2.length > 10, `${label} both runs produced substantial output`)
+    }
   }
-})
+)

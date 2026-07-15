@@ -20,11 +20,14 @@
 
 const os = require('bare-os')
 
-const flag = typeof os.getEnv === 'function' ? (os.getEnv('QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') || '') : ''
+const flag =
+  typeof os.getEnv === 'function' ? os.getEnv('QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') || '' : ''
 const enabled = flag === '1' || flag.toLowerCase() === 'true' || flag.toLowerCase() === 'yes'
 
 if (enabled) {
   require('../benchmark/rtf-benchmark.test.js')
 } else {
-  console.log('[rtf-benchmark mobile shim] QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE not set; skipping benchmark.')
+  console.log(
+    '[rtf-benchmark mobile shim] QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE not set; skipping benchmark.'
+  )
 }

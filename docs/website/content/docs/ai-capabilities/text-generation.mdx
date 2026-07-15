@@ -28,7 +28,6 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model. Model file format: `*.gguf`.
 
 - If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/models/sharded-models).
-- For multimodal prompts (images + text), see [Multimodal](/ai-capabilities/multimodal).
 - To adapt a model to domain-specific tasks, see [Fine-tuning](/ai-capabilities/fine-tuning).
 - For models available as constants, see [SDK — Models](/introduction#models).
 
@@ -40,6 +39,8 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
 * Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model's key/value attention state to speed up follow-up turns in long conversations. The `kvCache` parameter sets the cache key — pass a string to manage a session manually, or `true` to let the SDK auto-generate one.
+* Multimodal: attach images (and other media) to prompts so the model reasons over text and images together in the same conversation — see [Multimodal](/ai-capabilities/multimodal).
+* Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/ai-capabilities/batch-processing).
 
 ## Examples
 

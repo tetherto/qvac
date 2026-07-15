@@ -15,6 +15,9 @@ on:
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
   workflow_call:
 
@@ -49,6 +52,28 @@ jobs:
         uses: ./.github/actions/label-gate
         with:
           github-token: ${{ secrets.PAT_TOKEN }}
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_verified_checks: ${{ steps.route.outputs.run_verified_checks }}
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -65,47 +90,12 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      pkg: ${{ steps.filter.outputs.pkg }}
-      native: ${{ steps.filter.outputs.native }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
-
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
-        id: filter
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # `native` is a C++/CMake-scoped subset of `pkg`. The multi-platform
-          # prebuild (llama.cpp/ggml across Linux/macOS/Windows/Android/iOS) is
-          # expensive, so it only runs when a file that actually affects the
-          # compiled addon changes. Doc/JS-only edits match `pkg` (so the PR
-          # workflow still runs) but not `native` (so the prebuild is skipped).
-          filters: |
-            pkg:
-              - "packages/fabric/**"
-              - ".github/workflows/*fabric*.yml"
-            native:
-              - "packages/fabric/addon/**"
-              - "packages/fabric/CMakeLists.txt"
-              - "packages/fabric/cmake/**"
-              - "packages/fabric/symbols.map"
-              - "packages/fabric/exports.txt"
-              - "packages/fabric/vcpkg*.json"
-              - ".github/workflows/prebuilds-fabric.yml"
-
   sanity-checks:
     needs:
       - authorize
-      - changes
+      - ci-router
       - label-gate
-    if: |-
-      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -145,7 +135,9 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac/.github/actions/yamlfmt@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -199,15 +191,68 @@ jobs:
   cpp-lint:
     needs:
       - authorize
-      - changes
+      - ci-router
       - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/fabric
+
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - ci-router
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native_changed: ${{ steps.detect.outputs.native_changed }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Checkout composite source (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect native file changes
+        id: detect
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: packages/fabric
+
+  prebuild-artifact-reuse:
+    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    needs:
+      - detect-native-changes
+      - sanity-checks
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+    steps:
+      - name: Checkout prebuild-artifact-reuse composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-reuse
+          sparse-checkout-cone-mode: false
+      - name: Reuse prebuilds from a prior run
+        id: reuse
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: on-pr-fabric.yml
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   prebuild:
     permissions:
@@ -217,22 +262,65 @@ jobs:
       id-token: write
     needs:
       - authorize
-      - changes
+      - ci-router
+      - sanity-checks
+      - detect-native-changes
+      - prebuild-artifact-reuse
       - label-gate
-    if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.changes.outputs.pkg == 'true') && ( github.event_name == 'workflow_dispatch' || (needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.native == 'true') )
+    if: |
+      always() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-fabric.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
+  prebuild-artifact-save:
+    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    needs:
+      - prebuild
+      - detect-native-changes
+      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout prebuild-artifact-save composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+      - name: Save reuse marker
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+
   merge-guard:
-    needs: [authorize, changes, sanity-checks, prebuild]
-    if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      [
+        authorize,
+        ci-router,
+        label-gate,
+        sanity-checks,
+        cpp-lint,
+        detect-native-changes,
+        prebuild-artifact-reuse,
+        prebuild,
+        prebuild-artifact-save,
+      ]
+    if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      # A skipped prebuild is a pass: doc/JS-only PRs don't touch native sources
-      # (see the `native` filter above), so there is no compiled artifact to gate on.
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') }}
+      # A skipped prebuild is a pass: doc/JS-only PRs (or PRs without the prebuilds
+      # label) don't produce a compiled artifact, and a native-unchanged PR reuses a
+      # prior prebuild instead of rebuilding.
+      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}

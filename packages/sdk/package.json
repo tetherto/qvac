@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -194,9 +194,11 @@
     "bare:ensureprebuilds": "bun run bare:ensureprebuilds:llamacpp && bun run bare:ensureprebuilds:whispercpp && bun run bare:ensureprebuilds:embeddings",
     "prepare:husky": "bun run husky",
     "bare:example": "bare ./scripts/bare-bootstrap.js",
+    "contract:export": "tsx ./scripts/export-contract.ts",
+    "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check-models": "tsx ./models/update-models/index.ts --check",
     "check-models:hook": "tsx ./models/update-models/index.ts --check --non-blocking",
-    "update-models": "tsx ./models/update-models/index.ts",
+    "update-models": "tsx ./models/update-models/index.ts && bun run contract:export",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
@@ -251,6 +253,7 @@
     "@types/node": "^24.2.1",
     "@types/semver": "^7.7.1",
     "@types/tar-stream": "^3.1.4",
+    "ajv": "8.20.0",
     "bare-process": "^4.4.1",
     "bare-readline": "^1.2.0",
     "bare-stdio": "^1.0.2",

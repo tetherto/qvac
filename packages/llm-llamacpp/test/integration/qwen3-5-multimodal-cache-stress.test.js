@@ -5,20 +5,16 @@ const os = require('bare-os')
 const path = require('bare-path')
 const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
-const {
-  cleanupIntegrationCacheFiles,
-  ensureModelPath,
-  getMediaPath,
-  safeTest
-} = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModelPath, getMediaPath, safeTest } = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
 const isLinuxX64 = platform === 'linux' && arch === 'x64'
 const forceStress = process.env.QVAC_RUN_QWEN35_MTMD_STRESS === '1'
-const skipStress = !forceStress && !isLinuxX64
-  ? 'Qwen3.5 multimodal cache stress is Linux x64 by default; set QVAC_RUN_QWEN35_MTMD_STRESS=1 to force it'
-  : false
+const skipStress =
+  !forceStress && !isLinuxX64
+    ? 'Qwen3.5 multimodal cache stress is Linux x64 by default; set QVAC_RUN_QWEN35_MTMD_STRESS=1 to force it'
+    : false
 
 const CTX_SIZE = 8192
 const N_DISCARDED = 1024
@@ -34,7 +30,8 @@ const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 
 const QWEN35_MODEL = {
   modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
-  downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+  downloadUrl:
+    'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
 }
 
 const QWEN35_MMPROJ = {
@@ -44,7 +41,8 @@ const QWEN35_MMPROJ = {
 
 const SYSTEM_PROMPT = {
   role: 'system',
-  content: 'You are a visual chat assistant. Answer plainly and keep going until the requested list is complete.'
+  content:
+    'You are a visual chat assistant. Answer plainly and keep going until the requested list is complete.'
 }
 
 const NO_CACHE_SEPARATOR_PROMPT = [
@@ -54,7 +52,7 @@ const NO_CACHE_SEPARATOR_PROMPT = [
   }
 ]
 
-function createLogger () {
+function createLogger() {
   return {
     info: (...args) => console.info(...args),
     warn: (...args) => console.warn(...args),
@@ -63,52 +61,54 @@ function createLogger () {
   }
 }
 
-function toNumber (value) {
+function toNumber(value) {
   return typeof value === 'number' ? value : Number(value || 0)
 }
 
-function isCancellationError (err) {
+function isCancellationError(err) {
   if (!err) return false
   return /cancel|aborted|stopp?ed/i.test(err.message || String(err))
 }
 
-function repeatWord (word, count) {
+function repeatWord(word, count) {
   return Array.from({ length: count }, () => word).join(' ')
 }
 
-function makeImageTurn (imageBytes) {
+function makeImageTurn(imageBytes) {
   return [
     { role: 'user', type: 'media', content: imageBytes },
     {
       role: 'user',
-      content: 'Describe the image briefly, then write a very long story inspired by it with many scenes, characters, and details. Keep writing continuously until the token budget is exhausted.'
+      content:
+        'Describe the image briefly, then write a very long story inspired by it with many scenes, characters, and details. Keep writing continuously until the token budget is exhausted.'
     }
   ]
 }
 
-function makePrefillPressureTurn (cacheTokens) {
+function makePrefillPressureTurn(cacheTokens) {
   const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
   const wordCount = Math.max(96, Math.min(4600, freeSlots + PREFILL_PRESSURE_OVERSHOOT))
   return makeLongTextTurn(wordCount)
 }
 
-function makeDecodePressureTurn (cacheTokens) {
+function makeDecodePressureTurn(cacheTokens) {
   const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
   const wordCount = Math.max(96, Math.min(4600, freeSlots + N_DISCARDED - 256))
   return makeLongTextTurn(wordCount)
 }
 
-function makeCancelPrefillTurn (imageBytes) {
+function makeCancelPrefillTurn(imageBytes) {
   return [
     { role: 'user', type: 'media', content: imageBytes },
     {
       role: 'user',
-      content: 'Use this second image as part of the cached conversation, then stop if cancellation is requested.'
+      content:
+        'Use this second image as part of the cached conversation, then stop if cancellation is requested.'
     }
   ]
 }
 
-function makeFixedImagePrefillTurn (imageBytes, label) {
+function makeFixedImagePrefillTurn(imageBytes, label) {
   return [
     { role: 'user', type: 'media', content: imageBytes },
     {
@@ -118,7 +118,7 @@ function makeFixedImagePrefillTurn (imageBytes, label) {
   ]
 }
 
-function makeLongTextTurn (wordCount) {
+function makeLongTextTurn(wordCount) {
   return [
     {
       role: 'user',
@@ -131,7 +131,7 @@ function makeLongTextTurn (wordCount) {
   ]
 }
 
-function makeShortDecodeTurn () {
+function makeShortDecodeTurn() {
   return [
     {
       role: 'user',
@@ -140,7 +140,7 @@ function makeShortDecodeTurn () {
   ]
 }
 
-async function setupModel (t, configOverrides = {}) {
+async function setupModel(t, configOverrides = {}) {
   const modelPath = await ensureModelPath(QWEN35_MODEL)
   const projectionModelPath = await ensureModelPath(QWEN35_MMPROJ)
 
@@ -171,17 +171,17 @@ async function setupModel (t, configOverrides = {}) {
   return addon
 }
 
-async function runAndCollect (addon, prompt, runOptions = {}) {
+async function runAndCollect(addon, prompt, runOptions = {}) {
   const response = await addon.run(prompt, runOptions)
   const chunks = []
   let error = null
 
-  let chain = response.onUpdate(data => {
+  let chain = response.onUpdate((data) => {
     chunks.push(data)
   })
 
   if (typeof response.onError === 'function') {
-    chain = chain.onError(err => {
+    chain = chain.onError((err) => {
       error = err
     })
   }
@@ -201,7 +201,7 @@ async function runAndCollect (addon, prompt, runOptions = {}) {
   }
 }
 
-async function cancelResponse (addon, response) {
+async function cancelResponse(addon, response) {
   if (response && typeof response.cancel === 'function') {
     await response.cancel()
     return
@@ -209,12 +209,12 @@ async function cancelResponse (addon, response) {
   await addon.cancel()
 }
 
-async function runAndCancelDuringPrefill (addon, prompt, runOptions = {}) {
+async function runAndCancelDuringPrefill(addon, prompt, runOptions = {}) {
   const response = await addon.run(prompt, runOptions)
   let cancelFired = false
   const cancelTimer = setTimeout(() => {
     cancelFired = true
-    cancelResponse(addon, response).catch(err => {
+    cancelResponse(addon, response).catch((err) => {
       console.error('cancel during prefill failed:', err)
     })
   }, PREFILL_CANCEL_DELAY_MS)
@@ -228,7 +228,7 @@ async function runAndCancelDuringPrefill (addon, prompt, runOptions = {}) {
   return { stats: response.stats || {}, cancelFired }
 }
 
-async function runAndCancelAfterFirstChunk (addon, prompt, runOptions = {}) {
+async function runAndCancelAfterFirstChunk(addon, prompt, runOptions = {}) {
   const response = await addon.run(prompt, runOptions)
   let chunkCount = 0
   let cancelPromise = null
@@ -241,7 +241,7 @@ async function runAndCancelAfterFirstChunk (addon, prompt, runOptions = {}) {
   })
 
   if (typeof response.onError === 'function') {
-    chain = chain.onError(err => {
+    chain = chain.onError((err) => {
       if (!isCancellationError(err)) throw err
     })
   }
@@ -259,13 +259,16 @@ async function runAndCancelAfterFirstChunk (addon, prompt, runOptions = {}) {
   }
 }
 
-function assertCachedStats (t, stats, label) {
+function assertCachedStats(t, stats, label) {
   const cacheTokens = toNumber(stats.CacheTokens)
   t.ok(cacheTokens > 0, `${label}: CacheTokens should stay populated (${cacheTokens})`)
-  t.ok(cacheTokens <= CTX_SIZE, `${label}: CacheTokens should stay within ctx (${cacheTokens} <= ${CTX_SIZE})`)
+  t.ok(
+    cacheTokens <= CTX_SIZE,
+    `${label}: CacheTokens should stay within ctx (${cacheTokens} <= ${CTX_SIZE})`
+  )
 }
 
-function assertCanceledPrefillRolledBack (t, beforeStats, cancelResult) {
+function assertCanceledPrefillRolledBack(t, beforeStats, cancelResult) {
   // Cancel = "request never happened": prefill cancel must roll the
   // cache back to the pre-request cursor, modulo any context slides
   // that fired before cancel landed. We therefore expect the cache
@@ -281,210 +284,263 @@ function assertCanceledPrefillRolledBack (t, beforeStats, cancelResult) {
   t.ok(
     afterCacheTokens <= baselineAfterSlides + 1,
     'cancel during prefill rolls cache back to pre-request cursor ' +
-    `(${beforeCacheTokens} - ${slideDiscard} -> ${afterCacheTokens}, slides=${afterStats.contextSlides || 0})`
+      `(${beforeCacheTokens} - ${slideDiscard} -> ${afterCacheTokens}, slides=${afterStats.contextSlides || 0})`
   )
 }
 
-async function runNoCacheSeparator (t, addon, label) {
+async function runNoCacheSeparator(t, addon, label) {
   const result = await runAndCollect(addon, NO_CACHE_SEPARATOR_PROMPT, {
     generationParams: { predict: 16 }
   })
 
   t.ok(result.text.length > 0, `${label}: no-cache separator generated output`)
-  t.is(toNumber(result.stats.CacheTokens), 0, `${label}: no-cache separator cleared in-memory cache`)
+  t.is(
+    toNumber(result.stats.CacheTokens),
+    0,
+    `${label}: no-cache separator cleared in-memory cache`
+  )
 }
 
-async function assertContextOverflow (t, action, label) {
+async function assertContextOverflow(t, action, label) {
   try {
     await action()
     t.fail(`${label}: expected context overflow`)
   } catch (err) {
     const msg = err?.message || String(err)
-    t.ok(/context overflow/i.test(msg), `${label}: context overflow surfaced (${msg.slice(0, 120)})`)
+    t.ok(
+      /context overflow/i.test(msg),
+      `${label}: context overflow surfaced (${msg.slice(0, 120)})`
+    )
   }
 }
 
-safeTest('Qwen3.5-VL cached chat stresses sliding and cancel recovery', {
-  timeout: 2_400_000,
-  skip: skipStress
-}, async t => {
-  const imagePath = getMediaPath('fruitPlate.png')
-  t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
+safeTest(
+  'Qwen3.5-VL cached chat stresses sliding and cancel recovery',
+  {
+    timeout: 2_400_000,
+    skip: skipStress
+  },
+  async (t) => {
+    const imagePath = getMediaPath('fruitPlate.png')
+    t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
 
-  const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
-  const addon = await setupModel(t)
-  const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-stress-${Date.now()}.bin`)
-  cleanupIntegrationCacheFiles(cachePath)
-  t.teardown(() => {
-    try {
-      fs.unlinkSync(cachePath)
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err
-    }
-  })
+    const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
+    const addon = await setupModel(t)
+    const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-stress-${Date.now()}.bin`)
+    cleanupIntegrationCacheFiles(cachePath)
+    t.teardown(() => {
+      try {
+        fs.unlinkSync(cachePath)
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err
+      }
+    })
 
-  const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true }
+    const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true }
 
-  const systemPrefill = await runAndCollect(
-    addon,
-    [SYSTEM_PROMPT],
-    {
+    const systemPrefill = await runAndCollect(addon, [SYSTEM_PROMPT], {
       ...cacheOpts,
       prefill: true
-    }
-  )
-  t.is(systemPrefill.text, '', 'system prefill emits no text')
-  t.is(toNumber(systemPrefill.stats.generatedTokens), 0, 'system prefill reports zero generated tokens')
-  assertCachedStats(t, systemPrefill.stats, 'system prefill')
-  t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
-  await runNoCacheSeparator(t, addon, 'after system prefill')
+    })
+    t.is(systemPrefill.text, '', 'system prefill emits no text')
+    t.is(
+      toNumber(systemPrefill.stats.generatedTokens),
+      0,
+      'system prefill reports zero generated tokens'
+    )
+    assertCachedStats(t, systemPrefill.stats, 'system prefill')
+    t.ok(fs.existsSync(cachePath), 'system prefill saved cache to disk')
+    await runNoCacheSeparator(t, addon, 'after system prefill')
 
-  const first = await runAndCollect(
-    addon,
-    makeImageTurn(imageBytes),
-    {
+    const first = await runAndCollect(addon, makeImageTurn(imageBytes), {
       ...cacheOpts,
       generationParams: { predict: N_DISCARDED + 256 }
-    }
-  )
-  t.ok(first.text.length > 0, 'first multimodal turn generated output')
-  t.ok(toNumber(first.stats.generatedTokens) > N_DISCARDED, `first turn generated enough disposable tokens (${first.stats.generatedTokens})`)
-  t.ok(toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS, `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`)
-  assertCachedStats(t, first.stats, 'first multimodal turn')
-  t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
-  await runNoCacheSeparator(t, addon, 'after first multimodal turn')
+    })
+    t.ok(first.text.length > 0, 'first multimodal turn generated output')
+    t.ok(
+      toNumber(first.stats.generatedTokens) > N_DISCARDED,
+      `first turn generated enough disposable tokens (${first.stats.generatedTokens})`
+    )
+    t.ok(
+      toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
+      `first turn cached Qwen3.5 image cells (${first.stats.CacheTokens})`
+    )
+    assertCachedStats(t, first.stats, 'first multimodal turn')
+    t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
+    await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
-  const prefillSlide = await runAndCollect(
-    addon,
-    makePrefillPressureTurn(first.stats.CacheTokens),
-    {
-      ...cacheOpts,
-      prefill: true
-    }
-  )
-  t.is(prefillSlide.text, '', 'prefill stress run emits no text')
-  t.is(toNumber(prefillSlide.stats.generatedTokens), 0, 'prefill stress run reports zero generated tokens')
-  t.ok(toNumber(prefillSlide.stats.contextSlides) > 0, `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`)
-  assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
-  await runNoCacheSeparator(t, addon, 'after prefill stress run')
+    const prefillSlide = await runAndCollect(
+      addon,
+      makePrefillPressureTurn(first.stats.CacheTokens),
+      {
+        ...cacheOpts,
+        prefill: true
+      }
+    )
+    t.is(prefillSlide.text, '', 'prefill stress run emits no text')
+    t.is(
+      toNumber(prefillSlide.stats.generatedTokens),
+      0,
+      'prefill stress run reports zero generated tokens'
+    )
+    t.ok(
+      toNumber(prefillSlide.stats.contextSlides) > 0,
+      `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`
+    )
+    assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
+    await runNoCacheSeparator(t, addon, 'after prefill stress run')
 
-  const canceledPrefillResult = await runAndCancelDuringPrefill(
-    addon,
-    makeCancelPrefillTurn(imageBytes),
-    {
-      ...cacheOpts,
-      prefill: true
-    }
-  )
-  assertCanceledPrefillRolledBack(t, prefillSlide.stats, canceledPrefillResult)
-  await runNoCacheSeparator(t, addon, 'after canceled prefill')
+    const canceledPrefillResult = await runAndCancelDuringPrefill(
+      addon,
+      makeCancelPrefillTurn(imageBytes),
+      {
+        ...cacheOpts,
+        prefill: true
+      }
+    )
+    assertCanceledPrefillRolledBack(t, prefillSlide.stats, canceledPrefillResult)
+    await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
-  const afterPrefillCancel = await runAndCollect(
-    addon,
-    [{ role: 'user', content: 'After the canceled prefill, answer with one short sentence.' }],
-    {
-      ...cacheOpts,
-      generationParams: { predict: 64 }
-    }
-  )
-  t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
-  assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
-  await runNoCacheSeparator(t, addon, 'after prefill-cancel recovery')
+    const afterPrefillCancel = await runAndCollect(
+      addon,
+      [{ role: 'user', content: 'After the canceled prefill, answer with one short sentence.' }],
+      {
+        ...cacheOpts,
+        generationParams: { predict: 64 }
+      }
+    )
+    t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
+    assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
+    await runNoCacheSeparator(t, addon, 'after prefill-cancel recovery')
 
-  const decodePressure = await runAndCollect(
-    addon,
-    makeDecodePressureTurn(afterPrefillCancel.stats.CacheTokens),
-    {
-      ...cacheOpts,
-      prefill: true
-    }
-  )
-  t.is(decodePressure.text, '', 'decode pressure prefill emits no text')
-  t.is(toNumber(decodePressure.stats.generatedTokens), 0, 'decode pressure prefill reports zero generated tokens')
-  t.ok(toNumber(decodePressure.stats.contextSlides) > 0, `decode pressure prefill triggered context sliding (${decodePressure.stats.contextSlides})`)
-  assertCachedStats(t, decodePressure.stats, 'decode pressure prefill')
-  await runNoCacheSeparator(t, addon, 'after decode pressure prefill')
+    const decodePressure = await runAndCollect(
+      addon,
+      makeDecodePressureTurn(afterPrefillCancel.stats.CacheTokens),
+      {
+        ...cacheOpts,
+        prefill: true
+      }
+    )
+    t.is(decodePressure.text, '', 'decode pressure prefill emits no text')
+    t.is(
+      toNumber(decodePressure.stats.generatedTokens),
+      0,
+      'decode pressure prefill reports zero generated tokens'
+    )
+    t.ok(
+      toNumber(decodePressure.stats.contextSlides) > 0,
+      `decode pressure prefill triggered context sliding (${decodePressure.stats.contextSlides})`
+    )
+    assertCachedStats(t, decodePressure.stats, 'decode pressure prefill')
+    await runNoCacheSeparator(t, addon, 'after decode pressure prefill')
 
-  const decodeSlide = await runAndCollect(
-    addon,
-    makeShortDecodeTurn(),
-    {
+    const decodeSlide = await runAndCollect(addon, makeShortDecodeTurn(), {
       ...cacheOpts,
       generationParams: { predict: 256 }
-    }
-  )
-  t.ok(decodeSlide.text.length > 0, 'decode stress run generated output')
-  t.ok(toNumber(decodeSlide.stats.generatedTokens) > 0, 'decode stress run reports generated tokens')
-  t.ok(toNumber(decodeSlide.stats.contextSlides) > 0, `decode stress run triggered generation sliding (${decodeSlide.stats.contextSlides})`)
-  assertCachedStats(t, decodeSlide.stats, 'decode stress run')
-  await runNoCacheSeparator(t, addon, 'after decode stress run')
+    })
+    t.ok(decodeSlide.text.length > 0, 'decode stress run generated output')
+    t.ok(
+      toNumber(decodeSlide.stats.generatedTokens) > 0,
+      'decode stress run reports generated tokens'
+    )
+    t.ok(
+      toNumber(decodeSlide.stats.contextSlides) > 0,
+      `decode stress run triggered generation sliding (${decodeSlide.stats.contextSlides})`
+    )
+    assertCachedStats(t, decodeSlide.stats, 'decode stress run')
+    await runNoCacheSeparator(t, addon, 'after decode stress run')
 
-  const canceledDecode = await runAndCancelAfterFirstChunk(
-    addon,
-    makeShortDecodeTurn(),
-    {
+    const canceledDecode = await runAndCancelAfterFirstChunk(addon, makeShortDecodeTurn(), {
       ...cacheOpts,
       generationParams: { predict: 256 }
-    }
-  )
-  t.ok(canceledDecode.chunkCount > 0, 'cancel during decoding happened after at least one chunk')
-  await runNoCacheSeparator(t, addon, 'after canceled decode')
+    })
+    t.ok(canceledDecode.chunkCount > 0, 'cancel during decoding happened after at least one chunk')
+    await runNoCacheSeparator(t, addon, 'after canceled decode')
 
-  const afterDecodeCancel = await runAndCollect(
-    addon,
-    [{ role: 'user', content: 'After the canceled decode, continue normally with a concise answer.' }],
-    {
-      ...cacheOpts,
-      generationParams: { predict: 64 }
-    }
-  )
-  t.ok(afterDecodeCancel.text.length > 0, 'chat recovered after cancel during decoding')
-  assertCachedStats(t, afterDecodeCancel.stats, 'after decode cancel')
-})
+    const afterDecodeCancel = await runAndCollect(
+      addon,
+      [
+        {
+          role: 'user',
+          content: 'After the canceled decode, continue normally with a concise answer.'
+        }
+      ],
+      {
+        ...cacheOpts,
+        generationParams: { predict: 64 }
+      }
+    )
+    t.ok(afterDecodeCancel.text.length > 0, 'chat recovered after cancel during decoding')
+    assertCachedStats(t, afterDecodeCancel.stats, 'after decode cancel')
+  }
+)
 
-safeTest('Qwen3.5-VL image cache overflows by cache tokens before positions', {
-  timeout: 1_200_000,
-  skip: skipStress
-}, async t => {
-  const imagePath = getMediaPath('fruitPlate.png')
-  t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
+safeTest(
+  'Qwen3.5-VL image cache overflows by cache tokens before positions',
+  {
+    timeout: 1_200_000,
+    skip: skipStress
+  },
+  async (t) => {
+    const imagePath = getMediaPath('fruitPlate.png')
+    t.ok(fs.existsSync(imagePath), 'fruitPlate.png image fixture should exist')
 
-  const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
-  const CTX_SIZE_OVERRIDE = '6000'
+    const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
+    const CTX_SIZE_OVERRIDE = '6000'
 
-  const addon = await setupModel(t, { n_discarded: '0', ctx_size: CTX_SIZE_OVERRIDE })
-  const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-token-overflow-${Date.now()}.bin`)
-  cleanupIntegrationCacheFiles(cachePath)
-  t.teardown(() => {
-    try {
-      fs.unlinkSync(cachePath)
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err
-    }
-  })
+    const addon = await setupModel(t, { n_discarded: '0', ctx_size: CTX_SIZE_OVERRIDE })
+    const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-token-overflow-${Date.now()}.bin`)
+    cleanupIntegrationCacheFiles(cachePath)
+    t.teardown(() => {
+      try {
+        fs.unlinkSync(cachePath)
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err
+      }
+    })
 
-  const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true, prefill: true }
+    const cacheOpts = { cacheKey: cachePath, saveCacheToDisk: true, prefill: true }
 
-  const first = await runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'one'), cacheOpts)
-  t.is(first.text, '', 'first image prefill emits no text')
-  t.is(toNumber(first.stats.generatedTokens), 0, 'first image prefill reports zero generated tokens')
-  t.ok(
-    toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
-    `first image prefill cached image cells (${first.stats.CacheTokens})`
-  )
+    const first = await runAndCollect(
+      addon,
+      makeFixedImagePrefillTurn(imageBytes, 'one'),
+      cacheOpts
+    )
+    t.is(first.text, '', 'first image prefill emits no text')
+    t.is(
+      toNumber(first.stats.generatedTokens),
+      0,
+      'first image prefill reports zero generated tokens'
+    )
+    t.ok(
+      toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
+      `first image prefill cached image cells (${first.stats.CacheTokens})`
+    )
 
-  const second = await runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'two'), cacheOpts)
-  t.is(second.text, '', 'second image prefill emits no text')
-  t.is(toNumber(second.stats.generatedTokens), 0, 'second image prefill reports zero generated tokens')
-  t.ok(
-    toNumber(second.stats.CacheTokens) > CTX_SIZE_OVERRIDE - MIN_QWEN35_IMAGE_CACHE_TOKENS,
-    `two image prefills nearly fill cache by physical cells (${second.stats.CacheTokens}/${CTX_SIZE_OVERRIDE})`
-  )
-  t.ok(toNumber(second.stats.CacheTokens) <= CTX_SIZE_OVERRIDE, 'two image prefills still fit by cache tokens')
+    const second = await runAndCollect(
+      addon,
+      makeFixedImagePrefillTurn(imageBytes, 'two'),
+      cacheOpts
+    )
+    t.is(second.text, '', 'second image prefill emits no text')
+    t.is(
+      toNumber(second.stats.generatedTokens),
+      0,
+      'second image prefill reports zero generated tokens'
+    )
+    t.ok(
+      toNumber(second.stats.CacheTokens) > CTX_SIZE_OVERRIDE - MIN_QWEN35_IMAGE_CACHE_TOKENS,
+      `two image prefills nearly fill cache by physical cells (${second.stats.CacheTokens}/${CTX_SIZE_OVERRIDE})`
+    )
+    t.ok(
+      toNumber(second.stats.CacheTokens) <= CTX_SIZE_OVERRIDE,
+      'two image prefills still fit by cache tokens'
+    )
 
-  await assertContextOverflow(
-    t,
-    () => runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'three'), cacheOpts),
-    'third image prefill overflows physical cache-token capacity'
-  )
-})
+    await assertContextOverflow(
+      t,
+      () => runAndCollect(addon, makeFixedImagePrefillTurn(imageBytes, 'three'), cacheOpts),
+      'third image prefill overflows physical cache-token capacity'
+    )
+  }
+)

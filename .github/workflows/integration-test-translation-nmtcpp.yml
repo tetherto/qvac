@@ -223,7 +223,7 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
 
       - name: Generate test report (Linux/macOS)
-        if: ${{ always() && matrix.platform != 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' }}
         working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
@@ -322,7 +322,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Generate test report (Windows)
-        if: ${{ always() && matrix.platform == 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' }}
         working-directory: packages/translation-nmtcpp
         shell: powershell
         run: |
@@ -419,7 +419,7 @@ jobs:
           Write-Host "::endgroup::"
 
       - name: Generate HTML performance report
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
@@ -435,7 +435,7 @@ jobs:
           fi
 
       - name: Upload performance report
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-nmtcpp-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
@@ -448,7 +448,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload test logs
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: test-logs-${{ matrix.os }}-${{ matrix.arch }}

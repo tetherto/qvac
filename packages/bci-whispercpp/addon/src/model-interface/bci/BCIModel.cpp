@@ -24,39 +24,12 @@ namespace qvac_lib_inference_addon_bci {
 namespace {
 constexpr float K_SEGMENT_TIMESTAMP_SCALE = 0.01F;
 constexpr int K_WARMUP_SAMPLE_COUNT = 8000;
-constexpr int K_DUMMY_AUDIO_30S = 16000 * 30;
 } // namespace
 
 static bool shouldAbortWhisper(void* userData) {
   const auto* cancelRequested = static_cast<const std::atomic_bool*>(userData);
   return cancelRequested != nullptr &&
          cancelRequested->load(std::memory_order_relaxed);
-}
-
-// Called right before the encoder runs. Replaces the mel spectrogram
-// (computed from dummy silence) with our neural-signal-derived features.
-static bool onEncoderBegin(
-    whisper_context* ctx, whisper_state* state, void* userData) {
-  auto* cbData = static_cast<BCIModel::EncoderCallbackData*>(userData);
-  if (cbData == nullptr || cbData->melData == nullptr) {
-    return true;
-  }
-
-  int result = whisper_set_mel_with_state(
-      cbData->ctx, state,
-      cbData->melData, cbData->melFrames, cbData->melBins);
-
-  if (result != 0) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-         "whisper_set_mel_with_state failed: " + std::to_string(result));
-    return false;
-  }
-
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "Injected neural mel features: " +
-           std::to_string(cbData->melFrames) + " frames x " +
-           std::to_string(cbData->melBins) + " bins");
-  return true;
 }
 
 #if defined(__ANDROID__)
@@ -525,6 +498,23 @@ void BCIModel::warmup() {
                static_cast<int>(silentAudio.size()));
 }
 
+int BCIModel::injectNeuralMelAndRunWhisper(
+    const std::vector<float>& melFeatures, int melFrames, int melBins,
+    whisper_full_params& params) {
+  const int melStatus =
+      whisper_set_mel(ctx_.get(), melFeatures.data(), melFrames, melBins);
+  if (melStatus != 0) {
+    const std::string melError =
+        "whisper_set_mel rejected neural mel features (status " +
+        std::to_string(melStatus) + ")";
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR, melError);
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        "Failed to inject neural mel features into whisper state");
+  }
+  return whisper_full(ctx_.get(), params, nullptr, 0);
+}
+
 void BCIModel::process(const Input& rawNeuralData) {
   if (ctx_ == nullptr) {
     throw std::runtime_error("BCI Whisper context is not initialized — call load() first");
@@ -572,27 +562,14 @@ void BCIModel::process(const Input& rawNeuralData) {
 
   const auto startTime = std::chrono::steady_clock::now();
 
-  EncoderCallbackData cbData;
-  cbData.ctx = ctx_.get();
-  cbData.melData = melFeatures.data();
-  cbData.melFrames = melFrames;
-  cbData.melBins = melBins;
-
   whisper_full_params params = toWhisperFullParams(cfg_);
   params.new_segment_callback = onNewSegment;
   params.new_segment_callback_user_data = this;
   params.abort_callback = shouldAbortWhisper;
   params.abort_callback_user_data = &cancelRequested_;
-  params.encoder_begin_callback = onEncoderBegin;
-  params.encoder_begin_callback_user_data = &cbData;
 
-  if (dummyAudioPad_.size() != static_cast<size_t>(K_DUMMY_AUDIO_30S)) {
-    dummyAudioPad_.assign(K_DUMMY_AUDIO_30S, 0.0F);
-  }
-
-  int result = whisper_full(
-      ctx_.get(), params,
-      dummyAudioPad_.data(), static_cast<int>(dummyAudioPad_.size()));
+  const int result =
+      injectNeuralMelAndRunWhisper(melFeatures, melFrames, melBins, params);
 
   const auto endTime = std::chrono::steady_clock::now();
   totalWallMs_ +=

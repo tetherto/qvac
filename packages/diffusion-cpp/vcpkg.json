@@ -3,7 +3,7 @@
     "picojson",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.3"
+      "version>=": "1.2.4"
     },
     {
       "name": "qvac-lint-cpp",
@@ -11,7 +11,7 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-07-03#2"
+      "version>=": "2026-07-03#4"
     },
     "stb"
   ],

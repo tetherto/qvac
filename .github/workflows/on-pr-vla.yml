@@ -16,6 +16,9 @@ on:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
       - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
 
   workflow_call:
@@ -243,6 +246,7 @@ jobs:
       id-token: write
     if: |
       always() &&
+      !cancelled() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.label-gate.outputs.authorised == 'true' &&
@@ -256,7 +260,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   prebuild-artifact-save:
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
     needs: [prebuild, detect-native-changes, label-gate]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -277,7 +281,7 @@ jobs:
 
   integration-tests:
     needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, label-gate]
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -294,7 +298,7 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
-    if: always() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs: [authorize, prebuild, prebuild-artifact-reuse, label-gate, ci-router]
     uses: ./.github/workflows/integration-mobile-test-vla.yml
     secrets: inherit

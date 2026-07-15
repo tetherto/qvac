@@ -462,7 +462,7 @@ jobs:
       # smolvla's `performance-report.json` and pi05's
       # `performance-report-pi05.json`; missing files are tolerated.
       - name: Render performance Step Summary (Linux/macOS)
-        if: ${{ always() && matrix.platform != 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -479,7 +479,7 @@ jobs:
           done
 
       - name: Render performance Step Summary (Windows)
-        if: ${{ always() && matrix.platform == 'win32' }}
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         shell: powershell
         run: |
@@ -494,7 +494,7 @@ jobs:
           }
 
       - name: Upload performance report
-        if: ${{ always() }}
+        if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}

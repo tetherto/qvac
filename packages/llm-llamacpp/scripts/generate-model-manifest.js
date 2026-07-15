@@ -14,18 +14,16 @@ const outPath = path.resolve(__dirname, '../test/mobile/model-manifest.json')
 
 // Mirror toFunctionName() in generate-mobile-integration-tests.js:
 // "gemma4.test.js" -> "runGemma4Test".
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
 // Pull every { name|modelName: '...', url|downloadUrl: '...gguf...' } pair from a
 // file, tolerating either key order. Returns deduped { name, url } objects.
-function extractModels (src) {
+function extractModels(src) {
   const found = new Map()
   const nameKey = "(?:name|modelName):\\s*'([^']+)'"
   const urlKey = "(?:url|downloadUrl):\\s*'(https?:\\/\\/[^']+?\\.gguf[^']*)'"
@@ -45,13 +43,17 @@ function extractModels (src) {
 }
 
 // Read a file, returning '' if missing.
-function readIfExists (p) {
-  try { return fs.readFileSync(p, 'utf8') } catch (_) { return '' }
+function readIfExists(p) {
+  try {
+    return fs.readFileSync(p, 'utf8')
+  } catch (_) {
+    return ''
+  }
 }
 
 // Models declared directly in the test file PLUS those in any local helper it
 // requires (e.g. image tests get their model config from _image-common.js).
-function modelsForFile (file) {
+function modelsForFile(file) {
   const found = new Map()
   const add = (models) => models.forEach((m) => found.set(m.name, m))
   const src = readIfExists(path.join(integrationDir, file))
@@ -65,7 +67,7 @@ function modelsForFile (file) {
   return [...found.values()]
 }
 
-function main () {
+function main() {
   const files = fs.readdirSync(integrationDir).filter((f) => f.endsWith('.test.js'))
   const manifest = {}
   let totalModels = 0

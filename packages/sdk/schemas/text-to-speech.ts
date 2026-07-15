@@ -162,7 +162,10 @@ type TtsTokenizerAssetRefinementInput = {
   cangjieTsvSrc?: ModelSrcInput | undefined
 }
 
-function refineChatterboxTokenizerAssets(data: TtsTokenizerAssetRefinementInput, ctx: z.RefinementCtx) {
+function refineChatterboxTokenizerAssets(
+  data: TtsTokenizerAssetRefinementInput,
+  ctx: z.RefinementCtx
+) {
   if (data.ttsEngine !== 'chatterbox') return
 
   if (data.language === 'ja' && data.mecabDictSrc === undefined) {
@@ -220,10 +223,12 @@ const legacyTtsOnnxFieldsShape = LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS.reduce<
 // `loadConfigSchema`. Permits deprecated ONNX field names so
 // `resolveConfig` can raise LegacyTtsModelDeprecatedError instead of a
 // generic Zod error; other unknown keys are still rejected by `.strict()`.
-export const ttsConfigSchema = z.discriminatedUnion('ttsEngine', [
-  ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
-  ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
-]).superRefine(refineChatterboxTokenizerAssets)
+export const ttsConfigSchema = z
+  .discriminatedUnion('ttsEngine', [
+    ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
+    ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict()
+  ])
+  .superRefine(refineChatterboxTokenizerAssets)
 
 export const ttsClientParamsSchema = z.object({
   modelId: z.string(),

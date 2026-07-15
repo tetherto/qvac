@@ -2,7 +2,7 @@
 
 const { QvacErrorBase, addCodes } = require('@qvac/error')
 
-class QvacErrorAddonTTSGgml extends QvacErrorBase { }
+class QvacErrorAddonTTSGgml extends QvacErrorBase {}
 
 const { name, version } = require('../package.json')
 
@@ -32,55 +32,58 @@ const ERR_CODES = Object.freeze({
   JOB_ALREADY_RUNNING: 13011
 })
 
-addCodes({
-  [ERR_CODES.FAILED_TO_ACTIVATE]: {
-    name: 'FAILED_TO_ACTIVATE',
-    message: (message) => `Failed to activate model, error: ${message}`
+addCodes(
+  {
+    [ERR_CODES.FAILED_TO_ACTIVATE]: {
+      name: 'FAILED_TO_ACTIVATE',
+      message: (message) => `Failed to activate model, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_APPEND]: {
+      name: 'FAILED_TO_APPEND',
+      message: (message) => `Failed to append data to processing queue, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_GET_STATUS]: {
+      name: 'FAILED_TO_GET_STATUS',
+      message: (message) => `Failed to get addon status, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_PAUSE]: {
+      name: 'FAILED_TO_PAUSE',
+      message: (message) => `Failed to pause inference, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_CANCEL]: {
+      name: 'FAILED_TO_CANCEL',
+      message: (message) => `Failed to cancel inference, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_DESTROY]: {
+      name: 'FAILED_TO_DESTROY',
+      message: (message) => `Failed to destroy instance, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_UNLOAD]: {
+      name: 'FAILED_TO_UNLOAD',
+      message: (message) => `Failed to unload model, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_LOAD]: {
+      name: 'FAILED_TO_LOAD',
+      message: (message) => `Failed to load model, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_RELOAD]: {
+      name: 'FAILED_TO_RELOAD',
+      message: (message) => `Failed to reload model, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_STOP]: {
+      name: 'FAILED_TO_STOP',
+      message: (message) => `Failed to stop inference, error: ${message}`
+    },
+    [ERR_CODES.JOB_ALREADY_RUNNING]: {
+      name: 'JOB_ALREADY_RUNNING',
+      message: () => 'Cannot set new job: a job is already set or being processed'
+    }
   },
-  [ERR_CODES.FAILED_TO_APPEND]: {
-    name: 'FAILED_TO_APPEND',
-    message: (message) => `Failed to append data to processing queue, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_GET_STATUS]: {
-    name: 'FAILED_TO_GET_STATUS',
-    message: (message) => `Failed to get addon status, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_PAUSE]: {
-    name: 'FAILED_TO_PAUSE',
-    message: (message) => `Failed to pause inference, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_CANCEL]: {
-    name: 'FAILED_TO_CANCEL',
-    message: (message) => `Failed to cancel inference, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_DESTROY]: {
-    name: 'FAILED_TO_DESTROY',
-    message: (message) => `Failed to destroy instance, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_UNLOAD]: {
-    name: 'FAILED_TO_UNLOAD',
-    message: (message) => `Failed to unload model, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_LOAD]: {
-    name: 'FAILED_TO_LOAD',
-    message: (message) => `Failed to load model, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_RELOAD]: {
-    name: 'FAILED_TO_RELOAD',
-    message: (message) => `Failed to reload model, error: ${message}`
-  },
-  [ERR_CODES.FAILED_TO_STOP]: {
-    name: 'FAILED_TO_STOP',
-    message: (message) => `Failed to stop inference, error: ${message}`
-  },
-  [ERR_CODES.JOB_ALREADY_RUNNING]: {
-    name: 'JOB_ALREADY_RUNNING',
-    message: () => 'Cannot set new job: a job is already set or being processed'
+  {
+    name,
+    version
   }
-}, {
-  name,
-  version
-})
+)
 
 module.exports = {
   ERR_CODES,

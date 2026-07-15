@@ -219,6 +219,7 @@ argument.
 | `sampler_rng` | RNG type | auto | Sampler RNG override |
 | `clip_on_cpu` | boolean | `false` | Force CLIP/text encoder to CPU |
 | `vae_on_cpu` | boolean | `false` | Force VAE to CPU |
+| `vae_decode_only` | boolean | `false` | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
 | `vae_tiling` | boolean | `false` | Tile VAE decode to reduce peak VRAM |
 | `flash_attn` | boolean | `false` | Enable flash attention globally |
 | `diffusion_fa` | boolean | `true` | Enable diffusion-model flash attention; important for FLUX/LTX memory use |

@@ -6,10 +6,8 @@ system for the GGML (tts-cpp) TTS backend — the one wired into the
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
 drops.
 
-It mirrors the ONNX TTS benchmark suite
-([`packages/tts-onnx/benchmarks/RTF-BENCHMARKS.md`](../../tts-onnx/benchmarks/RTF-BENCHMARKS.md))
-so the two TTS backends share tooling and the consolidated findings tables line
-up column-for-column.
+It follows the same RTF and streaming benchmark methodology used across QVAC's
+TTS backends so the consolidated findings tables line up column-for-column.
 
 Two benchmark tracks:
 
@@ -35,8 +33,11 @@ logs when the filesystem isn't accessible.
   the `variant` field is a **label** (default `q4`) used for the artifact name
   and report column.
 - **Engines** are `chatterbox`, `chatterbox-mtl`, `supertonic`,
-  `supertonic-mtl` (the ONNX `chatterbox-en` / `chatterbox-multi` split maps to
-  `chatterbox` / `chatterbox-mtl`).
+  `supertonic-mtl`, `supertonic3` (the ONNX `chatterbox-en` / `chatterbox-multi`
+  split maps to `chatterbox` / `chatterbox-mtl`). `supertonic3` loads the
+  `supertonic3-<quant>.gguf` tier via the same `ENGINE_SUPERTONIC` code path;
+  the benchmark `variant` label picks the tier (`q4`→`q4_0`, `q8`→`q8_0`,
+  `f16`→`f16`).
 - **GPU backends** are Vulkan (linux / win32 / android), Metal (darwin / ios),
   and CUDA / OpenCL only when explicitly hinted. The active backend is reported
   by the addon as `stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
@@ -88,7 +89,7 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_ENGINE` | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl`. |
+| `QVAC_TTS_GGML_BENCHMARK_ENGINE` | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl` / `supertonic3`. |
 | `QVAC_TTS_GGML_BENCHMARK_VARIANT` | `q4` | Label only — one of `q4` / `q8` / `f16` / `mixed`. The GGUF on the registry determines the real quant. |
 | `QVAC_TTS_GGML_BENCHMARK_USE_GPU` | `0` | `1` / `true` to request GPU. Backend auto-derives from platform (Vulkan / Metal). |
 | `QVAC_TTS_GGML_BENCHMARK_BACKEND` | (derived) | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. Used in reports and to differentiate rows. |
@@ -139,7 +140,7 @@ workflow_dispatch
   └── benchmark-performance-tts-ggml.yml  (orchestrator)
          ├── prebuilds-tts-ggml.yml          (build native addon)
          ├── desktop-benchmarks              (desktop matrix: CPU everywhere, Vulkan on GPU runners)
-         ├── mobile-benchmarks               (run_mobile=true → Device Farm CPU)
+         ├── mobile-benchmarks               (run_mobile=true → Device Farm CPU + GPU, engine sweep)
          └── summarize job
                ├── downloads rtf-results-tts-ggml-* (desktop) + perf-report-tts-ggml-* (mobile)
                ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
@@ -164,8 +165,8 @@ entries run across the desktop matrix; Vulkan entries run only on GPU-capable
 | darwin / x64 | cpu | `macos-15-large` |
 | win32 / x64 | cpu | `qvac-win25-x64` |
 | win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` |
-| Android | cpu | `run_mobile=true` — AWS Device Farm (this matrix runs CPU; GPU is opt-in via `useGPU`) |
-| iOS | cpu | `run_mobile=true` — AWS Device Farm |
+| Android | cpu + vulkan | `run_mobile=true` — AWS Device Farm. Benchmark matrix sweeps `chatterbox` (CPU q4/q8 + GPU q4), `supertonic` (CPU + GPU q4), `supertonic3` (CPU + GPU q4). `use_gpu:true` → Vulkan. |
+| iOS | cpu + metal | `run_mobile=true` — AWS Device Farm. Same engine sweep as Android (q4). `use_gpu:true` → Metal. |
 | darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
 | linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
 | android | opencl | **Manual** — Adreno-only; drop JSON under `manual-results/` |

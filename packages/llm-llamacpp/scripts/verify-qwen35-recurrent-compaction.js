@@ -32,7 +32,7 @@ if (!fs.existsSync(MODEL_PATH)) {
   process.exit(2)
 }
 
-async function main () {
+async function main() {
   console.log(`[verify] loading ${path.basename(MODEL_PATH)}...`)
   // Generous ctx_size + n_predict so Qwen3.5-0.8B has room to close its
   // `</think>` block. Small Qwen3.5 variants tend to ramble; if the
@@ -63,18 +63,20 @@ async function main () {
   // detects `<think>\n` in the rendered prompt suffix and tracks the
   // span from prefill). The model only needs to emit `</think>` for
   // compaction to fire — the open is already in the cache.
-  const messages = [
-    { role: 'user', content: 'What is 7 + 5? Reply with the number only.' }
-  ]
+  const messages = [{ role: 'user', content: 'What is 7 + 5? Reply with the number only.' }]
 
-  async function runOne (label, msgs) {
+  async function runOne(label, msgs) {
     console.log(`[verify] turn ${label}: running with remove_thinking_from_context: true ...`)
     const t0 = Date.now()
     const result = await inference.run(msgs, {
       generationParams: { remove_thinking_from_context: true }
     })
     let response = ''
-    await result.onUpdate(token => { response += token }).await()
+    await result
+      .onUpdate((token) => {
+        response += token
+      })
+      .await()
     return { response, stats: result.stats || {}, elapsedMs: Date.now() - t0 }
   }
 
@@ -103,15 +105,17 @@ async function main () {
   console.log('\n=== Verification result ===')
   console.log(`elapsed: ${elapsedMs} ms`)
   console.log(`response length: ${response.length} chars`)
-  console.log(`<think> present: ${hasOpen}; </think> present: ${hasClose}` +
-    (hasClose ? ` at idx ${closeIdx}` : ''))
+  console.log(
+    `<think> present: ${hasOpen}; </think> present: ${hasClose}` +
+      (hasClose ? ` at idx ${closeIdx}` : '')
+  )
   console.log(`response head: ${response.slice(0, 200)}${response.length > 200 ? '...' : ''}`)
   if (hasClose) {
     console.log(`response tail (post-close): ${response.slice(closeIdx, closeIdx + 300)}`)
   }
   console.log(`stats: ${JSON.stringify(stats, null, 2)}`)
 
-  const toNum = v => typeof v === 'number' ? v : Number(v || 0)
+  const toNum = (v) => (typeof v === 'number' ? v : Number(v || 0))
   const discards = toNum(stats.thinkingBlockDiscards)
 
   let exitCode = 0
@@ -134,7 +138,9 @@ async function main () {
     console.error('[FAIL] turn 2 response is empty — compacted cache may be corrupt')
     exitCode = 1
   }
-  console.log(`turn 2 (len=${turn2.response.length}, ${turn2.elapsedMs} ms) head: ${turn2.response.slice(0, 200)}`)
+  console.log(
+    `turn 2 (len=${turn2.response.length}, ${turn2.elapsedMs} ms) head: ${turn2.response.slice(0, 200)}`
+  )
   console.log(`turn 2 stats: ${JSON.stringify(turn2.stats)}`)
 
   if (exitCode === 0) {
@@ -147,7 +153,7 @@ async function main () {
   process.exit(exitCode)
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[verify] fatal:', err)
   process.exit(3)
 })

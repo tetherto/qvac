@@ -123,6 +123,9 @@ function buildCases (modelDef, sweep) {
       if (Number(ubatchSize) > Number(batchSize)) {
         continue // Skip combinations where ubatchSize is greater than batchSize
       }
+      if (cacheTypeK !== cacheTypeV) {
+        continue // Benchmark only symmetric KV-cache pairs (k === v); skip mixed k/v
+      }
       const runtimeConfig = {
         ...defaults,
         device,

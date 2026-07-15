@@ -44,6 +44,8 @@ const TEST_MODELS = {
   runMobilePerfEouGpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
   runMobilePerfSortformerCpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
   runMobilePerfSortformerGpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
+  runMobilePerfSortformerStreamingCpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
+  runMobilePerfSortformerStreamingGpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
   runMobilePerfTdtCpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
   runMobilePerfTdtGpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
   runMultipleTranscriptionsTest: [MODELS.tdtQ4],

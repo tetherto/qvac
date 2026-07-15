@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chatterbox S3Gen classifier-free-guidance rate (`cfgRate`) (QVAC-21908).**
+  New optional `cfgRate` knob for the Chatterbox engine, surfacing the S3Gen
+  CFG rate that was previously fixed to the model's GGUF-baked value. The S3Gen
+  CFM diffusion loop normally runs a batched cond+uncond pass combined by this
+  rate; passing `cfgRate: 0` makes it run **cond-only** (skips the uncond pass,
+  roughly halving S3Gen compute at some quality cost), and a positive value
+  overrides the model rate. Omit it to keep the model's baked rate (full
+  backward compat); negative values are rejected at construction. Plumbed
+  through `ChatterboxConfig::cfgRate` → `JSAdapter` → `EngineOptions::s3gen_cfg_rate`
+  and exposed on the JS surface (`index.d.ts` `TTSGgmlOptions.cfgRate`), with
+  C++ validation/mapping unit tests and a JS param-forwarding test. Requires the
+  `tts-cpp` pin bump to `2026-07-13#1` (qvac-ext-lib-whisper.cpp PR #88), which
+  adds `EngineOptions::s3gen_cfg_rate` / `s3gen_synthesize_opts::cfg_rate`.
 - **LavaSR enhancer GPU acceleration.** The 48 kHz bandwidth-extension enhancer
   now runs on the GPU when the model is constructed with the GPU enabled (the
   same `useGPU` / `nGpuLayers` config the engine uses) — Vulkan on Windows/Linux,
@@ -18,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `1` GPU) and `enhancerBackendId` (the ggml backend id, e.g. `3` for Vulkan),
   so hosts can confirm where the enhancer actually ran.
 - Opt-in `vulkanCacheDir` (Supertonic + `useGPU: true`): persists the Vulkan pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`) and pre-warms it at `load()` so the first-dispatch shader-compile cost is paid once per install, not on the first `run()`. Fully opt-in/non-breaking; Vulkan analogue of `openclCacheDir` (QVAC-21910, tetherto/qvac#3120).
+- **Per-call cancellation via `AbortSignal` on `run()`.** `model.run({ input, signal })` now accepts an optional `AbortSignal`; when it aborts, `response.await()` rejects with the abort reason. An already-aborted signal rejects deterministically without dispatching the engine (no native interrupt) — the race-free way to cancel on fast hardware. Additive/non-breaking. Non-streaming `run()` only: **ignored when `streamOutput: true`** (and on `runStream` / `runStreaming`). (QVAC-22247, tetherto/qvac#3260)
+
+## [0.5.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
 
 ## [0.4.2] - 2026-07-08
 

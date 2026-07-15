@@ -17,7 +17,7 @@ const PRIORITY_NAMES = {
  * @param {Function} [options.onLog] optional callback receiving formatted log
  * @returns {{logs: string[], release: Function}}
  */
-function attachSpecLogger (options = {}) {
+function attachSpecLogger(options = {}) {
   const { forwardToConsole = true, onLog } = options
   const logs = []
 
