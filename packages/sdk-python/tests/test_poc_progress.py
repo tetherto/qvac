@@ -25,8 +25,8 @@ import os
 from pathlib import Path
 
 import pytest
-
 from poc_heartbeat import WORKER
+
 from qvac.models import QWEN3_600M_INST_Q4
 
 DEFAULT_MODEL = str(
@@ -69,13 +69,13 @@ def transport(worker):
 async def test_load_model_with_progress_streams_real_progress_then_terminal_reply(
     transport,
 ) -> None:
+    from qvac.methods import load_model_with_progress
     from qvac.schemas import (
         LoadModelRequest,
         LoadModelResponse,
         ModelProgressResponse,
         ModelType,
     )
-    from qvac.methods import load_model_with_progress
 
     params = LoadModelRequest.model_validate(
         {

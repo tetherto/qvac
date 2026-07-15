@@ -16,7 +16,8 @@ worker ahead of the production transport landing.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterable, AsyncIterator, Protocol
+from collections.abc import AsyncIterable, AsyncIterator
+from typing import Any, Protocol
 
 
 class Transport(Protocol):

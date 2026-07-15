@@ -11,7 +11,7 @@ implement (see qvac._transport.Transport).
 
 from __future__ import annotations
 
-from typing import AsyncIterable, AsyncIterator
+from collections.abc import AsyncIterable, AsyncIterator
 
 from .._transport import Transport
 from . import (

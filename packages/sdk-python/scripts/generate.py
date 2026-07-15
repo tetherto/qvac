@@ -28,6 +28,7 @@ GENERATED_DIR = SRC_DIR / "qvac" / "_generated"
 MODELS_DIR = GENERATED_DIR / "models"
 INDEX_PATH = GENERATED_DIR / "__init__.py"
 METHODS_PATH = GENERATED_DIR / "methods.py"
+GENERATED_BASE_PATH = SRC_DIR / "qvac" / "_generated_base.py"
 MODELS_REGISTRY_PATH = GENERATED_DIR / "models_registry.py"
 
 CALL_SHAPE_ANNOTATION = {
@@ -172,6 +173,17 @@ def run_datamodel_codegen(output_dir: Path) -> None:
             "--disable-timestamp",
             "--disable-warnings",
             "--use-double-quotes",
+            # Emits `Annotated[int, Field(ge=...)]` instead of calling
+            # conint(...)/constr(...) directly in a type position -- the
+            # latter is invalid as a static type annotation, which is
+            # what datamodel-code-generator's own docs say this flag is
+            # headed toward becoming the pydantic v2 default for anyway.
+            "--use-annotated",
+            # See qvac._generated_base's docstring: makes enum-typed
+            # fields' schema-literal defaults validate_default instead
+            # of staying a bare str.
+            "--base-class",
+            "qvac._generated_base.GeneratedBaseModel",
         ],
         check=True,
     )
@@ -197,6 +209,7 @@ def resolve_titles(
         fake_qvac = Path(fake_src) / "qvac"
         fake_qvac.mkdir()
         (fake_qvac / "__init__.py").write_text("")
+        shutil.copy(GENERATED_BASE_PATH, fake_qvac / "_generated_base.py")
         fake_generated = fake_qvac / "_generated"
         fake_generated.mkdir()
         (fake_generated / "__init__.py").write_text("")
@@ -299,7 +312,7 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
         "",
         "from __future__ import annotations",
         "",
-        "from typing import AsyncIterable, AsyncIterator",
+        "from collections.abc import AsyncIterable, AsyncIterator",
         "",
         "from .._transport import Transport",
         "from . import (",
@@ -407,12 +420,34 @@ def format_with_black(paths: list[Path]) -> None:
     )
 
 
+def sort_imports_with_ruff(path: Path) -> None:
+    # datamodel-code-generator appends the --base-class import as a plain
+    # trailing line rather than running it through isort, so the header
+    # block it emits isn't reliably sorted -- fix up just the "I" (import
+    # sort) rules here rather than adding a whole extra lint pass.
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--fix",
+            "--select",
+            "I",
+            "--quiet",
+            str(path),
+        ],
+        check=True,
+    )
+
+
 def build(output_root: Path) -> None:
     """Renders a complete `_generated/` tree (models/, __init__.py, methods.py,
     models_registry.py) into `output_root`. Never touches the real committed
     GENERATED_DIR."""
     models_dir = output_root / "models"
     run_datamodel_codegen(models_dir)
+    sort_imports_with_ruff(models_dir)
     manifest_methods = load_manifest_methods()
     resolved = resolve_titles(models_dir, manifest_methods)
 

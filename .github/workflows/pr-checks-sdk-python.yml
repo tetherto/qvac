@@ -49,6 +49,15 @@ jobs:
       - name: Format check
         run: .venv/bin/python3 -m black --check src/qvac scripts/ tests/
 
+      - name: Lint (ruff)
+        run: .venv/bin/python3 -m ruff check src/qvac scripts/ tests/
+
+      - name: Typecheck (mypy)
+        run: |
+          .venv/bin/python3 -m mypy -p qvac
+          .venv/bin/python3 -m mypy scripts
+          .venv/bin/python3 -m mypy tests
+
       # test_poc_smoke.py/test_poc_progress.py need a real Bare worker + a
       # downloaded model; they skip themselves unless a built worker exists
       # at WORKER (QVAC_POC_SDK_DIR override or its monorepo-relative

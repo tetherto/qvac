@@ -7,7 +7,8 @@ smoke-tested against a real running worker ahead of the production
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncIterable, AsyncIterator
+from collections.abc import AsyncIterable, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # Import-time only (see `from __future__ import annotations` above) --
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class PocTransport:
-    def __init__(self, worker: "QvacWorker") -> None:
+    def __init__(self, worker: QvacWorker) -> None:
         self._worker = worker
 
     async def call(self, payload: dict[str, Any]) -> dict[str, Any]:

@@ -6,5 +6,8 @@
 
 from __future__ import annotations
 
-from ._generated import *
-from ._generated import __all__
+# Re-exports both the names and _generated's own __all__, so
+# `from qvac.schemas import *` downstream still respects it -- the
+# __all__ import looks unused to a linter but is what makes that work.
+from ._generated import *  # noqa: F403
+from ._generated import __all__  # noqa: F401

@@ -49,3 +49,18 @@ python3 -m venv .venv
 .venv/bin/python3 scripts/generate.py
 .venv/bin/python3 -m pytest
 ```
+
+Format, lint, and typecheck (all run in CI, on every file — generated code
+included):
+
+```bash
+.venv/bin/python3 -m black --check src/qvac scripts/ tests/
+.venv/bin/python3 -m ruff check src/qvac scripts/ tests/
+.venv/bin/python3 -m mypy -p qvac
+.venv/bin/python3 -m mypy scripts
+.venv/bin/python3 -m mypy tests
+```
+
+`scripts/generate.py` runs `black` and `ruff --fix --select I` on its own
+output as part of the build, so a fresh regeneration should already pass all
+three checks above.

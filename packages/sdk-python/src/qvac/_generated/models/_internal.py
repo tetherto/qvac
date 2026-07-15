@@ -4,90 +4,105 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    PositiveFloat,
-    RootModel,
-    confloat,
-    conint,
-    constr,
-)
+from pydantic import ConfigDict, Field, RootModel
+
+from qvac._generated_base import GeneratedBaseModel
 
 
 class FieldQvacSdkWireContract(RootModel[Any]):
-    root: Any = Field(
-        ...,
-        description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
-        title="@qvac/sdk wire contract",
-    )
+    root: Annotated[
+        Any,
+        Field(
+            description="Generated from the SDK Zod schemas by `bun run contract:export`. Do not edit by hand. Requests use the schema input shape, responses the output shape; runtime-only refinements and transforms stay server-side.",
+            title="@qvac/sdk wire contract",
+        ),
+    ]
 
 
-class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(BaseModel):
-    path: str = Field(
-        ...,
-        description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).",
-    )
+class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
+    GeneratedBaseModel
+):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
 
 
-class BatchCompletionStreamRequestPromptsItemHistoryItem(BaseModel):
-    role: str = Field(
-        ..., description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'
-    )
-    content: str = Field(..., description="Message content.")
-    attachments: (
-        list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None
-    ) = Field(None, description="Optional file attachments for multimodal models.")
+class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+    ]
+    content: Annotated[str, Field(description="Message content.")]
+    attachments: Annotated[
+        list[BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
 
 
-class BatchCompletionStreamRequestPromptsItemGenerationParams(BaseModel):
+class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    temp: float | None = Field(
-        None, description="Sampling temperature (typically 0–2)."
-    )
-    top_p: float | None = Field(
-        None, description="Top-p (nucleus) sampling cutoff (0–1)."
-    )
-    top_k: float | None = Field(
-        None, description="Top-k sampling — keep only the top K tokens."
-    )
-    predict: float | None = Field(
-        None,
-        description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
-    )
-    seed: float | None = Field(None, description="Random seed for reproducibility.")
-    frequency_penalty: float | None = Field(
-        None, description="Penalty applied to tokens based on frequency so far."
-    )
-    presence_penalty: float | None = Field(
-        None, description="Penalty applied to tokens that have already appeared."
-    )
-    repeat_penalty: float | None = Field(
-        None, description="Penalty applied to repeated tokens."
-    )
-    reasoning_budget: conint(ge=-1, le=2147483647) | None = Field(
-        None,
-        description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
-    )
-    remove_thinking_from_context: bool | None = Field(
-        None,
-        description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
-    )
+    temp: Annotated[
+        float | None, Field(description="Sampling temperature (typically 0–2).")
+    ] = None
+    top_p: Annotated[
+        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+    ] = None
+    top_k: Annotated[
+        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+    ] = None
+    predict: Annotated[
+        float | None,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled."
+        ),
+    ] = None
+    seed: Annotated[
+        float | None, Field(description="Random seed for reproducibility.")
+    ] = None
+    frequency_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens based on frequency so far."),
+    ] = None
+    presence_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens that have already appeared."),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None, Field(description="Penalty applied to repeated tokens.")
+    ] = None
+    reasoning_budget: Annotated[
+        int | None,
+        Field(
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            ge=-1,
+            le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+        ),
+    ] = None
 
 
-class BatchCompletionStreamRequestPromptsItemResponseFormatText(BaseModel):
+class BatchCompletionStreamRequestPromptsItemResponseFormatText(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["text"]
 
 
-class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(BaseModel):
+class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -97,52 +112,63 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(BaseModel)
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema(
     RootModel[dict[str, Any]]
 ):
-    root: dict[str, Any] = Field(
-        ...,
-        description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
-    )
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema(
-    BaseModel
+    GeneratedBaseModel
 ):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: constr(min_length=1) = Field(
-        ...,
-        description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
-    )
-    description: str | None = Field(
-        None,
-        description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
-    )
-    schema_: (
-        BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema
-    ) = Field(
-        ...,
-        alias="schema",
-        description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
-    )
-    strict: bool | None = Field(
-        None,
-        description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`.",
-    )
+    name: Annotated[
+        str,
+        Field(
+            description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
+            min_length=1,
+        ),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation."
+        ),
+    ] = None
+    schema_: Annotated[
+        BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema,
+        Field(
+            alias="schema",
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+    strict: Annotated[
+        bool | None,
+        Field(
+            description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`."
+        ),
+    ] = None
 
 
-class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(BaseModel):
+class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["json_schema"]
-    json_schema: (
-        BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema
-    ) = Field(
-        ...,
-        title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema",
-    )
+    json_schema: Annotated[
+        BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema,
+        Field(
+            title="BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema"
+        ),
+    ]
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType(
@@ -157,14 +183,14 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueT
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue(
-    BaseModel
+    GeneratedBaseModel
 ):
-    type: (
-        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType
-    ) = Field(
-        ...,
-        title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType",
-    )
+    type: Annotated[
+        BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType,
+        Field(
+            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType"
+        ),
+    ]
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
 
@@ -177,66 +203,75 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
         ]
     ]
 ):
-    root: dict[
-        str, BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue
-    ] = Field(
-        ...,
-        title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties",
-    )
-
-
-class BatchCompletionStreamRequestPromptsItemToolsItemParameters(BaseModel):
-    type: Literal["object"]
-    properties: BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties = (
+    root: Annotated[
+        dict[
+            str,
+            BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValue,
+        ],
         Field(
-            ...,
-            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties",
-        )
-    )
+            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties"
+        ),
+    ]
+
+
+class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseModel):
+    type: Literal["object"]
+    properties: Annotated[
+        BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties,
+        Field(
+            title="BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties"
+        ),
+    ]
     required: list[str] | None = None
 
 
-class BatchCompletionStreamRequestPromptsItemToolsItem(BaseModel):
+class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
     type: Literal["function"]
     name: str
     description: str
-    parameters: BatchCompletionStreamRequestPromptsItemToolsItemParameters = Field(
-        ..., title="BatchCompletionStreamRequestPromptsItemToolsItemParameters"
-    )
+    parameters: Annotated[
+        BatchCompletionStreamRequestPromptsItemToolsItemParameters,
+        Field(title="BatchCompletionStreamRequestPromptsItemToolsItemParameters"),
+    ]
 
 
-class BatchCompletionStreamRequestPromptsItem(BaseModel):
+class BatchCompletionStreamRequestPromptsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    id: constr(min_length=1) | None = Field(
-        None,
-        description="Optional caller-supplied id used to correlate streamed chunks and final results.",
-    )
-    history: list[BatchCompletionStreamRequestPromptsItemHistoryItem] = Field(
-        ..., description="Array of conversation messages sent to the model."
-    )
-    generation_params: (
-        BatchCompletionStreamRequestPromptsItemGenerationParams | None
-    ) = Field(
-        None,
-        alias="generationParams",
-        description="Optional per-prompt sampling / generation parameters.",
-        title="BatchCompletionStreamRequestPromptsItemGenerationParams",
-    )
-    response_format: (
+    id: Annotated[
+        str | None,
+        Field(
+            description="Optional caller-supplied id used to correlate streamed chunks and final results.",
+            min_length=1,
+        ),
+    ] = None
+    history: Annotated[
+        list[BatchCompletionStreamRequestPromptsItemHistoryItem],
+        Field(description="Array of conversation messages sent to the model."),
+    ]
+    generation_params: Annotated[
+        BatchCompletionStreamRequestPromptsItemGenerationParams | None,
+        Field(
+            alias="generationParams",
+            description="Optional per-prompt sampling / generation parameters.",
+            title="BatchCompletionStreamRequestPromptsItemGenerationParams",
+        ),
+    ] = None
+    response_format: Annotated[
         BatchCompletionStreamRequestPromptsItemResponseFormatText
         | BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject
         | BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema
-        | None
-    ) = Field(
-        None,
-        alias="responseFormat",
-        description="Optional per-prompt structured-output constraint.",
-    )
-    tools: list[BatchCompletionStreamRequestPromptsItemToolsItem] | None = Field(
-        None, description="Resolved per-prompt tools the model can call."
-    )
+        | None,
+        Field(
+            alias="responseFormat",
+            description="Optional per-prompt structured-output constraint.",
+        ),
+    ] = None
+    tools: Annotated[
+        list[BatchCompletionStreamRequestPromptsItemToolsItem] | None,
+        Field(description="Resolved per-prompt tools the model can call."),
+    ] = None
 
 
 class BatchCompletionStreamRequestToolDialect(Enum):
@@ -248,107 +283,125 @@ class BatchCompletionStreamRequestToolDialect(Enum):
     gemma4 = "gemma4"
 
 
-class BatchCompletionStreamRequest(BaseModel):
+class BatchCompletionStreamRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the model to use for batch completion.",
-    )
-    prompts: list[BatchCompletionStreamRequestPromptsItem] = Field(
-        ...,
-        description="Batch prompts submitted to the addon in one run.",
-        min_length=1,
-    )
-    stream: bool | None = Field(
-        None,
-        description="Whether to stream tokens (`true`) or return all events on completion. Defaults to true.",
-    )
-    capture_thinking: bool | None = Field(
-        None,
-        alias="captureThinking",
-        description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas.",
-    )
-    emit_raw_deltas: bool | None = Field(
-        None,
-        alias="emitRawDeltas",
-        description="When `true`, also emit raw per-token deltas in addition to normalized content deltas.",
-    )
-    tool_dialect: BatchCompletionStreamRequestToolDialect | None = Field(
-        None,
-        alias="toolDialect",
-        description="Override auto-detected tool-call dialect for all prompts.",
-        title="BatchCompletionStreamRequestToolDialect",
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight batch request.",
-    )
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the model to use for batch completion.",
+        ),
+    ]
+    prompts: Annotated[
+        list[BatchCompletionStreamRequestPromptsItem],
+        Field(
+            description="Batch prompts submitted to the addon in one run.", min_length=1
+        ),
+    ]
+    stream: Annotated[
+        bool | None,
+        Field(
+            description="Whether to stream tokens (`true`) or return all events on completion. Defaults to true."
+        ),
+    ] = None
+    capture_thinking: Annotated[
+        bool | None,
+        Field(
+            alias="captureThinking",
+            description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas.",
+        ),
+    ] = None
+    emit_raw_deltas: Annotated[
+        bool | None,
+        Field(
+            alias="emitRawDeltas",
+            description="When `true`, also emit raw per-token deltas in addition to normalized content deltas.",
+        ),
+    ] = None
+    tool_dialect: Annotated[
+        BatchCompletionStreamRequestToolDialect | None,
+        Field(
+            alias="toolDialect",
+            description="Override auto-detected tool-call dialect for all prompts.",
+            title="BatchCompletionStreamRequestToolDialect",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight batch request.",
+            min_length=1,
+        ),
+    ] = None
     type: Literal["batchCompletionStream"]
 
 
-class BatchCompletionStreamResponseEventsItemEventContentDelta(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventContentDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["contentDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
-class BatchCompletionStreamResponseEventsItemEventRawDelta(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventRawDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["rawDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
-class BatchCompletionStreamResponseEventsItemEventThinkingDelta(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventThinkingDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["thinkingDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
 class BatchCompletionStreamResponseEventsItemEventToolCallCallArguments(
     RootModel[dict[str, Any]]
 ):
-    root: dict[str, Any] = Field(
-        ..., title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments"
-    )
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments"
+        ),
+    ]
 
 
-class BatchCompletionStreamResponseEventsItemEventToolCallCall(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventToolCallCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     id: str
     name: str
-    arguments: BatchCompletionStreamResponseEventsItemEventToolCallCallArguments = (
+    arguments: Annotated[
+        BatchCompletionStreamResponseEventsItemEventToolCallCallArguments,
         Field(
-            ...,
-            title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments",
-        )
-    )
+            title="BatchCompletionStreamResponseEventsItemEventToolCallCallArguments"
+        ),
+    ]
     raw: str | None = None
 
 
-class BatchCompletionStreamResponseEventsItemEventToolCall(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventToolCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["toolCall"]
-    seq: conint(ge=0, le=9007199254740991)
-    call: BatchCompletionStreamResponseEventsItemEventToolCallCall = Field(
-        ..., title="BatchCompletionStreamResponseEventsItemEventToolCallCall"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    call: Annotated[
+        BatchCompletionStreamResponseEventsItemEventToolCallCall,
+        Field(title="BatchCompletionStreamResponseEventsItemEventToolCallCall"),
+    ]
 
 
 class BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode(Enum):
@@ -357,26 +410,28 @@ class BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode(Enum):
     unknown_tool = "UNKNOWN_TOOL"
 
 
-class BatchCompletionStreamResponseEventsItemEventToolErrorError(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventToolErrorError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode = Field(
-        ..., title="BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode"
-    )
+    code: Annotated[
+        BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode,
+        Field(title="BatchCompletionStreamResponseEventsItemEventToolErrorErrorCode"),
+    ]
     message: str
     raw: str | None = None
 
 
-class BatchCompletionStreamResponseEventsItemEventToolError(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventToolError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["toolError"]
-    seq: conint(ge=0, le=9007199254740991)
-    error: BatchCompletionStreamResponseEventsItemEventToolErrorError = Field(
-        ..., title="BatchCompletionStreamResponseEventsItemEventToolErrorError"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    error: Annotated[
+        BatchCompletionStreamResponseEventsItemEventToolErrorError,
+        Field(title="BatchCompletionStreamResponseEventsItemEventToolErrorError"),
+    ]
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice(
@@ -386,68 +441,79 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDev
     gpu = "gpu"
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    cache_tokens: float | None = Field(None, alias="cacheTokens")
-    prompt_tokens: float | None = Field(None, alias="promptTokens")
-    generated_tokens: float | None = Field(None, alias="generatedTokens")
-    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
-    backend_device: (
+    time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
+    prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    backend_device: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
-        | None
-    ) = Field(
-        None,
-        alias="backendDevice",
-        title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice",
-    )
+        | None,
+        Field(
+            alias="backendDevice",
+            title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice",
+        ),
+    ] = None
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionStats(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionStats"]
-    seq: conint(ge=0, le=9007199254740991)
-    stats: BatchCompletionStreamResponseEventsItemEventCompletionStatsStats = Field(
-        ..., title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStats"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stats: Annotated[
+        BatchCompletionStreamResponseEventsItemEventCompletionStatsStats,
+        Field(title="BatchCompletionStreamResponseEventsItemEventCompletionStatsStats"),
+    ]
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
     message: str
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
-    full_text: str = Field(..., alias="fullText")
+    full_text: Annotated[str, Field(alias="fullText")]
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDoneError(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionDoneError(
+    GeneratedBaseModel
+):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionDone"]
-    seq: conint(ge=0, le=9007199254740991)
-    stop_reason: Literal["error"] = Field(..., alias="stopReason")
-    error: BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError = Field(
-        ...,
-        title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError",
-    )
-    raw: BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw | None = (
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")]
+    error: Annotated[
+        BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError,
         Field(
-            None,
-            title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw",
-        )
-    )
+            title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError"
+        ),
+    ]
+    raw: Annotated[
+        BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw | None,
+        Field(
+            title="BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorRaw"
+        ),
+    ] = None
 
 
 class BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason(Enum):
@@ -457,32 +523,33 @@ class BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason(Enum)
     cancelled = "cancelled"
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    full_text: str = Field(..., alias="fullText")
+    full_text: Annotated[str, Field(alias="fullText")]
 
 
-class BatchCompletionStreamResponseEventsItemEventCompletionDone(BaseModel):
+class BatchCompletionStreamResponseEventsItemEventCompletionDone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionDone"]
-    seq: conint(ge=0, le=9007199254740991)
-    stop_reason: (
-        BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason | None
-    ) = Field(
-        None,
-        alias="stopReason",
-        title="BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason",
-    )
-    raw: BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw | None = Field(
-        None, title="BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[
+        BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason | None,
+        Field(
+            alias="stopReason",
+            title="BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason",
+        ),
+    ] = None
+    raw: Annotated[
+        BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw | None,
+        Field(title="BatchCompletionStreamResponseEventsItemEventCompletionDoneRaw"),
+    ] = None
 
 
-class BatchCompletionStreamResponseEventsItem(BaseModel):
+class BatchCompletionStreamResponseEventsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -504,24 +571,26 @@ class BatchCompletionStreamResponseStatsBackendDevice(Enum):
     gpu = "gpu"
 
 
-class BatchCompletionStreamResponseStats(BaseModel):
+class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    cache_tokens: float | None = Field(None, alias="cacheTokens")
-    prompt_tokens: float | None = Field(None, alias="promptTokens")
-    generated_tokens: float | None = Field(None, alias="generatedTokens")
-    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
-    backend_device: BatchCompletionStreamResponseStatsBackendDevice | None = Field(
-        None,
-        alias="backendDevice",
-        title="BatchCompletionStreamResponseStatsBackendDevice",
-    )
+    time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
+    prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    backend_device: Annotated[
+        BatchCompletionStreamResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            title="BatchCompletionStreamResponseStatsBackendDevice",
+        ),
+    ] = None
 
 
-class BatchCompletionStreamResponse(BaseModel):
+class BatchCompletionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -529,97 +598,112 @@ class BatchCompletionStreamResponse(BaseModel):
     done: bool | None = None
     ids: list[str] | None = None
     events: list[BatchCompletionStreamResponseEventsItem]
-    stats: BatchCompletionStreamResponseStats | None = Field(
-        None, title="BatchCompletionStreamResponseStats"
-    )
+    stats: Annotated[
+        BatchCompletionStreamResponseStats | None,
+        Field(title="BatchCompletionStreamResponseStats"),
+    ] = None
 
 
-class BciTranscribeRequestNeuralDataBase64(BaseModel):
-    type: Literal["base64"] = Field(
-        ..., description="Inline base64-encoded neural bytes."
-    )
-    value: str = Field(
-        ..., description="Base64-encoded contents of a BCI neural `.bin` recording."
-    )
+class BciTranscribeRequestNeuralDataBase64(GeneratedBaseModel):
+    type: Annotated[
+        Literal["base64"], Field(description="Inline base64-encoded neural bytes.")
+    ]
+    value: Annotated[
+        str,
+        Field(description="Base64-encoded contents of a BCI neural `.bin` recording."),
+    ]
 
 
-class BciTranscribeRequestNeuralDataFilePath(BaseModel):
-    type: Literal["filePath"] = Field(..., description="Local neural `.bin` file path.")
-    value: str = Field(
-        ..., description="Path to a BCI neural `.bin` recording on the provider."
-    )
+class BciTranscribeRequestNeuralDataFilePath(GeneratedBaseModel):
+    type: Annotated[
+        Literal["filePath"], Field(description="Local neural `.bin` file path.")
+    ]
+    value: Annotated[
+        str, Field(description="Path to a BCI neural `.bin` recording on the provider.")
+    ]
 
 
-class BciTranscribeRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Identifier returned by `loadModel()` for a loaded BCI model.",
-    )
-    metadata: bool | None = Field(
-        None,
-        description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.",
-    )
-    neural_data: (
-        BciTranscribeRequestNeuralDataBase64 | BciTranscribeRequestNeuralDataFilePath
-    ) = Field(
-        ...,
-        alias="neuralData",
-        description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
-    )
+class BciTranscribeRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier returned by `loadModel()` for a loaded BCI model.",
+        ),
+    ]
+    metadata: Annotated[
+        bool | None,
+        Field(
+            description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text."
+        ),
+    ] = None
+    neural_data: Annotated[
+        BciTranscribeRequestNeuralDataBase64 | BciTranscribeRequestNeuralDataFilePath,
+        Field(
+            alias="neuralData",
+            description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
+        ),
+    ]
     type: Literal["bciTranscribe"]
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class BciTranscribeResponseStats(BaseModel):
+class BciTranscribeResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    real_time_factor: float | None = Field(None, alias="realTimeFactor")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    total_tokens: float | None = Field(None, alias="totalTokens")
-    total_segments: float | None = Field(None, alias="totalSegments")
-    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
-    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
-    encoder_time: float | None = Field(None, alias="encoderTime")
-    decoder_time: float | None = Field(None, alias="decoderTime")
-    mel_spec_time: float | None = Field(None, alias="melSpecTime")
-    backend_device: float | None = Field(None, alias="backendDevice")
-    backend_id: float | None = Field(None, alias="backendId")
-    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
-    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
-    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    total_tokens: Annotated[float | None, Field(alias="totalTokens")] = None
+    total_segments: Annotated[float | None, Field(alias="totalSegments")] = None
+    whisper_encode_time: Annotated[float | None, Field(alias="whisperEncodeTime")] = (
+        None
+    )
+    whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
+        None
+    )
+    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
+    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
+    gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
+    gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
 
 
-class BciTranscribeResponseSegment(BaseModel):
+class BciTranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias="startMs")
-    end_ms: float = Field(..., alias="endMs")
+    start_ms: Annotated[float, Field(alias="startMs")]
+    end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
 
 
-class BciTranscribeResponse(BaseModel):
+class BciTranscribeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
-    stats: BciTranscribeResponseStats | None = Field(
-        None, title="BciTranscribeResponseStats"
-    )
+    stats: Annotated[
+        BciTranscribeResponseStats | None, Field(title="BciTranscribeResponseStats")
+    ] = None
     error: str | None = None
-    segment: BciTranscribeResponseSegment | None = Field(
-        None, title="BciTranscribeResponseSegment"
-    )
+    segment: Annotated[
+        BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
+    ] = None
     type: Literal["bciTranscribe"]
 
 
@@ -628,106 +712,135 @@ class BciTranscribeStreamRequestStreamOptsEmit(Enum):
     full = "full"
 
 
-class BciTranscribeStreamRequestStreamOpts(BaseModel):
-    window_timesteps: conint(le=9007199254740991, gt=0) | None = Field(
-        None,
-        alias="windowTimesteps",
-        description="Decode window size in timesteps (addon default: 1500).",
-    )
-    hop_timesteps: conint(le=9007199254740991, gt=0) | None = Field(
-        None,
-        alias="hopTimesteps",
-        description="How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.",
-    )
-    emit: BciTranscribeStreamRequestStreamOptsEmit | None = Field(
-        None,
-        description="'delta' (default) emits only the newly-discovered tail per window; 'full' emits the full running transcript each update.",
-        title="BciTranscribeStreamRequestStreamOptsEmit",
-    )
+class BciTranscribeStreamRequestStreamOpts(GeneratedBaseModel):
+    window_timesteps: Annotated[
+        int | None,
+        Field(
+            alias="windowTimesteps",
+            description="Decode window size in timesteps (addon default: 1500).",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    hop_timesteps: Annotated[
+        int | None,
+        Field(
+            alias="hopTimesteps",
+            description="How far the window advances between decodes (addon default: 500). Must be < windowTimesteps.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    emit: Annotated[
+        BciTranscribeStreamRequestStreamOptsEmit | None,
+        Field(
+            description="'delta' (default) emits only the newly-discovered tail per window; 'full' emits the full running transcript each update.",
+            title="BciTranscribeStreamRequestStreamOptsEmit",
+        ),
+    ] = None
 
 
-class BciTranscribeStreamRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Identifier returned by `loadModel()` for a loaded BCI model.",
-    )
-    metadata: bool | None = Field(
-        None,
-        description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text.",
-    )
+class BciTranscribeStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier returned by `loadModel()` for a loaded BCI model.",
+        ),
+    ]
+    metadata: Annotated[
+        bool | None,
+        Field(
+            description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text."
+        ),
+    ] = None
     type: Literal["bciTranscribeStream"]
-    stream_opts: BciTranscribeStreamRequestStreamOpts | None = Field(
-        None, alias="streamOpts", title="BciTranscribeStreamRequestStreamOpts"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight duplex BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    stream_opts: Annotated[
+        BciTranscribeStreamRequestStreamOpts | None,
+        Field(alias="streamOpts", title="BciTranscribeStreamRequestStreamOpts"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight duplex BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class BciTranscribeStreamResponseStats(BaseModel):
+class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    real_time_factor: float | None = Field(None, alias="realTimeFactor")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    total_tokens: float | None = Field(None, alias="totalTokens")
-    total_segments: float | None = Field(None, alias="totalSegments")
-    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
-    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
-    encoder_time: float | None = Field(None, alias="encoderTime")
-    decoder_time: float | None = Field(None, alias="decoderTime")
-    mel_spec_time: float | None = Field(None, alias="melSpecTime")
-    backend_device: float | None = Field(None, alias="backendDevice")
-    backend_id: float | None = Field(None, alias="backendId")
-    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
-    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
-    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    total_tokens: Annotated[float | None, Field(alias="totalTokens")] = None
+    total_segments: Annotated[float | None, Field(alias="totalSegments")] = None
+    whisper_encode_time: Annotated[float | None, Field(alias="whisperEncodeTime")] = (
+        None
+    )
+    whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
+        None
+    )
+    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
+    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
+    gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
+    gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
 
 
-class BciTranscribeStreamResponseSegment(BaseModel):
+class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias="startMs")
-    end_ms: float = Field(..., alias="endMs")
+    start_ms: Annotated[float, Field(alias="startMs")]
+    end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
 
 
-class BciTranscribeStreamResponse(BaseModel):
+class BciTranscribeStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
-    stats: BciTranscribeStreamResponseStats | None = Field(
-        None, title="BciTranscribeStreamResponseStats"
-    )
+    stats: Annotated[
+        BciTranscribeStreamResponseStats | None,
+        Field(title="BciTranscribeStreamResponseStats"),
+    ] = None
     error: str | None = None
-    segment: BciTranscribeStreamResponseSegment | None = Field(
-        None, title="BciTranscribeStreamResponseSegment"
-    )
+    segment: Annotated[
+        BciTranscribeStreamResponseSegment | None,
+        Field(title="BciTranscribeStreamResponseSegment"),
+    ] = None
     type: Literal["bciTranscribeStream"]
 
 
-class CancelRequestRequest(BaseModel):
+class CancelRequestRequest(GeneratedBaseModel):
     type: Literal["cancel"]
-    operation: Literal["request"] = Field(..., description="Operation type")
-    request_id: constr(min_length=1) = Field(
-        ...,
-        alias="requestId",
-        description="Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).",
-    )
-    clear_cache: bool | None = Field(
-        None,
-        alias="clearCache",
-        description="Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.",
-    )
+    operation: Annotated[Literal["request"], Field(description="Operation type")]
+    request_id: Annotated[
+        str,
+        Field(
+            alias="requestId",
+            description="Identifier of the specific in-flight request to cancel — the value exposed on the result object returned by long-running calls (e.g. `completion(...)`, `loadModel(...)`, `downloadAsset(...)`).",
+            min_length=1,
+        ),
+    ]
+    clear_cache: Annotated[
+        bool | None,
+        Field(
+            alias="clearCache",
+            description="Download-only: if true, deletes the partial download file when the subscriber leaves. Ignored for non-download kinds.",
+        ),
+    ] = None
 
 
 class CancelRequestBroadKind(Enum):
@@ -746,42 +859,51 @@ class CancelRequestBroadKind(Enum):
     rag = "rag"
 
 
-class CancelRequestBroad(BaseModel):
+class CancelRequestBroad(GeneratedBaseModel):
     type: Literal["cancel"]
-    operation: Literal["broad"] = Field(..., description="Operation type")
-    model_id: str = Field(
-        ..., alias="modelId", description="Cancel every in-flight request on this model"
-    )
-    kind: CancelRequestBroadKind | None = Field(
-        None,
-        description="Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
-        title="CancelRequestBroadKind",
-    )
+    operation: Annotated[Literal["broad"], Field(description="Operation type")]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="Cancel every in-flight request on this model"
+        ),
+    ]
+    kind: Annotated[
+        CancelRequestBroadKind | None,
+        Field(
+            description="Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
+            title="CancelRequestBroadKind",
+        ),
+    ] = None
 
 
-class CancelResponse(BaseModel):
+class CancelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["cancel"]
     success: bool
-    cancelled: conint(ge=0, le=9007199254740991) | None = None
+    cancelled: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
     error: str | None = None
 
 
-class ClassifyRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class ClassifyRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     image: str
-    top_k: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="topK"
+    top_k: Annotated[
+        int | None, Field(alias="topK", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    width: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
+        None
     )
-    width: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    height: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    height: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
+        None
+    )
     channels: Literal[3] | None = None
     type: Literal["classify"]
 
 
-class ClassifyResponseResultsItem(BaseModel):
+class ClassifyResponseResultsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -789,7 +911,7 @@ class ClassifyResponseResultsItem(BaseModel):
     confidence: float
 
 
-class ClassifyResponse(BaseModel):
+class ClassifyResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -798,21 +920,29 @@ class ClassifyResponse(BaseModel):
     done: bool | None = None
 
 
-class CompletionStreamRequestHistoryItemAttachmentsItem(BaseModel):
-    path: str = Field(
-        ...,
-        description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models).",
-    )
+class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
 
 
-class CompletionStreamRequestHistoryItem(BaseModel):
-    role: str = Field(
-        ..., description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'
-    )
-    content: str = Field(..., description="Message content.")
-    attachments: list[CompletionStreamRequestHistoryItemAttachmentsItem] | None = Field(
-        None, description="Optional file attachments for multimodal models."
-    )
+class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+    ]
+    content: Annotated[str, Field(description="Message content.")]
+    attachments: Annotated[
+        list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
+
+
+class KvCache(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
@@ -824,10 +954,11 @@ class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
     array = "array"
 
 
-class CompletionStreamRequestToolsItemParametersPropertiesValue(BaseModel):
-    type: CompletionStreamRequestToolsItemParametersPropertiesValueType = Field(
-        ..., title="CompletionStreamRequestToolsItemParametersPropertiesValueType"
-    )
+class CompletionStreamRequestToolsItemParametersPropertiesValue(GeneratedBaseModel):
+    type: Annotated[
+        CompletionStreamRequestToolsItemParametersPropertiesValueType,
+        Field(title="CompletionStreamRequestToolsItemParametersPropertiesValueType"),
+    ]
     description: str | None = None
     enum: list[str | float | bool | None] | None = None
 
@@ -835,63 +966,78 @@ class CompletionStreamRequestToolsItemParametersPropertiesValue(BaseModel):
 class CompletionStreamRequestToolsItemParametersProperties(
     RootModel[dict[str, CompletionStreamRequestToolsItemParametersPropertiesValue]]
 ):
-    root: dict[str, CompletionStreamRequestToolsItemParametersPropertiesValue] = Field(
-        ..., title="CompletionStreamRequestToolsItemParametersProperties"
-    )
+    root: Annotated[
+        dict[str, CompletionStreamRequestToolsItemParametersPropertiesValue],
+        Field(title="CompletionStreamRequestToolsItemParametersProperties"),
+    ]
 
 
-class CompletionStreamRequestToolsItemParameters(BaseModel):
+class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
     type: Literal["object"]
-    properties: CompletionStreamRequestToolsItemParametersProperties = Field(
-        ..., title="CompletionStreamRequestToolsItemParametersProperties"
-    )
+    properties: Annotated[
+        CompletionStreamRequestToolsItemParametersProperties,
+        Field(title="CompletionStreamRequestToolsItemParametersProperties"),
+    ]
     required: list[str] | None = None
 
 
-class CompletionStreamRequestToolsItem(BaseModel):
+class CompletionStreamRequestToolsItem(GeneratedBaseModel):
     type: Literal["function"]
     name: str
     description: str
-    parameters: CompletionStreamRequestToolsItemParameters = Field(
-        ..., title="CompletionStreamRequestToolsItemParameters"
-    )
+    parameters: Annotated[
+        CompletionStreamRequestToolsItemParameters,
+        Field(title="CompletionStreamRequestToolsItemParameters"),
+    ]
 
 
-class CompletionStreamRequestGenerationParams(BaseModel):
+class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    temp: float | None = Field(
-        None, description="Sampling temperature (typically 0–2)."
-    )
-    top_p: float | None = Field(
-        None, description="Top-p (nucleus) sampling cutoff (0–1)."
-    )
-    top_k: float | None = Field(
-        None, description="Top-k sampling — keep only the top K tokens."
-    )
-    predict: float | None = Field(
-        None,
-        description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
-    )
-    seed: float | None = Field(None, description="Random seed for reproducibility.")
-    frequency_penalty: float | None = Field(
-        None, description="Penalty applied to tokens based on frequency so far."
-    )
-    presence_penalty: float | None = Field(
-        None, description="Penalty applied to tokens that have already appeared."
-    )
-    repeat_penalty: float | None = Field(
-        None, description="Penalty applied to repeated tokens."
-    )
-    reasoning_budget: conint(ge=-1, le=2147483647) | None = Field(
-        None,
-        description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
-    )
-    remove_thinking_from_context: bool | None = Field(
-        None,
-        description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
-    )
+    temp: Annotated[
+        float | None, Field(description="Sampling temperature (typically 0–2).")
+    ] = None
+    top_p: Annotated[
+        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+    ] = None
+    top_k: Annotated[
+        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+    ] = None
+    predict: Annotated[
+        float | None,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled."
+        ),
+    ] = None
+    seed: Annotated[
+        float | None, Field(description="Random seed for reproducibility.")
+    ] = None
+    frequency_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens based on frequency so far."),
+    ] = None
+    presence_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens that have already appeared."),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None, Field(description="Penalty applied to repeated tokens.")
+    ] = None
+    reasoning_budget: Annotated[
+        int | None,
+        Field(
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            ge=-1,
+            le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+        ),
+    ] = None
 
 
 class CompletionStreamRequestToolDialect(Enum):
@@ -903,14 +1049,14 @@ class CompletionStreamRequestToolDialect(Enum):
     gemma4 = "gemma4"
 
 
-class CompletionStreamRequestResponseFormatText(BaseModel):
+class CompletionStreamRequestResponseFormatText(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["text"]
 
 
-class CompletionStreamRequestResponseFormatJsonObject(BaseModel):
+class CompletionStreamRequestResponseFormatJsonObject(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -920,161 +1066,194 @@ class CompletionStreamRequestResponseFormatJsonObject(BaseModel):
 class CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema(
     RootModel[dict[str, Any]]
 ):
-    root: dict[str, Any] = Field(
-        ...,
-        description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
-    )
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
 
 
-class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(BaseModel):
+class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: constr(min_length=1) = Field(
-        ...,
-        description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
-    )
-    description: str | None = Field(
-        None,
-        description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
-    )
-    schema_: CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema = Field(
-        ...,
-        alias="schema",
-        description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
-        title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
-    )
-    strict: bool | None = Field(
-        None,
-        description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`.",
-    )
+    name: Annotated[
+        str,
+        Field(
+            description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
+            min_length=1,
+        ),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation."
+        ),
+    ] = None
+    schema_: Annotated[
+        CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema,
+        Field(
+            alias="schema",
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+    strict: Annotated[
+        bool | None,
+        Field(
+            description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`."
+        ),
+    ] = None
 
 
-class CompletionStreamRequestResponseFormatJsonSchema(BaseModel):
+class CompletionStreamRequestResponseFormatJsonSchema(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["json_schema"]
-    json_schema: CompletionStreamRequestResponseFormatJsonSchemaJsonSchema = Field(
-        ..., title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"
-    )
+    json_schema: Annotated[
+        CompletionStreamRequestResponseFormatJsonSchemaJsonSchema,
+        Field(title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"),
+    ]
 
 
-class CompletionStreamRequest(BaseModel):
-    history: list[CompletionStreamRequestHistoryItem] = Field(
-        ..., description="Array of conversation messages sent to the model."
-    )
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the model to use for completion.",
-    )
-    kv_cache: bool | constr(min_length=1) | None = Field(None, alias="kvCache")
-    tools: list[CompletionStreamRequestToolsItem] | None = Field(
-        None,
-        description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
-    )
-    stream: bool = Field(
-        ...,
-        description="Whether to stream tokens (`true`) or return the complete response once (`false`).",
-    )
-    generation_params: CompletionStreamRequestGenerationParams | None = Field(
-        None,
-        alias="generationParams",
-        description="Optional sampling / generation parameters.",
-        title="CompletionStreamRequestGenerationParams",
-    )
-    capture_thinking: bool | None = Field(
-        None,
-        alias="captureThinking",
-        description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
-    )
-    emit_raw_deltas: bool | None = Field(
-        None,
-        alias="emitRawDeltas",
-        description="When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
-    )
-    tool_dialect: CompletionStreamRequestToolDialect | None = Field(
-        None,
-        alias="toolDialect",
-        description="Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
-        title="CompletionStreamRequestToolDialect",
-    )
-    response_format: (
+class CompletionStreamRequest(GeneratedBaseModel):
+    history: Annotated[
+        list[CompletionStreamRequestHistoryItem],
+        Field(description="Array of conversation messages sent to the model."),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the model to use for completion.",
+        ),
+    ]
+    kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    tools: Annotated[
+        list[CompletionStreamRequestToolsItem] | None,
+        Field(
+            description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    stream: Annotated[
+        bool,
+        Field(
+            description="Whether to stream tokens (`true`) or return the complete response once (`false`)."
+        ),
+    ]
+    generation_params: Annotated[
+        CompletionStreamRequestGenerationParams | None,
+        Field(
+            alias="generationParams",
+            description="Optional sampling / generation parameters.",
+            title="CompletionStreamRequestGenerationParams",
+        ),
+    ] = None
+    capture_thinking: Annotated[
+        bool | None,
+        Field(
+            alias="captureThinking",
+            description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
+        ),
+    ] = None
+    emit_raw_deltas: Annotated[
+        bool | None,
+        Field(
+            alias="emitRawDeltas",
+            description="When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
+        ),
+    ] = None
+    tool_dialect: Annotated[
+        CompletionStreamRequestToolDialect | None,
+        Field(
+            alias="toolDialect",
+            description="Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+            title="CompletionStreamRequestToolDialect",
+        ),
+    ] = None
+    response_format: Annotated[
         CompletionStreamRequestResponseFormatText
         | CompletionStreamRequestResponseFormatJsonObject
         | CompletionStreamRequestResponseFormatJsonSchema
-        | None
-    ) = Field(
-        None,
-        alias="responseFormat",
-        description="Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
-    )
+        | None,
+        Field(
+            alias="responseFormat",
+            description="Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+            min_length=1,
+        ),
+    ] = None
     type: Literal["completionStream"]
 
 
-class CompletionStreamResponseEventsItemContentDelta(BaseModel):
+class CompletionStreamResponseEventsItemContentDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["contentDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
-class CompletionStreamResponseEventsItemRawDelta(BaseModel):
+class CompletionStreamResponseEventsItemRawDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["rawDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
-class CompletionStreamResponseEventsItemThinkingDelta(BaseModel):
+class CompletionStreamResponseEventsItemThinkingDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["thinkingDelta"]
-    seq: conint(ge=0, le=9007199254740991)
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
 
 class CompletionStreamResponseEventsItemToolCallCallArguments(
     RootModel[dict[str, Any]]
 ):
-    root: dict[str, Any] = Field(
-        ..., title="CompletionStreamResponseEventsItemToolCallCallArguments"
-    )
+    root: Annotated[
+        dict[str, Any],
+        Field(title="CompletionStreamResponseEventsItemToolCallCallArguments"),
+    ]
 
 
-class CompletionStreamResponseEventsItemToolCallCall(BaseModel):
+class CompletionStreamResponseEventsItemToolCallCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     id: str
     name: str
-    arguments: CompletionStreamResponseEventsItemToolCallCallArguments = Field(
-        ..., title="CompletionStreamResponseEventsItemToolCallCallArguments"
-    )
+    arguments: Annotated[
+        CompletionStreamResponseEventsItemToolCallCallArguments,
+        Field(title="CompletionStreamResponseEventsItemToolCallCallArguments"),
+    ]
     raw: str | None = None
 
 
-class CompletionStreamResponseEventsItemToolCall(BaseModel):
+class CompletionStreamResponseEventsItemToolCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["toolCall"]
-    seq: conint(ge=0, le=9007199254740991)
-    call: CompletionStreamResponseEventsItemToolCallCall = Field(
-        ..., title="CompletionStreamResponseEventsItemToolCallCall"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    call: Annotated[
+        CompletionStreamResponseEventsItemToolCallCall,
+        Field(title="CompletionStreamResponseEventsItemToolCallCall"),
+    ]
 
 
 class CompletionStreamResponseEventsItemToolErrorErrorCode(Enum):
@@ -1083,26 +1262,28 @@ class CompletionStreamResponseEventsItemToolErrorErrorCode(Enum):
     unknown_tool = "UNKNOWN_TOOL"
 
 
-class CompletionStreamResponseEventsItemToolErrorError(BaseModel):
+class CompletionStreamResponseEventsItemToolErrorError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    code: CompletionStreamResponseEventsItemToolErrorErrorCode = Field(
-        ..., title="CompletionStreamResponseEventsItemToolErrorErrorCode"
-    )
+    code: Annotated[
+        CompletionStreamResponseEventsItemToolErrorErrorCode,
+        Field(title="CompletionStreamResponseEventsItemToolErrorErrorCode"),
+    ]
     message: str
     raw: str | None = None
 
 
-class CompletionStreamResponseEventsItemToolError(BaseModel):
+class CompletionStreamResponseEventsItemToolError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["toolError"]
-    seq: conint(ge=0, le=9007199254740991)
-    error: CompletionStreamResponseEventsItemToolErrorError = Field(
-        ..., title="CompletionStreamResponseEventsItemToolErrorError"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    error: Annotated[
+        CompletionStreamResponseEventsItemToolErrorError,
+        Field(title="CompletionStreamResponseEventsItemToolErrorError"),
+    ]
 
 
 class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
@@ -1110,63 +1291,66 @@ class CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
     gpu = "gpu"
 
 
-class CompletionStreamResponseEventsItemCompletionStatsStats(BaseModel):
+class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    time_to_first_token: float | None = Field(None, alias="timeToFirstToken")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    cache_tokens: float | None = Field(None, alias="cacheTokens")
-    prompt_tokens: float | None = Field(None, alias="promptTokens")
-    generated_tokens: float | None = Field(None, alias="generatedTokens")
-    avg_concurrent_seq: float | None = Field(None, alias="avgConcurrentSeq")
-    backend_device: (
-        CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None
-    ) = Field(
-        None,
-        alias="backendDevice",
-        title="CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice",
-    )
+    time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
+    prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    backend_device: Annotated[
+        CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            title="CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice",
+        ),
+    ] = None
 
 
-class CompletionStreamResponseEventsItemCompletionStats(BaseModel):
+class CompletionStreamResponseEventsItemCompletionStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionStats"]
-    seq: conint(ge=0, le=9007199254740991)
-    stats: CompletionStreamResponseEventsItemCompletionStatsStats = Field(
-        ..., title="CompletionStreamResponseEventsItemCompletionStatsStats"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stats: Annotated[
+        CompletionStreamResponseEventsItemCompletionStatsStats,
+        Field(title="CompletionStreamResponseEventsItemCompletionStatsStats"),
+    ]
 
 
-class CompletionStreamResponseEventsItemCompletionDoneErrorError(BaseModel):
+class CompletionStreamResponseEventsItemCompletionDoneErrorError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     message: str
 
 
-class CompletionStreamResponseEventsItemCompletionDoneErrorRaw(BaseModel):
+class CompletionStreamResponseEventsItemCompletionDoneErrorRaw(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    full_text: str = Field(..., alias="fullText")
+    full_text: Annotated[str, Field(alias="fullText")]
 
 
-class CompletionStreamResponseEventsItemCompletionDoneError(BaseModel):
+class CompletionStreamResponseEventsItemCompletionDoneError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionDone"]
-    seq: conint(ge=0, le=9007199254740991)
-    stop_reason: Literal["error"] = Field(..., alias="stopReason")
-    error: CompletionStreamResponseEventsItemCompletionDoneErrorError = Field(
-        ..., title="CompletionStreamResponseEventsItemCompletionDoneErrorError"
-    )
-    raw: CompletionStreamResponseEventsItemCompletionDoneErrorRaw | None = Field(
-        None, title="CompletionStreamResponseEventsItemCompletionDoneErrorRaw"
-    )
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")]
+    error: Annotated[
+        CompletionStreamResponseEventsItemCompletionDoneErrorError,
+        Field(title="CompletionStreamResponseEventsItemCompletionDoneErrorError"),
+    ]
+    raw: Annotated[
+        CompletionStreamResponseEventsItemCompletionDoneErrorRaw | None,
+        Field(title="CompletionStreamResponseEventsItemCompletionDoneErrorRaw"),
+    ] = None
 
 
 class CompletionStreamResponseEventsItemCompletionDoneStopReason(Enum):
@@ -1176,32 +1360,33 @@ class CompletionStreamResponseEventsItemCompletionDoneStopReason(Enum):
     cancelled = "cancelled"
 
 
-class CompletionStreamResponseEventsItemCompletionDoneRaw(BaseModel):
+class CompletionStreamResponseEventsItemCompletionDoneRaw(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    full_text: str = Field(..., alias="fullText")
+    full_text: Annotated[str, Field(alias="fullText")]
 
 
-class CompletionStreamResponseEventsItemCompletionDone(BaseModel):
+class CompletionStreamResponseEventsItemCompletionDone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["completionDone"]
-    seq: conint(ge=0, le=9007199254740991)
-    stop_reason: CompletionStreamResponseEventsItemCompletionDoneStopReason | None = (
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[
+        CompletionStreamResponseEventsItemCompletionDoneStopReason | None,
         Field(
-            None,
             alias="stopReason",
             title="CompletionStreamResponseEventsItemCompletionDoneStopReason",
-        )
-    )
-    raw: CompletionStreamResponseEventsItemCompletionDoneRaw | None = Field(
-        None, title="CompletionStreamResponseEventsItemCompletionDoneRaw"
-    )
+        ),
+    ] = None
+    raw: Annotated[
+        CompletionStreamResponseEventsItemCompletionDoneRaw | None,
+        Field(title="CompletionStreamResponseEventsItemCompletionDoneRaw"),
+    ] = None
 
 
-class CompletionStreamResponse(BaseModel):
+class CompletionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1269,18 +1454,18 @@ class Verbosity(Enum):
     debug = 3
 
 
-class DeleteCacheAllRequest(BaseModel):
+class DeleteCacheAllRequest(GeneratedBaseModel):
     type: Literal["deleteCache"]
     all: Literal[True]
 
 
-class DeleteCacheKvEntryRequest(BaseModel):
+class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     type: Literal["deleteCache"]
-    kv_cache_key: str = Field(..., alias="kvCacheKey")
-    model_id: str | None = Field(None, alias="modelId")
+    kv_cache_key: Annotated[str, Field(alias="kvCacheKey")]
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
 
 
-class DeleteCacheResponse(BaseModel):
+class DeleteCacheResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1320,232 +1505,330 @@ class DiffusionStreamRequestScheduler(Enum):
     bong_tangent = "bong_tangent"
 
 
-class InitImage(
-    RootModel[
-        constr(
-            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+class InitImage(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
             min_length=1,
-        )
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
     ]
-):
-    root: constr(
-        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-        min_length=1,
-    )
 
 
-class DiffusionStreamRequestUpscale(BaseModel):
+class DiffusionStreamRequestUpscale(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    repeats: conint(le=9007199254740991, gt=0) | None = None
+    repeats: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
 
 
-class DiffusionStreamRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the diffusion model to use for generation.",
-    )
-    prompt: str = Field(
-        ..., description="Positive prompt describing the image to generate."
-    )
-    negative_prompt: str | None = Field(
-        None, description="Optional negative prompt describing what to avoid."
-    )
-    width: conint(le=9007199254740991, multiple_of=8, gt=0) | None = Field(
-        None, description="Image width in pixels (must be a multiple of 8)."
-    )
-    height: conint(le=9007199254740991, multiple_of=8, gt=0) | None = Field(
-        None, description="Image height in pixels (must be a multiple of 8)."
-    )
-    steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description="Number of sampling steps to run."
-    )
-    cfg_scale: float | None = Field(
-        None,
-        description="Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
-    )
-    img_cfg_scale: float | None = Field(
-        -1,
-        description="Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
-    )
-    guidance: float | None = Field(
-        None,
-        description="Distilled guidance for FLUX models; typical range 1–10, default 3.5",
-    )
-    sampling_method: DiffusionStreamRequestSamplingMethod | None = Field(
-        None,
-        description="Sampling algorithm used by the diffusion scheduler.",
-        title="DiffusionStreamRequestSamplingMethod",
-    )
-    scheduler: DiffusionStreamRequestScheduler | None = Field(
-        None,
-        description="Noise schedule to apply when sampling.",
-        title="DiffusionStreamRequestScheduler",
-    )
-    seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None,
-        description="Random seed; when omitted the SDK picks one and returns it in stats.",
-    )
-    batch_count: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description="Number of images to generate in this call."
-    )
-    vae_tiling: bool | None = Field(
-        None,
-        description="Enable VAE tiling for large images on constrained VRAM (overrides model config).",
-    )
-    cache_preset: str | None = Field(
-        None, description="Optional name of a cached sampler preset to reuse."
-    )
-    init_image: (
-        constr(
-            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+class DiffusionStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the diffusion model to use for generation.",
+        ),
+    ]
+    prompt: Annotated[
+        str, Field(description="Positive prompt describing the image to generate.")
+    ]
+    negative_prompt: Annotated[
+        str | None,
+        Field(description="Optional negative prompt describing what to avoid."),
+    ] = None
+    width: Annotated[
+        int | None,
+        Field(
+            description="Image width in pixels (must be a multiple of 8).",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=8,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Image height in pixels (must be a multiple of 8).",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=8,
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Number of sampling steps to run.", gt=0, le=9007199254740991
+        ),
+    ] = None
+    cfg_scale: Annotated[
+        float | None,
+        Field(
+            description="Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7"
+        ),
+    ] = None
+    img_cfg_scale: Annotated[
+        float | None,
+        Field(
+            description="Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale"
+        ),
+    ] = -1
+    guidance: Annotated[
+        float | None,
+        Field(
+            description="Distilled guidance for FLUX models; typical range 1–10, default 3.5"
+        ),
+    ] = None
+    sampling_method: Annotated[
+        DiffusionStreamRequestSamplingMethod | None,
+        Field(
+            description="Sampling algorithm used by the diffusion scheduler.",
+            title="DiffusionStreamRequestSamplingMethod",
+        ),
+    ] = None
+    scheduler: Annotated[
+        DiffusionStreamRequestScheduler | None,
+        Field(
+            description="Noise schedule to apply when sampling.",
+            title="DiffusionStreamRequestScheduler",
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Random seed; when omitted the SDK picks one and returns it in stats.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    batch_count: Annotated[
+        int | None,
+        Field(
+            description="Number of images to generate in this call.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    vae_tiling: Annotated[
+        bool | None,
+        Field(
+            description="Enable VAE tiling for large images on constrained VRAM (overrides model config)."
+        ),
+    ] = None
+    cache_preset: Annotated[
+        str | None,
+        Field(description="Optional name of a cached sampler preset to reuse."),
+    ] = None
+    init_image: Annotated[
+        str | None,
+        Field(
+            description="Base64-encoded image for img2img generation. Mutually exclusive with init_images.",
             min_length=1,
-        )
-        | None
-    ) = Field(
-        None,
-        description="Base64-encoded image for img2img generation. Mutually exclusive with init_images.",
-    )
-    init_images: list[InitImage] | None = Field(
-        None,
-        description="FLUX.2-only multi-reference fusion: array of base64-encoded PNG/JPEG buffers. Each buffer becomes a separate reference image that the FLUX.2 transformer attends to. Mutually exclusive with init_image; requires the model to be loaded with config.prediction='flux2_flow' and a Qwen3 text encoder via llmModelSrc.",
-        min_length=1,
-    )
-    increase_ref_index: bool | None = Field(
-        None,
-        description="FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens.",
-    )
-    auto_resize_ref_image: bool | None = Field(
-        None,
-        description="FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions.",
-    )
-    lora: constr(pattern=r"^(\/|[A-Za-z]:[\\/]|\\\\)", min_length=1) | None = Field(
-        None,
-        description="Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
-    )
-    strength: confloat(ge=0.0, le=1.0) | None = Field(
-        None,
-        description="img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
-    )
-    upscale: bool | DiffusionStreamRequestUpscale | None = Field(
-        None,
-        description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig.",
-    )
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ] = None
+    init_images: Annotated[
+        list[InitImage] | None,
+        Field(
+            description="FLUX.2-only multi-reference fusion: array of base64-encoded PNG/JPEG buffers. Each buffer becomes a separate reference image that the FLUX.2 transformer attends to. Mutually exclusive with init_image; requires the model to be loaded with config.prediction='flux2_flow' and a Qwen3 text encoder via llmModelSrc.",
+            min_length=1,
+        ),
+    ] = None
+    increase_ref_index: Annotated[
+        bool | None,
+        Field(
+            description="FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all reference latents share one RoPE index slot and blend via attention (recommended for FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with text encoders that receive per-image vision tokens."
+        ),
+    ] = None
+    auto_resize_ref_image: Annotated[
+        bool | None,
+        Field(
+            description="FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference image (single or fusion) is auto-resized to the target width/height before VAE-encoding. Disable only if the buffers are already at the exact target dimensions."
+        ),
+    ] = None
+    lora: Annotated[
+        str | None,
+        Field(
+            description="Optional local LoRA adapter path to apply for this generation. Must be an absolute filesystem path. Whether the adapter persists across subsequent diffusion() calls is controlled by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
+            min_length=1,
+            pattern="^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)",
+        ),
+    ] = None
+    strength: Annotated[
+        float | None,
+        Field(
+            description="img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    upscale: Annotated[
+        bool | DiffusionStreamRequestUpscale | None,
+        Field(
+            description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig."
+        ),
+    ] = None
     type: Literal["diffusionStream"]
 
 
-class DiffusionStreamResponseStats(BaseModel):
+class DiffusionStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_load_ms: float | None = Field(
-        None,
-        alias="modelLoadMs",
-        description="Time in milliseconds spent loading the diffusion model.",
-    )
-    generation_ms: float | None = Field(
-        None,
-        alias="generationMs",
-        description="Wall-clock time in milliseconds spent generating images.",
-    )
-    total_generation_ms: float | None = Field(
-        None,
-        alias="totalGenerationMs",
-        description="Total generation time in milliseconds across all images in the batch.",
-    )
-    total_wall_ms: float | None = Field(
-        None,
-        alias="totalWallMs",
-        description="Total wall-clock time in milliseconds including model load and sampling.",
-    )
-    total_steps: float | None = Field(
-        None,
-        alias="totalSteps",
-        description="Total number of diffusion sampling steps executed.",
-    )
-    total_generations: float | None = Field(
-        None,
-        alias="totalGenerations",
-        description="Total number of generation passes executed.",
-    )
-    total_images: float | None = Field(
-        None, alias="totalImages", description="Total number of images produced."
-    )
-    total_pixels: float | None = Field(
-        None,
-        alias="totalPixels",
-        description="Total number of pixels generated across all images.",
-    )
-    width: float | None = Field(
-        None, description="Width in pixels of each generated image."
-    )
-    height: float | None = Field(
-        None, description="Height in pixels of each generated image."
-    )
-    seed: float | None = Field(
-        None,
-        description="Seed that produced these outputs (randomized when not supplied by the caller).",
-    )
+    model_load_ms: Annotated[
+        float | None,
+        Field(
+            alias="modelLoadMs",
+            description="Time in milliseconds spent loading the diffusion model.",
+        ),
+    ] = None
+    generation_ms: Annotated[
+        float | None,
+        Field(
+            alias="generationMs",
+            description="Wall-clock time in milliseconds spent generating images.",
+        ),
+    ] = None
+    total_generation_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalGenerationMs",
+            description="Total generation time in milliseconds across all images in the batch.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Total wall-clock time in milliseconds including model load and sampling.",
+        ),
+    ] = None
+    total_steps: Annotated[
+        float | None,
+        Field(
+            alias="totalSteps",
+            description="Total number of diffusion sampling steps executed.",
+        ),
+    ] = None
+    total_generations: Annotated[
+        float | None,
+        Field(
+            alias="totalGenerations",
+            description="Total number of generation passes executed.",
+        ),
+    ] = None
+    total_images: Annotated[
+        float | None,
+        Field(alias="totalImages", description="Total number of images produced."),
+    ] = None
+    total_pixels: Annotated[
+        float | None,
+        Field(
+            alias="totalPixels",
+            description="Total number of pixels generated across all images.",
+        ),
+    ] = None
+    width: Annotated[
+        float | None, Field(description="Width in pixels of each generated image.")
+    ] = None
+    height: Annotated[
+        float | None, Field(description="Height in pixels of each generated image.")
+    ] = None
+    seed: Annotated[
+        float | None,
+        Field(
+            description="Seed that produced these outputs (randomized when not supplied by the caller)."
+        ),
+    ] = None
 
 
-class DiffusionStreamResponse(BaseModel):
+class DiffusionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["diffusionStream"]
     step: float | None = None
-    total_steps: float | None = Field(None, alias="totalSteps")
-    elapsed_ms: float | None = Field(None, alias="elapsedMs")
+    total_steps: Annotated[float | None, Field(alias="totalSteps")] = None
+    elapsed_ms: Annotated[float | None, Field(alias="elapsedMs")] = None
     data: str | None = None
-    output_index: float | None = Field(None, alias="outputIndex")
+    output_index: Annotated[float | None, Field(alias="outputIndex")] = None
     done: bool | None = None
-    stats: DiffusionStreamResponseStats | None = Field(
-        None, title="DiffusionStreamResponseStats"
-    )
+    stats: Annotated[
+        DiffusionStreamResponseStats | None, Field(title="DiffusionStreamResponseStats")
+    ] = None
 
 
-class DownloadAssetRequest(BaseModel):
+class DownloadAssetRequest(GeneratedBaseModel):
     type: Literal["downloadAsset"]
-    asset_src: str = Field(..., alias="assetSrc")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    asset_src: Annotated[str, Field(alias="assetSrc")]
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight download, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this download with `cancel({ requestId })`.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight download, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this download with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class DownloadAssetResponse(BaseModel):
+class DownloadAssetResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["downloadAsset"]
     success: bool
-    asset_id: str | None = Field(None, alias="assetId")
+    asset_id: Annotated[str | None, Field(alias="assetId")] = None
     error: str | None = None
 
 
-class TextItem(RootModel[constr(min_length=1)]):
-    root: constr(min_length=1)
+class Text(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
+            min_length=1,
+        ),
+    ]
 
 
-class EmbedRequest(BaseModel):
-    model_id: str = Field(
-        ..., alias="modelId", description="The identifier of the embedding model to use"
-    )
-    text: constr(min_length=1) | list[TextItem] = Field(
-        ...,
-        description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
-    )
+class Text1Item(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class Text1(RootModel[list[Text1Item]]):
+    root: Annotated[
+        list[Text1Item],
+        Field(
+            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
+            min_length=1,
+        ),
+    ]
+
+
+class EmbedRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    text: Annotated[
+        Text | Text1,
+        Field(
+            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`."
+        ),
+    ]
     type: Literal["embed"]
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight embed, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight embed, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
 class EmbedResponseStatsBackendDevice(Enum):
@@ -1553,51 +1836,58 @@ class EmbedResponseStatsBackendDevice(Enum):
     gpu = "gpu"
 
 
-class EmbedResponseStats(BaseModel):
+class EmbedResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    total_time: float | None = Field(
-        None, alias="totalTime", description="Total embedding time in milliseconds"
-    )
-    tokens_per_second: float | None = Field(
-        None, alias="tokensPerSecond", description="Tokens processed per second"
-    )
-    total_tokens: float | None = Field(
-        None, alias="totalTokens", description="Total tokens processed"
-    )
-    backend_device: EmbedResponseStatsBackendDevice | None = Field(
-        None,
-        alias="backendDevice",
-        description="Compute backend used for inference",
-        title="EmbedResponseStatsBackendDevice",
-    )
-    context_size: float | None = Field(
-        None, alias="contextSize", description="Context size in tokens"
-    )
+    total_time: Annotated[
+        float | None,
+        Field(alias="totalTime", description="Total embedding time in milliseconds"),
+    ] = None
+    tokens_per_second: Annotated[
+        float | None,
+        Field(alias="tokensPerSecond", description="Tokens processed per second"),
+    ] = None
+    total_tokens: Annotated[
+        float | None, Field(alias="totalTokens", description="Total tokens processed")
+    ] = None
+    backend_device: Annotated[
+        EmbedResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            description="Compute backend used for inference",
+            title="EmbedResponseStatsBackendDevice",
+        ),
+    ] = None
+    context_size: Annotated[
+        float | None, Field(alias="contextSize", description="Context size in tokens")
+    ] = None
 
 
-class EmbedResponse(BaseModel):
+class EmbedResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["embed"]
     success: bool
-    embedding: list[float] | list[list[float]] = Field(
-        ...,
-        description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array.",
-    )
-    stats: EmbedResponseStats | None = Field(
-        None, description="Performance statistics", title="EmbedResponseStats"
-    )
+    embedding: Annotated[
+        list[float] | list[list[float]],
+        Field(
+            description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array."
+        ),
+    ]
+    stats: Annotated[
+        EmbedResponseStats | None,
+        Field(description="Performance statistics", title="EmbedResponseStats"),
+    ] = None
     error: str | None = None
 
 
 class ErrorResponseTypedFields(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title="ErrorResponseTypedFields")
+    root: Annotated[dict[str, Any], Field(title="ErrorResponseTypedFields")]
 
 
-class ErrorResponse(BaseModel):
+class ErrorResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1608,32 +1898,33 @@ class ErrorResponse(BaseModel):
     name: str | None = None
     code: float | None = None
     cause: Any | None = None
-    typed_fields: ErrorResponseTypedFields | None = Field(
-        None, alias="typedFields", title="ErrorResponseTypedFields"
-    )
+    typed_fields: Annotated[
+        ErrorResponseTypedFields | None,
+        Field(alias="typedFields", title="ErrorResponseTypedFields"),
+    ] = None
 
 
-class FinetuneRunRequestOptionsValidationNone(BaseModel):
+class FinetuneRunRequestOptionsValidationNone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["none"]
 
 
-class FinetuneRunRequestOptionsValidationSplit(BaseModel):
+class FinetuneRunRequestOptionsValidationSplit(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["split"]
-    fraction: confloat(ge=0.0, le=1.0) | None = None
+    fraction: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
 
 
-class FinetuneRunRequestOptionsValidationDataset(BaseModel):
+class FinetuneRunRequestOptionsValidationDataset(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["dataset"]
-    path: constr(min_length=1)
+    path: Annotated[str, Field(min_length=1)]
 
 
 class FinetuneRunRequestOptionsLrScheduler(Enum):
@@ -1642,60 +1933,65 @@ class FinetuneRunRequestOptionsLrScheduler(Enum):
     linear = "linear"
 
 
-class FinetuneRunRequestOptions(BaseModel):
+class FinetuneRunRequestOptions(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    train_dataset_dir: constr(min_length=1) = Field(..., alias="trainDatasetDir")
+    train_dataset_dir: Annotated[str, Field(alias="trainDatasetDir", min_length=1)]
     validation: (
         FinetuneRunRequestOptionsValidationNone
         | FinetuneRunRequestOptionsValidationSplit
         | FinetuneRunRequestOptionsValidationDataset
     )
-    output_parameters_dir: constr(min_length=1) = Field(
-        ..., alias="outputParametersDir"
-    )
-    number_of_epochs: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="numberOfEpochs"
-    )
-    learning_rate: PositiveFloat | None = Field(None, alias="learningRate")
-    context_length: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="contextLength"
-    )
-    batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="batchSize"
-    )
-    micro_batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="microBatchSize"
-    )
-    assistant_loss_only: bool | None = Field(None, alias="assistantLossOnly")
-    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias="loraRank")
-    lora_alpha: PositiveFloat | None = Field(None, alias="loraAlpha")
-    lora_init_std: PositiveFloat | None = Field(None, alias="loraInitStd")
-    lora_seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="loraSeed"
-    )
-    lora_modules: constr(min_length=1) | None = Field(None, alias="loraModules")
-    checkpoint_save_dir: constr(min_length=1) | None = Field(
-        None, alias="checkpointSaveDir"
-    )
-    checkpoint_save_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="checkpointSaveSteps"
-    )
-    chat_template_path: constr(min_length=1) | None = Field(
-        None, alias="chatTemplatePath"
-    )
-    lr_scheduler: FinetuneRunRequestOptionsLrScheduler | None = Field(
-        None, alias="lrScheduler", title="FinetuneRunRequestOptionsLrScheduler"
-    )
-    lr_min: confloat(ge=0.0) | None = Field(None, alias="lrMin")
-    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias="warmupRatio")
-    warmup_ratio_set: bool | None = Field(None, alias="warmupRatioSet")
-    warmup_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="warmupSteps"
-    )
-    warmup_steps_set: bool | None = Field(None, alias="warmupStepsSet")
-    weight_decay: confloat(ge=0.0) | None = Field(None, alias="weightDecay")
+    output_parameters_dir: Annotated[
+        str, Field(alias="outputParametersDir", min_length=1)
+    ]
+    number_of_epochs: Annotated[
+        int | None, Field(alias="numberOfEpochs", gt=0, le=9007199254740991)
+    ] = None
+    learning_rate: Annotated[float | None, Field(alias="learningRate", gt=0.0)] = None
+    context_length: Annotated[
+        int | None, Field(alias="contextLength", gt=0, le=9007199254740991)
+    ] = None
+    batch_size: Annotated[
+        int | None, Field(alias="batchSize", gt=0, le=9007199254740991)
+    ] = None
+    micro_batch_size: Annotated[
+        int | None, Field(alias="microBatchSize", gt=0, le=9007199254740991)
+    ] = None
+    assistant_loss_only: Annotated[bool | None, Field(alias="assistantLossOnly")] = None
+    lora_rank: Annotated[
+        int | None, Field(alias="loraRank", gt=0, le=9007199254740991)
+    ] = None
+    lora_alpha: Annotated[float | None, Field(alias="loraAlpha", gt=0.0)] = None
+    lora_init_std: Annotated[float | None, Field(alias="loraInitStd", gt=0.0)] = None
+    lora_seed: Annotated[
+        int | None, Field(alias="loraSeed", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    lora_modules: Annotated[str | None, Field(alias="loraModules", min_length=1)] = None
+    checkpoint_save_dir: Annotated[
+        str | None, Field(alias="checkpointSaveDir", min_length=1)
+    ] = None
+    checkpoint_save_steps: Annotated[
+        int | None, Field(alias="checkpointSaveSteps", ge=0, le=9007199254740991)
+    ] = None
+    chat_template_path: Annotated[
+        str | None, Field(alias="chatTemplatePath", min_length=1)
+    ] = None
+    lr_scheduler: Annotated[
+        FinetuneRunRequestOptionsLrScheduler | None,
+        Field(alias="lrScheduler", title="FinetuneRunRequestOptionsLrScheduler"),
+    ] = None
+    lr_min: Annotated[float | None, Field(alias="lrMin", ge=0.0)] = None
+    warmup_ratio: Annotated[
+        float | None, Field(alias="warmupRatio", ge=0.0, le=1.0)
+    ] = None
+    warmup_ratio_set: Annotated[bool | None, Field(alias="warmupRatioSet")] = None
+    warmup_steps: Annotated[
+        int | None, Field(alias="warmupSteps", ge=0, le=9007199254740991)
+    ] = None
+    warmup_steps_set: Annotated[bool | None, Field(alias="warmupStepsSet")] = None
+    weight_decay: Annotated[float | None, Field(alias="weightDecay", ge=0.0)] = None
 
 
 class FinetuneRunRequestOperation(Enum):
@@ -1703,45 +1999,50 @@ class FinetuneRunRequestOperation(Enum):
     resume = "resume"
 
 
-class FinetuneRunRequest(BaseModel):
+class FinetuneRunRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(..., alias="modelId")
-    options: FinetuneRunRequestOptions = Field(..., title="FinetuneRunRequestOptions")
+    model_id: Annotated[str, Field(alias="modelId")]
+    options: Annotated[
+        FinetuneRunRequestOptions, Field(title="FinetuneRunRequestOptions")
+    ]
     type: Literal["finetune"]
-    operation: FinetuneRunRequestOperation | None = Field(
-        None, title="FinetuneRunRequestOperation"
-    )
-    with_progress: bool | None = Field(None, alias="withProgress")
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight finetune, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    operation: Annotated[
+        FinetuneRunRequestOperation | None, Field(title="FinetuneRunRequestOperation")
+    ] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight finetune, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class FinetuneGetStateRequestOptionsValidationNone(BaseModel):
+class FinetuneGetStateRequestOptionsValidationNone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["none"]
 
 
-class FinetuneGetStateRequestOptionsValidationSplit(BaseModel):
+class FinetuneGetStateRequestOptionsValidationSplit(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["split"]
-    fraction: confloat(ge=0.0, le=1.0) | None = None
+    fraction: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
 
 
-class FinetuneGetStateRequestOptionsValidationDataset(BaseModel):
+class FinetuneGetStateRequestOptionsValidationDataset(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["dataset"]
-    path: constr(min_length=1)
+    path: Annotated[str, Field(min_length=1)]
 
 
 class FinetuneGetStateRequestOptionsLrScheduler(Enum):
@@ -1750,70 +2051,75 @@ class FinetuneGetStateRequestOptionsLrScheduler(Enum):
     linear = "linear"
 
 
-class FinetuneGetStateRequestOptions(BaseModel):
+class FinetuneGetStateRequestOptions(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    train_dataset_dir: constr(min_length=1) = Field(..., alias="trainDatasetDir")
+    train_dataset_dir: Annotated[str, Field(alias="trainDatasetDir", min_length=1)]
     validation: (
         FinetuneGetStateRequestOptionsValidationNone
         | FinetuneGetStateRequestOptionsValidationSplit
         | FinetuneGetStateRequestOptionsValidationDataset
     )
-    output_parameters_dir: constr(min_length=1) = Field(
-        ..., alias="outputParametersDir"
-    )
-    number_of_epochs: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="numberOfEpochs"
-    )
-    learning_rate: PositiveFloat | None = Field(None, alias="learningRate")
-    context_length: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="contextLength"
-    )
-    batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="batchSize"
-    )
-    micro_batch_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="microBatchSize"
-    )
-    assistant_loss_only: bool | None = Field(None, alias="assistantLossOnly")
-    lora_rank: conint(le=9007199254740991, gt=0) | None = Field(None, alias="loraRank")
-    lora_alpha: PositiveFloat | None = Field(None, alias="loraAlpha")
-    lora_init_std: PositiveFloat | None = Field(None, alias="loraInitStd")
-    lora_seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="loraSeed"
-    )
-    lora_modules: constr(min_length=1) | None = Field(None, alias="loraModules")
-    checkpoint_save_dir: constr(min_length=1) | None = Field(
-        None, alias="checkpointSaveDir"
-    )
-    checkpoint_save_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="checkpointSaveSteps"
-    )
-    chat_template_path: constr(min_length=1) | None = Field(
-        None, alias="chatTemplatePath"
-    )
-    lr_scheduler: FinetuneGetStateRequestOptionsLrScheduler | None = Field(
-        None, alias="lrScheduler", title="FinetuneGetStateRequestOptionsLrScheduler"
-    )
-    lr_min: confloat(ge=0.0) | None = Field(None, alias="lrMin")
-    warmup_ratio: confloat(ge=0.0, le=1.0) | None = Field(None, alias="warmupRatio")
-    warmup_ratio_set: bool | None = Field(None, alias="warmupRatioSet")
-    warmup_steps: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="warmupSteps"
-    )
-    warmup_steps_set: bool | None = Field(None, alias="warmupStepsSet")
-    weight_decay: confloat(ge=0.0) | None = Field(None, alias="weightDecay")
+    output_parameters_dir: Annotated[
+        str, Field(alias="outputParametersDir", min_length=1)
+    ]
+    number_of_epochs: Annotated[
+        int | None, Field(alias="numberOfEpochs", gt=0, le=9007199254740991)
+    ] = None
+    learning_rate: Annotated[float | None, Field(alias="learningRate", gt=0.0)] = None
+    context_length: Annotated[
+        int | None, Field(alias="contextLength", gt=0, le=9007199254740991)
+    ] = None
+    batch_size: Annotated[
+        int | None, Field(alias="batchSize", gt=0, le=9007199254740991)
+    ] = None
+    micro_batch_size: Annotated[
+        int | None, Field(alias="microBatchSize", gt=0, le=9007199254740991)
+    ] = None
+    assistant_loss_only: Annotated[bool | None, Field(alias="assistantLossOnly")] = None
+    lora_rank: Annotated[
+        int | None, Field(alias="loraRank", gt=0, le=9007199254740991)
+    ] = None
+    lora_alpha: Annotated[float | None, Field(alias="loraAlpha", gt=0.0)] = None
+    lora_init_std: Annotated[float | None, Field(alias="loraInitStd", gt=0.0)] = None
+    lora_seed: Annotated[
+        int | None, Field(alias="loraSeed", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    lora_modules: Annotated[str | None, Field(alias="loraModules", min_length=1)] = None
+    checkpoint_save_dir: Annotated[
+        str | None, Field(alias="checkpointSaveDir", min_length=1)
+    ] = None
+    checkpoint_save_steps: Annotated[
+        int | None, Field(alias="checkpointSaveSteps", ge=0, le=9007199254740991)
+    ] = None
+    chat_template_path: Annotated[
+        str | None, Field(alias="chatTemplatePath", min_length=1)
+    ] = None
+    lr_scheduler: Annotated[
+        FinetuneGetStateRequestOptionsLrScheduler | None,
+        Field(alias="lrScheduler", title="FinetuneGetStateRequestOptionsLrScheduler"),
+    ] = None
+    lr_min: Annotated[float | None, Field(alias="lrMin", ge=0.0)] = None
+    warmup_ratio: Annotated[
+        float | None, Field(alias="warmupRatio", ge=0.0, le=1.0)
+    ] = None
+    warmup_ratio_set: Annotated[bool | None, Field(alias="warmupRatioSet")] = None
+    warmup_steps: Annotated[
+        int | None, Field(alias="warmupSteps", ge=0, le=9007199254740991)
+    ] = None
+    warmup_steps_set: Annotated[bool | None, Field(alias="warmupStepsSet")] = None
+    weight_decay: Annotated[float | None, Field(alias="weightDecay", ge=0.0)] = None
 
 
-class FinetuneGetStateRequest(BaseModel):
+class FinetuneGetStateRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(..., alias="modelId")
-    options: FinetuneGetStateRequestOptions = Field(
-        ..., title="FinetuneGetStateRequestOptions"
-    )
+    model_id: Annotated[str, Field(alias="modelId")]
+    options: Annotated[
+        FinetuneGetStateRequestOptions, Field(title="FinetuneGetStateRequestOptions")
+    ]
     type: Literal["finetune"]
     operation: Literal["getState"]
 
@@ -1823,15 +2129,15 @@ class FinetuneStopRequestOperation(Enum):
     cancel = "cancel"
 
 
-class FinetuneStopRequest(BaseModel):
+class FinetuneStopRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(..., alias="modelId")
+    model_id: Annotated[str, Field(alias="modelId")]
     type: Literal["finetune"]
-    operation: FinetuneStopRequestOperation = Field(
-        ..., title="FinetuneStopRequestOperation"
-    )
+    operation: Annotated[
+        FinetuneStopRequestOperation, Field(title="FinetuneStopRequestOperation")
+    ]
 
 
 class FinetuneResponseStatus(Enum):
@@ -1842,7 +2148,7 @@ class FinetuneResponseStatus(Enum):
     completed = "COMPLETED"
 
 
-class FinetuneResponseStats(BaseModel):
+class FinetuneResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1855,20 +2161,22 @@ class FinetuneResponseStats(BaseModel):
     val_accuracy: float | None = None
     val_accuracy_uncertainty: float | Any | None = None
     learning_rate: float | None = None
-    global_steps: conint(ge=0, le=9007199254740991)
-    epochs_completed: conint(ge=0, le=9007199254740991)
+    global_steps: Annotated[int, Field(ge=0, le=9007199254740991)]
+    epochs_completed: Annotated[int, Field(ge=0, le=9007199254740991)]
 
 
-class FinetuneResponse(BaseModel):
+class FinetuneResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["finetune"]
-    status: FinetuneResponseStatus = Field(..., title="FinetuneResponseStatus")
-    stats: FinetuneResponseStats | None = Field(None, title="FinetuneResponseStats")
+    status: Annotated[FinetuneResponseStatus, Field(title="FinetuneResponseStatus")]
+    stats: Annotated[
+        FinetuneResponseStats | None, Field(title="FinetuneResponseStats")
+    ] = None
 
 
-class FinetuneProgressResponse(BaseModel):
+class FinetuneProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1877,56 +2185,57 @@ class FinetuneProgressResponse(BaseModel):
     loss_uncertainty: float | Any | None
     accuracy: float | Any | None
     accuracy_uncertainty: float | Any | None
-    global_steps: conint(ge=0, le=9007199254740991)
-    current_epoch: conint(ge=0, le=9007199254740991)
-    current_batch: conint(ge=0, le=9007199254740991)
-    total_batches: conint(ge=0, le=9007199254740991)
-    elapsed_ms: confloat(ge=0.0)
-    eta_ms: confloat(ge=0.0)
+    global_steps: Annotated[int, Field(ge=0, le=9007199254740991)]
+    current_epoch: Annotated[int, Field(ge=0, le=9007199254740991)]
+    current_batch: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total_batches: Annotated[int, Field(ge=0, le=9007199254740991)]
+    elapsed_ms: Annotated[float, Field(ge=0.0)]
+    eta_ms: Annotated[float, Field(ge=0.0)]
     type: Literal["finetune:progress"]
-    model_id: str = Field(..., alias="modelId")
+    model_id: Annotated[str, Field(alias="modelId")]
 
 
-class GetLoadedModelInfoRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class GetLoadedModelInfoRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     type: Literal["getLoadedModelInfo"]
 
 
-class LocalLoadedModelInfo(BaseModel):
+class LocalLoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(..., alias="modelId")
-    is_delegated: Literal[False] = Field(..., alias="isDelegated")
-    model_type: str = Field(..., alias="modelType")
+    model_id: Annotated[str, Field(alias="modelId")]
+    is_delegated: Annotated[Literal[False], Field(alias="isDelegated")]
+    model_type: Annotated[str, Field(alias="modelType")]
     handlers: list[str]
-    display_name: str | None = Field(None, alias="displayName")
-    addon_package: str | None = Field(None, alias="addonPackage")
-    loaded_at: Any = Field(..., alias="loadedAt")
+    display_name: Annotated[str | None, Field(alias="displayName")] = None
+    addon_package: Annotated[str | None, Field(alias="addonPackage")] = None
+    loaded_at: Annotated[Any, Field(alias="loadedAt")]
     name: str | None = None
     path: str | None = None
 
 
-class DelegatedLoadedModelInfoProviderInfo(BaseModel):
+class DelegatedLoadedModelInfoProviderInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    provider_public_key: str = Field(..., alias="providerPublicKey")
+    provider_public_key: Annotated[str, Field(alias="providerPublicKey")]
 
 
-class DelegatedLoadedModelInfo(BaseModel):
+class DelegatedLoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_id: str = Field(..., alias="modelId")
-    is_delegated: Literal[True] = Field(..., alias="isDelegated")
+    model_id: Annotated[str, Field(alias="modelId")]
+    is_delegated: Annotated[Literal[True], Field(alias="isDelegated")]
     handlers: list[str]
-    provider_info: DelegatedLoadedModelInfoProviderInfo = Field(
-        ..., alias="providerInfo", title="DelegatedLoadedModelInfoProviderInfo"
-    )
+    provider_info: Annotated[
+        DelegatedLoadedModelInfoProviderInfo,
+        Field(alias="providerInfo", title="DelegatedLoadedModelInfoProviderInfo"),
+    ]
 
 
-class GetLoadedModelInfoResponse(BaseModel):
+class GetLoadedModelInfoResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -1934,11 +2243,13 @@ class GetLoadedModelInfoResponse(BaseModel):
     info: LocalLoadedModelInfo | DelegatedLoadedModelInfo
 
 
-class GetModelInfoRequest(BaseModel):
-    name: str = Field(
-        ...,
-        description="The model's registry name (as found in the SDK's built-in catalog).",
-    )
+class GetModelInfoRequest(GeneratedBaseModel):
+    name: Annotated[
+        str,
+        Field(
+            description="The model's registry name (as found in the SDK's built-in catalog)."
+        ),
+    ]
     type: Literal["getModelInfo"]
 
 
@@ -1958,185 +2269,241 @@ class GetModelInfoResponseModelInfoAddon(Enum):
     other = "other"
 
 
-class GetModelInfoResponseModelInfoCacheFilesItem(BaseModel):
+class GetModelInfoResponseModelInfoCacheFilesItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    filename: str = Field(..., description="Name of the cached file on disk.")
-    path: str = Field(..., description="Absolute path to the cached file.")
-    expected_size: float = Field(
-        ...,
-        alias="expectedSize",
-        description="Expected file size in bytes from the model metadata.",
-    )
-    sha256_checksum: str = Field(
-        ...,
-        alias="sha256Checksum",
-        description="Expected SHA-256 checksum of the file.",
-    )
-    is_cached: bool = Field(
-        ...,
-        alias="isCached",
-        description="Whether the file is currently present in the cache.",
-    )
-    actual_size: float | None = Field(
-        None,
-        alias="actualSize",
-        description="Actual size of the cached file on disk, in bytes.",
-    )
-    cached_at: Any | None = Field(
-        None, alias="cachedAt", description="Timestamp when the file was last cached."
-    )
-
-
-class GetModelInfoResponseModelInfoLoadedInstancesItem(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    registry_id: str = Field(
-        ...,
-        alias="registryId",
-        description="Identifier of the registered loaded instance.",
-    )
-    loaded_at: Any = Field(
-        ..., alias="loadedAt", description="Timestamp when the instance was loaded."
-    )
-    config: Any | None = Field(
-        None,
-        description="Opaque model-specific configuration the instance was loaded with.",
-    )
-
-
-class GetModelInfoResponseModelInfo(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: str = Field(..., description="Catalog name of the model.")
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Unique identifier used to reference the model in SDK calls.",
-    )
-    registry_path: str | None = Field(
-        None,
-        alias="registryPath",
-        description="Registry-relative path (set for registry-backed models).",
-    )
-    registry_source: str | None = Field(
-        None,
-        alias="registrySource",
-        description="Registry source identifier, e.g. `huggingface`.",
-    )
-    blob_core_key: str | None = Field(
-        None,
-        alias="blobCoreKey",
-        description="Hyperdrive blob core key for the model file.",
-    )
-    blob_block_offset: float | None = Field(
-        None,
-        alias="blobBlockOffset",
-        description="Starting block offset of the model file in the blob.",
-    )
-    blob_block_length: float | None = Field(
-        None,
-        alias="blobBlockLength",
-        description="Number of blocks occupied by the model file in the blob.",
-    )
-    blob_byte_offset: float | None = Field(
-        None,
-        alias="blobByteOffset",
-        description="Starting byte offset of the model file within its block.",
-    )
-    engine: str | None = Field(
-        None, description="Inference engine identifier, e.g. `llamacpp-completion`."
-    )
-    quantization: str | None = Field(
-        None, description="Quantization identifier, e.g. `Q4_K_M`."
-    )
-    params: str | None = Field(
-        None, description="Parameter-count label for the model, e.g. `7B`."
-    )
-    expected_size: float = Field(
-        ...,
-        alias="expectedSize",
-        description="Expected total size of the model file in bytes.",
-    )
-    sha256_checksum: str = Field(
-        ...,
-        alias="sha256Checksum",
-        description="Expected SHA-256 checksum of the model file.",
-    )
-    addon: GetModelInfoResponseModelInfoAddon = Field(
-        ...,
-        description="Inference addon / capability category this model belongs to.",
-        title="GetModelInfoResponseModelInfoAddon",
-    )
-    is_cached: bool = Field(
-        ...,
-        alias="isCached",
-        description="Whether the model file is present in the local cache.",
-    )
-    is_loaded: bool = Field(
-        ...,
-        alias="isLoaded",
-        description="Whether the model is currently loaded into memory.",
-    )
-    cache_files: list[GetModelInfoResponseModelInfoCacheFilesItem] = Field(
-        ...,
-        alias="cacheFiles",
-        description="Individual cache file entries that make up this model.",
-    )
-    actual_size: float | None = Field(
-        None,
-        alias="actualSize",
-        description="Actual total size of the cached model on disk, in bytes.",
-    )
-    cached_at: Any | None = Field(
-        None, alias="cachedAt", description="Timestamp when the model was last cached."
-    )
-    loaded_instances: list[GetModelInfoResponseModelInfoLoadedInstancesItem] | None = (
+    filename: Annotated[str, Field(description="Name of the cached file on disk.")]
+    path: Annotated[str, Field(description="Absolute path to the cached file.")]
+    expected_size: Annotated[
+        float,
         Field(
-            None,
+            alias="expectedSize",
+            description="Expected file size in bytes from the model metadata.",
+        ),
+    ]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum", description="Expected SHA-256 checksum of the file."
+        ),
+    ]
+    is_cached: Annotated[
+        bool,
+        Field(
+            alias="isCached",
+            description="Whether the file is currently present in the cache.",
+        ),
+    ]
+    actual_size: Annotated[
+        float | None,
+        Field(
+            alias="actualSize",
+            description="Actual size of the cached file on disk, in bytes.",
+        ),
+    ] = None
+    cached_at: Annotated[
+        Any | None,
+        Field(alias="cachedAt", description="Timestamp when the file was last cached."),
+    ] = None
+
+
+class GetModelInfoResponseModelInfoLoadedInstancesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    registry_id: Annotated[
+        str,
+        Field(
+            alias="registryId",
+            description="Identifier of the registered loaded instance.",
+        ),
+    ]
+    loaded_at: Annotated[
+        Any,
+        Field(alias="loadedAt", description="Timestamp when the instance was loaded."),
+    ]
+    config: Annotated[
+        Any | None,
+        Field(
+            description="Opaque model-specific configuration the instance was loaded with."
+        ),
+    ] = None
+
+
+class GetModelInfoResponseModelInfo(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(description="Catalog name of the model.")]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in SDK calls.",
+        ),
+    ]
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_block_offset: Annotated[
+        float | None,
+        Field(
+            alias="blobBlockOffset",
+            description="Starting block offset of the model file in the blob.",
+        ),
+    ] = None
+    blob_block_length: Annotated[
+        float | None,
+        Field(
+            alias="blobBlockLength",
+            description="Number of blocks occupied by the model file in the blob.",
+        ),
+    ] = None
+    blob_byte_offset: Annotated[
+        float | None,
+        Field(
+            alias="blobByteOffset",
+            description="Starting byte offset of the model file within its block.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(description="Inference engine identifier, e.g. `llamacpp-completion`."),
+    ] = None
+    quantization: Annotated[
+        str | None, Field(description="Quantization identifier, e.g. `Q4_K_M`.")
+    ] = None
+    params: Annotated[
+        str | None, Field(description="Parameter-count label for the model, e.g. `7B`.")
+    ] = None
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    addon: Annotated[
+        GetModelInfoResponseModelInfoAddon,
+        Field(
+            description="Inference addon / capability category this model belongs to.",
+            title="GetModelInfoResponseModelInfoAddon",
+        ),
+    ]
+    is_cached: Annotated[
+        bool,
+        Field(
+            alias="isCached",
+            description="Whether the model file is present in the local cache.",
+        ),
+    ]
+    is_loaded: Annotated[
+        bool,
+        Field(
+            alias="isLoaded",
+            description="Whether the model is currently loaded into memory.",
+        ),
+    ]
+    cache_files: Annotated[
+        list[GetModelInfoResponseModelInfoCacheFilesItem],
+        Field(
+            alias="cacheFiles",
+            description="Individual cache file entries that make up this model.",
+        ),
+    ]
+    actual_size: Annotated[
+        float | None,
+        Field(
+            alias="actualSize",
+            description="Actual total size of the cached model on disk, in bytes.",
+        ),
+    ] = None
+    cached_at: Annotated[
+        Any | None,
+        Field(
+            alias="cachedAt", description="Timestamp when the model was last cached."
+        ),
+    ] = None
+    loaded_instances: Annotated[
+        list[GetModelInfoResponseModelInfoLoadedInstancesItem] | None,
+        Field(
             alias="loadedInstances",
             description="Loaded instances associated with this model (one per live load).",
-        )
-    )
+        ),
+    ] = None
 
 
-class GetModelInfoResponse(BaseModel):
+class GetModelInfoResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["getModelInfo"]
-    model_info: GetModelInfoResponseModelInfo = Field(
-        ..., alias="modelInfo", title="GetModelInfoResponseModelInfo"
-    )
+    model_info: Annotated[
+        GetModelInfoResponseModelInfo,
+        Field(alias="modelInfo", title="GetModelInfoResponseModelInfo"),
+    ]
 
 
-class HeartbeatRequestDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
+class HeartbeatRequestDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
 
 
-class HeartbeatRequest(BaseModel):
+class HeartbeatRequest(GeneratedBaseModel):
     type: Literal["heartbeat"]
-    delegate: HeartbeatRequestDelegate | None = Field(
-        None, title="HeartbeatRequestDelegate"
-    )
+    delegate: Annotated[
+        HeartbeatRequestDelegate | None, Field(title="HeartbeatRequestDelegate")
+    ] = None
 
 
-class HeartbeatResponse(BaseModel):
+class HeartbeatResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -2144,30 +2511,48 @@ class HeartbeatResponse(BaseModel):
     number: float
 
 
-class LoadModelSrcRequestLlamacppCompletionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestLlamacppCompletionDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
+
+
+class Predict(RootModel[int]):
+    root: Annotated[int, Field(ge=1, le=9007199254740991)]
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
@@ -2180,6 +2565,10 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
 class LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode(Enum):
     static = "static"
     dynamic = "dynamic"
+
+
+class MainGpu(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991)]
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(Enum):
@@ -2219,17 +2608,19 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     classification = "classification"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(BaseModel):
+class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon
         | Literal["vad"]
@@ -2243,113 +2634,133 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(Enum):
     sequential = "sequential"
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfig(BaseModel):
+class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     ctx_size: float | None = None
-    temp: confloat(ge=0.0, le=2.0) | None = None
-    top_p: confloat(ge=0.0, le=1.0) | None = None
-    top_k: conint(ge=0, le=128) | None = None
+    temp: Annotated[float | None, Field(ge=0.0, le=2.0)] = None
+    top_p: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
+    top_k: Annotated[int | None, Field(ge=0, le=128)] = None
     seed: float | None = None
     gpu_layers: float | None = None
     lora: str | None = None
     device: str | None = None
-    predict: Literal[-1] | Literal[-2] | conint(ge=1, le=9007199254740991) | None = None
+    predict: Literal[-1] | Literal[-2] | Predict | None = None
     system_prompt: str | None = None
     no_mmap: bool | None = None
-    verbosity: LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity | None = Field(
-        None, title="LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
-    )
+    verbosity: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity | None,
+        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"),
+    ] = None
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     repeat_penalty: float | None = None
     stop_sequences: list[str] | None = None
     n_discarded: float | None = None
-    parallel: conint(ge=1, le=9007199254740991) | None = None
+    parallel: Annotated[int | None, Field(ge=1, le=9007199254740991)] = None
     tools: bool | None = None
-    tools_mode: LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode | None = (
+    tools_mode: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode | None,
         Field(
-            None,
             alias="toolsMode",
             description='Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.',
             title="LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode",
-        )
-    )
-    cache_type_k: str | None = Field(None, alias="cache-type-k")
-    cache_type_v: str | None = Field(None, alias="cache-type-v")
-    main_gpu: (
-        conint(ge=0, le=9007199254740991)
-        | LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu
-        | None
-    ) = Field(None, alias="main-gpu")
-    split_mode: LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None = (
+        ),
+    ] = None
+    cache_type_k: Annotated[str | None, Field(alias="cache-type-k")] = None
+    cache_type_v: Annotated[str | None, Field(alias="cache-type-v")] = None
+    main_gpu: Annotated[
+        MainGpu | LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu | None,
+        Field(alias="main-gpu"),
+    ] = None
+    split_mode: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
-            None,
             alias="split-mode",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
-        )
-    )
-    tensor_split: str | None = Field(None, alias="tensor-split")
-    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
-    reasoning_budget: conint(ge=-1, le=2147483647) | None = None
-    projection_model_src: (
-        str | LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc | None
-    ) = Field(None, alias="projectionModelSrc")
-    image_tile_mode: (
-        LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None
-    ) = Field(
-        None, title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
-    )
-    mmproj_use_gpu: bool | None = Field(None, alias="mmproj-use-gpu")
+        ),
+    ] = None
+    tensor_split: Annotated[str | None, Field(alias="tensor-split")] = None
+    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
+    reasoning_budget: Annotated[int | None, Field(ge=-1, le=2147483647)] = None
+    projection_model_src: Annotated[
+        str | LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc | None,
+        Field(alias="projectionModelSrc"),
+    ] = None
+    image_tile_mode: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None,
+        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"),
+    ] = None
+    mmproj_use_gpu: Annotated[bool | None, Field(alias="mmproj-use-gpu")] = None
 
 
-class LoadModelSrcRequestLlamacppCompletion(BaseModel):
+class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestLlamacppCompletionDelegate | None = Field(
-        None, title="LoadModelSrcRequestLlamacppCompletionDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["llamacpp-completion"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestLlamacppCompletionModelConfig = Field(
-        ...,
-        alias="modelConfig",
-        title="LoadModelSrcRequestLlamacppCompletionModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestLlamacppCompletionDelegate | None,
+        Field(title="LoadModelSrcRequestLlamacppCompletionDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["llamacpp-completion"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfig,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfig",
+        ),
+    ]
 
 
-class LoadModelSrcRequestWhispercppTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestWhispercppTranscriptionDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
@@ -2357,7 +2768,9 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
     beam_search = "beam_search"
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(BaseModel):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(
+    GeneratedBaseModel
+):
     threshold: float | None = None
     min_speech_duration_ms: float | None = None
     min_silence_duration_ms: float | None = None
@@ -2371,14 +2784,18 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(BaseModel):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
+    GeneratedBaseModel
+):
     model: str | None = None
     use_gpu: bool | None = None
     flash_attn: bool | None = None
     gpu_device: float | None = None
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(BaseModel):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
+    GeneratedBaseModel
+):
     caption_enabled: bool | None = None
 
 
@@ -2408,17 +2825,19 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     classification = "classification"
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(BaseModel):
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon
         | Literal["vad"]
@@ -2426,17 +2845,26 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(BaseModel
     ) = None
 
 
-class LoadModelSrcRequestWhispercppTranscriptionModelConfig(BaseModel):
-    strategy: LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy | None = (
-        Field(
-            None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"
-        )
-    )
-    n_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    n_max_text_ctx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    offset_ms: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    duration_ms: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    audio_ctx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
+    strategy: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy | None,
+        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"),
+    ] = None
+    n_threads: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    n_max_text_ctx: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    offset_ms: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    duration_ms: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    audio_ctx: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     translate: bool | None = None
     no_context: bool | None = None
     no_timestamps: bool | None = None
@@ -2448,9 +2876,13 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(BaseModel):
     token_timestamps: bool | None = None
     thold_pt: float | None = None
     thold_ptsum: float | None = None
-    max_len: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    max_len: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
+        None
+    )
     split_on_word: bool | None = None
-    max_tokens: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    max_tokens: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     debug_mode: bool | None = None
     tdrz_enable: bool | None = None
     suppress_regex: str | None = None
@@ -2464,97 +2896,124 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(BaseModel):
     temperature_inc: float | None = None
     entropy_thold: float | None = None
     logprob_thold: float | None = None
-    greedy_best_of: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    beam_search_beam_size: conint(ge=-9007199254740991, le=9007199254740991) | None = (
-        None
-    )
-    vad_params: (
-        LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams | None
-    ) = Field(
-        None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"
-    )
-    audio_format: (
-        LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat | None
-    ) = Field(
-        None, title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"
-    )
-    context_params: (
-        LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams | None
-    ) = Field(
-        None,
-        alias="contextParams",
-        title="LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams",
-    )
-    misc_config: (
-        LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig | None
-    ) = Field(
-        None,
-        alias="miscConfig",
-        title="LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig",
-    )
-    vad_model_src: (
-        str | LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc | None
-    ) = Field(None, alias="vadModelSrc")
+    greedy_best_of: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    beam_search_beam_size: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    vad_params: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams | None,
+        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"),
+    ] = None
+    audio_format: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat | None,
+        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"),
+    ] = None
+    context_params: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams | None,
+        Field(
+            alias="contextParams",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams",
+        ),
+    ] = None
+    misc_config: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig | None,
+        Field(
+            alias="miscConfig",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig",
+        ),
+    ] = None
+    vad_model_src: Annotated[
+        str | LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc | None,
+        Field(alias="vadModelSrc"),
+    ] = None
 
 
-class LoadModelSrcRequestWhispercppTranscription(BaseModel):
+class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestWhispercppTranscriptionDelegate | None = Field(
-        None, title="LoadModelSrcRequestWhispercppTranscriptionDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["whispercpp-transcription"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestWhispercppTranscriptionModelConfig = Field(
-        ...,
-        alias="modelConfig",
-        title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionDelegate | None,
+        Field(title="LoadModelSrcRequestWhispercppTranscriptionDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["whispercpp-transcription"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestWhispercppTranscriptionModelConfig,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
+        ),
+    ]
 
 
-class LoadModelSrcRequestBciWhispercppTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestBciWhispercppTranscriptionDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
-class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(BaseModel):
+class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
+    GeneratedBaseModel
+):
     language: str | None = None
-    n_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    n_threads: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     temperature: float | None = None
     suppress_nst: bool | None = None
     suppress_blank: bool | None = None
-    duration_ms: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    duration_ms: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     translate: bool | None = None
     no_timestamps: bool | None = None
     single_segment: bool | None = None
@@ -2563,24 +3022,34 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(Base
     print_realtime: bool | None = None
     print_timestamps: bool | None = None
     detect_language: bool | None = None
-    greedy_best_of: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    beam_search_beam_size: conint(ge=-9007199254740991, le=9007199254740991) | None = (
+    greedy_best_of: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    beam_search_beam_size: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+
+
+class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig(
+    GeneratedBaseModel
+):
+    day_idx: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
         None
     )
 
 
-class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig(BaseModel):
-    day_idx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-
-
-class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams(BaseModel):
+class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams(
+    GeneratedBaseModel
+):
     model: str | None = None
     use_gpu: bool | None = None
     flash_attn: bool | None = None
     gpu_device: float | None = None
 
 
-class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(BaseModel):
+class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
+    GeneratedBaseModel
+):
     caption_enabled: bool | None = None
 
 
@@ -2613,18 +3082,18 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon
         | Literal["vad"]
@@ -2632,204 +3101,268 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc(
     ) = None
 
 
-class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(BaseModel):
-    whisper_config: (
-        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig | None
-    ) = Field(
-        None,
-        alias="whisperConfig",
-        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig",
-    )
-    bci_config: (
-        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig | None
-    ) = Field(
-        None,
-        alias="bciConfig",
-        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig",
-    )
-    context_params: (
-        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams | None
-    ) = Field(
-        None,
-        alias="contextParams",
-        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams",
-    )
-    misc_config: (
-        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig | None
-    ) = Field(
-        None,
-        alias="miscConfig",
-        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig",
-    )
-    backends_dir: str | None = Field(None, alias="backendsDir")
-    embedder_model_src: (
+class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(GeneratedBaseModel):
+    whisper_config: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig | None,
+        Field(
+            alias="whisperConfig",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig",
+        ),
+    ] = None
+    bci_config: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig | None,
+        Field(
+            alias="bciConfig",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig",
+        ),
+    ] = None
+    context_params: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams | None,
+        Field(
+            alias="contextParams",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams",
+        ),
+    ] = None
+    misc_config: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig | None,
+        Field(
+            alias="miscConfig",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig",
+        ),
+    ] = None
+    backends_dir: Annotated[str | None, Field(alias="backendsDir")] = None
+    embedder_model_src: Annotated[
         str
         | LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc
-        | None
-    ) = Field(None, alias="embedderModelSrc")
+        | None,
+        Field(alias="embedderModelSrc"),
+    ] = None
 
 
-class LoadModelSrcRequestBciWhispercppTranscription(BaseModel):
+class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None = Field(
-        None, title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["bci-whispercpp-transcription"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestBciWhispercppTranscriptionModelConfig = Field(
-        ...,
-        alias="modelConfig",
-        title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None,
+        Field(title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[
+        Literal["bci-whispercpp-transcription"], Field(alias="modelType")
+    ]
+    model_config_: Annotated[
+        LoadModelSrcRequestBciWhispercppTranscriptionModelConfig,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
+        ),
+    ]
 
 
-class LoadModelSrcRequestParakeetTranscriptionDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestParakeetTranscriptionDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
-class LoadModelSrcRequestParakeetTranscriptionModelConfig(BaseModel):
+class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    max_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="maxThreads"
-    )
-    use_gpu: bool | None = Field(None, alias="useGPU")
-    sample_rate: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="sampleRate"
-    )
-    channels: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    caption_enabled: bool | None = Field(None, alias="captionEnabled")
-    timestamps_enabled: bool | None = Field(None, alias="timestampsEnabled")
-    seed: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    max_threads: Annotated[
+        int | None, Field(alias="maxThreads", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    channels: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    caption_enabled: Annotated[bool | None, Field(alias="captionEnabled")] = None
+    timestamps_enabled: Annotated[bool | None, Field(alias="timestampsEnabled")] = None
+    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
     streaming: bool | None = None
-    streaming_chunk_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="streamingChunkMs"
+    streaming_chunk_ms: Annotated[
+        int | None, Field(alias="streamingChunkMs", gt=0, le=9007199254740991)
+    ] = None
+    streaming_history_ms: Annotated[
+        int | None, Field(alias="streamingHistoryMs", gt=0, le=9007199254740991)
+    ] = None
+    streaming_emit_partials: Annotated[
+        bool | None, Field(alias="streamingEmitPartials")
+    ] = None
+    streaming_energy_vad: Annotated[bool | None, Field(alias="streamingEnergyVad")] = (
+        None
     )
-    streaming_history_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="streamingHistoryMs"
+    streaming_left_context_ms: Annotated[
+        int | None, Field(alias="streamingLeftContextMs", ge=0, le=9007199254740991)
+    ] = None
+    streaming_right_lookahead_ms: Annotated[
+        int | None, Field(alias="streamingRightLookaheadMs", ge=0, le=9007199254740991)
+    ] = None
+    streaming_spk_cache_enable: Annotated[
+        bool | None, Field(alias="streamingSpkCacheEnable")
+    ] = None
+    streaming_spk_cache_len: Annotated[
+        int | None, Field(alias="streamingSpkCacheLen", gt=0, le=9007199254740991)
+    ] = None
+    streaming_fifo_len: Annotated[
+        int | None, Field(alias="streamingFifoLen", gt=0, le=9007199254740991)
+    ] = None
+    streaming_chunk_left_context_ms: Annotated[
+        int | None,
+        Field(alias="streamingChunkLeftContextMs", ge=0, le=9007199254740991),
+    ] = None
+    streaming_chunk_right_context_ms: Annotated[
+        int | None,
+        Field(alias="streamingChunkRightContextMs", ge=0, le=9007199254740991),
+    ] = None
+    streaming_spk_cache_update_period: Annotated[
+        int | None,
+        Field(alias="streamingSpkCacheUpdatePeriod", gt=0, le=9007199254740991),
+    ] = None
+    backends_dir: Annotated[str | None, Field(alias="backendsDir")] = None
+    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
+    parakeet_encoder_src: Annotated[Any | None, Field(alias="parakeetEncoderSrc")] = (
+        None
     )
-    streaming_emit_partials: bool | None = Field(None, alias="streamingEmitPartials")
-    streaming_energy_vad: bool | None = Field(None, alias="streamingEnergyVad")
-    streaming_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamingLeftContextMs"
+    parakeet_decoder_src: Annotated[Any | None, Field(alias="parakeetDecoderSrc")] = (
+        None
     )
-    streaming_right_lookahead_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamingRightLookaheadMs"
-    )
-    streaming_spk_cache_enable: bool | None = Field(
-        None, alias="streamingSpkCacheEnable"
-    )
-    streaming_spk_cache_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="streamingSpkCacheLen"
-    )
-    streaming_fifo_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="streamingFifoLen"
-    )
-    streaming_chunk_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamingChunkLeftContextMs"
-    )
-    streaming_chunk_right_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamingChunkRightContextMs"
-    )
-    streaming_spk_cache_update_period: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="streamingSpkCacheUpdatePeriod"
-    )
-    backends_dir: str | None = Field(None, alias="backendsDir")
-    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
-    parakeet_encoder_src: Any | None = Field(None, alias="parakeetEncoderSrc")
-    parakeet_decoder_src: Any | None = Field(None, alias="parakeetDecoderSrc")
-    parakeet_vocab_src: Any | None = Field(None, alias="parakeetVocabSrc")
-    parakeet_preprocessor_src: Any | None = Field(None, alias="parakeetPreprocessorSrc")
-    parakeet_ctc_model_src: Any | None = Field(None, alias="parakeetCtcModelSrc")
-    parakeet_tokenizer_src: Any | None = Field(None, alias="parakeetTokenizerSrc")
-    parakeet_sortformer_src: Any | None = Field(None, alias="parakeetSortformerSrc")
-    parakeet_model_src: Any | None = Field(None, alias="parakeetModelSrc")
-    model_type: Any | None = Field(None, alias="modelType")
+    parakeet_vocab_src: Annotated[Any | None, Field(alias="parakeetVocabSrc")] = None
+    parakeet_preprocessor_src: Annotated[
+        Any | None, Field(alias="parakeetPreprocessorSrc")
+    ] = None
+    parakeet_ctc_model_src: Annotated[
+        Any | None, Field(alias="parakeetCtcModelSrc")
+    ] = None
+    parakeet_tokenizer_src: Annotated[
+        Any | None, Field(alias="parakeetTokenizerSrc")
+    ] = None
+    parakeet_sortformer_src: Annotated[
+        Any | None, Field(alias="parakeetSortformerSrc")
+    ] = None
+    parakeet_model_src: Annotated[Any | None, Field(alias="parakeetModelSrc")] = None
+    model_type: Annotated[Any | None, Field(alias="modelType")] = None
 
 
-class LoadModelSrcRequestParakeetTranscription(BaseModel):
+class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestParakeetTranscriptionDelegate | None = Field(
-        None, title="LoadModelSrcRequestParakeetTranscriptionDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["parakeet-transcription"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestParakeetTranscriptionModelConfig | None = Field(
-        None,
-        alias="modelConfig",
-        title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestParakeetTranscriptionDelegate | None,
+        Field(title="LoadModelSrcRequestParakeetTranscriptionDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["parakeet-transcription"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestParakeetTranscriptionModelConfig | None,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
+        ),
+    ] = None
 
 
-class LoadModelSrcRequestLlamacppEmbeddingDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestLlamacppEmbeddingDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
@@ -2874,98 +3407,123 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
     number_3 = 3
 
 
-class LoadModelSrcRequestLlamacppEmbeddingModelConfig(BaseModel):
-    gpu_layers: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="gpuLayers"
-    )
-    device: LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice | None = Field(
-        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"
-    )
-    batch_size: conint(ge=1, le=9007199254740991) | None = Field(
-        None, alias="batchSize"
-    )
-    pooling: LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling | None = Field(
-        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"
-    )
-    attention: LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention | None = Field(
-        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"
-    )
-    embd_normalize: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="embdNormalize"
-    )
-    flash_attention: (
-        LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention | None
-    ) = Field(
-        None,
-        alias="flashAttention",
-        title="LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention",
-    )
-    main_gpu: (
-        conint(ge=0, le=9007199254740991)
-        | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu
-        | None
-    ) = Field(None, alias="mainGpu")
-    split_mode: LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode | None = Field(
-        None,
-        alias="splitMode",
-        title="LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode",
-    )
-    tensor_split: str | None = Field(None, alias="tensorSplit")
-    verbosity: LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity | None = Field(
-        None, title="LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"
-    )
-    opencl_cache_dir: str | None = Field(None, alias="openclCacheDir")
+class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    gpu_layers: Annotated[
+        int | None, Field(alias="gpuLayers", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    device: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice | None,
+        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"),
+    ] = None
+    batch_size: Annotated[
+        int | None, Field(alias="batchSize", ge=1, le=9007199254740991)
+    ] = None
+    pooling: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling | None,
+        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"),
+    ] = None
+    attention: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention | None,
+        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"),
+    ] = None
+    embd_normalize: Annotated[
+        int | None,
+        Field(alias="embdNormalize", ge=-9007199254740991, le=9007199254740991),
+    ] = None
+    flash_attention: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention | None,
+        Field(
+            alias="flashAttention",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention",
+        ),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
+        Field(alias="mainGpu"),
+    ] = None
+    split_mode: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode | None,
+        Field(
+            alias="splitMode",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode",
+        ),
+    ] = None
+    tensor_split: Annotated[str | None, Field(alias="tensorSplit")] = None
+    verbosity: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity | None,
+        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"),
+    ] = None
+    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
 
 
-class LoadModelSrcRequestLlamacppEmbedding(BaseModel):
+class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestLlamacppEmbeddingDelegate | None = Field(
-        None, title="LoadModelSrcRequestLlamacppEmbeddingDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["llamacpp-embedding"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestLlamacppEmbeddingModelConfig = Field(
-        ...,
-        alias="modelConfig",
-        title="LoadModelSrcRequestLlamacppEmbeddingModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingDelegate | None,
+        Field(title="LoadModelSrcRequestLlamacppEmbeddingDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["llamacpp-embedding"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfig,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestLlamacppEmbeddingModelConfig"
+        ),
+    ]
 
 
-class LoadModelSrcRequestNmtcppTranslationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestNmtcppTranslationDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
@@ -3112,17 +3670,19 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     classification = "classification"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc(BaseModel):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon
         | Literal["vad"]
@@ -3156,17 +3716,19 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     classification = "classification"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc(BaseModel):
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon
         | Literal["vad"]
@@ -3207,18 +3769,18 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon
         | Literal["vad"]
@@ -3255,18 +3817,18 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon
         | Literal["vad"]
@@ -3303,18 +3865,18 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon
         | Literal["vad"]
@@ -3322,13 +3884,15 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     ) = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(BaseModel):
-    mode: (
-        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None
-    ) = Field(
-        None,
-        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode",
-    )
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
+    GeneratedBaseModel
+):
+    mode: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None,
+        Field(
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
+        ),
+    ] = None
     beamsize: float | None = None
     lengthpenalty: float | None = None
     maxlength: float | None = None
@@ -3337,26 +3901,30 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(BaseMode
     temperature: float | None = None
     topk: float | None = None
     topp: float | None = None
-    model_src: (
-        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc
-    ) = Field(..., alias="modelSrc")
-    src_vocab_src: (
+    model_src: Annotated[
+        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc,
+        Field(alias="modelSrc"),
+    ]
+    src_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc
-        | None
-    ) = Field(None, alias="srcVocabSrc")
-    dst_vocab_src: (
+        | None,
+        Field(alias="srcVocabSrc"),
+    ] = None
+    dst_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc
-        | None
-    ) = Field(None, alias="dstVocabSrc")
+        | None,
+        Field(alias="dstVocabSrc"),
+    ] = None
     normalize: float | None = None
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(BaseModel):
-    mode: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None = Field(
-        None, title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
-    )
+class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel):
+    mode: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None,
+        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"),
+    ] = None
     beamsize: float | None = None
     lengthpenalty: float | None = None
     maxlength: float | None = None
@@ -3366,28 +3934,33 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(BaseModel):
     topk: float | None = None
     topp: float | None = None
     engine: Literal["Bergamot"]
-    from_: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom = Field(
-        ...,
-        alias="from",
-        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom",
-    )
-    to: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo = Field(
-        ..., title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
-    )
-    src_vocab_src: (
-        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc | None
-    ) = Field(None, alias="srcVocabSrc")
-    dst_vocab_src: (
-        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc | None
-    ) = Field(None, alias="dstVocabSrc")
+    from_: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom,
+        Field(
+            alias="from",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom",
+        ),
+    ]
+    to: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo,
+        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"),
+    ]
+    src_vocab_src: Annotated[
+        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc | None,
+        Field(alias="srcVocabSrc"),
+    ] = None
+    dst_vocab_src: Annotated[
+        str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc | None,
+        Field(alias="dstVocabSrc"),
+    ] = None
     normalize: float | None = None
-    pivot_model: (
-        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel | None
-    ) = Field(
-        None,
-        alias="pivotModel",
-        title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel",
-    )
+    pivot_model: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel | None,
+        Field(
+            alias="pivotModel",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode(Enum):
@@ -3452,10 +4025,11 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
     urd_arab = "urd_Arab"
 
 
-class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(BaseModel):
-    mode: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None = Field(
-        None, title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
-    )
+class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseModel):
+    mode: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None,
+        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"),
+    ] = None
     beamsize: float | None = None
     lengthpenalty: float | None = None
     maxlength: float | None = None
@@ -3465,64 +4039,86 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(BaseModel):
     topk: float | None = None
     topp: float | None = None
     engine: Literal["IndicTrans"]
-    from_: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom = Field(
-        ...,
-        alias="from",
-        title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom",
-    )
-    to: LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo = Field(
-        ..., title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"
-    )
+    from_: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom,
+        Field(
+            alias="from",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom",
+        ),
+    ]
+    to: Annotated[
+        LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo,
+        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"),
+    ]
 
 
-class LoadModelSrcRequestNmtcppTranslation(BaseModel):
+class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestNmtcppTranslationDelegate | None = Field(
-        None, title="LoadModelSrcRequestNmtcppTranslationDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["nmtcpp-translation"] = Field(..., alias="modelType")
-    model_config_: (
+    delegate: Annotated[
+        LoadModelSrcRequestNmtcppTranslationDelegate | None,
+        Field(title="LoadModelSrcRequestNmtcppTranslationDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["nmtcpp-translation"], Field(alias="modelType")]
+    model_config_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamot
-        | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans
-    ) = Field(..., alias="modelConfig")
+        | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans,
+        Field(alias="modelConfig"),
+    ]
 
 
-class LoadModelSrcRequestTtsGgmlDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestTtsGgmlDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
@@ -3577,17 +4173,17 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon
         | Literal["vad"]
@@ -3621,17 +4217,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon
         | Literal["vad"]
@@ -3665,17 +4263,17 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon
         | Literal["vad"]
@@ -3709,17 +4307,17 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon
         | Literal["vad"]
@@ -3753,17 +4351,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
         | Literal["vad"]
@@ -3797,17 +4397,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
         | Literal["vad"]
@@ -3815,69 +4417,86 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(Base
     ) = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Literal["chatterbox"] = Field(..., alias="ttsEngine")
-    language: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage = Field(
-        ..., title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"
-    )
+    tts_engine: Annotated[Literal["chatterbox"], Field(alias="ttsEngine")]
+    language: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"),
+    ]
     voice: str | None = None
-    use_gpu: bool | None = Field(None, alias="useGPU")
-    stream_chunk_tokens: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamChunkTokens"
-    )
-    stream_first_chunk_tokens: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="streamFirstChunkTokens"
-    )
-    cfm_steps: conint(ge=0, le=9007199254740991) | None = Field(None, alias="cfmSteps")
-    threads: conint(le=9007199254740991, gt=0) | None = None
-    n_gpu_layers: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="nGpuLayers"
-    )
-    seed: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    s3gen_model_src: (
-        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc | None
-    ) = Field(None, alias="s3genModelSrc")
-    reference_audio_src: (
-        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc | None
-    ) = Field(None, alias="referenceAudioSrc")
-    mecab_dict_src: (
-        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc | None
-    ) = Field(None, alias="mecabDictSrc")
-    cangjie_tsv_src: (
-        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc | None
-    ) = Field(None, alias="cangjieTsvSrc")
-    lavasr_enhancer_model_src: (
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    stream_chunk_tokens: Annotated[
+        int | None, Field(alias="streamChunkTokens", ge=0, le=9007199254740991)
+    ] = None
+    stream_first_chunk_tokens: Annotated[
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=9007199254740991)
+    ] = None
+    cfm_steps: Annotated[
+        int | None, Field(alias="cfmSteps", ge=0, le=9007199254740991)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
+    s3gen_model_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc | None,
+        Field(alias="s3genModelSrc"),
+    ] = None
+    reference_audio_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc | None,
+        Field(alias="referenceAudioSrc"),
+    ] = None
+    mecab_dict_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc | None,
+        Field(alias="mecabDictSrc"),
+    ] = None
+    cangjie_tsv_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc | None,
+        Field(alias="cangjieTsvSrc"),
+    ] = None
+    lavasr_enhancer_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
-        | None
-    ) = Field(None, alias="lavasrEnhancerModelSrc")
-    lavasr_denoiser_model_src: (
+        | None,
+        Field(alias="lavasrEnhancerModelSrc"),
+    ] = None
+    lavasr_denoiser_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
-        | None
-    ) = Field(None, alias="lavasrDenoiserModelSrc")
-    tts_supertonic_multilingual: Any | None = Field(
-        None, alias="ttsSupertonicMultilingual"
-    )
-    tts_tokenizer_src: Any | None = Field(None, alias="ttsTokenizerSrc")
-    tts_speech_encoder_src: Any | None = Field(None, alias="ttsSpeechEncoderSrc")
-    tts_embed_tokens_src: Any | None = Field(None, alias="ttsEmbedTokensSrc")
-    tts_conditional_decoder_src: Any | None = Field(
-        None, alias="ttsConditionalDecoderSrc"
-    )
-    tts_language_model_src: Any | None = Field(None, alias="ttsLanguageModelSrc")
-    tts_text_encoder_src: Any | None = Field(None, alias="ttsTextEncoderSrc")
-    tts_duration_predictor_src: Any | None = Field(
-        None, alias="ttsDurationPredictorSrc"
-    )
-    tts_vector_estimator_src: Any | None = Field(None, alias="ttsVectorEstimatorSrc")
-    tts_vocoder_src: Any | None = Field(None, alias="ttsVocoderSrc")
-    tts_unicode_indexer_src: Any | None = Field(None, alias="ttsUnicodeIndexerSrc")
-    tts_tts_config_src: Any | None = Field(None, alias="ttsTtsConfigSrc")
-    tts_voice_style_src: Any | None = Field(None, alias="ttsVoiceStyleSrc")
+        | None,
+        Field(alias="lavasrDenoiserModelSrc"),
+    ] = None
+    tts_supertonic_multilingual: Annotated[
+        Any | None, Field(alias="ttsSupertonicMultilingual")
+    ] = None
+    tts_tokenizer_src: Annotated[Any | None, Field(alias="ttsTokenizerSrc")] = None
+    tts_speech_encoder_src: Annotated[
+        Any | None, Field(alias="ttsSpeechEncoderSrc")
+    ] = None
+    tts_embed_tokens_src: Annotated[Any | None, Field(alias="ttsEmbedTokensSrc")] = None
+    tts_conditional_decoder_src: Annotated[
+        Any | None, Field(alias="ttsConditionalDecoderSrc")
+    ] = None
+    tts_language_model_src: Annotated[
+        Any | None, Field(alias="ttsLanguageModelSrc")
+    ] = None
+    tts_text_encoder_src: Annotated[Any | None, Field(alias="ttsTextEncoderSrc")] = None
+    tts_duration_predictor_src: Annotated[
+        Any | None, Field(alias="ttsDurationPredictorSrc")
+    ] = None
+    tts_vector_estimator_src: Annotated[
+        Any | None, Field(alias="ttsVectorEstimatorSrc")
+    ] = None
+    tts_vocoder_src: Annotated[Any | None, Field(alias="ttsVocoderSrc")] = None
+    tts_unicode_indexer_src: Annotated[
+        Any | None, Field(alias="ttsUnicodeIndexerSrc")
+    ] = None
+    tts_tts_config_src: Annotated[Any | None, Field(alias="ttsTtsConfigSrc")] = None
+    tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage(Enum):
@@ -3940,17 +4559,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
         | Literal["vad"]
@@ -3984,17 +4605,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     classification = "classification"
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
         | Literal["vad"]
@@ -4002,100 +4625,132 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(Base
     ) = None
 
 
-class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(BaseModel):
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Literal["supertonic"] = Field(..., alias="ttsEngine")
-    language: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage = Field(
-        ..., title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"
-    )
+    tts_engine: Annotated[Literal["supertonic"], Field(alias="ttsEngine")]
+    language: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"),
+    ]
     voice: str | None = None
-    tts_speed: float | None = Field(None, alias="ttsSpeed")
-    tts_num_inference_steps: float | None = Field(None, alias="ttsNumInferenceSteps")
-    use_gpu: bool | None = Field(None, alias="useGPU")
-    output_sample_rate: conint(ge=8000, le=192000) | None = Field(
-        None, alias="outputSampleRate"
-    )
-    lavasr_enhancer_model_src: (
+    tts_speed: Annotated[float | None, Field(alias="ttsSpeed")] = None
+    tts_num_inference_steps: Annotated[
+        float | None, Field(alias="ttsNumInferenceSteps")
+    ] = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    lavasr_enhancer_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
-        | None
-    ) = Field(None, alias="lavasrEnhancerModelSrc")
-    lavasr_denoiser_model_src: (
+        | None,
+        Field(alias="lavasrEnhancerModelSrc"),
+    ] = None
+    lavasr_denoiser_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
-        | None
-    ) = Field(None, alias="lavasrDenoiserModelSrc")
-    tts_supertonic_multilingual: Any | None = Field(
-        None, alias="ttsSupertonicMultilingual"
-    )
-    tts_tokenizer_src: Any | None = Field(None, alias="ttsTokenizerSrc")
-    tts_speech_encoder_src: Any | None = Field(None, alias="ttsSpeechEncoderSrc")
-    tts_embed_tokens_src: Any | None = Field(None, alias="ttsEmbedTokensSrc")
-    tts_conditional_decoder_src: Any | None = Field(
-        None, alias="ttsConditionalDecoderSrc"
-    )
-    tts_language_model_src: Any | None = Field(None, alias="ttsLanguageModelSrc")
-    tts_text_encoder_src: Any | None = Field(None, alias="ttsTextEncoderSrc")
-    tts_duration_predictor_src: Any | None = Field(
-        None, alias="ttsDurationPredictorSrc"
-    )
-    tts_vector_estimator_src: Any | None = Field(None, alias="ttsVectorEstimatorSrc")
-    tts_vocoder_src: Any | None = Field(None, alias="ttsVocoderSrc")
-    tts_unicode_indexer_src: Any | None = Field(None, alias="ttsUnicodeIndexerSrc")
-    tts_tts_config_src: Any | None = Field(None, alias="ttsTtsConfigSrc")
-    tts_voice_style_src: Any | None = Field(None, alias="ttsVoiceStyleSrc")
+        | None,
+        Field(alias="lavasrDenoiserModelSrc"),
+    ] = None
+    tts_supertonic_multilingual: Annotated[
+        Any | None, Field(alias="ttsSupertonicMultilingual")
+    ] = None
+    tts_tokenizer_src: Annotated[Any | None, Field(alias="ttsTokenizerSrc")] = None
+    tts_speech_encoder_src: Annotated[
+        Any | None, Field(alias="ttsSpeechEncoderSrc")
+    ] = None
+    tts_embed_tokens_src: Annotated[Any | None, Field(alias="ttsEmbedTokensSrc")] = None
+    tts_conditional_decoder_src: Annotated[
+        Any | None, Field(alias="ttsConditionalDecoderSrc")
+    ] = None
+    tts_language_model_src: Annotated[
+        Any | None, Field(alias="ttsLanguageModelSrc")
+    ] = None
+    tts_text_encoder_src: Annotated[Any | None, Field(alias="ttsTextEncoderSrc")] = None
+    tts_duration_predictor_src: Annotated[
+        Any | None, Field(alias="ttsDurationPredictorSrc")
+    ] = None
+    tts_vector_estimator_src: Annotated[
+        Any | None, Field(alias="ttsVectorEstimatorSrc")
+    ] = None
+    tts_vocoder_src: Annotated[Any | None, Field(alias="ttsVocoderSrc")] = None
+    tts_unicode_indexer_src: Annotated[
+        Any | None, Field(alias="ttsUnicodeIndexerSrc")
+    ] = None
+    tts_tts_config_src: Annotated[Any | None, Field(alias="ttsTtsConfigSrc")] = None
+    tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
-class LoadModelSrcRequestTtsGgml(BaseModel):
+class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestTtsGgmlDelegate | None = Field(
-        None, title="LoadModelSrcRequestTtsGgmlDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["tts-ggml"] = Field(..., alias="modelType")
-    model_config_: (
+    delegate: Annotated[
+        LoadModelSrcRequestTtsGgmlDelegate | None,
+        Field(title="LoadModelSrcRequestTtsGgmlDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["tts-ggml"], Field(alias="modelType")]
+    model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
-        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
-    ) = Field(..., alias="modelConfig")
+        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic,
+        Field(alias="modelConfig"),
+    ]
 
 
-class LoadModelSrcRequestGgmlOcrDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestGgmlOcrDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(Enum):
@@ -4136,17 +4791,17 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(BaseModel):
+class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon
         | Literal["vad"]
@@ -4154,80 +4809,108 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(BaseModel):
     ) = None
 
 
-class LoadModelSrcRequestGgmlOcrModelConfig(BaseModel):
-    lang_list: list[str] | None = Field(None, alias="langList")
-    pipeline_type: LoadModelSrcRequestGgmlOcrModelConfigPipelineType | None = Field(
-        None,
-        alias="pipelineType",
-        title="LoadModelSrcRequestGgmlOcrModelConfigPipelineType",
-    )
-    mag_ratio: float | None = Field(None, alias="magRatio")
-    canvas_size: float | None = Field(None, alias="canvasSize")
-    default_rotation_angles: list[float] | None = Field(
-        None, alias="defaultRotationAngles"
-    )
-    contrast_retry: bool | None = Field(None, alias="contrastRetry")
-    low_confidence_threshold: float | None = Field(None, alias="lowConfidenceThreshold")
-    recognizer_batch_size: float | None = Field(None, alias="recognizerBatchSize")
-    n_threads: float | None = Field(None, alias="nThreads")
-    backend_device: LoadModelSrcRequestGgmlOcrModelConfigBackendDevice | None = Field(
-        None,
-        alias="backendDevice",
-        title="LoadModelSrcRequestGgmlOcrModelConfigBackendDevice",
-    )
-    gpu_device: float | None = Field(None, alias="gpuDevice")
-    detector_model_src: (
-        str | LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc | None
-    ) = Field(None, alias="detectorModelSrc")
+class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
+    lang_list: Annotated[list[str] | None, Field(alias="langList")] = None
+    pipeline_type: Annotated[
+        LoadModelSrcRequestGgmlOcrModelConfigPipelineType | None,
+        Field(
+            alias="pipelineType",
+            title="LoadModelSrcRequestGgmlOcrModelConfigPipelineType",
+        ),
+    ] = None
+    mag_ratio: Annotated[float | None, Field(alias="magRatio")] = None
+    canvas_size: Annotated[float | None, Field(alias="canvasSize")] = None
+    default_rotation_angles: Annotated[
+        list[float] | None, Field(alias="defaultRotationAngles")
+    ] = None
+    contrast_retry: Annotated[bool | None, Field(alias="contrastRetry")] = None
+    low_confidence_threshold: Annotated[
+        float | None, Field(alias="lowConfidenceThreshold")
+    ] = None
+    recognizer_batch_size: Annotated[
+        float | None, Field(alias="recognizerBatchSize")
+    ] = None
+    n_threads: Annotated[float | None, Field(alias="nThreads")] = None
+    backend_device: Annotated[
+        LoadModelSrcRequestGgmlOcrModelConfigBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            title="LoadModelSrcRequestGgmlOcrModelConfigBackendDevice",
+        ),
+    ] = None
+    gpu_device: Annotated[float | None, Field(alias="gpuDevice")] = None
+    detector_model_src: Annotated[
+        str | LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc | None,
+        Field(alias="detectorModelSrc"),
+    ] = None
 
 
-class LoadModelSrcRequestGgmlOcr(BaseModel):
+class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestGgmlOcrDelegate | None = Field(
-        None, title="LoadModelSrcRequestGgmlOcrDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["ggml-ocr"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestGgmlOcrModelConfig = Field(
-        ..., alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestGgmlOcrDelegate | None,
+        Field(title="LoadModelSrcRequestGgmlOcrDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["ggml-ocr"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestGgmlOcrModelConfig,
+        Field(alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"),
+    ]
 
 
-class LoadModelSrcRequestSdcppGenerationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestSdcppGenerationDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
@@ -4239,6 +4922,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
 class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     gpu = "gpu"
     cpu = "cpu"
+
+
+class MainGpu2(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigMainGpu(Enum):
@@ -4316,17 +5010,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon
         | Literal["vad"]
@@ -4360,17 +5054,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon
         | Literal["vad"]
@@ -4404,17 +5098,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon
         | Literal["vad"]
@@ -4448,17 +5142,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon
         | Literal["vad"]
@@ -4492,17 +5186,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon
         | Literal["vad"]
@@ -4539,18 +5233,18 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon
         | Literal["vad"]
@@ -4584,17 +5278,19 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(
+    GeneratedBaseModel
+):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon
         | Literal["vad"]
@@ -4628,17 +5324,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon
         | Literal["vad"]
@@ -4675,18 +5371,18 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
-    BaseModel
+    GeneratedBaseModel
 ):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon
         | Literal["vad"]
@@ -4720,17 +5416,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     classification = "classification"
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(BaseModel):
+class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: (
         LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon
         | Literal["vad"]
@@ -4738,219 +5434,278 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(BaseModel):
     ) = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(BaseModel):
+class Threads(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["esrgan"] | None = Field(
-        None,
-        description="Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale }).",
-    )
-    model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc | None
-    ) = Field(
-        None,
-        description="ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). Required in diffusion mode when this `upscaler` block is set — configures the post-generation upscaler invoked via diffusion({ upscale }). In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, so this field is ignored.",
-    )
-    tile_size: conint(le=9007199254740991, gt=0) | None = Field(
-        None,
-        description="ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.",
-    )
-    direct: bool | None = Field(
-        None,
-        description="Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others.",
-    )
-    offload_params_to_cpu: bool | None = Field(
-        None,
-        description="Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs.",
-    )
-    threads: Literal[-1] | conint(le=9007199254740991, gt=0) | None = Field(
-        None,
-        description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
-    )
+    type: Annotated[
+        Literal["esrgan"] | None,
+        Field(
+            description="Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale })."
+        ),
+    ] = None
+    model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc | None,
+        Field(
+            description="ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). Required in diffusion mode when this `upscaler` block is set — configures the post-generation upscaler invoked via diffusion({ upscale }). In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, so this field is ignored."
+        ),
+    ] = None
+    tile_size: Annotated[
+        int | None,
+        Field(
+            description="ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM at the cost of more passes.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    direct: Annotated[
+        bool | None,
+        Field(
+            description="Use direct convolution in the ESRGAN upscaler instead of im2col + GEMM. Faster on some backends, slower on others."
+        ),
+    ] = None
+    offload_params_to_cpu: Annotated[
+        bool | None,
+        Field(
+            description="Keep ESRGAN upscaler weights on CPU and offload them during compute. Trades latency for VRAM headroom on memory-constrained GPUs."
+        ),
+    ] = None
+    threads: Annotated[
+        Literal[-1] | Threads | None,
+        Field(
+            description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto."
+        ),
+    ] = None
 
 
-class LoadModelSrcRequestSdcppGenerationModelConfig(BaseModel):
-    mode: LoadModelSrcRequestSdcppGenerationModelConfigMode | None = Field(
-        "diffusion",
-        description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
-        title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
-    )
+class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
+    mode: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
+        Field(
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
+        ),
+    ] = "diffusion"
     threads: float | None = None
-    device: LoadModelSrcRequestSdcppGenerationModelConfigDevice | None = Field(
-        None, title="LoadModelSrcRequestSdcppGenerationModelConfigDevice"
-    )
-    main_gpu: (
-        conint(ge=0, le=9007199254740991)
-        | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu
-        | None
-    ) = Field(
-        None,
-        alias="main-gpu",
-        description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
-    )
-    prediction: LoadModelSrcRequestSdcppGenerationModelConfigPrediction | None = Field(
-        None,
-        description="Prediction type; auto-detected from model when omitted",
-        title="LoadModelSrcRequestSdcppGenerationModelConfigPrediction",
-    )
-    type: LoadModelSrcRequestSdcppGenerationModelConfigType | None = Field(
-        None,
-        description="Weight quantization type override; auto-detected when omitted",
-        title="LoadModelSrcRequestSdcppGenerationModelConfigType",
-    )
-    rng: LoadModelSrcRequestSdcppGenerationModelConfigRng | None = Field(
-        None, title="LoadModelSrcRequestSdcppGenerationModelConfigRng"
-    )
-    sampler_rng: LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None = Field(
-        None, title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
-    )
-    clip_on_cpu: bool | None = Field(
-        None, description="Force CLIP text encoder to run on CPU"
-    )
-    vae_on_cpu: bool | None = Field(None, description="Force VAE decoder to run on CPU")
-    vae_tiling: bool | None = Field(
-        None, description="Enable VAE tiling for large images on limited VRAM"
-    )
-    offload_to_cpu: bool | None = Field(
-        None,
-        description="Keep model weights in CPU memory and offload them during GPU compute",
-    )
-    flash_attn: bool | None = Field(
-        None, description="Enable flash attention to reduce memory usage"
-    )
-    diffusion_fa: bool | None = Field(
-        None, description="Enable flash attention for the diffusion transformer only"
-    )
-    lora_apply_mode: (
-        LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode | None
-    ) = Field(
-        None,
-        description="How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
-        title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
-    )
+    device: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigDevice | None,
+        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigDevice"),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        Field(
+            alias="main-gpu",
+            description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
+        ),
+    ] = None
+    prediction: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigPrediction | None,
+        Field(
+            description="Prediction type; auto-detected from model when omitted",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigPrediction",
+        ),
+    ] = None
+    type: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigType | None,
+        Field(
+            description="Weight quantization type override; auto-detected when omitted",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigType",
+        ),
+    ] = None
+    rng: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigRng | None,
+        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigRng"),
+    ] = None
+    sampler_rng: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None,
+        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"),
+    ] = None
+    clip_on_cpu: Annotated[
+        bool | None, Field(description="Force CLIP text encoder to run on CPU")
+    ] = None
+    vae_on_cpu: Annotated[
+        bool | None, Field(description="Force VAE decoder to run on CPU")
+    ] = None
+    vae_tiling: Annotated[
+        bool | None,
+        Field(description="Enable VAE tiling for large images on limited VRAM"),
+    ] = None
+    offload_to_cpu: Annotated[
+        bool | None,
+        Field(
+            description="Keep model weights in CPU memory and offload them during GPU compute"
+        ),
+    ] = None
+    flash_attn: Annotated[
+        bool | None, Field(description="Enable flash attention to reduce memory usage")
+    ] = None
+    diffusion_fa: Annotated[
+        bool | None,
+        Field(description="Enable flash attention for the diffusion transformer only"),
+    ] = None
+    lora_apply_mode: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode | None,
+        Field(
+            description="How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
+        ),
+    ] = None
     verbosity: float | None = None
-    clip_l_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc | None
-    ) = Field(
-        None,
-        alias="clipLModelSrc",
-        description="CLIP-L text encoder model — required for SD3",
-    )
-    clip_g_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc | None
-    ) = Field(
-        None,
-        alias="clipGModelSrc",
-        description="CLIP-G text encoder model — required for SDXL and SD3",
-    )
-    t5_xxl_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc | None
-    ) = Field(
-        None,
-        alias="t5XxlModelSrc",
-        description="T5-XXL text encoder model — required for SD3",
-    )
-    llm_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None
-    ) = Field(
-        None,
-        alias="llmModelSrc",
-        description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
-    )
-    vae_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None
-    ) = Field(
-        None,
-        alias="vaeModelSrc",
-        description="VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
-    )
-    high_noise_diffusion_model_src: (
+    clip_l_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc | None,
+        Field(
+            alias="clipLModelSrc",
+            description="CLIP-L text encoder model — required for SD3",
+        ),
+    ] = None
+    clip_g_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc | None,
+        Field(
+            alias="clipGModelSrc",
+            description="CLIP-G text encoder model — required for SDXL and SD3",
+        ),
+    ] = None
+    t5_xxl_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc | None,
+        Field(
+            alias="t5XxlModelSrc",
+            description="T5-XXL text encoder model — required for SD3",
+        ),
+    ] = None
+    llm_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
+        Field(
+            alias="llmModelSrc",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
+        ),
+    ] = None
+    vae_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
+        Field(
+            alias="vaeModelSrc",
+            description="VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
+        ),
+    ] = None
+    high_noise_diffusion_model_src: Annotated[
         str
         | LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc
-        | None
-    ) = Field(
-        None,
-        alias="highNoiseDiffusionModelSrc",
-        description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
-    )
-    clip_vision_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None
-    ) = Field(
-        None,
-        alias="clipVisionModelSrc",
-        description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
-    )
-    audio_vae_model_src: (
-        str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None
-    ) = Field(
-        None,
-        alias="audioVaeModelSrc",
-        description="Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
-    )
-    embeddings_connectors_model_src: (
+        | None,
+        Field(
+            alias="highNoiseDiffusionModelSrc",
+            description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
+        ),
+    ] = None
+    clip_vision_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc | None,
+        Field(
+            alias="clipVisionModelSrc",
+            description="OpenCLIP ViT-H/14 weights (`clip_vision_h.safetensors`). Required for Wan image-to-video (`img2vid`); omit for text-to-video-only pipelines. Not used by LTX-2 (its img2vid path needs no CLIP-vision projection).",
+        ),
+    ] = None
+    audio_vae_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc | None,
+        Field(
+            alias="audioVaeModelSrc",
+            description="Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
+        ),
+    ] = None
+    embeddings_connectors_model_src: Annotated[
         str
         | LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc
-        | None
-    ) = Field(
-        None,
-        alias="embeddingsConnectorsModelSrc",
-        description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
-    )
-    upscaler: LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None = Field(
-        None,
-        description="ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `model_src`. In `mode: 'upscale'` only the tuning fields (tile_size, direct, offload_params_to_cpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `model_src` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `model_src` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
-        title="LoadModelSrcRequestSdcppGenerationModelConfigUpscaler",
-    )
+        | None,
+        Field(
+            alias="embeddingsConnectorsModelSrc",
+            description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
+        ),
+    ] = None
+    upscaler: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None,
+        Field(
+            description="ESRGAN upscaler configuration. In diffusion mode this enables the post-generation upscale path invoked via diffusion({ upscale }) and requires `model_src`. In `mode: 'upscale'` only the tuning fields (tile_size, direct, offload_params_to_cpu, threads) are honored — the primary modelSrc IS the ESRGAN model in that mode and `model_src` here is ignored. In `mode: 'video'` the entire `upscaler` object is ignored. Mode-dependent constraints (e.g. `model_src` required in diffusion mode) are enforced by the sdcpp-generation plugin at load time, not at the schema layer.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigUpscaler",
+        ),
+    ] = None
 
 
-class LoadModelSrcRequestSdcppGeneration(BaseModel):
+class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestSdcppGenerationDelegate | None = Field(
-        None, title="LoadModelSrcRequestSdcppGenerationDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["sdcpp-generation"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestSdcppGenerationModelConfig | None = Field(
-        None, alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestSdcppGenerationDelegate | None,
+        Field(title="LoadModelSrcRequestSdcppGenerationDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["sdcpp-generation"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfig | None,
+        Field(
+            alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
+        ),
+    ] = None
 
 
-class LoadModelSrcRequestGgmlVlaDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestGgmlVlaDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
@@ -4958,148 +5713,200 @@ class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
     cpu = "cpu"
 
 
-class LoadModelSrcRequestGgmlVlaModelConfig(BaseModel):
-    backend: LoadModelSrcRequestGgmlVlaModelConfigBackend | None = Field(
-        None,
-        description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
-        title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
-    )
-    verbosity: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None,
-        description="Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
-    )
+class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
+    backend: Annotated[
+        LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
+        Field(
+            description="Backend selection passed to `VlaModel.load({ backend })`. `'auto'` (default) prefers an accepted GPU (Vulkan / Metal / OpenCL) and falls back to CPU. `'cpu'` forces CPU regardless of available accelerators.",
+            title="LoadModelSrcRequestGgmlVlaModelConfigBackend",
+        ),
+    ] = None
+    verbosity: Annotated[
+        int | None,
+        Field(
+            description="Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
 
 
-class LoadModelSrcRequestGgmlVla(BaseModel):
+class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestGgmlVlaDelegate | None = Field(
-        None, title="LoadModelSrcRequestGgmlVlaDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["ggml-vla"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestGgmlVlaModelConfig | None = Field(
-        None, alias="modelConfig", title="LoadModelSrcRequestGgmlVlaModelConfig"
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestGgmlVlaDelegate | None,
+        Field(title="LoadModelSrcRequestGgmlVlaDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["ggml-vla"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestGgmlVlaModelConfig | None,
+        Field(alias="modelConfig", title="LoadModelSrcRequestGgmlVlaModelConfig"),
+    ] = None
 
 
-class LoadModelSrcRequestGgmlClassificationDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelSrcRequestGgmlClassificationDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
-class LoadModelSrcRequestGgmlClassificationModelConfig(BaseModel):
-    model_path: str | None = Field(None, alias="modelPath")
-    top_k: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None, alias="topK"
-    )
-    native_logger: bool | None = Field(None, alias="nativeLogger")
+class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
+    model_path: Annotated[str | None, Field(alias="modelPath")] = None
+    top_k: Annotated[
+        int | None, Field(alias="topK", ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    native_logger: Annotated[bool | None, Field(alias="nativeLogger")] = None
 
 
-class LoadModelSrcRequestGgmlClassification(BaseModel):
+class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelSrcRequestGgmlClassificationDelegate | None = Field(
-        None, title="LoadModelSrcRequestGgmlClassificationDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: Literal["ggml-classification"] = Field(..., alias="modelType")
-    model_config_: LoadModelSrcRequestGgmlClassificationModelConfig | None = Field(
-        None,
-        alias="modelConfig",
-        title="LoadModelSrcRequestGgmlClassificationModelConfig",
-    )
+    delegate: Annotated[
+        LoadModelSrcRequestGgmlClassificationDelegate | None,
+        Field(title="LoadModelSrcRequestGgmlClassificationDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["ggml-classification"], Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelSrcRequestGgmlClassificationModelConfig | None,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestGgmlClassificationModelConfig",
+        ),
+    ] = None
 
 
-class LoadModelCustomPluginRequestDelegate(BaseModel):
-    provider_public_key: constr(pattern=r"^[0-9a-fA-F]{64}$") = Field(
-        ...,
-        alias="providerPublicKey",
-        description="Hex-encoded public key of the remote provider to delegate to.",
-    )
-    timeout: confloat(ge=100.0) | None = Field(
-        None, description="Per-call timeout in milliseconds for the delegated request."
-    )
-    health_check_timeout: confloat(ge=100.0) | None = Field(
-        None,
-        alias="healthCheckTimeout",
-        description="Timeout in milliseconds for the health-check probe before delegating.",
-    )
-    fallback_to_local: bool | None = Field(
-        False,
-        alias="fallbackToLocal",
-        description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-    )
-    force_new_connection: bool | None = Field(
-        False,
-        alias="forceNewConnection",
-        description="When `true`, skip any cached delegation connection and open a fresh one.",
-    )
+class LoadModelCustomPluginRequestDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
 
 
 class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title="LoadModelCustomPluginRequestModelConfig")
+    root: Annotated[
+        dict[str, Any], Field(title="LoadModelCustomPluginRequestModelConfig")
+    ]
 
 
-class LoadModelCustomPluginRequest(BaseModel):
+class LoadModelCustomPluginRequest(GeneratedBaseModel):
     type: Literal["loadModel"]
-    model_src: str = Field(..., alias="modelSrc")
-    model_name: str | None = Field(None, alias="modelName")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: LoadModelCustomPluginRequestDelegate | None = Field(
-        None, title="LoadModelCustomPluginRequestDelegate"
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
-    )
-    model_type: str = Field(..., alias="modelType")
-    model_config_: LoadModelCustomPluginRequestModelConfig | None = Field(
-        None, alias="modelConfig", title="LoadModelCustomPluginRequestModelConfig"
-    )
+    delegate: Annotated[
+        LoadModelCustomPluginRequestDelegate | None,
+        Field(title="LoadModelCustomPluginRequestDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[str, Field(alias="modelType")]
+    model_config_: Annotated[
+        LoadModelCustomPluginRequestModelConfig | None,
+        Field(alias="modelConfig", title="LoadModelCustomPluginRequestModelConfig"),
+    ] = None
 
 
 class LoadModelSrcRequest(
@@ -5118,7 +5925,7 @@ class LoadModelSrcRequest(
         | LoadModelCustomPluginRequest
     ]
 ):
-    root: (
+    root: Annotated[
         LoadModelSrcRequestLlamacppCompletion
         | LoadModelSrcRequestWhispercppTranscription
         | LoadModelSrcRequestBciWhispercppTranscription
@@ -5130,8 +5937,9 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestSdcppGeneration
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
-        | LoadModelCustomPluginRequest
-    ) = Field(..., title="LoadModelSrcRequest")
+        | LoadModelCustomPluginRequest,
+        Field(title="LoadModelSrcRequest"),
+    ]
 
 
 class ReloadConfigRequestModelType(Enum):
@@ -5144,7 +5952,7 @@ class ReloadConfigRequestModelConfigStrategy(Enum):
     beam_search = "beam_search"
 
 
-class ReloadConfigRequestModelConfigVadParams(BaseModel):
+class ReloadConfigRequestModelConfigVadParams(GeneratedBaseModel):
     threshold: float | None = None
     min_speech_duration_ms: float | None = None
     min_silence_duration_ms: float | None = None
@@ -5158,14 +5966,14 @@ class ReloadConfigRequestModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
-class ReloadConfigRequestModelConfigContextParams(BaseModel):
+class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
     model: str | None = None
     use_gpu: bool | None = None
     flash_attn: bool | None = None
     gpu_device: float | None = None
 
 
-class ReloadConfigRequestModelConfigMiscConfig(BaseModel):
+class ReloadConfigRequestModelConfigMiscConfig(GeneratedBaseModel):
     caption_enabled: bool | None = None
 
 
@@ -5195,29 +6003,40 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     classification = "classification"
 
 
-class ReloadConfigRequestModelConfigVadModelSrc(BaseModel):
+class ReloadConfigRequestModelConfigVadModelSrc(GeneratedBaseModel):
     src: str
     name: str | None = None
-    model_id: str | None = Field(None, alias="modelId")
-    registry_path: str | None = Field(None, alias="registryPath")
-    registry_source: str | None = Field(None, alias="registrySource")
-    blob_core_key: str | None = Field(None, alias="blobCoreKey")
-    blob_index: float | None = Field(None, alias="blobIndex")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
     engine: str | None = None
-    expected_size: float | None = Field(None, alias="expectedSize")
-    sha256_checksum: str | None = Field(None, alias="sha256Checksum")
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
     addon: ReloadConfigRequestModelConfigVadModelSrcAddon | Literal["vad"] | None = None
 
 
-class ReloadConfigRequestModelConfig(BaseModel):
-    strategy: ReloadConfigRequestModelConfigStrategy | None = Field(
-        None, title="ReloadConfigRequestModelConfigStrategy"
-    )
-    n_threads: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    n_max_text_ctx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    offset_ms: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    duration_ms: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    audio_ctx: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+class ReloadConfigRequestModelConfig(GeneratedBaseModel):
+    strategy: Annotated[
+        ReloadConfigRequestModelConfigStrategy | None,
+        Field(title="ReloadConfigRequestModelConfigStrategy"),
+    ] = None
+    n_threads: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    n_max_text_ctx: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    offset_ms: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    duration_ms: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    audio_ctx: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     translate: bool | None = None
     no_context: bool | None = None
     no_timestamps: bool | None = None
@@ -5229,9 +6048,13 @@ class ReloadConfigRequestModelConfig(BaseModel):
     token_timestamps: bool | None = None
     thold_pt: float | None = None
     thold_ptsum: float | None = None
-    max_len: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    max_len: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
+        None
+    )
     split_on_word: bool | None = None
-    max_tokens: conint(ge=-9007199254740991, le=9007199254740991) | None = None
+    max_tokens: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
     debug_mode: bool | None = None
     tdrz_enable: bool | None = None
     suppress_regex: str | None = None
@@ -5245,56 +6068,68 @@ class ReloadConfigRequestModelConfig(BaseModel):
     temperature_inc: float | None = None
     entropy_thold: float | None = None
     logprob_thold: float | None = None
-    greedy_best_of: conint(ge=-9007199254740991, le=9007199254740991) | None = None
-    beam_search_beam_size: conint(ge=-9007199254740991, le=9007199254740991) | None = (
-        None
-    )
-    vad_params: ReloadConfigRequestModelConfigVadParams | None = Field(
-        None, title="ReloadConfigRequestModelConfigVadParams"
-    )
-    audio_format: ReloadConfigRequestModelConfigAudioFormat | None = Field(
-        None, title="ReloadConfigRequestModelConfigAudioFormat"
-    )
-    context_params: ReloadConfigRequestModelConfigContextParams | None = Field(
-        None, alias="contextParams", title="ReloadConfigRequestModelConfigContextParams"
-    )
-    misc_config: ReloadConfigRequestModelConfigMiscConfig | None = Field(
-        None, alias="miscConfig", title="ReloadConfigRequestModelConfigMiscConfig"
-    )
-    vad_model_src: str | ReloadConfigRequestModelConfigVadModelSrc | None = Field(
-        None, alias="vadModelSrc"
-    )
+    greedy_best_of: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    beam_search_beam_size: Annotated[
+        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    ] = None
+    vad_params: Annotated[
+        ReloadConfigRequestModelConfigVadParams | None,
+        Field(title="ReloadConfigRequestModelConfigVadParams"),
+    ] = None
+    audio_format: Annotated[
+        ReloadConfigRequestModelConfigAudioFormat | None,
+        Field(title="ReloadConfigRequestModelConfigAudioFormat"),
+    ] = None
+    context_params: Annotated[
+        ReloadConfigRequestModelConfigContextParams | None,
+        Field(
+            alias="contextParams", title="ReloadConfigRequestModelConfigContextParams"
+        ),
+    ] = None
+    misc_config: Annotated[
+        ReloadConfigRequestModelConfigMiscConfig | None,
+        Field(alias="miscConfig", title="ReloadConfigRequestModelConfigMiscConfig"),
+    ] = None
+    vad_model_src: Annotated[
+        str | ReloadConfigRequestModelConfigVadModelSrc | None,
+        Field(alias="vadModelSrc"),
+    ] = None
 
 
-class ReloadConfigRequest(BaseModel):
+class ReloadConfigRequest(GeneratedBaseModel):
     type: Literal["loadModel"]
-    model_id: constr(pattern=r"^[0-9a-f]{16}$") = Field(..., alias="modelId")
-    model_src: Any | None = Field(None, alias="modelSrc")
-    with_progress: Any | None = Field(None, alias="withProgress")
+    model_id: Annotated[str, Field(alias="modelId", pattern="^[0-9a-f]{16}$")]
+    model_src: Annotated[Any | None, Field(alias="modelSrc")] = None
+    with_progress: Annotated[Any | None, Field(alias="withProgress")] = None
     delegate: Any | None = None
     seed: Any | None = None
-    model_type: ReloadConfigRequestModelType = Field(
-        ...,
-        alias="modelType",
-        description='Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
-        title="ReloadConfigRequestModelType",
-    )
-    model_config_: ReloadConfigRequestModelConfig = Field(
-        ..., alias="modelConfig", title="ReloadConfigRequestModelConfig"
-    )
+    model_type: Annotated[
+        ReloadConfigRequestModelType,
+        Field(
+            alias="modelType",
+            description='Whisper model type: "whisper" (alias) or "whispercpp-transcription" (canonical)',
+            title="ReloadConfigRequestModelType",
+        ),
+    ]
+    model_config_: Annotated[
+        ReloadConfigRequestModelConfig,
+        Field(alias="modelConfig", title="ReloadConfigRequestModelConfig"),
+    ]
 
 
-class LoadModelResponse(BaseModel):
+class LoadModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loadModel"]
     success: bool
-    model_id: str | None = Field(None, alias="modelId")
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
     error: str | None = None
 
 
-class LoggingStreamRequest(BaseModel):
+class LoggingStreamRequest(GeneratedBaseModel):
     id: str
     type: Literal["loggingStream"]
 
@@ -5307,44 +6142,46 @@ class LoggingStreamResponseLevel(Enum):
     off = "off"
 
 
-class LoggingStreamResponse(BaseModel):
+class LoggingStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["loggingStream"]
     id: str
-    level: LoggingStreamResponseLevel = Field(..., title="LoggingStreamResponseLevel")
+    level: Annotated[
+        LoggingStreamResponseLevel, Field(title="LoggingStreamResponseLevel")
+    ]
     namespace: str
     message: str
     timestamp: float
 
 
-class ModelProgressResponseShardInfo(BaseModel):
+class ModelProgressResponseShardInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    current_shard: float = Field(..., alias="currentShard")
-    total_shards: float = Field(..., alias="totalShards")
-    shard_name: str = Field(..., alias="shardName")
-    overall_downloaded: float = Field(..., alias="overallDownloaded")
-    overall_total: float = Field(..., alias="overallTotal")
-    overall_percentage: float = Field(..., alias="overallPercentage")
+    current_shard: Annotated[float, Field(alias="currentShard")]
+    total_shards: Annotated[float, Field(alias="totalShards")]
+    shard_name: Annotated[str, Field(alias="shardName")]
+    overall_downloaded: Annotated[float, Field(alias="overallDownloaded")]
+    overall_total: Annotated[float, Field(alias="overallTotal")]
+    overall_percentage: Annotated[float, Field(alias="overallPercentage")]
 
 
-class ModelProgressResponseFileSetInfo(BaseModel):
+class ModelProgressResponseFileSetInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    set_key: str = Field(..., alias="setKey")
-    current_file: str = Field(..., alias="currentFile")
-    file_index: float = Field(..., alias="fileIndex")
-    total_files: float = Field(..., alias="totalFiles")
-    overall_downloaded: float = Field(..., alias="overallDownloaded")
-    overall_total: float = Field(..., alias="overallTotal")
-    overall_percentage: float = Field(..., alias="overallPercentage")
+    set_key: Annotated[str, Field(alias="setKey")]
+    current_file: Annotated[str, Field(alias="currentFile")]
+    file_index: Annotated[float, Field(alias="fileIndex")]
+    total_files: Annotated[float, Field(alias="totalFiles")]
+    overall_downloaded: Annotated[float, Field(alias="overallDownloaded")]
+    overall_total: Annotated[float, Field(alias="overallTotal")]
+    overall_percentage: Annotated[float, Field(alias="overallPercentage")]
 
 
-class ModelProgressResponse(BaseModel):
+class ModelProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5352,19 +6189,21 @@ class ModelProgressResponse(BaseModel):
     downloaded: float
     total: float
     percentage: float
-    download_key: str = Field(..., alias="downloadKey")
-    shard_info: ModelProgressResponseShardInfo | None = Field(
-        None, alias="shardInfo", title="ModelProgressResponseShardInfo"
-    )
-    file_set_info: ModelProgressResponseFileSetInfo | None = Field(
-        None, alias="fileSetInfo", title="ModelProgressResponseFileSetInfo"
-    )
+    download_key: Annotated[str, Field(alias="downloadKey")]
+    shard_info: Annotated[
+        ModelProgressResponseShardInfo | None,
+        Field(alias="shardInfo", title="ModelProgressResponseShardInfo"),
+    ] = None
+    file_set_info: Annotated[
+        ModelProgressResponseFileSetInfo | None,
+        Field(alias="fileSetInfo", title="ModelProgressResponseFileSetInfo"),
+    ] = None
 
 
-class ModelRegistryGetModelRequest(BaseModel):
+class ModelRegistryGetModelRequest(GeneratedBaseModel):
     type: Literal["modelRegistryGetModel"]
-    registry_path: str = Field(..., alias="registryPath")
-    registry_source: str = Field(..., alias="registrySource")
+    registry_path: Annotated[str, Field(alias="registryPath")]
+    registry_source: Annotated[str, Field(alias="registrySource")]
 
 
 class ModelRegistryGetModelResponseModelAddon(Enum):
@@ -5399,85 +6238,107 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     onnx_vad = "onnx-vad"
 
 
-class ModelRegistryGetModelResponseModel(BaseModel):
+class ModelRegistryGetModelResponseModel(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str = Field(..., description="Catalog name of the model entry.")
-    registry_path: str = Field(
-        ..., alias="registryPath", description="Registry-relative path to the model."
-    )
-    registry_source: str = Field(
-        ...,
-        alias="registrySource",
-        description="Registry source identifier, e.g. `huggingface`.",
-    )
-    blob_core_key: str = Field(
-        ...,
-        alias="blobCoreKey",
-        description="Hyperdrive blob core key for the model file.",
-    )
-    blob_block_offset: float = Field(
-        ...,
-        alias="blobBlockOffset",
-        description="Starting block offset of the model file in the blob.",
-    )
-    blob_block_length: float = Field(
-        ...,
-        alias="blobBlockLength",
-        description="Number of blocks occupied by the model file.",
-    )
-    blob_byte_offset: float = Field(
-        ...,
-        alias="blobByteOffset",
-        description="Starting byte offset of the model file within its block.",
-    )
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Unique identifier used to reference the model in SDK calls.",
-    )
-    addon: ModelRegistryGetModelResponseModelAddon = Field(
-        ...,
-        description="Inference addon / capability category this model belongs to.",
-        title="ModelRegistryGetModelResponseModelAddon",
-    )
-    expected_size: float = Field(
-        ...,
-        alias="expectedSize",
-        description="Expected total size of the model file in bytes.",
-    )
-    sha256_checksum: str = Field(
-        ...,
-        alias="sha256Checksum",
-        description="Expected SHA-256 checksum of the model file.",
-    )
-    engine: ModelRegistryGetModelResponseModelEngine = Field(
-        ...,
-        description="Canonical inference engine identifier.",
-        title="ModelRegistryGetModelResponseModelEngine",
-    )
-    quantization: str = Field(
-        ..., description="Quantization identifier, e.g. `Q4_K_M`."
-    )
-    params: str = Field(
-        ..., description="Parameter-count label for the model, e.g. `7B`."
-    )
+    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    registry_path: Annotated[
+        str,
+        Field(alias="registryPath", description="Registry-relative path to the model."),
+    ]
+    registry_source: Annotated[
+        str,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ]
+    blob_core_key: Annotated[
+        str,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ]
+    blob_block_offset: Annotated[
+        float,
+        Field(
+            alias="blobBlockOffset",
+            description="Starting block offset of the model file in the blob.",
+        ),
+    ]
+    blob_block_length: Annotated[
+        float,
+        Field(
+            alias="blobBlockLength",
+            description="Number of blocks occupied by the model file.",
+        ),
+    ]
+    blob_byte_offset: Annotated[
+        float,
+        Field(
+            alias="blobByteOffset",
+            description="Starting byte offset of the model file within its block.",
+        ),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in SDK calls.",
+        ),
+    ]
+    addon: Annotated[
+        ModelRegistryGetModelResponseModelAddon,
+        Field(
+            description="Inference addon / capability category this model belongs to.",
+            title="ModelRegistryGetModelResponseModelAddon",
+        ),
+    ]
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    engine: Annotated[
+        ModelRegistryGetModelResponseModelEngine,
+        Field(
+            description="Canonical inference engine identifier.",
+            title="ModelRegistryGetModelResponseModelEngine",
+        ),
+    ]
+    quantization: Annotated[
+        str, Field(description="Quantization identifier, e.g. `Q4_K_M`.")
+    ]
+    params: Annotated[
+        str, Field(description="Parameter-count label for the model, e.g. `7B`.")
+    ]
 
 
-class ModelRegistryGetModelResponse(BaseModel):
+class ModelRegistryGetModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["modelRegistryGetModel"]
     success: bool
-    model: ModelRegistryGetModelResponseModel | None = Field(
-        None, title="ModelRegistryGetModelResponseModel"
-    )
+    model: Annotated[
+        ModelRegistryGetModelResponseModel | None,
+        Field(title="ModelRegistryGetModelResponseModel"),
+    ] = None
     error: str | None = None
 
 
-class ModelRegistryListRequest(BaseModel):
+class ModelRegistryListRequest(GeneratedBaseModel):
     type: Literal["modelRegistryList"]
 
 
@@ -5513,73 +6374,94 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     onnx_vad = "onnx-vad"
 
 
-class ModelRegistryListResponseModelsItem(BaseModel):
+class ModelRegistryListResponseModelsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str = Field(..., description="Catalog name of the model entry.")
-    registry_path: str = Field(
-        ..., alias="registryPath", description="Registry-relative path to the model."
-    )
-    registry_source: str = Field(
-        ...,
-        alias="registrySource",
-        description="Registry source identifier, e.g. `huggingface`.",
-    )
-    blob_core_key: str = Field(
-        ...,
-        alias="blobCoreKey",
-        description="Hyperdrive blob core key for the model file.",
-    )
-    blob_block_offset: float = Field(
-        ...,
-        alias="blobBlockOffset",
-        description="Starting block offset of the model file in the blob.",
-    )
-    blob_block_length: float = Field(
-        ...,
-        alias="blobBlockLength",
-        description="Number of blocks occupied by the model file.",
-    )
-    blob_byte_offset: float = Field(
-        ...,
-        alias="blobByteOffset",
-        description="Starting byte offset of the model file within its block.",
-    )
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Unique identifier used to reference the model in SDK calls.",
-    )
-    addon: ModelRegistryListResponseModelsItemAddon = Field(
-        ...,
-        description="Inference addon / capability category this model belongs to.",
-        title="ModelRegistryListResponseModelsItemAddon",
-    )
-    expected_size: float = Field(
-        ...,
-        alias="expectedSize",
-        description="Expected total size of the model file in bytes.",
-    )
-    sha256_checksum: str = Field(
-        ...,
-        alias="sha256Checksum",
-        description="Expected SHA-256 checksum of the model file.",
-    )
-    engine: ModelRegistryListResponseModelsItemEngine = Field(
-        ...,
-        description="Canonical inference engine identifier.",
-        title="ModelRegistryListResponseModelsItemEngine",
-    )
-    quantization: str = Field(
-        ..., description="Quantization identifier, e.g. `Q4_K_M`."
-    )
-    params: str = Field(
-        ..., description="Parameter-count label for the model, e.g. `7B`."
-    )
+    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    registry_path: Annotated[
+        str,
+        Field(alias="registryPath", description="Registry-relative path to the model."),
+    ]
+    registry_source: Annotated[
+        str,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ]
+    blob_core_key: Annotated[
+        str,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ]
+    blob_block_offset: Annotated[
+        float,
+        Field(
+            alias="blobBlockOffset",
+            description="Starting block offset of the model file in the blob.",
+        ),
+    ]
+    blob_block_length: Annotated[
+        float,
+        Field(
+            alias="blobBlockLength",
+            description="Number of blocks occupied by the model file.",
+        ),
+    ]
+    blob_byte_offset: Annotated[
+        float,
+        Field(
+            alias="blobByteOffset",
+            description="Starting byte offset of the model file within its block.",
+        ),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in SDK calls.",
+        ),
+    ]
+    addon: Annotated[
+        ModelRegistryListResponseModelsItemAddon,
+        Field(
+            description="Inference addon / capability category this model belongs to.",
+            title="ModelRegistryListResponseModelsItemAddon",
+        ),
+    ]
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    engine: Annotated[
+        ModelRegistryListResponseModelsItemEngine,
+        Field(
+            description="Canonical inference engine identifier.",
+            title="ModelRegistryListResponseModelsItemEngine",
+        ),
+    ]
+    quantization: Annotated[
+        str, Field(description="Quantization identifier, e.g. `Q4_K_M`.")
+    ]
+    params: Annotated[
+        str, Field(description="Parameter-count label for the model, e.g. `7B`.")
+    ]
 
 
-class ModelRegistryListResponse(BaseModel):
+class ModelRegistryListResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5605,14 +6487,15 @@ class ModelRegistrySearchRequestAddon(Enum):
     other = "other"
 
 
-class ModelRegistrySearchRequest(BaseModel):
+class ModelRegistrySearchRequest(GeneratedBaseModel):
     type: Literal["modelRegistrySearch"]
     filter: str | None = None
     engine: str | None = None
     quantization: str | None = None
-    addon: ModelRegistrySearchRequestAddon | None = Field(
-        None, title="ModelRegistrySearchRequestAddon"
-    )
+    addon: Annotated[
+        ModelRegistrySearchRequestAddon | None,
+        Field(title="ModelRegistrySearchRequestAddon"),
+    ] = None
 
 
 class ModelRegistrySearchResponseModelsItemAddon(Enum):
@@ -5647,73 +6530,94 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     onnx_vad = "onnx-vad"
 
 
-class ModelRegistrySearchResponseModelsItem(BaseModel):
+class ModelRegistrySearchResponseModelsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: str = Field(..., description="Catalog name of the model entry.")
-    registry_path: str = Field(
-        ..., alias="registryPath", description="Registry-relative path to the model."
-    )
-    registry_source: str = Field(
-        ...,
-        alias="registrySource",
-        description="Registry source identifier, e.g. `huggingface`.",
-    )
-    blob_core_key: str = Field(
-        ...,
-        alias="blobCoreKey",
-        description="Hyperdrive blob core key for the model file.",
-    )
-    blob_block_offset: float = Field(
-        ...,
-        alias="blobBlockOffset",
-        description="Starting block offset of the model file in the blob.",
-    )
-    blob_block_length: float = Field(
-        ...,
-        alias="blobBlockLength",
-        description="Number of blocks occupied by the model file.",
-    )
-    blob_byte_offset: float = Field(
-        ...,
-        alias="blobByteOffset",
-        description="Starting byte offset of the model file within its block.",
-    )
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Unique identifier used to reference the model in SDK calls.",
-    )
-    addon: ModelRegistrySearchResponseModelsItemAddon = Field(
-        ...,
-        description="Inference addon / capability category this model belongs to.",
-        title="ModelRegistrySearchResponseModelsItemAddon",
-    )
-    expected_size: float = Field(
-        ...,
-        alias="expectedSize",
-        description="Expected total size of the model file in bytes.",
-    )
-    sha256_checksum: str = Field(
-        ...,
-        alias="sha256Checksum",
-        description="Expected SHA-256 checksum of the model file.",
-    )
-    engine: ModelRegistrySearchResponseModelsItemEngine = Field(
-        ...,
-        description="Canonical inference engine identifier.",
-        title="ModelRegistrySearchResponseModelsItemEngine",
-    )
-    quantization: str = Field(
-        ..., description="Quantization identifier, e.g. `Q4_K_M`."
-    )
-    params: str = Field(
-        ..., description="Parameter-count label for the model, e.g. `7B`."
-    )
+    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    registry_path: Annotated[
+        str,
+        Field(alias="registryPath", description="Registry-relative path to the model."),
+    ]
+    registry_source: Annotated[
+        str,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ]
+    blob_core_key: Annotated[
+        str,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ]
+    blob_block_offset: Annotated[
+        float,
+        Field(
+            alias="blobBlockOffset",
+            description="Starting block offset of the model file in the blob.",
+        ),
+    ]
+    blob_block_length: Annotated[
+        float,
+        Field(
+            alias="blobBlockLength",
+            description="Number of blocks occupied by the model file.",
+        ),
+    ]
+    blob_byte_offset: Annotated[
+        float,
+        Field(
+            alias="blobByteOffset",
+            description="Starting byte offset of the model file within its block.",
+        ),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in SDK calls.",
+        ),
+    ]
+    addon: Annotated[
+        ModelRegistrySearchResponseModelsItemAddon,
+        Field(
+            description="Inference addon / capability category this model belongs to.",
+            title="ModelRegistrySearchResponseModelsItemAddon",
+        ),
+    ]
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    engine: Annotated[
+        ModelRegistrySearchResponseModelsItemEngine,
+        Field(
+            description="Canonical inference engine identifier.",
+            title="ModelRegistrySearchResponseModelsItemEngine",
+        ),
+    ]
+    quantization: Annotated[
+        str, Field(description="Quantization identifier, e.g. `Q4_K_M`.")
+    ]
+    params: Annotated[
+        str, Field(description="Parameter-count label for the model, e.g. `7B`.")
+    ]
 
 
-class ModelRegistrySearchResponse(BaseModel):
+class ModelRegistrySearchResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5723,30 +6627,30 @@ class ModelRegistrySearchResponse(BaseModel):
     error: str | None = None
 
 
-class OcrStreamRequestImageBase64(BaseModel):
+class OcrStreamRequestImageBase64(GeneratedBaseModel):
     type: Literal["base64"]
     value: str
 
 
-class OcrStreamRequestImageFilePath(BaseModel):
+class OcrStreamRequestImageFilePath(GeneratedBaseModel):
     type: Literal["filePath"]
     value: str
 
 
-class OcrStreamRequestOptions(BaseModel):
+class OcrStreamRequestOptions(GeneratedBaseModel):
     paragraph: bool | None = None
 
 
-class OcrStreamRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class OcrStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     image: OcrStreamRequestImageBase64 | OcrStreamRequestImageFilePath
-    options: OcrStreamRequestOptions | None = Field(
-        None, title="OcrStreamRequestOptions"
-    )
+    options: Annotated[
+        OcrStreamRequestOptions | None, Field(title="OcrStreamRequestOptions")
+    ] = None
     type: Literal["ocrStream"]
 
 
-class OcrStreamResponseBlocksItem(BaseModel):
+class OcrStreamResponseBlocksItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5755,16 +6659,16 @@ class OcrStreamResponseBlocksItem(BaseModel):
     confidence: float | None = None
 
 
-class OcrStreamResponseStats(BaseModel):
+class OcrStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    detection_time: float | None = Field(None, alias="detectionTime")
-    recognition_time: float | None = Field(None, alias="recognitionTime")
-    total_time: float | None = Field(None, alias="totalTime")
+    detection_time: Annotated[float | None, Field(alias="detectionTime")] = None
+    recognition_time: Annotated[float | None, Field(alias="recognitionTime")] = None
+    total_time: Annotated[float | None, Field(alias="totalTime")] = None
 
 
-class OcrStreamResponse(BaseModel):
+class OcrStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5772,17 +6676,19 @@ class OcrStreamResponse(BaseModel):
     blocks: list[OcrStreamResponseBlocksItem] | None = None
     done: bool | None = None
     error: str | None = None
-    stats: OcrStreamResponseStats | None = Field(None, title="OcrStreamResponseStats")
+    stats: Annotated[
+        OcrStreamResponseStats | None, Field(title="OcrStreamResponseStats")
+    ] = None
 
 
-class PluginInvokeRequest(BaseModel):
+class PluginInvokeRequest(GeneratedBaseModel):
     type: Literal["pluginInvoke"]
-    model_id: str = Field(..., alias="modelId")
+    model_id: Annotated[str, Field(alias="modelId")]
     handler: str
     params: Any
 
 
-class PluginInvokeResponse(BaseModel):
+class PluginInvokeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5790,14 +6696,14 @@ class PluginInvokeResponse(BaseModel):
     result: Any
 
 
-class PluginInvokeStreamRequest(BaseModel):
+class PluginInvokeStreamRequest(GeneratedBaseModel):
     type: Literal["pluginInvokeStream"]
-    model_id: str = Field(..., alias="modelId")
+    model_id: Annotated[str, Field(alias="modelId")]
     handler: str
     params: Any
 
 
-class PluginInvokeStreamResponse(BaseModel):
+class PluginInvokeStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5811,31 +6717,31 @@ class ProvideRequestFirewallMode(Enum):
     deny = "deny"
 
 
-class ProvideRequestFirewall(BaseModel):
-    mode: ProvideRequestFirewallMode | None = Field(
-        "allow", title="ProvideRequestFirewallMode"
-    )
-    public_keys: list[str] | None = Field([], alias="publicKeys")
+class ProvideRequestFirewall(GeneratedBaseModel):
+    mode: Annotated[
+        ProvideRequestFirewallMode | None, Field(title="ProvideRequestFirewallMode")
+    ] = "allow"
+    public_keys: Annotated[list[str] | None, Field(alias="publicKeys")] = []
 
 
-class ProvideRequest(BaseModel):
+class ProvideRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    firewall: ProvideRequestFirewall | None = Field(
-        None, title="ProvideRequestFirewall"
-    )
+    firewall: Annotated[
+        ProvideRequestFirewall | None, Field(title="ProvideRequestFirewall")
+    ] = None
     type: Literal["provide"]
 
 
-class ProvideResponse(BaseModel):
+class ProvideResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["provide"]
     success: bool
     error: str | None = None
-    public_key: str | None = Field(None, alias="publicKey")
+    public_key: Annotated[str | None, Field(alias="publicKey")] = None
 
 
 class RagRequestChunkChunkOptsChunkStrategy(Enum):
@@ -5851,25 +6757,28 @@ class RagRequestChunkChunkOptsSplitStrategy(Enum):
     line = "line"
 
 
-class RagRequestChunkChunkOpts(BaseModel):
-    chunk_size: float | None = Field(None, alias="chunkSize")
-    chunk_overlap: float | None = Field(None, alias="chunkOverlap")
-    chunk_strategy: RagRequestChunkChunkOptsChunkStrategy | None = Field(
-        None, alias="chunkStrategy", title="RagRequestChunkChunkOptsChunkStrategy"
-    )
-    split_strategy: RagRequestChunkChunkOptsSplitStrategy | None = Field(
-        None, alias="splitStrategy", title="RagRequestChunkChunkOptsSplitStrategy"
-    )
+class RagRequestChunkChunkOpts(GeneratedBaseModel):
+    chunk_size: Annotated[float | None, Field(alias="chunkSize")] = None
+    chunk_overlap: Annotated[float | None, Field(alias="chunkOverlap")] = None
+    chunk_strategy: Annotated[
+        RagRequestChunkChunkOptsChunkStrategy | None,
+        Field(alias="chunkStrategy", title="RagRequestChunkChunkOptsChunkStrategy"),
+    ] = None
+    split_strategy: Annotated[
+        RagRequestChunkChunkOptsSplitStrategy | None,
+        Field(alias="splitStrategy", title="RagRequestChunkChunkOptsSplitStrategy"),
+    ] = None
 
 
-class RagRequestChunk(BaseModel):
+class RagRequestChunk(GeneratedBaseModel):
     documents: str | list[str]
-    chunk_opts: RagRequestChunkChunkOpts | None = Field(
-        None, alias="chunkOpts", title="RagRequestChunkChunkOpts"
-    )
+    chunk_opts: Annotated[
+        RagRequestChunkChunkOpts | None,
+        Field(alias="chunkOpts", title="RagRequestChunkChunkOpts"),
+    ] = None
     type: Literal["rag"]
     operation: Literal["chunk"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
 class RagRequestIngestChunkOptsChunkStrategy(Enum):
@@ -5885,113 +6794,121 @@ class RagRequestIngestChunkOptsSplitStrategy(Enum):
     line = "line"
 
 
-class RagRequestIngestChunkOpts(BaseModel):
-    chunk_size: float | None = Field(None, alias="chunkSize")
-    chunk_overlap: float | None = Field(None, alias="chunkOverlap")
-    chunk_strategy: RagRequestIngestChunkOptsChunkStrategy | None = Field(
-        None, alias="chunkStrategy", title="RagRequestIngestChunkOptsChunkStrategy"
-    )
-    split_strategy: RagRequestIngestChunkOptsSplitStrategy | None = Field(
-        None, alias="splitStrategy", title="RagRequestIngestChunkOptsSplitStrategy"
-    )
+class RagRequestIngestChunkOpts(GeneratedBaseModel):
+    chunk_size: Annotated[float | None, Field(alias="chunkSize")] = None
+    chunk_overlap: Annotated[float | None, Field(alias="chunkOverlap")] = None
+    chunk_strategy: Annotated[
+        RagRequestIngestChunkOptsChunkStrategy | None,
+        Field(alias="chunkStrategy", title="RagRequestIngestChunkOptsChunkStrategy"),
+    ] = None
+    split_strategy: Annotated[
+        RagRequestIngestChunkOptsSplitStrategy | None,
+        Field(alias="splitStrategy", title="RagRequestIngestChunkOptsSplitStrategy"),
+    ] = None
 
 
-class RagRequestIngest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class RagRequestIngest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     workspace: str | None = None
     documents: str | list[str]
     chunk: bool | None = True
-    chunk_opts: RagRequestIngestChunkOpts | None = Field(
-        None, alias="chunkOpts", title="RagRequestIngestChunkOpts"
-    )
-    progress_interval: PositiveFloat | None = Field(None, alias="progressInterval")
-    on_progress: Any | None = Field(None, alias="onProgress")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    chunk_opts: Annotated[
+        RagRequestIngestChunkOpts | None,
+        Field(alias="chunkOpts", title="RagRequestIngestChunkOpts"),
+    ] = None
+    progress_interval: Annotated[
+        float | None, Field(alias="progressInterval", gt=0.0)
+    ] = None
+    on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     type: Literal["rag"]
     operation: Literal["ingest"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
 class RagRequestSaveEmbeddingsDocumentsItemMetadata(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(
-        ..., title="RagRequestSaveEmbeddingsDocumentsItemMetadata"
-    )
+    root: Annotated[
+        dict[str, Any], Field(title="RagRequestSaveEmbeddingsDocumentsItemMetadata")
+    ]
 
 
-class RagRequestSaveEmbeddingsDocumentsItem(BaseModel):
+class RagRequestSaveEmbeddingsDocumentsItem(GeneratedBaseModel):
     id: str
     content: str
     embedding: list[float]
-    embedding_model_id: str = Field(..., alias="embeddingModelId")
-    metadata: RagRequestSaveEmbeddingsDocumentsItemMetadata | None = Field(
-        None, title="RagRequestSaveEmbeddingsDocumentsItemMetadata"
-    )
+    embedding_model_id: Annotated[str, Field(alias="embeddingModelId")]
+    metadata: Annotated[
+        RagRequestSaveEmbeddingsDocumentsItemMetadata | None,
+        Field(title="RagRequestSaveEmbeddingsDocumentsItemMetadata"),
+    ] = None
 
 
-class RagRequestSaveEmbeddings(BaseModel):
-    model_id: str | None = Field(None, alias="modelId")
+class RagRequestSaveEmbeddings(GeneratedBaseModel):
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
     workspace: str | None = None
     documents: list[RagRequestSaveEmbeddingsDocumentsItem]
-    progress_interval: PositiveFloat | None = Field(None, alias="progressInterval")
-    on_progress: Any | None = Field(None, alias="onProgress")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    progress_interval: Annotated[
+        float | None, Field(alias="progressInterval", gt=0.0)
+    ] = None
+    on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     type: Literal["rag"]
     operation: Literal["saveEmbeddings"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestSearch(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class RagRequestSearch(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     workspace: str | None = None
-    query: constr(min_length=1)
-    top_k: PositiveFloat | None = Field(5, alias="topK")
-    n: PositiveFloat | None = 3
+    query: Annotated[str, Field(min_length=1)]
+    top_k: Annotated[float | None, Field(alias="topK", gt=0.0)] = 5
+    n: Annotated[float | None, Field(gt=0.0)] = 3
     type: Literal["rag"]
     operation: Literal["search"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestDeleteEmbeddings(BaseModel):
-    model_id: str | None = Field(None, alias="modelId")
+class RagRequestDeleteEmbeddings(GeneratedBaseModel):
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
     workspace: str | None = None
-    ids: list[str] = Field(..., min_length=1)
+    ids: Annotated[list[str], Field(min_length=1)]
     type: Literal["rag"]
     operation: Literal["deleteEmbeddings"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestReindex(BaseModel):
-    model_id: str | None = Field(None, alias="modelId")
+class RagRequestReindex(GeneratedBaseModel):
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
     workspace: str | None = None
-    on_progress: Any | None = Field(None, alias="onProgress")
-    with_progress: bool | None = Field(None, alias="withProgress")
+    on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     type: Literal["rag"]
     operation: Literal["reindex"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestListWorkspaces(BaseModel):
+class RagRequestListWorkspaces(GeneratedBaseModel):
     type: Literal["rag"]
     operation: Literal["listWorkspaces"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestCloseWorkspace(BaseModel):
+class RagRequestCloseWorkspace(GeneratedBaseModel):
     workspace: str | None = None
-    delete_on_close: bool | None = Field(None, alias="deleteOnClose")
+    delete_on_close: Annotated[bool | None, Field(alias="deleteOnClose")] = None
     type: Literal["rag"]
     operation: Literal["closeWorkspace"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagRequestDeleteWorkspace(BaseModel):
-    workspace: constr(min_length=1)
+class RagRequestDeleteWorkspace(GeneratedBaseModel):
+    workspace: Annotated[str, Field(min_length=1)]
     type: Literal["rag"]
     operation: Literal["deleteWorkspace"]
-    request_id: constr(min_length=1) | None = Field(None, alias="requestId")
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
-class RagResponseChunkChunksItem(BaseModel):
+class RagResponseChunkChunksItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -5999,7 +6916,7 @@ class RagResponseChunkChunksItem(BaseModel):
     content: str
 
 
-class RagResponseChunk(BaseModel):
+class RagResponseChunk(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6015,18 +6932,19 @@ class RagResponseIngestProcessedItemStatus(Enum):
     rejected = "rejected"
 
 
-class RagResponseIngestProcessedItem(BaseModel):
+class RagResponseIngestProcessedItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    status: RagResponseIngestProcessedItemStatus = Field(
-        ..., title="RagResponseIngestProcessedItemStatus"
-    )
+    status: Annotated[
+        RagResponseIngestProcessedItemStatus,
+        Field(title="RagResponseIngestProcessedItemStatus"),
+    ]
     id: str | None = None
     error: str | None = None
 
 
-class RagResponseIngest(BaseModel):
+class RagResponseIngest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6035,7 +6953,7 @@ class RagResponseIngest(BaseModel):
     error: str | None = None
     operation: Literal["ingest"]
     processed: list[RagResponseIngestProcessedItem]
-    dropped_indices: list[float] = Field(..., alias="droppedIndices")
+    dropped_indices: Annotated[list[float], Field(alias="droppedIndices")]
 
 
 class RagResponseSaveEmbeddingsProcessedItemStatus(Enum):
@@ -6043,18 +6961,19 @@ class RagResponseSaveEmbeddingsProcessedItemStatus(Enum):
     rejected = "rejected"
 
 
-class RagResponseSaveEmbeddingsProcessedItem(BaseModel):
+class RagResponseSaveEmbeddingsProcessedItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    status: RagResponseSaveEmbeddingsProcessedItemStatus = Field(
-        ..., title="RagResponseSaveEmbeddingsProcessedItemStatus"
-    )
+    status: Annotated[
+        RagResponseSaveEmbeddingsProcessedItemStatus,
+        Field(title="RagResponseSaveEmbeddingsProcessedItemStatus"),
+    ]
     id: str | None = None
     error: str | None = None
 
 
-class RagResponseSaveEmbeddings(BaseModel):
+class RagResponseSaveEmbeddings(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6065,7 +6984,7 @@ class RagResponseSaveEmbeddings(BaseModel):
     processed: list[RagResponseSaveEmbeddingsProcessedItem]
 
 
-class RagResponseSearchResultsItem(BaseModel):
+class RagResponseSearchResultsItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6074,7 +6993,7 @@ class RagResponseSearchResultsItem(BaseModel):
     score: float
 
 
-class RagResponseSearch(BaseModel):
+class RagResponseSearch(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6085,7 +7004,7 @@ class RagResponseSearch(BaseModel):
     results: list[RagResponseSearchResultsItem]
 
 
-class RagResponseDeleteEmbeddings(BaseModel):
+class RagResponseDeleteEmbeddings(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6096,20 +7015,21 @@ class RagResponseDeleteEmbeddings(BaseModel):
 
 
 class RagResponseReindexResultDetails(RootModel[dict[str, Any]]):
-    root: dict[str, Any] = Field(..., title="RagResponseReindexResultDetails")
+    root: Annotated[dict[str, Any], Field(title="RagResponseReindexResultDetails")]
 
 
-class RagResponseReindexResult(BaseModel):
+class RagResponseReindexResult(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     reindexed: bool
-    details: RagResponseReindexResultDetails | None = Field(
-        None, title="RagResponseReindexResultDetails"
-    )
+    details: Annotated[
+        RagResponseReindexResultDetails | None,
+        Field(title="RagResponseReindexResultDetails"),
+    ] = None
 
 
-class RagResponseReindex(BaseModel):
+class RagResponseReindex(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6117,10 +7037,10 @@ class RagResponseReindex(BaseModel):
     success: bool
     error: str | None = None
     operation: Literal["reindex"]
-    result: RagResponseReindexResult = Field(..., title="RagResponseReindexResult")
+    result: Annotated[RagResponseReindexResult, Field(title="RagResponseReindexResult")]
 
 
-class RagResponseListWorkspacesWorkspacesItem(BaseModel):
+class RagResponseListWorkspacesWorkspacesItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6128,7 +7048,7 @@ class RagResponseListWorkspacesWorkspacesItem(BaseModel):
     open: bool
 
 
-class RagResponseListWorkspaces(BaseModel):
+class RagResponseListWorkspaces(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6139,7 +7059,7 @@ class RagResponseListWorkspaces(BaseModel):
     workspaces: list[RagResponseListWorkspacesWorkspacesItem]
 
 
-class RagResponseCloseWorkspace(BaseModel):
+class RagResponseCloseWorkspace(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6149,7 +7069,7 @@ class RagResponseCloseWorkspace(BaseModel):
     operation: Literal["closeWorkspace"]
 
 
-class RagResponseDeleteWorkspace(BaseModel):
+class RagResponseDeleteWorkspace(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6165,14 +7085,14 @@ class RagProgressResponseOperation(Enum):
     reindex = "reindex"
 
 
-class RagProgressResponse(BaseModel):
+class RagProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["rag:progress"]
-    operation: RagProgressResponseOperation = Field(
-        ..., title="RagProgressResponseOperation"
-    )
+    operation: Annotated[
+        RagProgressResponseOperation, Field(title="RagProgressResponseOperation")
+    ]
     workspace: str
     stage: str
     current: float
@@ -6180,18 +7100,18 @@ class RagProgressResponse(BaseModel):
     timestamp: float
 
 
-class ResumeRequest(BaseModel):
+class ResumeRequest(GeneratedBaseModel):
     type: Literal["resume"]
 
 
-class ResumeResponse(BaseModel):
+class ResumeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["resume"]
 
 
-class StateRequest(BaseModel):
+class StateRequest(GeneratedBaseModel):
     type: Literal["state"]
 
 
@@ -6202,22 +7122,22 @@ class StateResponseState(Enum):
     resuming = "resuming"
 
 
-class StateResponse(BaseModel):
+class StateResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["state"]
-    state: StateResponseState = Field(..., title="StateResponseState")
+    state: Annotated[StateResponseState, Field(title="StateResponseState")]
 
 
-class StopProvideRequest(BaseModel):
+class StopProvideRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["stopProvide"]
 
 
-class StopProvideResponse(BaseModel):
+class StopProvideResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6226,52 +7146,54 @@ class StopProvideResponse(BaseModel):
     error: str | None = None
 
 
-class SuspendRequest(BaseModel):
+class SuspendRequest(GeneratedBaseModel):
     type: Literal["suspend"]
 
 
-class SuspendResponse(BaseModel):
+class SuspendResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["suspend"]
 
 
-class TextToSpeechRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
-    input_type: str | None = Field("text", alias="inputType")
-    text: constr(min_length=1)
+class TextToSpeechRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
+    input_type: Annotated[str | None, Field(alias="inputType")] = "text"
+    text: Annotated[str, Field(min_length=1)]
     stream: bool | None = True
-    sentence_stream: bool | None = Field(False, alias="sentenceStream")
-    sentence_stream_locale: str | None = Field(None, alias="sentenceStreamLocale")
-    sentence_stream_max_chunk_scalars: PositiveFloat | None = Field(
-        None, alias="sentenceStreamMaxChunkScalars"
-    )
+    sentence_stream: Annotated[bool | None, Field(alias="sentenceStream")] = False
+    sentence_stream_locale: Annotated[
+        str | None, Field(alias="sentenceStreamLocale")
+    ] = None
+    sentence_stream_max_chunk_scalars: Annotated[
+        float | None, Field(alias="sentenceStreamMaxChunkScalars", gt=0.0)
+    ] = None
     type: Literal["textToSpeech"]
 
 
-class TextToSpeechResponseStats(BaseModel):
+class TextToSpeechResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    total_samples: float | None = Field(None, alias="totalSamples")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
 
 
-class TextToSpeechResponse(BaseModel):
+class TextToSpeechResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["textToSpeech"]
     buffer: list[float]
     done: bool
-    stats: TextToSpeechResponseStats | None = Field(
-        None, title="TextToSpeechResponseStats"
-    )
-    chunk_index: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="chunkIndex"
-    )
-    sentence_chunk: str | None = Field(None, alias="sentenceChunk")
+    stats: Annotated[
+        TextToSpeechResponseStats | None, Field(title="TextToSpeechResponseStats")
+    ] = None
+    chunk_index: Annotated[
+        int | None, Field(alias="chunkIndex", ge=0, le=9007199254740991)
+    ] = None
+    sentence_chunk: Annotated[str | None, Field(alias="sentenceChunk")] = None
 
 
 class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
@@ -6280,104 +7202,117 @@ class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
     multilingual = "multilingual"
 
 
-class TextToSpeechStreamRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
-    input_type: str | None = Field("text", alias="inputType")
-    accumulate_sentences: bool | None = Field(None, alias="accumulateSentences")
-    sentence_delimiter_preset: (
-        TextToSpeechStreamRequestSentenceDelimiterPreset | None
-    ) = Field(
-        None,
-        alias="sentenceDelimiterPreset",
-        title="TextToSpeechStreamRequestSentenceDelimiterPreset",
+class TextToSpeechStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
+    input_type: Annotated[str | None, Field(alias="inputType")] = "text"
+    accumulate_sentences: Annotated[bool | None, Field(alias="accumulateSentences")] = (
+        None
     )
-    max_buffer_scalars: PositiveFloat | None = Field(None, alias="maxBufferScalars")
-    flush_after_ms: PositiveFloat | None = Field(None, alias="flushAfterMs")
+    sentence_delimiter_preset: Annotated[
+        TextToSpeechStreamRequestSentenceDelimiterPreset | None,
+        Field(
+            alias="sentenceDelimiterPreset",
+            title="TextToSpeechStreamRequestSentenceDelimiterPreset",
+        ),
+    ] = None
+    max_buffer_scalars: Annotated[
+        float | None, Field(alias="maxBufferScalars", gt=0.0)
+    ] = None
+    flush_after_ms: Annotated[float | None, Field(alias="flushAfterMs", gt=0.0)] = None
     type: Literal["textToSpeechStream"]
 
 
-class TextToSpeechStreamResponseStats(BaseModel):
+class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    total_samples: float | None = Field(None, alias="totalSamples")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
 
 
-class TextToSpeechStreamResponse(BaseModel):
+class TextToSpeechStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["textToSpeechStream"]
     buffer: list[float]
     done: bool
-    stats: TextToSpeechStreamResponseStats | None = Field(
-        None, title="TextToSpeechStreamResponseStats"
-    )
-    chunk_index: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="chunkIndex"
-    )
-    sentence_chunk: str | None = Field(None, alias="sentenceChunk")
+    stats: Annotated[
+        TextToSpeechStreamResponseStats | None,
+        Field(title="TextToSpeechStreamResponseStats"),
+    ] = None
+    chunk_index: Annotated[
+        int | None, Field(alias="chunkIndex", ge=0, le=9007199254740991)
+    ] = None
+    sentence_chunk: Annotated[str | None, Field(alias="sentenceChunk")] = None
 
 
-class TranscribeRequestAudioChunkBase64(BaseModel):
+class TranscribeRequestAudioChunkBase64(GeneratedBaseModel):
     type: Literal["base64"]
     value: str
 
 
-class TranscribeRequestAudioChunkFilePath(BaseModel):
+class TranscribeRequestAudioChunkFilePath(GeneratedBaseModel):
     type: Literal["filePath"]
     value: str
 
 
-class TranscribeRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class TranscribeRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     prompt: str | None = None
     metadata: bool | None = None
-    audio_chunk: (
-        TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath
-    ) = Field(..., alias="audioChunk")
+    audio_chunk: Annotated[
+        TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath,
+        Field(alias="audioChunk"),
+    ]
     type: Literal["transcribe"]
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class TranscribeResponseStats(BaseModel):
+class TranscribeResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    real_time_factor: float | None = Field(None, alias="realTimeFactor")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    total_tokens: float | None = Field(None, alias="totalTokens")
-    total_segments: float | None = Field(None, alias="totalSegments")
-    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
-    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
-    encoder_time: float | None = Field(None, alias="encoderTime")
-    decoder_time: float | None = Field(None, alias="decoderTime")
-    mel_spec_time: float | None = Field(None, alias="melSpecTime")
-    backend_device: float | None = Field(None, alias="backendDevice")
-    backend_id: float | None = Field(None, alias="backendId")
-    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
-    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
-    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    total_tokens: Annotated[float | None, Field(alias="totalTokens")] = None
+    total_segments: Annotated[float | None, Field(alias="totalSegments")] = None
+    whisper_encode_time: Annotated[float | None, Field(alias="whisperEncodeTime")] = (
+        None
+    )
+    whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
+        None
+    )
+    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
+    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
+    gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
+    gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
 
 
-class TranscribeResponseSegment(BaseModel):
+class TranscribeResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias="startMs")
-    end_ms: float = Field(..., alias="endMs")
+    start_ms: Annotated[float, Field(alias="startMs")]
+    end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
 
 
-class TranscribeResponseVad(BaseModel):
+class TranscribeResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6385,129 +7320,149 @@ class TranscribeResponseVad(BaseModel):
     probability: float
 
 
-class TranscribeResponseEndOfTurnWhisper(BaseModel):
+class TranscribeResponseEndOfTurnWhisper(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     source: Literal["whisper"]
-    silence_duration_ms: float = Field(..., alias="silenceDurationMs")
+    silence_duration_ms: Annotated[float, Field(alias="silenceDurationMs")]
 
 
-class TranscribeResponseEndOfTurnParakeet(BaseModel):
+class TranscribeResponseEndOfTurnParakeet(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     source: Literal["parakeet"]
 
 
-class TranscribeResponse(BaseModel):
+class TranscribeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
-    stats: TranscribeResponseStats | None = Field(None, title="TranscribeResponseStats")
+    stats: Annotated[
+        TranscribeResponseStats | None, Field(title="TranscribeResponseStats")
+    ] = None
     error: str | None = None
-    segment: TranscribeResponseSegment | None = Field(
-        None, title="TranscribeResponseSegment"
-    )
-    vad: TranscribeResponseVad | None = Field(None, title="TranscribeResponseVad")
-    end_of_turn: (
-        TranscribeResponseEndOfTurnWhisper | TranscribeResponseEndOfTurnParakeet | None
-    ) = Field(None, alias="endOfTurn")
+    segment: Annotated[
+        TranscribeResponseSegment | None, Field(title="TranscribeResponseSegment")
+    ] = None
+    vad: Annotated[
+        TranscribeResponseVad | None, Field(title="TranscribeResponseVad")
+    ] = None
+    end_of_turn: Annotated[
+        TranscribeResponseEndOfTurnWhisper | TranscribeResponseEndOfTurnParakeet | None,
+        Field(alias="endOfTurn"),
+    ] = None
     type: Literal["transcribe"]
 
 
-class TranscribeStreamRequestParakeetStreamingConfig(BaseModel):
-    chunk_ms: conint(le=9007199254740991, gt=0) | None = Field(None, alias="chunkMs")
-    history_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="historyMs"
-    )
-    left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="leftContextMs"
-    )
-    right_lookahead_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="rightLookaheadMs"
-    )
-    emit_partials: bool | None = Field(None, alias="emitPartials")
-    emit_energy_vad: bool | None = Field(None, alias="emitEnergyVad")
-    spk_cache_enable: bool | None = Field(None, alias="spkCacheEnable")
-    spk_cache_len: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="spkCacheLen"
-    )
-    fifo_len: conint(le=9007199254740991, gt=0) | None = Field(None, alias="fifoLen")
-    chunk_left_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="chunkLeftContextMs"
-    )
-    chunk_right_context_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None, alias="chunkRightContextMs"
-    )
-    spk_cache_update_period: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="spkCacheUpdatePeriod"
-    )
+class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
+    chunk_ms: Annotated[
+        int | None, Field(alias="chunkMs", gt=0, le=9007199254740991)
+    ] = None
+    history_ms: Annotated[
+        int | None, Field(alias="historyMs", gt=0, le=9007199254740991)
+    ] = None
+    left_context_ms: Annotated[
+        int | None, Field(alias="leftContextMs", ge=0, le=9007199254740991)
+    ] = None
+    right_lookahead_ms: Annotated[
+        int | None, Field(alias="rightLookaheadMs", ge=0, le=9007199254740991)
+    ] = None
+    emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
+    emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    spk_cache_enable: Annotated[bool | None, Field(alias="spkCacheEnable")] = None
+    spk_cache_len: Annotated[
+        int | None, Field(alias="spkCacheLen", gt=0, le=9007199254740991)
+    ] = None
+    fifo_len: Annotated[
+        int | None, Field(alias="fifoLen", gt=0, le=9007199254740991)
+    ] = None
+    chunk_left_context_ms: Annotated[
+        int | None, Field(alias="chunkLeftContextMs", ge=0, le=9007199254740991)
+    ] = None
+    chunk_right_context_ms: Annotated[
+        int | None, Field(alias="chunkRightContextMs", ge=0, le=9007199254740991)
+    ] = None
+    spk_cache_update_period: Annotated[
+        int | None, Field(alias="spkCacheUpdatePeriod", gt=0, le=9007199254740991)
+    ] = None
 
 
-class TranscribeStreamRequest(BaseModel):
-    model_id: str = Field(..., alias="modelId")
+class TranscribeStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[str, Field(alias="modelId")]
     prompt: str | None = None
     metadata: bool | None = None
     type: Literal["transcribeStream"]
-    emit_vad_events: bool | None = Field(None, alias="emitVadEvents")
-    end_of_turn_silence_ms: conint(ge=0, le=9007199254740991) | None = Field(
-        None,
-        alias="endOfTurnSilenceMs",
-        description="Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.",
-    )
-    vad_run_interval_ms: conint(le=9007199254740991, gt=0) | None = Field(
-        None, alias="vadRunIntervalMs"
-    )
-    parakeet_streaming_config: TranscribeStreamRequestParakeetStreamingConfig | None = (
+    emit_vad_events: Annotated[bool | None, Field(alias="emitVadEvents")] = None
+    end_of_turn_silence_ms: Annotated[
+        int | None,
         Field(
-            None,
+            alias="endOfTurnSilenceMs",
+            description="Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    vad_run_interval_ms: Annotated[
+        int | None, Field(alias="vadRunIntervalMs", gt=0, le=9007199254740991)
+    ] = None
+    parakeet_streaming_config: Annotated[
+        TranscribeStreamRequestParakeetStreamingConfig | None,
+        Field(
             alias="parakeetStreamingConfig",
             title="TranscribeStreamRequestParakeetStreamingConfig",
-        )
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight duplex transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight duplex transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class TranscribeStreamResponseStats(BaseModel):
+class TranscribeStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    audio_duration: float | None = Field(None, alias="audioDuration")
-    real_time_factor: float | None = Field(None, alias="realTimeFactor")
-    tokens_per_second: float | None = Field(None, alias="tokensPerSecond")
-    total_tokens: float | None = Field(None, alias="totalTokens")
-    total_segments: float | None = Field(None, alias="totalSegments")
-    whisper_encode_time: float | None = Field(None, alias="whisperEncodeTime")
-    whisper_decode_time: float | None = Field(None, alias="whisperDecodeTime")
-    encoder_time: float | None = Field(None, alias="encoderTime")
-    decoder_time: float | None = Field(None, alias="decoderTime")
-    mel_spec_time: float | None = Field(None, alias="melSpecTime")
-    backend_device: float | None = Field(None, alias="backendDevice")
-    backend_id: float | None = Field(None, alias="backendId")
-    gpu_unsupported: float | None = Field(None, alias="gpuUnsupported")
-    gpu_mem_total_mb: float | None = Field(None, alias="gpuMemTotalMb")
-    gpu_mem_free_mb: float | None = Field(None, alias="gpuMemFreeMb")
+    audio_duration: Annotated[float | None, Field(alias="audioDuration")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    total_tokens: Annotated[float | None, Field(alias="totalTokens")] = None
+    total_segments: Annotated[float | None, Field(alias="totalSegments")] = None
+    whisper_encode_time: Annotated[float | None, Field(alias="whisperEncodeTime")] = (
+        None
+    )
+    whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
+        None
+    )
+    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
+    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
+    gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
+    gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
 
 
-class TranscribeStreamResponseSegment(BaseModel):
+class TranscribeStreamResponseSegment(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str
-    start_ms: float = Field(..., alias="startMs")
-    end_ms: float = Field(..., alias="endMs")
+    start_ms: Annotated[float, Field(alias="startMs")]
+    end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
 
 
-class TranscribeStreamResponseVad(BaseModel):
+class TranscribeStreamResponseVad(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -6515,43 +7470,70 @@ class TranscribeStreamResponseVad(BaseModel):
     probability: float
 
 
-class TranscribeStreamResponseEndOfTurnWhisper(BaseModel):
+class TranscribeStreamResponseEndOfTurnWhisper(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     source: Literal["whisper"]
-    silence_duration_ms: float = Field(..., alias="silenceDurationMs")
+    silence_duration_ms: Annotated[float, Field(alias="silenceDurationMs")]
 
 
-class TranscribeStreamResponseEndOfTurnParakeet(BaseModel):
+class TranscribeStreamResponseEndOfTurnParakeet(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     source: Literal["parakeet"]
 
 
-class TranscribeStreamResponse(BaseModel):
+class TranscribeStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     text: str | None = None
     done: bool | None = None
-    stats: TranscribeStreamResponseStats | None = Field(
-        None, title="TranscribeStreamResponseStats"
-    )
+    stats: Annotated[
+        TranscribeStreamResponseStats | None,
+        Field(title="TranscribeStreamResponseStats"),
+    ] = None
     error: str | None = None
-    segment: TranscribeStreamResponseSegment | None = Field(
-        None, title="TranscribeStreamResponseSegment"
-    )
-    vad: TranscribeStreamResponseVad | None = Field(
-        None, title="TranscribeStreamResponseVad"
-    )
-    end_of_turn: (
+    segment: Annotated[
+        TranscribeStreamResponseSegment | None,
+        Field(title="TranscribeStreamResponseSegment"),
+    ] = None
+    vad: Annotated[
+        TranscribeStreamResponseVad | None, Field(title="TranscribeStreamResponseVad")
+    ] = None
+    end_of_turn: Annotated[
         TranscribeStreamResponseEndOfTurnWhisper
         | TranscribeStreamResponseEndOfTurnParakeet
-        | None
-    ) = Field(None, alias="endOfTurn")
+        | None,
+        Field(alias="endOfTurn"),
+    ] = None
     type: Literal["transcribeStream"]
+
+
+class Text2(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.",
+            min_length=1,
+        ),
+    ]
+
+
+class Text3Item(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class Text3(RootModel[list[Text3Item]]):
+    root: Annotated[
+        list[Text3Item],
+        Field(
+            description="The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.",
+            min_length=1,
+        ),
+    ]
 
 
 class TranslateNmtRequestModelType(Enum):
@@ -6559,32 +7541,43 @@ class TranslateNmtRequestModelType(Enum):
     nmtcpp_translation = "nmtcpp-translation"
 
 
-class TranslateNmtRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the NMT translation model to use.",
-    )
-    text: constr(min_length=1) | list[TextItem] = Field(
-        ...,
-        description="The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.",
-    )
-    stream: bool = Field(
-        ...,
-        description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
-    )
-    model_type: TranslateNmtRequestModelType = Field(
-        ...,
-        alias="modelType",
-        description="NMT model-type variant identifier.",
-        title="TranslateNmtRequestModelType",
-    )
+class TranslateNmtRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the NMT translation model to use.",
+        ),
+    ]
+    text: Annotated[
+        Text2 | Text3,
+        Field(
+            description="The input text(s) to translate. A single string returns a single translation; an array returns one translation per input."
+        ),
+    ]
+    stream: Annotated[
+        bool,
+        Field(
+            description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`)."
+        ),
+    ]
+    model_type: Annotated[
+        TranslateNmtRequestModelType,
+        Field(
+            alias="modelType",
+            description="NMT model-type variant identifier.",
+            title="TranslateNmtRequestModelType",
+        ),
+    ]
     type: Literal["translate"]
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
 class TranslateLlmRequestModelType(Enum):
@@ -6592,120 +7585,160 @@ class TranslateLlmRequestModelType(Enum):
     llamacpp_completion = "llamacpp-completion"
 
 
-class TranslateLlmRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the LLM model used for translation.",
-    )
-    text: constr(min_length=1) = Field(..., description="The input text to translate.")
-    stream: bool = Field(
-        ...,
-        description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
-    )
-    model_type: TranslateLlmRequestModelType = Field(
-        ...,
-        alias="modelType",
-        description="LLM model-type variant identifier.",
-        title="TranslateLlmRequestModelType",
-    )
-    from_: str | None = Field(
-        None,
-        alias="from",
-        description="Source language code. When omitted, the SDK attempts to auto-detect the source language.",
-    )
-    to: str = Field(..., description="Target language code.")
-    context: str | None = Field(
-        None,
-        description="Optional translation context passed to the LLM as a system hint.",
-    )
+class TranslateLlmRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the LLM model used for translation.",
+        ),
+    ]
+    text: Annotated[
+        str, Field(description="The input text to translate.", min_length=1)
+    ]
+    stream: Annotated[
+        bool,
+        Field(
+            description="Whether to stream tokens (`true`) or resolve the complete translation once (`false`)."
+        ),
+    ]
+    model_type: Annotated[
+        TranslateLlmRequestModelType,
+        Field(
+            alias="modelType",
+            description="LLM model-type variant identifier.",
+            title="TranslateLlmRequestModelType",
+        ),
+    ]
+    from_: Annotated[
+        str | None,
+        Field(
+            alias="from",
+            description="Source language code. When omitted, the SDK attempts to auto-detect the source language.",
+        ),
+    ] = None
+    to: Annotated[str, Field(description="Target language code.")]
+    context: Annotated[
+        str | None,
+        Field(
+            description="Optional translation context passed to the LLM as a system hint."
+        ),
+    ] = None
     type: Literal["translate"]
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
 
 
-class TranslateResponseStats(BaseModel):
+class TranslateResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    total_time: float | None = Field(
-        None, alias="totalTime", description="Total translation time in milliseconds."
-    )
-    total_tokens: float | None = Field(
-        None,
-        alias="totalTokens",
-        description="Total tokens produced by the translation.",
-    )
-    tokens_per_second: float | None = Field(
-        None, alias="tokensPerSecond", description="Tokens generated per second."
-    )
-    time_to_first_token: float | None = Field(
-        None,
-        alias="timeToFirstToken",
-        description="Time to first token in milliseconds (LLM translation only).",
-    )
-    decode_time: float | None = Field(
-        None,
-        alias="decodeTime",
-        description="Time spent in the NMT decoder in milliseconds.",
-    )
-    encode_time: float | None = Field(
-        None,
-        alias="encodeTime",
-        description="Time spent in the NMT encoder in milliseconds.",
-    )
-    cache_tokens: float | None = Field(
-        None,
-        alias="cacheTokens",
-        description="Tokens served from the KV cache during LLM translation.",
-    )
+    total_time: Annotated[
+        float | None,
+        Field(alias="totalTime", description="Total translation time in milliseconds."),
+    ] = None
+    total_tokens: Annotated[
+        float | None,
+        Field(
+            alias="totalTokens", description="Total tokens produced by the translation."
+        ),
+    ] = None
+    tokens_per_second: Annotated[
+        float | None,
+        Field(alias="tokensPerSecond", description="Tokens generated per second."),
+    ] = None
+    time_to_first_token: Annotated[
+        float | None,
+        Field(
+            alias="timeToFirstToken",
+            description="Time to first token in milliseconds (LLM translation only).",
+        ),
+    ] = None
+    decode_time: Annotated[
+        float | None,
+        Field(
+            alias="decodeTime",
+            description="Time spent in the NMT decoder in milliseconds.",
+        ),
+    ] = None
+    encode_time: Annotated[
+        float | None,
+        Field(
+            alias="encodeTime",
+            description="Time spent in the NMT encoder in milliseconds.",
+        ),
+    ] = None
+    cache_tokens: Annotated[
+        float | None,
+        Field(
+            alias="cacheTokens",
+            description="Tokens served from the KV cache during LLM translation.",
+        ),
+    ] = None
 
 
-class TranslateResponse(BaseModel):
+class TranslateResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["translate"]
     token: str
     done: bool | None = None
-    stats: TranslateResponseStats | None = Field(None, title="TranslateResponseStats")
+    stats: Annotated[
+        TranslateResponseStats | None, Field(title="TranslateResponseStats")
+    ] = None
     error: str | None = None
 
 
-class UnloadModelRequest(BaseModel):
+class UnloadModelRequest(GeneratedBaseModel):
     type: Literal["unloadModel"]
-    model_id: str = Field(..., alias="modelId")
-    clear_storage: bool | None = Field(False, alias="clearStorage")
+    model_id: Annotated[str, Field(alias="modelId")]
+    clear_storage: Annotated[bool | None, Field(alias="clearStorage")] = False
 
 
-class UnloadModelResponse(BaseModel):
+class UnloadModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["unloadModel"]
     success: bool
     error: str | None = None
-    has_active_models: bool | None = Field(None, alias="hasActiveModels")
-    has_active_providers: bool | None = Field(None, alias="hasActiveProviders")
+    has_active_models: Annotated[bool | None, Field(alias="hasActiveModels")] = None
+    has_active_providers: Annotated[bool | None, Field(alias="hasActiveProviders")] = (
+        None
+    )
 
 
-class UpscaleStreamRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="Identifier of the loaded upscaler model. The model must have been loaded with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`.",
-    )
-    image: constr(
-        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-        min_length=1,
-    ) = Field(..., description="Base64-encoded PNG/JPEG bytes of the source image.")
-    repeats: conint(le=9007199254740991, gt=0) | None = Field(
-        None,
-        description="Number of ESRGAN passes to run sequentially. Each pass multiplies dimensions by the model's native scale factor; only the final image is emitted (`outputs.length === 1`). Defaults to 1.",
-    )
+class UpscaleStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier of the loaded upscaler model. The model must have been loaded with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`.",
+        ),
+    ]
+    image: Annotated[
+        str,
+        Field(
+            description="Base64-encoded PNG/JPEG bytes of the source image.",
+            min_length=1,
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ]
+    repeats: Annotated[
+        int | None,
+        Field(
+            description="Number of ESRGAN passes to run sequentially. Each pass multiplies dimensions by the model's native scale factor; only the final image is emitted (`outputs.length === 1`). Defaults to 1.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
     type: Literal["upscaleStream"]
 
 
@@ -6714,69 +7747,86 @@ class UpscaleStreamResponseStatsBackendDevice(Enum):
     gpu = "gpu"
 
 
-class UpscaleStreamResponseStats(BaseModel):
+class UpscaleStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_load_ms: float | None = Field(
-        None,
-        alias="modelLoadMs",
-        description="Wall-clock time in milliseconds spent loading the upscaler model.",
-    )
-    upscale_ms: float | None = Field(
-        None,
-        alias="upscaleMs",
-        description="Wall-clock time in milliseconds for the most recent upscale job.",
-    )
-    total_upscale_ms: float | None = Field(
-        None,
-        alias="totalUpscaleMs",
-        description="Cumulative upscale time in milliseconds across all jobs.",
-    )
-    total_wall_ms: float | None = Field(
-        None,
-        alias="totalWallMs",
-        description="Total wall-clock time in milliseconds including model load and upscaling.",
-    )
-    total_upscales: float | None = Field(
-        None, alias="totalUpscales", description="Cumulative number of upscale calls."
-    )
-    total_images: float | None = Field(
-        None, alias="totalImages", description="Cumulative number of images produced."
-    )
-    total_pixels: float | None = Field(
-        None,
-        alias="totalPixels",
-        description="Cumulative number of pixels produced across all images.",
-    )
-    width: float | None = Field(
-        None, description="Width of the most recent emitted PNG."
-    )
-    height: float | None = Field(
-        None, description="Height of the most recent emitted PNG."
-    )
-    repeats: float | None = Field(
-        None, description="Number of ESRGAN passes used by the most recent upscale job."
-    )
-    backend_device: UpscaleStreamResponseStatsBackendDevice | None = Field(
-        None,
-        alias="backendDevice",
-        description="Actual compute device used by the ESRGAN upscaler. Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` falls back to `cpu` because the mobile GPU/OpenCL path is unstable).",
-        title="UpscaleStreamResponseStatsBackendDevice",
-    )
+    model_load_ms: Annotated[
+        float | None,
+        Field(
+            alias="modelLoadMs",
+            description="Wall-clock time in milliseconds spent loading the upscaler model.",
+        ),
+    ] = None
+    upscale_ms: Annotated[
+        float | None,
+        Field(
+            alias="upscaleMs",
+            description="Wall-clock time in milliseconds for the most recent upscale job.",
+        ),
+    ] = None
+    total_upscale_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalUpscaleMs",
+            description="Cumulative upscale time in milliseconds across all jobs.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Total wall-clock time in milliseconds including model load and upscaling.",
+        ),
+    ] = None
+    total_upscales: Annotated[
+        float | None,
+        Field(alias="totalUpscales", description="Cumulative number of upscale calls."),
+    ] = None
+    total_images: Annotated[
+        float | None,
+        Field(alias="totalImages", description="Cumulative number of images produced."),
+    ] = None
+    total_pixels: Annotated[
+        float | None,
+        Field(
+            alias="totalPixels",
+            description="Cumulative number of pixels produced across all images.",
+        ),
+    ] = None
+    width: Annotated[
+        float | None, Field(description="Width of the most recent emitted PNG.")
+    ] = None
+    height: Annotated[
+        float | None, Field(description="Height of the most recent emitted PNG.")
+    ] = None
+    repeats: Annotated[
+        float | None,
+        Field(
+            description="Number of ESRGAN passes used by the most recent upscale job."
+        ),
+    ] = None
+    backend_device: Annotated[
+        UpscaleStreamResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            description="Actual compute device used by the ESRGAN upscaler. Reflects the backend stable-diffusion.cpp selected (e.g. Android `gpu` falls back to `cpu` because the mobile GPU/OpenCL path is unstable).",
+            title="UpscaleStreamResponseStatsBackendDevice",
+        ),
+    ] = None
 
 
-class UpscaleStreamResponse(BaseModel):
+class UpscaleStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["upscaleStream"]
     data: str | None = None
-    output_index: float | None = Field(None, alias="outputIndex")
+    output_index: Annotated[float | None, Field(alias="outputIndex")] = None
     done: bool | None = None
-    stats: UpscaleStreamResponseStats | None = Field(
-        None, title="UpscaleStreamResponseStats"
-    )
+    stats: Annotated[
+        UpscaleStreamResponseStats | None, Field(title="UpscaleStreamResponseStats")
+    ] = None
 
 
 class VideoStreamRequestSamplingMethod(Enum):
@@ -6841,18 +7891,22 @@ class VideoStreamRequestHighNoiseScheduler(Enum):
     bong_tangent = "bong_tangent"
 
 
-class ControlFrame(
-    RootModel[
-        constr(
-            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+class ControlFrame(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
             min_length=1,
-        )
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
     ]
-):
-    root: constr(
-        pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-        min_length=1,
-    )
+
+
+class VaeTileSize(RootModel[float]):
+    root: Annotated[float, Field(description="VAE tile size override.", gt=0.0)]
+
+
+class VaeTileSize1(RootModel[str]):
+    root: Annotated[str, Field(description="VAE tile size override.", min_length=1)]
 
 
 class VideoStreamRequestCacheMode(Enum):
@@ -6869,252 +7923,352 @@ class VideoStreamRequestMode(Enum):
     img2vid = "img2vid"
 
 
-class VideoStreamRequest(BaseModel):
-    model_id: str = Field(
-        ...,
-        alias="modelId",
-        description="The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices.",
-    )
-    request_id: constr(min_length=1) | None = Field(
-        None,
-        alias="requestId",
-        description="Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
-    )
-    prompt: str = Field(
-        ..., description="Positive prompt describing the video to generate."
-    )
-    negative_prompt: str | None = Field(
-        None, description="Optional negative prompt describing what to avoid."
-    )
-    width: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
-        None,
-        description="Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
-    )
-    height: conint(le=9007199254740991, multiple_of=16, gt=0) | None = Field(
-        None,
-        description="Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
-    )
-    video_frames: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None,
-        description="Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
-    )
-    fps: confloat(le=120.0, gt=0.0) | None = Field(
-        None,
-        description="AVI framerate metadata in frames per second; must be in (0, 120].",
-    )
-    seed: conint(ge=-9007199254740991, le=9007199254740991) | None = Field(
-        None,
-        description="Random seed; when omitted the SDK picks one and returns it in stats.",
-    )
-    steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description="Low-noise or single-expert denoising step count."
-    )
-    sampling_method: VideoStreamRequestSamplingMethod | None = Field(
-        None,
-        description="Sampling algorithm used by the low-noise diffusion scheduler.",
-        title="VideoStreamRequestSamplingMethod",
-    )
-    scheduler: VideoStreamRequestScheduler | None = Field(
-        None,
-        description="Noise schedule to apply for the low-noise diffusion path.",
-        title="VideoStreamRequestScheduler",
-    )
-    cfg_scale: float | None = Field(None, description="Classifier-free guidance scale.")
-    flow_shift: float | None = Field(
-        None, description="Per-request flow-matching guidance shift override."
-    )
-    high_noise_steps: conint(le=9007199254740991, gt=0) | None = Field(
-        None, description="Wan 2.2 high-noise expert step count."
-    )
-    high_noise_sampler: VideoStreamRequestHighNoiseSampler | None = Field(
-        None,
-        description="Wan 2.2 high-noise expert sampler.",
-        title="VideoStreamRequestHighNoiseSampler",
-    )
-    high_noise_scheduler: VideoStreamRequestHighNoiseScheduler | None = Field(
-        None,
-        description="Wan 2.2 high-noise expert scheduler.",
-        title="VideoStreamRequestHighNoiseScheduler",
-    )
-    high_noise_cfg_scale: float | None = Field(
-        None, description="Wan 2.2 high-noise expert CFG scale."
-    )
-    high_noise_flow_shift: float | None = Field(
-        None, description="Wan 2.2 high-noise expert flow shift override."
-    )
-    moe_boundary: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description="Wan 2.2 mixture-of-experts boundary in [0, 1]."
-    )
-    vace_strength: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description="Control-frame guidance strength."
-    )
-    control_frames: list[ControlFrame] | None = Field(
-        None,
-        description="Optional array of base64-encoded control-frame images.",
-        min_length=1,
-    )
-    vae_tiling: bool | None = Field(
-        None, description="Enable VAE tiling for large videos on constrained VRAM."
-    )
-    vae_tile_size: PositiveFloat | constr(min_length=1) | None = Field(
-        None, description="VAE tile size override."
-    )
-    vae_tile_overlap: float | None = Field(
-        None, description="VAE tile overlap override."
-    )
-    temporal_tiling: bool | None = Field(
-        None,
-        description="LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE).",
-    )
-    cache_mode: VideoStreamRequestCacheMode | None = Field(
-        None, description="Step-caching algorithm.", title="VideoStreamRequestCacheMode"
-    )
-    cache_preset: str | None = Field(
-        None, description="Optional name of a cached sampler preset to reuse."
-    )
-    cache_threshold: float | None = Field(
-        None, description="Direct cache reuse threshold override."
-    )
-    mode: VideoStreamRequestMode = Field(
-        ...,
-        description="Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
-        title="VideoStreamRequestMode",
-    )
-    init_image: (
-        constr(
-            pattern=r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+class VideoStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices.",
+        ),
+    ]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
             min_length=1,
-        )
-        | None
-    ) = Field(
-        None,
-        description="Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
-    )
-    strength: confloat(ge=0.0, le=1.0) | None = Field(
-        None, description="img2vid denoise strength in [0, 1]; rejected for txt2vid."
-    )
+        ),
+    ] = None
+    prompt: Annotated[
+        str, Field(description="Positive prompt describing the video to generate.")
+    ]
+    negative_prompt: Annotated[
+        str | None,
+        Field(description="Optional negative prompt describing what to avoid."),
+    ] = None
+    width: Annotated[
+        int | None,
+        Field(
+            description="Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=16,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=16,
+        ),
+    ] = None
+    video_frames: Annotated[
+        int | None,
+        Field(
+            description="Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    fps: Annotated[
+        float | None,
+        Field(
+            description="AVI framerate metadata in frames per second; must be in (0, 120].",
+            gt=0.0,
+            le=120.0,
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Random seed; when omitted the SDK picks one and returns it in stats.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    steps: Annotated[
+        int | None,
+        Field(
+            description="Low-noise or single-expert denoising step count.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    sampling_method: Annotated[
+        VideoStreamRequestSamplingMethod | None,
+        Field(
+            description="Sampling algorithm used by the low-noise diffusion scheduler.",
+            title="VideoStreamRequestSamplingMethod",
+        ),
+    ] = None
+    scheduler: Annotated[
+        VideoStreamRequestScheduler | None,
+        Field(
+            description="Noise schedule to apply for the low-noise diffusion path.",
+            title="VideoStreamRequestScheduler",
+        ),
+    ] = None
+    cfg_scale: Annotated[
+        float | None, Field(description="Classifier-free guidance scale.")
+    ] = None
+    flow_shift: Annotated[
+        float | None,
+        Field(description="Per-request flow-matching guidance shift override."),
+    ] = None
+    high_noise_steps: Annotated[
+        int | None,
+        Field(
+            description="Wan 2.2 high-noise expert step count.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    high_noise_sampler: Annotated[
+        VideoStreamRequestHighNoiseSampler | None,
+        Field(
+            description="Wan 2.2 high-noise expert sampler.",
+            title="VideoStreamRequestHighNoiseSampler",
+        ),
+    ] = None
+    high_noise_scheduler: Annotated[
+        VideoStreamRequestHighNoiseScheduler | None,
+        Field(
+            description="Wan 2.2 high-noise expert scheduler.",
+            title="VideoStreamRequestHighNoiseScheduler",
+        ),
+    ] = None
+    high_noise_cfg_scale: Annotated[
+        float | None, Field(description="Wan 2.2 high-noise expert CFG scale.")
+    ] = None
+    high_noise_flow_shift: Annotated[
+        float | None,
+        Field(description="Wan 2.2 high-noise expert flow shift override."),
+    ] = None
+    moe_boundary: Annotated[
+        float | None,
+        Field(
+            description="Wan 2.2 mixture-of-experts boundary in [0, 1].", ge=0.0, le=1.0
+        ),
+    ] = None
+    vace_strength: Annotated[
+        float | None,
+        Field(description="Control-frame guidance strength.", ge=0.0, le=1.0),
+    ] = None
+    control_frames: Annotated[
+        list[ControlFrame] | None,
+        Field(
+            description="Optional array of base64-encoded control-frame images.",
+            min_length=1,
+        ),
+    ] = None
+    vae_tiling: Annotated[
+        bool | None,
+        Field(description="Enable VAE tiling for large videos on constrained VRAM."),
+    ] = None
+    vae_tile_size: Annotated[
+        VaeTileSize | VaeTileSize1 | None, Field(description="VAE tile size override.")
+    ] = None
+    vae_tile_overlap: Annotated[
+        float | None, Field(description="VAE tile overlap override.")
+    ] = None
+    temporal_tiling: Annotated[
+        bool | None,
+        Field(
+            description="LTX-2 only: tile the video VAE decode along the time axis to cap peak VRAM for HD / long clips. No effect on Wan (spatial-only VAE)."
+        ),
+    ] = None
+    cache_mode: Annotated[
+        VideoStreamRequestCacheMode | None,
+        Field(
+            description="Step-caching algorithm.", title="VideoStreamRequestCacheMode"
+        ),
+    ] = None
+    cache_preset: Annotated[
+        str | None,
+        Field(description="Optional name of a cached sampler preset to reuse."),
+    ] = None
+    cache_threshold: Annotated[
+        float | None, Field(description="Direct cache reuse threshold override.")
+    ] = None
+    mode: Annotated[
+        VideoStreamRequestMode,
+        Field(
+            description="Generation mode: 'txt2vid' (no source frame) or 'img2vid' (first-frame image).",
+            title="VideoStreamRequestMode",
+        ),
+    ]
+    init_image: Annotated[
+        str | None,
+        Field(
+            description="Base64-encoded first-frame image (PNG/JPEG). Required for img2vid; rejected for txt2vid.",
+            min_length=1,
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ] = None
+    strength: Annotated[
+        float | None,
+        Field(
+            description="img2vid denoise strength in [0, 1]; rejected for txt2vid.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
     type: Literal["videoStream"]
 
 
-class VideoStreamResponseStats(BaseModel):
+class VideoStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    model_load_ms: float | None = Field(
-        None,
-        alias="modelLoadMs",
-        description="Time in milliseconds spent loading the diffusion model.",
-    )
-    generation_ms: float | None = Field(
-        None,
-        alias="generationMs",
-        description="Wall-clock time in milliseconds spent generating images.",
-    )
-    total_generation_ms: float | None = Field(
-        None,
-        alias="totalGenerationMs",
-        description="Total generation time in milliseconds across all images in the batch.",
-    )
-    total_wall_ms: float | None = Field(
-        None,
-        alias="totalWallMs",
-        description="Total wall-clock time in milliseconds including model load and sampling.",
-    )
-    total_steps: float | None = Field(
-        None,
-        alias="totalSteps",
-        description="Total number of diffusion sampling steps executed.",
-    )
-    total_generations: float | None = Field(
-        None,
-        alias="totalGenerations",
-        description="Total number of generation passes executed.",
-    )
-    total_images: float | None = Field(
-        None, alias="totalImages", description="Total number of images produced."
-    )
-    total_pixels: float | None = Field(
-        None,
-        alias="totalPixels",
-        description="Total number of pixels generated across all images.",
-    )
-    width: float | None = Field(
-        None, description="Width in pixels of each generated image."
-    )
-    height: float | None = Field(
-        None, description="Height in pixels of each generated image."
-    )
-    seed: float | None = Field(
-        None,
-        description="Seed that produced these outputs (randomized when not supplied by the caller).",
-    )
-    total_videos: float | None = Field(
-        None, alias="totalVideos", description="Total number of videos produced."
-    )
-    total_video_frames: float | None = Field(
-        None,
-        alias="totalVideoFrames",
-        description="Total number of video frames produced.",
-    )
-    video_frames: float | None = Field(
-        None,
-        alias="videoFrames",
-        description="Frame count of the most recent generated video.",
-    )
-    fps: float | None = Field(
-        None,
-        description="Frames-per-second metadata for the most recent generated video.",
-    )
-    has_audio: bool | None = Field(
-        None,
-        alias="hasAudio",
-        description="True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
-    )
-    audio_sample_rate: float | None = Field(
-        None,
-        alias="audioSampleRate",
-        description="Sample rate (Hz) of the muxed audio track; 0 when there is no audio.",
-    )
+    model_load_ms: Annotated[
+        float | None,
+        Field(
+            alias="modelLoadMs",
+            description="Time in milliseconds spent loading the diffusion model.",
+        ),
+    ] = None
+    generation_ms: Annotated[
+        float | None,
+        Field(
+            alias="generationMs",
+            description="Wall-clock time in milliseconds spent generating images.",
+        ),
+    ] = None
+    total_generation_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalGenerationMs",
+            description="Total generation time in milliseconds across all images in the batch.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Total wall-clock time in milliseconds including model load and sampling.",
+        ),
+    ] = None
+    total_steps: Annotated[
+        float | None,
+        Field(
+            alias="totalSteps",
+            description="Total number of diffusion sampling steps executed.",
+        ),
+    ] = None
+    total_generations: Annotated[
+        float | None,
+        Field(
+            alias="totalGenerations",
+            description="Total number of generation passes executed.",
+        ),
+    ] = None
+    total_images: Annotated[
+        float | None,
+        Field(alias="totalImages", description="Total number of images produced."),
+    ] = None
+    total_pixels: Annotated[
+        float | None,
+        Field(
+            alias="totalPixels",
+            description="Total number of pixels generated across all images.",
+        ),
+    ] = None
+    width: Annotated[
+        float | None, Field(description="Width in pixels of each generated image.")
+    ] = None
+    height: Annotated[
+        float | None, Field(description="Height in pixels of each generated image.")
+    ] = None
+    seed: Annotated[
+        float | None,
+        Field(
+            description="Seed that produced these outputs (randomized when not supplied by the caller)."
+        ),
+    ] = None
+    total_videos: Annotated[
+        float | None,
+        Field(alias="totalVideos", description="Total number of videos produced."),
+    ] = None
+    total_video_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalVideoFrames",
+            description="Total number of video frames produced.",
+        ),
+    ] = None
+    video_frames: Annotated[
+        float | None,
+        Field(
+            alias="videoFrames",
+            description="Frame count of the most recent generated video.",
+        ),
+    ] = None
+    fps: Annotated[
+        float | None,
+        Field(
+            description="Frames-per-second metadata for the most recent generated video."
+        ),
+    ] = None
+    has_audio: Annotated[
+        bool | None,
+        Field(
+            alias="hasAudio",
+            description="True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
+        ),
+    ] = None
+    audio_sample_rate: Annotated[
+        float | None,
+        Field(
+            alias="audioSampleRate",
+            description="Sample rate (Hz) of the muxed audio track; 0 when there is no audio.",
+        ),
+    ] = None
 
 
-class VideoStreamResponse(BaseModel):
+class VideoStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["videoStream"]
     step: float | None = None
-    total_steps: float | None = Field(None, alias="totalSteps")
-    elapsed_ms: float | None = Field(None, alias="elapsedMs")
+    total_steps: Annotated[float | None, Field(alias="totalSteps")] = None
+    elapsed_ms: Annotated[float | None, Field(alias="elapsedMs")] = None
     data: str | None = None
-    output_index: float | None = Field(None, alias="outputIndex")
+    output_index: Annotated[float | None, Field(alias="outputIndex")] = None
     done: bool | None = None
-    stats: VideoStreamResponseStats | None = Field(
-        None, title="VideoStreamResponseStats"
-    )
+    stats: Annotated[
+        VideoStreamResponseStats | None, Field(title="VideoStreamResponseStats")
+    ] = None
 
 
 class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
-    root: CancelRequestRequest | CancelRequestBroad = Field(..., title="CancelRequest")
+    root: Annotated[
+        CancelRequestRequest | CancelRequestBroad, Field(title="CancelRequest")
+    ]
 
 
 class Request_2(RootModel[DeleteCacheAllRequest | DeleteCacheKvEntryRequest]):
-    root: DeleteCacheAllRequest | DeleteCacheKvEntryRequest = Field(
-        ..., title="DeleteCacheRequest"
-    )
+    root: Annotated[
+        DeleteCacheAllRequest | DeleteCacheKvEntryRequest,
+        Field(title="DeleteCacheRequest"),
+    ]
 
 
 class Request_3(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
-    root: FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest = Field(
-        ..., title="FinetuneRequest"
-    )
+    root: Annotated[
+        FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest,
+        Field(title="FinetuneRequest"),
+    ]
 
 
 class Request_4(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
-    root: LoadModelSrcRequest | ReloadConfigRequest = Field(
-        ..., title="LoadModelRequest"
-    )
+    root: Annotated[
+        LoadModelSrcRequest | ReloadConfigRequest, Field(title="LoadModelRequest")
+    ]
 
 
 class Request_5(
@@ -7130,7 +8284,7 @@ class Request_5(
         | RagRequestDeleteWorkspace
     ]
 ):
-    root: (
+    root: Annotated[
         RagRequestChunk
         | RagRequestIngest
         | RagRequestSaveEmbeddings
@@ -7139,8 +8293,9 @@ class Request_5(
         | RagRequestReindex
         | RagRequestListWorkspaces
         | RagRequestCloseWorkspace
-        | RagRequestDeleteWorkspace
-    ) = Field(..., title="RagRequest")
+        | RagRequestDeleteWorkspace,
+        Field(title="RagRequest"),
+    ]
 
 
 class Response_1(
@@ -7156,7 +8311,7 @@ class Response_1(
         | RagResponseDeleteWorkspace
     ]
 ):
-    root: (
+    root: Annotated[
         RagResponseChunk
         | RagResponseIngest
         | RagResponseSaveEmbeddings
@@ -7165,8 +8320,9 @@ class Response_1(
         | RagResponseReindex
         | RagResponseListWorkspaces
         | RagResponseCloseWorkspace
-        | RagResponseDeleteWorkspace
-    ) = Field(..., title="RagResponse")
+        | RagResponseDeleteWorkspace,
+        Field(title="RagResponse"),
+    ]
 
 
 class Response(
@@ -7213,7 +8369,7 @@ class Response(
         | VideoStreamResponse
     ]
 ):
-    root: (
+    root: Annotated[
         BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
@@ -7253,18 +8409,18 @@ class Response(
         | TranslateResponse
         | UnloadModelResponse
         | UpscaleStreamResponse
-        | VideoStreamResponse
-    ) = Field(
-        ...,
-        description="Any response emitted by the server, including progress updates and error envelopes.",
-        title="AnyResponse",
-    )
+        | VideoStreamResponse,
+        Field(
+            description="Any response emitted by the server, including progress updates and error envelopes.",
+            title="AnyResponse",
+        ),
+    ]
 
 
 class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
-    root: TranslateNmtRequest | TranslateLlmRequest = Field(
-        ..., title="TranslateRequest"
-    )
+    root: Annotated[
+        TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
+    ]
 
 
 class Request(
@@ -7307,7 +8463,7 @@ class Request(
         | VideoStreamRequest
     ]
 ):
-    root: (
+    root: Annotated[
         BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
@@ -7343,9 +8499,9 @@ class Request(
         | Request_6
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | VideoStreamRequest
-    ) = Field(
-        ...,
-        description="Any request accepted by the server, in wire (pre-parse) shape.",
-        title="AnyRequest",
-    )
+        | VideoStreamRequest,
+        Field(
+            description="Any request accepted by the server, in wire (pre-parse) shape.",
+            title="AnyRequest",
+        ),
+    ]

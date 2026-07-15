@@ -17,8 +17,15 @@ and intentionally not ported here.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
+from ._generated.models import (
+    ModelRegistryGetModelResponseModel,
+    ModelRegistryListResponseModelsItem,
+    ModelRegistrySearchResponseModelsItem,
+)
+from ._transport import Transport
 from .schemas import (
     CancelRequest,
     CancelResponse,
@@ -37,12 +44,6 @@ from .schemas import (
     UnloadModelRequest,
     UnloadModelResponse,
 )
-from ._generated.models import (
-    ModelRegistryGetModelResponseModel,
-    ModelRegistryListResponseModelsItem,
-    ModelRegistrySearchResponseModelsItem,
-)
-from ._transport import Transport
 
 
 class CancelFailedError(Exception):
