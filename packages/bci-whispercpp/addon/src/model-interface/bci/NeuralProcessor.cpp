@@ -118,8 +118,249 @@ constexpr float K_KERNEL_TRIM_THRESHOLD = 0.01F;
 constexpr float K_SMOOTH_KERNEL_STD = 2.0F;
 constexpr int K_SMOOTH_KERNEL_SIZE = 100;
 
+// Day indices are grouped into 30-day months to select the month-level
+// correction, matching the BrainWhisperer reference.
+constexpr int K_DAYS_PER_MONTH = 30;
+
+float lowRankEntry(
+    const std::vector<float>& dayA, const std::vector<float>& dayB, uint32_t i,
+    uint32_t j, uint32_t nf, uint32_t r) {
+  float sum = 0.0F;
+  for (uint32_t k = 0; k < r; ++k) {
+    sum += dayA[i * r + k] * dayB[k * nf + j];
+  }
+  return sum;
+}
+
+void buildLowRankRow(
+    const std::vector<float>& dayA, const std::vector<float>& dayB, uint32_t i,
+    uint32_t nf, uint32_t r, float* outRow) {
+  for (uint32_t j = 0; j < nf; ++j) {
+    outRow[j] = lowRankEntry(dayA, dayB, i, j, nf, r);
+  }
+}
+
+void buildLowRankProduct(
+    const std::vector<float>& dayA, const std::vector<float>& dayB, uint32_t nf,
+    uint32_t r, std::vector<float>& out) {
+  for (uint32_t i = 0; i < nf; ++i) {
+    buildLowRankRow(dayA, dayB, i, nf, r, &out[static_cast<size_t>(i) * nf]);
+  }
+}
+
+void addInPlace(
+    std::vector<float>& acc, const std::vector<float>& add, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    acc[i] += add[i];
+  }
+}
+
+void buildProjectionBias(
+    std::vector<float>& bias, const std::vector<float>& dayBias,
+    const std::vector<float>* monthBias, uint32_t nf) {
+  for (uint32_t i = 0; i < nf; ++i) {
+    bias[i] = dayBias[i];
+    if (monthBias != nullptr && i < monthBias->size()) {
+      bias[i] += (*monthBias)[i];
+    }
+  }
+}
+
+void projectTimestepBand(
+    std::vector<float>& output, const std::vector<float>& features,
+    const std::vector<float>& projectionW,
+    const std::vector<float>& projectionBias, uint32_t tBegin, uint32_t tEnd,
+    uint32_t numChannels, uint32_t nf) {
+  for (uint32_t t = tBegin; t < tEnd; ++t) {
+    float* out = &output[static_cast<size_t>(t) * nf];
+    const float* feat = &features[static_cast<size_t>(t) * numChannels];
+    projectTimestepRow(out, feat, projectionW, projectionBias, nf);
+  }
+}
+
+void copyMelFrame(
+    std::vector<float>& mel, const std::vector<float>& src, uint32_t t,
+    uint32_t chToCopy, uint32_t srcChannels, int melFrames) {
+  for (uint32_t c = 0; c < chToCopy; ++c) {
+    mel[static_cast<size_t>(c) * melFrames + t] =
+        src[static_cast<size_t>(t) * srcChannels + c];
+  }
+}
+
+void copyToMelMajor(
+    std::vector<float>& mel, const std::vector<float>& src,
+    uint32_t framesToCopy, uint32_t chToCopy, uint32_t srcChannels,
+    int melFrames) {
+  for (uint32_t t = 0; t < framesToCopy; ++t) {
+    copyMelFrame(mel, src, t, chToCopy, srcChannels, melFrames);
+  }
+}
+
 bool hasExpectedSize(const std::vector<float>& vec, size_t expected) {
   return vec.size() == expected;
+}
+
+// Sequential reader over the embedder weights file. Each read checks the
+// stream so a truncated/corrupt file surfaces as `failed` instead of silently
+// loading zeros and producing garbage at inference time.
+struct WeightsReader {
+  std::ifstream& in;
+  bool failed = false;
+
+  uint32_t u32() {
+    uint32_t value = 0;
+    in.read(reinterpret_cast<char*>(&value), sizeof(value));
+    if (!in)
+      failed = true;
+    return value;
+  }
+
+  std::vector<float> floats(size_t count) {
+    std::vector<float> data(count);
+    if (count > 0) {
+      in.read(
+          reinterpret_cast<char*>(data.data()),
+          static_cast<std::streamsize>(count * sizeof(float)));
+      if (!in)
+        failed = true;
+    }
+    return data;
+  }
+
+  std::vector<int32_t> ints(size_t count) {
+    std::vector<int32_t> data(count);
+    if (count > 0) {
+      in.read(
+          reinterpret_cast<char*>(data.data()),
+          static_cast<std::streamsize>(count * sizeof(int32_t)));
+      if (!in)
+        failed = true;
+    }
+    return data;
+  }
+
+  std::vector<float> lengthPrefixedFloats() {
+    const uint32_t count = u32();
+    return floats(count);
+  }
+};
+
+bool readEmbedderHeader(
+    WeightsReader& reader, NeuralProcessor::EmbedderWeights& w) {
+  if (reader.u32() != K_EMBEDDER_MAGIC || reader.u32() != 1 || reader.failed) {
+    return false;
+  }
+  w.numFeatures = reader.u32();
+  reader.u32(); // embedDim
+  reader.u32(); // kernelSize1
+  reader.u32(); // kernelSize2
+  reader.u32(); // stride2
+  w.numDays = reader.u32();
+  w.numMonths = reader.u32();
+  w.r = reader.u32();
+  return !reader.failed;
+}
+
+// conv1/conv2 weights live in the file but are consumed by the GGML model.
+bool skipConvWeights(WeightsReader& reader) {
+  reader.lengthPrefixedFloats();
+  reader.lengthPrefixedFloats();
+  reader.lengthPrefixedFloats();
+  reader.lengthPrefixedFloats();
+  return !reader.failed;
+}
+
+void readDayWeights(
+    WeightsReader& reader, NeuralProcessor::EmbedderWeights& w) {
+  w.dayAs.resize(w.numDays);
+  w.dayBs.resize(w.numDays);
+  w.dayBiases.resize(w.numDays);
+  for (uint32_t i = 0; i < w.numDays; ++i) {
+    w.dayAs[i] = reader.lengthPrefixedFloats();
+    w.dayBs[i] = reader.lengthPrefixedFloats();
+    w.dayBiases[i] = reader.lengthPrefixedFloats();
+    if (reader.failed)
+      return;
+  }
+}
+
+void readMonthWeights(
+    WeightsReader& reader, NeuralProcessor::EmbedderWeights& w) {
+  w.monthWeights.resize(w.numMonths);
+  w.monthBiases.resize(w.numMonths);
+  for (uint32_t i = 0; i < w.numMonths; ++i) {
+    w.monthWeights[i] = reader.lengthPrefixedFloats();
+    w.monthBiases[i] = reader.lengthPrefixedFloats();
+    if (reader.failed)
+      return;
+  }
+}
+
+bool dayWeightsHaveExpectedSizes(const NeuralProcessor::EmbedderWeights& w) {
+  const size_t nf = static_cast<size_t>(w.numFeatures);
+  const size_t r = static_cast<size_t>(w.r);
+  for (uint32_t i = 0; i < w.numDays; ++i) {
+    if (!hasExpectedSize(w.dayAs[i], nf * r) ||
+        !hasExpectedSize(w.dayBs[i], r * nf) ||
+        !hasExpectedSize(w.dayBiases[i], nf)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool monthWeightsHaveExpectedSizes(const NeuralProcessor::EmbedderWeights& w) {
+  const size_t nf = static_cast<size_t>(w.numFeatures);
+  for (uint32_t i = 0; i < w.numMonths; ++i) {
+    if (!hasExpectedSize(w.monthWeights[i], nf * nf) ||
+        !hasExpectedSize(w.monthBiases[i], nf)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::vector<float> readNeuralFeatures(
+    const std::vector<uint8_t>& rawData, uint32_t& numTimesteps,
+    uint32_t& numChannels) {
+  if (rawData.size() < K_HEADER_BYTES) {
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        "Neural signal buffer too small");
+  }
+
+  std::memcpy(&numTimesteps, rawData.data(), sizeof(uint32_t));
+  std::memcpy(
+      &numChannels, rawData.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+  const size_t expectedBytes =
+      static_cast<size_t>(numTimesteps) * numChannels * sizeof(float);
+  if (rawData.size() < K_HEADER_BYTES + expectedBytes) {
+    throw qvac_errors::bci_error::makeStatus(
+        qvac_errors::bci_error::Code::InvalidNeuralSignal,
+        "Neural signal buffer truncated");
+  }
+
+  std::vector<float> features(static_cast<size_t>(numTimesteps) * numChannels);
+  std::memcpy(features.data(), rawData.data() + K_HEADER_BYTES, expectedBytes);
+  return features;
+}
+
+// whisper.cpp stores mel as data[mel_bin * n_len + frame] (mel-major) and
+// expects a fixed K_WHISPER_MEL_FRAMES x K_WHISPER_N_MEL buffer, so the source
+// features are padded and written in that layout for whisper_set_mel.
+std::vector<float> buildMel(
+    const std::vector<float>& src, uint32_t numTimesteps,
+    uint32_t srcChannels) {
+  const int melBins = NeuralProcessor::K_WHISPER_N_MEL;
+  const int melFrames = NeuralProcessor::K_WHISPER_MEL_FRAMES;
+  std::vector<float> mel(static_cast<size_t>(melFrames) * melBins, 0.0F);
+  const uint32_t framesToCopy =
+      std::min(numTimesteps, static_cast<uint32_t>(melFrames));
+  const uint32_t chToCopy =
+      std::min(srcChannels, static_cast<uint32_t>(melBins));
+  copyToMelMajor(mel, src, framesToCopy, chToCopy, srcChannels, melFrames);
+  return mel;
 }
 } // namespace
 
@@ -127,102 +368,31 @@ NeuralProcessor::NeuralProcessor() = default;
 
 bool NeuralProcessor::loadEmbedderWeights(const std::string& path) {
   std::ifstream f(path, std::ios::binary);
-  if (!f.is_open()) return false;
-
-  // A truncated/corrupt embedder file would otherwise silently load as
-  // zeros and produce garbage output at inference time. Check f.good()
-  // after every read and bail out cleanly so the caller reports the file
-  // as missing / invalid instead of the model emitting nonsense.
-  bool readFailed = false;
-
-  auto readU32 = [&]() -> uint32_t {
-    uint32_t v = 0;
-    f.read(reinterpret_cast<char*>(&v), sizeof(v));
-    if (!f) readFailed = true;
-    return v;
-  };
-  auto readFloats = [&](size_t count) -> std::vector<float> {
-    std::vector<float> data(count);
-    if (count > 0) {
-      f.read(reinterpret_cast<char*>(data.data()),
-             static_cast<std::streamsize>(count * sizeof(float)));
-      if (!f) readFailed = true;
-    }
-    return data;
-  };
-  auto readInts = [&](size_t count) -> std::vector<int32_t> {
-    std::vector<int32_t> data(count);
-    if (count > 0) {
-      f.read(reinterpret_cast<char*>(data.data()),
-             static_cast<std::streamsize>(count * sizeof(int32_t)));
-      if (!f) readFailed = true;
-    }
-    return data;
-  };
-
-  if (readU32() != K_EMBEDDER_MAGIC || readU32() != 1 || readFailed) {
+  if (!f.is_open())
     return false;
-  }
 
-  weights_.numFeatures = readU32();
-  /*embedDim=*/ readU32();
-  /*kernelSize1=*/ readU32();
-  /*kernelSize2=*/ readU32();
-  /*stride2=*/ readU32();
-  weights_.numDays = readU32();
-  weights_.numMonths = readU32();
-  weights_.r = readU32();
-  if (readFailed) return false;
+  WeightsReader reader{f};
+  if (!readEmbedderHeader(reader, weights_))
+    return false;
+  if (!skipConvWeights(reader))
+    return false;
 
-  // Skip conv1/conv2 weights (handled by GGML model)
-  uint32_t n = readU32(); readFloats(n);
-  n = readU32(); readFloats(n);
-  n = readU32(); readFloats(n);
-  n = readU32(); readFloats(n);
-  if (readFailed) return false;
+  const uint32_t sessionCount = reader.u32();
+  weights_.sessionToDayMap = reader.ints(sessionCount);
+  if (reader.failed)
+    return false;
 
-  n = readU32();
-  weights_.sessionToDayMap = readInts(n);
-  if (readFailed) return false;
+  readDayWeights(reader, weights_);
+  if (reader.failed)
+    return false;
 
-  weights_.dayAs.resize(weights_.numDays);
-  weights_.dayBs.resize(weights_.numDays);
-  weights_.dayBiases.resize(weights_.numDays);
-  for (uint32_t i = 0; i < weights_.numDays; ++i) {
-    n = readU32(); weights_.dayAs[i] = readFloats(n);
-    n = readU32(); weights_.dayBs[i] = readFloats(n);
-    n = readU32(); weights_.dayBiases[i] = readFloats(n);
-    if (readFailed) return false;
-  }
+  readMonthWeights(reader, weights_);
+  if (reader.failed)
+    return false;
 
-  weights_.monthWeights.resize(weights_.numMonths);
-  weights_.monthBiases.resize(weights_.numMonths);
-  for (uint32_t i = 0; i < weights_.numMonths; ++i) {
-    n = readU32(); weights_.monthWeights[i] = readFloats(n);
-    n = readU32(); weights_.monthBiases[i] = readFloats(n);
-    if (readFailed) return false;
-  }
-
-  const size_t nf = static_cast<size_t>(weights_.numFeatures);
-  const size_t r = static_cast<size_t>(weights_.r);
-  const size_t expectedDayA = nf * r;
-  const size_t expectedDayB = r * nf;
-  const size_t expectedDayBias = nf;
-  const size_t expectedMonthW = nf * nf;
-
-  for (uint32_t i = 0; i < weights_.numDays; ++i) {
-    if (!hasExpectedSize(weights_.dayAs[i], expectedDayA) ||
-        !hasExpectedSize(weights_.dayBs[i], expectedDayB) ||
-        !hasExpectedSize(weights_.dayBiases[i], expectedDayBias)) {
-      return false;
-    }
-  }
-
-  for (uint32_t i = 0; i < weights_.numMonths; ++i) {
-    if (!hasExpectedSize(weights_.monthWeights[i], expectedMonthW) ||
-        !hasExpectedSize(weights_.monthBiases[i], expectedDayBias)) {
-      return false;
-    }
+  if (!dayWeightsHaveExpectedSizes(weights_) ||
+      !monthWeightsHaveExpectedSizes(weights_)) {
+    return false;
   }
 
   weights_.loaded = true;
@@ -262,58 +432,49 @@ std::vector<float> NeuralProcessor::gaussianSmooth(
   return result;
 }
 
-std::vector<float> NeuralProcessor::applyDayProjection(
-    const std::vector<float>& features,
-    uint32_t numTimesteps, uint32_t numChannels, int dayIdx) const {
+void NeuralProcessor::rebuildDayProjectionCache(
+    int dayIndex, uint32_t nf, uint32_t r) const {
+  const auto& dayA = weights_.dayAs[dayIndex];
+  const auto& dayB = weights_.dayBs[dayIndex];
+  const auto& dayBias = weights_.dayBiases[dayIndex];
 
+  cachedProjectionW_.assign(static_cast<size_t>(nf) * nf, 0.0F);
+  cachedProjectionBias_.assign(nf, 0.0F);
+  buildLowRankProduct(dayA, dayB, nf, r, cachedProjectionW_);
+
+  const int monthIdx = dayIndex / K_DAYS_PER_MONTH;
+  const bool hasMonth =
+      monthIdx < static_cast<int>(weights_.monthWeights.size()) &&
+      !weights_.monthWeights[monthIdx].empty();
+  if (hasMonth) {
+    addInPlace(
+        cachedProjectionW_,
+        weights_.monthWeights[monthIdx],
+        static_cast<size_t>(nf) * nf);
+  }
+
+  const std::vector<float>* monthBias =
+      hasMonth ? &weights_.monthBiases[monthIdx] : nullptr;
+  buildProjectionBias(cachedProjectionBias_, dayBias, monthBias, nf);
+
+  cachedDayIdx_ = dayIndex;
+}
+
+std::vector<float> NeuralProcessor::applyDayProjection(
+    const std::vector<float>& features, uint32_t numTimesteps,
+    uint32_t numChannels, int dayIdx) const {
   if (!weights_.loaded || weights_.r == 0) return features;
 
   const uint32_t nf = weights_.numFeatures;
   const uint32_t r = weights_.r;
-  int di = std::clamp(dayIdx, 0, static_cast<int>(weights_.numDays) - 1);
+  const int di = std::clamp(dayIdx, 0, static_cast<int>(weights_.numDays) - 1);
 
-  // Rebuild the dense projection only when the resolved day index changes.
-  // Materializing dayDelta + W costs O(nf*nf*r) + O(nf*nf); for nf=512,r=8
-  // that is ~2M + 0.25M multiplies per recompute.
+  // Rebuild the dense projection only when the resolved day index changes;
+  // materializing W is O(nf*nf*r), so caching keeps same-day batches cheap.
   if (di != cachedDayIdx_ ||
       cachedProjectionW_.size() != static_cast<size_t>(nf) * nf ||
       cachedProjectionBias_.size() != nf) {
-    const auto& dayA = weights_.dayAs[di];
-    const auto& dayB = weights_.dayBs[di];
-    const auto& dayBias = weights_.dayBiases[di];
-
-    cachedProjectionW_.assign(static_cast<size_t>(nf) * nf, 0.0F);
-    cachedProjectionBias_.assign(nf, 0.0F);
-
-    for (uint32_t i = 0; i < nf; ++i) {
-      for (uint32_t j = 0; j < nf; ++j) {
-        float s = 0.0F;
-        for (uint32_t k = 0; k < r; ++k) {
-          s += dayA[i * r + k] * dayB[k * nf + j];
-        }
-        cachedProjectionW_[i * nf + j] = s;
-      }
-    }
-
-    int monthIdx = di / 30;
-    bool hasMonth =
-        (monthIdx < static_cast<int>(weights_.monthWeights.size()) &&
-         !weights_.monthWeights[monthIdx].empty());
-    if (hasMonth) {
-      const auto& mw = weights_.monthWeights[monthIdx];
-      for (uint32_t i = 0; i < nf * nf; ++i) {
-        cachedProjectionW_[i] += mw[i];
-      }
-    }
-
-    for (uint32_t i = 0; i < nf; ++i) {
-      cachedProjectionBias_[i] = dayBias[i];
-      if (hasMonth && i < weights_.monthBiases[monthIdx].size()) {
-        cachedProjectionBias_[i] += weights_.monthBiases[monthIdx][i];
-      }
-    }
-
-    cachedDayIdx_ = di;
+    rebuildDayProjectionCache(di, nf, r);
   }
 
   const auto& projectionW = cachedProjectionW_;
@@ -321,11 +482,15 @@ std::vector<float> NeuralProcessor::applyDayProjection(
 
   std::vector<float> output(static_cast<size_t>(numTimesteps) * nf);
   forEachTimestepBand(numTimesteps, [&](uint32_t tBegin, uint32_t tEnd) {
-    for (uint32_t t = tBegin; t < tEnd; ++t) {
-      float* out = &output[static_cast<size_t>(t) * nf];
-      const float* feat = &features[static_cast<size_t>(t) * numChannels];
-      projectTimestepRow(out, feat, projectionW, projectionBias, nf);
-    }
+    projectTimestepBand(
+        output,
+        features,
+        projectionW,
+        projectionBias,
+        tBegin,
+        tEnd,
+        numChannels,
+        nf);
   });
 
   return output;
@@ -333,48 +498,26 @@ std::vector<float> NeuralProcessor::applyDayProjection(
 
 std::vector<float> NeuralProcessor::processToMel(
     const std::vector<uint8_t>& rawData, int dayIdx) const {
+  uint32_t numTimesteps = 0;
+  uint32_t numChannels = 0;
+  std::vector<float> features =
+      readNeuralFeatures(rawData, numTimesteps, numChannels);
 
-  if (rawData.size() < K_HEADER_BYTES) {
-    throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
-        "Neural signal buffer too small");
+  // Passthrough mode: treat the input as pre-computed mel features in
+  // frame-major layout and skip preprocessing.
+  if (dayIdx == K_PASSTHROUGH_DAY_IDX) {
+    return buildMel(features, numTimesteps, numChannels);
   }
 
-  uint32_t numTimesteps = 0, numChannels = 0;
-  std::memcpy(&numTimesteps, rawData.data(), sizeof(uint32_t));
-  std::memcpy(&numChannels, rawData.data() + sizeof(uint32_t), sizeof(uint32_t));
+  const std::vector<float> smoothed = gaussianSmooth(
+      features,
+      numTimesteps,
+      numChannels,
+      K_SMOOTH_KERNEL_STD,
+      K_SMOOTH_KERNEL_SIZE);
 
-  size_t expectedBytes = static_cast<size_t>(numTimesteps) * numChannels * sizeof(float);
-  if (rawData.size() < K_HEADER_BYTES + expectedBytes) {
-    throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
-        "Neural signal buffer truncated");
-  }
-
-  std::vector<float> features(numTimesteps * numChannels);
-  std::memcpy(features.data(), rawData.data() + K_HEADER_BYTES, expectedBytes);
-
-  // Passthrough mode: if dayIdx == -1, skip preprocessing and treat
-  // the input as pre-computed mel features in frame-major layout.
-  if (dayIdx == -1) {
-    const int melBins = K_WHISPER_N_MEL;
-    const int melFrames = K_WHISPER_MEL_FRAMES;
-    std::vector<float> melOutput(melFrames * melBins, 0.0F);
-    uint32_t framesToCopy = std::min(numTimesteps, static_cast<uint32_t>(melFrames));
-    uint32_t chToCopy = std::min(numChannels, static_cast<uint32_t>(melBins));
-    for (uint32_t t = 0; t < framesToCopy; ++t)
-      for (uint32_t c = 0; c < chToCopy; ++c)
-        melOutput[c * melFrames + t] = features[t * numChannels + c];
-    return melOutput;
-  }
-
-  auto smoothed = gaussianSmooth(
-      features, numTimesteps, numChannels,
-      K_SMOOTH_KERNEL_STD, K_SMOOTH_KERNEL_SIZE);
-
-  // Step 2: Day projection (if available)
-  std::vector<float> projected;
   uint32_t projChannels = numChannels;
+  std::vector<float> projected;
   if (weights_.loaded && weights_.r > 0) {
     projected = applyDayProjection(smoothed, numTimesteps, numChannels, dayIdx);
     projChannels = weights_.numFeatures;
@@ -382,20 +525,7 @@ std::vector<float> NeuralProcessor::processToMel(
     projected = smoothed;
   }
 
-  // Step 3: Pad to 3000 frames at 512 channels for whisper_set_mel()
-  // whisper.cpp stores mel as mel.data[mel_bin * n_len + frame] (mel-major),
-  // so we must write in that layout for whisper_set_mel_with_state.
-  const int melBins = K_WHISPER_N_MEL;
-  const int melFrames = K_WHISPER_MEL_FRAMES;
-  std::vector<float> melOutput(melFrames * melBins, 0.0F);
-
-  uint32_t framesToCopy = std::min(numTimesteps, static_cast<uint32_t>(melFrames));
-  uint32_t chToCopy = std::min(projChannels, static_cast<uint32_t>(melBins));
-  for (uint32_t t = 0; t < framesToCopy; ++t)
-    for (uint32_t c = 0; c < chToCopy; ++c)
-      melOutput[c * melFrames + t] = projected[t * projChannels + c];
-
-  return melOutput;
+  return buildMel(projected, numTimesteps, projChannels);
 }
 
 } // namespace qvac_lib_inference_addon_bci
