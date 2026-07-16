@@ -7,7 +7,7 @@
     "bare": ">=1.24.0"
   },
   "scripts": {
-    "lint": "npm run lint:js && npm run lint:ts",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
