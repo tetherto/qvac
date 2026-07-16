@@ -1,9 +1,9 @@
 import test from 'brittle'
-import type { Tool } from '@/schemas'
-import { parseToolCalls, detectToolDialectFromName } from '@/server/utils/tools'
-import { parseHarmonyFormat } from '@/server/utils/tools/parsers/harmony'
-import { parseQwen35Format } from '@/server/utils/tools/parsers/qwen35'
-import { parseGemma4NativeFormat } from '@/server/utils/tools/parsers/gemma4native'
+import type { Tool } from '../src/schemas'
+import { parseToolCalls, detectToolDialectFromName } from '../src/utils/tools'
+import { parseHarmonyFormat } from '../src/utils/tools/parsers/harmony'
+import { parseQwen35Format } from '../src/utils/tools/parsers/qwen35'
+import { parseGemma4NativeFormat } from '../src/utils/tools/parsers/gemma4native'
 const weatherTool: Tool = {
   type: 'function',
   name: 'weather',
@@ -530,7 +530,7 @@ test('parseHarmonyFormat: to=functions. without complete frame returns matched: 
 })
 
 // Hyphenated names are valid per OpenAI's `[a-zA-Z0-9_-]{1,64}` and pass
-// the SDK's `name: z.string()` schema — must not silently drop.
+// the engine's `name: z.string()` schema — must not silently drop.
 test('parseHarmonyFormat: hyphenated function names parse', (t) => {
   const hyphenTool: Tool = {
     type: 'function',

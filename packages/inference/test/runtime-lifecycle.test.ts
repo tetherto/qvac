@@ -1,5 +1,5 @@
 import test from 'brittle'
-import type { SuspendableSwarm, SuspendableStore } from '@/server/bare/runtime-lifecycle'
+import type { SuspendableSwarm, SuspendableStore } from '../src/runtime/runtime-lifecycle'
 import {
   registerSwarm,
   unregisterSwarm,
@@ -12,9 +12,9 @@ import {
   resetLifecycleState,
   assertLifecycleAllowed,
   onResume
-} from '@/server/bare/runtime-lifecycle'
-import type { Request } from '@/schemas'
-import { LifecycleOperationBlockedError } from '@/utils/errors-server'
+} from '../src/runtime/runtime-lifecycle'
+import type { Request } from '../src/schemas'
+import { LifecycleOperationBlockedError } from '../src/errors'
 
 interface MockOptions {
   failSuspend?: boolean
@@ -69,7 +69,7 @@ function setup(log: string[], swarmOpts?: MockOptions, storeOpts?: MockOptions) 
   return { swarm, store }
 }
 
-test('suspend order: stores before swarms', async (t) => {
+test('suspend order: stores before swarms', async function (t) {
   const log: string[] = []
   setup(log)
 
@@ -78,7 +78,7 @@ test('suspend order: stores before swarms', async (t) => {
   t.alike(log, ['store:suspend', 'swarm:suspend'])
 })
 
-test('resume order: swarms before stores', async (t) => {
+test('resume order: swarms before stores', async function (t) {
   const log: string[] = []
   setup(log)
 
@@ -89,7 +89,7 @@ test('resume order: swarms before stores', async (t) => {
   t.alike(log, ['swarm:resume', 'store:resume'])
 })
 
-test('suspend is idempotent when already suspended', async (t) => {
+test('suspend is idempotent when already suspended', async function (t) {
   const log: string[] = []
   setup(log)
 
@@ -103,7 +103,7 @@ test('suspend is idempotent when already suspended', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('resume is idempotent when already active', async (t) => {
+test('resume is idempotent when already active', async function (t) {
   const log: string[] = []
   setup(log)
 
@@ -115,7 +115,7 @@ test('resume is idempotent when already active', async (t) => {
   t.is(getLifecycleState(), 'active')
 })
 
-test('concurrent suspend calls share the same transition', async (t) => {
+test('concurrent suspend calls share the same transition', async function (t) {
   const log: string[] = []
   setup(log, { delayMs: 20 })
 
@@ -127,7 +127,7 @@ test('concurrent suspend calls share the same transition', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('concurrent resume calls share the same transition', async (t) => {
+test('concurrent resume calls share the same transition', async function (t) {
   const log: string[] = []
   setup(log, { delayMs: 20 })
 
@@ -140,7 +140,7 @@ test('concurrent resume calls share the same transition', async (t) => {
   t.is(getLifecycleState(), 'active')
 })
 
-test('resume during in-flight suspend waits then resumes', async (t) => {
+test('resume during in-flight suspend waits then resumes', async function (t) {
   const log: string[] = []
   setup(log, { delayMs: 30 })
 
@@ -155,7 +155,7 @@ test('resume during in-flight suspend waits then resumes', async (t) => {
   t.is(getLifecycleState(), 'active')
 })
 
-test('suspend during in-flight resume waits then suspends', async (t) => {
+test('suspend during in-flight resume waits then suspends', async function (t) {
   const log: string[] = []
   setup(log, { delayMs: 30 })
 
@@ -173,7 +173,7 @@ test('suspend during in-flight resume waits then suspends', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('partial suspend failure commits to suspended state', async (t) => {
+test('partial suspend failure commits to suspended state', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -193,7 +193,7 @@ test('partial suspend failure commits to suspended state', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('suspend after partial failure is a no-op', async (t) => {
+test('suspend after partial failure is a no-op', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -215,7 +215,7 @@ test('suspend after partial failure is a no-op', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('resume after partial suspend failure repairs state', async (t) => {
+test('resume after partial suspend failure repairs state', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -238,7 +238,7 @@ test('resume after partial suspend failure repairs state', async (t) => {
   t.ok(log.includes('swarm:resume'))
 })
 
-test('partial resume failure stays suspended', async (t) => {
+test('partial resume failure stays suspended', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -261,7 +261,7 @@ test('partial resume failure stays suspended', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('retry resume after partial failure restores active', async (t) => {
+test('retry resume after partial failure restores active', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -292,7 +292,7 @@ test('retry resume after partial failure restores active', async (t) => {
   t.ok(log.includes('swarm:resume'))
 })
 
-test('resource unregistered during transition does not fail', async (t) => {
+test('resource unregistered during transition does not fail', async function (t) {
   const log: string[] = []
   resetLifecycleState()
 
@@ -308,7 +308,7 @@ test('resource unregistered during transition does not fail', async (t) => {
   t.is(getLifecycleState(), 'suspended')
 })
 
-test('register and unregister updates resource counts', (t) => {
+test('register and unregister updates resource counts', function (t) {
   resetLifecycleState()
 
   const log: string[] = []
@@ -337,7 +337,7 @@ function fakeRequest(type: string): Request {
   return { type } as unknown as Request
 }
 
-test('gate allows representative requests when active', (t) => {
+test('gate allows representative requests when active', function (t) {
   resetLifecycleState()
   t.is(getLifecycleState(), 'active')
 
@@ -350,7 +350,7 @@ test('gate allows representative requests when active', (t) => {
   t.execution(() => assertLifecycleAllowed(fakeRequest('state')))
 })
 
-test('gate allows only lifecycle ops and blocks representative requests when suspended', async (t) => {
+test('gate allows only lifecycle ops and blocks others when suspended', async function (t) {
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -366,7 +366,7 @@ test('gate allows only lifecycle ops and blocks representative requests when sus
   t.exception(() => assertLifecycleAllowed(fakeRequest('transcribeStream')))
 })
 
-test('gate error includes request type and lifecycle state', async (t) => {
+test('gate error includes request type and lifecycle state', async function (t) {
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -381,7 +381,7 @@ test('gate error includes request type and lifecycle state', async (t) => {
   }
 })
 
-test('gate blocks during transition states (suspending and resuming)', async (t) => {
+test('gate blocks during transition states (suspending and resuming)', async function (t) {
   // suspending
   const log1: string[] = []
   setup(log1, { delayMs: 50 })
@@ -406,7 +406,7 @@ test('gate blocks during transition states (suspending and resuming)', async (t)
   await resumeP
 })
 
-test('onResume listeners fire after resume and unregister cleanly', async (t) => {
+test('onResume listeners fire after resume and unregister cleanly', async function (t) {
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -423,7 +423,7 @@ test('onResume listeners fire after resume and unregister cleanly', async (t) =>
   t.is(fired, 1, 'listener did not fire after unregister')
 })
 
-test('resetLifecycleState clears onResume listeners', async (t) => {
+test('resetLifecycleState clears onResume listeners', async function (t) {
   const log: string[] = []
   setup(log)
   await suspendRuntime()

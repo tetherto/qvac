@@ -1,7 +1,6 @@
 import test from 'brittle'
-import { getClientLogger } from '@/logging/client-logger'
-import { createBaseLogger } from '@/logging/base-logger'
-import { logLevelSchema } from '@/schemas/logging-stream'
+import { getAppLogger, createBaseLogger } from '../src/logging/logger'
+import { logLevelSchema } from '../src/schemas/logging-stream'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
   for (const level of ['error', 'warn', 'info', 'debug', 'off']) {
@@ -10,7 +9,7 @@ test('logLevelSchema: accepts off alongside the standard levels', (t) => {
   t.is(logLevelSchema.safeParse('verbose').success, false)
 })
 
-test('getClientLogger: silent console by default, still feeds transports', (t) => {
+test('getAppLogger: silent console by default, still feeds transports', (t) => {
   const original = console.info
   let printed = 0
   console.info = () => {
@@ -21,8 +20,12 @@ test('getClientLogger: silent console by default, still feeds transports', (t) =
   })
 
   const received: string[] = []
-  const logger = getClientLogger({
-    transports: [(_level, _namespace, message) => received.push(message)]
+  const logger = getAppLogger({
+    transports: [
+      (_level, _namespace, message) => {
+        received.push(message)
+      }
+    ]
   })
   logger.info('hello')
 
@@ -30,7 +33,7 @@ test('getClientLogger: silent console by default, still feeds transports', (t) =
   t.alike(received, ['hello'], 'transport still receives the log')
 })
 
-test('getClientLogger: enableConsole opts back into console output', (t) => {
+test('getAppLogger: enableConsole opts back into console output', (t) => {
   const original = console.info
   let printed = 0
   console.info = () => {
@@ -40,7 +43,7 @@ test('getClientLogger: enableConsole opts back into console output', (t) => {
     console.info = original
   })
 
-  getClientLogger({ enableConsole: true }).info('hi')
+  getAppLogger({ enableConsole: true }).info('hi')
 
   t.ok(printed > 0, 'console prints when explicitly enabled')
 })
@@ -74,7 +77,11 @@ test('level off: silences console, stream, and transports together', (t) => {
     {
       level: 'off',
       enableConsole: true,
-      transports: [(_l, _n, message) => transported.push(message)]
+      transports: [
+        (_l, _n, message) => {
+          transported.push(message)
+        }
+      ]
     },
     { onLog: (_l, _n, message) => streamed.push(message) }
   )

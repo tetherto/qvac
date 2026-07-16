@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { decoratePromise } from '@/utils/decorate-promise'
+import { decoratePromise } from '../src/utils/decorate-promise'
 
 // -----------------------------------------------------------------------------
 // decoratePromise unit tests.

@@ -3,7 +3,7 @@ import {
   createProgressThrottle,
   PROGRESS_THROTTLE_MS,
   PROGRESS_MAX_PENDING
-} from '@/server/rpc/progress-throttle'
+} from '../src/p2p/progress-throttle'
 
 const T0 = 1_000_000
 
@@ -57,7 +57,7 @@ test('events within the same window are buffered, not dropped', (t) => {
 })
 
 test('flush is a no-op when buffer is empty', (t) => {
-  let time = T0
+  const time = T0
   const { written, batchSizes, throttle } = createTestThrottle(() => time)
 
   throttle.flush()
@@ -85,7 +85,7 @@ test('timer flush writes all buffered events as single batch', async (t) => {
   t.alike(written, [1], 'only immediate write before timer')
 
   time += throttleMs
-  await new Promise((r) => setTimeout(r, throttleMs + 10))
+  await new Promise<void>((r) => setTimeout(r, throttleMs + 10))
 
   t.alike(written, [1, 2, 3], 'timer flushed all buffered events')
   t.alike(batchSizes, [1, 2], 'timer flush was a single batch call')

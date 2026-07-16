@@ -1,9 +1,7 @@
 import test from 'brittle'
-import {
-  createRequestRegistry,
-  __requestRegistryTestHooks
-} from '@/server/bare/runtime/request-registry'
-import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/utils/errors-server'
+import { AbortController } from 'bare-abort-controller'
+import { createRequestRegistry, __requestRegistryTestHooks } from '../src/runtime/request-registry'
+import { RequestIdConflictError, RequestRejectedByPolicyError } from '../src/errors'
 
 // -----------------------------------------------------------------------------
 // RequestRegistry unit tests.

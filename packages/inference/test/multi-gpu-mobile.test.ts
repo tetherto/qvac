@@ -1,6 +1,5 @@
-// @ts-expect-error brittle has no type declarations
 import test from 'brittle'
-import { stripMultiGpuKeys, MULTI_GPU_KEYS } from '@/server/utils/multi-gpu-mobile'
+import { stripMultiGpuKeys, MULTI_GPU_KEYS } from '../src/utils/multi-gpu-mobile'
 
 test('stripMultiGpuKeys: removes all three multi-GPU keys when present', (t) => {
   const config: Record<string, unknown> = {

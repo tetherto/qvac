@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { sdcppConfigSchema } from '@/schemas'
+import { sdcppConfigSchema } from '../src/schemas'
 
 type DiffusionDebugModel = {
   _files?: Record<string, string | undefined>
@@ -29,7 +29,7 @@ test('sdcppConfigSchema: accepts the Ideogram 4 companion layout', (t) => {
 })
 
 test('sdcpp plugin resolveConfig: resolves Ideogram companions and strips source fields', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const resolved = await diffusionPlugin.resolveConfig!(
     {
@@ -62,8 +62,8 @@ test('sdcpp plugin resolveConfig: resolves Ideogram companions and strips source
 
 test('sdcpp plugin resolveConfig: rejects Ideogram unconditional model outside diffusion mode', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
   let resolveCalls = 0
 
@@ -93,8 +93,8 @@ test('sdcpp plugin resolveConfig: rejects Ideogram unconditional model outside d
 
 test('sdcpp plugin resolveConfig: requires Ideogram LLM and VAE companions', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
 
   for (const config of [
@@ -123,7 +123,7 @@ test('sdcpp plugin resolveConfig: requires Ideogram LLM and VAE companions', asy
 })
 
 test('sdcpp plugin createModel: wires Ideogram unconditional model into the addon', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const result = diffusionPlugin.createModel({
     modelId: 'ideogram-test',

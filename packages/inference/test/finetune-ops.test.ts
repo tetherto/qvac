@@ -7,15 +7,15 @@ import {
   registerModel,
   unregisterModel,
   type AnyModel
-} from '@/server/bare/registry/model-registry'
+} from '../src/runtime/model-registry'
 import {
   finetune as finetuneOp,
   getFinetuneState,
   getFinetuneStateFromCheckpoints,
   startFinetune
-} from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
-import { ModelType } from '@/schemas'
-import { CompletionFailedError } from '@/utils/errors-server'
+} from '../src/plugins/builtin/llamacpp-completion/ops/finetune'
+import { ModelType } from '../src/schemas'
+import { CompletionFailedError } from '../src/errors'
 
 function createTempCheckpointDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'finetune-op-test-'))
@@ -294,7 +294,7 @@ test('getFinetuneState: returns running while finetune is active', async (t) => 
     t.is(result.status, 'RUNNING')
 
     // Yield to let startFinetune reach model.finetune().await() and set resolveAwait.
-    await new Promise((r) => setTimeout(r, 0))
+    await new Promise<void>((r) => setTimeout(r, 0))
     resolveAwait!({
       op: 'finetune',
       status: 'COMPLETED',

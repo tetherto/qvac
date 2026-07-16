@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { createErrorResponse } from '@/schemas/error'
+import { createErrorResponse } from '../src/schemas/error'
 import {
   ContextOverflowError,
   RequestIdConflictError,
@@ -7,23 +7,27 @@ import {
   RequestRejectedByPolicyError,
   InferenceCancelledError,
   ModelNotLoadedError
-} from '@/utils/errors-server'
+} from '../src/errors'
 
 test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
-  const err = new RequestRejectedByPolicyError('rid-1', 'completion', 'model-1', 'queue full')
+  const err = new RequestRejectedByPolicyError(
+    'rid-1',
+    'completion',
+    'model-1',
+    'oneAtATimePerModel'
+  )
   const response = createErrorResponse(err)
 
   t.is(response.type, 'error')
-  // `QvacErrorBase.name` is the SCREAMING_SNAKE error-code name from
-  // sdk-errors-server.ts, not the JS class name — the rpc-error.ts
-  // reconstructor map keys off this value.
+  // `QvacErrorBase.name` is the SCREAMING_SNAKE error-code name from the
+  // error-code definitions, not the JS class name.
   t.is(response.name, 'REQUEST_REJECTED_BY_POLICY')
   t.is(response.code, 52420)
   t.alike(response.typedFields, {
     requestId: 'rid-1',
     kind: 'completion',
     modelId: 'model-1',
-    reason: 'queue full'
+    reason: 'oneAtATimePerModel'
   })
 })
 

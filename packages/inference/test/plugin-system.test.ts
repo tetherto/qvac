@@ -1,21 +1,16 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { clearPlugins, registerPlugin } from '@/server/plugins'
-import {
-  registerModel,
-  unregisterModel,
-  type AnyModel
-} from '@/server/bare/registry/model-registry'
-import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
+import { clearPlugins, registerPlugin, getPlugin, hasPlugin } from '../src/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvoke, handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
 import {
   ModelIsDelegatedError,
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
   PluginResponseValidationFailedError
-} from '@/utils/errors-server'
-import { SDK_SERVER_ERROR_CODES, ModelType, type QvacPlugin } from '@/schemas'
-import { getPlugin, hasPlugin } from '@/server/plugins'
+} from '../src/errors'
+import { ERROR_CODES, ModelType, type QvacPlugin } from '../src/schemas'
 
 let idCounter = 0
 function makeId(prefix: string) {
@@ -110,7 +105,7 @@ test('pluginInvokeStream: validates streamed chunks against responseSchema', asy
       t.ok(error instanceof PluginResponseValidationFailedError)
       t.is(
         (error as PluginResponseValidationFailedError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+        ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
       )
     }
   } finally {
@@ -136,7 +131,7 @@ test('pluginInvoke: delegated models throw ModelIsDelegatedError', async functio
     t.fail('Expected handlePluginInvoke to throw')
   } catch (error) {
     t.ok(error instanceof ModelIsDelegatedError)
-    t.is((error as ModelIsDelegatedError).code, SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED)
+    t.is((error as ModelIsDelegatedError).code, ERROR_CODES.MODEL_IS_DELEGATED)
   } finally {
     unregisterModel(modelId)
   }
@@ -211,10 +206,7 @@ test('registerPlugin: rejects duplicate modelType registration', function (t) {
       t.fail('Expected registerPlugin to throw on duplicate')
     } catch (error) {
       t.ok(error instanceof PluginAlreadyRegisteredError)
-      t.is(
-        (error as PluginAlreadyRegisteredError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED
-      )
+      t.is((error as PluginAlreadyRegisteredError).code, ERROR_CODES.PLUGIN_ALREADY_REGISTERED)
     }
 
     const retrieved = getPlugin('test-duplicate-plugin')
@@ -245,10 +237,7 @@ test('registerPlugin: rejects alias as modelType', function (t) {
     t.fail('Expected registerPlugin to throw for alias modelType')
   } catch (error) {
     t.ok(error instanceof PluginModelTypeReservedError)
-    t.is(
-      (error as PluginModelTypeReservedError).code,
-      SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED
-    )
+    t.is((error as PluginModelTypeReservedError).code, ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED)
   } finally {
     clearPlugins()
   }

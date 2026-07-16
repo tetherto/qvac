@@ -8,10 +8,10 @@ import {
   record,
   getAggregates,
   getRecentEvents
-} from '../../profiling/controller'
-import { clearAggregator } from '../../profiling/aggregator'
-import { exportJSON, exportTable, exportSummary } from '../../profiling/exporters'
-import type { ProfilingEvent } from '../../profiling/types'
+} from '../src/profiling/controller'
+import { clearAggregator } from '../src/profiling/aggregator'
+import { exportJSON, exportTable, exportSummary } from '../src/profiling/exporters'
+import type { ProfilingEvent } from '../src/profiling/types'
 
 function reset() {
   disable()
@@ -23,7 +23,7 @@ function testEvent(op: string, phase: string, ms: number): ProfilingEvent {
 }
 
 // =============================================================================
-// Core Contract
+// Profiler Contract
 // =============================================================================
 
 test('profiler: enable/disable toggles isEnabled', (t) => {

@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
 import type { LogLevel } from '@qvac/logging'
-import type { Logger, LogTransport } from '@/logging/types'
-import { createRequestRegistry } from '@/server/bare/runtime/request-registry'
+import type { Logger, LogTransport } from '../src/logging/types'
+import { createRequestRegistry } from '../src/runtime/request-registry'
 
 // -----------------------------------------------------------------------------
 // Registry structured logging (Deliverable 3)
@@ -14,7 +14,7 @@ import { createRequestRegistry } from '@/server/bare/runtime/request-registry'
 // part of the 0.11.0 request-lifecycle contract.
 //
 // Tests use the `options.logger` injection on `createRequestRegistry`
-// to capture every `info(...)` call without touching the SDK's
+// to capture every `info(...)` call without touching the engine's
 // cached singleton logger.
 // -----------------------------------------------------------------------------
 

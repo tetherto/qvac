@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { shouldUseStreamErrorTransport } from '@/server/rpc/transport-selector'
-import type { HandlerEntry } from '@/server/rpc/handler-utils'
+import { shouldUseStreamErrorTransport } from '../src/p2p/transport-selector'
+import type { HandlerEntry } from '../src/handlers/types'
 
 const noop = (() => {}) as unknown as HandlerEntry['handler']
 

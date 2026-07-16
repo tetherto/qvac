@@ -8,7 +8,7 @@ type VideoDebugModel = {
 }
 
 test('sdcpp plugin resolveConfig: resolves LTX-2 companions to artifacts and strips *Src', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const resolved = await diffusionPlugin.resolveConfig!(
     {
@@ -41,8 +41,8 @@ test('sdcpp plugin resolveConfig: resolves LTX-2 companions to artifacts and str
 
 test('sdcpp plugin resolveConfig: rejects audioVaeModelSrc without LTX layout (Wan video)', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
 
   let resolveCalls = 0
@@ -75,8 +75,8 @@ test('sdcpp plugin resolveConfig: rejects audioVaeModelSrc without LTX layout (W
 
 test('sdcpp plugin resolveConfig: rejects embeddingsConnectorsModelSrc outside video mode', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
 
   try {
@@ -99,7 +99,7 @@ test('sdcpp plugin resolveConfig: rejects embeddingsConnectorsModelSrc outside v
 })
 
 test('sdcpp plugin createModel: LTX-2 video layout wires llm + vae + connectors (+ audio)', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const result = diffusionPlugin.createModel({
     modelId: 'ltx-test',
@@ -126,7 +126,7 @@ test('sdcpp plugin createModel: LTX-2 video layout wires llm + vae + connectors 
 })
 
 test('sdcpp plugin createModel: LTX-2 audio VAE is optional (silent video)', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const result = diffusionPlugin.createModel({
     modelId: 'ltx-silent',
@@ -145,7 +145,7 @@ test('sdcpp plugin createModel: LTX-2 audio VAE is optional (silent video)', asy
 })
 
 test('sdcpp plugin createModel: Wan video layout unchanged (t5Xxl, no LTX slots)', async (t) => {
-  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+  const { diffusionPlugin } = await import('../src/plugins/builtin/sdcpp-generation/plugin')
 
   const result = diffusionPlugin.createModel({
     modelId: 'wan-test',
@@ -166,8 +166,8 @@ test('sdcpp plugin createModel: Wan video layout unchanged (t5Xxl, no LTX slots)
 
 test('sdcpp plugin createModel: LTX-2 without llm throws ModelLoadFailedError', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
 
   try {
@@ -188,8 +188,8 @@ test('sdcpp plugin createModel: LTX-2 without llm throws ModelLoadFailedError', 
 
 test('sdcpp plugin createModel: video mode without vae throws ModelLoadFailedError', async (t) => {
   const [{ diffusionPlugin }, { ModelLoadFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/plugin'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/plugin'),
+    import('../src/errors')
   ])
 
   try {

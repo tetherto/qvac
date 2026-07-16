@@ -9,7 +9,7 @@ import {
   TTS_CHATTERBOX_LANGUAGES,
   TTS_SUPERTONIC_LANGUAGES,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
-} from '@/schemas/text-to-speech'
+} from '../src/schemas/text-to-speech'
 
 test('ttsConfigSchema: accepts GGML chatterbox load config', (t) => {
   const r = ttsConfigSchema.safeParse({
@@ -80,12 +80,12 @@ test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
   })
   t.is(r.success, true)
   if (r.success) {
-    t.is(r.data.streamChunkTokens, 25)
-    t.is(r.data.streamFirstChunkTokens, 10)
-    t.is(r.data.cfmSteps, 1)
-    t.is(r.data.threads, 8)
-    t.is(r.data.nGpuLayers, 99)
-    t.is(r.data.seed, 42)
+    t.is(r.data['streamChunkTokens'], 25)
+    t.is(r.data['streamFirstChunkTokens'], 10)
+    t.is(r.data['cfmSteps'], 1)
+    t.is(r.data['threads'], 8)
+    t.is(r.data['nGpuLayers'], 99)
+    t.is(r.data['seed'], 42)
   }
 })
 

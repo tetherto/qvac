@@ -1,7 +1,7 @@
 import test from 'brittle'
-import { completionStatsSchema } from '@/schemas'
-import { normalizeCompletionStats } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
-import type { LlmStats } from '@/server/bare/types/addon-responses'
+import { completionStatsSchema } from '../src/schemas'
+import { normalizeCompletionStats } from '../src/plugins/builtin/llamacpp-completion/ops/completion-stats'
+import type { LlmStats } from '../src/utils/addon-responses'
 
 test('normalizeCompletionStats: drops non-finite addon numbers', (t) => {
   const stats: LlmStats = {

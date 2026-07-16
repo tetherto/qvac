@@ -18,9 +18,9 @@ async function withRegisteredVideoModel<T>(
 ) {
   const [{ registerModel, unregisterModel }, { ModelType }, { markLtxVideoModel }] =
     await Promise.all([
-      import('@/server/bare/registry/model-registry'),
-      import('@/schemas'),
-      import('@/server/bare/plugins/sdcpp-generation/ops/video')
+      import('../src/runtime/model-registry'),
+      import('../src/schemas'),
+      import('../src/plugins/builtin/sdcpp-generation/ops/video')
     ])
   const modelId = makeId('test-video')
   const fakeModel = Object.create(VideoStableDiffusion.prototype) as Record<string, unknown>
@@ -43,7 +43,7 @@ async function withRegisteredVideoModel<T>(
 }
 
 test('video op: decodes base64 inputs, forwards mode, and emits stream responses', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
@@ -102,7 +102,7 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
 })
 
 test('video op: maps addon numeric hasAudio to a boolean in final stats', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
 
   await withRegisteredVideoModel(
     async function () {
@@ -141,7 +141,7 @@ test('video op: maps addon numeric hasAudio to a boolean in final stats', async 
 })
 
 test('video op: silent video maps hasAudio 0 to false', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
 
   await withRegisteredVideoModel(
     async function () {
@@ -177,7 +177,7 @@ test('video op: silent video maps hasAudio 0 to false', async function (t) {
 })
 
 test('video op: forwards img2vid init_image and strength to model.run', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
@@ -212,7 +212,7 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
 })
 
 test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
@@ -248,7 +248,7 @@ test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling
 })
 
 test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', async function (t) {
-  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  const { video: videoOp } = await import('../src/plugins/builtin/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
 
   await withRegisteredVideoModel(
@@ -280,8 +280,8 @@ test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', a
 
 test('video op: rejects invalid LTX-2 dimensions and frame counts before generation', async function (t) {
   const [{ video: videoOp }, { PluginRequestValidationFailedError }] = await Promise.all([
-    import('@/server/bare/plugins/sdcpp-generation/ops/video'),
-    import('@/utils/errors-server')
+    import('../src/plugins/builtin/sdcpp-generation/ops/video'),
+    import('../src/errors')
   ])
   let runCalls = 0
 
@@ -354,8 +354,8 @@ test('video op: rejects invalid LTX-2 dimensions and frame counts before generat
 
 test('video op: broad cancel routes through registry and calls model.cancel', async function (t) {
   const [{ getRequestRegistry }, { video: videoOp }] = await Promise.all([
-    import('@/server/bare/runtime'),
-    import('@/server/bare/plugins/sdcpp-generation/ops/video')
+    import('../src/runtime'),
+    import('../src/plugins/builtin/sdcpp-generation/ops/video')
   ])
   let release: () => void = () => {}
   const gate = new Promise<void>((resolve) => {

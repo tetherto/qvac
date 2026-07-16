@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { createBatchCompletionRun } from '@/client/api/batch-completion'
-import type { BatchCompletionStreamRequest } from '@/schemas'
-import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
+import { createBatchCompletionRun } from '../src/api/batch-completion'
+import type { BatchCompletionStreamRequest } from '../src/schemas'
+import { CompletionFailedError, InferenceCancelledError } from '../src/errors'
 
 async function* mockResponses(responses: unknown[]): AsyncGenerator<unknown> {
   for (const response of responses) yield response

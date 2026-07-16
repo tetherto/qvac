@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { ModelType, type RuntimeContext, type DevicePattern } from '@/schemas'
-import { LLM_CONFIG_DEFAULTS, EMBED_CONFIG_DEFAULTS } from '@/schemas/llamacpp-config'
+import { ModelType, type RuntimeContext, type DevicePattern } from '../src/schemas'
+import { LLM_CONFIG_DEFAULTS, EMBED_CONFIG_DEFAULTS } from '../src/schemas/llamacpp-config'
 import {
   matchesPattern,
   findAllMatchingPatterns,
@@ -9,7 +9,7 @@ import {
   CANONICAL_TO_ALIAS,
   BUILTIN_DEVICE_PATTERNS,
   type ConfigResolutionLog
-} from '@/server/bare/registry/model-config-utils'
+} from '../src/runtime/model-config-utils'
 
 test('matchesPattern: matches Pixel device', (t) => {
   const ctx: RuntimeContext = {
@@ -242,7 +242,7 @@ test('BUILTIN: Pixel device gets cpu + flashAttention off', (t) => {
     }
   )
 
-  t.alike(log?.appliedPatterns, ['Pixel devices (SDK default)'])
+  t.alike(log?.appliedPatterns, ['Pixel devices (default)'])
   t.is(llmResult.device, 'cpu')
   t.is(llmResult.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 
@@ -257,7 +257,7 @@ test('BUILTIN: Pixel device gets cpu + flashAttention off', (t) => {
     }
   )
 
-  t.alike(log?.appliedPatterns, ['Android devices (SDK default)', 'Pixel devices (SDK default)'])
+  t.alike(log?.appliedPatterns, ['Android devices (default)', 'Pixel devices (default)'])
   t.is(embedResult.device, 'cpu')
   t.is(embedResult.flashAttention, 'off')
 })
@@ -297,7 +297,7 @@ test('BUILTIN: Non-Pixel Android gets flashAttention off only', (t) => {
     }
   )
 
-  t.alike(log?.appliedPatterns, ['Android devices (SDK default)'])
+  t.alike(log?.appliedPatterns, ['Android devices (default)'])
   t.is(embedResult.device, EMBED_CONFIG_DEFAULTS.device)
   t.is(embedResult.flashAttention, 'off')
 })

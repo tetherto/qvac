@@ -10,19 +10,15 @@ import {
   vlaStatsSchema,
   modelInfoSchema,
   ModelType
-} from '@/schemas'
-import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '@/schemas/load-model'
-import { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from '@/client/api/vla-helpers'
-import { clearPlugins, registerPlugin, hasPlugin } from '@/server/plugins'
-import {
-  registerModel,
-  unregisterModel,
-  type AnyModel
-} from '@/server/bare/registry/model-registry'
-import { handlePluginInvoke } from '@/server/rpc/handlers/plugin-invoke'
-import { vlaRun } from '@/server/bare/plugins/ggml-vla/ops/vla-run'
-import { vlaGetHparams } from '@/server/bare/plugins/ggml-vla/ops/vla-hparams'
-import { encodeBase64 } from '@/utils/encoding'
+} from '../src/schemas'
+import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '../src/schemas/load-model'
+import { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from '../src/api/vla-helpers'
+import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvoke } from '../src/handlers/plugin-invoke'
+import { vlaRun } from '../src/plugins/builtin/ggml-vla/ops/vla-run'
+import { vlaGetHparams } from '../src/plugins/builtin/ggml-vla/ops/vla-hparams'
+import { encodeBase64 } from '../src/utils/encoding'
 
 // ============================================
 // vlaConfigSchema

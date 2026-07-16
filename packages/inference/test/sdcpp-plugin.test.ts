@@ -9,23 +9,19 @@ import {
   upscaleStatsSchema,
   modelInfoSchema,
   ModelType,
-  SDK_SERVER_ERROR_CODES,
+  ERROR_CODES,
   type DiffusionStreamResponse,
   type PluginInvokeStreamResponse
-} from '@/schemas'
-import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '@/schemas/load-model'
-import { clearPlugins, registerPlugin, hasPlugin } from '@/server/plugins'
-import {
-  registerModel,
-  unregisterModel,
-  type AnyModel
-} from '@/server/bare/registry/model-registry'
-import { handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
+} from '../src/schemas'
+import { loadModelSrcRequestSchema, loadModelOptionsBaseSchema } from '../src/schemas/load-model'
+import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
 import {
   PluginResponseValidationFailedError,
   PluginRequestValidationFailedError
-} from '@/utils/errors-server'
-import { diffusion as diffusionOp } from '@/server/bare/plugins/sdcpp-generation/ops/diffusion'
+} from '../src/errors'
+import { diffusion as diffusionOp } from '../src/plugins/builtin/sdcpp-generation/ops/diffusion'
 
 // ============================================
 // sdcppConfigSchema
@@ -1173,7 +1169,7 @@ test('diffusion plugin: rejects invalid request schema', async function (t) {
         t.ok(error instanceof PluginRequestValidationFailedError)
         t.is(
           (error as PluginRequestValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED
+          ERROR_CODES.PLUGIN_REQUEST_VALIDATION_FAILED
         )
       }
     }
@@ -1200,7 +1196,7 @@ test('diffusion plugin: rejects invalid response from handler', async function (
         t.ok(error instanceof PluginResponseValidationFailedError)
         t.is(
           (error as PluginResponseValidationFailedError).code,
-          SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+          ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
         )
       }
     }

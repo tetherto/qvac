@@ -3,7 +3,7 @@ import {
   getActiveRagRequest,
   setActiveRagRequest,
   clearActiveRagRequest
-} from '@/server/bare/rag-hyperdb/rag-operation-manager'
+} from '../src/rag/rag-operation-manager'
 
 // -----------------------------------------------------------------------------
 // RAG workspace → requestId map.

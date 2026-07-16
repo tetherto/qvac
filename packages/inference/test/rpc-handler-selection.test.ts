@@ -1,7 +1,7 @@
 import test from 'brittle'
-import type { Request, Response } from '@/schemas'
-import type { HandlerEntry } from '@/server/rpc/handler-utils'
-import { selectHandler } from '@/server/rpc/handler-selection'
+import type { Request, Response } from '../src/schemas'
+import type { HandlerEntry } from '../src/handlers/types'
+import { selectHandler } from '../src/selection'
 
 function localHandler() {
   return { type: 'heartbeat' } as Response
@@ -12,7 +12,7 @@ function delegatedHandler() {
 }
 
 function delegatedRequest() {
-  return { type: 'heartbeat', delegate: true } as Request
+  return { type: 'heartbeat', delegate: true } as unknown as Request
 }
 
 function localRequest() {

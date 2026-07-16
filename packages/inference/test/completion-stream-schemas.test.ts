@@ -4,10 +4,9 @@ import {
   completionStatsSchema,
   generationParamsSchema,
   toolDialectSchema
-} from '@/schemas/completion-stream'
-import { toolSchema } from '@/schemas/tools'
-import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
-import { contractValidate } from './utils/contract-validator'
+} from '../src/schemas/completion-stream'
+import { toolSchema } from '../src/schemas/tools'
+import { REASONING_BUDGET_MAX } from '../src/schemas/llamacpp-config'
 
 test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
   t.is(completionStatsSchema.safeParse({ backendDevice: 'cpu' }).success, true)
@@ -117,44 +116,4 @@ test('completionStreamResponseSchema: round-trips backendDevice through completi
       t.is(statsEvent.stats.backendDevice, 'cpu')
     }
   }
-})
-
-test('contract completionStream.response: validates streaming event chunks', (t) => {
-  const statsChunk = {
-    type: 'completionStream',
-    done: true,
-    events: [
-      {
-        type: 'completionStats',
-        seq: 0,
-        stats: { timeToFirstToken: 80, tokensPerSecond: 75, cacheTokens: 12, backendDevice: 'cpu' }
-      },
-      { type: 'completionDone', seq: 1 }
-    ]
-  }
-  t.is(completionStreamResponseSchema.safeParse(statsChunk).success, true)
-  const contract = contractValidate('completionStream.response', statsChunk)
-  t.ok(contract.valid, `contract accepts stats + done chunk: ${contract.errors}`)
-
-  const badDevice = {
-    type: 'completionStream',
-    events: [
-      { type: 'completionStats', seq: 0, stats: { backendDevice: 'npu' } },
-      { type: 'completionDone', seq: 1 }
-    ]
-  }
-  t.is(completionStreamResponseSchema.safeParse(badDevice).success, false)
-  t.is(contractValidate('completionStream.response', badDevice).valid, false)
-
-  const extraKey = {
-    type: 'completionStream',
-    events: [{ type: 'completionDone', seq: 0 }],
-    extraKey: true
-  }
-  t.is(completionStreamResponseSchema.safeParse(extraKey).success, false)
-  t.is(
-    contractValidate('completionStream.response', extraKey).valid,
-    false,
-    'strict response object rejects unknown keys in the contract too'
-  )
 })

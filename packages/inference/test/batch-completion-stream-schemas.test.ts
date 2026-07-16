@@ -3,8 +3,8 @@ import {
   batchCompletionClientParamsSchema,
   batchCompletionStreamRequestSchema,
   batchCompletionStreamResponseSchema
-} from '@/schemas/batch-completion-stream'
-import { requestSchema, responseSchema } from '@/schemas/common'
+} from '../src/schemas/batch-completion-stream'
+import { requestSchema, responseSchema } from '../src/schemas/common'
 
 const prompt = {
   id: 'first',

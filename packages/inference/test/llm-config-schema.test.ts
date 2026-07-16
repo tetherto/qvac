@@ -3,9 +3,12 @@ import {
   llmConfigBaseSchema,
   llmConfigSchema,
   REASONING_BUDGET_MAX
-} from '@/schemas/llamacpp-config'
-import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+} from '../src/schemas/llamacpp-config'
+import {
+  loadModelOptionsToRequestSchema,
+  loadModelSrcRequestSchema
+} from '../src/schemas/load-model'
+import { ModelType } from '../src/schemas'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,

@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { bciConfigSchema } from '@/schemas/bci-config'
+import { bciConfigSchema } from '../src/schemas/bci-config'
 import {
   neuralInputSchema,
   bciTranscribeClientParamsSchema,
@@ -8,10 +8,13 @@ import {
   bciStreamOptsSchema,
   bciTranscribeStreamRequestSchema,
   bciTranscribeStreamResponseSchema
-} from '@/schemas/bci'
-import { requestSchema, responseSchema } from '@/schemas/common'
-import { loadModelSrcRequestSchema, loadModelOptionsToRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+} from '../src/schemas/bci'
+import { requestSchema, responseSchema } from '../src/schemas/common'
+import {
+  loadModelSrcRequestSchema,
+  loadModelOptionsToRequestSchema
+} from '../src/schemas/load-model'
+import { ModelType } from '../src/schemas'
 
 // === bciConfigSchema (engine config) ===
 

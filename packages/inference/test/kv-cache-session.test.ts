@@ -47,7 +47,7 @@ async function loadSession() {
   const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-kvcache-'))
   env['HOME'] = testHome
 
-  const mod = await import('@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session')
+  const mod = await import('../src/plugins/builtin/llamacpp-completion/ops/kv-cache-session')
 
   // Reset state between tests — module state is per-process, the
   // tests share it.

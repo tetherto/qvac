@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
+import { isAddonCancelledError } from '../src/plugins/builtin/llamacpp-completion/ops/batch-cancelled'
 
 // The addon's structured-code format from
 // `qvac_errors::StatusError::codeString()`:

@@ -1,7 +1,7 @@
 import test from 'brittle'
 import type { LogLevel } from '@qvac/logging'
-import type { Logger, LogTransport } from '@/logging/types'
-import { withRequestContext } from '@/server/bare/runtime/with-request-context'
+import type { Logger, LogTransport } from '../src/logging/types'
+import { withRequestContext } from '../src/runtime/request-context'
 
 // -----------------------------------------------------------------------------
 // withRequestContext — handler-side per-request logger wrapper.

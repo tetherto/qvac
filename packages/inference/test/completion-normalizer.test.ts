@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { createCompletionNormalizer } from '@/server/utils/completion-normalizer'
-import type { CompletionEvent, NormalizerConfig, PluginCapabilities, Tool } from '@/schemas'
+import { createCompletionNormalizer } from '../src/utils/completion-normalizer'
+import type { CompletionEvent, NormalizerConfig, PluginCapabilities, Tool } from '../src/schemas'
 
 const NONE_CAPS: PluginCapabilities = {
   toolCalling: 'none',

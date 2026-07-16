@@ -6,7 +6,7 @@ import {
   videoStatsSchema,
   videoStreamRequestSchema,
   videoStreamResponseSchema
-} from '@/schemas'
+} from '../src/schemas'
 
 type BrittleT = {
   alike: (actual: unknown, expected: unknown, msg?: string) => void

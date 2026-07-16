@@ -1,4 +1,5 @@
 import test from 'brittle'
+import Buffer from 'bare-buffer'
 import {
   transcribeRequestSchema,
   transcribeStreamRequestSchema,
@@ -7,14 +8,11 @@ import {
   transcribeSegmentSchema,
   type TranscribeSegment,
   type TranscribeStreamResponse
-} from '@/schemas/transcription'
-import { ModelType } from '@/schemas/model-types'
-import { createErrorResponse } from '@/schemas/error'
-import {
-  toTranscribeSegment,
-  assertMetadataSupported
-} from '@/server/bare/utils/transcribe-metadata'
-import { TranscriptionFailedError } from '@/utils/errors-server'
+} from '../src/schemas/transcription'
+import { ModelType } from '../src/schemas/model-types'
+import { createErrorResponse } from '../src/schemas/error'
+import { toTranscribeSegment, assertMetadataSupported } from '../src/utils/transcribe-metadata'
+import { TranscriptionFailedError } from '../src/errors'
 
 // =============================================================================
 // Schema round-trip — transcribeSegmentSchema / transcribeResponseSchema

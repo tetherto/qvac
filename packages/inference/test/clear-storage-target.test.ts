@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { resolveClearStorageTarget } from '@/server/utils/clear-storage'
+import { resolveClearStorageTarget } from '../src/utils/clear-storage'
 
 const CACHE = '/home/user/.qvac/models'
 

@@ -1,13 +1,13 @@
 import test from 'brittle'
-import { audioInputSchema } from '@/schemas/transcription'
-import { imageInputSchema } from '@/schemas/ocr'
-import { attachmentSchema } from '@/schemas/completion-stream'
+import { audioInputSchema } from '../src/schemas/transcription'
+import { imageInputSchema } from '../src/schemas/ocr'
+import { attachmentSchema } from '../src/schemas/completion-stream'
 import {
   ragIngestParamsSchema,
   ragSearchParamsSchema,
   ragDeleteWorkspaceParamsSchema,
   ragCloseWorkspaceParamsSchema
-} from '@/schemas/rag'
+} from '../src/schemas/rag'
 
 // ============== Attack vectors ==============
 
@@ -22,7 +22,7 @@ const TRAVERSAL_VECTORS = [
 
 // ============== Category B schemas (absolute user paths) ==============
 // These MUST continue to accept all paths — the user intentionally points
-// the SDK at files on their filesystem. These are regression guards:
+// us at files on their filesystem. These are regression guards:
 // if someone adds blanket .. rejection to these schemas, these tests break.
 
 test('audioInputSchema filePath accepts user paths (no-regression)', (t) => {

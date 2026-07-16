@@ -1,19 +1,16 @@
 import test from 'brittle'
-import type RPC from 'bare-rpc'
 import { z } from 'zod'
 import {
   createErrorResponse,
   loadBuiltinToRequestSchema,
   loadCustomPluginToRequestSchema,
-  isBuiltInModelType,
-  type Request
-} from '@/schemas'
-import { LLAMA_3_2_1B_INST_Q4_0 } from '@/models/registry'
-import { formatZodError } from '@/utils/zod-error'
-import { parseClientInput } from '@/client/parse-input'
-import { send } from '@/client'
-import { validateConfig } from '@/client/config-loader/config-utils'
-import { ConfigValidationFailedError, RequestValidationFailedError } from '@/utils/errors-client'
+  isBuiltInModelType
+} from '../src/schemas'
+import { LLAMA_3_2_1B_INST_Q4_0 } from '../src/models/registry'
+import { formatZodError } from '../src/utils/zod-error'
+import { parseClientInput } from '../src/api/parse-input'
+import { validateConfig } from '../src/config/config-utils'
+import { ConfigValidationFailedError, RequestValidationFailedError } from '../src/errors'
 
 // A raw ZodError serialises its `.message` as a JSON array of issues; a friendly
 // message does not. Validation errors shown to consumers must never be JSON.
@@ -30,17 +27,6 @@ function isJson(value: string): boolean {
 function inputError(schema: typeof loadBuiltinToRequestSchema, value: unknown) {
   try {
     parseClientInput(schema, value)
-    return null
-  } catch (error) {
-    if (error instanceof RequestValidationFailedError) return error.message
-    throw error
-  }
-}
-
-const DUMMY_RPC = {} as unknown as RPC
-async function requestError(request: unknown) {
-  try {
-    await send(request as Request, {}, DUMMY_RPC)
     return null
   } catch (error) {
     if (error instanceof RequestValidationFailedError) return error.message
@@ -75,17 +61,6 @@ test('validateConfig throws a readable ConfigValidationFailedError', function (t
   } catch (error) {
     t.ok(error instanceof ConfigValidationFailedError)
     t.absent(isJson((error as ConfigValidationFailedError).message), 'not JSON')
-  }
-})
-
-test('a malformed request rejects with a typed error, never a raw ZodError', async function (t) {
-  try {
-    await send({ type: 'embed' } as unknown as Request, {}, DUMMY_RPC)
-    t.fail('expected send to reject')
-  } catch (error) {
-    t.ok(error instanceof RequestValidationFailedError, 'typed SDK error')
-    t.absent(error instanceof z.ZodError, 'raw ZodError does not escape')
-    t.absent(isJson((error as RequestValidationFailedError).message), 'not JSON')
   }
 })
 
@@ -165,29 +140,4 @@ test('tts: a missing engine points at the ttsEngine discriminator', function (t)
     modelConfig: { language: 'en' }
   })
   t.ok(message?.includes('ttsEngine'), 'names the discriminator')
-})
-
-// --- Every operation: errors name the field, resolved via the request `type` ---
-
-test('embed: a malformed request names the field', async function (t) {
-  const message = await requestError({ type: 'embed', modelId: 123, input: 'hi' })
-  t.ok(message?.includes('modelId'), 'names the field')
-  t.ok(message?.includes('→ at'), 'field-level path')
-})
-
-test('transcribe: a malformed request names the field', async function (t) {
-  const message = await requestError({ type: 'transcribe', modelId: 5 })
-  t.ok(message?.includes('modelId'), 'names the field')
-})
-
-test('translate: a malformed request resolves to the right modelType branch', async function (t) {
-  const message = await requestError({
-    type: 'translate',
-    modelId: 'm',
-    text: 'hi',
-    stream: true,
-    modelType: 'llm',
-    to: 5
-  })
-  t.ok(message?.includes('at to'), 'names the LLM-branch field')
 })

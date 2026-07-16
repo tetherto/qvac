@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { transcribeStatsSchema } from '@/schemas/transcription'
+import { transcribeStatsSchema } from '../src/schemas/transcription'
 
 test('transcribeStatsSchema: round-trips whisper backend/GPU stats', (t) => {
   const result = transcribeStatsSchema.parse({

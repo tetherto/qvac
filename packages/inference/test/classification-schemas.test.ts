@@ -8,21 +8,17 @@ import {
   modelInfoSchema,
   ModelType,
   type ClassificationResult
-} from '@/schemas'
+} from '../src/schemas'
 import {
   loadModelSrcRequestSchema,
   loadModelOptionsBaseSchema,
   loadClassificationModelRequestSchema
-} from '@/schemas/load-model'
-import { clearPlugins, registerPlugin, hasPlugin } from '@/server/plugins'
-import {
-  registerModel,
-  unregisterModel,
-  type AnyModel
-} from '@/server/bare/registry/model-registry'
-import { handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
-import { classify as classifyOp } from '@/server/bare/plugins/ggml-classification/ops/classify'
-import { encodeBase64 } from '@/utils/encoding'
+} from '../src/schemas/load-model'
+import { clearPlugins, registerPlugin, hasPlugin } from '../src/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '../src/runtime/model-registry'
+import { handlePluginInvokeStream } from '../src/handlers/plugin-invoke'
+import { classify as classifyOp } from '../src/plugins/builtin/ggml-classification/ops/classify'
+import { encodeBase64 } from '../src/utils/encoding'
 
 // ============================================
 // classificationConfigSchema

@@ -1,7 +1,7 @@
 import test from 'brittle'
-import { buildBciWhispercppArgs } from '@/server/bare/plugins/bci-whispercpp-transcription/args'
-import { resolveBciConfig } from '@/server/bare/plugins/bci-whispercpp-transcription/resolve-config'
-import type { ResolveContext } from '@/schemas'
+import { buildBciWhispercppArgs } from '../src/plugins/builtin/bci-whispercpp-transcription/args'
+import { resolveBciConfig } from '../src/plugins/builtin/bci-whispercpp-transcription/resolve-config'
+import type { ResolveContext } from '../src/schemas'
 
 const logger = {
   error: function () {},

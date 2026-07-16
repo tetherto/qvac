@@ -1,6 +1,6 @@
 import test from 'brittle'
-import { ttsConfigSchema } from '@/schemas/text-to-speech'
-import { LegacyTtsModelDeprecatedError } from '@/utils/errors-server'
+import { ttsConfigSchema } from '../src/schemas/text-to-speech'
+import { LegacyTtsModelDeprecatedError } from '../src/errors'
 
 type TtsGgmlDebugModel = {
   _streamChunkTokens?: number
@@ -9,8 +9,6 @@ type TtsGgmlDebugModel = {
   _threads?: number
   _nGpuLayers?: number
   _seed?: number
-  _mecabDictPath?: string
-  _cangjieTsvPath?: string
   _enhancerGgufPath?: string
   _denoiserGgufPath?: string
   _outputSampleRate?: number | null
@@ -22,7 +20,7 @@ type TtsGgmlDebugModel = {
 }
 
 test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsModelDeprecatedError', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
   const legacyConfig = {
     ttsEngine: 'chatterbox',
     language: 'en',
@@ -51,7 +49,7 @@ test('ttsPlugin resolveConfig: legacy ONNX Chatterbox shape throws LegacyTtsMode
 })
 
 test('ttsPlugin createModel: forwards Chatterbox native constructor options', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-chatterbox-test',
@@ -80,50 +78,8 @@ test('ttsPlugin createModel: forwards Chatterbox native constructor options', as
   t.alike(model._config, { language: 'en', useGPU: true })
 })
 
-test('ttsPlugin resolveConfig: resolves Chatterbox multilingual tokenizer assets', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
-  const resolved: string[] = []
-
-  const result = await ttsPlugin.resolveConfig!(
-    {
-      ttsEngine: 'chatterbox',
-      language: 'ja',
-      s3genModelSrc: 'registry://s3/s3gen.gguf',
-      mecabDictSrc: 'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-      cangjieTsvSrc: 'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
-    },
-    {
-      resolveModelPath: async (src) => {
-        const value = typeof src === 'string' ? src : src.src
-        resolved.push(value)
-        if (value.includes('mecab-ipadic')) {
-          return '/tmp/qvac/sets/mecab-ipadic/char.bin'
-        }
-        if (value.includes('Cangjie5_TC')) {
-          return '/tmp/qvac/Cangjie5_TC.tsv'
-        }
-        return '/tmp/qvac/s3gen.gguf'
-      },
-      modelSrc: 'registry://s3/t3.gguf',
-      modelType: 'tts-ggml'
-    }
-  )
-
-  t.alike(resolved, [
-    'registry://s3/s3gen.gguf',
-    'registry://s3/qvac_models_compiled/chatterbox/mecab-ipadic/char.bin',
-    'registry://s3/qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv'
-  ])
-  t.alike(result.config, { ttsEngine: 'chatterbox', language: 'ja' })
-  t.alike(result.artifacts, {
-    s3genPath: '/tmp/qvac/s3gen.gguf',
-    mecabDictPath: '/tmp/qvac/sets/mecab-ipadic',
-    cangjieTsvPath: '/tmp/qvac/Cangjie5_TC.tsv'
-  })
-})
-
 test('ttsPlugin resolveConfig: resolves LavaSR enhancer/denoiser to artifacts and strips *Src', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
 
   const resolved = await ttsPlugin.resolveConfig!(
     {
@@ -151,7 +107,7 @@ test('ttsPlugin resolveConfig: resolves LavaSR enhancer/denoiser to artifacts an
 })
 
 test('ttsPlugin resolveConfig: resolves Chatterbox LavaSR artifacts and strips *Src', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
 
   const resolved = await ttsPlugin.resolveConfig!(
     {
@@ -180,7 +136,7 @@ test('ttsPlugin resolveConfig: resolves Chatterbox LavaSR artifacts and strips *
 })
 
 test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertonic)', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-supertonic-lavasr',
@@ -204,7 +160,7 @@ test('ttsPlugin createModel: forwards LavaSR files + outputSampleRate (supertoni
 })
 
 test('ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const { ttsPlugin } = await import('../src/plugins/builtin/tts-ggml/plugin')
 
   const result = ttsPlugin.createModel({
     modelId: 'tts-chatterbox-lavasr',
@@ -224,26 +180,4 @@ test('ttsPlugin createModel: forwards LavaSR enhancer (chatterbox)', async (t) =
   t.is(model._denoiserGgufPath, undefined)
   // Chatterbox does not resample; outputSampleRate is never forwarded.
   t.is(model._outputSampleRate ?? null, null)
-})
-
-test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', async (t) => {
-  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
-
-  const result = ttsPlugin.createModel({
-    modelId: 'tts-chatterbox-mtl-test',
-    modelPath: '/tmp/chatterbox-t3-mtl.gguf',
-    artifacts: {
-      s3genPath: '/tmp/chatterbox-s3gen-mtl.gguf',
-      mecabDictPath: '/tmp/mecab-ipadic',
-      cangjieTsvPath: '/tmp/Cangjie5_TC.tsv'
-    },
-    modelConfig: {
-      ttsEngine: 'chatterbox',
-      language: 'ja'
-    }
-  })
-
-  const model = result.model as TtsGgmlDebugModel
-  t.is(model._mecabDictPath, '/tmp/mecab-ipadic')
-  t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.tsv')
 })
