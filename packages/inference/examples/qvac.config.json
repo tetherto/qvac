@@ -1,5 +1,5 @@
 {
-  "loggerLevel": "info",
+  "loggerLevel": "debug",
   "loggerConsoleOutput": true,
   "httpDownloadConcurrency": 3,
   "httpConnectionTimeoutMs": 10000
