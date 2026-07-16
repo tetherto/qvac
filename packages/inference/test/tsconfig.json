@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["./**/*", "../types/**/*"],
+  "exclude": ["./dist", "./bare"],
+  "compilerOptions": {
+    "noEmit": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
+  }
+}
