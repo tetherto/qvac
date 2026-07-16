@@ -60,8 +60,6 @@ export const constantsRegistry = {
   // than a hand-written record, so the varnames can't drift from the one
   // source of truth every other consumer of SUPPORTED_AUDIO_FORMATS shares.
   SupportedAudioFormat: z.enum(
-    Object.fromEntries(
-      SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext])
-    )
+    Object.fromEntries(SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext]))
   )
 } as const
