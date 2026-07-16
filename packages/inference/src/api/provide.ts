@@ -1,6 +1,6 @@
-import { type ProvideParams, type ProvideRequest } from '@/schemas'
-import { send } from '@/client/rpc/rpc-client'
-import { InvalidResponseError, ProviderStartFailedError } from '@/utils/errors-client'
+import { type ProvideParams, type ProvideRequest } from '../schemas/index.ts'
+import { send } from '../dispatch.ts'
+import { InvalidResponseError, ProviderStartFailedError } from '../errors/index.ts'
 
 /**
  * Starts a provider service that offers QVAC capabilities to remote peers.

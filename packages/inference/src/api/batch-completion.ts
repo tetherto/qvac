@@ -1,6 +1,5 @@
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
-import { generateClientRequestId } from '@/client/api/client-request-id'
-import { getClientLogger } from '@/logging'
+import { stream as streamRpc } from '../dispatch.ts'
+import { getAppLogger } from '../logging/index.ts'
 import {
   batchCompletionStreamResponseSchema,
   type BatchCompletionClientParams,
@@ -14,13 +13,14 @@ import {
   type McpClientInput,
   type RPCOptions,
   type Tool
-} from '@/schemas'
-import { buildFinalFromEvents } from '@/utils/aggregate-events'
-import { CompletionFailedError, InferenceCancelledError } from '@/utils/errors-server'
-import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
-import { validateTools, type ToolHandlerMap, type ToolInput } from '@/utils/tool-helpers'
+} from '../schemas/index.ts'
+import { buildFinalFromEvents } from '../utils/aggregate-events.ts'
+import { CompletionFailedError, InferenceCancelledError } from '../errors/index.ts'
+import { getMcpToolsWithHandlers } from '../utils/mcp-adapter.ts'
+import { validateTools, type ToolHandlerMap, type ToolInput } from '../utils/tool-helpers.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 type BatchPromptParams = Omit<BatchCompletionClientParams['prompts'][number], 'tools'> & {
   tools?: Tool[] | ToolInput[]
@@ -129,7 +129,7 @@ export function createBatchCompletionRun(
   params: BatchCompletionParams,
   streamFactory: BatchCompletionStreamFactory
 ): BatchCompletionRun {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const states = new Map<string, PerIdState>()
   const subStreams = new Map<string, BatchCompletionSubRun>()
   const eventQueue: BatchCompletionEvent[] = []

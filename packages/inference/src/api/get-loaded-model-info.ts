@@ -2,16 +2,16 @@ import {
   type GetLoadedModelInfoParams,
   type GetLoadedModelInfoRequest,
   type LoadedModelInfo
-} from '@/schemas'
-import { type RPCOptions } from '@/schemas/common'
-import { send } from '@/client/rpc/rpc-client'
-import { InvalidResponseError } from '@/utils/errors-client'
+} from '../schemas/index.ts'
+import { type RPCOptions } from '../schemas/common.ts'
+import { send } from '../dispatch.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 /**
  * Returns introspection info for a loaded `modelId` (local or delegated).
  *
  * For local models, `info.modelType` and `info.handlers` are authoritative.
- * Use them to preflight an SDK call before sending the actual RPC, e.g.
+ * Use them to preflight a call before making the actual request, e.g.
  * confirm that a model supports `transcribeStream` before calling `transcribe()`.
  *
  * For delegated models, only `modelId`, `isDelegated: true`, `providerInfo`,

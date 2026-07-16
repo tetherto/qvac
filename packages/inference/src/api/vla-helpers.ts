@@ -1,15 +1,14 @@
 /**
- * Pure-JS helpers for preparing VLA inference inputs on the client side.
+ * Pure-JS helpers for preparing VLA inference inputs.
  *
  * Mirrors `preprocessImage` / `padState` / `DEFAULT_IMAGE_SIZE` from
  * `@qvac/vla-ggml/addon.js`. Kept inlined (not re-exported from the addon)
- * so the SDK's client surface never loads the addon's native binding —
- * consumers running under Node / Bun / Expo without VLA prebuilds can still
- * use the SDK to drive a remote VLA worker.
+ * so preparing inputs never loads the addon's native binding — a caller
+ * without VLA prebuilds can still drive a remote VLA provider over delegation.
  *
  * This file is a verbatim port of the addon's JS implementation; keep them
- * in sync so the wire-format tensors stay byte-identical regardless of
- * where preprocessing runs (consumer process vs worker vs addon).
+ * in sync so the produced tensors stay byte-identical regardless of where
+ * preprocessing runs (in-process vs addon).
  */
 
 /** Default vision tower image size used by SmolVLA-LIBERO. */

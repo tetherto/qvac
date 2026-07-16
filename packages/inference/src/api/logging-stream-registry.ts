@@ -1,8 +1,8 @@
-import { type Logger, getClientLogger } from '@/logging'
-import { loggingStream } from './api/logging-stream'
-import type { LoggingStreamResponse } from '@/schemas/logging-stream'
+import { type Logger, getAppLogger } from '../logging/index.ts'
+import { loggingStream } from './logging-stream.ts'
+import type { LoggingStreamResponse } from '../schemas/logging-stream.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 const activeStreams = new Map<
   string,
@@ -60,8 +60,8 @@ export function stopLoggingStreamForModel(modelId: string) {
   const stream = activeStreams.get(modelId)
   if (stream) {
     activeStreams.delete(modelId)
-    // Terminate the stream iterator - this will close the RPC connection
-    // and the server-side async generator will automatically terminate
+    // Terminate the stream iterator - this ends the in-process stream
+    // and the engine-side async generator terminates automatically
     void stream.streamIterator.return(undefined)
     logger.debug(`Stopped logging stream for model ${modelId}`)
   }

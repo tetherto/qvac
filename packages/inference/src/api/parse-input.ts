@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { formatZodError } from '@/utils/zod-error'
-import { RequestValidationFailedError } from '@/utils/errors-client'
+import { formatZodError } from '../utils/zod-error.ts'
+import { RequestValidationFailedError } from '../errors/index.ts'
 
 export function parseClientInput<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
   try {

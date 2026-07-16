@@ -1,7 +1,5 @@
 import {
   textToSpeechStreamResponseSchema,
-  ttsClientParamsSchema,
-  type TtsClientParams,
   type TtsClientParamsInput,
   type TtsRequest,
   type RPCOptions,
@@ -12,13 +10,13 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate
-} from '@/schemas'
-import { stream as streamRpc, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
-import { getClientLogger } from '@/logging'
-import { TextToSpeechStreamFailedError } from '@/utils/errors-client'
-import { parseClientInput } from '@/client/parse-input'
+} from '../schemas/index.ts'
+import Buffer from 'bare-buffer'
+import { stream as streamRpc, duplex, type DuplexReadable } from '../dispatch.ts'
+import { getAppLogger } from '../logging/index.ts'
+import { TextToSpeechStreamFailedError } from '../errors/index.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 /**
  * Fan-out queue that lets multiple consumers iterate the same TTS response
@@ -27,10 +25,10 @@ const logger = getClientLogger()
  *
  * The source is injected as an `AsyncIterable<TtsResponse>` so this class can
  * be unit-tested directly against the real implementation (without mocking
- * the RPC layer). Production callsites adapt `streamRpc(...)` via
+ * dispatch). Production callsites adapt `streamRpc(...)` via
  * `ttsResponseSource()` below.
  *
- * Exported for test use; not part of the public SDK surface.
+ * Exported for test use; not part of the public API surface.
  */
 export class TtsMulticast {
   private readonly queue: TtsResponse[] = []
@@ -94,10 +92,10 @@ export class TtsMulticast {
   private async pump(source: AsyncIterable<TtsResponse>): Promise<void> {
     try {
       for await (const response of source) {
-        // The server owns this response schema; per-frame Zod .parse() adds
+        // The engine owns this response schema; per-frame Zod .parse() adds
         // non-trivial CPU overhead for large sentences with many PCM frames.
-        // Rely on the discriminated union narrowing at the RPC boundary and
-        // skip re-validation here.
+        // Rely on the discriminated union narrowing done where the response
+        // is produced and skip re-validation here.
         this.queue.push(response)
         this.notify()
         if (response.done) break
@@ -143,14 +141,14 @@ export class TtsMulticast {
   }
 }
 
-function buildTtsRequest(params: TtsClientParams): TtsRequest {
+function buildTtsRequest(params: TtsClientParamsInput): TtsRequest {
   return {
     type: 'textToSpeech',
     modelId: params.modelId,
-    inputType: params.inputType,
+    inputType: params.inputType ?? 'text',
     text: params.text,
-    stream: params.stream,
-    sentenceStream: params.sentenceStream,
+    stream: params.stream ?? true,
+    sentenceStream: params.sentenceStream ?? false,
     ...(params.sentenceStreamLocale !== undefined && {
       sentenceStreamLocale: params.sentenceStreamLocale
     }),
@@ -212,21 +210,22 @@ export function textToSpeech(
   params: TtsClientParamsInput,
   options?: RPCOptions
 ): TextToSpeechStreamResult {
-  const parsed: TtsClientParams = parseClientInput(ttsClientParamsSchema, params)
+  const stream = params.stream ?? true
+  const sentenceStream = params.sentenceStream ?? false
 
-  if (parsed.sentenceStream && !parsed.stream) {
+  if (sentenceStream && !stream) {
     throw new TextToSpeechStreamFailedError(
       'textToSpeech: `sentenceStream: true` requires `stream: true`'
     )
   }
 
-  const request = buildTtsRequest(parsed)
+  const request = buildTtsRequest(params)
 
-  if (parsed.stream && parsed.sentenceStream) {
+  if (stream && sentenceStream) {
     return sentenceStreamTts(request, options)
   }
 
-  if (parsed.stream) {
+  if (stream) {
     return plainStreamTts(request, options)
   }
 
@@ -326,8 +325,8 @@ async function* plainTtsBufferStream(
   try {
     for await (const response of streamRpc(request, options)) {
       if (response.type !== 'textToSpeech') continue
-      // See TtsMulticast.pump — skip per-frame Zod validation; the server is
-      // the source of truth for this wire shape.
+      // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
+      // the source of truth for this response shape.
       if (response.buffer.length > 0) {
         yield* response.buffer
       }
@@ -396,7 +395,7 @@ async function collectTtsBuffer(
 
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Buffer should be a complete UTF-8 fragment. The engine forwards them to ONNX TTS `runStreaming`
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  */
@@ -412,7 +411,7 @@ export async function textToSpeechStream(
   let consumed = false
   // `closed` flips on `end()` or `destroy()`. Without this guard a late
   // `write()` would propagate a raw Bare/Node "write after end" stream error
-  // to the caller. Throwing a typed SDK error keeps the duplex session
+  // to the caller. Throwing a typed error keeps the duplex session
   // surface predictable.
   let closed = false
 
@@ -474,7 +473,7 @@ async function* parseTextToSpeechStreamLines(
       if (yielded === undefined) continue
       yield yielded
       // Close the stream after the terminal frame so consumers don't
-      // depend on the server closing the socket to stop iteration.
+      // depend on the engine ending the stream to stop iteration.
       if (yielded.done) return
     }
   }

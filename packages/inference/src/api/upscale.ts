@@ -3,10 +3,10 @@ import {
   type UpscaleClientParams,
   type UpscaleStats,
   type UpscaleStreamRequest
-} from '@/schemas/sdcpp-config'
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
-import { decodeBase64, encodeBase64 } from '@/utils/encoding'
-import { StreamEndedError } from '@/utils/errors-client'
+} from '../schemas/sdcpp-config.ts'
+import { stream as streamRpc } from '../dispatch.ts'
+import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
+import { StreamEndedError } from '../errors/index.ts'
 
 interface UpscaleResult {
   outputs: Promise<Uint8Array[]>
@@ -27,14 +27,14 @@ interface UpscaleResult {
  * multi-output variants.
  *
  * @param params - `{ modelId, image, repeats? }`. `image` is raw PNG/JPEG
- *   bytes; the client base64-encodes them on the wire.
+ *   bytes; they are base64-encoded in the request.
  * @returns `{ outputs, stats }` — `outputs` resolves to a single-element
  *   array containing the final upscaled PNG; `stats` resolves to
  *   addon-side stats (load/upscale ms, final width/height, repeats
  *   actually executed, etc.).
  * @throws {ModelOperationNotSupportedError} If the model was not loaded
  *   with `mode: "upscale"`.
- * @throws {StreamEndedError} If the RPC stream closes without emitting a
+ * @throws {StreamEndedError} If the stream closes without emitting a
  *   terminal `done` chunk.
  *
  * @example

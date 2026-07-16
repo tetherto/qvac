@@ -1,17 +1,17 @@
-import { send, stream } from '@/client/rpc/rpc-client'
+import { send, stream } from '../dispatch.ts'
 import {
   type DownloadAssetOptions as BaseDownloadAssetOptions,
   type RPCOptions,
   downloadAssetOptionsToRequestSchema
-} from '@/schemas'
+} from '../schemas/index.ts'
 import {
   DownloadAssetFailedError,
   StreamEndedError,
   InvalidResponseError
-} from '@/utils/errors-client'
-import { decoratePromise } from '@/utils/decorate-promise'
-import { parseClientInput } from '@/client/parse-input'
-import { generateClientRequestId } from '@/client/api/client-request-id'
+} from '../errors/index.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
+import { parseClientInput } from './parse-input.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
 export type DownloadAssetOptions = BaseDownloadAssetOptions
 
@@ -34,7 +34,7 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions
  *
  * @throws {QvacErrorBase} When asset download fails, with details in the error message
  * @throws {QvacErrorBase} When streaming ends unexpectedly (only when using onProgress)
- * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ * @throws {QvacErrorBase} When receiving an invalid response type from the engine
  *
  * @example
  * ```typescript
@@ -63,7 +63,7 @@ export function downloadAsset(
   options: DownloadAssetOptions,
   rpcOptions?: RPCOptions
 ): Promise<string> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runDownloadAsset(options, requestId, rpcOptions)
   return decoratePromise(inner, { requestId })
 }

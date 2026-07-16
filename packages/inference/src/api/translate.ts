@@ -1,4 +1,4 @@
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { stream as streamRpc } from '../dispatch.ts'
 import {
   translateResponseSchema,
   normalizeModelType,
@@ -7,9 +7,9 @@ import {
   type TranslateClientParams,
   type TranslationStats,
   type RPCOptions
-} from '@/schemas'
+} from '../schemas/index.ts'
 import { detectOne } from '@qvac/langdetect-text'
-import { TranslationFailedError } from '@/utils/errors-client'
+import { TranslationFailedError } from '../errors/index.ts'
 
 /**
  * Translates text from one language to another using a specified translation model.

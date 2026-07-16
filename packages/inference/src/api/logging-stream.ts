@@ -1,10 +1,10 @@
-import { stream } from '@/client/rpc/rpc-client'
+import { stream } from '../dispatch.ts'
 import type {
   LoggingStreamResponse,
   LoggingStreamRequest,
   LoggingParams
-} from '@/schemas/logging-stream'
-import { InvalidResponseError } from '@/utils/errors-client'
+} from '../schemas/logging-stream.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 /**
  * Opens a logging stream to receive real-time logs.
@@ -19,8 +19,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * // Open a logging stream for a model
  * const logStream = loggingStream({ id: 'my-model-id' });
  *
- * // Or stream SDK server logs
- * const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+ * // Or stream the engine's own logs
+ * const engineLogs = loggingStream({ id: LOG_ID });
  *
  * for await (const logMessage of logStream) {
  *   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);

@@ -13,14 +13,14 @@ import {
   type TranscribeStreamConversationSession,
   type TranscribeStreamEvent,
   type TranscribeStreamResponse
-} from '@/schemas'
-import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
-import { getClientLogger } from '@/logging'
-import { TranscriptionFailedError } from '@/utils/errors-client'
-import { decoratePromise } from '@/utils/decorate-promise'
-import { generateClientRequestId } from '@/client/api/client-request-id'
+} from '../schemas/index.ts'
+import { stream, duplex, type DuplexReadable } from '../dispatch.ts'
+import { getAppLogger } from '../logging/index.ts'
+import { TranscriptionFailedError } from '../errors/index.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 function buildTranscribeRequest(
   params: TranscribeClientParams,
@@ -75,7 +75,7 @@ export function transcribe(
   // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
   // `cancel({ requestId })` immediately after the call returns so a
   // client disconnect aborts the in-flight transcription.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runTranscribe(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -218,7 +218,7 @@ async function* streamTranscribeValues<T>(
   options: RPCOptions | undefined,
   extract: (parsed: TranscribeResponse) => T | undefined
 ): AsyncGenerator<T> {
-  const request = buildTranscribeRequest(params, generateClientRequestId())
+  const request = buildTranscribeRequest(params, generateRequestId())
 
   for await (const response of stream(request, options)) {
     if (response.type === 'transcribe') {

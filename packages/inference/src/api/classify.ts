@@ -3,9 +3,9 @@ import {
   type ClassifyRequest,
   type ClassifyClientParams,
   type ClassificationResult
-} from '@/schemas'
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
-import { encodeBase64 } from '@/utils/encoding'
+} from '../schemas/index.ts'
+import { stream as streamRpc } from '../dispatch.ts'
+import { encodeBase64 } from '../utils/encoding.ts'
 
 /**
  * Classifies an image using a loaded classification model.

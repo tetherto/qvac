@@ -1,25 +1,25 @@
-import { send, stream } from '@/client/rpc/rpc-client'
-import type {
-  RagRequest,
-  RagChunkParams,
-  RagDoc,
-  RagIngestParams,
-  RagSaveEmbeddingsParams,
-  RagSaveEmbeddingsResult,
-  RagSearchParams,
-  RagSearchResult,
-  RagDeleteEmbeddingsParams,
-  RagReindexParams,
-  RagReindexResult,
-  RagIngestStage,
-  RagReindexStage,
-  RagSaveStage,
-  RagProgressUpdate,
-  RagWorkspaceInfo,
-  RagCloseWorkspaceParams,
-  RagDeleteWorkspaceParams,
-  RPCOptions
-} from '@/schemas'
+import { send, stream } from '../dispatch.ts'
+import {
+  type RagRequest,
+  type RagChunkParams,
+  type RagDoc,
+  type RagIngestParams,
+  type RagSaveEmbeddingsParams,
+  type RagSaveEmbeddingsResult,
+  type RagSearchParams,
+  type RagSearchResult,
+  type RagDeleteEmbeddingsParams,
+  type RagReindexParams,
+  type RagReindexResult,
+  type RagIngestStage,
+  type RagReindexStage,
+  type RagSaveStage,
+  type RagProgressUpdate,
+  type RagWorkspaceInfo,
+  type RagCloseWorkspaceParams,
+  type RagDeleteWorkspaceParams,
+  type RPCOptions
+} from '../schemas/index.ts'
 import {
   InvalidResponseError,
   InvalidOperationError,
@@ -30,9 +30,9 @@ import {
   RAGDeleteFailedError,
   RAGCloseWorkspaceFailedError,
   RAGListWorkspacesFailedError
-} from '@/utils/errors-client'
-import { generateClientRequestId } from '@/client/api/client-request-id'
-import { decoratePromise } from '@/utils/decorate-promise'
+} from '../errors/index.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
 
 // ============== Chunk ==============
 
@@ -130,7 +130,7 @@ export function ragIngest(
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> & {
   requestId: string
 } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagIngest(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -233,7 +233,7 @@ export function ragSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
   options?: RPCOptions
 ): Promise<RagSaveEmbeddingsResult[]> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagSaveEmbeddings(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -436,7 +436,7 @@ export function ragReindex(
   params: RagReindexParams,
   options?: RPCOptions
 ): Promise<RagReindexResult> & { requestId: string } {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runRagReindex(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
@@ -566,7 +566,7 @@ export async function ragCloseWorkspace(
   const request: RagRequest = {
     type: 'rag',
     operation: 'closeWorkspace',
-    ...params
+    ...(params ?? {})
   }
 
   const response = await send(request, options)

@@ -1,11 +1,11 @@
-import { type HeartbeatRequest, type HeartbeatResponse } from '@/schemas'
-import type { DelegateBase } from '@/schemas/delegate'
-import { send } from '@/client/rpc/rpc-client'
-import { InvalidResponseError } from '@/utils/errors-client'
+import { type HeartbeatRequest, type HeartbeatResponse } from '../schemas/index.ts'
+import type { DelegateBase } from '../schemas/delegate.ts'
+import { send } from '../dispatch.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 /**
  * Checks if a delegated provider is online by sending a heartbeat round-trip.
- * Can also be used to check if the local SDK worker is responsive.
+ * Can also be used to check if the local engine is responsive.
  *
  * @param params - Delegation target to check
  * @param params.delegate - The provider to check (providerPublicKey + optional timeout)
@@ -24,7 +24,7 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * }
  *
  * @example
- * // Check if the local SDK worker is responsive
+ * // Check if the local engine is responsive
  * await heartbeat();
  */
 export async function heartbeat(params?: { delegate?: DelegateBase }): Promise<HeartbeatResponse> {

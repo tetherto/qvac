@@ -1,8 +1,13 @@
-import { send } from '@/client/rpc/rpc-client'
-import { type EmbedParams, type EmbedRequest, type EmbedStats, type RPCOptions } from '@/schemas'
-import { InvalidResponseError } from '@/utils/errors-client'
-import { decoratePromise } from '@/utils/decorate-promise'
-import { generateClientRequestId } from '@/client/api/client-request-id'
+import { send } from '../dispatch.ts'
+import {
+  type EmbedParams,
+  type EmbedRequest,
+  type EmbedStats,
+  type RPCOptions
+} from '../schemas/index.ts'
+import { InvalidResponseError } from '../errors/index.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
 /**
  * Generates embeddings for a single text using a specified model.
@@ -44,12 +49,12 @@ export function embed(
 ): Promise<{ embedding: number[] | number[][]; stats?: EmbedStats }> & {
   requestId: string
 } {
-  // Client-generated `requestId` is surfaced synchronously on the
+  // The caller-generated `requestId` is surfaced synchronously on the
   // returned promise so the caller can `cancel({ requestId })` before
-  // `await` resolves. The same id is threaded onto the wire envelope so
-  // the server's registry entry uses it as the canonical key —
-  // matching the `loadModel` / `downloadAsset` / `completion` shape.
-  const requestId = generateClientRequestId()
+  // `await` resolves. The same id is carried on the request so the
+  // registry entry uses it as the canonical key — matching the
+  // `loadModel` / `downloadAsset` / `completion` shape.
+  const requestId = generateRequestId()
   const inner = runEmbed(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }

@@ -1,8 +1,8 @@
-import { send } from '@/client/rpc/rpc-client'
-import { InvalidResponseError } from '@/utils/errors-client'
+import { send } from '../dispatch.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 /**
- * Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore
+ * Suspends the QVAC runtime: pauses all registered Hyperswarm and Corestore
  * resources and engages the lifecycle gate so non-lifecycle operations are
  * blocked until `resume()` is called.
  *
@@ -10,7 +10,7 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * lifecycle gate (along with `resume()` and `state()`). Idempotent.
  *
  * After `suspend()` resolves, runtime state is `"suspended"` and any non-
- * lifecycle SDK operation throws `LifecycleOperationBlockedError` until
+ * lifecycle operation throws `LifecycleOperationBlockedError` until
  * `resume()` is called.
  *
  * In-flight operations started before suspend:

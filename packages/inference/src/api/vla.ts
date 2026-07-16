@@ -8,9 +8,9 @@ import {
   type VlaRunResponse,
   vlaHparamsResponseSchema,
   vlaRunResponseSchema
-} from '@/schemas'
-import { decodeBase64, encodeBase64 } from '@/utils/encoding'
-import { invokePlugin } from './invoke-plugin'
+} from '../schemas/index.ts'
+import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
+import { invokePlugin } from './invoke-plugin.ts'
 
 const VLA_RUN_HANDLER = 'vlaRun'
 const VLA_HPARAMS_HANDLER = 'vlaHparams'
@@ -60,7 +60,7 @@ function f32FromBase64(b64: string): Float32Array {
  *
  * @example
  * ```typescript
- * import { loadModel, vla, vlaPreprocessImage, vlaPadState, vlaHparams } from "@qvac/sdk";
+ * import { loadModel, vla, vlaPreprocessImage, vlaPadState, vlaHparams } from "@qvac/inference";
  *
  * const modelId = await loadModel({ modelSrc: "/path/to/smolvla.gguf", modelType: "vla" });
  * const { hparams } = await vlaHparams({ modelId });

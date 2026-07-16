@@ -3,9 +3,9 @@ import {
   type DiffusionStreamRequest,
   type DiffusionClientParams,
   type DiffusionStats
-} from '@/schemas'
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
-import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+} from '../schemas/index.ts'
+import { stream as streamRpc } from '../dispatch.ts'
+import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
 
 export interface DiffusionProgressTick {
   step: number
@@ -143,6 +143,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
         ) {
           const parsed = diffusionStreamResponseSchema.parse(response)
 
+          // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
             progressQueue.push({
               step: parsed.step,

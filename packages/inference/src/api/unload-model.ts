@@ -1,20 +1,19 @@
-import { isBare } from 'which-runtime'
-import { type UnloadModelRequest, type UnloadModelParams } from '@/schemas'
-import { send, close } from '@/client/rpc/rpc-client'
-import { stopLoggingStreamForModel } from '@/client/logging-stream-registry'
-import { InvalidResponseError, ModelUnloadFailedError } from '@/utils/errors-client'
-import { getClientLogger } from '@/logging'
+import { type UnloadModelRequest, type UnloadModelParams } from '../schemas/index.ts'
+import { send, close } from '../dispatch.ts'
+import { stopLoggingStreamForModel } from './logging-stream-registry.ts'
+import { InvalidResponseError, ModelUnloadFailedError } from '../errors/index.ts'
+import { getAppLogger } from '../logging/index.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 /**
- * Unloads a previously loaded model from the server.
+ * Unloads a previously loaded model from the engine.
  *
- * When the last model is unloaded (no more models remain), this function
- * automatically closes the RPC connection on Node/Electron, allowing the
- * process to exit naturally without requiring manual cleanup. On Bare the
- * connection is left open by default so long-lived workers survive a routine
- * unload; pass `autoClose: true` to opt in to closing.
+ * When the last model is unloaded (no more models remain), this function can
+ * automatically tear the engine down so the process can exit without manual
+ * cleanup. On Bare the engine is left running by default so a long-lived
+ * process survives a routine unload; pass `autoClose: true` to opt in to
+ * closing.
  *
  * @param params - The parameters for unloading the model
  * @param params.modelId - The unique identifier of the model to unload
@@ -40,13 +39,13 @@ export async function unloadModel(params: UnloadModelParams) {
 
   stopLoggingStreamForModel(params.modelId)
 
-  const shouldAutoClose = params.autoClose ?? !isBare
+  const shouldAutoClose = params.autoClose ?? false
   if (
     shouldAutoClose &&
     response.hasActiveModels === false &&
     response.hasActiveProviders === false
   ) {
-    logger.info('🧹 No models or providers active, automatically closing RPC connection...')
+    logger.info('🧹 No models or providers active, automatically tearing down the engine...')
     await close()
   }
 }

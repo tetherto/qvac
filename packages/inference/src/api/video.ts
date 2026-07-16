@@ -3,10 +3,10 @@ import {
   type VideoStreamRequest,
   type VideoClientParams,
   type VideoStats
-} from '@/schemas'
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
-import { generateClientRequestId } from '@/client/api/client-request-id'
-import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+} from '../schemas/index.ts'
+import { stream as streamRpc } from '../dispatch.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
+import { decodeBase64, encodeBase64 } from '../utils/encoding.ts'
 
 export interface VideoProgressTick {
   step: number
@@ -95,7 +95,7 @@ export interface VideoResult {
  * ```
  */
 export function video(params: VideoClientParams): VideoResult {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
 
   const { control_frames, init_image, ...rest } = params
   const request: VideoStreamRequest = {
@@ -143,6 +143,7 @@ export function video(params: VideoClientParams): VideoResult {
         ) {
           const parsed = videoStreamResponseSchema.parse(response)
 
+          // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
             progressQueue.push({
               step: parsed.step,

@@ -1,10 +1,8 @@
 import {
   bciTranscribeResponseSchema,
-  bciTranscribeClientParamsSchema,
   bciTranscribeStreamResponseSchema,
   type BciTranscribeRequest,
   type BciTranscribeClientParams,
-  type BciTranscribeClientParamsParsed,
   type BciTranscribeStreamClientParams,
   type BciTranscribeStreamRequest,
   type BciTranscribeStreamResponse,
@@ -12,18 +10,18 @@ import {
   type BciTranscribeStreamMetadataSession,
   type RPCOptions,
   type TranscribeSegment
-} from '@/schemas'
-import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
-import { getClientLogger } from '@/logging'
-import { TranscriptionFailedError } from '@/utils/errors-client'
-import { decoratePromise } from '@/utils/decorate-promise'
-import { parseClientInput } from '@/client/parse-input'
-import { generateClientRequestId } from '@/client/api/client-request-id'
+} from '../schemas/index.ts'
+import Buffer from 'bare-buffer'
+import { stream, duplex, type DuplexReadable } from '../dispatch.ts'
+import { getAppLogger } from '../logging/index.ts'
+import { TranscriptionFailedError } from '../errors/index.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 function buildBciTranscribeRequest(
-  params: BciTranscribeClientParamsParsed,
+  params: BciTranscribeClientParams,
   requestId: string
 ): BciTranscribeRequest {
   return {
@@ -71,14 +69,13 @@ export function bciTranscribe(
   params: BciTranscribeClientParams,
   options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
-  const parsed = parseClientInput(bciTranscribeClientParamsSchema, params)
-  const requestId = generateClientRequestId()
-  const inner = runBciTranscribe(parsed, requestId, options)
+  const requestId = generateRequestId()
+  const inner = runBciTranscribe(params, requestId, options)
   return decoratePromise(inner, { requestId })
 }
 
 async function runBciTranscribe(
-  params: BciTranscribeClientParamsParsed,
+  params: BciTranscribeClientParams,
   requestId: string,
   options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> {
@@ -202,7 +199,7 @@ async function createBciStreamSession<T>(
   destroy(): void
   [Symbol.asyncIterator](): AsyncIterator<T>
 }> {
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const request = buildBciTranscribeStreamRequest(params, requestId)
 
   const { requestStream, responseStream } = await duplex(request, options)

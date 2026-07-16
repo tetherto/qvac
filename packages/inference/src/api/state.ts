@@ -1,6 +1,6 @@
-import { send } from '@/client/rpc/rpc-client'
-import type { LifecycleState } from '@/schemas'
-import { InvalidResponseError } from '@/utils/errors-client'
+import { send } from '../dispatch.ts'
+import type { LifecycleState } from '../schemas/index.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 /**
  * Returns the current runtime lifecycle state.
@@ -9,7 +9,7 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * lifecycle gate (along with `suspend()` and `resume()`).
  *
  * @returns The current lifecycle state:
- *   - `"active"`: all SDK operations are allowed
+ *   - `"active"`: all operations are allowed
  *   - `"suspending"` | `"suspended"` | `"resuming"`: non-lifecycle operations
  *     throw `LifecycleOperationBlockedError`
  *

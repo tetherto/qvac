@@ -1,11 +1,11 @@
-import { send, stream } from '@/client/rpc/rpc-client'
+import { send, stream } from '../dispatch.ts'
 import type {
   PluginInvokeRequest,
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse,
   RPCOptions
-} from '@/schemas'
-import { InvalidResponseError } from '@/utils/errors-client'
+} from '../schemas/index.ts'
+import { InvalidResponseError } from '../errors/index.ts'
 
 export interface InvokePluginOptions<TParams = unknown> {
   modelId: string

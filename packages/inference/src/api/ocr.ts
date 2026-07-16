@@ -4,8 +4,8 @@ import {
   type OCRClientParams,
   type OCRTextBlock,
   type OCRStats
-} from '@/schemas'
-import { stream as streamRpc } from '@/client/rpc/rpc-client'
+} from '../schemas/index.ts'
+import { stream as streamRpc } from '../dispatch.ts'
 
 /**
  * Performs Optical Character Recognition (OCR) on an image to extract text.

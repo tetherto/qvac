@@ -1,6 +1,6 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas'
-import { send } from '@/client/rpc/rpc-client'
-import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/errors-client'
+import type { DeleteCacheRequest, DeleteCacheResponse } from '../schemas/index.ts'
+import { send } from '../dispatch.ts'
+import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '../errors/index.ts'
 
 /**
  * Deletes KV cache files.
@@ -10,7 +10,7 @@ import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/e
  * @param params.kvCacheKey - The cache key to delete
  * @param params.modelId - Optional: specific model ID to delete within the cache key. If not provided, deletes entire cache key.
  * @returns Promise resolving to success status
- * @throws {QvacErrorBase} When the cache parameters are invalid (`InvalidDeleteCacheParamsError`) or the server reports a delete failure (`DeleteCacheFailedError`).
+ * @throws {QvacErrorBase} When the cache parameters are invalid (`InvalidDeleteCacheParamsError`) or the engine reports a delete failure (`DeleteCacheFailedError`).
  * @example
  * ```typescript
  * // Delete all caches

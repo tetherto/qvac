@@ -1,5 +1,5 @@
-import { send, stream } from '@/client/rpc/rpc-client'
-import { startLoggingStreamForModel } from '@/client/logging-stream-registry'
+import { send, stream } from '../dispatch.ts'
+import { startLoggingStreamForModel } from './logging-stream-registry.ts'
 import {
   type LoadModelOptions,
   type LoadCustomPluginModelOptions,
@@ -17,20 +17,20 @@ import {
   normalizeModelType,
   inferModelTypeFromModelSrc,
   ModelType
-} from '@/schemas'
+} from '../schemas/index.ts'
 import {
   ModelLoadFailedError,
   ModelTypeRequiredError,
   StreamEndedError,
   InvalidResponseError
-} from '@/utils/errors-client'
-import { assertModelSrcMatchesModelType } from '@/utils/load-model-validation'
-import { parseClientInput } from '@/client/parse-input'
-import { getClientLogger } from '@/logging'
-import { decoratePromise } from '@/utils/decorate-promise'
-import { generateClientRequestId } from '@/client/api/client-request-id'
+} from '../errors/index.ts'
+import { assertModelSrcMatchesModelType } from '../utils/load-model-validation.ts'
+import { parseClientInput } from './parse-input.ts'
+import { getAppLogger } from '../logging/index.ts'
+import { decoratePromise } from '../utils/decorate-promise.ts'
+import { generateRequestId } from '../runtime/request-id.ts'
 
-const logger = getClientLogger()
+const logger = getAppLogger()
 
 interface ReactNativeRuntimeGlobal {
   navigator?: { product?: string }
@@ -91,7 +91,7 @@ export function loadModel<S extends ModelDescriptor>(
  *
  * @throws {QvacErrorBase} When model loading fails, with details in the error message
  * @throws {QvacErrorBase} When streaming ends unexpectedly (only when using onProgress)
- * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ * @throws {QvacErrorBase} When receiving an invalid response type from the engine
  *
  * @example
  * ```typescript
@@ -151,7 +151,7 @@ export function loadModel<S extends ModelDescriptor>(
  * });
  *
  * // Load with automatic logging - logs from the model will be forwarded to your logger
- * import { getLogger } from "@/logging";
+ * import { getLogger } from "../logging/index.ts";
  * const logger = getLogger("my-app");
  *
  * const modelId = await loadModel({
@@ -168,7 +168,7 @@ export function loadModel(
 
 /**
  * Loads a custom plugin model (any non-built-in `modelType` string).
- * `modelConfig` is plugin-defined; the SDK does not narrow it.
+ * `modelConfig` is plugin-defined; we do not narrow it.
  *
  * @overloadLabel "Custom plugin"
  * @param options - Custom plugin load options. `modelType` can be any
@@ -195,7 +195,7 @@ export function loadModel<T extends string>(
  * @returns Promise that resolves to the model ID
  *
  * @throws {QvacErrorBase} When model reload fails, with details in the error message
- * @throws {QvacErrorBase} When receiving an invalid response type from the server
+ * @throws {QvacErrorBase} When receiving an invalid response type from the engine
  *
  * @example
  * ```typescript
@@ -229,16 +229,15 @@ export function loadModel(
 ): Promise<string> & { requestId: string } {
   // Generate a stable `requestId` once, synchronously, before kicking
   // off any async work. The same id is:
-  //   - threaded onto the request envelope (`request.requestId`) so the
-  //     server's `registry.begin(...)` records it on the registry
-  //     entry; and
+  //   - threaded onto the request (`request.requestId`) so the engine's
+  //     `registry.begin(...)` records it on the registry entry; and
   //   - attached to the returned promise via `decoratePromise` so the
   //     caller can target this exact call with `cancel({ requestId })`
-  //     before `await` resolves. Generating client-side and surfacing
+  //     before `await` resolves. Generating it in the caller and surfacing
   //     it synchronously is what closes the "stop-button race" gap for
   //     `loadModel` / `downloadAsset` callers — same shape as the
   //     `CompletionRun.requestId` contract.
-  const requestId = generateClientRequestId()
+  const requestId = generateRequestId()
   const inner = runLoadModel(options, requestId, rpcOptions)
   return decoratePromise(inner, { requestId })
 }
@@ -291,15 +290,15 @@ async function runLoadModel(
       const message =
         'QVAC video generation works on React Native, but loading the video ' +
         'model on-device will usually fail or take several minutes — the video ' +
-        'diffusion models currently shipped by the SDK are too large to load ' +
+        'diffusion models currently shipped by QVAC are too large to load ' +
         'on typical mobile devices. Pass a `delegate` to `loadModel(...)` to ' +
         'run generation on a desktop peer instead.'
       logger.warn(message)
     }
   }
 
-  // Splice the client-generated `requestId` onto the resolved options so
-  // the wire envelope carries it. The server uses the same value as the
+  // Splice the caller-generated `requestId` onto the resolved options so
+  // the request carries it. The engine uses the same value as the
   // registry-entry key — that match is what makes
   // `cancel({ requestId: op.requestId })` a no-op when no match exists
   // and a precise abort when it does.
