@@ -169,9 +169,10 @@ async function decodeSegment(audioPath: string, segment: AudioSegment) {
 }
 
 function formatTimestamp(seconds: number) {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = (seconds % 60).toFixed(1).padStart(4, '0')
+  const totalTenths = Math.round(seconds * 10)
+  const hours = Math.floor(totalTenths / 36000)
+  const minutes = Math.floor((totalTenths % 36000) / 600)
+  const remainingSeconds = ((totalTenths % 600) / 10).toFixed(1).padStart(4, '0')
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${remainingSeconds}`
 }
 
