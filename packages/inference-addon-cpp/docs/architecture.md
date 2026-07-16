@@ -222,6 +222,8 @@ classDiagram
         +runExclusiveJob(std::any input) optional~JobId~
         +cancelJob(JobId id) void
         +cancelAllJobs() void
+        +liveJobIds() vector~JobId~
+        +cancelJobs(ids) void
         +activeJobs() size_t
         +model IModel&
     }
@@ -240,6 +242,8 @@ classDiagram
         +runExclusiveJob(std::any input) optional~JobId~
         +cancel(JobId id) void
         +cancelAll() void
+        +liveJobIds() vector~JobId~
+        +cancelJobs(ids) void
         +activeJobs() size_t
     }
     
@@ -297,7 +301,7 @@ classDiagram
 3. **AddonCpp** (Non-Template Class - Framework Core)
    - Constructor: Takes output callback, model, and an optional `IJobScheduler` (defaults to a single-job scheduler when omitted)
    - Job execution: `runJob(std::any input)` / `runExclusiveJob(...)` - admits jobs via the scheduler and returns the `JobId` it assigned (`std::nullopt` when rejected)
-   - Cancellation: `cancelJob(JobId id = kNoJobId)` cancels one job (or every job when `id` is omitted); `cancelAllJobs()` always cancels every job
+   - Cancellation: `cancelJob(JobId id = kNoJobId)` cancels one job; `cancelAllJobs()` cancels every job live at call time; `liveJobIds()` + `cancelJobs(ids)` support snapshot-based cancel-all (the JS binding snapshots on its thread, so jobs admitted after the request survive the deferred cancellation)
    - Introspection: `activeJobs()` - number of in-flight + queued jobs per the scheduler
    - Lifecycle: `activate()` - Start processing
 
@@ -455,7 +459,7 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 - FIFO admission queue with O(1) cancel-while-queued via an id → queue-node index
 - Mints each admitted job's `JobId` (monotonic, never reused) and returns it from `runJob`, so late terminal events can never be attributed to a newer job
 - Back-pressure: `runJob` rejects (`std::nullopt`) once in-flight + queued would exceed `maxConcurrency + queueCapacity`
-- Per-job cancellation via `IModelCancelById` (`cancel(id)`); whole-model `cancelAll()` always available
+- Per-job cancellation via `IModelCancelById` (`cancel(id)`); whole-model `cancelAll()` always available; `cancelJobs(liveJobIds())` is the snapshot form (falls back to the whole-model cancel when the model lacks `cancelById`)
 - `runExclusiveJob` reserves the model for one job at a time (e.g. finetune vs. inference mutual exclusion)
 
 **Output Handlers - Output Type Routing**
@@ -610,7 +614,7 @@ Most addons serve one request at a time, and a single-slot scheduler matches tha
 
 **Decision**
 
-Job admission sits behind an `IJobScheduler` interface (`start`, `runJob`, `runExclusiveJob`, `cancel`, `cancelAll`, `activeJobs`). `AddonCpp` builds a `SingleJobScheduler` when the caller supplies none. A caller wanting concurrency constructs a `MultiJobScheduler` (sized to a worker count, with a bounded waiting-room queue and FIFO admission) and passes it to the `AddonCpp` constructor; the scheduler mints each admitted job's `JobId` itself (monotonic, never reused) and returns it from `runJob`, so concurrent outputs can be correlated back to their request without the caller inventing ids, and `runExclusiveJob` lets an addon reserve the model for one job at a time (e.g. a finetune) regardless of which scheduler is active.
+Job admission sits behind an `IJobScheduler` interface (`start`, `runJob`, `runExclusiveJob`, `cancel`, `cancelAll`, `liveJobIds`, `cancelJobs`, `activeJobs`). `AddonCpp` builds a `SingleJobScheduler` when the caller supplies none. A caller wanting concurrency constructs a `MultiJobScheduler` (sized to a worker count, with a bounded waiting-room queue and FIFO admission) and passes it to the `AddonCpp` constructor; the scheduler mints each admitted job's `JobId` itself (monotonic, never reused) and returns it from `runJob`, so concurrent outputs can be correlated back to their request without the caller inventing ids, and `runExclusiveJob` lets an addon reserve the model for one job at a time (e.g. a finetune) regardless of which scheduler is active.
 
 **Rationale**
 - **Simple by default:** An addon that supplies no scheduler gets single-job semantics: one job in flight, every other `runJob()` call rejected until it finishes.

@@ -1015,6 +1015,93 @@ TEST_F(MultiJobSchedulerTest, CancelAllDropsQueuedJobs) {
       << "dropped queued jobs must surface terminal errors";
 }
 
+// (k1) Snapshot cancellation: cancelJobs on a liveJobIds() snapshot taken
+// before a later admission must cancel only the snapshot — the later job
+// keeps running. This is the JS cancel-all contract: jobs started after the
+// cancel was requested survive the deferred cancellation.
+TEST_F(MultiJobSchedulerTest, CancelJobsLeavesPostSnapshotJobsRunning) {
+  build(3, std::chrono::milliseconds{10000});
+
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
+  ASSERT_EQ(waitForActive(*model_, 2, std::chrono::seconds{2}), 2);
+
+  std::vector<JobId> snapshot = scheduler_->liveJobIds();
+  std::sort(snapshot.begin(), snapshot.end());
+  ASSERT_EQ(snapshot, (std::vector<JobId>{1, 2}));
+
+  const std::optional<JobId> late = scheduler_->runJob(std::string("late"));
+  ASSERT_TRUE(late.has_value());
+  ASSERT_EQ(waitForActive(*model_, 3, std::chrono::seconds{2}), 3);
+
+  scheduler_->cancelJobs(snapshot);
+
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (model_->active() > 1 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_EQ(model_->active(), 1) << "both snapshot jobs must be cancelled";
+
+  // The survivor stays alive long enough to confirm it was never targeted.
+  std::this_thread::sleep_for(std::chrono::milliseconds{100});
+  EXPECT_EQ(model_->active(), 1)
+      << "a job admitted after the snapshot must keep running";
+
+  scheduler_->cancel(*late);
+}
+
+// (k1b) A snapshot spans queued jobs too: cancelJobs drops a still-queued
+// snapshot id without it ever reaching process().
+TEST_F(MultiJobSchedulerTest, CancelJobsDropsQueuedSnapshotJobs) {
+  StartTrackingTestModel* tracking =
+      buildTrackingWithQueue(1, 1, std::chrono::milliseconds{10000});
+
+  const std::optional<JobId> running = scheduler_->runJob(std::string("job"));
+  ASSERT_TRUE(running.has_value());
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+  const std::optional<JobId> queued = scheduler_->runJob(std::string("queued"));
+  ASSERT_TRUE(queued.has_value());
+
+  std::vector<JobId> snapshot = scheduler_->liveJobIds();
+  std::sort(snapshot.begin(), snapshot.end());
+  ASSERT_EQ(snapshot, (std::vector<JobId>{*running, *queued}));
+
+  scheduler_->cancelJobs(snapshot);
+  waitForIdle(*scheduler_, std::chrono::seconds{5});
+  EXPECT_EQ(scheduler_->activeJobs(), 0u);
+  EXPECT_FALSE(tracking->started(*queued))
+      << "a queued snapshot job must never reach process()";
+  EXPECT_EQ(erroredIds(outputQueue_->clear()).count(*queued), 1u)
+      << "a dropped queued job must surface a terminal error";
+}
+
+// (k1c) cancelJobs on a model without cancelById falls back to the whole-model
+// cancel for the in-flight snapshot ids — the only cancel such a model offers.
+TEST_F(MultiJobSchedulerTest, CancelJobsWithoutCancelByIdUsesWholeModelCancel) {
+  constexpr unsigned kConcurrency = 2;
+  buildNoCancelById(kConcurrency, std::chrono::milliseconds{10000});
+
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
+  }
+  ASSERT_EQ(
+      waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
+      static_cast<int>(kConcurrency));
+
+  scheduler_->cancelJobs(scheduler_->liveJobIds());
+
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (model_->active() > 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_EQ(model_->active(), 0)
+      << "the fallback must still stop the in-flight snapshot jobs";
+}
+
 // (k2) Dequeue must announce the job to the model (jobStarting) before
 // process(input, id) runs — exactly once per started job, and never for a job
 // dropped from the queue.

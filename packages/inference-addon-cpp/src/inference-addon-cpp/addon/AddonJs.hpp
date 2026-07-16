@@ -3,6 +3,8 @@
 #include <js.h>
 
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include "../JsBlobsStream.hpp"
 #include "../JsUtils.hpp"
@@ -59,21 +61,25 @@ public:
 
   /**
    * @brief Cancels jobs asynchronously
-   * @param id Optional job id. Absent cancels every in-flight and queued job
-   *        (cancelAll); present cancels only that job. A scheduler that cannot
-   *        map the id to a job warns and does nothing — a targeted cancel is
-   *        never escalated to cancelAll.
+   * @param id Optional job id. Present cancels only that job; a scheduler that
+   *        cannot map the id to a job warns and does nothing. Absent cancels
+   *        every job live right now: the id snapshot is taken here, on the JS
+   *        thread — where admissions also run — so jobs started after this
+   *        call are never touched by the deferred cancellation.
    * @return JavaScript Promise that resolves when cancellation completes
    * @note This is a non-blocking operation that returns a future/promise
    */
   js_value_t* cancelJob(std::optional<JobId> id = std::nullopt) {
-    return js::JsAsyncTask::run(env_, [addonCppRef = addonCpp, id]() {
-      if (id.has_value()) {
-        addonCppRef->cancelJob(*id);
-      } else {
-        addonCppRef->cancelAllJobs();
-      }
-    });
+    if (id.has_value()) {
+      return js::JsAsyncTask::run(env_, [addonCppRef = addonCpp, id = *id]() {
+        addonCppRef->cancelJob(id);
+      });
+    }
+    std::vector<JobId> snapshot = addonCpp->liveJobIds();
+    return js::JsAsyncTask::run(
+        env_, [addonCppRef = addonCpp, snapshot = std::move(snapshot)]() {
+          addonCppRef->cancelJobs(snapshot);
+        });
   }
 
   /**

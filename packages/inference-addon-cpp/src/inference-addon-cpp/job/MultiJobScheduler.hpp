@@ -45,7 +45,9 @@ namespace qvac_lib_inference_addon_cpp {
 /// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
 /// queued as its terminal event. In-flight cancellation routes to the model:
 /// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(); that
-/// id -> internal-slot mapping is the model's concern. Dequeue announces the
+/// id -> internal-slot mapping is the model's concern. cancelJobs(liveJobIds())
+/// is the snapshot form the JS binding uses for cancel-all, so jobs admitted
+/// after the cancel was requested survive it. Dequeue announces the
 /// job to the model (IModelJobLifecycle::jobStarting) under the same lock the
 /// cancel paths take, so every cancel finds each admitted job either still
 /// queued (dropped here) or already announced (cancellable model-side) — never
@@ -119,6 +121,22 @@ class MultiJobScheduler final : public IJobScheduler {
       exclusiveActive_ = false;
     }
     lock.unlock();
+  }
+
+  /// Unlink @p id if still queued, releasing its slot and exclusivity. Caller
+  /// holds mtx_ and queues the terminal error outside the lock.
+  bool dropQueuedJob(JobId id) {
+    const auto indexed = queuedIndex_.find(id);
+    if (indexed == queuedIndex_.end()) {
+      return false;
+    }
+    if (indexed->second->exclusive) {
+      exclusiveActive_ = false;
+    }
+    queued_.erase(indexed->second);
+    queuedIndex_.erase(indexed);
+    --admittedCount_;
+    return true;
   }
 
   /// Unlinks every still-queued job, releasing its slot and exclusivity;
@@ -334,16 +352,7 @@ public:
     bool dropped = false;
     {
       std::lock_guard lock(mtx_);
-      const auto indexed = queuedIndex_.find(id);
-      if (indexed != queuedIndex_.end()) {
-        if (indexed->second->exclusive) {
-          exclusiveActive_ = false;
-        }
-        queued_.erase(indexed->second);
-        queuedIndex_.erase(indexed);
-        --admittedCount_;
-        dropped = true;
-      }
+      dropped = dropQueuedJob(id);
     }
     if (dropped) {
       // Never reached the model, so there is nothing to cancel there; this
@@ -368,6 +377,51 @@ public:
       return;
     }
     QLOG(logger::Priority::WARNING, "Model does not support cancellation (of all jobs in a single-call)");
+  }
+
+  [[nodiscard]] std::vector<JobId> liveJobIds() const override {
+    std::lock_guard lock(mtx_);
+    std::vector<JobId> ids;
+    ids.reserve(queuedIndex_.size() + inFlight_.size());
+    for (const auto& entry : queuedIndex_) {
+      ids.push_back(entry.first);
+    }
+    ids.insert(ids.end(), inFlight_.begin(), inFlight_.end());
+    return ids;
+  }
+
+  /// Per-id (the default loop) when the model supports cancelById; otherwise
+  /// drop the still-queued ids and issue one whole-model cancel() for the
+  /// in-flight remainder — indiscriminate, but the only cancel such a model
+  /// offers.
+  void cancelJobs(const std::vector<JobId>& ids) override {
+    if (cancelById_ != nullptr) {
+      IJobScheduler::cancelJobs(ids);
+      return;
+    }
+    std::vector<JobId> dropped;
+    bool anyInFlight = false;
+    {
+      std::lock_guard lock(mtx_);
+      for (const JobId id : ids) {
+        if (dropQueuedJob(id)) {
+          dropped.push_back(id);
+        } else if (inFlight_.count(id) != 0) {
+          anyInFlight = true;
+        }
+      }
+    }
+    for (const JobId id : dropped) {
+      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    }
+    if (!anyInFlight) {
+      return;
+    }
+    if (cancel_ != nullptr) {
+      cancel_->cancel();
+      return;
+    }
+    QLOG(logger::Priority::WARNING, "Model does not support cancellation");
   }
 
   /// Active jobs (queued + in-flight); the figure admission is capped against.

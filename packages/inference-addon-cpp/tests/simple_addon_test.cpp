@@ -375,6 +375,7 @@ public:
   }
   void cancel(JobId /*id*/) override {}
   void cancelAll() override {}
+  [[nodiscard]] std::vector<JobId> liveJobIds() const override { return {}; }
   [[nodiscard]] std::size_t activeJobs() const override { return 0; }
 
   [[nodiscard]] bool isBoundTo(const model::IModel& model) const override {

@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include "../Logger.hpp"
 #include "../ModelInterfaces.hpp"
@@ -109,6 +110,15 @@ public:
   }
   void cancelJob(JobId id = kNoJobId) { jobScheduler_->cancel(id); }
   void cancelAllJobs() { jobScheduler_->cancelAll(); }
+
+  /// Live (queued + in-flight) job ids; pairs with cancelJobs for the
+  /// snapshot-based cancel-all (see IJobScheduler::liveJobIds).
+  [[nodiscard]] std::vector<JobId> liveJobIds() const {
+    return jobScheduler_->liveJobIds();
+  }
+  void cancelJobs(const std::vector<JobId>& ids) {
+    jobScheduler_->cancelJobs(ids);
+  }
 
   /// Active jobs (in-flight + queued) per the scheduler.
   [[nodiscard]] std::size_t activeJobs() const { return jobScheduler_->activeJobs(); }

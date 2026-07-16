@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "JobId.hpp"
 
@@ -48,6 +49,18 @@ struct IJobScheduler {
 
   /// Cancel every in-flight and queued job.
   virtual void cancelAll() = 0;
+
+  /// Ids of every live (queued + in-flight) job. Pairs with cancelJobs(): a
+  /// caller snapshots on its admission thread and cancels the snapshot later,
+  /// so jobs admitted in between are never touched.
+  [[nodiscard]] virtual std::vector<JobId> liveJobIds() const = 0;
+
+  /// Cancel exactly the jobs in @p ids; finished or unknown ids are no-ops.
+  virtual void cancelJobs(const std::vector<JobId>& ids) {
+    for (const JobId id : ids) {
+      cancel(id);
+    }
+  }
 
   /// Number of active jobs (in-flight + queued). The authoritative admission
   /// count consumers can read instead of tracking their own.

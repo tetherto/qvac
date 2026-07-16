@@ -9,6 +9,7 @@
 #include <optional>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 #include "../Logger.hpp"
 #include "../ModelInterfaces.hpp"
@@ -195,6 +196,15 @@ public:
   }
 
   void cancelAll() override { cancelImpl(); }
+
+  /// The single slot's live id is the untagged sentinel.
+  [[nodiscard]] std::vector<JobId> liveJobIds() const override {
+    std::scoped_lock lock(mtx_);
+    if (job_.has_value()) {
+      return {kNoJobId};
+    }
+    return {};
+  }
 
   /// 0 or 1: the single slot is either free or occupied.
   [[nodiscard]] std::size_t activeJobs() const override {

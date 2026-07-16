@@ -135,6 +135,26 @@ TEST_F(JobRunnerTest, BasicJobExecution) {
   EXPECT_GT(outputs.size(), 0);
 }
 
+// liveJobIds: the single slot reports the untagged sentinel while occupied and
+// nothing when idle — the snapshot the JS cancel-all path pairs with
+// cancelJobs.
+TEST_F(JobRunnerTest, LiveJobIdsReflectTheSingleSlot) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{5000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
+
+  EXPECT_TRUE(jobRunner_->liveJobIds().empty());
+
+  ASSERT_TRUE(jobRunner_->runJob(std::string("job")).has_value());
+  EXPECT_EQ(jobRunner_->liveJobIds(), std::vector<JobId>{kNoJobId});
+
+  jobRunner_->cancel(kNoJobId);
+  EXPECT_TRUE(jobRunner_->liveJobIds().empty())
+      << "cancel waits for the slot to clear, so no live id may remain";
+}
+
 // Test cancel without deadlock - this is the critical test
 TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
   // Create a model with longer processing time

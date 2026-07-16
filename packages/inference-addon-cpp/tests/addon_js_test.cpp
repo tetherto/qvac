@@ -1,9 +1,11 @@
 #include <any>
+#include <atomic>
 #include <cstddef>
 #include <future>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -42,7 +44,10 @@ class RecordingScheduler : public IJobScheduler {
   std::promise<void> called_;
 
 public:
+  std::vector<JobId> liveIds;
+  mutable std::atomic_bool liveIdsQueried{false};
   std::optional<JobId> cancelId;
+  std::optional<std::vector<JobId>> cancelledJobs;
   bool cancelAllCalled{false};
 
   std::future<void> awaitCall() { return called_.get_future(); }
@@ -58,6 +63,14 @@ public:
   }
   void cancelAll() override {
     cancelAllCalled = true;
+    called_.set_value();
+  }
+  [[nodiscard]] std::vector<JobId> liveJobIds() const override {
+    liveIdsQueried = true;
+    return liveIds;
+  }
+  void cancelJobs(const std::vector<JobId>& ids) override {
+    cancelledJobs = ids;
     called_.set_value();
   }
   [[nodiscard]] std::size_t activeJobs() const override { return 0; }
@@ -116,7 +129,10 @@ TEST(AddonJsTest, CancelJobInvokesAddonCppCancelJob) {
   EXPECT_NO_THROW(addon.cancelJob());
 }
 
-TEST(AddonJsTest, CancelWithoutIdCancelsEveryJob) {
+// Cancel without id is snapshot-based: the live ids are captured synchronously
+// on the calling (JS) thread — before cancelJob returns — and exactly that
+// snapshot is cancelled later, so jobs admitted after the call are untouched.
+TEST(AddonJsTest, CancelWithoutIdCancelsSnapshotOfLiveJobs) {
   js_env_t env;
   auto scheduler = std::make_unique<RecordingScheduler>();
   RecordingScheduler* recorder = scheduler.get();
@@ -125,10 +141,16 @@ TEST(AddonJsTest, CancelWithoutIdCancelsEveryJob) {
       &env, std::make_unique<MockOutputCallback>(),
       std::make_unique<MockModel>(), std::move(scheduler));
 
+  recorder->liveIds = {7, 9};
   addon.cancelJob();
+  EXPECT_TRUE(recorder->liveIdsQueried)
+      << "the snapshot must be taken before cancelJob returns";
   called.wait();
 
-  EXPECT_TRUE(recorder->cancelAllCalled);
+  ASSERT_TRUE(recorder->cancelledJobs.has_value());
+  EXPECT_EQ(*recorder->cancelledJobs, (std::vector<JobId>{7, 9}));
+  EXPECT_FALSE(recorder->cancelAllCalled)
+      << "cancel-all must never reach for jobs outside the snapshot";
   EXPECT_FALSE(recorder->cancelId.has_value());
 }
 
