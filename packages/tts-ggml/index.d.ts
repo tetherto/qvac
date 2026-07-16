@@ -135,6 +135,15 @@ declare interface TTSGgmlOptions {
   streamFirstChunkTokens?: number
   /** Chatterbox-only: CFM Euler step count (1 halves cost; 2 matches Python meanflow). */
   cfmSteps?: number
+  /**
+   * Chatterbox-only: S3Gen classifier-free-guidance (CFG) rate. The S3Gen CFM
+   * diffusion loop normally runs a batched cond+uncond pass combined by this
+   * rate; `0` makes it run cond-only (skips the uncond pass, ~2x faster S3Gen
+   * at some quality cost), and a positive value overrides the model's
+   * GGUF-baked rate. Omit to keep the model's baked rate; negative values are
+   * rejected. Maps to `tts-cpp` `EngineOptions::s3gen_cfg_rate`.
+   */
+  cfgRate?: number
   /** Supertonic: voice id baked into the GGUF (e.g. 'F1', 'F2', 'M1', 'M2'). */
   voice?: string
   /** Alias for `voice` (cross-compat with `@qvac/tts-onnx`). */
@@ -310,6 +319,8 @@ declare namespace TTSGgml {
     locale?: string
     maxChunkScalars?: number
     outputSampleRate?: number
+    /** Cancels a non-streaming `run()`: when the signal aborts, `response.await()` rejects with the abort reason. An already-aborted signal rejects without dispatching the engine. Ignored when `streamOutput: true` (and on `runStream` / `runStreaming`) — passing it on the streaming path is a silent no-op (neither cancels nor errors). */
+    signal?: AbortSignal
   }
 
   export {

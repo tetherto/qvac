@@ -61,13 +61,24 @@ export function parseArgs(argv) {
   return args
 }
 
+export function isTrustedHuggingFaceUrl(url) {
+  const parsed = new URL(url)
+  return parsed.protocol === 'https:' && parsed.hostname === 'huggingface.co'
+}
+
 export function authHeaders(url, token = process.env.HF_TOKEN) {
   const headers = { 'user-agent': 'qvac-warm-models' }
-  const parsed = new URL(url)
-  if (parsed.protocol === 'https:' && parsed.hostname === 'huggingface.co' && token) {
+  if (isTrustedHuggingFaceUrl(url) && token) {
     headers.authorization = `Bearer ${token}`
   }
   return headers
+}
+
+// Recompute credentials for a redirect target so a bearer token is never
+// replayed to a non-huggingface.co host (e.g. a signed CDN redirect).
+export function redirectRequest(location, currentUrl, token = process.env.HF_TOKEN) {
+  const url = new URL(location, currentUrl).href
+  return { url, headers: authHeaders(url, token) }
 }
 
 export function redactUrl(url) {
@@ -85,6 +96,11 @@ export function redactUrl(url) {
 
 export function redactUrlsInText(value) {
   return String(value).replace(/https?:\/\/[^\s]+/gi, (url) => redactUrl(url))
+}
+
+export function redactedErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error)
+  return redactUrlsInText(message)
 }
 
 function discardResponse(res) {
@@ -312,6 +328,13 @@ export function manifestModelPaths(packageName, entries) {
     validateModelName(name)
     return `packages/${packageName}/test/model/${name}`
   })
+}
+
+// Legacy (group-less) selection: every declared model except those explicitly
+// deferred with `warm: false`. Retained for callers/tests that predate group
+// selection; equivalent to selectManifestEntries(manifest).entries.
+export function selectWarmEntries(manifest) {
+  return Object.entries(manifest.models || {}).filter(([, entry]) => entry.warm !== false)
 }
 
 // Per-group verified marker. It lives inside the cached model dir so it is

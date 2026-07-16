@@ -15,7 +15,9 @@ on:
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"
-      - "vcpkg-overlays/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
   workflow_call:
 

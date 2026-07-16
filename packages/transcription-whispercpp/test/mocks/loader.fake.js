@@ -17,24 +17,24 @@ const files = {
 // Standalone loader mock. Intentionally does not depend on @qvac/dl-* so the
 // dl- packages can be deprecated and removed from the monorepo.
 class FakeDL {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     this.opts = opts
   }
 
-  async ready () { }
+  async ready() {}
 
-  async close () { }
+  async close() {}
 
-  async list (path) {
+  async list(path) {
     return Object.keys(files)
   }
 
-  async getStream (filepath) {
+  async getStream(filepath) {
     const name = path.basename(filepath)
     return Readable.from(Buffer.from(files[name]))
   }
 
-  async download (filepath, destPath) {
+  async download(filepath, destPath) {
     const name = path.basename(filepath)
     const content = files[name]
     if (!content) {

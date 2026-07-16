@@ -6,3 +6,5 @@ set(VCPKG_CMAKE_SYSTEM_NAME Darwin)
 set(VCPKG_OSX_ARCHITECTURES arm64)
 set(VCPKG_OSX_DEPLOYMENT_TARGET 12.0)
 
+# Build only Release configuration to avoid vcpkg debug dependency builds in CI.
+set(VCPKG_BUILD_TYPE release)

@@ -19,10 +19,14 @@ const CPU_SWEEP = [
 ]
 
 for (const modelFile of CPU_SWEEP) {
-  test('Mobile perf ' + modelFile.replace(/\.bin$/, '') + ' CPU', { timeout: 600000 }, async (t) => {
-    await runMobilePerfCase(t, {
-      modelFile,
-      useGPU: false
-    })
-  })
+  test(
+    'Mobile perf ' + modelFile.replace(/\.bin$/, '') + ' CPU',
+    { timeout: 600000 },
+    async (t) => {
+      await runMobilePerfCase(t, {
+        modelFile,
+        useGPU: false
+      })
+    }
+  )
 }

@@ -4,7 +4,7 @@ const test = require('brittle')
 const { TTSInterface } = require('../../tts.js')
 const { QvacErrorAddonTTSGgml, ERR_CODES } = require('../../lib/error.js')
 
-function createErrorBinding (errorMethods = {}) {
+function createErrorBinding(errorMethods = {}) {
   return {
     createInstance: () => ({ id: 1 }),
     activate: (handle) => {
@@ -35,7 +35,10 @@ test('activate() throws QvacErrorAddonTTSGgml with FAILED_TO_ACTIVATE code', asy
     await tts.activate()
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_ACTIVATE, 'Error code should be FAILED_TO_ACTIVATE')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
@@ -50,7 +53,10 @@ test('runJob() throws QvacErrorAddonTTSGgml with FAILED_TO_APPEND code', async (
     await tts.runJob({ type: 'text', input: 'Hello' })
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_APPEND, 'Error code should be FAILED_TO_APPEND')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
@@ -65,7 +71,10 @@ test('loadWeights() throws QvacErrorAddonTTSGgml with FAILED_TO_LOAD code', asyn
     await tts.loadWeights({ filename: 'foo', contents: new Uint8Array(0) })
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_LOAD, 'Error code should be FAILED_TO_LOAD')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
@@ -80,7 +89,10 @@ test('cancel() throws QvacErrorAddonTTSGgml with FAILED_TO_CANCEL code', async (
     await tts.cancel()
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_CANCEL, 'Error code should be FAILED_TO_CANCEL')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
@@ -110,7 +122,10 @@ test('destroyInstance() throws QvacErrorAddonTTSGgml with FAILED_TO_DESTROY code
     await tts.destroyInstance()
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_DESTROY, 'Error code should be FAILED_TO_DESTROY')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }
@@ -137,7 +152,10 @@ test('unload() delegates to destroyInstance and preserves errors', async (t) => 
     await tts.unload()
     t.fail('Should have thrown an error')
   } catch (error) {
-    t.ok(error instanceof QvacErrorAddonTTSGgml, 'Error should be instance of QvacErrorAddonTTSGgml')
+    t.ok(
+      error instanceof QvacErrorAddonTTSGgml,
+      'Error should be instance of QvacErrorAddonTTSGgml'
+    )
     t.is(error.code, ERR_CODES.FAILED_TO_DESTROY, 'Error code should be FAILED_TO_DESTROY')
     t.ok(error.message.includes(errorMessage), 'Error message should contain original error')
   }

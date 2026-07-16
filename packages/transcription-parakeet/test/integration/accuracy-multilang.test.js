@@ -35,8 +35,9 @@ const LANGUAGE_TESTS = {
     name: 'English',
     code: 'en',
     sampleFile: 'sample.raw',
-    expected: 'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations',
-    threshold: 0.30 // 30% WER threshold
+    expected:
+      'Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once or twice she had peeped into the book her sister was reading, but it had no pictures or conversations in it. And what is the use of a book thought Alice without pictures or conversations',
+    threshold: 0.3 // 30% WER threshold
   },
   es: {
     name: 'Spanish',
@@ -65,7 +66,7 @@ const LANGUAGE_TESTS = {
 /**
  * Helper function to run transcription for a specific language
  */
-async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
+async function runLanguageTest(t, langConfig, loggerBinding, stagedGguf) {
   const samplePath = path.join(samplesDir, langConfig.sampleFile)
 
   // Check if sample exists
@@ -90,7 +91,9 @@ async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
     const maxSamples = langConfig.maxDurationSeconds * sampleRate
     if (pcmData.length > maxSamples) {
       samplesToUse = maxSamples
-      console.log(`   ⚠️  Truncating from ${(pcmData.length / sampleRate).toFixed(2)}s to ${langConfig.maxDurationSeconds}s for CI`)
+      console.log(
+        `   ⚠️  Truncating from ${(pcmData.length / sampleRate).toFixed(2)}s to ${langConfig.maxDurationSeconds}s for CI`
+      )
     }
   }
 
@@ -113,7 +116,7 @@ async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
 
     const response = await model.run(audioData)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         for (const seg of items) {
           if (seg && seg.text) transcriptions.push(seg)
@@ -121,7 +124,10 @@ async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
       })
       .await()
 
-    const fullText = transcriptions.map(s => s.text).join(' ').trim()
+    const fullText = transcriptions
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
 
     console.log(`\n📝 ${langConfig.name} transcription (${transcriptions.length} segments):`)
     console.log(`   "${fullText.substring(0, 150)}${fullText.length > 150 ? '...' : ''}"`)
@@ -148,7 +154,9 @@ async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
       // for multilingual GGUFs (TDT v3) and as a "doesn't crash"
       // check for English-only GGUFs (CTC).
       const hasOutput = fullText.length > 0
-      console.log(`\nℹ️ No reference transcript for ${langConfig.name}; checking output non-emptiness`)
+      console.log(
+        `\nℹ️ No reference transcript for ${langConfig.name}; checking output non-emptiness`
+      )
       console.log(`   Output received: ${hasOutput ? 'Yes' : 'No'}`)
       console.log(`   Text length: ${fullText.length} characters`)
 
@@ -164,7 +172,11 @@ async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
     console.log(`❌ Test error: ${error.message}`)
     return { skipped: false, passed: false, error: error.message }
   } finally {
-    try { await model.unload() } catch (e) { /* ignore */ }
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
   }
 }
 
@@ -193,11 +205,18 @@ test('Accuracy test - English (primary language)', { timeout: 300000 }, async (t
     } else if (result.error) {
       t.fail(`English accuracy test failed: ${result.error}`)
     } else {
-      t.ok(result.passed, `English WER should be below ${LANGUAGE_TESTS.en.threshold * 100}%, got ${result.werPercent}`)
+      t.ok(
+        result.passed,
+        `English WER should be below ${LANGUAGE_TESTS.en.threshold * 100}%, got ${result.werPercent}`
+      )
       t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
     }
   } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -225,12 +244,22 @@ test('Transcription test - Spanish (non-primary language)', { timeout: 300000 },
       // No reference transcript yet, so we only assert non-empty
       // multi-segment output. TDT v3 should produce real Spanish
       // text here; CTC GGUFs would produce gibberish-but-non-empty.
-      t.ok(result.segmentCount > 0, `Should produce at least one segment for Spanish audio (got ${result.segmentCount})`)
-      t.ok(result.actualText.length > 0, `Should produce non-empty text for Spanish audio (got ${result.actualText.length} chars)`)
+      t.ok(
+        result.segmentCount > 0,
+        `Should produce at least one segment for Spanish audio (got ${result.segmentCount})`
+      )
+      t.ok(
+        result.actualText.length > 0,
+        `Should produce non-empty text for Spanish audio (got ${result.actualText.length} chars)`
+      )
       console.log('\n✅ Spanish audio produced output')
     }
   } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -255,12 +284,22 @@ test('Transcription test - French (non-primary language)', { timeout: 300000 }, 
     } else if (result.error) {
       t.fail(`French test failed: ${result.error}`)
     } else {
-      t.ok(result.segmentCount > 0, `Should produce at least one segment for French audio (got ${result.segmentCount})`)
-      t.ok(result.actualText.length > 0, `Should produce non-empty text for French audio (got ${result.actualText.length} chars)`)
+      t.ok(
+        result.segmentCount > 0,
+        `Should produce at least one segment for French audio (got ${result.segmentCount})`
+      )
+      t.ok(
+        result.actualText.length > 0,
+        `Should produce non-empty text for French audio (got ${result.actualText.length} chars)`
+      )
       console.log('\n✅ French audio produced output')
     }
   } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -285,12 +324,22 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
     } else if (result.error) {
       t.fail(`Croatian test failed: ${result.error}`)
     } else {
-      t.ok(result.segmentCount > 0, `Should produce at least one segment for Croatian audio (got ${result.segmentCount})`)
-      t.ok(result.actualText.length > 0, `Should produce non-empty text for Croatian audio (got ${result.actualText.length} chars)`)
+      t.ok(
+        result.segmentCount > 0,
+        `Should produce at least one segment for Croatian audio (got ${result.segmentCount})`
+      )
+      t.ok(
+        result.actualText.length > 0,
+        `Should produce non-empty text for Croatian audio (got ${result.actualText.length} chars)`
+      )
       console.log('\n✅ Croatian audio produced output')
     }
   } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
 
@@ -327,10 +376,17 @@ test('Accuracy test - English (CTC head)', { timeout: 300000 }, async (t) => {
     } else if (result.error) {
       t.fail(`CTC English accuracy test failed: ${result.error}`)
     } else {
-      t.ok(result.passed, `CTC English WER should be below ${LANGUAGE_TESTS.en.threshold * 100}%, got ${result.werPercent}`)
+      t.ok(
+        result.passed,
+        `CTC English WER should be below ${LANGUAGE_TESTS.en.threshold * 100}%, got ${result.werPercent}`
+      )
       t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
     }
   } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
 })
