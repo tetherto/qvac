@@ -1,9 +1,9 @@
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO infinitalo/llama.cpp
-  REF d326b77c2bcdeb0142551ee1a174cb57d95516bb
-  SHA512 3bc052e0ed880b5a99797e6a47135d18a173054708b3fc4b635eefc2b192f4ded5d8f76b5fc36660d7520f6f554dce48e99dd9da93f37ebaf97095781a8e6e43
-  HEAD_REF italo/revert-opencl
+  REPO tetherto/qvac-fabric-llm.cpp
+  REF bd3e7791a7150bb60e06d67abcbfb6710213da4d
+  SHA512 42175d999297822c3733b6b5792c069563517ea89f8db9cc9ba71dab43d237d60f53d33894015040e2e325b388046d3f7e8483cd7b0398a547f0640328648d11
+  HEAD_REF qvac-b9840
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
