@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`parakeet-cpp` >= 2026-07-13#1, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16/i8mm kernels, leaving quantized models slow (tdt q4_0 mean RTF 0.2285 -> 0.0612 on ubuntu-24.04-arm; q4_0 now beats q8_0 like on every other desktop platform).
+
+### Fixed
+
+- `BACKENDS_SUBDIR` is now defined on `parakeet_model_core` (the target that compiles `ParakeetModel.cpp`), so the engine scans `prebuilds/<bare-target>/<module>/` for dynamically-loadable ggml backends instead of the prebuilds root. Latent on all platforms; required for the desktop-Linux per-arch CPU variants.
+
 ## [0.10.0] - 2026-07-14
 
 ### Fixed
