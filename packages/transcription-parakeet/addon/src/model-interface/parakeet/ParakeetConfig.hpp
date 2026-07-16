@@ -7,6 +7,14 @@
 namespace qvac_lib_infer_parakeet {
 
 struct ParakeetConfig {
+  static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
+  static constexpr int DEFAULT_STREAMING_HISTORY_MS = 30000;
+  static constexpr int DEFAULT_STREAMING_SPK_CACHE_LEN = 188;
+  static constexpr int DEFAULT_STREAMING_FIFO_LEN = 188;
+  static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = 80;
+  static constexpr int DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS = 560;
+  static constexpr int DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD = 144;
+
   std::string modelPath;
 
   // ModelType is auto-detected by ParakeetModel::load() from the
@@ -14,13 +22,13 @@ struct ParakeetConfig {
   // is just a placeholder until that override fires.
   ModelType modelType = ModelType::TDT;
 
-  int  maxThreads        = 4;
-  bool useGPU            = false;
-  int  sampleRate        = 16000;
-  int  channels          = 1;
-  bool captionEnabled    = false;
+  int maxThreads = 4;
+  bool useGPU = false;
+  int sampleRate = 16000;
+  int channels = 1;
+  bool captionEnabled = false;
   bool timestampsEnabled = true;
-  int  seed              = -1;
+  int seed = -1;
 
   // ── Streaming mode ──────────────────────────────────────────────────────
   // When true, the model opens a long-lived qvac_parakeet streaming session
@@ -41,11 +49,12 @@ struct ParakeetConfig {
   // a single long-lived session for the lifetime of one runStreaming() call
   // regardless of how many append-style chunks it ingests.
   // Off by default for batch-style transcription.
-  bool streaming             = false;
-  int  streamingChunkMs      = 2000;
-  int  streamingHistoryMs    = 30000;   // Sortformer rolling window only
+  bool streaming = false;
+  int streamingChunkMs = DEFAULT_STREAMING_CHUNK_MS;
+  int streamingHistoryMs =
+      DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only
   bool streamingEmitPartials = true;
-  bool streamingEnergyVad    = false;   // CTC/TDT only; ignored elsewhere
+  bool streamingEnergyVad = false; // CTC/TDT only; ignored elsewhere
   // Forwarded to parakeet::StreamingOptions.left_context_ms /
   // right_lookahead_ms. ASR sessions only (Sortformer ignores both --
   // it has its own SortformerStreamingOptions::history_ms knob).
@@ -54,8 +63,8 @@ struct ParakeetConfig {
   // bounds the rolling encoder context retained upstream of each chunk.
   // -1 keeps parakeet's own defaults (10000 / 2000) so callers that don't
   // set the field behave like before.
-  int  streamingLeftContextMs    = -1;
-  int  streamingRightLookaheadMs = -1;
+  int streamingLeftContextMs = -1;
+  int streamingRightLookaheadMs = -1;
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) ───────────
   // Forwarded to parakeet::SortformerStreamingOptions.spkcache_* /
@@ -72,11 +81,11 @@ struct ParakeetConfig {
   // Setting streamingSpkCacheEnable = false on a v2.1 model forces the
   // v1 sliding-window code path (useful for regression comparison).
   bool streamingSpkCacheEnable = true;
-  int streamingSpkCacheLen = 188;          // long-term speaker rows (~15s)
-  int streamingFifoLen = 188;              // FIFO warmup buffer rows
-  int streamingChunkLeftContextMs = 80;    // encoder left context  (~1 frame)
-  int streamingChunkRightContextMs = 560;  // encoder right context (~7 frames)
-  int streamingSpkCacheUpdatePeriod = 144; // FIFO-overflow pop-out count
+  int streamingSpkCacheLen = DEFAULT_STREAMING_SPK_CACHE_LEN;
+  int streamingFifoLen = DEFAULT_STREAMING_FIFO_LEN;
+  int streamingChunkLeftContextMs = DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS;
+  int streamingChunkRightContextMs = DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS;
+  int streamingSpkCacheUpdatePeriod = DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD;
 
   // ── Dynamic-backend loading ────────────────────────────────────────────
   // Forwarded to parakeet::EngineOptions::backends_dir /
