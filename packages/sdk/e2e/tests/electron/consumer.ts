@@ -34,14 +34,12 @@ import {
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
-  PARAKEET_CTC_0_6B_Q8_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
-  PARAKEET_EOU_120M_V1_Q8_0,
+  PARAKEET_TDT_0_6B_V3_Q4_0,
+  PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
+  PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -241,27 +239,6 @@ resources.define('bergamot-es-it-pivot', {
   }
 })
 
-resources.define('salamandra', {
-  constant: SALAMANDRATA_2B_INST_Q4,
-  type: 'llamacpp-completion'
-})
-
-resources.define('afriquegemma', {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ['\n']
-  }
-})
-
 resources.define('tts-chatterbox', {
   constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   type: 'tts-ggml',
@@ -330,25 +307,25 @@ resources.define('tts-supertonic-enhanced', {
 })
 
 resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
+  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q8_0,
+  constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })
 
 resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  constant: PARAKEET_EOU_120M_V1_Q4_0,
   type: 'parakeet-transcription',
   config: {}
 })

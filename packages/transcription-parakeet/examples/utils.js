@@ -24,7 +24,7 @@ const NATIVE_MIN_PRIORITY = 1 // WARNING
  *
  * @param {Object} loggerBinding
  */
-function setupLogger (loggerBinding) {
+function setupLogger(loggerBinding) {
   if (loggerBinding.__qvacExampleLoggerSet) return
   loggerBinding.setLogger((priority, message) => {
     if (priority > NATIVE_MIN_PRIORITY) return
@@ -37,11 +37,11 @@ function setupLogger (loggerBinding) {
 /**
  * Read a file using streams to handle large GGUFs (>2 GiB).
  */
-function readFileAsStream (filePath) {
+function readFileAsStream(filePath) {
   return new Promise((resolve, reject) => {
     const chunks = []
     const stream = fs.createReadStream(filePath)
-    stream.on('data', chunk => chunks.push(chunk))
+    stream.on('data', (chunk) => chunks.push(chunk))
     stream.on('end', () => resolve(Buffer.concat(chunks)))
     stream.on('error', reject)
   })
@@ -51,7 +51,7 @@ function readFileAsStream (filePath) {
  * Parse a WAV file (RIFF/PCM int16 mono) into a Float32Array of
  * normalised samples. Skips non-`data` chunks.
  */
-function parseWavFile (wavPath) {
+function parseWavFile(wavPath) {
   const buffer = fs.readFileSync(wavPath)
   if (buffer.toString('utf8', 0, 4) !== 'RIFF') throw new Error('Not a valid WAV file')
   if (buffer.toString('utf8', 8, 12) !== 'WAVE') throw new Error('Not a valid WAV file')
@@ -77,7 +77,7 @@ function parseWavFile (wavPath) {
  * Convert a raw int16 little-endian PCM buffer to a normalised
  * Float32Array. Used for `.raw` audio fixtures.
  */
-function convertRawToFloat32 (rawBuffer) {
+function convertRawToFloat32(rawBuffer) {
   const view = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
   const out = new Float32Array(view.length)
   for (let i = 0; i < view.length; i++) out[i] = view[i] / 32768
@@ -87,7 +87,7 @@ function convertRawToFloat32 (rawBuffer) {
 /**
  * Validate that required paths exist on disk.
  */
-function validatePaths (paths) {
+function validatePaths(paths) {
   if (!fs.existsSync(paths.model)) {
     console.error(`Model not found: ${paths.model}`)
     console.error("Run 'npm run setup-models' or pass --model </path/to/model.gguf>.")
@@ -108,12 +108,12 @@ function validatePaths (paths) {
  * path) without buffering the entire stream. Also accepted by the
  * batched `run()` path; both consumers iterate it lazily.
  */
-function pushableStream () {
+function pushableStream() {
   const queue = []
   let waiter = null
   let ended = false
 
-  function push (chunk) {
+  function push(chunk) {
     if (ended) return
     queue.push(chunk)
     if (waiter) {
@@ -123,7 +123,7 @@ function pushableStream () {
     }
   }
 
-  function end () {
+  function end() {
     ended = true
     if (waiter) {
       const w = waiter
@@ -135,14 +135,16 @@ function pushableStream () {
   return {
     push,
     end,
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
         if (queue.length > 0) {
           yield queue.shift()
           continue
         }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
@@ -151,11 +153,15 @@ function pushableStream () {
 /**
  * Print transcription segments to stdout in a uniform banner block.
  */
-function printResults (segments) {
+function printResults(segments) {
   console.log('\n=== RESULT ===')
   console.log('='.repeat(50))
   if (segments.length > 0) {
-    const text = segments.map(s => s.text).join(' ').trim().replace(/\s+/g, ' ')
+    const text = segments
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
+      .replace(/\s+/g, ' ')
     console.log(text)
   } else {
     console.log('[No speech detected]')

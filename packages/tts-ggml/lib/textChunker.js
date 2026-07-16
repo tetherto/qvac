@@ -13,11 +13,8 @@
  * should always use {@link splitTtsText} which falls back to punctuation
  * and max-length chunking.
  */
-function intlSentenceSegmentationAvailable () {
-  return (
-    typeof Intl !== 'undefined' &&
-    typeof Intl.Segmenter === 'function'
-  )
+function intlSentenceSegmentationAvailable() {
+  return typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
 }
 
 /**
@@ -25,7 +22,7 @@ function intlSentenceSegmentationAvailable () {
  * @param {string} [locale]
  * @returns {string[]|null}
  */
-function splitByIntlSentences (text, locale) {
+function splitByIntlSentences(text, locale) {
   if (!intlSentenceSegmentationAvailable()) return null
   const trimmed = text.trim()
   if (!trimmed) return null
@@ -49,7 +46,7 @@ const SENTENCE_TERMINATORS = /([.!?。！？؟])(\s*)/gu
  * @param {string} text
  * @returns {string[]}
  */
-function splitByAsciiAndCjkPunctuation (text) {
+function splitByAsciiAndCjkPunctuation(text) {
   const parts = []
   let lastIndex = 0
   let m
@@ -68,8 +65,11 @@ function splitByAsciiAndCjkPunctuation (text) {
  * @param {string} text
  * @returns {string[]}
  */
-function splitByParagraphs (text) {
-  return text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 0)
+function splitByParagraphs(text) {
+  return text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
 }
 
 const MIN_CHUNK_GRAPHEMES = 10
@@ -78,7 +78,7 @@ const MIN_CHUNK_GRAPHEMES = 10
  * @param {string[]} chunks
  * @returns {string[]}
  */
-function mergeShortChunks (chunks) {
+function mergeShortChunks(chunks) {
   const merged = []
   let buffer = ''
 
@@ -108,17 +108,19 @@ function mergeShortChunks (chunks) {
  * @param {string} s
  * @returns {number}
  */
-function countScalars (s) {
+function countScalars(s) {
   return [...s].length
 }
+
+const MIN_HARD_SPLIT_SCALARS = 10
 
 /**
  * @param {string} text
  * @param {number} maxScalars
  * @returns {string[]}
  */
-function hardSplitByMaxScalars (text, maxScalars) {
-  if (maxScalars < 10) maxScalars = 10
+function hardSplitByMaxScalars(text, maxScalars) {
+  if (maxScalars < MIN_HARD_SPLIT_SCALARS) maxScalars = MIN_HARD_SPLIT_SCALARS
   const g = [...text]
   if (g.length <= maxScalars) return [text]
   const out = []
@@ -137,7 +139,7 @@ function hardSplitByMaxScalars (text, maxScalars) {
  * @param {number} maxScalars
  * @returns {string[]}
  */
-function mergeUpToMaxScalars (pieces, maxScalars) {
+function mergeUpToMaxScalars(pieces, maxScalars) {
   const out = []
   let current = ''
 
@@ -157,7 +159,21 @@ function mergeUpToMaxScalars (pieces, maxScalars) {
   if (current.length > 0) {
     out.push(...hardSplitByMaxScalars(current, maxScalars))
   }
-  return out.filter(s => s.trim().length > 0)
+  return out.filter((s) => s.trim().length > 0)
+}
+
+// Default per-chunk grapheme caps, shared with textStreamAccumulator's buffer
+// sizing. Korean packs more meaning per grapheme, so it flushes shorter chunks.
+const KOREAN_MAX_CHUNK_SCALARS = 120
+const DEFAULT_MAX_CHUNK_SCALARS = 300
+
+/**
+ * @param {string} [language]
+ * @returns {number}
+ */
+function defaultMaxChunkScalars(language) {
+  const lang = (language || 'en').toLowerCase()
+  return lang === 'ko' ? KOREAN_MAX_CHUNK_SCALARS : DEFAULT_MAX_CHUNK_SCALARS
 }
 
 /**
@@ -172,15 +188,11 @@ function mergeUpToMaxScalars (pieces, maxScalars) {
  *   mergeUpToMaxScalars pass). Default true. Useful for test harnesses that synthesize per sentence.
  * @returns {string[]}
  */
-function splitTtsText (text, options = {}) {
+function splitTtsText(text, options = {}) {
   const mergeToMaxScalars = options.mergeToMaxScalars !== false
   const language = (options.language || 'en').toLowerCase()
   const maxScalars =
-    options.maxScalars != null
-      ? options.maxScalars
-      : language === 'ko'
-        ? 120
-        : 300
+    options.maxScalars != null ? options.maxScalars : defaultMaxChunkScalars(language)
 
   const raw = text.trim()
   if (!raw) return []
@@ -220,5 +232,8 @@ module.exports = {
   intlSentenceSegmentationAvailable,
   splitByIntlSentences,
   splitByAsciiAndCjkPunctuation,
-  countScalars
+  countScalars,
+  defaultMaxChunkScalars,
+  KOREAN_MAX_CHUNK_SCALARS,
+  DEFAULT_MAX_CHUNK_SCALARS
 }

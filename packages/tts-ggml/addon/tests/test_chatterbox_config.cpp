@@ -192,6 +192,37 @@ TEST(ChatterboxValidate, ConfigSpeedDefaultUnset) {
   EXPECT_FALSE(cfg.speed.has_value());
 }
 
+TEST(ChatterboxValidate, CfgRateNegativeRejected) {
+  // -1 is tts-cpp's internal "keep the model rate" sentinel; the addon
+  // expresses that by omitting the option, so a user-supplied negative value
+  // is rejected rather than silently meaning "keep model rate".
+  auto cfg = minimallyValidStubConfig();
+  cfg.cfgRate = -1.0f;
+  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+}
+
+TEST(ChatterboxValidate, CfgRateZeroAccepted) {
+  // 0 = disable CFG (cond-only S3Gen) — a valid, explicit choice.
+  auto cfg = minimallyValidStubConfig();
+  cfg.cfgRate = 0.0f;
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  EXPECT_NE(m, nullptr);
+}
+
+TEST(ChatterboxValidate, CfgRatePositiveAccepted) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.cfgRate = 0.7f; // a typical S3Gen CFG rate
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  EXPECT_NE(m, nullptr);
+}
+
+TEST(ChatterboxValidate, ConfigCfgRateDefaultUnset) {
+  ChatterboxConfig cfg;
+  EXPECT_FALSE(cfg.cfgRate.has_value());
+}
+
 // ─────────────────────────────────────────────────────────────────────
 //  ChatterboxConfig -> tts_cpp EngineOptions mapping.
 // ─────────────────────────────────────────────────────────────────────
@@ -266,6 +297,31 @@ TEST(ChatterboxEngineOptions, NCtxZeroMeansUncapped) {
   ChatterboxConfig cfg;
   cfg.nCtx = 0;
   EXPECT_EQ(qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).n_ctx, 0);
+}
+
+// Unset cfgRate must leave tts-cpp's -1 sentinel untouched so the engine keeps
+// the model's GGUF-baked CFG rate (full backward compat).
+TEST(ChatterboxEngineOptions, CfgRateUnsetKeepsModelSentinel) {
+  ChatterboxConfig cfg;
+  EXPECT_FLOAT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).s3gen_cfg_rate,
+      -1.0f);
+}
+
+TEST(ChatterboxEngineOptions, CfgRateZeroForwarded) {
+  ChatterboxConfig cfg;
+  cfg.cfgRate = 0.0f; // disable CFG (cond-only)
+  EXPECT_FLOAT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).s3gen_cfg_rate,
+      0.0f);
+}
+
+TEST(ChatterboxEngineOptions, CfgRatePositiveForwarded) {
+  ChatterboxConfig cfg;
+  cfg.cfgRate = 0.7f;
+  EXPECT_FLOAT_EQ(
+      qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).s3gen_cfg_rate,
+      0.7f);
 }
 
 // ─────────────────────────────────────────────────────────────────────

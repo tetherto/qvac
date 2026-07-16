@@ -20,9 +20,11 @@ const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
 const { ensureWhisperModel, ensureVADModel, getAssetPath, isMobile } = require('./helpers.js')
 
-async function getModelPaths () {
+async function getModelPaths() {
   // Use writable directory for models
-  const modelsDir = isMobile ? path.join(global.testDir || os.tmpdir(), 'models') : path.resolve(__dirname, '../../models')
+  const modelsDir = isMobile
+    ? path.join(global.testDir || os.tmpdir(), 'models')
+    : path.resolve(__dirname, '../../models')
 
   if (!fs.existsSync(modelsDir)) {
     fs.mkdirSync(modelsDir, { recursive: true })
@@ -55,7 +57,7 @@ async function getModelPaths () {
 /**
  * High-resolution timer using hrtime (works in Bare)
  */
-function getTimeMs () {
+function getTimeMs() {
   const [sec, nsec] = process.hrtime()
   return sec * 1000 + nsec / 1e6
 }
@@ -63,7 +65,7 @@ function getTimeMs () {
 /**
  * Run a single transcription and return timing info
  */
-async function runTimedTranscription (model, audioPath) {
+async function runTimedTranscription(model, audioPath) {
   const startTime = getTimeMs()
   let firstSegmentTime = null
 
@@ -87,143 +89,158 @@ async function runTimedTranscription (model, audioPath) {
     totalTime: endTime - startTime,
     timeToFirstSegment: firstSegmentTime ? firstSegmentTime - startTime : null,
     segmentCount: segments.length,
-    text: segments.map(s => s?.text || '').join(' ').trim()
+    text: segments
+      .map((s) => s?.text || '')
+      .join(' ')
+      .trim()
   }
 }
 
 // Works on both mobile and desktop - fewer runs on mobile
-test('Cold start timing: measure first vs subsequent transcription times', { timeout: 300000 }, async (t) => {
-  const paths = await getModelPaths()
+test(
+  'Cold start timing: measure first vs subsequent transcription times',
+  { timeout: 300000 },
+  async (t) => {
+    const paths = await getModelPaths()
 
-  const NUM_RUNS = 5
-  const ACCEPTABLE_PENALTY_THRESHOLD = 100 // 100% = 2x slower is acceptable
+    const NUM_RUNS = 5
+    const ACCEPTABLE_PENALTY_THRESHOLD = 100 // 100% = 2x slower is acceptable
 
-  console.log('\n' + '='.repeat(60))
-  console.log('COLD START TIMING TEST')
-  console.log('='.repeat(60))
-  console.log(`Model: ${path.basename(paths.modelPath)}`)
-  console.log(`VAD Model: ${paths.vadModelPath ? path.basename(paths.vadModelPath) : 'none'}`)
-  console.log(`Audio: ${path.basename(paths.audioPath)}`)
-  console.log(`Platform: ${isMobile ? 'mobile' : 'desktop'}`)
-  console.log(`Runs: ${NUM_RUNS}`)
-  console.log('='.repeat(60) + '\n')
-
-  // Verify files exist
-  if (!fs.existsSync(paths.modelPath)) {
-    console.log(`⚠️ Model not found: ${paths.modelPath}`)
-    t.pass('Test skipped - model not found')
-    return
-  }
-  if (!fs.existsSync(paths.audioPath)) {
-    console.log(`⚠️ Audio not found: ${paths.audioPath}`)
-    t.pass('Test skipped - audio not found')
-    return
-  }
-
-  const config = {
-    path: paths.modelPath,
-    vadModelPath: paths.vadModelPath,
-    whisperConfig: {
-      language: 'en',
-      audio_format: 's16le',
-      temperature: 0.0,
-      suppress_nst: true
-    }
-  }
-
-  if (paths.vadModelPath && fs.existsSync(paths.vadModelPath)) {
-    config.whisperConfig.vad_model_path = paths.vadModelPath
-    config.whisperConfig.vad_params = {
-      threshold: 0.5,
-      min_speech_duration_ms: 100,
-      min_silence_duration_ms: 100
-    }
-  }
-
-  let model
-  try {
-    // Create model instance
-    console.log('📦 Creating model instance...')
-    const loadStartTime = getTimeMs()
-
-    const ctorFiles = { model: paths.modelPath }
-    if (paths.vadModelPath) {
-      ctorFiles.vadModel = paths.vadModelPath
-    }
-    model = new TranscriptionWhispercpp({
-      files: ctorFiles
-    }, config)
-
-    // Load model (this should trigger warmup)
-    console.log('🔄 Loading model (with warmup)...')
-    await model._load()
-
-    const loadEndTime = getTimeMs()
-    console.log(`✅ Model loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms\n`)
-
-    // Run multiple transcriptions
-    const results = []
-
-    console.log(`🎤 Running ${NUM_RUNS} consecutive transcriptions...\n`)
-
-    for (let i = 0; i < NUM_RUNS; i++) {
-      console.log(`--- Run ${i + 1}/${NUM_RUNS} ---`)
-
-      const result = await runTimedTranscription(model, paths.audioPath)
-      results.push(result)
-
-      console.log(`  Total time: ${result.totalTime.toFixed(0)}ms`)
-      if (result.timeToFirstSegment) {
-        console.log(`  Time to first segment: ${result.timeToFirstSegment.toFixed(0)}ms`)
-      }
-      console.log(`  Segments: ${result.segmentCount}`)
-      console.log(`  Text preview: "${result.text.substring(0, 50)}${result.text.length > 50 ? '...' : ''}"\n`)
-
-      // Small delay on mobile to allow memory cleanup
-      if (isMobile) {
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-    }
-
-    // Calculate statistics
+    console.log('\n' + '='.repeat(60))
+    console.log('COLD START TIMING TEST')
     console.log('='.repeat(60))
-    console.log('📊 TIMING SUMMARY')
-    console.log('='.repeat(60))
+    console.log(`Model: ${path.basename(paths.modelPath)}`)
+    console.log(`VAD Model: ${paths.vadModelPath ? path.basename(paths.vadModelPath) : 'none'}`)
+    console.log(`Audio: ${path.basename(paths.audioPath)}`)
+    console.log(`Platform: ${isMobile ? 'mobile' : 'desktop'}`)
+    console.log(`Runs: ${NUM_RUNS}`)
+    console.log('='.repeat(60) + '\n')
 
-    const times = results.map(r => r.totalTime)
-    const firstRunTime = times[0]
-    const subsequentTimes = times.slice(1)
-    const avgSubsequent = subsequentTimes.reduce((a, b) => a + b, 0) / subsequentTimes.length
+    // Verify files exist
+    if (!fs.existsSync(paths.modelPath)) {
+      console.log(`⚠️ Model not found: ${paths.modelPath}`)
+      t.pass('Test skipped - model not found')
+      return
+    }
+    if (!fs.existsSync(paths.audioPath)) {
+      console.log(`⚠️ Audio not found: ${paths.audioPath}`)
+      t.pass('Test skipped - audio not found')
+      return
+    }
 
-    console.log('\n  Run times:')
-    times.forEach((time, i) => {
-      const marker = i === 0 ? ' (FIRST)' : ''
-      console.log(`    Run ${i + 1}: ${time.toFixed(0)}ms${marker}`)
-    })
+    const config = {
+      path: paths.modelPath,
+      vadModelPath: paths.vadModelPath,
+      whisperConfig: {
+        language: 'en',
+        audio_format: 's16le',
+        temperature: 0.0,
+        suppress_nst: true
+      }
+    }
 
-    console.log('\n  Statistics:')
-    console.log(`    First run: ${firstRunTime.toFixed(0)}ms`)
-    console.log(`    Average of runs 2-${NUM_RUNS}: ${avgSubsequent.toFixed(0)}ms`)
+    if (paths.vadModelPath && fs.existsSync(paths.vadModelPath)) {
+      config.whisperConfig.vad_model_path = paths.vadModelPath
+      config.whisperConfig.vad_params = {
+        threshold: 0.5,
+        min_speech_duration_ms: 100,
+        min_silence_duration_ms: 100
+      }
+    }
 
-    const coldStartPenalty = ((firstRunTime - avgSubsequent) / avgSubsequent) * 100
-    console.log(`    Cold start penalty: ${coldStartPenalty.toFixed(1)}%`)
+    let model
+    try {
+      // Create model instance
+      console.log('📦 Creating model instance...')
+      const loadStartTime = getTimeMs()
 
-    console.log('\n' + '='.repeat(60) + '\n')
+      const ctorFiles = { model: paths.modelPath }
+      if (paths.vadModelPath) {
+        ctorFiles.vadModel = paths.vadModelPath
+      }
+      model = new TranscriptionWhispercpp(
+        {
+          files: ctorFiles
+        },
+        config
+      )
 
-    // Assertions
-    t.ok(results.length === NUM_RUNS, `Completed ${NUM_RUNS} transcription runs`)
-    t.ok(coldStartPenalty <= ACCEPTABLE_PENALTY_THRESHOLD, `Cold start penalty ${coldStartPenalty.toFixed(1)}% should be <= ${ACCEPTABLE_PENALTY_THRESHOLD}%`)
-  } finally {
-    // Cleanup
-    if (model) {
-      try {
-        await model.unload()
-      } catch (e) {
-        // ignore
+      // Load model (this should trigger warmup)
+      console.log('🔄 Loading model (with warmup)...')
+      await model._load()
+
+      const loadEndTime = getTimeMs()
+      console.log(`✅ Model loaded in ${(loadEndTime - loadStartTime).toFixed(0)}ms\n`)
+
+      // Run multiple transcriptions
+      const results = []
+
+      console.log(`🎤 Running ${NUM_RUNS} consecutive transcriptions...\n`)
+
+      for (let i = 0; i < NUM_RUNS; i++) {
+        console.log(`--- Run ${i + 1}/${NUM_RUNS} ---`)
+
+        const result = await runTimedTranscription(model, paths.audioPath)
+        results.push(result)
+
+        console.log(`  Total time: ${result.totalTime.toFixed(0)}ms`)
+        if (result.timeToFirstSegment) {
+          console.log(`  Time to first segment: ${result.timeToFirstSegment.toFixed(0)}ms`)
+        }
+        console.log(`  Segments: ${result.segmentCount}`)
+        console.log(
+          `  Text preview: "${result.text.substring(0, 50)}${result.text.length > 50 ? '...' : ''}"\n`
+        )
+
+        // Small delay on mobile to allow memory cleanup
+        if (isMobile) {
+          await new Promise((resolve) => setTimeout(resolve, 200))
+        }
+      }
+
+      // Calculate statistics
+      console.log('='.repeat(60))
+      console.log('📊 TIMING SUMMARY')
+      console.log('='.repeat(60))
+
+      const times = results.map((r) => r.totalTime)
+      const firstRunTime = times[0]
+      const subsequentTimes = times.slice(1)
+      const avgSubsequent = subsequentTimes.reduce((a, b) => a + b, 0) / subsequentTimes.length
+
+      console.log('\n  Run times:')
+      times.forEach((time, i) => {
+        const marker = i === 0 ? ' (FIRST)' : ''
+        console.log(`    Run ${i + 1}: ${time.toFixed(0)}ms${marker}`)
+      })
+
+      console.log('\n  Statistics:')
+      console.log(`    First run: ${firstRunTime.toFixed(0)}ms`)
+      console.log(`    Average of runs 2-${NUM_RUNS}: ${avgSubsequent.toFixed(0)}ms`)
+
+      const coldStartPenalty = ((firstRunTime - avgSubsequent) / avgSubsequent) * 100
+      console.log(`    Cold start penalty: ${coldStartPenalty.toFixed(1)}%`)
+
+      console.log('\n' + '='.repeat(60) + '\n')
+
+      // Assertions
+      t.ok(results.length === NUM_RUNS, `Completed ${NUM_RUNS} transcription runs`)
+      t.ok(
+        coldStartPenalty <= ACCEPTABLE_PENALTY_THRESHOLD,
+        `Cold start penalty ${coldStartPenalty.toFixed(1)}% should be <= ${ACCEPTABLE_PENALTY_THRESHOLD}%`
+      )
+    } finally {
+      // Cleanup
+      if (model) {
+        try {
+          await model.unload()
+        } catch (e) {
+          // ignore
+        }
       }
     }
   }
-})
+)
 
 // Fresh instance test - fewer runs on mobile
 test('Cold start: fresh model instance per transcription', { timeout: 300000 }, async (t) => {
@@ -269,9 +286,12 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
       if (paths.vadModelPath) {
         ctorFiles.vadModel = paths.vadModelPath
       }
-      model = new TranscriptionWhispercpp({
-        files: ctorFiles
-      }, config)
+      model = new TranscriptionWhispercpp(
+        {
+          files: ctorFiles
+        },
+        config
+      )
 
       await model._load()
 
@@ -304,7 +324,7 @@ test('Cold start: fresh model instance per transcription', { timeout: 300000 }, 
 
     // Delay between instances on mobile
     if (isMobile) {
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
   }
 

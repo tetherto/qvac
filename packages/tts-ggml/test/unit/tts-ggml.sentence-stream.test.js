@@ -9,7 +9,7 @@ const process = require('bare-process')
 
 global.process = process
 
-function createStubbedModel (opts = {}) {
+function createStubbedModel(opts = {}) {
   const model = new TTSGgml({
     files: {
       t3Model: './models/chatterbox-t3-turbo.gguf',
@@ -27,15 +27,19 @@ function createStubbedModel (opts = {}) {
 
 const origRunJob = MockedBinding.prototype.runJob
 
-function spyRunJob () {
+function spyRunJob() {
   let callCount = 0
   MockedBinding.prototype.runJob = function (...args) {
     callCount++
     return origRunJob.apply(this, args)
   }
   return {
-    get callCount () { return callCount },
-    restore () { MockedBinding.prototype.runJob = origRunJob }
+    get callCount() {
+      return callCount
+    },
+    restore() {
+      MockedBinding.prototype.runJob = origRunJob
+    }
   }
 }
 
@@ -43,16 +47,15 @@ test('runStream runs multiple native jobs and enriches output (onUpdate + await)
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  const text =
-    'This is long text one. This is long text two. This is long text three.'
+  const text = 'This is long text one. This is long text two. This is long text three.'
   const response = await model.runStream(text, { maxChunkScalars: 18 })
   const updates = []
-  response.onUpdate(d => {
+  response.onUpdate((d) => {
     updates.push(d)
   })
   await response.await()
   t.ok(runJobSpy.callCount >= 2, 'expected multiple runJob calls')
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.ok(withChunk.length >= 2, 'expected chunk metadata on outputs')
   t.is(withChunk[0].chunkIndex, 0)
   t.ok(typeof withChunk[0].sentenceChunk === 'string')
@@ -64,20 +67,19 @@ test('run({ streamOutput: true }) matches chunked runStream behavior', async (t)
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  const text =
-    'This is long text one. This is long text two. This is long text three.'
+  const text = 'This is long text one. This is long text two. This is long text three.'
   const response = await model.run({
     input: text,
     streamOutput: true,
     maxChunkScalars: 18
   })
   const updates = []
-  response.onUpdate(d => {
+  response.onUpdate((d) => {
     updates.push(d)
   })
   await response.await()
   t.ok(runJobSpy.callCount >= 2, 'expected multiple runJob calls')
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.ok(withChunk.length >= 2, 'expected chunk metadata on outputs')
   t.is(withChunk[0].chunkIndex, 0)
   t.ok(typeof withChunk[0].sentenceChunk === 'string')
@@ -89,7 +91,7 @@ test('runStreaming accumulate merges token stream into one job when sentence com
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  async function * tokens () {
+  async function* tokens() {
     yield 'One '
     yield 'sentence '
     yield 'only.'
@@ -104,7 +106,7 @@ test('runStreaming accumulateSentences false runs one job per yield', async (t) 
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  async function * tokens () {
+  async function* tokens() {
     yield 'a'
     yield 'b'
   }
@@ -118,7 +120,7 @@ test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars',
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  async function * oneBig () {
+  async function* oneBig() {
     yield 'a'.repeat(250)
   }
   const response = await model.runStreaming(oneBig(), { maxBufferScalars: 100 })
@@ -131,7 +133,7 @@ test('runStreaming maxBufferScalars 0 falls back to default (no infinite loop)',
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
-  async function * oneBig () {
+  async function* oneBig() {
     yield 'a'.repeat(250)
   }
   const response = await model.runStreaming(oneBig(), { maxBufferScalars: 0 })
@@ -152,7 +154,7 @@ test('runStreaming custom sentenceDelimiter with /g still flushes each fragment'
   const model = createStubbedModel()
   await model.load()
   const delimiter = /[.!?]\s*$/g
-  async function * parts () {
+  async function* parts() {
     yield 'A.'
     yield 'B.'
   }
@@ -167,7 +169,7 @@ test('runStreaming yields multiple jobs from async text chunks', async (t) => {
   const model = createStubbedModel()
   await model.load()
 
-  async function * lines () {
+  async function* lines() {
     yield 'First sentence for TTS.'
     yield 'Second sentence follows.'
     yield 'Third sentence ends here.'
@@ -175,12 +177,12 @@ test('runStreaming yields multiple jobs from async text chunks', async (t) => {
 
   const response = await model.runStreaming(lines())
   const updates = []
-  response.onUpdate(d => {
+  response.onUpdate((d) => {
     updates.push(d)
   })
   await response.await()
   t.is(runJobSpy.callCount, 3, 'expected one runJob per yielded string')
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.is(withChunk.length, 3)
   t.is(withChunk[0].chunkIndex, 0)
   t.is(withChunk[2].chunkIndex, 2)
@@ -201,7 +203,7 @@ test('plain run() uses single job', async (t) => {
   }
   await response.await()
   t.is(runJobSpy.callCount, 1)
-  const withChunk = updates.filter(u => u.chunkIndex !== undefined)
+  const withChunk = updates.filter((u) => u.chunkIndex !== undefined)
   t.is(withChunk.length, 0)
   runJobSpy.restore()
 })

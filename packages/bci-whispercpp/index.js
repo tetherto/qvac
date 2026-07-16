@@ -8,42 +8,41 @@ const { createJobHandler, exclusiveRunQueue, QvacResponse } = require('@qvac/inf
 const { BCIInterface } = require('./bci')
 const { QvacErrorAddonBCI, ERR_CODES } = require('./lib/error')
 const { computeWER } = require('./lib/wer')
+const { toUint8, sliceBody, buildWindowBuffer, stitchSegments } = require('./lib/stream')
 const {
-  toUint8,
-  sliceBody,
-  buildWindowBuffer,
-  stitchSegments
-} = require('./lib/stream')
+  STREAM_HEADER_BYTES,
+  CHANNELS_FIELD_OFFSET,
+  FLOAT32_BYTES,
+  ADDON_EVENT
+} = require('./lib/constants')
 
-// Default prebuilds folder for dynamically-loaded ggml backend `.so`
-// files. Consumed by the native addon on Android only (no-op
-// elsewhere). The CMake build stages the per-arch backends into
-// `<addon>/prebuilds/<bare_target>/<module_name>/`; the native side
-// joins `backendsDir` with the compile-time `BACKENDS_SUBDIR` before
-// calling `ggml_backend_load_all_from_path()`.
+// Consumed by the native addon on Android only (no-op elsewhere), where it is
+// joined with the compile-time BACKENDS_SUBDIR before ggml loads the per-arch
+// backend `.so` files.
 const PREBUILDS_DIR = path.join(__dirname, 'prebuilds')
 
-// Sliding-window streaming constants.
-//
-// The underlying whisper encoder accepts up to ~3000 timesteps of input per
-// forward pass. We keep MAX_WINDOW_TIMESTEPS slightly below that ceiling so
-// that edge-case window sizes (e.g. final flush of a partial window) always
-// fit without a native-side truncation. Requests above this surface as
-// WINDOW_TOO_LARGE so callers can react explicitly.
-//
-// DEFAULT_WINDOW_TIMESTEPS / DEFAULT_HOP_TIMESTEPS are chosen as a balanced
-// first-step trade-off: a 1500-step window decodes quickly on commodity
-// hardware, and a 500-step hop (≈33% overlap) gives the word-stitcher
-// enough overlap to deduplicate across boundaries without decoding the
-// same audio ~2x. These numbers will be revisited when a segmentation
-// model replaces the fixed-window heuristic.
-//
-// MAX_STITCH_WORDS bounds the suffix/prefix search in stitchSegments so
-// the per-window merge stays O(maxWords^2) regardless of transcript length.
+// MAX_WINDOW_TIMESTEPS stays below the whisper encoder's ~3000-timestep
+// per-forward ceiling so even a final partial-window flush fits without
+// native-side truncation; larger requests surface as WINDOW_TOO_LARGE.
+// The 1500/500 default window/hop is a balanced first step: it decodes
+// quickly while the ~33% overlap lets the word-stitcher deduplicate across
+// boundaries without decoding the same signal twice.
+// MAX_STITCH_WORDS bounds the suffix/prefix search so the merge stays
+// O(maxWords^2) regardless of transcript length.
 const DEFAULT_WINDOW_TIMESTEPS = 1500
 const DEFAULT_HOP_TIMESTEPS = 500
 const MAX_WINDOW_TIMESTEPS = 2900
 const MAX_STITCH_WORDS = 40
+
+function collectSegments(collected, data) {
+  if (Array.isArray(data)) {
+    for (const seg of data) {
+      if (seg && typeof seg.text === 'string') collected.push(seg)
+    }
+  } else if (data && typeof data.text === 'string') {
+    collected.push(data)
+  }
+}
 
 /**
  * BCI neural signal transcription client powered by whisper.cpp.
@@ -68,7 +67,7 @@ class BCIWhispercpp {
    * @param {Object} [config.contextParams] - whisper context params
    * @param {Object} [config.miscConfig] - miscellaneous config
    */
-  constructor ({ files, logger = null, opts = {} }, config = {}) {
+  constructor({ files, logger = null, opts = {} }, config = {}) {
     if (!files || typeof files.model !== 'string' || files.model.length === 0) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
@@ -76,8 +75,10 @@ class BCIWhispercpp {
       })
     }
 
-    if (files.embedder !== undefined &&
-        (typeof files.embedder !== 'string' || files.embedder.length === 0)) {
+    if (
+      files.embedder !== undefined &&
+      (typeof files.embedder !== 'string' || files.embedder.length === 0)
+    ) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
         adds: 'files.embedder must be a non-empty string when provided'
@@ -121,7 +122,7 @@ class BCIWhispercpp {
    * to fully unwind (unload/destroy) should `await this._streamDriverPromise`
    * after calling this.
    */
-  _teardownActiveStream (reason) {
+  _teardownActiveStream(reason) {
     this._streamAborted = true
     this._streamWindowHandler = null
     if (this._streamWindowReject) {
@@ -136,11 +137,11 @@ class BCIWhispercpp {
     }
   }
 
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load () {
+  async load() {
     if (this.state.destroyed) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_NOT_LOADED,
@@ -155,7 +156,7 @@ class BCIWhispercpp {
     this.state.configLoaded = true
   }
 
-  async _load () {
+  async _load() {
     if (!fs.existsSync(this._files.model)) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_FILE_NOT_FOUND,
@@ -192,9 +193,10 @@ class BCIWhispercpp {
       // native libs. Defaulting to the in-package prebuilds dir keeps
       // mobile builds working out of the box, parity with transcription-
       // whispercpp 0.9.0.
-      backendsDir: typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0
-        ? this._config.backendsDir
-        : PREBUILDS_DIR
+      backendsDir:
+        typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0
+          ? this._config.backendsDir
+          : PREBUILDS_DIR
     }
 
     if (this._config.bciConfig) {
@@ -252,7 +254,7 @@ class BCIWhispercpp {
    * @param {string} filePath - path to .bin neural signal file
    * @returns {Promise<QvacResponse>}
    */
-  async transcribeFile (filePath) {
+  async transcribeFile(filePath) {
     const data = fs.readFileSync(filePath)
     return this.transcribe(new Uint8Array(data))
   }
@@ -264,7 +266,7 @@ class BCIWhispercpp {
    * @param {Uint8Array} neuralData - binary neural signal
    * @returns {Promise<QvacResponse>}
    */
-  async transcribe (neuralData) {
+  async transcribe(neuralData) {
     this._assertReadyForInference()
     return await this._enqueueInference(async () => {
       const response = this._job.start()
@@ -331,7 +333,7 @@ class BCIWhispercpp {
    *   full running transcript ('full').
    * @returns {Promise<QvacResponse>}
    */
-  async transcribeStream (neuralStream, streamOpts = {}) {
+  async transcribeStream(neuralStream, streamOpts = {}) {
     this._assertReadyForInference()
     if (this._streamResponse !== null) {
       throw new QvacErrorAddonBCI({ code: ERR_CODES.STREAM_ALREADY_ACTIVE })
@@ -343,144 +345,183 @@ class BCIWhispercpp {
     return await this._enqueueInference(async () => {
       this._streamAborted = false
       const response = new QvacResponse({
-        cancelHandler: async () => { await this.cancel() }
+        cancelHandler: async () => {
+          await this.cancel()
+        }
       })
       this._streamResponse = response
 
-      const driver = this._runStreamDriver(iterable, opts, response).catch((err) => {
-        if (this._streamResponse === response) {
-          this._streamResponse = null
-        }
-        response.failed(err)
-      }).finally(() => {
-        if (this._streamDriverPromise === driver) {
-          this._streamDriverPromise = null
-        }
-      })
+      const driver = this._runStreamDriver(iterable, opts, response)
+        .catch((err) => {
+          if (this._streamResponse === response) {
+            this._streamResponse = null
+          }
+          response.failed(err)
+        })
+        .finally(() => {
+          if (this._streamDriverPromise === driver) {
+            this._streamDriverPromise = null
+          }
+        })
       this._streamDriverPromise = driver
 
       return response
     })
   }
 
-  async _runStreamDriver (iterable, opts, response) {
-    let channels = null
-    let headerCarry = new Uint8Array(0)
-    const body = []
-    let bodyBytes = 0
-    let bytesPerTimestep = 0
-    let windowStartTs = 0
-    let lastDecodedEndTs = 0
-    let mergedText = ''
-
-    const decodeRange = async (startTs, windowTs) => {
-      if (this._streamAborted) return
-      if (windowTs <= 0) return
-      const endTs = startTs + windowTs
-      if (endTs <= lastDecodedEndTs) return
-
-      const windowBody = sliceBody(body, bytesPerTimestep, startTs, endTs, bodyBytes)
-      const windowBuf = buildWindowBuffer(windowBody, channels, windowTs)
-
-      this.logger.debug('Decoding stream window', {
-        startTimestep: startTs,
-        endTimestep: endTs,
-        windowTimesteps: windowTs
-      })
-
-      const segments = await this._decodeWindow(windowBuf)
-      lastDecodedEndTs = endTs
-
-      const { deltaSegments, merged } = stitchSegments(
-        mergedText,
-        segments,
-        MAX_STITCH_WORDS,
-        startTs
-      )
-      mergedText = merged
-
-      if (opts.emit === 'full') {
-        if (merged.length > 0) {
-          response.updateOutput([{ text: merged }])
-        }
-      } else if (deltaSegments.length > 0) {
-        response.updateOutput(deltaSegments)
-      }
+  async _runStreamDriver(iterable, opts, response) {
+    const ctx = {
+      opts,
+      response,
+      channels: null,
+      headerCarry: new Uint8Array(0),
+      body: [],
+      bodyBytes: 0,
+      bytesPerTimestep: 0,
+      windowStartTs: 0,
+      lastDecodedEndTs: 0,
+      mergedText: ''
     }
 
     try {
-      for await (const rawChunk of iterable) {
-        if (this._streamAborted) return
-        let chunk = toUint8(rawChunk)
-        if (chunk.byteLength === 0) continue
-
-        if (channels === null) {
-          if (headerCarry.byteLength > 0) {
-            const combined = new Uint8Array(headerCarry.byteLength + chunk.byteLength)
-            combined.set(headerCarry, 0)
-            combined.set(chunk, headerCarry.byteLength)
-            chunk = combined
-            headerCarry = new Uint8Array(0)
-          }
-          if (chunk.byteLength < 8) {
-            headerCarry = chunk
-            continue
-          }
-          const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength)
-          channels = view.getUint32(4, true)
-          if (channels === 0) {
-            throw new QvacErrorAddonBCI({
-              code: ERR_CODES.INVALID_STREAM_HEADER,
-              adds: 'channels is zero'
-            })
-          }
-          bytesPerTimestep = channels * 4
-          chunk = chunk.subarray(8)
-          if (chunk.byteLength === 0) continue
-        }
-
-        body.push(chunk)
-        bodyBytes += chunk.byteLength
-
-        while (!this._streamAborted &&
-          Math.floor(bodyBytes / bytesPerTimestep) >= (windowStartTs + opts.windowTimesteps)) {
-          await decodeRange(windowStartTs, opts.windowTimesteps)
-          if (this._streamAborted) return
-          windowStartTs += opts.hopTimesteps
-        }
-      }
-
+      await this._consumeStream(iterable, ctx)
       if (this._streamAborted) return
-
-      if (channels === null && headerCarry.byteLength > 0) {
-        throw new QvacErrorAddonBCI({
-          code: ERR_CODES.INVALID_STREAM_HEADER,
-          adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need 8`
-        })
-      }
-
-      if (channels !== null) {
-        const bufferedTs = Math.floor(bodyBytes / bytesPerTimestep)
-        if (bufferedTs > lastDecodedEndTs && bufferedTs > windowStartTs) {
-          await decodeRange(windowStartTs, bufferedTs - windowStartTs)
-        }
-      }
-
-      if (!this._streamAborted) {
-        this._streamResponse = null
-        if (opts.emit === 'full') {
-          response.ended(mergedText.length > 0 ? [{ text: mergedText }] : [])
-        } else {
-          response.ended()
-        }
-      }
+      this._assertHeaderComplete(ctx)
+      await this._flushFinalWindow(ctx)
+      this._finalizeStream(ctx)
     } catch (err) {
       this._streamResponse = null
       throw err
     }
   }
 
-  async _decodeWindow (windowBytes) {
+  async _consumeStream(iterable, ctx) {
+    for await (const rawChunk of iterable) {
+      if (this._streamAborted) return
+      const chunk = toUint8(rawChunk)
+      if (chunk.byteLength === 0) continue
+      await this._ingestChunk(chunk, ctx)
+      if (this._streamAborted) return
+    }
+  }
+
+  async _ingestChunk(chunk, ctx) {
+    let body = chunk
+    if (ctx.channels === null) {
+      body = this._consumeHeader(chunk, ctx)
+      if (body === null || body.byteLength === 0) return
+    }
+    ctx.body.push(body)
+    ctx.bodyBytes += body.byteLength
+    await this._emitReadyWindows(ctx)
+  }
+
+  // Parse the [T, C] header once, buffering across chunks until the full
+  // header has arrived. Returns the post-header body bytes, or null while
+  // still waiting for more header bytes.
+  _consumeHeader(chunk, ctx) {
+    if (ctx.headerCarry.byteLength > 0) {
+      const combined = new Uint8Array(ctx.headerCarry.byteLength + chunk.byteLength)
+      combined.set(ctx.headerCarry, 0)
+      combined.set(chunk, ctx.headerCarry.byteLength)
+      chunk = combined
+      ctx.headerCarry = new Uint8Array(0)
+    }
+    if (chunk.byteLength < STREAM_HEADER_BYTES) {
+      ctx.headerCarry = chunk
+      return null
+    }
+    const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+    const channels = view.getUint32(CHANNELS_FIELD_OFFSET, true)
+    if (channels === 0) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.INVALID_STREAM_HEADER,
+        adds: 'channels is zero'
+      })
+    }
+    ctx.channels = channels
+    ctx.bytesPerTimestep = channels * FLOAT32_BYTES
+    return chunk.subarray(STREAM_HEADER_BYTES)
+  }
+
+  async _emitReadyWindows(ctx) {
+    while (
+      !this._streamAborted &&
+      Math.floor(ctx.bodyBytes / ctx.bytesPerTimestep) >=
+        ctx.windowStartTs + ctx.opts.windowTimesteps
+    ) {
+      await this._decodeRange(ctx, ctx.windowStartTs, ctx.opts.windowTimesteps)
+      if (this._streamAborted) return
+      ctx.windowStartTs += ctx.opts.hopTimesteps
+    }
+  }
+
+  async _decodeRange(ctx, startTs, windowTs) {
+    if (this._streamAborted) return
+    if (windowTs <= 0) return
+    const endTs = startTs + windowTs
+    if (endTs <= ctx.lastDecodedEndTs) return
+
+    const windowBody = sliceBody(ctx.body, ctx.bytesPerTimestep, startTs, endTs, ctx.bodyBytes)
+    const windowBuf = buildWindowBuffer(windowBody, ctx.channels, windowTs)
+
+    this.logger.debug('Decoding stream window', {
+      startTimestep: startTs,
+      endTimestep: endTs,
+      windowTimesteps: windowTs
+    })
+
+    const segments = await this._decodeWindow(windowBuf)
+    ctx.lastDecodedEndTs = endTs
+
+    const { deltaSegments, merged } = stitchSegments(
+      ctx.mergedText,
+      segments,
+      MAX_STITCH_WORDS,
+      startTs
+    )
+    ctx.mergedText = merged
+    this._emitWindowUpdate(ctx, merged, deltaSegments)
+  }
+
+  _emitWindowUpdate(ctx, merged, deltaSegments) {
+    if (ctx.opts.emit === 'full') {
+      if (merged.length > 0) {
+        ctx.response.updateOutput([{ text: merged }])
+      }
+    } else if (deltaSegments.length > 0) {
+      ctx.response.updateOutput(deltaSegments)
+    }
+  }
+
+  _assertHeaderComplete(ctx) {
+    if (ctx.channels === null && ctx.headerCarry.byteLength > 0) {
+      throw new QvacErrorAddonBCI({
+        code: ERR_CODES.INVALID_STREAM_HEADER,
+        adds: `stream ended with ${ctx.headerCarry.byteLength} header byte(s) buffered; need ${STREAM_HEADER_BYTES}`
+      })
+    }
+  }
+
+  async _flushFinalWindow(ctx) {
+    if (ctx.channels === null) return
+    const bufferedTs = Math.floor(ctx.bodyBytes / ctx.bytesPerTimestep)
+    if (bufferedTs > ctx.lastDecodedEndTs && bufferedTs > ctx.windowStartTs) {
+      await this._decodeRange(ctx, ctx.windowStartTs, bufferedTs - ctx.windowStartTs)
+    }
+  }
+
+  _finalizeStream(ctx) {
+    if (this._streamAborted) return
+    this._streamResponse = null
+    if (ctx.opts.emit === 'full') {
+      ctx.response.ended(ctx.mergedText.length > 0 ? [{ text: ctx.mergedText }] : [])
+    } else {
+      ctx.response.ended()
+    }
+  }
+
+  async _decodeWindow(windowBytes) {
     return await new Promise((resolve, reject) => {
       const collected = []
       const cleanup = () => {
@@ -492,38 +533,34 @@ class BCIWhispercpp {
         reject(err)
       }
       this._streamWindowHandler = (event, data, error) => {
-        if (event === 'Error') {
+        if (event === ADDON_EVENT.ERROR) {
           cleanup()
-          const err = error instanceof Error
-            ? error
-            : new Error(typeof error === 'string' ? error : 'window decode failed')
+          const err =
+            error instanceof Error
+              ? error
+              : new Error(typeof error === 'string' ? error : 'window decode failed')
           reject(err)
           return
         }
-        if (event === 'Output') {
-          if (Array.isArray(data)) {
-            for (const seg of data) {
-              if (seg && typeof seg.text === 'string') collected.push(seg)
-            }
-          } else if (data && typeof data.text === 'string') {
-            collected.push(data)
-          }
+        if (event === ADDON_EVENT.OUTPUT) {
+          collectSegments(collected, data)
           return
         }
-        if (event === 'JobEnded') {
+        if (event === ADDON_EVENT.JOB_ENDED) {
           cleanup()
           resolve(collected)
         }
       }
 
-      this.addon.runJob({ input: windowBytes })
-        .then(accepted => {
+      this.addon
+        .runJob({ input: windowBytes })
+        .then((accepted) => {
           if (!accepted) {
             cleanup()
             reject(new QvacErrorAddonBCI({ code: ERR_CODES.JOB_ALREADY_RUNNING }))
           }
         })
-        .catch(err => {
+        .catch((err) => {
           cleanup()
           reject(err)
         })
@@ -536,7 +573,7 @@ class BCIWhispercpp {
    * mirroring whispercpp's `_checkParamsExists` pattern. Returns a new
    * opts object; does not mutate the caller's input.
    */
-  _validateStreamOpts (streamOpts) {
+  _validateStreamOpts(streamOpts) {
     const opts = {
       windowTimesteps: streamOpts.windowTimesteps ?? DEFAULT_WINDOW_TIMESTEPS,
       hopTimesteps: streamOpts.hopTimesteps ?? DEFAULT_HOP_TIMESTEPS,
@@ -577,7 +614,7 @@ class BCIWhispercpp {
     return opts
   }
 
-  _normalizeNeuralStream (input) {
+  _normalizeNeuralStream(input) {
     if (input == null) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.INVALID_STREAM_INPUT,
@@ -599,10 +636,12 @@ class BCIWhispercpp {
    * response settles. Separate from _withExclusiveRun (lifecycle ops) so
    * destroy/unload can still preempt.
    */
-  async _enqueueInference (runFn) {
+  async _enqueueInference(runFn) {
     const prev = this._inferenceQueueWaiter
     let releaseSlot
-    this._inferenceQueueWaiter = new Promise(resolve => { releaseSlot = resolve })
+    this._inferenceQueueWaiter = new Promise((resolve) => {
+      releaseSlot = resolve
+    })
     await prev
     let response
     try {
@@ -611,11 +650,16 @@ class BCIWhispercpp {
       releaseSlot()
       throw err
     }
-    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    response
+      .await()
+      .finally(() => {
+        releaseSlot()
+      })
+      .catch(() => {})
     return response
   }
 
-  _assertReadyForInference () {
+  _assertReadyForInference() {
     if (this.state.destroyed || !this.state.configLoaded || !this.addon) {
       throw new QvacErrorAddonBCI({
         code: ERR_CODES.MODEL_NOT_LOADED,
@@ -624,11 +668,15 @@ class BCIWhispercpp {
     }
   }
 
-  _isConfigurationError (err) {
+  _isConfigurationError(err) {
     if (err && err.code === 'ERR_ASSERTION') return true
     if (err instanceof TypeError) return true
     const msg = String(err?.message || '')
-    return msg.includes('is required') || msg.includes('is not a valid parameter') || msg.includes('must be')
+    return (
+      msg.includes('is required') ||
+      msg.includes('is not a valid parameter') ||
+      msg.includes('must be')
+    )
   }
 
   /**
@@ -640,21 +688,21 @@ class BCIWhispercpp {
    * reserved for batch `transcribe()` calls and not used while a stream
    * is active. When `_streamWindowHandler` is null the batch path runs.
    */
-  _outputCallback (addon, event, jobId, data, error) {
+  _outputCallback(addon, event, jobId, data, error) {
     if (this._streamWindowHandler) {
       this._streamWindowHandler(event, data, error)
       return
     }
-    if (event === 'Error') {
+    if (event === ADDON_EVENT.ERROR) {
       this.logger.error('Job ' + jobId + ' failed with error: ' + error)
       this._job.fail(error)
       return
     }
-    if (event === 'Output') {
+    if (event === ADDON_EVENT.OUTPUT) {
       this._job.output(data)
       return
     }
-    if (event === 'JobEnded') {
+    if (event === ADDON_EVENT.JOB_ENDED) {
       this.logger.info('Job ' + jobId + ' completed')
       if (this.opts.stats) {
         this._job.end(data)
@@ -666,7 +714,7 @@ class BCIWhispercpp {
     this.logger.debug('Received event for job ' + jobId + ': ' + event)
   }
 
-  async cancel () {
+  async cancel() {
     this._teardownActiveStream('Stream cancelled')
     if (this.addon?.cancel) {
       await this.addon.cancel()
@@ -679,7 +727,7 @@ class BCIWhispercpp {
     }
   }
 
-  async unload () {
+  async unload() {
     return await this._withExclusiveRun(async () => {
       this._teardownActiveStream('Model was unloaded')
       if (this._streamDriverPromise) {
@@ -697,7 +745,7 @@ class BCIWhispercpp {
     })
   }
 
-  async destroy () {
+  async destroy() {
     return await this._withExclusiveRun(async () => {
       this._teardownActiveStream('Model was destroyed')
       if (this._streamDriverPromise) {
