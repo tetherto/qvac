@@ -33,15 +33,26 @@ export interface Addon {
   cancel(): Promise<void>
   /** Cancel a single job by its native-assigned id, leaving other concurrent jobs running. */
   cancelJob(id: number): Promise<void>
-  finetune?(params: FinetuneOptions): Promise<boolean>
+  /** Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count. */
+  activeJobs(): number
+  /** Resolves the scheduler-minted exclusive-job id when admitted, `false` when rejected. */
+  finetune?(params: FinetuneOptions): Promise<number | false>
   unload(): Promise<void>
 }
 
-export interface AddonRunJobResult {
-  accepted: boolean
-  /** Native-assigned job id used to route this request's streamed output. */
-  id: number
-}
+/**
+ * Discriminated admission result: the native binding only sets `id` when the
+ * scheduler minted one, so a job id exists exactly when the job was accepted.
+ */
+export type AdmissionResult =
+  | {
+      accepted: true
+      /** Native-assigned job id used to route this request's streamed output. */
+      id: number
+    }
+  | { accepted: false; id?: never }
+
+export type AddonRunJobResult = AdmissionResult
 
 export interface AddonBatchRunItem {
   /** Optional caller-supplied id; the native binding auto-assigns one when omitted. */
@@ -49,10 +60,20 @@ export interface AddonBatchRunItem {
   messages: AddonRunJobMessage[]
 }
 
-export interface AddonBatchRunResult {
-  accepted: boolean
-  ids: string[]
-}
+/**
+ * Batch admission result. The per-sequence `ids` are reported on both
+ * branches (they are assigned while parsing the batch input); the native
+ * group id used to route the batch's terminal events exists only when the
+ * batch was accepted.
+ */
+export type AddonBatchRunResult =
+  | {
+      accepted: true
+      /** Native group id used by the batch handler to route this group's terminal events. */
+      id: number
+      ids: string[]
+    }
+  | { accepted: false; id?: never; ids: string[] }
 
 export interface LlamaConfig {
   device?: string
