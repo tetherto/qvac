@@ -39,33 +39,42 @@ const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
 const SAMPLE_AUDIO_NAME = 'sample.raw'
 
-function backendIdToName (id) {
+function backendIdToName(id) {
   switch (id) {
-    case 0: return 'CPU'
-    case 1: return 'Metal'
-    case 2: return 'CUDA'
-    case 3: return 'Vulkan'
-    case 4: return 'OpenCL'
-    case 99: return 'other-GPU'
-    default: return `unknown(${id})`
+    case 0:
+      return 'CPU'
+    case 1:
+      return 'Metal'
+    case 2:
+      return 'CUDA'
+    case 3:
+      return 'Vulkan'
+    case 4:
+      return 'OpenCL'
+    case 99:
+      return 'other-GPU'
+    default:
+      return `unknown(${id})`
   }
 }
 
-function locateSampleAudio () {
+function locateSampleAudio() {
   try {
     const samplePath = getAssetPath(SAMPLE_AUDIO_NAME)
     if (samplePath && fs.existsSync(samplePath)) return samplePath
-  } catch (_) { /* asset manifest may not contain the sample on mobile */ }
+  } catch (_) {
+    /* asset manifest may not contain the sample on mobile */
+  }
   return null
 }
 
-async function ensureTinyModel () {
+async function ensureTinyModel() {
   const { modelPath } = getTestPaths()
   const result = await ensureWhisperModel(modelPath)
   return result && result.success ? modelPath : null
 }
 
-function buildConfig (useGpu) {
+function buildConfig(useGpu) {
   return {
     contextParams: {
       use_gpu: !!useGpu,
@@ -80,7 +89,7 @@ function buildConfig (useGpu) {
   }
 }
 
-async function loadAndTranscribe ({ modelPath, samplePath, useGpu }) {
+async function loadAndTranscribe({ modelPath, samplePath, useGpu }) {
   const constructorArgs = {
     files: { model: modelPath },
     opts: { stats: true }
@@ -95,20 +104,26 @@ async function loadAndTranscribe ({ modelPath, samplePath, useGpu }) {
     const response = await model.run(audioStream)
 
     const segments = []
-    await response.onUpdate((out) => {
-      const items = Array.isArray(out) ? out : [out]
-      for (const seg of items) {
-        if (seg && typeof seg.text === 'string') segments.push(seg)
-      }
-    }).await()
+    await response
+      .onUpdate((out) => {
+        const items = Array.isArray(out) ? out : [out]
+        for (const seg of items) {
+          if (seg && typeof seg.text === 'string') segments.push(seg)
+        }
+      })
+      .await()
 
     return { segments, stats: response.stats || null }
   } finally {
-    try { await model.destroy() } catch (_) { /* ignore */ }
+    try {
+      await model.destroy()
+    } catch (_) {
+      /* ignore */
+    }
   }
 }
 
-function assertStatsShape (t, label, stats) {
+function assertStatsShape(t, label, stats) {
   t.ok(stats, `${label}: response.stats must be present (opts.stats=true was set)`)
   if (!stats) return
   t.ok(
@@ -123,17 +138,11 @@ function assertStatsShape (t, label, stats) {
     typeof stats.realTimeFactor === 'number' && stats.realTimeFactor >= 0,
     `${label}: stats.realTimeFactor must be a non-negative number`
   )
-  t.ok(
-    typeof stats.backendDevice === 'number',
-    `${label}: stats.backendDevice must be a number`
-  )
-  t.ok(
-    typeof stats.backendId === 'number',
-    `${label}: stats.backendId must be a number`
-  )
+  t.ok(typeof stats.backendDevice === 'number', `${label}: stats.backendDevice must be a number`)
+  t.ok(typeof stats.backendId === 'number', `${label}: stats.backendId must be a number`)
 }
 
-function assertGpuBackend (t, label, stats) {
+function assertGpuBackend(t, label, stats) {
   if (!stats) {
     t.fail(`${label}: no response.stats returned (cannot verify backend)`)
     return
@@ -144,11 +153,12 @@ function assertGpuBackend (t, label, stats) {
   console.log(`[${label}] backendDevice=${dev} backendId=${id} (${name})`)
 
   if (dev !== 1) {
-    const msg = `${label}/${platform}: expected GPU backend, got ${name} ` +
-                `(backendDevice=${dev}, backendId=${id}). ` +
-                'use_gpu=true was requested but the engine fell back to CPU. ' +
-                'Set QVAC_WHISPER_GPU_RELAX=1 to downgrade this to a warning ' +
-                'on hosts without a usable GPU.'
+    const msg =
+      `${label}/${platform}: expected GPU backend, got ${name} ` +
+      `(backendDevice=${dev}, backendId=${id}). ` +
+      'use_gpu=true was requested but the engine fell back to CPU. ' +
+      'Set QVAC_WHISPER_GPU_RELAX=1 to downgrade this to a warning ' +
+      'on hosts without a usable GPU.'
     if (RELAX) {
       t.comment(`WARNING (relaxed): ${msg}`)
       t.pass(`${label}: GPU smoke completed (relaxed)`)
@@ -163,12 +173,14 @@ function assertGpuBackend (t, label, stats) {
   } else if (platform === 'linux' || platform === 'win32') {
     t.is(id, 3, `${label}/${platform}: expected Vulkan backendId=3, got ${name}`)
   } else if (platform === 'android') {
-    t.ok(id === 3 || id === 4,
-      `${label}/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`)
+    t.ok(
+      id === 3 || id === 4,
+      `${label}/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`
+    )
   }
 }
 
-function assertCpuBackend (t, label, stats) {
+function assertCpuBackend(t, label, stats) {
   if (!stats) {
     t.fail(`${label}: no response.stats returned (cannot verify backend)`)
     return
@@ -176,16 +188,25 @@ function assertCpuBackend (t, label, stats) {
   const dev = stats.backendDevice
   const id = stats.backendId
   console.log(`[${label}] backendDevice=${dev} backendId=${id} (${backendIdToName(id)})`)
-  t.is(dev, 0,
+  t.is(
+    dev,
+    0,
     `${label}: use_gpu=false must pin the engine to CPU (backendDevice=0), ` +
-    `got backendDevice=${dev} (${backendIdToName(id)})`)
+      `got backendDevice=${dev} (${backendIdToName(id)})`
+  )
 }
 
-async function runCase (t, { useGpu, label }) {
+async function runCase(t, { useGpu, label }) {
   const modelPath = await ensureTinyModel()
-  if (!modelPath) { t.pass(`${label}: skipped — ggml-tiny.bin not available locally`); return null }
+  if (!modelPath) {
+    t.pass(`${label}: skipped — ggml-tiny.bin not available locally`)
+    return null
+  }
   const samplePath = locateSampleAudio()
-  if (!samplePath) { t.pass(`${label}: skipped — ${SAMPLE_AUDIO_NAME} not available locally`); return null }
+  if (!samplePath) {
+    t.pass(`${label}: skipped — ${SAMPLE_AUDIO_NAME} not available locally`)
+    return null
+  }
 
   const result = await loadAndTranscribe({ modelPath, samplePath, useGpu })
   console.log(`[${label}] segments=${result.segments.length}`)
@@ -202,7 +223,9 @@ test(
   { timeout: 600000, skip: NO_GPU },
   async (t) => {
     if (platform === 'android') {
-      t.pass('Android: Whisper GPU test quarantined pending teardown crash investigation (see mobile-perf-tiny-gpu.test.js)')
+      t.pass(
+        'Android: Whisper GPU test quarantined pending teardown crash investigation (see mobile-perf-tiny-gpu.test.js)'
+      )
       return
     }
     const gpuRun = await runCase(t, { useGpu: true, label: 'GPU' })

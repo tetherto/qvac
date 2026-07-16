@@ -5,7 +5,7 @@
  * @param {Object} configObject
  * @returns {void} or throws if invalid
  */
-function checkConfig (configObject) {
+function checkConfig(configObject) {
   const requiredSections = ['whisperConfig', 'contextParams', 'miscConfig']
 
   for (const section of requiredSections) {
@@ -33,20 +33,11 @@ function checkConfig (configObject) {
     'beam_search_beam_size'
   ]
 
-  const validContextParams = [
-    'model',
-    'use_gpu',
-    'flash_attn',
-    'gpu_device'
-  ]
+  const validContextParams = ['model', 'use_gpu', 'flash_attn', 'gpu_device']
 
-  const validMiscParams = [
-    'caption_enabled'
-  ]
+  const validMiscParams = ['caption_enabled']
 
-  const validBCIParams = [
-    'day_idx'
-  ]
+  const validBCIParams = ['day_idx']
 
   for (const userParam of Object.keys(configObject.whisperConfig)) {
     if (!validWhisperParams.includes(userParam)) {
@@ -65,8 +56,10 @@ function checkConfig (configObject) {
       throw new Error(`${userParam} is not a valid parameter for miscConfig`)
     }
   }
-  if (configObject.miscConfig.caption_enabled !== undefined &&
-      typeof configObject.miscConfig.caption_enabled !== 'boolean') {
+  if (
+    configObject.miscConfig.caption_enabled !== undefined &&
+    typeof configObject.miscConfig.caption_enabled !== 'boolean'
+  ) {
     throw new Error('miscConfig.caption_enabled must be a boolean')
   }
 

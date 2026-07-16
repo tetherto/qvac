@@ -37,11 +37,7 @@ const { ParakeetInterface } = require('../../parakeet')
 const process = require('bare-process')
 global.process = process
 
-function createMockedModel ({
-  onOutput = () => {},
-  binding = undefined,
-  parakeetConfig = {}
-} = {}) {
+function createMockedModel({ onOutput = () => {}, binding = undefined, parakeetConfig = {} } = {}) {
   TranscriptionParakeet.prototype.validateModelFiles = () => undefined
 
   const model = new TranscriptionParakeet({
@@ -57,7 +53,7 @@ function createMockedModel ({
 
   const _binding = binding || new MockedBinding()
 
-  model._createAddon = configurationParams => {
+  model._createAddon = (configurationParams) => {
     const addon = new ParakeetInterface(
       _binding,
       configurationParams,
@@ -74,12 +70,12 @@ function createMockedModel ({
   return model
 }
 
-function pushable () {
+function pushable() {
   const queue = []
   let waiter = null
   let ended = false
   return {
-    push (chunk) {
+    push(chunk) {
       if (ended) return
       queue.push(chunk)
       if (waiter) {
@@ -88,7 +84,7 @@ function pushable () {
         w()
       }
     },
-    end () {
+    end() {
       ended = true
       if (waiter) {
         const w = waiter
@@ -96,14 +92,16 @@ function pushable () {
         w()
       }
     },
-    async * [Symbol.asyncIterator] () {
+    async *[Symbol.asyncIterator]() {
       while (true) {
         if (queue.length > 0) {
           yield queue.shift()
           continue
         }
         if (ended) return
-        await new Promise(resolve => { waiter = resolve })
+        await new Promise((resolve) => {
+          waiter = resolve
+        })
       }
     }
   }
@@ -127,8 +125,8 @@ test('runStreaming surfaces one Output per pushed chunk and one JobEnded on clos
   // that fired before it landed in the response chain.
   const seenSegments = []
   const updateDone = response
-    .onUpdate(items => {
-      for (const seg of (Array.isArray(items) ? items : [items])) {
+    .onUpdate((items) => {
+      for (const seg of Array.isArray(items) ? items : [items]) {
         seenSegments.push(seg)
       }
     })
@@ -142,20 +140,31 @@ test('runStreaming surfaces one Output per pushed chunk and one JobEnded on clos
   await updateDone
   await wait()
 
-  const outputEvents = events.filter(e => e.event === 'Output')
+  const outputEvents = events.filter((e) => e.event === 'Output')
   t.is(outputEvents.length, 3, 'Three Output events for three pushed chunks')
   t.is(seenSegments.length, 3, 'onUpdate sees exactly three segments')
-  t.is(seenSegments[0].text, 'Mock streaming chunk 0',
-    'First segment text comes from chunk index 0')
-  t.is(seenSegments[1].text, 'Mock streaming chunk 1',
-    'Second segment text comes from chunk index 1')
-  t.is(seenSegments[2].text, 'Mock streaming chunk 2',
-    'Third segment text comes from chunk index 2')
+  t.is(
+    seenSegments[0].text,
+    'Mock streaming chunk 0',
+    'First segment text comes from chunk index 0'
+  )
+  t.is(
+    seenSegments[1].text,
+    'Mock streaming chunk 1',
+    'Second segment text comes from chunk index 1'
+  )
+  t.is(
+    seenSegments[2].text,
+    'Mock streaming chunk 2',
+    'Third segment text comes from chunk index 2'
+  )
 
-  const jobEndedEvents = events.filter(e => e.event === 'JobEnded')
+  const jobEndedEvents = events.filter((e) => e.event === 'JobEnded')
   t.is(jobEndedEvents.length, 1, 'Exactly one synthetic JobEnded')
-  t.ok(jobEndedEvents[0].output && typeof jobEndedEvents[0].output === 'object',
-    'JobEnded payload is the runtime-stats object placeholder')
+  t.ok(
+    jobEndedEvents[0].output && typeof jobEndedEvents[0].output === 'object',
+    'JobEnded payload is the runtime-stats object placeholder'
+  )
 
   const log = model._mockedBinding._streamingLog
   t.is(log.starts, 1, 'startStreaming called once')
@@ -221,8 +230,7 @@ test('cancel after startStreaming tears down the session at the binding layer', 
   await model.addon.appendStreamingAudio(new Float32Array(1024))
   await wait()
 
-  t.ok(model._mockedBinding._streamingActive,
-    'Streaming session active before cancel')
+  t.ok(model._mockedBinding._streamingActive, 'Streaming session active before cancel')
 
   model._mockedBinding.cancel(model.addon._handle)
 
@@ -230,8 +238,10 @@ test('cancel after startStreaming tears down the session at the binding layer', 
   t.is(log.starts, 1, 'startStreaming called once')
   t.is(log.appends, 1, 'appendStreamingAudio called once before cancel')
   t.is(log.cancels, 1, 'cancel invoked the streaming-aware tear-down once')
-  t.absent(model._mockedBinding._streamingActive,
-    'Mock binding flipped streamingActive=false after cancel')
+  t.absent(
+    model._mockedBinding._streamingActive,
+    'Mock binding flipped streamingActive=false after cancel'
+  )
 
   // Bypass `model.unload()` because we cancelled at the binding
   // level (without firing a synthetic terminal event); the wrapper's
@@ -251,10 +261,12 @@ test('endStreaming on a binding with no active session is a no-op', async (t) =>
   // duration captured by ParakeetStreamingProcessor; with no active
   // session, `cleaned` is false and the timing fields are zero.
   const result = model._mockedBinding.endStreaming(model.addon._handle)
-  t.is(typeof result, 'object',
-    'Mock returns the same { cleaned, audioDurationMs, totalSamples } shape as the C++ wrapper')
-  t.is(result.cleaned, false,
-    'cleaned is false when no streaming session was active')
+  t.is(
+    typeof result,
+    'object',
+    'Mock returns the same { cleaned, audioDurationMs, totalSamples } shape as the C++ wrapper'
+  )
+  t.is(result.cleaned, false, 'cleaned is false when no streaming session was active')
   t.is(result.audioDurationMs, 0, 'no session = no audio observed')
   t.is(result.totalSamples, 0, 'no session = no samples observed')
 

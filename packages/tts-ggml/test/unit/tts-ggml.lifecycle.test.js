@@ -9,7 +9,7 @@ const process = require('bare-process')
 
 global.process = process
 
-function createStubbedModel () {
+function createStubbedModel() {
   const model = new TTSGgml({
     files: {
       t3Model: './models/chatterbox-t3-turbo.gguf',

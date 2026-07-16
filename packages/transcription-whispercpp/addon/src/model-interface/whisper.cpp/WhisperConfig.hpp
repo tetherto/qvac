@@ -46,21 +46,16 @@ struct WhisperConfig {
 
 struct MiscConfig {
   bool captionModeEnabled;
-  int seed; // this is an internal c++ calls that is going to be handled
-            // seperately.
-  // seed is not passed to the main functions but is set ahead of time before
-  // the function call. use this struct for future options not passed into
-  // whisper.cpp but nevertheless effects model input/output
+  // Applied before the whisper.cpp call rather than passed as a
+  // whisper_full_params field. Holds addon-side knobs that influence model
+  // input/output without being native whisper parameters.
+  int seed;
 };
 
 MiscConfig defaultMiscConfig();
 
-// HandlersMap are visible to the js side only.
-// uses handlers map form js side.
 whisper_full_params toWhisperFullParams(const WhisperConfig& whisperConfig);
 
-// HandlersMap are visible to the js side only, so this function
-// uses handlers
 whisper_context_params
 toWhisperContextParams(const WhisperConfig& whisperConfig);
 

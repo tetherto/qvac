@@ -4,7 +4,10 @@ const test = require('brittle')
 const {
   splitTtsText,
   intlSentenceSegmentationAvailable,
-  splitByAsciiAndCjkPunctuation
+  splitByAsciiAndCjkPunctuation,
+  defaultMaxChunkScalars,
+  KOREAN_MAX_CHUNK_SCALARS,
+  DEFAULT_MAX_CHUNK_SCALARS
 } = require('../../lib/textChunker.js')
 
 test('splitByAsciiAndCjkPunctuation splits on CJK full stops', (t) => {
@@ -38,4 +41,19 @@ test('splitTtsText mergeToMaxScalars:false does not merge sentences by max lengt
   const sentenceLevel = splitTtsText(text, { language: 'en', mergeToMaxScalars: false })
   const merged = splitTtsText(text, { language: 'en', mergeToMaxScalars: true, maxScalars: 100 })
   t.ok(sentenceLevel.length >= merged.length)
+})
+
+test('defaultMaxChunkScalars returns the Korean cap for ko regardless of case', (t) => {
+  t.is(defaultMaxChunkScalars('ko'), KOREAN_MAX_CHUNK_SCALARS)
+  t.is(defaultMaxChunkScalars('KO'), KOREAN_MAX_CHUNK_SCALARS)
+})
+
+test('defaultMaxChunkScalars falls back to the default cap for other languages', (t) => {
+  t.is(defaultMaxChunkScalars('en'), DEFAULT_MAX_CHUNK_SCALARS)
+  t.is(defaultMaxChunkScalars('ja'), DEFAULT_MAX_CHUNK_SCALARS)
+  t.is(defaultMaxChunkScalars(undefined), DEFAULT_MAX_CHUNK_SCALARS)
+})
+
+test('default per-language caps keep Korean shorter than the default', (t) => {
+  t.ok(KOREAN_MAX_CHUNK_SCALARS < DEFAULT_MAX_CHUNK_SCALARS)
 })

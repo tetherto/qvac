@@ -186,6 +186,24 @@ target_compile_definitions(${qvac_lib_infer_parakeet} PUBLIC JS_LOGGER)
 # it here lets the addon compute the full backends path from a
 # host-provided prebuilds root without the host needing to know the
 # `<bare-target>/<module-name>` shape itself.
+#
+# The consumer of this define is ParakeetModel.cpp
+# (`#ifdef BACKENDS_SUBDIR` around the eopts.backends_dir join), which
+# is compiled into ${LIB_NAME} (parakeet_model_core) -- NOT into the
+# bare-module target, whose only direct source is binding.cpp. A
+# PRIVATE define on the module target alone never reaches
+# ParakeetModel.cpp's translation unit: the #ifdef silently compiles
+# out, the engine scans `<backendsDir>` (the prebuilds *root*) instead
+# of `<backendsDir>/<bare-target>/<module-name>`, finds no backend
+# .so files there, and falls back to bare-filename dlopen. That
+# fallback masks the bug on Android (per-arch CPU candidate list +
+# APK linker path) and for single-file GPU backends anywhere (the
+# .bare's $ORIGIN RUNPATH resolves them), but the desktop-Linux
+# per-arch CPU MODULE variants (GGML_CPU_ALL_VARIANTS) are reachable
+# only via the directory scan -- without the define the CPU backend
+# never registers ("no CPU device registered").
+target_compile_definitions(${LIB_NAME} PRIVATE
+  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 target_compile_definitions(${qvac_lib_infer_parakeet} PRIVATE
   BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
@@ -409,6 +427,7 @@ if(BUILD_TESTING)
     add_executable(
         parakeet_tests
         addon/tests/test_core.cpp
+        addon/tests/test_config_and_audio.cpp
         addon/tests/AddonCppTest.cpp
         addon/src/model-interface/parakeet/ParakeetModel.cpp
         addon/src/model-interface/parakeet/ParakeetConfig.cpp

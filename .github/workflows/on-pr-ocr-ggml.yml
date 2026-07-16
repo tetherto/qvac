@@ -15,7 +15,9 @@ on:
     paths:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
-      - "vcpkg-overlays/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
     inputs:
       base_sha:
@@ -39,6 +41,10 @@ permissions:
 
 env:
   PKG_DIR: packages/ocr-ggml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   label-gate:
