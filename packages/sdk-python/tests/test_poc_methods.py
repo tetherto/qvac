@@ -563,6 +563,20 @@ async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> Non
     assert response.info.model_id == model_id
 
 
+async def test_api_load_model_infers_type_against_real_worker(transport) -> None:
+    """api.load_model's ergonomic path end to end: a bare ModelConstant (no
+    model_type) infers llamacpp-completion from the descriptor's engine and
+    loads on a real worker."""
+    from qvac import api
+    from qvac.models import QWEN3_600M_INST_Q4
+
+    model_id = await api.load_model(transport, model_src=QWEN3_600M_INST_Q4)
+    try:
+        assert isinstance(model_id, str) and model_id
+    finally:
+        await api.unload_model(transport, model_id)
+
+
 async def test_download_asset_succeeds_on_a_real_registry_src(transport) -> None:
     from qvac.methods import download_asset
     from qvac.models import QWEN3_600M_INST_Q4

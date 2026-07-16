@@ -19,10 +19,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-# Error codes mirror packages/sdk/schemas/sdk-errors-server.ts. Only the
-# codes referenced from Python live here; the SDK's own file is the source
-# of truth for the full range.
+# Error codes mirror packages/sdk/schemas/sdk-errors-server.ts (5xxxx
+# server range) and sdk-errors-client.ts (500xx client range). Only the
+# codes referenced from Python live here; the SDK's own files are the
+# source of truth for the full range.
 _CODE_CANCEL_FAILED = 52408
+_CODE_MODEL_LOAD_FAILED = 52200
 _CODE_MODEL_UNLOAD_FAILED = 52400
 _CODE_REQUEST_ID_CONFLICT = 52417
 _CODE_REQUEST_NOT_FOUND = 52418
@@ -31,6 +33,10 @@ _CODE_CONTEXT_OVERFLOW = 52421
 _CODE_DELETE_CACHE_FAILED = 53200
 _CODE_INVALID_DELETE_CACHE_PARAMS = 53201
 _CODE_MODEL_REGISTRY_QUERY_FAILED = 53950
+_CODE_INVALID_RESPONSE_TYPE = 50001
+_CODE_STREAM_ENDED_WITHOUT_RESPONSE = 50003
+_CODE_MODEL_TYPE_REQUIRED = 50008
+_CODE_MODEL_SRC_TYPE_MISMATCH = 50009
 
 
 class QvacError(Exception):
@@ -173,6 +179,60 @@ class ContextOverflowError(QvacError):
 
 
 # ---- Client-raised errors (from api.py wrappers) ------------------------
+
+
+class ModelLoadFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "model load failed",
+            name="MODEL_LOAD_FAILED",
+            code=_CODE_MODEL_LOAD_FAILED,
+            cause=cause,
+        )
+
+
+class ModelTypeRequiredError(QvacError):
+    def __init__(self, *, cause: Any = None) -> None:
+        super().__init__(
+            "modelType is required: it could not be inferred from modelSrc",
+            name="MODEL_TYPE_REQUIRED",
+            code=_CODE_MODEL_TYPE_REQUIRED,
+            cause=cause,
+        )
+
+
+class ModelSrcTypeMismatchError(QvacError):
+    def __init__(self, inferred: str, resolved: str, *, cause: Any = None) -> None:
+        self.inferred = inferred
+        self.resolved = resolved
+        super().__init__(
+            f"modelType {resolved!r} does not match the type inferred "
+            f"from modelSrc ({inferred!r})",
+            name="MODEL_SRC_TYPE_MISMATCH",
+            code=_CODE_MODEL_SRC_TYPE_MISMATCH,
+            cause=cause,
+        )
+
+
+class StreamEndedError(QvacError):
+    def __init__(self, *, cause: Any = None) -> None:
+        super().__init__(
+            "stream ended without a terminal response",
+            name="STREAM_ENDED_WITHOUT_RESPONSE",
+            code=_CODE_STREAM_ENDED_WITHOUT_RESPONSE,
+            cause=cause,
+        )
+
+
+class InvalidResponseError(QvacError):
+    def __init__(self, expected: str, *, cause: Any = None) -> None:
+        self.expected = expected
+        super().__init__(
+            f"invalid response type: expected {expected!r}",
+            name="INVALID_RESPONSE_TYPE",
+            code=_CODE_INVALID_RESPONSE_TYPE,
+            cause=cause,
+        )
 
 
 class CancelFailedError(QvacError):
@@ -341,6 +401,11 @@ __all__ = [
     "RequestRejectedByPolicyError",
     "ContextOverflowError",
     "CancelFailedError",
+    "ModelLoadFailedError",
+    "ModelTypeRequiredError",
+    "ModelSrcTypeMismatchError",
+    "StreamEndedError",
+    "InvalidResponseError",
     "ModelUnloadFailedError",
     "ModelRegistryQueryFailedError",
     "InvalidDeleteCacheParamsError",

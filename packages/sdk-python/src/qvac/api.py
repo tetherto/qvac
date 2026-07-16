@@ -17,9 +17,12 @@ and intentionally not ported here.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import uuid
+import warnings
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
+from ._generated import methods as _methods
 from ._generated.models import (
     ModelRegistryGetModelResponseModel,
     ModelRegistryListResponseModelsItem,
@@ -33,14 +36,26 @@ from .errors import (  # noqa: F401
     CancelFailedError,
     DeleteCacheFailedError,
     InvalidDeleteCacheParamsError,
+    ModelLoadFailedError,
     ModelRegistryQueryFailedError,
+    ModelTypeRequiredError,
     ModelUnloadFailedError,
+    StreamEndedError,
+)
+from .model_types import (
+    assert_model_src_matches_model_type,
+    infer_model_type_from_model_src,
+    is_model_type_alias,
+    model_src_to_wire,
+    normalize_model_type,
 )
 from .schemas import (
     CancelRequest,
     CancelResponse,
     DeleteCacheRequest,
     DeleteCacheResponse,
+    LoadModelRequest,
+    ModelProgressResponse,
     ModelRegistryGetModelRequest,
     ModelRegistryGetModelResponse,
     ModelRegistryListRequest,
@@ -58,6 +73,105 @@ from .schemas import (
 
 def _dump(model: Any) -> dict[str, Any]:
     return model.model_dump(mode="json", by_alias=True, exclude_unset=True)
+
+
+def generate_client_request_id() -> str:
+    """UUIDv4 for client-side request ids -- the same value goes on the wire
+    (`requestId`) and is what `cancel(request_id=...)` targets, mirroring the
+    JS SDK's generateClientRequestId contract."""
+    return str(uuid.uuid4())
+
+
+async def load_model(
+    transport: Transport,
+    *,
+    model_src: Any = None,
+    model_type: str | None = None,
+    model_config: dict[str, Any] | None = None,
+    model_name: str | None = None,
+    model_id: str | None = None,
+    on_progress: Callable[[ModelProgressResponse], None] | None = None,
+    request_id: str | None = None,
+    seed: bool | None = None,
+    delegate: dict[str, Any] | None = None,
+) -> str:
+    """Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:
+
+    - `model_src` accepts a plain string, a `qvac.models` ModelConstant, or a
+      descriptor dict; the wire gets the descriptor's `src` string.
+    - `model_type` may be omitted when it's inferable from the descriptor's
+      engine/addon (raises ModelTypeRequiredError otherwise), accepts
+      deprecated aliases ("llm", "whisper", ...) with a DeprecationWarning,
+      and is normalized to the canonical form the wire contract requires.
+    - An explicit `model_type` that contradicts the descriptor raises
+      ModelSrcTypeMismatchError.
+    - `model_id` (without `model_src`) is the hot-reload-config path; type
+      handling is skipped, matching JS.
+    - `request_id` is client-generated when omitted and threaded onto the
+      wire so `cancel(request_id=...)` can target this load; pass your own
+      to hold the id before awaiting.
+    - `on_progress` switches to the streaming call shape and receives each
+      ModelProgressResponse.
+    """
+    is_reload_config = model_id is not None and model_src is None
+
+    resolved_type = model_type
+    if not is_reload_config:
+        if resolved_type is not None:
+            assert_model_src_matches_model_type(model_src, resolved_type)
+        else:
+            resolved_type = infer_model_type_from_model_src(model_src)
+            if not resolved_type:
+                raise ModelTypeRequiredError()
+
+        if is_model_type_alias(resolved_type):
+            canonical = normalize_model_type(resolved_type)
+            warnings.warn(
+                f'Model type "{resolved_type}" is an alias and will be '
+                f'deprecated. Use "{canonical}" instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        resolved_type = normalize_model_type(resolved_type)
+
+    payload: dict[str, Any] = {"type": "loadModel"}
+    if is_reload_config:
+        payload["modelId"] = model_id
+        if model_type is not None:
+            payload["modelType"] = model_type
+    else:
+        payload["modelSrc"] = model_src_to_wire(model_src)
+        payload["modelType"] = resolved_type
+        payload["requestId"] = (
+            request_id if request_id is not None else generate_client_request_id()
+        )
+        if model_name is not None:
+            payload["modelName"] = model_name
+        if seed is not None:
+            payload["seed"] = seed
+        if delegate is not None:
+            payload["delegate"] = delegate
+    if model_config is not None:
+        payload["modelConfig"] = model_config
+
+    request = LoadModelRequest.model_validate(payload)
+
+    if on_progress is not None:
+        async for event in _methods.load_model_with_progress(transport, request):
+            if isinstance(event, ModelProgressResponse):
+                on_progress(event)
+                continue
+            if not event.success:
+                raise ModelLoadFailedError(event.error)
+            assert event.model_id is not None
+            return event.model_id
+        raise StreamEndedError()
+
+    response = await _methods.load_model(transport, request)
+    if not response.success:
+        raise ModelLoadFailedError(response.error)
+    assert response.model_id is not None
+    return response.model_id
 
 
 async def cancel(
