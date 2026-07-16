@@ -273,6 +273,11 @@ private:
       const SeqObserver& onSeqDone = {});
   void cancelImpl() const;
 
+  /// The armed cancel action of a tagged finetune job: pause without a
+  /// checkpoint — the same semantics the JS cancel() binding uses. No-op in
+  /// the standalone test build, where the finetuner is compiled out.
+  void requestFinetuneCancel();
+
   /// True for a single Prompt that may run on the scheduler concurrently:
   /// text generation, or a prefill that persists its cache to disk
   /// (saveCacheToDisk with a cacheKey). Finetune and live-only prefill (whose
