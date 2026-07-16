@@ -25,6 +25,7 @@
 #include "addon/PayloadHandler.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "utils/ParseUnsigned.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -544,15 +545,19 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   // Worker-pool size for multi-job admission == the model's concurrency
   // (`parallel`/`n_seq_max`). Read straight from the config map before it is
-  // moved into the model; absent or unparseable means single-slot (1).
+  // moved into the model; absent means single-slot (1), a malformed or
+  // out-of-range value throws before the model or scheduler is constructed.
   auto config = args.getSubmap(1, "config");
+  // Explicit safe ceiling for the scheduler's thread pool; keep in sync with
+  // the JS constructor validation in index.js.
+  constexpr unsigned kMaxParallelWorkers = 1024;
   unsigned maxConcurrency = 1;
   if (auto it = config.find("parallel"); it != config.end()) {
     try {
       maxConcurrency =
-          std::max(1U, static_cast<unsigned>(std::stoul(it->second)));
-    } catch (const std::exception&) {
-      maxConcurrency = 1;
+          parseUnsignedInRange(it->second, 1, kMaxParallelWorkers, "parallel");
+    } catch (const std::invalid_argument& e) {
+      throw StatusError(general_error::InvalidArgument, e.what());
     }
   }
 
