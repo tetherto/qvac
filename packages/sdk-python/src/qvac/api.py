@@ -17,6 +17,7 @@ and intentionally not ported here.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 import warnings
 from collections.abc import AsyncIterator, Callable
@@ -41,7 +42,9 @@ from .errors import (  # noqa: F401
     ModelTypeRequiredError,
     ModelUnloadFailedError,
     StreamEndedError,
+    TranslationFailedError,
 )
+from .language_detect import detect_one
 from .model_types import (
     assert_model_src_matches_model_type,
     infer_model_type_from_model_src,
@@ -66,6 +69,8 @@ from .schemas import (
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
+    TranslateRequest,
+    TranslateResponse,
     UnloadModelRequest,
     UnloadModelResponse,
 )
@@ -172,6 +177,124 @@ async def load_model(
         raise ModelLoadFailedError(response.error)
     assert response.model_id is not None
     return response.model_id
+
+
+class TranslateRun:
+    """Handles for one translate() call, mirroring the JS return shape:
+    `token_stream` (live tokens; empty in non-stream mode), `text` (awaitable
+    full text; resolves to "" in stream mode), and `stats` (awaitable,
+    resolved when the terminal done chunk arrives -- in stream mode that
+    means once `token_stream` has been consumed to the end)."""
+
+    def __init__(
+        self,
+        token_stream: AsyncIterator[str],
+        text: asyncio.Future[str],
+        stats: asyncio.Future[Any],
+    ) -> None:
+        self.token_stream = token_stream
+        self.text = text
+        self.stats = stats
+
+
+def translate(
+    transport: Transport,
+    *,
+    model_id: str,
+    text: str | list[str],
+    model_type: str,
+    to: str | None = None,
+    from_: str | None = None,
+    stream: bool = True,
+    context: str | None = None,
+    request_id: str | None = None,
+) -> TranslateRun:
+    """Mirrors JS's `client/api/translate.ts`. For LLM-backed translation
+    (`model_type` "llm"/"llamacpp-completion") with `from_` omitted, the
+    source language is auto-detected from `text`; an undetermined result
+    raises TranslationFailedError telling the caller to pass `from_`. NMT
+    models are per-language-pair, so `from_`/`to` don't apply to them.
+
+    Must be called with a running event loop (it's a sync constructor for
+    async handles, like the JS function)."""
+    canonical = normalize_model_type(model_type)
+    is_llm = canonical == "llamacpp-completion"
+
+    source_language = from_ if is_llm else None
+    if is_llm and not source_language:
+        if not isinstance(text, str):
+            raise TranslationFailedError(
+                "LLM translation takes a single string; pass `from_` explicitly "
+                "for batch inputs"
+            )
+        detected = detect_one(text)
+        if detected.code == "und":
+            raise TranslationFailedError(
+                "Could not detect the source language. Please specify the "
+                "'from_' parameter explicitly."
+            )
+        source_language = detected.language
+
+    payload: dict[str, Any] = {
+        "type": "translate",
+        "modelId": model_id,
+        "text": text,
+        "stream": stream,
+        "modelType": model_type,
+    }
+    if is_llm:
+        payload["from"] = source_language
+    if to is not None:
+        payload["to"] = to
+    if context is not None:
+        payload["context"] = context
+    if request_id is not None:
+        payload["requestId"] = request_id
+
+    request = TranslateRequest.model_validate(payload)
+    wire = _dump(request)
+
+    loop = asyncio.get_running_loop()
+    stats_future: asyncio.Future[Any] = loop.create_future()
+
+    def _finish_stats(response: TranslateResponse) -> None:
+        if not stats_future.done():
+            stats_future.set_result(response.stats)
+
+    if stream:
+
+        async def token_stream() -> AsyncIterator[str]:
+            async for chunk in transport.call_stream(wire):
+                if chunk.get("type") != "translate":
+                    continue
+                response = TranslateResponse.model_validate(chunk)
+                if not response.done:
+                    yield response.token
+                else:
+                    _finish_stats(response)
+
+        text_future: asyncio.Future[str] = loop.create_future()
+        text_future.set_result("")
+        return TranslateRun(token_stream(), text_future, stats_future)
+
+    async def empty_stream() -> AsyncIterator[str]:
+        return
+        yield  # pragma: no cover -- makes this an (empty) async generator
+
+    async def collect_text() -> str:
+        buffer = ""
+        async for chunk in transport.call_stream(wire):
+            if chunk.get("type") != "translate":
+                continue
+            response = TranslateResponse.model_validate(chunk)
+            buffer += response.token
+            if response.done:
+                _finish_stats(response)
+        return buffer
+
+    # Eager task, matching the JS promise: the wire call starts now, not
+    # when `text` is first awaited.
+    return TranslateRun(empty_stream(), loop.create_task(collect_text()), stats_future)
 
 
 async def cancel(

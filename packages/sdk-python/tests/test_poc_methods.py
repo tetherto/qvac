@@ -563,6 +563,38 @@ async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> Non
     assert response.info.model_id == model_id
 
 
+async def test_api_translate_autodetects_source_against_real_worker(transport) -> None:
+    """api.translate's LLM path end to end: `from_` omitted, so the source
+    language ("French") is auto-detected client-side and drives the worker's
+    translation prompt; asserts the mechanism (detection + a real completion
+    round trip), not translation quality -- same as the SDK e2e suite's
+    autodetect case, since a 0.6B model translates unreliably. Thinking
+    model, so give it an explicit context window."""
+    from qvac import api
+    from qvac.models import QWEN3_600M_INST_Q4
+    from qvac.schemas import ModelType
+
+    model_id = await _load(
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
+    )
+
+    run = api.translate(
+        transport,
+        model_id=model_id,
+        text="Bonjour le monde, comment allez-vous aujourd'hui?",
+        to="English",
+        model_type="llamacpp-completion",
+        stream=False,
+    )
+    text = await run.text
+    assert isinstance(text, str) and text.strip(), "expected real LLM output"
+    stats = await run.stats
+    assert stats is not None and stats.total_tokens
+
+
 async def test_api_load_model_infers_type_against_real_worker(transport) -> None:
     """api.load_model's ergonomic path end to end: a bare ModelConstant (no
     model_type) infers llamacpp-completion from the descriptor's engine and

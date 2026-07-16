@@ -25,6 +25,7 @@ from typing import Any
 # source of truth for the full range.
 _CODE_CANCEL_FAILED = 52408
 _CODE_MODEL_LOAD_FAILED = 52200
+_CODE_TRANSLATION_FAILED = 52405
 _CODE_MODEL_UNLOAD_FAILED = 52400
 _CODE_REQUEST_ID_CONFLICT = 52417
 _CODE_REQUEST_NOT_FOUND = 52418
@@ -210,6 +211,16 @@ class ModelSrcTypeMismatchError(QvacError):
             f"from modelSrc ({inferred!r})",
             name="MODEL_SRC_TYPE_MISMATCH",
             code=_CODE_MODEL_SRC_TYPE_MISMATCH,
+            cause=cause,
+        )
+
+
+class TranslationFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "translation failed",
+            name="TRANSLATION_FAILED",
+            code=_CODE_TRANSLATION_FAILED,
             cause=cause,
         )
 
@@ -404,6 +415,7 @@ __all__ = [
     "ModelLoadFailedError",
     "ModelTypeRequiredError",
     "ModelSrcTypeMismatchError",
+    "TranslationFailedError",
     "StreamEndedError",
     "InvalidResponseError",
     "ModelUnloadFailedError",

@@ -13,7 +13,16 @@ dependencies = ["pydantic>=2.6,<3"]
 
 [project.optional-dependencies]
 gen = ["datamodel-code-generator==0.68.0", "black==26.5.1", "ruff==0.15.21"]
-dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.15.21", "mypy==2.3.0"]
+dev = [
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "ruff==0.15.21",
+  "mypy==2.3.0",
+  "lingua-language-detector==2.1.1",
+]
+# translate() source-language auto-detection; optional so the thin client
+# stays lean when callers always pass `from_` themselves.
+langdetect = ["lingua-language-detector==2.1.1"]
 # QVAC-21806 PoC only -- neither package is on PyPI yet (both v0.0.1, git-only).
 # Pinned to their current HEAD commits for reproducibility while unreleased.
 bare-rpc = [
