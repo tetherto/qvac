@@ -1963,7 +1963,7 @@
       "title": "SupportedAudioFormat",
       "type": "string",
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
-      "x-enum-varnames": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"]
+      "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
     "constants.ToolsMode": {
       "title": "ToolsMode",
