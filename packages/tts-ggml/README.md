@@ -391,6 +391,12 @@ unchanged.
 - `model.run({ input, streamOutput: true })` → sentence-chunked
   synthesis driven by the JS-side sentence splitter (see
   `lib/textChunker.js`).  Equivalent to `runStream(input)`.
+- `model.run({ input, signal })` → pass an `AbortSignal` to cancel a
+  **non-streaming** run: when the signal aborts, `response.await()` rejects
+  with the abort reason.  An already-aborted signal rejects deterministically
+  without dispatching the engine (no native interrupt).  **Ignored when
+  `streamOutput: true`** (and on `runStream` / `runStreaming`) — the streaming
+  path does not thread the signal, so passing it there is a silent no-op.
 - `model.runStream(text, { locale?, maxChunkScalars? })` → same as
   above, but the options read more naturally for the "split this long
   string" use case.

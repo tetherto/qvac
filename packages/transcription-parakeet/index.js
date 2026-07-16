@@ -6,6 +6,7 @@ const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
 const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error')
+const { toFloat32Chunk } = require('./lib/audio')
 
 /**
  * High-level Parakeet speech-to-text client backed by the ggml engine
@@ -126,24 +127,17 @@ class TranscriptionParakeet {
       streamingEnergyVad: this.params.streamingEnergyVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
       streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
-      // AOSC (v2.1+ Sortformer only). parakeet-cpp ignores these on
-      // non-Sortformer engines and on v1/v2 GGUFs. Defaults mirror the
-      // C++ ParakeetConfig defaults; passing the field explicitly (vs
-      // letting C++ pick its own default) ensures user overrides at
-      // the JS layer reach the native engine instead of being silently
-      // discarded by _buildConfigurationParams.
+      // AOSC (v2.1+ Sortformer only). Numeric fields are forwarded as-is;
+      // an unset field stays undefined so the native ParakeetConfig
+      // applies its own default rather than duplicating the value here.
       streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
-      streamingSpkCacheLen: this.params.streamingSpkCacheLen ?? 188,
-      streamingFifoLen: this.params.streamingFifoLen ?? 188,
-      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs ?? 80,
-      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs ?? 560,
-      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod ?? 144,
-      // Forwarded as-is; ParakeetInterface fills in a per-package
-      // default for `backendsDir` (`path.join(__dirname, 'prebuilds')`)
-      // when the host doesn't pass one, so explicit `undefined`
-      // values here are intentional (they keep the default-resolution
-      // path on the JS side). `openclCacheDir` has no JS-side default;
-      // the addon is a no-op when it's empty.
+      streamingSpkCacheLen: this.params.streamingSpkCacheLen,
+      streamingFifoLen: this.params.streamingFifoLen,
+      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs,
+      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs,
+      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod,
+      // ParakeetInterface fills in a per-package `backendsDir` default
+      // when the host omits one, so a passthrough undefined is intended.
       backendsDir: this.params.backendsDir,
       openclCacheDir: this.params.openclCacheDir
     }
@@ -280,16 +274,7 @@ class TranscriptionParakeet {
   async _pumpStreamingAudio(audioStream) {
     this.logger.debug('Start pumping audio into duplex streaming session')
     for await (const chunk of audioStream) {
-      let audioData
-      if (chunk instanceof Float32Array) {
-        audioData = chunk
-      } else {
-        const int16Data = new Int16Array(chunk.buffer, chunk.byteOffset, chunk.byteLength / 2)
-        audioData = new Float32Array(int16Data.length)
-        for (let i = 0; i < int16Data.length; i++) {
-          audioData[i] = int16Data[i] / 32768.0
-        }
-      }
+      const audioData = toFloat32Chunk(chunk)
       if (audioData.length === 0) continue
       await this.addon.appendStreamingAudio(audioData)
     }
@@ -306,20 +291,7 @@ class TranscriptionParakeet {
     this.logger.debug('Start handling audio stream')
     for await (const chunk of audioStream) {
       this.logger.debug('Appending audio chunk', { chunkLength: chunk.length })
-
-      // Convert chunk to Float32Array if needed
-      let audioData
-      if (chunk instanceof Float32Array) {
-        audioData = chunk
-      } else {
-        // Assume s16le format, convert to float32
-        const int16Data = new Int16Array(chunk.buffer, chunk.byteOffset, chunk.byteLength / 2)
-        audioData = new Float32Array(int16Data.length)
-        for (let i = 0; i < int16Data.length; i++) {
-          audioData[i] = int16Data[i] / 32768.0
-        }
-      }
-
+      const audioData = toFloat32Chunk(chunk)
       await this.addon.append({
         type: 'audio',
         data: audioData.buffer

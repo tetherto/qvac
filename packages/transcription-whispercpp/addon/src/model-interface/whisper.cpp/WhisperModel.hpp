@@ -38,11 +38,9 @@ public:
   explicit WhisperModel(WhisperConfig config);
   ~WhisperModel() noexcept;
 
-  // ModelApiTest required methods
-  void initializeBackend() {
-    // No-op - WhisperModel handles initialization in constructor/load
-  }
-  // set config from WhisperConfig
+  // Interface stub for the shared ModelApiTest harness (not part of IModel*).
+  // WhisperModel initializes in the constructor and load(), so this is empty.
+  void initializeBackend() {}
   void setConfig(const WhisperConfig& config);
 
   auto setOnSegmentCallback(const OutputCallback& callback) -> void {
@@ -94,9 +92,13 @@ public:
   void reset();
   void endOfStream();
   void waitForLoadInitialization() override { load(); }
+  // IModelAsyncLoad override: WhisperModel loads weights from the model file
+  // path in load(), so there is no streambuf to honor here.
   void setWeightsForFile(
       const std::string& /*filename*/,
       std::unique_ptr<std::basic_streambuf<char>>&& /*streambuf*/) override {}
+  // Interface stub for the shared ModelApiTest harness; weights come from the
+  // model file path, so nothing is stored here.
   // NOLINTNEXTLINE(readability-identifier-naming)
   void set_weights_for_file(
       const std::string& /*filename*/,
@@ -129,8 +131,6 @@ public:
   saveLoadParams(T&&, Args&&...) {}
 
 private:
-  static constexpr size_t MAX_CONTEXT_TOKENS = 256;
-  // Helper to check if context parameters changed
   static bool configContextIsChanged(
       const WhisperConfig& oldCfg, const WhisperConfig& newCfg);
   void resetContext();
