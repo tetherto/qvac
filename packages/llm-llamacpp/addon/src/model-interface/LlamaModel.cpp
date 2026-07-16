@@ -760,6 +760,14 @@ void LlamaModel::cancelImpl() const {
   liveJobs_.parkAll();
 }
 
+void LlamaModel::requestFinetuneCancel() {
+#ifndef STANDALONE_TEST_BUILD
+  // requestPause is cross-thread safe by design (the JS cancel binding calls
+  // it from a detached thread); it no-ops when no finetune is running.
+  finetuner_.requestPause(/*savePauseCheckpoint=*/false);
+#endif
+}
+
 void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
   // Runs under the scheduler's admission lock (see IModelJobLifecycle), so
   // it must stay quick and must not call back into the scheduler. Registering
@@ -860,8 +868,12 @@ std::any LlamaModel::process(
   };
   if (isSingle) {
     const auto& prompt = std::any_cast<const Prompt&>(input);
-    // Finetune keeps the whole-model cancel semantics: never registered.
     if (prompt.finetuningParams.has_value()) {
+      // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
+      // cancel parked before this point aborts the job before training starts.
+      if (liveJobs_.bind(id, [this] { requestFinetuneCancel(); })) {
+        return std::any(FinetuneTerminalResult{"finetune", "cancelled"});
+      }
       return process(input);
     }
     if (!isConcurrentEligible(prompt)) {
