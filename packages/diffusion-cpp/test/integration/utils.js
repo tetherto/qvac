@@ -3,6 +3,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
+const crypto = require('bare-crypto')
 
 // Lazily loaded: requiring addonLogging pulls in the native binding, which
 // isn't needed for model download/integrity helpers and lets those run in
@@ -248,8 +249,8 @@ const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
 let _manifestCache
 
 // Loads and caches the model manifest (single source of truth for model
-// URLs + sha256/bytes integrity values). Returns null when absent so callers
-// can fall back to an explicitly-passed downloadUrl.
+// URLs + sha256/bytes integrity values). The default manifest is mandatory:
+// a packaging or parsing error must not silently disable integrity checks.
 //
 // The default path is loaded via a literal require() rather than
 // fs.readFileSync. Mobile builds pack this file into a single bundle via
@@ -259,57 +260,56 @@ let _manifestCache
 // the bundle, so every model lookup fails on-device even though the file is
 // present on disk at build time. require('./models.manifest.json') is a
 // static reference bare-pack can see and embed.
+function validateManifest(manifest, source) {
+  if (!manifest || typeof manifest !== 'object' || !manifest.models) {
+    throw new Error(`Required model manifest is invalid (${source}): missing models object`)
+  }
+  return manifest
+}
+
 function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
   if (manifestPath === DEFAULT_MANIFEST_PATH) {
     if (_manifestCache !== undefined) return _manifestCache
-    let parsed = null
     try {
-      parsed = require('./models.manifest.json')
-    } catch (_) {
-      parsed = null
+      _manifestCache = validateManifest(
+        require('./models.manifest.json'),
+        'test/integration/models.manifest.json'
+      )
+    } catch (err) {
+      throw new Error(`Failed to load required model manifest: ${err.message}`)
     }
-    _manifestCache = parsed
-    return parsed
+    return _manifestCache
   }
-  let parsed = null
   try {
-    parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-  } catch (_) {
-    parsed = null
+    return validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath)
+  } catch (err) {
+    throw new Error(`Failed to load required model manifest "${manifestPath}": ${err.message}`)
   }
-  return parsed
 }
 
 function resolveModelEntry(modelName, { manifest } = {}) {
   const m = manifest !== undefined ? manifest : loadManifest()
-  if (!m || !m.models) return null
-  return m.models[modelName] || null
-}
-
-function entryHasIntegrity(entry) {
-  if (!entry) return false
-  const hasSha = typeof entry.sha256 === 'string' && entry.sha256.length === 64
-  const hasBytes = Number.isInteger(entry.bytes)
-  return hasSha || hasBytes
-}
-
-// Streaming sha256 via bare-crypto (matches the pattern used in vla-ggml
-// tests). Returns null when bare-crypto is unavailable so callers can decide
-// how to degrade.
-async function sha256File(filePath) {
-  let crypto
-  try {
-    crypto = require('bare-crypto')
-  } catch (_) {
-    return null
+  validateManifest(m, manifest !== undefined ? 'explicit manifest override' : 'default manifest')
+  const entry = m.models[modelName]
+  if (!entry) {
+    throw new Error(`Model "${modelName}" is missing from required models.manifest.json`)
   }
+  if (!Array.isArray(entry.urls) || entry.urls.length === 0) {
+    throw new Error(`Model "${modelName}" has no source URL in models.manifest.json`)
+  }
+  if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+    throw new Error(`Model "${modelName}" has no valid SHA-256 pin in models.manifest.json`)
+  }
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new Error(`Model "${modelName}" has no valid byte-size pin in models.manifest.json`)
+  }
+  return entry
+}
+
+// Streaming sha256 via the package's direct bare-crypto dependency.
+async function sha256File(filePath) {
   return await new Promise((resolve, reject) => {
-    let hash
-    try {
-      hash = crypto.createHash('sha256')
-    } catch (_) {
-      return resolve(null)
-    }
+    const hash = crypto.createHash('sha256')
     const stream = fs.createReadStream(filePath)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
@@ -320,7 +320,7 @@ async function sha256File(filePath) {
 // Verifies a model file against a manifest entry. Byte-length is checked first
 // (cheap) so a size mismatch fails fast before hashing a multi-GB file.
 // { ok: true } when it passes (or when no integrity value is pinned yet).
-async function verifyModelFile(filePath, entry) {
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
   let stats
   try {
     stats = fs.statSync(filePath)
@@ -335,14 +335,14 @@ async function verifyModelFile(filePath, entry) {
 
   const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
   if (hasSha) {
-    const got = await sha256File(filePath)
-    if (got === null) {
-      // bare-crypto missing: we cannot honour the pinned hash. Degrade to a
-      // loud warning rather than looping forever on re-download.
-      console.log(
-        '[download] WARNING: sha256 pinned for this model but bare-crypto is unavailable — integrity NOT verified'
-      )
-      return { ok: true, unverified: true }
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
     }
     if (got !== entry.sha256.toLowerCase()) {
       return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
@@ -351,6 +351,53 @@ async function verifyModelFile(filePath, entry) {
   }
 
   return { ok: true, skipped: true }
+}
+
+// Avoid hashing the same multi-GB file repeatedly within one integration-test
+// process. The key includes file identity, mutable stat fields, and the expected
+// pins, so replacing or changing a file forces a new verification.
+const _verificationCache = new Map()
+
+function verificationKey(filePath, entry) {
+  const stats = fs.statSync(filePath)
+  const mtimeMs =
+    typeof stats.mtimeMs === 'number'
+      ? stats.mtimeMs
+      : stats.mtime && typeof stats.mtime.getTime === 'function'
+        ? stats.mtime.getTime()
+        : 0
+  return [
+    filePath,
+    stats.dev,
+    stats.ino,
+    stats.size,
+    mtimeMs,
+    entry.sha256.toLowerCase(),
+    entry.bytes
+  ].join(':')
+}
+
+async function verifyModelFileOnce(filePath, entry, hashFile = sha256File) {
+  let key
+  try {
+    key = verificationKey(filePath, entry)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+
+  let verification = _verificationCache.get(key)
+  if (!verification) {
+    verification = verifyModelFile(filePath, entry, hashFile)
+    _verificationCache.set(key, verification)
+  }
+
+  const result = await verification
+  if (!result.ok) _verificationCache.delete(key)
+  return result
+}
+
+function resetVerificationCache() {
+  _verificationCache.clear()
 }
 
 let _downloadCount = 0
@@ -362,10 +409,10 @@ function resetDownloadCount() {
 }
 
 // Resolves a model into test/model/, reusing a cached copy when it passes
-// integrity. Model URL + sha256/bytes come from models.manifest.json (by
-// `modelName`); an explicit `downloadUrl` is honoured only as a fallback when
-// the manifest has no entry. `modelDirOverride`, `manifest`, and `download`
-// overrides exist for unit testing.
+// integrity. Model URL + sha256/bytes come exclusively from
+// models.manifest.json (by `modelName`). `modelDirOverride`, `manifest`, and
+// `download` overrides exist for unit testing, but the override manifest must
+// still contain a fully pinned entry.
 //
 // The line below resolving the default model directory is matched verbatim
 // by qvac-test-addon-mobile's build-time patch (patchIntegrationUtilsForMobile),
@@ -374,61 +421,27 @@ function resetDownloadCount() {
 // no other occurrence of this exact snippet earlier in the file, so that
 // patch's string replace (which only replaces the first match) keeps hitting
 // the right line.
-async function ensureModel({
-  modelName,
-  downloadUrl,
-  modelDir: modelDirOverride,
-  manifest,
-  download
-} = {}) {
+async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, download } = {}) {
   const modelDir = path.resolve(__dirname, '../model')
   const dir = modelDirOverride || modelDir
   const modelPath = path.join(dir, modelName)
   const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
   const doDownload = download || downloadFileWithRetries
 
-  const urls =
-    entry && Array.isArray(entry.urls) && entry.urls.length
-      ? entry.urls
-      : downloadUrl
-        ? [].concat(downloadUrl)
-        : null
-
-  const hasIntegrity = entryHasIntegrity(entry)
+  const urls = entry.urls
 
   if (fs.existsSync(modelPath)) {
-    if (hasIntegrity) {
-      const res = await verifyModelFile(modelPath, entry)
-      if (res.ok) {
-        console.log(`[download] ${modelName}: cached copy verified, skipping download`)
-        return [modelName, dir]
-      }
-      console.log(
-        `[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`
-      )
-      try {
-        fs.unlinkSync(modelPath)
-      } catch (_) {}
-    } else {
-      const stats = fs.statSync(modelPath)
-      if (stats.size === 0) {
-        console.log(`[download] Removing zero-byte cached file: ${modelName}`)
-        fs.unlinkSync(modelPath)
-      } else {
-        if (entry) {
-          console.log(
-            `[download] ${modelName}: no sha256/bytes pinned in manifest — integrity check SKIPPED (run scripts/generate-model-manifest.mjs to pin)`
-          )
-        }
-        return [modelName, dir]
-      }
+    const res = await verifyModelFileOnce(modelPath, entry)
+    if (res.ok) {
+      console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+      return [modelName, dir]
     }
-  }
-
-  if (!urls) {
-    throw new Error(
-      `No download URL for model "${modelName}": not in models.manifest.json and no downloadUrl provided`
+    console.log(
+      `[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`
     )
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
   }
 
   fs.mkdirSync(dir, { recursive: true })
@@ -440,16 +453,14 @@ async function ensureModel({
   // doesn't fail the whole test.
   await doDownload(urls, modelPath, { retries: 6 })
 
-  if (hasIntegrity) {
-    const res = await verifyModelFile(modelPath, entry)
-    if (!res.ok) {
-      try {
-        fs.unlinkSync(modelPath)
-      } catch (_) {}
-      throw new Error(
-        `[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`
-      )
-    }
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(
+      `[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`
+    )
   }
 
   const stats = fs.statSync(modelPath)
@@ -457,15 +468,26 @@ async function ensureModel({
   return [modelName, dir]
 }
 
-async function ensureModelPath({ modelName, downloadUrl, modelDir, manifest, download } = {}) {
+async function ensureModelPath({ modelName, modelDir, manifest, download } = {}) {
   const [downloadedModelName, resolvedDir] = await ensureModel({
     modelName,
-    downloadUrl,
     modelDir,
     manifest,
     download
   })
   return path.join(resolvedDir, downloadedModelName)
+}
+
+// Repository-supported local model directories are cache locations, not trust
+// boundaries. Exact filenames declared in the manifest must pass the same
+// SHA-256/size checks as test/model before an integration test can use them.
+async function verifyLocalModelPath({ modelName, filePath, manifest } = {}) {
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
+  const result = await verifyModelFileOnce(filePath, entry)
+  if (!result.ok) {
+    throw new Error(`[model] ${modelName}: local file failed integrity: ${result.reason}`)
+  }
+  return filePath
 }
 
 /**
@@ -607,10 +629,13 @@ module.exports = {
   GeneratedImageSaver,
   ensureModel,
   ensureModelPath,
+  verifyLocalModelPath,
   loadManifest,
   resolveModelEntry,
   verifyModelFile,
+  verifyModelFileOnce,
   sha256File,
+  resetVerificationCache,
   getDownloadCount,
   resetDownloadCount,
   getMediaPath,

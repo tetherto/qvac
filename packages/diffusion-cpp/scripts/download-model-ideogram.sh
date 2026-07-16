@@ -30,13 +30,13 @@ mkdir -p "$OUT"
 source "$SCRIPT_DIR/dl-functions.sh"
 
 # -- Ideogram 4 diffusion weights (download these first) ----------------------
-dl "$HF/leejet/ideogram-4-GGUF/resolve/main/ideogram4-Q4_0.gguf"        "$OUT/ideogram4-Q4_0.gguf"
-dl "$HF/leejet/ideogram-4-GGUF/resolve/main/ideogram4_uncond-Q4_0.gguf" "$OUT/ideogram4_uncond-Q4_0.gguf"
+dl "$HF/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4-Q4_0.gguf"        "$OUT/ideogram4-Q4_0.gguf"
+dl "$HF/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4_uncond-Q4_0.gguf" "$OUT/ideogram4_uncond-Q4_0.gguf"
 
 # -- Text encoder (Qwen3-VL 8B Instruct) --------------------------------------
-dl "$HF/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/main/Qwen3-VL-8B-Instruct-Q4_K_M.gguf" "$OUT/Qwen3-VL-8B-Instruct-Q4_K_M.gguf"
+dl "$HF/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/b93a7ee713758252c555be4210c00540df954dc2/Qwen3-VL-8B-Instruct-Q4_K_M.gguf" "$OUT/Qwen3-VL-8B-Instruct-Q4_K_M.gguf"
 
 # -- VAE (FLUX.2 family; reused if already present from the FLUX.2 script) -----
-dl "$HF/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors" "$OUT/flux2-vae.safetensors"
+dl "$HF/black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc27f91deacad38e78976d1f2b499d76a294/vae/diffusion_pytorch_model.safetensors" "$OUT/flux2-vae.safetensors"
 
 echo "done → $OUT"

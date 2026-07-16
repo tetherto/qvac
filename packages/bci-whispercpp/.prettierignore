@@ -8,3 +8,9 @@ package-lock.json
 test/unit/all.js
 test/integration/all.js
 test/results
+index.js
+bci.js
+configChecker.js
+addonLogging.js
+lib
+*.d.ts

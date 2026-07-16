@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-16
+
+### Changed
+
+- Migrated the JavaScript wrapper to TypeScript-authored sources while continuing to publish generated JavaScript entrypoints and declarations. This keeps the runtime package shape stable for SDK and Bare consumers while making wrapper implementation and typings share one source of truth.
+- Added TypeScript linting, type checking, and generated-output freshness checks for the wrapper. Publish workflows now rebuild the generated JavaScript and declarations before package publication.
+- Tightened the package export boundary so the internal `addon.js` bridge and native `binding.js` loader remain packaged for relative imports but are no longer exported package subpaths. Consumers should continue to use the package root API.
+- Added a small Bare example that classifies the existing `meal_1.jpg` test image.
+
+### Pull Requests
+
+- [#3192](https://github.com/tetherto/qvac/pull/3192) - chore[notask]: migrate classification wrapper to TypeScript
+
 ## [0.11.0] - 2026-07-14
 
 ### Fixed

@@ -11,8 +11,7 @@ const { ensureModel, releaseJsLogger } = require('./utils')
 const BACKENDS_DIR = path.resolve(__dirname, '../../prebuilds')
 
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 async function waitForLog(logs, predicate, timeoutMs = 5000) {
@@ -47,8 +46,7 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
     const targetIndex = 0
 
     const [modelName, modelDir] = await ensureModel({
-      modelName: MODEL.name,
-      downloadUrl: MODEL.url
+      modelName: MODEL.name
     })
 
     model = new ImgStableDiffusion({

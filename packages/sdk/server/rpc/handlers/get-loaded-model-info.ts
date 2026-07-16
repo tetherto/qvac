@@ -5,6 +5,7 @@ import type {
 } from '@/schemas'
 import { getModelEntry } from '@/server/bare/registry/model-registry'
 import { getPlugin } from '@/server/plugins/registry'
+import { detectToolDialectFromName } from '@/server/utils/tools'
 import { ModelNotFoundError } from '@/utils/errors-server'
 import { getServerLogger } from '@/logging'
 
@@ -39,16 +40,22 @@ export function handleGetLoadedModelInfo(
     )
   }
 
+  const handlers = plugin ? Object.keys(plugin.handlers) : []
+
   const info: LoadedModelInfo = {
     modelId: entry.id,
     isDelegated: false,
     modelType: entry.local.modelType,
-    handlers: plugin ? Object.keys(plugin.handlers) : [],
+    handlers,
     loadedAt: entry.local.loadedAt,
     ...(plugin && { displayName: plugin.displayName }),
     ...(plugin && { addonPackage: plugin.addonPackage }),
     ...(entry.local.name && { name: entry.local.name }),
-    ...(entry.local.path && { path: entry.local.path })
+    ...(entry.local.path && { path: entry.local.path }),
+    // Same detection the completion normalizer uses, so callers see the dialect it parses.
+    ...(handlers.includes('completionStream') && {
+      toolDialect: detectToolDialectFromName(entry.local.name, entry.local.path)
+    })
   }
 
   return { type: 'getLoadedModelInfo', info }

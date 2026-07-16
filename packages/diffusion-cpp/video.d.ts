@@ -191,6 +191,20 @@ export interface VideoRuntimeStats {
   hasAudio: number
   /** Sample rate (Hz) of the muxed audio track; 0 when there is no audio. */
   audioSampleRate: number
+  /** Conditioning (text-encode) phase before denoising, most recent job (ms) */
+  conditionerMs: number
+  /** Denoising loop duration, most recent job (ms) */
+  denoiseMs: number
+  /** VAE decode phase after denoising, most recent job (ms) */
+  vaeMs: number
+  /**
+   * Post-generate work after VAE decode — per-frame PNG fan-out, AVI encode +
+   * audio mux, and output callback — for the most recent job (ms). Completes
+   * the breakdown so conditionerMs + denoiseMs + vaeMs + postProcessMs === generationMs.
+   */
+  postProcessMs: number
+  /** Denoising throughput, most recent job (steps per second) */
+  stepsPerSecond: number
 }
 
 export default class VideoStableDiffusion {

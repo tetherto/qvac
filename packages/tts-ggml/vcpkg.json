@@ -10,7 +10,7 @@
     },
     {
       "name": "tts-cpp",
-      "version>=": "2026-07-13#1"
+      "version>=": "2026-07-13#2"
     }
   ],
   "features": {
