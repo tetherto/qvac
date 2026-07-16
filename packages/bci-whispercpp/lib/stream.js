@@ -1,6 +1,11 @@
 'use strict'
 
 const { QvacErrorAddonBCI, ERR_CODES } = require('./error')
+const {
+  STREAM_HEADER_BYTES,
+  TIMESTEPS_FIELD_OFFSET,
+  CHANNELS_FIELD_OFFSET
+} = require('./constants')
 
 /**
  * Streaming helpers for the sliding-window transcription driver in index.js.
@@ -58,11 +63,11 @@ function sliceBody(bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
  * batch input, reusing the per-window body bytes.
  */
 function buildWindowBuffer(windowBody, channels, windowTimesteps) {
-  const out = new Uint8Array(8 + windowBody.byteLength)
+  const out = new Uint8Array(STREAM_HEADER_BYTES + windowBody.byteLength)
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength)
-  view.setUint32(0, windowTimesteps, true)
-  view.setUint32(4, channels, true)
-  out.set(windowBody, 8)
+  view.setUint32(TIMESTEPS_FIELD_OFFSET, windowTimesteps, true)
+  view.setUint32(CHANNELS_FIELD_OFFSET, channels, true)
+  out.set(windowBody, STREAM_HEADER_BYTES)
   return out
 }
 
@@ -185,19 +190,21 @@ function stitchSegments(prevText, segments, maxWords, windowStartTimestep = 0) {
   return { deltaSegments, merged, bestK }
 }
 
+function _seamOverlapMatches(prevWords, newWords, k) {
+  for (let i = 0; i < k; i++) {
+    const prevWord = normalizeWord(prevWords[prevWords.length - k + i])
+    const newWord = normalizeWord(newWords[i])
+    if (prevWord.length === 0 || newWord.length === 0 || prevWord !== newWord) {
+      return false
+    }
+  }
+  return true
+}
+
 function _computeBestK(prevWords, newWords, maxWords) {
   const maxK = Math.min(prevWords.length, newWords.length, maxWords)
   for (let k = maxK; k >= 1; k--) {
-    let match = true
-    for (let i = 0; i < k; i++) {
-      const a = normalizeWord(prevWords[prevWords.length - k + i])
-      const b = normalizeWord(newWords[i])
-      if (a.length === 0 || b.length === 0 || a !== b) {
-        match = false
-        break
-      }
-    }
-    if (match) return k
+    if (_seamOverlapMatches(prevWords, newWords, k)) return k
   }
   return 0
 }
