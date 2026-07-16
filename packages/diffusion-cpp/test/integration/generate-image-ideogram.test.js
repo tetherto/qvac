@@ -5,7 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
 const ImgStableDiffusion = require('../../index')
-const { ensureModel, detectPlatform, isPng, safeTest } = require('./utils')
+const { ensureModel, verifyLocalModelPath, detectPlatform, isPng, safeTest } = require('./utils')
 
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -17,22 +17,22 @@ const EXAMPLE_MODELS_DIR = path.resolve(__dirname, '../../models')
 
 const DIFFUSION_MODEL = {
   name: 'ideogram4-Q4_0.gguf',
-  url: 'https://huggingface.co/leejet/ideogram-4-GGUF/resolve/main/ideogram4-Q4_0.gguf'
+  url: 'https://huggingface.co/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4-Q4_0.gguf'
 }
 
 const UNCOND_MODEL = {
   name: 'ideogram4_uncond-Q4_0.gguf',
-  url: 'https://huggingface.co/leejet/ideogram-4-GGUF/resolve/main/ideogram4_uncond-Q4_0.gguf'
+  url: 'https://huggingface.co/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4_uncond-Q4_0.gguf'
 }
 
 const LLM_MODEL = {
   name: 'Qwen3-VL-8B-Instruct-Q4_K_M.gguf',
-  url: 'https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/main/Qwen3-VL-8B-Instruct-Q4_K_M.gguf'
+  url: 'https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/b93a7ee713758252c555be4210c00540df954dc2/Qwen3-VL-8B-Instruct-Q4_K_M.gguf'
 }
 
 const VAE_MODEL = {
   name: 'flux2-vae.safetensors',
-  url: 'https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors'
+  url: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc27f91deacad38e78976d1f2b499d76a294/vae/diffusion_pytorch_model.safetensors'
 }
 
 const PROMPT = JSON.stringify({
@@ -69,7 +69,8 @@ async function resolveModelPath(spec) {
   if (fs.existsSync(examplePath)) {
     const stats = fs.statSync(examplePath)
     if (stats.size > 0) {
-      console.log(`[model] Using existing example model: ${examplePath}`)
+      await verifyLocalModelPath({ modelName: spec.name, filePath: examplePath })
+      console.log(`[model] Using verified example model: ${examplePath}`)
       return examplePath
     }
   }

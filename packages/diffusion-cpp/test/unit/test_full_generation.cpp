@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <any>
 #include <cstdint>
 #include <filesystem>
@@ -124,4 +125,48 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   const auto stats = model->runtimeStats();
   EXPECT_FALSE(stats.empty())
       << "runtimeStats() should be populated after generation";
+
+  // Verify the four phase-breakdown fields are present and have sane values.
+  // RuntimeStats values are std::variant<double, int64_t> -- phase fields are
+  // stored as double, but generationMs is an int64_t, so read whichever
+  // alternative is held and widen to double.
+  auto findStat = [&](const std::string& key) -> double {
+    for (const auto& [k, v] : stats) {
+      if (k == key) {
+        if (std::holds_alternative<double>(v))
+          return std::get<double>(v);
+        return static_cast<double>(std::get<int64_t>(v));
+      }
+    }
+    return -1.0;
+  };
+
+  const double conditionerMs = findStat("conditionerMs");
+  const double denoiseMs = findStat("denoiseMs");
+  const double vaeMs = findStat("vaeMs");
+  const double postProcessMs = findStat("postProcessMs");
+  const double stepsPerSecond = findStat("stepsPerSecond");
+
+  EXPECT_GT(conditionerMs, 0.0)
+      << "conditionerMs must be positive (text encoding time)";
+  EXPECT_GT(denoiseMs, 0.0)
+      << "denoiseMs must be positive (10-step denoise time)";
+  EXPECT_GT(vaeMs, 0.0) << "vaeMs must be positive (VAE decode time)";
+  EXPECT_GE(postProcessMs, 0.0)
+      << "postProcessMs must be non-negative (PNG encode + output time)";
+  EXPECT_GT(stepsPerSecond, 0.0)
+      << "stepsPerSecond must be positive (should be ~2–4 steps/sec)";
+
+  // The four phases are exhaustive and telescope to t0..t1, which is exactly
+  // generationMs. Only the int cast of generationMs and sub-ms jitter clamps
+  // separate them, so hold a tight bound rather than a loose percentage.
+  const double totalPhaseMs = conditionerMs + denoiseMs + vaeMs + postProcessMs;
+  const int64_t generationMsInt =
+      static_cast<int64_t>(findStat("generationMs"));
+  const double tolerance = std::max(2.0, generationMsInt * 0.01);
+  EXPECT_NEAR(totalPhaseMs, generationMsInt, tolerance)
+      << "Phase times should sum to total generation time: "
+      << "conditioner=" << conditionerMs << " + denoise=" << denoiseMs
+      << " + vae=" << vaeMs << " + postProcess=" << postProcessMs
+      << " vs generation=" << generationMsInt;
 }

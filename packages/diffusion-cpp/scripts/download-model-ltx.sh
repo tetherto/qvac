@@ -19,12 +19,12 @@ set -euo pipefail
 #   Q4_K_S (~16.7 GB)
 #   Q4_K_M (~17.8 GB)
 #   Q5_K_S (~18.5 GB)
-#   Q5_K_M (~19.4 GB) - DEFAULT (size/quality balance)
+#   Q5_K_M (~19.4 GB)
 #   Q6_K   (~21.0 GB)
 #   Q8_0   (~25.5 GB) - Best quality
 #
 # Usage:
-#   ./download-model-ltx.sh              # Downloads distilled-1.1 Q5_K_M (default)
+#   ./download-model-ltx.sh              # Downloads manifest-pinned distilled-1.1 Q2_K
 #   ./download-model-ltx.sh --dev        # Use dev model instead
 #   ./download-model-ltx.sh --distilled  # Use basic distilled model
 #   ./download-model-ltx.sh --q4ks       # Downloads Q4_K_S
@@ -37,6 +37,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$(cd "$SCRIPT_DIR/.." && pwd)/models"
 HF="https://huggingface.co"
 REPO="QuantStack/LTX-2.3-GGUF"
+REPO_REV="4b420da2a92451eaeec5cd44e769007198acff88"
 
 mkdir -p "$OUT"
 
@@ -70,9 +71,10 @@ if [ "$DOWNLOAD_ALL" = true ]; then
   QUANTIZATIONS=("Q2_K" "Q3_K_S" "Q3_K_M" "Q4_K_S" "Q4_K_M" "Q5_K_S" "Q5_K_M" "Q6_K" "Q8_0")
 fi
 
-# If no quantizations specified, default to Q5_K_M (size/quality balance)
+# Match the integrity-pinned smoke-test default. Other quantizations remain
+# available through explicit flags and require explicit test overrides.
 if [ ${#QUANTIZATIONS[@]} -eq 0 ]; then
-  QUANTIZATIONS=("Q5_K_M")
+  QUANTIZATIONS=("Q2_K")
 fi
 
 echo "LTX-2.3 GGUF Model Download"
@@ -101,7 +103,7 @@ esac
 # Download each quantization
 for quant in "${QUANTIZATIONS[@]}"; do
   filename="${PREFIX}-${quant}.gguf"
-  url="$HF/$REPO/resolve/main/$FOLDER/$filename"
+  url="$HF/$REPO/resolve/$REPO_REV/$FOLDER/$filename"
   output_path="$OUT/$filename"
   
   dl "$url" "$output_path"
@@ -128,26 +130,28 @@ case "$MODEL_VARIANT" in
 esac
 
 UNSLOTH_LTX="unsloth/LTX-2.3-GGUF"
+UNSLOTH_LTX_REV="96e8ed4925ead3db9ff4d0084f165ef6a74f28d0"
 GEMMA_REPO="unsloth/gemma-3-12b-it-GGUF"
-GEMMA_FILE="${GEMMA_FILE:-gemma-3-12b-it-UD-Q4_K_XL.gguf}"
+GEMMA_REPO_REV="d15e4c7dc21dc55d56bf8549db57a71ad8a2a35d"
+GEMMA_FILE="${GEMMA_FILE:-gemma-3-12b-it-UD-Q2_K_XL.gguf}"
 
 echo ""
 echo "Downloading LTX runtime components (variant: $AUX_VARIANT)..."
 
 # Video VAE
-dl "$HF/$UNSLOTH_LTX/resolve/main/vae/ltx-2.3-22b-${AUX_VARIANT}_video_vae.safetensors" \
+dl "$HF/$UNSLOTH_LTX/resolve/$UNSLOTH_LTX_REV/vae/ltx-2.3-22b-${AUX_VARIANT}_video_vae.safetensors" \
    "$OUT/ltx-2.3-22b-${AUX_VARIANT}_video_vae.safetensors"
 
 # Audio VAE
-dl "$HF/$UNSLOTH_LTX/resolve/main/vae/ltx-2.3-22b-${AUX_VARIANT}_audio_vae.safetensors" \
+dl "$HF/$UNSLOTH_LTX/resolve/$UNSLOTH_LTX_REV/vae/ltx-2.3-22b-${AUX_VARIANT}_audio_vae.safetensors" \
    "$OUT/ltx-2.3-22b-${AUX_VARIANT}_audio_vae.safetensors"
 
 # Embeddings connectors (text encoder -> transformer adapter)
-dl "$HF/$UNSLOTH_LTX/resolve/main/text_encoders/ltx-2.3-22b-${AUX_VARIANT}_embeddings_connectors.safetensors" \
+dl "$HF/$UNSLOTH_LTX/resolve/$UNSLOTH_LTX_REV/text_encoders/ltx-2.3-22b-${AUX_VARIANT}_embeddings_connectors.safetensors" \
    "$OUT/ltx-2.3-22b-${AUX_VARIANT}_embeddings_connectors.safetensors"
 
 # Gemma-3-12b-it text encoder (--llm)
-dl "$HF/$GEMMA_REPO/resolve/main/$GEMMA_FILE" \
+dl "$HF/$GEMMA_REPO/resolve/$GEMMA_REPO_REV/$GEMMA_FILE" \
    "$OUT/$GEMMA_FILE"
 
 echo ""
