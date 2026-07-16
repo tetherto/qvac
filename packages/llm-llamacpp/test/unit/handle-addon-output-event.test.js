@@ -188,7 +188,7 @@ test('a tagged batch Error fails only its group; the peer group still completes'
   )
 })
 
-test('untagged events route to _finetuneJob, not to any per-job sink', (t) => {
+test('events with no registered job are dropped, never reinterpreted', (t) => {
   const model = createModel()
   const calls = []
   model._jobSinks.set(1, {
@@ -199,17 +199,27 @@ test('untagged events route to _finetuneJob, not to any per-job sink', (t) => {
     ended() {},
     failed() {}
   })
-  let jobOutput = null
+  const finetuneCalls = []
   model._finetuneJob = {
     output(d) {
-      jobOutput = d
+      finetuneCalls.push(['output', d])
+    },
+    fail(e) {
+      finetuneCalls.push(['fail', e])
+    },
+    end(s, r) {
+      finetuneCalls.push(['end', s, r])
     },
     active: null
   }
 
-  // jobId undefined => untagged.
+  // Untagged (jobId undefined) and unknown-tagged (no sink for 99) events:
+  // neither may reach the finetune handler or any per-job sink.
   model._handleAddonOutputEvent('Output', 'untagged', null, undefined)
+  model._handleAddonOutputEvent('Output', 'stale token', null, 99)
+  model._handleAddonOutputEvent('Error', null, new Error('stale'), 99)
+  model._handleAddonOutputEvent('JobEnded', { TPS: 1 }, null, 99)
 
-  t.is(jobOutput, 'untagged', 'untagged output goes to the finetune handler')
-  t.alike(calls, [], 'no per-job sink receives an untagged event')
+  t.alike(finetuneCalls, [], 'the finetune handler never receives unknown events')
+  t.alike(calls, [], 'no per-job sink receives an unknown event')
 })

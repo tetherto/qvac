@@ -12,23 +12,17 @@ const STOP_REASONS = [
 
 /**
  * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
- * `FinetuneProgress`, or `null` to drop it. `state.skipNextRuntimeStats`
- * is used to swallow the TPS trailer that follows a finetune terminal.
+ * `FinetuneProgress`, or `null` to drop it.
  *
  * @param {string} rawEvent
  * @param {*} rawData
  * @param {*} rawError
- * @param {{ skipNextRuntimeStats: boolean }} state
  * @returns {{ type: string, data: *, error: * } | null}
  */
-function mapAddonEvent(rawEvent, rawData, rawError, state) {
-  // TPS-shaped runtime stats — either a real inference terminal or the stale
-  // trailer that follows a finetune terminal.
+function mapAddonEvent(rawEvent, rawData, rawError) {
+  // TPS-shaped runtime stats: a job's terminal snapshot. The one trailing a
+  // finetune terminal carries the finetune's own id and routes to its sink.
   if (rawData && typeof rawData === 'object' && 'TPS' in rawData) {
-    if (state.skipNextRuntimeStats) {
-      state.skipNextRuntimeStats = false
-      return null
-    }
     const stats = { ...rawData }
     if (stats.backendDevice === 0) {
       stats.backendDevice = 'cpu'
@@ -41,16 +35,13 @@ function mapAddonEvent(rawEvent, rawData, rawError, state) {
     return { type: 'JobEnded', data: stats, error: null }
   }
 
-  // Finetune terminal: dispatch JobEnded carrying the finetune payload and arm
-  // the skip flag so the TPS the C++ addon emits right after is not mistaken
-  // for an inference result that would clobber `_hasActiveResponse`.
+  // Finetune terminal: dispatch JobEnded carrying the finetune payload.
   if (
     rawData &&
     typeof rawData === 'object' &&
     rawData.op === 'finetune' &&
     typeof rawData.status === 'string'
   ) {
-    state.skipNextRuntimeStats = true
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
