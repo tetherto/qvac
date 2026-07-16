@@ -48,6 +48,7 @@
     "index.js",
     "addon.js",
     "index.d.ts",
+    "addon.d.ts",
     "prebuilds",
     "weights",
     "test/mobile",
@@ -95,7 +96,6 @@
       "types": "./index.d.ts",
       "default": "./index.js"
     },
-    "./addon.js": "./addon.js",
     "./binding.js": "./binding.js"
   },
   "types": "index.d.ts"
