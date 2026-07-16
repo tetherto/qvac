@@ -1,10 +1,11 @@
-import type { ModelProgressUpdate, ShardUrl } from '@/schemas'
+import type { ModelProgressUpdate, ShardUrl } from '../../schemas/index.ts'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { Readable, type Writable } from 'bare-stream'
 import fetch, { Headers } from 'bare-fetch'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { withTimeout } from '@/utils/withTimeout'
+import Buffer from 'bare-buffer'
+import { withTimeout } from '../../utils/withTimeout.ts'
 import {
   getModelsCacheDir,
   getShardedModelCacheDir,
@@ -20,25 +21,25 @@ import {
   checkAllShardsExist,
   generateShardFilenames,
   hasValidGGUFHeader
-} from '@/server/utils'
-import { getSDKConfig } from '@/server/bare/registry/config-registry'
-import { getLifecycleState, onResume } from '@/server/bare/runtime-lifecycle'
+} from '../../utils/index.ts'
+import { getConfig } from '../../runtime/state.ts'
+import { getLifecycleState, onResume } from '../../runtime/runtime-lifecycle.ts'
 import {
   createHttpDownloadKey,
   startOrJoinDownload,
   applyJoinedDownloadStats
-} from '@/server/rpc/handlers/load-model/download-manager'
+} from './download-manager.ts'
 import {
   DownloadCancelledError,
   HTTPError,
   NoResponseBodyError,
   PartialDownloadOfflineError,
   ResponseBodyNotReadableError
-} from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import type { DownloadHooks } from './types'
+} from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import type { DownloadHooks } from './types.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const DEFAULT_CONCURRENCY = 3
 
@@ -80,7 +81,7 @@ async function validateCachedFile(
     const localStats = await fsPromises.stat(modelPath)
     const localSize = localStats.size
 
-    const config = getSDKConfig()
+    const config = getConfig()
     const connectionTimeout = config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS
     let expectedSize = 0
     try {
@@ -162,14 +163,14 @@ async function performHttpDownload(
 
   // Prepare headers for resume if needed
   const headers = new Headers({
-    'User-Agent': 'qvac-sdk'
+    'User-Agent': 'qvac'
   })
 
   if (startOffset > 0) {
     headers.append('Range', `bytes=${startOffset}-`)
   }
 
-  const config = getSDKConfig()
+  const config = getConfig()
   const connectionTimeout = config.httpConnectionTimeoutMs ?? DEFAULT_HTTP_CONNECTION_TIMEOUT_MS
 
   let response
@@ -220,7 +221,7 @@ async function performHttpDownload(
       response = await fetch(url, {
         method: 'GET',
         headers: new Headers({
-          'User-Agent': 'qvac-sdk'
+          'User-Agent': 'qvac'
         }),
         ...(signal && { signal })
       })
@@ -255,7 +256,8 @@ async function performHttpDownload(
   logger.info(`📏 Total size: ${totalBytes} bytes (${(totalBytes / 1024 / 1024).toFixed(2)} MB)`)
 
   // Create write stream (append if resuming)
-  const writeStreamOptions = startOffset > 0 && response.status === 206 ? { flags: 'a' } : {}
+  const writeStreamOptions =
+    startOffset > 0 && response.status === 206 ? { flags: 'a' as const } : {}
   const writeStream = fs.createWriteStream(modelPath, writeStreamOptions)
 
   // Get the response body
@@ -523,7 +525,7 @@ const HTTP_RETRY_BASE_DELAY_MS = 500
 const LIFECYCLE_WAIT_POLL_MS = 200
 const LIFECYCLE_WAIT_MAX_MS = 5 * 60_000
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 /**
  * A mid-stream socket/body error, a connection failure (HTTP status 0, no
@@ -584,13 +586,13 @@ async function performHttpDownloadWithResume(
   let attempt = 0
   for (;;) {
     const attemptController = new AbortController()
-    const forwardCancel = () => attemptController.abort()
+    const forwardCancel = () => attemptController.abort(undefined)
     if (signal) {
-      if (signal.aborted) attemptController.abort()
+      if (signal.aborted) attemptController.abort(undefined)
       else signal.addEventListener('abort', forwardCancel, { once: true })
     }
     // resume() → abort this attempt so it range-resumes now, not after the stall.
-    const offResume = onResume(() => attemptController.abort())
+    const offResume = onResume(() => attemptController.abort(undefined))
 
     try {
       await performHttpDownload(
@@ -742,7 +744,7 @@ async function downloadShardedModelFromHttp(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   hooks?: DownloadHooks
 ) {
-  const config = getSDKConfig()
+  const config = getConfig()
   const concurrency = config.httpDownloadConcurrency ?? DEFAULT_CONCURRENCY
   const { shardUrls: shardInfos, cacheKey } = parsePatternBasedShardUrl(shardUrl)
   const downloadKey = `http-sharded:${cacheKey}`

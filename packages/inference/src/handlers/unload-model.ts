@@ -1,10 +1,10 @@
-import { unloadModel } from '@/server/bare/ops/unload-model'
-import { getRegistryStats } from '@/server/bare/registry/model-registry'
-import { hasActiveProviders } from '@/server/bare/hyperswarm'
-import type { UnloadModelRequest, UnloadModelResponse } from '@/schemas'
-import { getServerLogger } from '@/logging'
+import { unloadModel } from '../plugins/ops/unload-model.ts'
+import { getRegistryStats } from '../runtime/model-registry.ts'
+import { hasActiveProviders } from '../p2p/swarm.ts'
+import type { UnloadModelRequest, UnloadModelResponse } from '../schemas/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleUnloadModel(request: UnloadModelRequest): Promise<UnloadModelResponse> {
   const { modelId, clearStorage } = request

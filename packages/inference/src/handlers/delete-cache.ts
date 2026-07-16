@@ -1,8 +1,8 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas'
-import { deleteKvCacheState } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
-import { getServerLogger } from '@/logging'
+import type { DeleteCacheRequest, DeleteCacheResponse } from '../schemas/index.ts'
+import { deleteKvCacheState } from '../plugins/builtin/llamacpp-completion/ops/kv-cache-session.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * RPC handler for `deleteCache(...)`. The three KV-cache bookkeeping

@@ -3,19 +3,23 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
   ReloadConfigRequest
-} from '@/schemas'
+} from '../../schemas/index.ts'
 import {
   normalizeModelType,
   PROFILING_KEY,
   OPERATION_EVENT_KEY,
   type OperationEvent
-} from '@/schemas'
-import { loadModel } from '@/server/bare/ops/load-model'
-import { createResolveSession } from '@/server/rpc/handlers/load-model/resolve-session'
-import { nowMs, generateProfileId } from '@/profiling/clock'
-import { getModelEntry, updateModelConfig } from '@/server/bare/registry/model-registry'
-import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/server/utils'
-import { buildDownloadProfilingFields } from '@/server/rpc/handlers/load-model/types'
+} from '../../schemas/index.ts'
+import { loadModel } from '../../plugins/ops/load-model.ts'
+import { createResolveSession } from './resolve-session.ts'
+import { nowMs, generateProfileId } from '../../profiling/clock.ts'
+import { getModelEntry, updateModelConfig } from '../../runtime/model-registry.ts'
+import {
+  generateShortHash,
+  canonicalConfigString,
+  transformConfigForReload
+} from '../../utils/index.ts'
+import { buildDownloadProfilingFields } from './types.ts'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
@@ -25,14 +29,14 @@ import {
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
   PluginNotFoundError
-} from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import { formatZodError } from '@/utils/zod-error'
-import { getPlugin } from '@/server/plugins'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+} from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import { formatZodError } from '../../utils/zod-error.ts'
+import { getPlugin } from '../../plugins/index.ts'
+import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
+import { generateRandomRequestId } from '../../runtime/request-id.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -53,7 +57,7 @@ export async function handleLoadModel(
     { enabled?: boolean; id?: string } | undefined
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta
 
-  const requestId = request.requestId ?? generateServerRequestId()
+  const requestId = request.requestId ?? generateRandomRequestId()
   // The handler `modelId` is derived from the config hash below — it
   // isn't known until after `resolveConfig` runs. The registry context
   // is opened with `modelId: undefined` so a cancel-by-modelId fired
@@ -63,7 +67,7 @@ export async function handleLoadModel(
     requestId,
     kind: 'loadModel'
   })
-  const log = withRequestContext(getServerLogger(), ctx)
+  const log = withRequestContext(getEngineLogger(), ctx)
   log.debug(`loadModel start modelSrc=${String(modelSrc ?? '')}`)
 
   try {
@@ -145,7 +149,7 @@ export async function handleLoadModel(
 
     if ('modelPath' in pluginArtifacts) {
       throw new ModelLoadFailedError(
-        'Plugin returned reserved key "modelPath" in artifacts; primary model resolution is core-owned'
+        'Plugin returned reserved key "modelPath" in artifacts; primary model resolution is engine-owned'
       )
     }
 

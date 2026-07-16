@@ -1,8 +1,8 @@
-import type { LoggingStreamRequest, LoggingStreamResponse } from '@/schemas'
+import type { LoggingStreamRequest, LoggingStreamResponse } from '../schemas/index.ts'
 import {
   registerLoggingStream,
   unregisterLoggingStream
-} from '@/server/bare/registry/logging-stream-registry'
+} from '../runtime/logging-stream-registry.ts'
 import type { LogLevel } from '@qvac/logging'
 
 export async function* handleLoggingStream(
@@ -16,7 +16,7 @@ export async function* handleLoggingStream(
   const streamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => {
     const logResponse: LoggingStreamResponse = {
       type: 'loggingStream',
-      // For the global SDK_ALL_LOG_ID stream `sourceId` is the real origin of the
+      // For the global ALL_LOG_ID stream `sourceId` is the real origin of the
       // log; for a per-id stream it equals the subscription `id`.
       id: sourceId,
       level: level,

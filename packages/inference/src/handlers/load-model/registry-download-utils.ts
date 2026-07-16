@@ -1,23 +1,23 @@
-import type { ModelProgressUpdate } from '@/schemas'
+import type { ModelProgressUpdate } from '../../schemas/index.ts'
 import type { QVACBlobBinding } from '@qvac/registry-client'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import type { AbortSignal } from 'bare-abort-controller'
-import { measureChecksum, calculatePercentage } from '@/server/utils'
-import { getRegistryClient } from '@/server/bare/registry/registry-client'
-import { getSDKConfig } from '@/server/bare/registry/config-registry'
-import { buildRegistryClientOptions } from './registry-client-options'
-import { ChecksumValidationFailedError, DownloadCancelledError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import type { DownloadHooks } from './types'
+import { measureChecksum, calculatePercentage } from '../../utils/index.ts'
+import { getRegistryClient } from '../../runtime/registry-client.ts'
+import { getConfig } from '../../runtime/state.ts'
+import { buildRegistryClientOptions } from './registry-client-options.ts'
+import { ChecksumValidationFailedError, DownloadCancelledError } from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import type { DownloadHooks } from './types.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export {
   DEFAULT_REGISTRY_STREAM_TIMEOUT_MS,
   buildRegistryClientOptions
-} from './registry-client-options'
-export type { RegistryClientDownloadOptions } from './registry-client-options'
+} from './registry-client-options.ts'
+export type { RegistryClientDownloadOptions } from './registry-client-options.ts'
 
 export function buildBlobBinding(meta: {
   blobCoreKey: string
@@ -121,7 +121,7 @@ export async function downloadSingleFileFromRegistry(
     : undefined
 
   const clientOptions = buildRegistryClientOptions({
-    sdkConfig: getSDKConfig(),
+    config: getConfig(),
     outputFile: modelPath,
     onProgress,
     signal

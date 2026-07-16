@@ -1,5 +1,5 @@
-import type { StateResponse } from '@/schemas'
-import { getLifecycleState } from '@/server/bare/runtime-lifecycle'
+import type { StateResponse } from '../schemas/index.ts'
+import { getLifecycleState } from '../runtime/runtime-lifecycle.ts'
 
 export function handleState(): StateResponse {
   return {

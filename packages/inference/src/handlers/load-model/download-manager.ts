@@ -1,12 +1,12 @@
-import type { ModelProgressUpdate } from '@/schemas'
+import type { ModelProgressUpdate } from '../../schemas/index.ts'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { DownloadCancelledError, InferenceCancelledError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import { getRequestRegistry } from '@/server/bare/runtime'
-import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
-import type { DownloadHooks } from '@/server/rpc/handlers/load-model/types'
+import { DownloadCancelledError, InferenceCancelledError } from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import { getRequestRegistry } from '../../runtime/index.ts'
+import type { DisposableScope } from '../../runtime/disposable-scope.ts'
+import type { DownloadHooks } from './types.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Per-subscriber binding to a registry-tracked request.
@@ -164,7 +164,7 @@ function maybeCancelTransfer(transfer: Transfer): void {
   if (transfer.subscribers.size > 0) return
   if (transfer.abortController.signal.aborted) return
   logger.debug(`[download-manager] last subscriber left, aborting transfer ${transfer.downloadKey}`)
-  transfer.abortController.abort()
+  transfer.abortController.abort(undefined)
 }
 
 function attachRequestBinding(
@@ -303,13 +303,11 @@ export function startOrJoinDownload(
  * otherwise — the cancel handler treats both cases identically (the
  * registry cancel still fires) and the return value is informational.
  *
- * Added in 0.11.0 to support `cancel({ requestId, clearCache: true })`
- * for download requests after the wire schema collapse removed the
- * `{ operation: "downloadAsset", downloadKey, clearCache }` arm. The
- * subscriber is the unit of `clearCache` even though the flag lives on
- * the shared transfer: if any subscriber on the transfer asks for
- * clearCache, the partial file is deleted when the last subscriber
- * leaves, matching the pre-collapse behaviour.
+ * Supports `cancel({ requestId, clearCache: true })` for download
+ * requests. The subscriber is the unit of `clearCache` even though the
+ * flag lives on the shared transfer: if any subscriber on the transfer
+ * asks for clearCache, the partial file is deleted when the last
+ * subscriber leaves.
  */
 export function markClearCacheForRequest(requestId: string): boolean {
   for (const transfer of activeTransfers.values()) {

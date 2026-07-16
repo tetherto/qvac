@@ -1,5 +1,5 @@
-import type { ModelProgressUpdate } from '@/schemas'
-import type { RegistryItem } from '@/models/registry'
+import type { ModelProgressUpdate } from '../../schemas/index.ts'
+import type { RegistryItem } from '../../models/registry/index.ts'
 import { promises as fsPromises } from 'bare-fs'
 import type { AbortSignal } from 'bare-abort-controller'
 import {
@@ -9,22 +9,22 @@ import {
   getSingleFileCachePath,
   generateShortHash,
   calculatePercentage
-} from '@/server/utils'
-import { measureChecksum } from '@/server/utils/checksum'
-import { validateAndJoinPath } from '@/server/utils/path-security'
+} from '../../utils/index.ts'
+import { measureChecksum } from '../../utils/checksum.ts'
+import { validateAndJoinPath } from '../../utils/path-security.ts'
 import {
   buildBlobBinding,
   downloadSingleFileFromRegistry,
   validateCachedFile
-} from './registry-download-utils'
-import { DownloadCancelledError, RegistryDownloadFailedError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import type { DownloadHooks } from './types'
+} from './registry-download-utils.ts'
+import { DownloadCancelledError, RegistryDownloadFailedError } from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import type { DownloadHooks } from './types.ts'
 
 type CompanionSetMetadata = NonNullable<RegistryItem['companionSet']>
 type CompanionSetMetadataEntry = CompanionSetMetadata['files'][number]
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface DownloadCompanionSetOptions {
   companionSet: CompanionSetMetadata

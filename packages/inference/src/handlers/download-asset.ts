@@ -1,21 +1,22 @@
-import type { DownloadAssetRequest, DownloadAssetResponse, ModelProgressUpdate } from '@/schemas'
-import { PROFILING_KEY, OPERATION_EVENT_KEY, type OperationEvent } from '@/schemas'
-import {
-  resolveModelPath,
-  resolveModelPathWithStats
-} from '@/server/rpc/handlers/load-model/resolve'
+import type {
+  DownloadAssetRequest,
+  DownloadAssetResponse,
+  ModelProgressUpdate
+} from '../schemas/index.ts'
+import { PROFILING_KEY, OPERATION_EVENT_KEY, type OperationEvent } from '../schemas/index.ts'
+import { resolveModelPath, resolveModelPathWithStats } from './load-model/resolve.ts'
 import {
   buildDownloadProfilingFields,
   type DownloadStats,
   type DownloadHooks
-} from '@/server/rpc/handlers/load-model/types'
-import { nowMs, generateProfileId } from '@/profiling/clock'
-import { getServerLogger } from '@/logging'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { InferenceCancelledError } from '@/utils/errors-server'
+} from './load-model/types.ts'
+import { nowMs, generateProfileId } from '../profiling/clock.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { getRequestRegistry, withRequestContext } from '../runtime/index.ts'
+import { generateRandomRequestId } from '../runtime/request-id.ts'
+import { InferenceCancelledError } from '../errors/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleDownloadAsset(
   request: DownloadAssetRequest,
@@ -27,7 +28,7 @@ export async function handleDownloadAsset(
     { enabled?: boolean; id?: string } | undefined
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta
 
-  const requestId = request.requestId ?? generateServerRequestId()
+  const requestId = request.requestId ?? generateRandomRequestId()
   // `downloadAsset` is artifact-shaped, not model-shaped — there is no
   // `modelId` to register on the registry entry. Cancel by `requestId`
   // is the primary path; `cancel({ modelId })` is intentionally a
@@ -36,7 +37,7 @@ export async function handleDownloadAsset(
     requestId,
     kind: 'downloadAsset'
   })
-  const log = withRequestContext(getServerLogger(), ctx)
+  const log = withRequestContext(getEngineLogger(), ctx)
   log.debug(`downloadAsset start assetSrc=${assetSrc}`)
 
   const hooks: DownloadHooks = {

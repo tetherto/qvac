@@ -1,6 +1,6 @@
-import type { ResumeResponse } from '@/schemas'
-import { resumeRuntime } from '@/server/bare/runtime-lifecycle'
-import { LifecycleResumeFailedError } from '@/utils/errors-server'
+import type { ResumeResponse } from '../schemas/index.ts'
+import { resumeRuntime } from '../runtime/runtime-lifecycle.ts'
+import { LifecycleResumeFailedError } from '../errors/index.ts'
 
 export async function handleResume(): Promise<ResumeResponse> {
   try {

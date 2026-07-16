@@ -1,5 +1,5 @@
-import type { RegistryItem } from '@/models/registry'
-import { modelDescriptorSchema } from '@/schemas'
+import type { RegistryItem } from '../../models/registry/index.ts'
+import { modelDescriptorSchema } from '../../schemas/index.ts'
 
 export type ExplicitRegistryMetadata = {
   expectedSize?: number

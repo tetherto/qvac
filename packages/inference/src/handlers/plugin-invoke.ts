@@ -3,10 +3,10 @@ import type {
   PluginInvokeResponse,
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse
-} from '@/schemas/plugin'
-import { getModelEntry } from '@/server/bare/registry/model-registry'
-import { getPlugin, getPluginHandler } from '@/server/plugins'
-import { profileReplyHandler, profileStreamHandler } from '@/server/rpc/profiling'
+} from '../schemas/plugin.ts'
+import { getModelEntry } from '../runtime/model-registry.ts'
+import { getPlugin, getPluginHandler } from '../plugins/index.ts'
+import { profileReplyHandler, profileStreamHandler } from '../profiling/index.ts'
 import {
   PluginNotFoundError,
   PluginHandlerNotFoundError,
@@ -15,11 +15,11 @@ import {
   PluginResponseValidationFailedError,
   ModelIsDelegatedError,
   ModelNotFoundError
-} from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import { formatZodError } from '@/utils/zod-error'
+} from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { formatZodError } from '../utils/zod-error.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function resolvePluginHandler(modelId: string, handlerName: string) {
   const modelEntry = getModelEntry(modelId)

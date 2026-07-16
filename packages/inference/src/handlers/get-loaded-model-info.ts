@@ -2,14 +2,14 @@ import type {
   GetLoadedModelInfoRequest,
   GetLoadedModelInfoResponse,
   LoadedModelInfo
-} from '@/schemas'
-import { getModelEntry } from '@/server/bare/registry/model-registry'
-import { getPlugin } from '@/server/plugins/registry'
-import { detectToolDialectFromName } from '@/server/utils/tools'
-import { ModelNotFoundError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
+} from '../schemas/index.ts'
+import { getModelEntry } from '../runtime/model-registry.ts'
+import { getPlugin } from '../plugins/registry.ts'
+import { detectToolDialectFromName } from '../utils/tools/index.ts'
+import { ModelNotFoundError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function handleGetLoadedModelInfo(
   request: GetLoadedModelInfoRequest

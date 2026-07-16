@@ -1,4 +1,4 @@
-import type { ModelProgressUpdate, ShardFileMetadata } from '@/schemas'
+import type { ModelProgressUpdate, ShardFileMetadata } from '../../schemas/index.ts'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import Corestore from 'corestore'
@@ -7,7 +7,7 @@ import Hyperdrive from 'hyperdrive'
 import type { Entry } from 'hyperdrive'
 import { type Readable, type Writable } from 'bare-stream'
 import type { AbortSignal } from 'bare-abort-controller'
-import { getQvacPath } from '@/server/utils/qvac-paths'
+import { getQvacPath } from '../../utils/qvac-paths.ts'
 import {
   getModelsCacheDir,
   generateShortHash,
@@ -18,14 +18,14 @@ import {
   measureChecksum,
   extractTensorsFromShards,
   calculatePercentage
-} from '@/server/utils'
-import { getModelBySrc } from '@/models/registry'
+} from '../../utils/index.ts'
+import { getModelBySrc } from '../../models/registry/index.ts'
 import {
   createHyperdriveDownloadKey,
   startOrJoinDownload,
   applyJoinedDownloadStats
-} from '@/server/rpc/handlers/load-model/download-manager'
-import { getSDKConfig } from '@/server/bare/registry/config-registry'
+} from './download-manager.ts'
+import { getConfig } from '../../runtime/state.ts'
 import {
   FileNotFoundError,
   ChecksumValidationFailedError,
@@ -33,18 +33,18 @@ import {
   HyperdriveDownloadFailedError,
   ModelLoadFailedError,
   NoBlobFoundError
-} from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
+} from '../../errors/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 import {
   registerSwarm,
   unregisterSwarm,
   registerCorestore,
   unregisterCorestore
-} from '@/server/bare/runtime-lifecycle'
-import type { DownloadHooks } from './types'
+} from '../../runtime/runtime-lifecycle.ts'
+import type { DownloadHooks } from './types.ts'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface HyperdriveSetup {
   corestore: Corestore
@@ -80,7 +80,7 @@ async function setupHyperdrive(
   await drive.ready()
 
   const getRelays = () => {
-    const config = getSDKConfig()
+    const config = getConfig()
     const relayPublicKeys = config.swarmRelays
     if (!relayPublicKeys || relayPublicKeys.length === 0) {
       return null

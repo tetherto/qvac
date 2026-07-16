@@ -5,19 +5,20 @@ import type {
   ModelRegistryGetModelRequest,
   ModelRegistryGetModelResponse,
   ModelRegistryEntry
-} from '@/schemas'
+} from '../schemas/index.ts'
+import Buffer from 'bare-buffer'
 import type { QVACModelEntry } from '@qvac/registry-client'
-import { REGISTRY_ERROR_CODES } from '@/schemas/sdk-errors-registry'
-import { getAddonFromEngine, resolveCanonicalEngine } from '@/schemas/engine-addon-map'
-import { getRegistryClient } from '@/server/bare/registry/registry-client'
-import { getServerLogger } from '@/logging'
-import { ModelRegistryQueryFailedError } from '@/utils/errors-server'
+import { REGISTRY_ERROR_CODES } from '../schemas/errors.ts'
+import { getAddonFromEngine, resolveCanonicalEngine } from '../schemas/engine-addon-map.ts'
+import { getRegistryClient } from '../runtime/registry-client.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { ModelRegistryQueryFailedError } from '../errors/index.ts'
 
 interface QvacError extends Error {
   code?: number
 }
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function toHexString(value: Buffer | string | { data: number[] } | undefined): string {
   if (!value) return ''
@@ -101,7 +102,7 @@ export async function handleModelRegistryList(): Promise<ModelRegistryListRespon
       throw error
     }
 
-    // Wrap unknown errors in SDK error
+    // Wrap unknown errors in a typed error
     throw new ModelRegistryQueryFailedError(
       error instanceof Error ? error.message : 'Unknown error',
       error

@@ -1,23 +1,21 @@
-import type { CancelRequest, CancelResponse } from '@/schemas/cancel'
-import { cancel as cancelByModelId } from '@/server/bare/ops/cancel'
-import { getRequestRegistry } from '@/server/bare/runtime'
-import { markClearCacheForRequest } from '@/server/rpc/handlers/load-model/download-manager'
-import { getServerLogger } from '@/logging'
+import type { CancelRequest, CancelResponse } from '../schemas/cancel.ts'
+import { cancel as cancelByModelId } from '../plugins/ops/cancel.ts'
+import { getRequestRegistry } from '../runtime/index.ts'
+import { markClearCacheForRequest } from './load-model/download-manager.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
- * Cancel RPC entry point. The 5-arm `switch (request.operation)`
- * dispatcher that lived here through 0.10.x was retired in 0.11.0:
- * every long-running handler now registers itself on the
- * worker-singleton `RequestRegistry`, so the cancel surface narrows to
- * two paths that route through the same registry primitive:
+ * Cancel handler entry point. Every long-running handler registers
+ * itself on the process-singleton `RequestRegistry`, so the cancel
+ * surface is two paths that route through the same registry primitive:
  *
  *  - `{ operation: "request", requestId, clearCache? }` — targeted
- *    cancel by client-generated id. Looks up the registry entry,
+ *    cancel by caller-generated id. Looks up the registry entry,
  *    fires its abort signal, optionally marks the underlying download
- *    transfer for cache clear. The "stop-button race" case (client
- *    cancel beats its own begin to the worker) is handled inside the
+ *    transfer for cache clear. The "stop-button race" case (a cancel
+ *    beats its own begin) is handled inside the
  *    registry via the cancel-before-begin tripwire.
  *
  *  - `{ operation: "broad", modelId, kind? }` — abort every in-flight
@@ -25,7 +23,7 @@ const logger = getServerLogger()
  *    model unload, app shutdown, and admin sweeps where the caller
  *    has no `requestId`. Delegates to the `cancel` bare op so the
  *    `ModelNotLoadedError` validation is shared with internal
- *    server-side broad cancels.
+ *    engine-side broad cancels.
  *
  * Always returns `success: true` plus a `cancelled` count (the number
  * of contexts this call flipped to `cancelling` — already-cancelled
