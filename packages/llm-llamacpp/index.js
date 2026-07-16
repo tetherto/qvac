@@ -491,6 +491,13 @@ class LlmLlamacpp {
         throw new Error(RUN_BUSY_ERROR_MESSAGE)
       }
 
+      // Native tags finetune events with the exclusive job's id (the
+      // admission value): route them through _jobSinks like any other job.
+      // Boolean stubs and legacy bindings skip registration.
+      if (typeof accepted === 'number') {
+        this._jobSinks.set(accepted, this._finetuneSink(accepted))
+      }
+
       const finalized = response.await()
       finalized.catch((err) => {
         this.logger?.warn?.('Finetune response rejected:', err?.message || err)
@@ -500,12 +507,32 @@ class LlmLlamacpp {
     })
   }
 
+  /// Sink adapter registered under the finetune job's native id: tagged
+  /// finetune events route here like any inference job's and forward to the
+  /// finetune-only handler, whose idle no-ops make double settlement (e.g.
+  /// unload) safe.
+  _finetuneSink(jobId) {
+    return {
+      updateOutput: (data) => this._finetuneJob.output(data),
+      // The finetune terminal is payload-routed (op/status) and the trailing
+      // scheduler stats snapshot is not a finetune result: both no-op here.
+      updateStats: () => {},
+      ended: () => {
+        this._jobSinks.delete(jobId)
+      },
+      failed: (error) => {
+        this._jobSinks.delete(jobId)
+        this._finetuneJob.fail(error)
+      }
+    }
+  }
+
   /// Route an output event to the correct sink. A tagged event owned by an
   /// in-flight batch group goes to that group's response; other tagged events
-  /// go to the per-job QvacResponse stored in _jobSinks. Untagged events
-  /// (jobId === undefined) belong to finetune, which does not go through the
-  /// job scheduler, and route to _finetuneJob (streamed batch chunks are also
-  /// untagged but route by their per-prompt string id).
+  /// go to the per-job QvacResponse stored in _jobSinks (finetune registers
+  /// an adapter under its native id). Untagged events (jobId === undefined)
+  /// still fall back to _finetuneJob (streamed batch chunks are also untagged
+  /// but route by their per-prompt string id).
   _handleAddonOutputEvent(eventType, data, error, jobId) {
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
@@ -560,6 +587,9 @@ class LlmLlamacpp {
         data.op === 'finetune' &&
         typeof data.status === 'string'
       if (isFinetuneTerminal) {
+        // The tagged finetune sink (if registered) is done once its terminal
+        // payload lands; the id is carried by the event itself.
+        if (typeof jobId === 'number') this._jobSinks.delete(jobId)
         this._finetuneJob.end(null, data)
       } else if (sink) {
         if (this.opts.stats && data != null) sink.updateStats(data)
