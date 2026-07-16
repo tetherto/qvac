@@ -1,12 +1,12 @@
 import { z } from 'zod'
-import { logLevelSchema } from './logging-stream'
-import { ModelType } from './model-types'
-import { llmConfigBaseSchema, embedConfigBaseSchema } from './llamacpp-config'
-import { whisperConfigSchema, parakeetConfigSchema } from './transcription-config'
-import { ocrConfigSchema } from './ocr'
-import { sdcppConfigSchema } from './sdcpp-config'
-import { vlaConfigSchema } from './vla'
-import { runtimeContextSchema } from './runtime-context'
+import { logLevelSchema } from './logging-stream.ts'
+import { ModelType } from './model-types.ts'
+import { llmConfigBaseSchema, embedConfigBaseSchema } from './llamacpp-config.ts'
+import { whisperConfigSchema, parakeetConfigSchema } from './transcription-config.ts'
+import { ocrConfigSchema } from './ocr.ts'
+import { sdcppConfigSchema } from './sdcpp-config.ts'
+import { vlaConfigSchema } from './vla.ts'
+import { runtimeContextSchema } from './runtime-context.ts'
 
 // Alias keys for user convenience (maps to canonical types)
 const AliasKeys = {
@@ -87,11 +87,11 @@ export type DevicePattern = z.infer<typeof devicePatternSchema>
 const directoryPath = z.string().transform((s) => s.replace(/\/+$/, ''))
 
 /**
- * QVAC SDK Configuration Schema
+ * QVAC Configuration Schema
  *
- * This configuration is loaded once at SDK initialization from a config file
+ * This configuration is loaded once at initialization from a config file
  * (qvac.config.json, qvac.config.js, or qvac.config.ts) and remains immutable
- * throughout the SDK's lifetime.
+ * throughout the process's lifetime.
  */
 export const qvacConfigSchema = z.object({
   /**
@@ -107,16 +107,16 @@ export const qvacConfigSchema = z.object({
   swarmRelays: z.array(z.string()).optional(),
 
   /**
-   * Global log level for all SDK loggers.
+   * Global log level for all loggers.
    * Options: "error", "warn", "info", "debug", "off".
    * Defaults to "info".
    */
   loggerLevel: logLevelSchema.optional(),
 
   /**
-   * Print SDK logs to the console.
+   * Print logs to the console.
    * When false, logs still reach streams and transports but are not printed.
-   * Defaults to false; set to true to see SDK logs on the console.
+   * Defaults to false; set to true to see logs on the console.
    */
   loggerConsoleOutput: z.boolean().optional(),
 
@@ -137,7 +137,7 @@ export const qvacConfigSchema = z.object({
 
   /**
    * Maximum number of retry attempts for registry (P2P) downloads on timeout.
-   * When a download times out due to a P2P connection stall, the SDK will
+   * When a download times out due to a P2P connection stall, we
    * automatically retry up to this many times before failing.
    * Defaults to 3.
    */
@@ -145,7 +145,7 @@ export const qvacConfigSchema = z.object({
 
   /**
    * Timeout in milliseconds for registry (P2P) download streams.
-   * Controls how long the SDK will wait on a stalled Hypercore block before
+   * Controls how long we wait on a stalled Hypercore block before
    * triggering a REQUEST_TIMEOUT and (optionally) retrying. Raise this on
    * slow or high-latency connections where the default triggers spurious
    * retries / failures.
@@ -156,7 +156,7 @@ export const qvacConfigSchema = z.object({
   /**
    * Device-specific config defaults.
    * Use this to override model config defaults for specific devices.
-   * User-defined patterns are checked before SDK built-in patterns.
+   * User-defined patterns are checked before the built-in patterns.
    * First matching pattern wins.
    *
    * @example
@@ -175,15 +175,17 @@ export const qvacConfigSchema = z.object({
   deviceDefaults: z.array(devicePatternSchema).optional(),
 
   /**
-   * List of plugin specifiers to include in the worker bundle.
-   * Each entry must end with /plugin (e.g. "@qvac/sdk/llamacpp-completion/plugin").
-   * When omitted, all built-in plugins are included.
+   * Inert: we do not read this field. Plugins are registered
+   * in code with `registerPlugin` / `plugins([...])`, and there are no
+   * defaults — nothing is registered until you register it. Carried over
+   * from the bundle-time config schema; each entry is a plugin specifier
+   * ending in `/plugin`.
    */
   plugins: z.array(z.string()).optional(),
 
   /**
-   * Bare runtime version for native addon ABI verification during bundling.
-   * When omitted, verify auto-detects from node_modules (bare-runtime, then bare).
+   * Inert: we have no bundling or ABI-verification step, so this field is
+   * unused. Carried over from the bundle-time config schema.
    */
   bareRuntimeVersion: z.string().optional()
 })

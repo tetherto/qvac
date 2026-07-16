@@ -1,7 +1,7 @@
-import { nowMs } from './clock'
-import { record } from './controller'
-import type { ProfilingEventKind } from './types'
-import type { ServerBreakdown, DelegationBreakdown } from '@/schemas'
+import { nowMs } from './clock.ts'
+import { record } from './controller.ts'
+import type { ProfilingEventKind } from './types.ts'
+import type { ServerBreakdown, DelegationBreakdown } from '../schemas/index.ts'
 
 export interface BaseTimings {
   profileId: string

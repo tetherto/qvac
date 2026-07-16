@@ -1,8 +1,8 @@
-import type { Logger } from '@/logging'
+import type { Logger } from './types.ts'
 import type { LogLevel } from '@qvac/logging'
-import { unregisterLogger } from './registry'
+import { unregisterLogger } from './logger.ts'
 
-// Map C++ addon priority (0-4) to SDK LogLevel
+// Map C++ addon priority (0-4) to LogLevel.
 const PRIORITY_TO_LEVEL: Record<number, LogLevel> = {
   0: 'error',
   1: 'warn',
@@ -11,8 +11,8 @@ const PRIORITY_TO_LEVEL: Record<number, LogLevel> = {
   4: 'debug'
 }
 
-const ADDON_LOGGERS_KEY = Symbol.for('@qvac/sdk:addon-loggers')
-const MODEL_LOGGERS_KEY = Symbol.for('@qvac/sdk:model-loggers')
+const ADDON_LOGGERS_KEY = Symbol.for('@qvac/inference:addon-loggers')
+const MODEL_LOGGERS_KEY = Symbol.for('@qvac/inference:model-loggers')
 
 type AddonLoggersMap = Map<string, Set<Logger>>
 type ModelLoggersMap = Map<string, { namespace: string; logger: Logger }>

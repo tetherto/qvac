@@ -1,2 +1,2 @@
-export * from './audio'
-export * from './registry'
+export * from './audio.ts'
+export * from './registry.ts'

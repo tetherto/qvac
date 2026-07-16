@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils'
+import { modelSrcInputSchema } from './model-src-utils.ts'
 
 // Bergamot supports many more language pairs
 export const BERGAMOT_LANGUAGES = [

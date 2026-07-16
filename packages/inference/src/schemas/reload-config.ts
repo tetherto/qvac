@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { whisperConfigSchema } from './transcription-config'
-import { whisperModelTypeSchema } from './model-types'
+import { whisperConfigSchema } from './transcription-config.ts'
+import { whisperModelTypeSchema } from './model-types.ts'
 
 export const modelIdSchema = z.string().regex(/^[0-9a-f]{16}$/, 'Invalid modelId format')
 

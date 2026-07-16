@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
-// === INTERNAL: Canonical types (used in SDK code) ===
+// === INTERNAL: Canonical types (used internally) ===
 /**
- * Canonical model type values for internal SDK use.
+ * Canonical model type values for internal use.
  * Format: `engine-usecase` (e.g., "llamacpp-completion")
  * Use dot-accessor syntax: `ModelType.llamacppCompletion`
  */

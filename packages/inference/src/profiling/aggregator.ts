@@ -3,8 +3,8 @@
  * Uses a ring buffer for O(1) event insertion.
  */
 
-import type { ProfilingEvent, AggregatedStats } from './types'
-import { getGlobalSingleton } from '@/utils/global-singleton'
+import type { ProfilingEvent, AggregatedStats } from './types.ts'
+import { getGlobalSingleton } from '../utils/global-singleton.ts'
 import {
   createRingBuffer,
   ringBufferPush,
@@ -13,7 +13,7 @@ import {
   ringBufferResize,
   ringBufferDroppedCount,
   type RingBufferState
-} from './ring-buffer'
+} from './ring-buffer.ts'
 
 const DEFAULT_MAX_RECENT_EVENTS = 1000
 
@@ -30,7 +30,7 @@ interface AggregatorState {
   eventBuffer: RingBufferState<ProfilingEvent>
 }
 
-const AGGREGATOR_STATE_KEY = Symbol.for('@qvac/sdk:profiler-aggregator-state')
+const AGGREGATOR_STATE_KEY = Symbol.for('@qvac/inference:profiler-aggregator-state')
 
 function getAggregatorState(): AggregatorState {
   return getGlobalSingleton(AGGREGATOR_STATE_KEY, () => {

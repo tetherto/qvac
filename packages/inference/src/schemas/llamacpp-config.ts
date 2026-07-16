@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { modelSrcInputSchema } from './model-src-utils'
-import { TOOLS_MODE } from './tools'
+import { modelSrcInputSchema } from './model-src-utils.ts'
+import { TOOLS_MODE } from './tools.ts'
 
 /**
  * Upper bound for `reasoning_budget`. Mirrors the llm-llamacpp addon, which
@@ -18,7 +18,7 @@ export const VERBOSITY = {
 
 const verbositySchema = z.enum(VERBOSITY)
 
-// Base schema - validates types, all fields optional (for client-side validation)
+// Base schema - validates types, all fields optional (for input validation)
 export const llmConfigBaseSchema = z.object({
   ctx_size: z.number().optional(),
   temp: z.number().min(0).max(2).optional(),
@@ -114,7 +114,7 @@ export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
 
 export type LlmConfig = z.infer<typeof llmConfigSchema>
 
-// Base schema - validates types, all fields optional (for client-side validation)
+// Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
   gpuLayers: z.number().int().optional(),
   device: z.enum(['gpu', 'cpu']).optional(),

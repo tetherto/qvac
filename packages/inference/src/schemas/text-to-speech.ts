@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils'
+import type Buffer from 'bare-buffer'
+import { modelSrcInputSchema, type ModelSrcInput } from './model-src-utils.ts'
 
 // Chatterbox multilingual supported languages (23). The engines support
 // different language sets, so the language enum is validated per engine.
@@ -192,7 +193,7 @@ export const ttsLoadConfigSchema = z
 // === Legacy ONNX modelConfig fields (deprecated) ===
 //
 // Pre-@qvac/tts-ggml multi-file ONNX `modelConfig` fields are kept ONLY so
-// callers migrating from earlier SDK versions hit a structured
+// callers migrating from earlier @qvac/sdk versions hit a structured
 // `LegacyTtsModelDeprecatedError` from the TTS plugin's `resolveConfig`,
 // rather than a generic Zod `Unrecognized key` error.
 export const LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS = [

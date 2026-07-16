@@ -4,8 +4,8 @@ import {
   normalizeModelType,
   isCanonicalModelType,
   isModelTypeAlias
-} from './model-types'
-import { resolveCanonicalEngine } from './engine-addon-map'
+} from './model-types.ts'
+import { resolveCanonicalEngine } from './engine-addon-map.ts'
 
 // Addon field accepts model type inputs plus "vad"
 const addonSchema = z.union([modelTypeInputSchema, z.literal('vad')])

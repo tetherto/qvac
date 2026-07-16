@@ -5,15 +5,15 @@ import {
   type CompletionEvent,
   type CompletionFinal,
   type CompletionStats
-} from './completion-event'
+} from './completion-event.ts'
 import {
   completionParamsSchema,
   generationParamsSchema,
   responseFormatSchema,
   toolDialectSchema
-} from './completion-stream'
-import { type McpClientInput } from './mcp-adapter'
-import { toolSchema } from './tools'
+} from './completion-stream.ts'
+import { type McpClientInput } from './mcp-adapter.ts'
+import { toolSchema } from './tools.ts'
 
 const mcpClientInputSchema = z.custom<McpClientInput>()
 

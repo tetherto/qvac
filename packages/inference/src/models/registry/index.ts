@@ -1,7 +1,7 @@
-import { models } from './models'
+import { models } from './models.ts'
 
 // Re-export all generated models
-export * from './models'
+export * from './models.ts'
 
 const bciEmbedder = models.find((model) => model.name === 'BCI_EMBEDDER')!
 

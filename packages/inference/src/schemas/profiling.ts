@@ -9,17 +9,17 @@ export const PROFILING_TRAILER_KEY = '__profilingTrailer'
 /**
  * Symbol key for attaching delegation breakdown to response objects.
  */
-export const DELEGATION_BREAKDOWN_KEY = Symbol.for('@qvac/sdk:delegation-breakdown')
+export const DELEGATION_BREAKDOWN_KEY = Symbol.for('@qvac/inference:delegation-breakdown')
 
 /**
  * Symbol key for attaching operation event to response objects.
  */
-export const OPERATION_EVENT_KEY = Symbol.for('@qvac/sdk:operation-event')
+export const OPERATION_EVENT_KEY = Symbol.for('@qvac/inference:operation-event')
 
 /**
  * Symbol key for attaching model execution timing.
  */
-export const MODEL_EXECUTION_KEY = Symbol.for('@qvac/sdk:model-execution')
+export const MODEL_EXECUTION_KEY = Symbol.for('@qvac/inference:model-execution')
 
 export const profilerModeSchema = z.enum(['summary', 'verbose'])
 
@@ -80,7 +80,7 @@ export const perCallProfilingSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Enable profiling for this call only; when omitted, the SDK-level profiler configuration applies.'
+      'Enable profiling for this call only; when omitted, the global profiler configuration applies.'
     ),
   includeServerBreakdown: z
     .boolean()

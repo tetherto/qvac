@@ -2,7 +2,11 @@
  * Helpers to inject/extract __profiling metadata in RPC payloads.
  */
 
-import { PROFILING_KEY, type ProfilingRequestMeta, type ProfilingResponseMeta } from '@/schemas'
+import {
+  PROFILING_KEY,
+  type ProfilingRequestMeta,
+  type ProfilingResponseMeta
+} from '../schemas/index.ts'
 
 export function createProfilingMeta(
   profileId: string,

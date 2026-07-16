@@ -1,25 +1,25 @@
 /**
- * QVAC SDK Profiler
+ * QVAC Profiler
  *
  * @example
  * ```ts
- * import { profiler } from "@qvac/sdk";
+ * import { profiler } from "@qvac/inference";
  *
  * profiler.enable({ mode: "summary" });
- * // ... run SDK operations ...
+ * // ... run inference operations ...
  * console.log(profiler.exportTable());
  * profiler.disable();
  * ```
  */
 
-import * as controller from './controller'
-import * as exporters from './exporters'
+import * as controller from './controller.ts'
+import * as exporters from './exporters.ts'
 import type {
   ProfilerRuntimeOptions,
   ProfilingEvent,
   ProfilerExport,
   AggregatedStats
-} from './types'
+} from './types.ts'
 
 export const profiler = {
   /**
@@ -30,7 +30,7 @@ export const profiler = {
   enable: (options?: ProfilerRuntimeOptions) => controller.enable(options),
 
   /**
-   * Disables profiling. New SDK operations will no longer be recorded.
+   * Disables profiling. New operations will no longer be recorded.
    */
   disable: () => controller.disable(),
 
@@ -99,24 +99,32 @@ export type {
   ProfilerExport,
   AggregatedStats,
   ProfilingEventKind
-} from './types'
-export type { ProfilerMode } from '@/schemas'
-export { nowMs } from './clock'
+} from './types.ts'
+export type { ProfilerMode } from '../schemas/index.ts'
+export { nowMs } from './clock.ts'
 export {
+  enable,
+  disable,
   record,
   shouldProfile,
   shouldIncludeServerBreakdown,
   generateId,
   isEnabled,
+  getAggregates,
+  getRecentEvents,
+  getEffectiveConfig,
+  onRecord,
   type ResolvedProfilerConfig
-} from './controller'
+} from './controller.ts'
+export { recordEvent, clearAggregator } from './aggregator.ts'
+export { exportJSON, exportTable, exportSummary } from './exporters.ts'
 export {
   createProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,
   stripProfilingMeta
-} from './envelope'
+} from './envelope.ts'
 export {
   recordPhase,
   recordFailure,
@@ -124,4 +132,26 @@ export {
   recordDelegationBreakdownPhases,
   type BaseTimings,
   type BaseEvent
-} from './events'
+} from './events.ts'
+export { createServerProfiler, type ServerProfiler } from './profiler.ts'
+export { profileReplyHandler, profileStreamHandler } from './operation-wrappers.ts'
+export {
+  registerOperationMetrics,
+  buildOperationEvent,
+  type OperationMetricsConfig
+} from './operation-metrics.ts'
+export {
+  shouldProfileDelegation,
+  createDelegationTimings,
+  createDelegationStreamTimings,
+  recordDelegationEvents,
+  recordDelegationStreamEvents,
+  cacheDelegationConnectionTime,
+  flushServerConnectionEvent,
+  consumeBreakdownConnectionTime,
+  clearPeerConnectionTracking,
+  resetDelegationConnectionTracking,
+  type DelegationTimings,
+  type DelegationStreamTimings,
+  type DelegatedHandlerOptions
+} from './delegation-profiler.ts'

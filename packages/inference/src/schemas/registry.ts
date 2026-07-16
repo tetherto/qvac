@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ModelType } from './model-types'
+import { ModelType } from './model-types.ts'
 
 // QVAC Model Registry entry schema matching the RegistryItem from models/registry/models.ts
 const modelRegistryEntryAddonSchema = z.enum([
@@ -21,7 +21,7 @@ const modelRegistryEntryAddonSchema = z.enum([
 // Canonical engine names derived from ModelType (schemas/model-types.ts) plus
 // registry-only engines not present in ModelType.
 // Values reference ModelType.* directly to avoid string duplication.
-// The SDK resolves legacy engine names (e.g. @qvac/* package names) to canonical
+// we resolve legacy engine names (e.g. @qvac/* package names) to canonical
 // form via schemas/engine-addon-map.ts.
 export const modelRegistryEngineSchema = z.enum([
   ModelType.llamacppCompletion,
@@ -47,7 +47,7 @@ export const modelRegistryEntrySchema = z.object({
   blobBlockOffset: z.number().describe('Starting block offset of the model file in the blob.'),
   blobBlockLength: z.number().describe('Number of blocks occupied by the model file.'),
   blobByteOffset: z.number().describe('Starting byte offset of the model file within its block.'),
-  modelId: z.string().describe('Unique identifier used to reference the model in SDK calls.'),
+  modelId: z.string().describe('Unique identifier used to reference the model in QVAC calls.'),
   addon: modelRegistryEntryAddonSchema.describe(
     'Inference addon / capability category this model belongs to.'
   ),
