@@ -36,7 +36,7 @@ const {
 
 const SAMPLE_RATE = 16000
 
-function parseArgs () {
+function parseArgs() {
   const args = { asrModel: null, diarModel: null, audio: null }
   const argv = Bare.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
@@ -48,14 +48,14 @@ function parseArgs () {
   return args
 }
 
-async function loadAudio (audioPath) {
+async function loadAudio(audioPath) {
   const ext = path.extname(audioPath).toLowerCase()
   if (ext === '.wav') return parseWavFile(audioPath)
   const rawBuffer = await readFileAsStream(audioPath)
   return convertRawToFloat32(rawBuffer)
 }
 
-function parseSpeakerSegments (sortformerText) {
+function parseSpeakerSegments(sortformerText) {
   const segments = []
   for (const line of sortformerText.split('\n')) {
     const m = line.match(/Speaker\s+(\d+)\s*:\s*([\d.:]+)\s*-\s*([\d.:]+)/)
@@ -76,14 +76,14 @@ function parseSpeakerSegments (sortformerText) {
   return segments
 }
 
-function sliceAudio (audioData, startS, endS) {
+function sliceAudio(audioData, startS, endS) {
   const i0 = Math.max(0, Math.floor(startS * SAMPLE_RATE))
   const i1 = Math.min(audioData.length, Math.ceil(endS * SAMPLE_RATE))
   if (i1 <= i0) return null
   return audioData.slice(i0, i1)
 }
 
-async function transcribeSegments (asrModel, audioData, segments) {
+async function transcribeSegments(asrModel, audioData, segments) {
   const results = []
   for (const seg of segments) {
     const slice = sliceAudio(audioData, seg.start, seg.end)
@@ -94,23 +94,28 @@ async function transcribeSegments (asrModel, audioData, segments) {
     const segments = []
     const response = await asrModel.run(slice)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         for (const s of items) {
           if (s && s.text && s.toAppend) segments.push(s)
         }
       })
       .await()
-    const text = segments.map(s => s.text).join(' ').trim()
+    const text = segments
+      .map((s) => s.text)
+      .join(' ')
+      .trim()
     results.push({ speaker: seg.speaker, text: text || '[no speech]' })
   }
   return results
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.asrModel || !args.diarModel || !args.audio) {
-    console.error('Usage: bare examples/diarized-transcribe.js --asr-model <gguf> --diar-model <gguf> --audio <file>')
+    console.error(
+      'Usage: bare examples/diarized-transcribe.js --asr-model <gguf> --diar-model <gguf> --audio <file>'
+    )
     process.exit(1)
   }
 
@@ -140,7 +145,7 @@ async function main () {
   const sortformerSegments = []
   const diarResponse = await diarModel.run(audioData)
   await diarResponse
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const s of items) {
         if (s && s.text) sortformerSegments.push(s)
@@ -149,7 +154,10 @@ async function main () {
     .await()
   await diarModel.unload()
 
-  const sfText = sortformerSegments.map(s => s.text).join(' ').trim()
+  const sfText = sortformerSegments
+    .map((s) => s.text)
+    .join(' ')
+    .trim()
   const segments = parseSpeakerSegments(sfText)
   if (segments.length === 0) {
     console.log('No speakers detected.')
@@ -169,7 +177,7 @@ async function main () {
   addonLogging.releaseLogger()
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)

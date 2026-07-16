@@ -77,11 +77,11 @@ const SILENCE_SENTINELS = new Set([
   '[No speakers detected]'
 ])
 
-function isSilenceText (text) {
+function isSilenceText(text) {
   return text.length === 0 || SILENCE_SENTINELS.has(text)
 }
 
-function buildSegmentText (items) {
+function buildSegmentText(items) {
   let text = ''
   let firstStartsWord = true
   let isFirst = true
@@ -99,14 +99,12 @@ function buildSegmentText (items) {
   return { text: text.replace(/\s+/g, ' '), firstStartsWord }
 }
 
-function parseSortformerSpeakerId (text) {
-  const m = typeof text === 'string'
-    ? text.match(/Speaker\s+(\d+)/)
-    : null
+function parseSortformerSpeakerId(text) {
+  const m = typeof text === 'string' ? text.match(/Speaker\s+(\d+)/) : null
   return m ? parseInt(m[1], 10) : -1
 }
 
-function parseBoolFlag (value) {
+function parseBoolFlag(value) {
   if (value === undefined || value === null) return undefined
   const normalised = String(value).toLowerCase()
   if (normalised === 'true' || normalised === '1' || normalised === 'yes') return true
@@ -114,17 +112,17 @@ function parseBoolFlag (value) {
   return undefined
 }
 
-function parsePositiveInt (value) {
+function parsePositiveInt(value) {
   const n = parseInt(value, 10)
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-function parseNonNegativeInt (value) {
+function parseNonNegativeInt(value) {
   const n = parseInt(value, 10)
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = {
     asrModel: null,
     diarModel: null,
@@ -153,14 +151,17 @@ function parseArgs () {
       if (v !== undefined) args.spkCacheEnable = v
     } else if (a === '--spk-cache-len') args.spkCacheLen = parsePositiveInt(argv[++i])
     else if (a === '--fifo-len') args.fifoLen = parsePositiveInt(argv[++i])
-    else if (a === '--chunk-left-context-ms') args.chunkLeftContextMs = parseNonNegativeInt(argv[++i])
-    else if (a === '--chunk-right-context-ms') args.chunkRightContextMs = parseNonNegativeInt(argv[++i])
-    else if (a === '--spk-cache-update-period') args.spkCacheUpdatePeriod = parsePositiveInt(argv[++i])
+    else if (a === '--chunk-left-context-ms')
+      args.chunkLeftContextMs = parseNonNegativeInt(argv[++i])
+    else if (a === '--chunk-right-context-ms')
+      args.chunkRightContextMs = parseNonNegativeInt(argv[++i])
+    else if (a === '--spk-cache-update-period')
+      args.spkCacheUpdatePeriod = parsePositiveInt(argv[++i])
   }
   return args
 }
 
-function buildDiarConfig (args) {
+function buildDiarConfig(args) {
   const config = {
     streaming: true,
     streamingChunkMs: args.chunkMs ?? 2000,
@@ -170,26 +171,34 @@ function buildDiarConfig (args) {
   if (args.spkCacheLen !== null) config.streamingSpkCacheLen = args.spkCacheLen
   if (args.fifoLen !== null) config.streamingFifoLen = args.fifoLen
   if (args.chunkLeftContextMs !== null) config.streamingChunkLeftContextMs = args.chunkLeftContextMs
-  if (args.chunkRightContextMs !== null) config.streamingChunkRightContextMs = args.chunkRightContextMs
-  if (args.spkCacheUpdatePeriod !== null) config.streamingSpkCacheUpdatePeriod = args.spkCacheUpdatePeriod
+  if (args.chunkRightContextMs !== null)
+    config.streamingChunkRightContextMs = args.chunkRightContextMs
+  if (args.spkCacheUpdatePeriod !== null)
+    config.streamingSpkCacheUpdatePeriod = args.spkCacheUpdatePeriod
   return config
 }
 
-function describeAoscConfig (config) {
+function describeAoscConfig(config) {
   const parts = []
-  if ('streamingSpkCacheEnable' in config) parts.push(`spkCacheEnable=${config.streamingSpkCacheEnable}`)
+  if ('streamingSpkCacheEnable' in config)
+    parts.push(`spkCacheEnable=${config.streamingSpkCacheEnable}`)
   if ('streamingSpkCacheLen' in config) parts.push(`spkCacheLen=${config.streamingSpkCacheLen}`)
   if ('streamingFifoLen' in config) parts.push(`fifoLen=${config.streamingFifoLen}`)
-  if ('streamingChunkLeftContextMs' in config) parts.push(`chunkLeftContextMs=${config.streamingChunkLeftContextMs}`)
-  if ('streamingChunkRightContextMs' in config) parts.push(`chunkRightContextMs=${config.streamingChunkRightContextMs}`)
-  if ('streamingSpkCacheUpdatePeriod' in config) parts.push(`spkCacheUpdatePeriod=${config.streamingSpkCacheUpdatePeriod}`)
+  if ('streamingChunkLeftContextMs' in config)
+    parts.push(`chunkLeftContextMs=${config.streamingChunkLeftContextMs}`)
+  if ('streamingChunkRightContextMs' in config)
+    parts.push(`chunkRightContextMs=${config.streamingChunkRightContextMs}`)
+  if ('streamingSpkCacheUpdatePeriod' in config)
+    parts.push(`spkCacheUpdatePeriod=${config.streamingSpkCacheUpdatePeriod}`)
   return parts.length === 0 ? '(all AOSC defaults)' : parts.join(' ')
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.asrModel || !args.diarModel) {
-    console.error('Usage: bare examples/live-mic-diarized-aosc.js --asr-model <gguf> --diar-model <v2.1-gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] [--fifo-len <rows>] [--chunk-left-context-ms <ms>] [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]')
+    console.error(
+      'Usage: bare examples/live-mic-diarized-aosc.js --asr-model <gguf> --diar-model <v2.1-gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] [--fifo-len <rows>] [--chunk-left-context-ms <ms>] [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]'
+    )
     process.exit(1)
   }
 
@@ -198,8 +207,14 @@ async function main () {
 
   const asrPath = path.resolve(args.asrModel)
   const diarPath = path.resolve(args.diarModel)
-  if (!validatePaths({ model: asrPath })) { addonLogging.releaseLogger(); process.exit(1) }
-  if (!validatePaths({ model: diarPath })) { addonLogging.releaseLogger(); process.exit(1) }
+  if (!validatePaths({ model: asrPath })) {
+    addonLogging.releaseLogger()
+    process.exit(1)
+  }
+  if (!validatePaths({ model: diarPath })) {
+    addonLogging.releaseLogger()
+    process.exit(1)
+  }
 
   console.log(`Loading ASR: ${asrPath}`)
   console.log(`Loading DIAR: ${diarPath}`)
@@ -230,12 +245,13 @@ async function main () {
   const [captureBin, ...captureArgs] = captureCmd.split(' ')
   let child
   try {
-    child = subprocess.spawn(captureBin, captureArgs,
-      { stdio: ['ignore', 'pipe', 'pipe'] })
+    child = subprocess.spawn(captureBin, captureArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
   } catch (err) {
     if (err && err.code === 'ENOENT') {
       console.error(`\n'${captureBin}' not found on PATH.`)
-      console.error('Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).')
+      console.error(
+        'Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).'
+      )
     } else {
       console.error(`\nFailed to spawn capture command: ${err.message}`)
     }
@@ -258,14 +274,14 @@ async function main () {
   let lineSpeaker = null
   let lastSpeaker = -1
 
-  function flushLine () {
+  function flushLine() {
     if (lineOpen) {
       process.stdout.write('\n')
       lineOpen = false
       lineSpeaker = null
     }
   }
-  function emitTranscript (speaker, text, firstStartsWord) {
+  function emitTranscript(speaker, text, firstStartsWord) {
     if (isSilenceText(text)) {
       if (args.accumulate) flushLine()
       return
@@ -301,7 +317,7 @@ async function main () {
   const diarRunPromise = (async () => {
     const response = await diar.runStreaming(diarStream, streamingConfig)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         for (let i = items.length - 1; i >= 0; i--) {
           const s = items[i]
@@ -319,7 +335,7 @@ async function main () {
   const asrRunPromise = (async () => {
     const response = await asr.runStreaming(asrStream, streamingConfig)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         const { text, firstStartsWord } = buildSegmentText(items)
         emitTranscript(lastSpeaker, text.trim(), firstStartsWord)
@@ -327,17 +343,33 @@ async function main () {
       .await()
   })()
 
-  async function shutdown () {
+  async function shutdown() {
     if (stopping) return
     stopping = true
     console.log('\nStopping...')
-    try { child.kill('SIGTERM') } catch (e) { /* ignore */ }
+    try {
+      child.kill('SIGTERM')
+    } catch (e) {
+      /* ignore */
+    }
     asrStream.end()
     diarStream.end()
-    try { await Promise.all([asrRunPromise, diarRunPromise]) } catch (e) { /* swallow */ }
+    try {
+      await Promise.all([asrRunPromise, diarRunPromise])
+    } catch (e) {
+      /* swallow */
+    }
     flushLine()
-    try { await asr.unload() } catch (e) { /* ignore */ }
-    try { await diar.unload() } catch (e) { /* ignore */ }
+    try {
+      await asr.unload()
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      await diar.unload()
+    } catch (e) {
+      /* ignore */
+    }
     addonLogging.releaseLogger()
     process.exit(0)
   }
@@ -346,7 +378,9 @@ async function main () {
   process.once('SIGTERM', shutdown)
   child.on('exit', (code, signal) => {
     if (!firstAudioSeen && !stopping) {
-      console.error(`\nCapture command exited before producing audio (code=${code}, signal=${signal}).`)
+      console.error(
+        `\nCapture command exited before producing audio (code=${code}, signal=${signal}).`
+      )
       const tail = stderrBuf.trim()
       if (tail) {
         console.error('--- sox stderr ---')
@@ -354,15 +388,21 @@ async function main () {
         console.error('------------------')
       }
       console.error('Hints:')
-      console.error('  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"')
-      console.error('  - Verify a default recording device exists (Settings -> System -> Sound -> Input).')
-      console.error('  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head')
+      console.error(
+        '  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"'
+      )
+      console.error(
+        '  - Verify a default recording device exists (Settings -> System -> Sound -> Input).'
+      )
+      console.error(
+        '  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head'
+      )
     }
     shutdown()
   })
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)
