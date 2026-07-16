@@ -66,6 +66,10 @@ function modelId(size, quant) {
   return `qwen3.5-${size.toLowerCase()}-${quant}`
 }
 
+function modelFileName(size, quant) {
+  return `Qwen3.5-${size}-${quant}.gguf`
+}
+
 // Stable per-shard key matching the renderer's "[<modelId>] ... [kv=<cache>]"
 // row label, so coverage can be reconciled against the matrix.
 function mobileShardKey(cell) {
@@ -115,6 +119,7 @@ module.exports = {
   cacheLabel,
   shardFileName,
   modelId,
+  modelFileName,
   mobileShardKey,
   runFunctionName,
   shardContents,
