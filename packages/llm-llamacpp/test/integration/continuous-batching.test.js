@@ -857,6 +857,47 @@ test(
   }
 )
 
+// model.cancel() (no id) is snapshot-based: the binding captures the live job
+// ids synchronously at the moment of the call and the deferred native
+// cancellation targets only that snapshot. A run() admitted right after the
+// cancel call — while that cancellation is still in flight — must survive and
+// produce its own full output.
+test(
+  'continuous batching: cancel() only stops jobs live at call time; a later run() survives',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const doomed = CASES.find((item) => item.id === 'story-otter')
+    const doomedResponse = await model.run(buildPrompt(doomed), {
+      generationParams: { predict: 512 }
+    })
+
+    // Not awaited yet: the native call runs synchronously up to the snapshot,
+    // so the admission below can only land after it.
+    const cancelPromise = model.cancel()
+
+    const survivor = CASES.find((item) => item.id === 'capital-france')
+    const survivorResponse = await model.run(buildPrompt(survivor), runOptionsForCase(survivor))
+
+    // The doomed job settles either as a cancel error or as a truncated
+    // normal completion, depending on where the cancel lands.
+    const doomedText = await collectText(doomedResponse).catch((err) => {
+      if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
+      return ''
+    })
+    await cancelPromise
+
+    const survivorText = await collectText(survivorResponse)
+    t.comment(`survivor output: ${survivorText.trim()}`)
+    t.comment(`doomed output (cut short by cancel): ${doomedText.trim()}`)
+    t.ok(
+      containsExpectedWord(survivorText, survivor.expected),
+      'a run() started after cancel() was requested must complete with its own output'
+    )
+  }
+)
+
 // Per-job stats reflect each job's OWN scale. A long story job (predict 96)
 // and short one-word jobs run together: the short jobs must report their own
 // tiny token counts. Under the old whole-model aggregate every jobEnded would
