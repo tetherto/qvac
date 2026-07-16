@@ -101,10 +101,10 @@ export interface LlamaConfig {
   /**
    * Number of concurrent sequence slots for continuous-batching (`--parallel` /
    * `n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch
-   * scheduler so the prompts of a single batch-array `run()` call are decoded
-   * together across slots; separate top-level `run()` calls are not batched
-   * (only one response is active at a time). Default `1` (sequential, batching
-   * disabled).
+   * scheduler: the prompts of a single batch-array `run()` call and separate
+   * concurrent top-level `run()` calls are both decoded together across slots,
+   * so multiple responses can be active at once. Default `1` (sequential, a
+   * single response active at a time, batching disabled).
    */
   parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined
