@@ -10,13 +10,18 @@ description: >-
 
 inputs:
   pools:
-    description: 'JSON array of candidate device pools [{name, arn}].'
+    description: >-
+      JSON array of candidate device pools [{name, arn, r?}]. The optional "r"
+      flag (default true) controls random eligibility: entries with "r": false
+      are excluded from random selection and reachable only by explicit
+      pool-name (e.g. manual-only devices), so PR/random runs never land on them.
     required: true
   pool-name:
     description: >-
       Explicit pool name to select. When set, that pool is used as-is (no
-      availability check). When empty, a random candidate is chosen with the
-      availability hint as a soft preference.
+      availability check) and may be any candidate, including "r": false
+      entries. When empty, a random candidate is chosen among the
+      random-eligible pools (r != false), with availability as a soft preference.
     required: false
     default: ""
 
@@ -145,16 +150,30 @@ runs:
           fi
         }
 
-        COUNT=$(echo "$POOLS" | jq 'length')
-        mapfile -t NAMES < <(echo "$POOLS" | jq -r '.[].name')
-        mapfile -t ARNS < <(echo "$POOLS" | jq -r '.[].arn')
+        # Random selection considers only random-eligible pools: entries with
+        # "r": false (e.g. manual-only devices) are excluded here and reachable
+        # solely via an explicit pool-name above.
+        RANDOM_POOLS=$(echo "$POOLS" | jq -c '[.[] | select(.r != false)]')
+        if [ "$(echo "$RANDOM_POOLS" | jq 'length')" -eq 0 ]; then
+          echo "::error::no random-eligible device pool (every candidate has \"r\": false); pass a pool-name to select one explicitly"
+          exit 1
+        fi
 
-        echo "Probing $COUNT candidate device pool(s) (availability = soft preference)..."
+        COUNT=$(echo "$RANDOM_POOLS" | jq 'length')
+        mapfile -t NAMES < <(echo "$RANDOM_POOLS" | jq -r '.[].name')
+        mapfile -t ARNS < <(echo "$RANDOM_POOLS" | jq -r '.[].arn')
+
+        # Manual-only pools (r=false) are excluded from random selection; they
+        # are probed and listed after the random candidates for transparency.
+        mapfile -t EXCL_NAMES < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .name')
+        mapfile -t EXCL_ARNS < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .arn')
+
+        echo "Probing $COUNT random-eligible device pool(s) (availability = soft preference)..."
 
         # Probe every candidate first so the full availability picture for all
-        # pools is visible in the log, then choose. Candidates are visited in a
-        # random order so load spreads across pools/devices over time, and the
-        # first one visited is the best-effort fallback.
+        # random-eligible pools is visible in the log, then choose. Candidates
+        # are visited in a random order so load spreads across pools/devices
+        # over time, and the first one visited is the best-effort fallback.
         HIGH_IDX=""
         AVAIL_IDX=""
         FALLBACK_IDX=""
@@ -186,6 +205,26 @@ runs:
             AVAIL_IDX="$i"
           fi
         done
+
+        # List manual-only pools (r=false) with their availability, marked as
+        # skipped — they exist and are selectable only via an explicit pool-name.
+        # The per-device breakdown from get_availability is suppressed here to
+        # keep each excluded pool on a single, compact line.
+        if [ "${#EXCL_NAMES[@]}" -gt 0 ]; then
+          echo ""
+          echo "Excluded from random (${#EXCL_NAMES[@]} manual-only pool(s), r=false; selectable by name):"
+          for j in "${!EXCL_NAMES[@]}"; do
+            E_ARNS=$(resolve_device_arns "${EXCL_ARNS[$j]}")
+            if [ "$(echo "$E_ARNS" | jq 'length')" -eq 0 ]; then
+              echo "  - '${EXCL_NAMES[$j]}': UNKNOWN (skipped)"
+            else
+              E_AVAIL=$(get_availability "$E_ARNS" 2>/dev/null)
+              echo "  - '${EXCL_NAMES[$j]}': $E_AVAIL (skipped)"
+            fi
+          done
+        fi
+
+        echo ""
 
         # Prefer HIGHLY_AVAILABLE, then AVAILABLE. Availability is only a hint for
         # public devices, so if none report ready proceed with a best-effort pick
