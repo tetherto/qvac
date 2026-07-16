@@ -95,8 +95,7 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    },
-    "./binding.js": "./binding.js"
+    }
   },
   "types": "index.d.ts"
 }
