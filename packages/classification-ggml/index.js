@@ -61,6 +61,7 @@ class ImageClassifier {
     getState() {
         return { ...this.state };
     }
+    /** Loads the model and native resources. Idempotent. */
     async load() {
         return this.runExclusive(async () => {
             if (this.state.configLoaded)
@@ -200,6 +201,7 @@ class ImageClassifier {
             this.state.configLoaded = false;
         });
     }
+    /** Releases native resources and marks this instance as destroyed. */
     async destroy() {
         await this.unload();
         this.state.destroyed = true;

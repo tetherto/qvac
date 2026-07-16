@@ -71,6 +71,7 @@ export declare class ImageClassifier {
     private state;
     constructor(opts?: ImageClassifierOptions);
     getState(): ImageClassifierState;
+    /** Loads the model and native resources. Idempotent. */
     load(): Promise<void>;
     private loadInternal;
     private createAddon;
@@ -89,6 +90,7 @@ export declare class ImageClassifier {
     private addonOutputCallback;
     /** Idempotent. Cancels any in-flight job before destroying the handle. */
     unload(): Promise<void>;
+    /** Releases native resources and marks this instance as destroyed. */
     destroy(): Promise<void>;
 }
 export default ImageClassifier;

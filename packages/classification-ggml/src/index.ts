@@ -132,6 +132,7 @@ export class ImageClassifier {
     return { ...this.state };
   }
 
+  /** Loads the model and native resources. Idempotent. */
   async load(): Promise<void> {
     return this.runExclusive(async () => {
       if (this.state.configLoaded) return;
@@ -300,6 +301,7 @@ export class ImageClassifier {
     });
   }
 
+  /** Releases native resources and marks this instance as destroyed. */
   async destroy(): Promise<void> {
     await this.unload();
     this.state.destroyed = true;
