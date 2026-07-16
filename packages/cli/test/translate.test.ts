@@ -48,7 +48,7 @@ describe('openaiMessagesToHistory', () => {
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi there' }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.deepEqual(history, [
       { role: 'user', content: 'hello' },
       { role: 'assistant', content: 'hi there' }
@@ -57,17 +57,17 @@ describe('openaiMessagesToHistory', () => {
 
   it('handles null content gracefully', () => {
     const messages = [{ role: 'assistant', content: null }]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.content, '')
   })
 
   it('handles undefined content gracefully', () => {
     const messages = [{ role: 'assistant', content: undefined }]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.content, '')
   })
 
-  it('synthesizes tool_call content for assistant messages', () => {
+  it('synthesizes hermes JSON tool_call content for assistant messages', () => {
     const messages = [
       {
         role: 'assistant',
@@ -81,11 +81,61 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.role, 'assistant')
-    assert.ok(history[0]!.content.includes('<tool_call>'))
-    assert.ok(history[0]!.content.includes('get_weather'))
-    assert.ok(history[0]!.content.includes('Tokyo'))
+    assert.equal(
+      history[0]!.content,
+      '<tool_call>\n{"name":"get_weather","arguments":{"location":"Tokyo"}}\n</tool_call>'
+    )
+  })
+
+  // Replaying a Qwen3.5 tool call as Hermes JSON makes the model imitate that
+  // foreign shape and emit a malformed hybrid frame, which then leaks raw markup
+  // into `content`. Render it in the model's native Pythonic-XML instead.
+  it('synthesizes native qwen35 XML tool_call content for assistant messages', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'bash', arguments: '{"command":"ls -la"}' }
+          }
+        ]
+      }
+    ]
+    const history = openaiMessagesToHistory(messages, 'qwen35')
+    assert.equal(
+      history[0]!.content,
+      '<tool_call>\n<function=bash>\n<parameter=command>ls -la</parameter>\n</function>\n</tool_call>'
+    )
+    // No JSON envelope leaks in — the whole point of the native rendering.
+    assert.ok(!history[0]!.content.includes('"arguments"'))
+  })
+
+  it('renders qwen35 non-string params as text/JSON per the parser contract', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'configure',
+              arguments: '{"limit":5,"enabled":true,"tags":["a","b"]}'
+            }
+          }
+        ]
+      }
+    ]
+    const content = openaiMessagesToHistory(messages, 'qwen35')[0]!.content
+    assert.ok(content.includes('<parameter=limit>5</parameter>'))
+    assert.ok(content.includes('<parameter=enabled>true</parameter>'))
+    assert.ok(content.includes('<parameter=tags>["a","b"]</parameter>'))
   })
 
   it('handles multiple tool calls in single message', () => {
@@ -99,7 +149,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     const content = history[0]!.content
     assert.ok(content.includes('fn_a'))
     assert.ok(content.includes('fn_b'))
@@ -119,13 +169,13 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.ok(history[0]!.content.includes('broken'))
   })
 
   it('preserves tool_call_id messages as-is', () => {
     const messages = [{ role: 'tool', content: '{"result": 42}', tool_call_id: 'call_1' }]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.deepEqual(history[0], { role: 'tool', content: '{"result": 42}' })
   })
 
@@ -139,7 +189,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.deepEqual(history[0], { role: 'user', content: 'hello world' })
   })
 
@@ -156,7 +206,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.role, 'user')
     assert.equal(history[0]!.content, 'what is this?')
     assert.equal(history[0]!.attachments!.length, 1)
@@ -167,7 +217,7 @@ describe('openaiMessagesToHistory', () => {
   it('accepts a string (data URL) image_url', () => {
     const dataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg=='
     const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: dataUrl }] }]
-    const history = openaiMessagesToHistory(messages)
+    const history = openaiMessagesToHistory(messages, 'hermes')
     assert.equal(history[0]!.attachments!.length, 1)
     assert.equal(history[0]!.attachments![0]!.ext, 'jpg')
   })
@@ -178,7 +228,7 @@ describe('openaiMessagesToHistory', () => {
     const messages = [
       { role: 'user', content: [{ type: 'image_url', image_url: 'https://example.com/x.png' }] }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
   })
 
   it('throws on an unsupported image format (e.g. webp)', () => {
@@ -192,7 +242,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
   })
 
   it('throws on a payload that is not valid base64 image data', () => {
@@ -204,7 +254,7 @@ describe('openaiMessagesToHistory', () => {
         ]
       }
     ]
-    assert.throws(() => openaiMessagesToHistory(messages), UnsupportedImageContentError)
+    assert.throws(() => openaiMessagesToHistory(messages, 'hermes'), UnsupportedImageContentError)
   })
 
   it('writeChatImages materializes attachment bytes to flat temp files', async () => {
@@ -213,7 +263,7 @@ describe('openaiMessagesToHistory', () => {
     const messages = [
       { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] }
     ]
-    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages))
+    const { history, tmpPaths } = await writeChatImages(openaiMessagesToHistory(messages, 'hermes'))
     assert.equal(tmpPaths.length, 1)
     assert.ok(tmpPaths[0]!.endsWith('.png'))
     assert.ok(existsSync(tmpPaths[0]!))

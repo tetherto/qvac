@@ -1,0 +1,22 @@
+'use strict'
+
+const UINT32_BYTES = 4
+const FLOAT32_BYTES = 4
+const TIMESTEPS_FIELD_OFFSET = 0
+const CHANNELS_FIELD_OFFSET = UINT32_BYTES
+const STREAM_HEADER_BYTES = 2 * UINT32_BYTES
+
+const ADDON_EVENT = Object.freeze({
+  OUTPUT: 'Output',
+  JOB_ENDED: 'JobEnded',
+  ERROR: 'Error'
+})
+
+module.exports = {
+  UINT32_BYTES,
+  FLOAT32_BYTES,
+  TIMESTEPS_FIELD_OFFSET,
+  CHANNELS_FIELD_OFFSET,
+  STREAM_HEADER_BYTES,
+  ADDON_EVENT
+}

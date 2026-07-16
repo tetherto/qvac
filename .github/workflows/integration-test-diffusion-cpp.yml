@@ -22,7 +22,6 @@ on:
         type: string
         required: false
         default: '0'
-
   workflow_dispatch:
     inputs:
       ref:
@@ -44,9 +43,52 @@ on:
         type: string
         required: false
         default: '0'
+      pin_model_manifest:
+        description: "Download every model fresh and upload a manifest with SHA-256/byte pins"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
+  pin-model-manifest:
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    timeout-minutes: 360
+    runs-on: ${{ 'qvac-ubuntu2404-x64-gpu' }}
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Generate pins from fresh downloads
+        working-directory: packages/diffusion-cpp
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: node scripts/generate-model-manifest.mjs --force
+
+      - name: Upload pinned model manifest
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: diffusion-cpp-model-manifest
+          path: packages/diffusion-cpp/test/integration/models.manifest.json
+          if-no-files-found: error
+
   run-integration-tests:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.pin_model_manifest }}
     timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
@@ -132,17 +174,40 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      # PNGs are test-generated outputs uploaded as artifacts further
-      # down; exclude them so they do not accumulate in the cache.
-      - name: Cache integration test models
-        id: model-cache
+      # Manifest groups use exact declared file paths, so generated images and
+      # platform-specific test outputs are never archived.
+      - name: Cache base integration test models
+        id: model-cache-base
         if: runner.environment != 'github-hosted'
         uses: ./.github/actions/cache-models
         with:
           package: diffusion-cpp
-          paths: |
-            packages/diffusion-cpp/test/model
-            !packages/diffusion-cpp/test/model/*.png
+          group: base
+          cache-key-suffix: base
+          # v2: evict any archive that still contains the removed, unauditable
+          # gpustack SD2.1 Q4_0 object (a restore-keys prefix hit could otherwise
+          # carry it forward on the transition run).
+          cache-version: v2
+
+      - name: Cache Ideogram integration test models
+        id: model-cache-ideogram
+        if: runner.environment != 'github-hosted' && matrix.no_gpu != 'true'
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ideogram
+          cache-key-suffix: ideogram
+          cache-version: v2
+
+      - name: Cache LTX integration test models
+        id: model-cache-ltx
+        if: runner.environment != 'github-hosted' && matrix.ltx == 'true'
+        uses: ./.github/actions/cache-models
+        with:
+          package: diffusion-cpp
+          group: ltx
+          cache-key-suffix: ltx
+          cache-version: v2
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -154,7 +219,7 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -181,7 +246,7 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -233,6 +298,8 @@ jobs:
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         shell: bash
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ env.WORKDIR }}/.npmrc
         run: |
           PACKAGE="${{ inputs.prebuild_package }}"
           echo "Downloading $PACKAGE from npm..."
@@ -259,6 +326,8 @@ jobs:
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         shell: powershell
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/${{ env.WORKDIR }}/.npmrc
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
 

@@ -33,6 +33,7 @@
     "coldRtf": 0.32,
     "modelLoadMs": 1800,
     "peakRssBytes": 1400000000,
+    "memory": { "avgRssMb": 1180.5, "peakRssMb": 1335.3, "rssAfterLoadMb": 1290.0, "rssAfterUnloadMb": 300.0, "reclaimedMb": 990.0 },
     "modelSizeBytes": 320000000,
     "noisy": false
   }

@@ -1963,7 +1963,7 @@
       "title": "SupportedAudioFormat",
       "type": "string",
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
-      "x-enum-varnames": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"]
+      "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
     "constants.ToolsMode": {
       "title": "ToolsMode",
@@ -3141,6 +3141,11 @@
                 },
                 "path": {
                   "type": "string"
+                },
+                "toolDialect": {
+                  "type": "string",
+                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+                  "title": "LocalLoadedModelInfoToolDialect"
                 }
               },
               "required": ["modelId", "isDelegated", "modelType", "handlers", "loadedAt"],

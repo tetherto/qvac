@@ -56,5 +56,10 @@ export const constantsRegistry = {
     VLA: PLUGIN_VLA,
     CLASSIFICATION: PLUGIN_CLASSIFICATION
   }),
-  SupportedAudioFormat: z.enum(SUPPORTED_AUDIO_FORMATS)
+  // Derived from SUPPORTED_AUDIO_FORMATS itself (e.g. '.mp3' -> 'MP3') rather
+  // than a hand-written record, so the varnames can't drift from the one
+  // source of truth every other consumer of SUPPORTED_AUDIO_FORMATS shares.
+  SupportedAudioFormat: z.enum(
+    Object.fromEntries(SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext]))
+  )
 } as const

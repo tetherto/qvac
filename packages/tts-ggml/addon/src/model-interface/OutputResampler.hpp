@@ -26,38 +26,51 @@ struct OutputResampler {
     if (sr_in == sr_out || input.empty()) {
       return input;
     }
-    constexpr int kLanczosA = 5;
-    constexpr double kPi = 3.14159265358979323846;
-
     const double ratio = static_cast<double>(sr_out) / sr_in;
     const auto out_len = static_cast<size_t>(std::round(input.size() * ratio));
-    std::vector<float> output(out_len, 0.0f);
     const double scale = std::min(1.0, ratio);
 
+    std::vector<float> output(out_len, 0.0f);
     for (size_t i = 0; i < out_len; i++) {
-      const double center = i / ratio;
-      const int left = static_cast<int>(
-          std::max(0.0, std::floor(center - kLanczosA / scale)));
-      const int right = static_cast<int>(std::min(
-          static_cast<double>(input.size()) - 1,
-          std::floor(center + kLanczosA / scale)));
-
-      float sum = 0.0f;
-      float weight_sum = 0.0f;
-      for (int j = left; j <= right; j++) {
-        const double x = (center - j) * scale;
-        double weight = 1.0;
-        if (x != 0.0) {
-          const double pi_x = kPi * x;
-          weight = std::sin(pi_x) * std::sin(pi_x / kLanczosA) /
-                   (pi_x * pi_x / kLanczosA);
-        }
-        sum += input[j] * static_cast<float>(weight);
-        weight_sum += static_cast<float>(weight);
-      }
-      output[i] = (weight_sum > 0.0f) ? sum / weight_sum : 0.0f;
+      output[i] = resampleOne(input, i / ratio, scale);
     }
     return output;
+  }
+
+private:
+  static constexpr int kLanczosA = 5;
+  static constexpr double kPi = 3.14159265358979323846;
+
+  // Normalized-sinc Lanczos (a=5) tap weight for a source offset `x` (already
+  // scaled for the downsampling case). x == 0 is the window peak.
+  static double lanczosWeight(double x) {
+    if (x == 0.0) {
+      return 1.0;
+    }
+    const double pi_x = kPi * x;
+    return std::sin(pi_x) * std::sin(pi_x / kLanczosA) /
+           (pi_x * pi_x / kLanczosA);
+  }
+
+  // One output sample: the weighted sum of the input taps whose Lanczos window
+  // covers `center` (in input-sample units), normalized by the weight sum.
+  static float resampleOne(const std::vector<float>& input, double center,
+                           double scale) {
+    const int left = static_cast<int>(
+        std::max(0.0, std::floor(center - kLanczosA / scale)));
+    const int right = static_cast<int>(
+        std::min(static_cast<double>(input.size()) - 1,
+                 std::floor(center + kLanczosA / scale)));
+
+    float sum = 0.0f;
+    float weight_sum = 0.0f;
+    for (int j = left; j <= right; j++) {
+      const auto weight =
+          static_cast<float>(lanczosWeight((center - j) * scale));
+      sum += input[j] * weight;
+      weight_sum += weight;
+    }
+    return (weight_sum > 0.0f) ? sum / weight_sum : 0.0f;
   }
 };
 
