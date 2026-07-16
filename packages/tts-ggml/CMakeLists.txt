@@ -318,6 +318,8 @@ if(BUILD_TESTING)
       addon/tests/test_supertonic_config.cpp
       addon/tests/test_time_stretch.cpp
       addon/tests/test_streaming_enhancer.cpp
+      addon/tests/test_output_resampler.cpp
+      addon/tests/test_pcm_conversion.cpp
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp

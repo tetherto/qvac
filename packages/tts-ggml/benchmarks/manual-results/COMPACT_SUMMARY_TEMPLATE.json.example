@@ -16,6 +16,7 @@
     "wallMs": { "mean": 2100 },
     "coldRtf": 1.1,
     "modelLoadMs": 3400,
-    "tokensPerSecond": { "mean": 0 }
+    "tokensPerSecond": { "mean": 0 },
+    "memory": { "avgRssMb": 640.0, "peakRssMb": 712.0, "reclaimedMb": 355.0 }
   }
 }
