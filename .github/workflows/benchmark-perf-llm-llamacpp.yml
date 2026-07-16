@@ -270,19 +270,23 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
-  # Mobile is sharded one group per (model x KV-cache type) = 70 groups so each
-  # Device Farm session finishes inside the fixed 20-minute iOS per-test ceiling.
-  # All of them in one reused-workflow call do NOT fit: Android serializes the
-  # runs against its device pool and the macOS runner fills its disk collecting
-  # logs. So we split the groups into one batch per KV-cache type (10 each — the
-  # proven in-budget load) and run them sequentially (max-parallel: 1) to avoid
-  # Device Farm pool contention. Each batch raises the job timeout to 180 for
-  # headroom (proven 10-shard wall ~119 min) and gets a distinct artifact_suffix
-  # so its perf-report doesn't collide; summarize aggregates all of them. The
-  # TurboQuant/PolarQuant batches (tbq*/pq*) are Vulkan + CPU only, so they show
-  # Crashed on iOS (Metal) and Samsung GPU. These wrappers are deliberately absent from
-  # the addon's test-groups.json, so this override is the only path that runs
-  # them — normal mobile integration runs never trigger the benchmark.
+  # Mobile is sharded one group per (model x KV-cache type) = 70 groups, plus a
+  # small additive batch-sweep group (size x batch = 4), so each Device Farm
+  # session finishes inside the fixed 20-minute iOS per-test ceiling. All of them
+  # in one reused-workflow call do NOT fit: Android serializes the runs against
+  # its device pool and the macOS runner fills its disk collecting logs. So we
+  # split the groups into one batch per KV-cache type (10 each — the proven
+  # in-budget load) plus one 'batchsweep' batch (4), and run them sequentially
+  # (max-parallel: 1) to avoid Device Farm pool contention. Each batch raises the
+  # job timeout to 180 for headroom (proven 10-shard wall ~119 min) and gets a
+  # distinct artifact_suffix so its perf-report doesn't collide; summarize
+  # aggregates all of them. The TurboQuant/PolarQuant batches (tbq*/pq*) are
+  # Vulkan + CPU only, so they show Crashed on iOS (Metal) and Samsung GPU. The
+  # batchsweep group holds batch === ubatch at a fixed Q4_0/f16 baseline against a
+  # long prompt: batch is orthogonal to quant/KV, so it is swept once here rather
+  # than crossed with all 70 cross-product shards. These wrappers are deliberately
+  # absent from the addon's test-groups.json, so this override is the only path
+  # that runs them — normal mobile integration runs never trigger the benchmark.
   mobile-benchmark:
     needs:
       - context
@@ -314,6 +318,8 @@ jobs:
             groups: '[{"name":"BenchmarkPerf08bQ40Pq30","grep":"runBenchmarkPerf08bQ40Pq30Test"},{"name":"BenchmarkPerf08bQ41Pq30","grep":"runBenchmarkPerf08bQ41Pq30Test"},{"name":"BenchmarkPerf08bQ4KMPq30","grep":"runBenchmarkPerf08bQ4KMPq30Test"},{"name":"BenchmarkPerf08bQ6KPq30","grep":"runBenchmarkPerf08bQ6KPq30Test"},{"name":"BenchmarkPerf08bQ80Pq30","grep":"runBenchmarkPerf08bQ80Pq30Test"},{"name":"BenchmarkPerf2bQ40Pq30","grep":"runBenchmarkPerf2bQ40Pq30Test"},{"name":"BenchmarkPerf2bQ41Pq30","grep":"runBenchmarkPerf2bQ41Pq30Test"},{"name":"BenchmarkPerf2bQ4KMPq30","grep":"runBenchmarkPerf2bQ4KMPq30Test"},{"name":"BenchmarkPerf2bQ6KPq30","grep":"runBenchmarkPerf2bQ6KPq30Test"},{"name":"BenchmarkPerf2bQ80Pq30","grep":"runBenchmarkPerf2bQ80Pq30Test"}]'
           - cache: pq4_0
             groups: '[{"name":"BenchmarkPerf08bQ40Pq40","grep":"runBenchmarkPerf08bQ40Pq40Test"},{"name":"BenchmarkPerf08bQ41Pq40","grep":"runBenchmarkPerf08bQ41Pq40Test"},{"name":"BenchmarkPerf08bQ4KMPq40","grep":"runBenchmarkPerf08bQ4KMPq40Test"},{"name":"BenchmarkPerf08bQ6KPq40","grep":"runBenchmarkPerf08bQ6KPq40Test"},{"name":"BenchmarkPerf08bQ80Pq40","grep":"runBenchmarkPerf08bQ80Pq40Test"},{"name":"BenchmarkPerf2bQ40Pq40","grep":"runBenchmarkPerf2bQ40Pq40Test"},{"name":"BenchmarkPerf2bQ41Pq40","grep":"runBenchmarkPerf2bQ41Pq40Test"},{"name":"BenchmarkPerf2bQ4KMPq40","grep":"runBenchmarkPerf2bQ4KMPq40Test"},{"name":"BenchmarkPerf2bQ6KPq40","grep":"runBenchmarkPerf2bQ6KPq40Test"},{"name":"BenchmarkPerf2bQ80Pq40","grep":"runBenchmarkPerf2bQ80Pq40Test"}]'
+          - cache: batchsweep
+            groups: '[{"name":"BenchmarkPerf08bQ40F16Bs512","grep":"runBenchmarkPerf08bQ40F16Bs512Test"},{"name":"BenchmarkPerf08bQ40F16Bs1024","grep":"runBenchmarkPerf08bQ40F16Bs1024Test"},{"name":"BenchmarkPerf2bQ40F16Bs512","grep":"runBenchmarkPerf2bQ40F16Bs512Test"},{"name":"BenchmarkPerf2bQ40F16Bs1024","grep":"runBenchmarkPerf2bQ40F16Bs1024Test"}]'
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
     # the release environment + label-gate keep this to trusted in-repo refs.
