@@ -41,16 +41,17 @@ inputs:
     description: |
       When 'true' (default) and the package has a
       `test/integration/models.manifest.json`, download every declared model
-      into `packages/<package>/test/model` right after the cache restore, so
-      the multi-GB fetch happens as an ordinary step (no per-test brittle
-      timeout) and the post-job save persists a complete set. No-op on a full
-      cache hit. Set 'false' for callers that provision models another way.
+      except entries marked `warm: false` into
+      `packages/<package>/test/model` right after the cache restore, so the
+      multi-GB fetch happens as an ordinary step (no per-test brittle timeout)
+      and the post-job save persists the selected set. No-op on a full cache
+      hit. Set 'false' for callers that provision models another way.
     required: false
     default: 'true'
   hf-token:
     description: |
-      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN for
-      gated model repositories.
+      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN and
+      sent only to exact HTTPS huggingface.co requests for gated repositories.
     required: false
     default: ''
 
@@ -133,8 +134,9 @@ runs:
     # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
     # inside a single test's timeout and fail. On a full cache hit every file is
     # already present (and verified when integrity is pinned), so this is a fast
-    # no-op. The trusted-context cache post-step then saves the now
-    # complete dir so subsequent runs restore instead of re-downloading.
+    # no-op. Entries marked warm:false stay lazy. The trusted-context cache
+    # post-step then saves the selected set so subsequent runs restore it
+    # instead of re-downloading.
     - name: Warm models (download any missing from manifest)
       if: ${{ inputs.warm == 'true' }}
       shell: bash

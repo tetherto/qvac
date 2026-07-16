@@ -131,12 +131,12 @@ public:
     return cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 1000;
   }
   int                 getStreamingHistoryMs() const {
-    return cfg_.streamingHistoryMs > 0 ? cfg_.streamingHistoryMs : 30000;
+    return cfg_.streamingHistoryMs > 0
+               ? cfg_.streamingHistoryMs
+               : ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
   }
-  // <0 sentinel = "not set; let parakeet use its own defaults"
-  // (10000 / 2000). Returned verbatim so callers can treat the negative
-  // value as "skip the override" rather than baking a duplicate of
-  // parakeet's defaults into our wrapper.
+  // <0 = "not set; keep parakeet's own defaults". Returned verbatim so
+  // callers treat the negative value as "skip the override".
   int                 getStreamingLeftContextMs() const {
     return cfg_.streamingLeftContextMs;
   }
@@ -236,6 +236,14 @@ private:
   void throwIfCancelled() const;
   static bool isCancellationError(const std::exception& e);
 
+  // load() decomposition.
+  std::filesystem::path resolveGgufPath();
+  void detectModelType();
+  void captureBackend();
+  void warnOnGpuFallback() const;
+  void warnOnSampleRateMismatch() const;
+  void openStreamingSessionOrThrow();
+
   // ── GGUF buffer staging ────────────────────────────────────────────────
   // The addon framework streams the GGUF bytes via setWeightsForFile().
   // We accumulate them into `gguf_buffer_` keyed by the (single) GGUF
@@ -263,20 +271,9 @@ private:
   std::unique_ptr<parakeet::Engine> engine_;
   mutable std::mutex                     engine_mutex_;
 
-  // Streaming sessions (only one of the two is open at a time, depending on
-  // model_type). Lifetime: opened in load() when cfg_.streaming == true,
-  // finalize()d on endOfStream(), reset on unload(). Each process() call
-  // routes through feed_pcm_f32() instead of the offline *_samples paths.
-  //
-  // session_mutex_ guards the unique_ptrs against the data race between
-  // cancel() (framework-callable from any thread, concurrent with
-  // process()/unload()/reload()) and the lifecycle paths
-  // openStreamingSession() / closeStreamingSession() / endOfStream() /
-  // ~ParakeetModel that .reset() them. cancel() copies the raw pointer
-  // under the lock and invokes the engine's session-internal cancel()
-  // (itself thread-safe with concurrent feed/finalize) without holding
-  // the lock further; closeStreamingSession() moves ownership out under
-  // the lock and runs the destructor outside.
+  // Only one session is open at a time (model_type decides which).
+  // session_mutex_ guards the unique_ptrs against the race between cancel()
+  // (callable from any thread) and the open/close/unload lifecycle.
   mutable std::mutex                                 session_mutex_;
   std::unique_ptr<parakeet::StreamSession>           asr_session_;
   std::unique_ptr<parakeet::SortformerStreamSession> diar_session_;
@@ -293,26 +290,17 @@ private:
   // other than 16 000 throws on load.
   int                                  sample_rate_ = 16000;
 
-  // Active backend, captured once at load() from
-  // parakeet::Engine::backend_device() / ::backend_name(). The
-  // *_device_ field is the post-fallback truth: a load-time GPU init
-  // failure (e.g. Adreno-tier rejection, missing OpenCL ICD subgroup
-  // extensions, simulator without Metal) leaves it at 0 / "CPU" even
-  // when cfg_.useGPU was true. Surfaced through runtimeStats() as
-  // numeric fields (the addon-cpp RuntimeStats variant only carries
-  // double / int64); the GPU smoke tests gate on
-  // `backendDevice == 1` and friends.
-  //
-  // backend_id_ codes (kept stable; mirrored on the JS side):
-  //   0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+  // Active backend, captured once at load(). backend_device_ is the
+  // post-fallback truth (0 = CPU, 1 = GPU): a GPU init failure leaves it at
+  // CPU even when cfg_.useGPU was true. backend_id_ codes are mirrored on
+  // the JS side: 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL,
+  // 99 = other.
   int                                  backend_device_ = 0;
   int                                  backend_id_     = 0;
   int backend_gpu_unsupported_ = 0;
   std::string                          backend_name_   = "CPU";
-  // Human-readable GPU device name (e.g. "NVIDIA GeForce RTX 3090", "Apple
-  // M2 Pro") recovered from the ggml device registry at load(); empty on CPU
-  // or when ggml provides no description. Surfaced to JS via getBackendInfo()
-  // as the nvidia-smi-independent GPU-name fallback for the perf reporter.
+  // Human-readable GPU device name recovered from the ggml device registry
+  // at load(); empty on CPU. Surfaced to JS via getBackendInfo().
   std::string backend_description_;
 
   // ── Token / sentinel constants ─────────────────────────────────────────
@@ -349,33 +337,29 @@ private:
   std::string runAsrProcess(const Input& input);
 
   // ── Streaming session helpers ──────────────────────────────────────────
-  // Opens an ASR or Sortformer streaming session against the loaded engine
-  // for the LEGACY framework path: called from load() when cfg_.streaming
-  // is true, then runStreamingProcess() drives it via the framework's
-  // process() callback. The on_segment callback pushes a Transcript onto
-  // pending_streaming_segments_ for the next process() call to drain into
-  // output_ + on_segment_.
-  //
-  // For the duplex path consumed by `runStreaming(...)` see
-  // `createDuplexAsrSession()` / `createDuplexDiarizationSession()` (above)
-  // and `ParakeetStreamingProcessor` (../ParakeetStreamingProcessor.hpp);
-  // those own a separate session per addon instance and queue segments
-  // directly into addonCpp->outputQueue without going through process().
+  // LEGACY framework path (cfg_.streaming): opened in load(), driven by
+  // runStreamingProcess() via process(). The duplex `runStreaming(...)`
+  // path uses createDuplexAsrSession() / createDuplexDiarizationSession()
+  // and ParakeetStreamingProcessor instead.
   void openStreamingSession();
+  void openSortformerStreamingSession(parakeet::Engine& engine);
+  void openAsrStreamingSession(parakeet::Engine& engine);
   void closeStreamingSession();
+  void pushPendingSegment(Transcript segment);
+  std::vector<Transcript> takePendingStreamingSegments();
+  void emitStreamingSegments(const std::vector<Transcript>& segments);
+  int64_t feedStreamingChunk(const Input& input);
+  void reopenStreamingSession();
 
-  // process() drainage: streaming-session callbacks fire mid-feed (and
-  // potentially from a different thread on finalize()), so we stash the
-  // per-segment Transcripts here under streaming_mutex_ and flush them
-  // into output_ at the end of each process() call.
+  // Streaming-session callbacks fire mid-feed (and from a different thread
+  // on finalize()), so segments are stashed here under streaming_mutex_ and
+  // flushed into output_ at the end of each process() call.
   std::mutex                          streaming_mutex_;
   std::vector<Transcript>             pending_streaming_segments_;
 
-  // Runs cfg_.streaming feed for a chunk and returns the concatenated
-  // text of the segments fired during the call (joined with single
-  // spaces). Sentinel-string fallbacks ([No speech detected] etc.) are
-  // applied when the session emitted nothing for the chunk so the
-  // existing Transcript-shaped JS contract stays intact.
+  // Feeds a cfg_.streaming chunk and returns the concatenated text of the
+  // segments fired during the call. Sentinel strings are applied when the
+  // session emitted nothing so the Transcript-shaped JS contract holds.
   std::string runStreamingProcess(const Input& input);
 
   // ── Runtime stats (subset of legacy fields; we now derive most numbers

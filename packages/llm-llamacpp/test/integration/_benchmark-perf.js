@@ -16,7 +16,7 @@ const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const { recordPerformance, isMobile } = require('./_perf-helper.js')
-const { modelId } = require('./_benchmark-matrix.js')
+const { modelId, modelFileName } = require('./_benchmark-matrix.js')
 const os = require('bare-os')
 
 const DEVICES = ['gpu', 'cpu']
@@ -56,7 +56,7 @@ const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 function modelSpec(size, quant) {
   return {
     id: modelId(size, quant),
-    name: `Qwen3.5-${size}-${quant}.gguf`,
+    name: modelFileName(size, quant),
     url: `https://huggingface.co/unsloth/Qwen3.5-${size}-GGUF/resolve/main/Qwen3.5-${size}-${quant}.gguf`
   }
 }

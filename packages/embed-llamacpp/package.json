@@ -19,7 +19,8 @@
     "generate:benchmark-shards": "node scripts/generate-benchmark-shards.js",
     "verify:benchmark-shards": "node scripts/generate-benchmark-shards.js --check",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
+    "test:prestage": "node --test scripts/__tests__/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -60,6 +61,7 @@
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "bare-crypto": "^1.15.3",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.1",
     "cmake-vcpkg": "^1.1.0",

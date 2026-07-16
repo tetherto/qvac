@@ -58,6 +58,13 @@ const {
   ensureSupertonic3Model,
   supertonic3QuantFromVariant
 } = require('../utils/downloadModel')
+const {
+  readRssBytes,
+  createMemorySampler,
+  summarizeRunMemory,
+  bytesToMb,
+  RECLAIM_SETTLE_MS
+} = require('../utils/memory-usage')
 
 const VALID_ENGINES = [
   'chatterbox',
@@ -123,6 +130,7 @@ function buildCanonicalReport(settings, summary, backend) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const memory = summary.memory || {}
 
   return {
     schema_version: '1.0',
@@ -151,7 +159,10 @@ function buildCanonicalReport(settings, summary, backend) {
           model_load_ms:
             typeof summary.modelLoadMs === 'number' ? Math.round(summary.modelLoadMs) : null,
           tps: typeof tps.mean === 'number' ? tps.mean : null,
-          sample_count: typeof rtf.count === 'number' ? rtf.count : null
+          sample_count: typeof rtf.count === 'number' ? rtf.count : null,
+          avg_rss_mb: typeof memory.avgRssMb === 'number' ? memory.avgRssMb : null,
+          peak_rss_mb: typeof memory.peakRssMb === 'number' ? memory.peakRssMb : null,
+          reclaimed_mb: typeof memory.reclaimedMb === 'number' ? memory.reclaimedMb : null
         }
       }
     ]
@@ -289,15 +300,21 @@ function computeStats(values) {
   }
 }
 
-function getRssBytes() {
-  if (process && typeof process.memoryUsage === 'function') {
+async function reclaimAfterUnload(model) {
+  try {
+    if (model) await model.unload()
+  } catch (_) {
+    /* ignore */
+  }
+  if (typeof global.gc === 'function') {
     try {
-      return process.memoryUsage().rss || 0
+      global.gc()
     } catch (_) {
-      return 0
+      /* ignore */
     }
   }
-  return 0
+  await new Promise((resolve) => setTimeout(resolve, RECLAIM_SETTLE_MS))
+  return readRssBytes()
 }
 
 function collectFilesSizeBytes(files) {
@@ -500,7 +517,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
   console.log('='.repeat(70) + '\n')
 
   console.log(`Loading model for engine: ${settings.engine}...`)
-  const rssBeforeLoad = getRssBytes()
+  const rssBeforeLoad = readRssBytes()
   const loadStart = nowMs()
   let model
   let modelFiles = []
@@ -513,7 +530,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     return
   }
   const loadMs = nowMs() - loadStart
-  const rssAfterLoad = getRssBytes()
+  const rssAfterLoad = readRssBytes()
   const modelSizeBytes = collectFilesSizeBytes(modelFiles)
   console.log(
     `Model loaded in ${loadMs.toFixed(0)}ms (rss +${((rssAfterLoad - rssBeforeLoad) / 1024 / 1024).toFixed(1)}MB, model ${(modelSizeBytes / 1024 / 1024).toFixed(1)}MB on disk)\n`
@@ -543,7 +560,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
           ? rtfFromStats
           : rtfFromWall
 
-      const currentRss = getRssBytes()
+      const currentRss = readRssBytes()
       if (currentRss > peakRssBytes) peakRssBytes = currentRss
       if (stats && typeof stats.backendId === 'number') observedBackendId = stats.backendId
 
@@ -561,11 +578,14 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     )
     for (let i = 0; i < settings.numRuns; i++) {
       const text = corpus[i % corpus.length]
+      const sampler = createMemorySampler()
       const runStart = nowMs()
+      sampler.start()
       const result = await runSynthesis(settings.engine, model, text)
+      const runMemory = sampler.stop()
       const wallMs = nowMs() - runStart
 
-      const currentRss = getRssBytes()
+      const currentRss = runMemory.peakBytes || readRssBytes()
       if (currentRss > peakRssBytes) peakRssBytes = currentRss
 
       if (!result.passed) {
@@ -596,7 +616,10 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         audioDurationMs: stats.audioDurationMs || durationMs,
         totalSamples: stats.totalSamples || sampleCount,
         backendId: typeof stats.backendId === 'number' ? stats.backendId : null,
-        rssBytes: currentRss
+        rssBytes: currentRss,
+        avgRssBytes: runMemory.avgBytes,
+        peakRssBytes: runMemory.peakBytes,
+        rssSampleCount: runMemory.count
       }
       runs.push(run)
 
@@ -606,7 +629,7 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
           `wall=${wallMs.toFixed(0)}ms  ` +
           `audio=${(durationMs / 1000).toFixed(2)}s  ` +
           `tokens/s=${(run.tokensPerSecond || 0).toFixed(1)}  ` +
-          `rss=${(currentRss / 1024 / 1024).toFixed(0)}MB`
+          `rss avg=${bytesToMb(runMemory.avgBytes, 0)}MB peak=${bytesToMb(runMemory.peakBytes, 0)}MB`
       )
     }
 
@@ -622,6 +645,18 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
     const stddevOverMean = rtfStats.mean > 0 ? rtfStats.stddev / rtfStats.mean : 0
     const noisy = stddevOverMean > 0.15
     const activeBackend = observedBackendId !== null ? backendIdToName(observedBackendId) : ''
+
+    // --- Memory: unload here (not in finally) to measure the RSS the allocator
+    // returns to the OS, then fold the per-run sampler records into the summary.
+    // The cross-run aggregation (sample-weighted average, peak floor, fallback)
+    // lives in the pure summarizeRunMemory helper so it is unit-tested.
+    const rssAfterUnload = await reclaimAfterUnload(model)
+    model = null
+    const memorySummary = summarizeRunMemory(runs, {
+      rssBeforeLoadBytes: rssBeforeLoad,
+      rssAfterLoadBytes: rssAfterLoad,
+      rssAfterUnloadBytes: rssAfterUnload
+    })
 
     console.log('\n' + '='.repeat(70))
     console.log('RTF BENCHMARK RESULTS')
@@ -659,12 +694,15 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       console.log(`    P50:    ${tpsStats.p50.toFixed(1)}`)
     }
     console.log('')
-    console.log('  Memory / size:')
-    console.log(`    Peak RSS:    ${(peakRssBytes / 1024 / 1024).toFixed(0)}MB`)
+    console.log('  Memory (RSS, MB):')
+    console.log(`    Average:      ${memorySummary.avgRssMb.toFixed(2)}`)
+    console.log(`    Peak:         ${memorySummary.peakRssMb.toFixed(2)}`)
     console.log(
-      `    RSS @load:   ${(rssAfterLoad / 1024 / 1024).toFixed(0)}MB (pre-load ${(rssBeforeLoad / 1024 / 1024).toFixed(0)}MB)`
+      `    After load:   ${memorySummary.rssAfterLoadMb.toFixed(2)} (pre-load ${memorySummary.rssBeforeLoadMb.toFixed(2)})`
     )
-    console.log(`    Model size:  ${(modelSizeBytes / 1024 / 1024).toFixed(1)}MB`)
+    console.log(`    After unload: ${memorySummary.rssAfterUnloadMb.toFixed(2)}`)
+    console.log(`    Reclaimed:    ${memorySummary.reclaimedMb.toFixed(2)}`)
+    console.log(`    Model size:   ${(modelSizeBytes / 1024 / 1024).toFixed(1)}`)
     console.log('='.repeat(70) + '\n')
 
     const [platformName, archName] = platformArch.split('-')
@@ -720,6 +758,8 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         peakRssBytes,
         rssBeforeLoadBytes: rssBeforeLoad,
         rssAfterLoadBytes: rssAfterLoad,
+        rssAfterUnloadBytes: rssAfterUnload,
+        memory: memorySummary,
         modelSizeBytes,
         backendId: observedBackendId,
         activeBackend,
@@ -778,6 +818,14 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         `Mean RTF ${rtfStats.mean.toFixed(4)} should be <= ${upperBound}`
       )
     }
+
+    t.ok(memorySummary.peakRssMb > 0, 'Peak memory (RSS) should be positive')
+    t.ok(memorySummary.avgRssMb > 0, 'Average memory (RSS) should be positive')
+    t.ok(
+      memorySummary.peakRssMb >= memorySummary.avgRssMb,
+      'Peak memory should be >= average memory'
+    )
+    t.ok(memorySummary.reclaimedMb >= 0, 'Reclaimed memory should be non-negative')
 
     console.log('RTF benchmark completed successfully.\n')
   } finally {
