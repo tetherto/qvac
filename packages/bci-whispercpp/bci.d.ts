@@ -2,6 +2,8 @@ import { type BCIConfigurationParams } from "./configChecker";
 export declare const END_OF_INPUT = "end of job";
 export declare const MAX_BUFFERED_BYTES: number;
 export declare function nextSafeId(current: number): number;
+/** Concatenate a list of byte chunks into a single contiguous Uint8Array. */
+export declare function concatChunks(chunks: Uint8Array[]): Uint8Array;
 /** Neural signal job payload handed to the native runner. */
 export interface NeuralJob {
     type: "neural";

@@ -12,6 +12,7 @@ const error_1 = require("./lib/error");
 const wer_1 = require("./lib/wer");
 Object.defineProperty(exports, "computeWER", { enumerable: true, get: function () { return wer_1.computeWER; } });
 const stream_1 = require("./lib/stream");
+const constants_1 = require("./lib/constants");
 // Default prebuilds folder for dynamically-loaded ggml backend `.so`
 // files. Consumed by the native addon on Android only (no-op
 // elsewhere). The CMake build stages the per-arch backends into
@@ -376,20 +377,20 @@ class BCIWhispercpp {
                         chunk = combined;
                         headerCarry = new Uint8Array(0);
                     }
-                    if (chunk.byteLength < 8) {
+                    if (chunk.byteLength < constants_1.STREAM_HEADER_BYTES) {
                         headerCarry = chunk;
                         continue;
                     }
                     const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
-                    channels = view.getUint32(4, true);
+                    channels = view.getUint32(constants_1.CHANNELS_FIELD_OFFSET, true);
                     if (channels === 0) {
                         throw new error_1.QvacErrorAddonBCI({
                             code: error_1.ERR_CODES.INVALID_STREAM_HEADER,
                             adds: "channels is zero",
                         });
                     }
-                    bytesPerTimestep = channels * 4;
-                    chunk = chunk.subarray(8);
+                    bytesPerTimestep = channels * constants_1.FLOAT32_BYTES;
+                    chunk = chunk.subarray(constants_1.STREAM_HEADER_BYTES);
                     if (chunk.byteLength === 0)
                         continue;
                 }
@@ -409,7 +410,7 @@ class BCIWhispercpp {
             if (channels === null && headerCarry.byteLength > 0) {
                 throw new error_1.QvacErrorAddonBCI({
                     code: error_1.ERR_CODES.INVALID_STREAM_HEADER,
-                    adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need 8`,
+                    adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need ${constants_1.STREAM_HEADER_BYTES}`,
                 });
             }
             if (channels !== null) {
@@ -452,7 +453,7 @@ class BCIWhispercpp {
                 reject(err);
             };
             this._streamWindowHandler = (event, data, error) => {
-                if (event === "Error") {
+                if (event === constants_1.ADDON_EVENT.ERROR) {
                     cleanup();
                     const err = error instanceof Error
                         ? error
@@ -460,7 +461,7 @@ class BCIWhispercpp {
                     reject(err);
                     return;
                 }
-                if (event === "Output") {
+                if (event === constants_1.ADDON_EVENT.OUTPUT) {
                     if (Array.isArray(data)) {
                         for (const seg of data) {
                             if (seg && typeof seg.text === "string") {
@@ -475,7 +476,7 @@ class BCIWhispercpp {
                     }
                     return;
                 }
-                if (event === "JobEnded") {
+                if (event === constants_1.ADDON_EVENT.JOB_ENDED) {
                     cleanup();
                     resolve(collected);
                 }
@@ -630,16 +631,16 @@ class BCIWhispercpp {
             this._streamWindowHandler(event, data, error);
             return;
         }
-        if (event === "Error") {
+        if (event === constants_1.ADDON_EVENT.ERROR) {
             this.logger.error(`Job ${jobId} failed with error: ${(0, error_1.errorMessage)(error)}`);
             this._job.fail(error);
             return;
         }
-        if (event === "Output") {
+        if (event === constants_1.ADDON_EVENT.OUTPUT) {
             this._job.output(data);
             return;
         }
-        if (event === "JobEnded") {
+        if (event === constants_1.ADDON_EVENT.JOB_ENDED) {
             this.logger.info(`Job ${jobId} completed`);
             if (this.opts.stats) {
                 this._job.end(data);

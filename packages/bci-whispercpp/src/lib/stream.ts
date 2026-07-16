@@ -1,4 +1,9 @@
 import { QvacErrorAddonBCI, ERR_CODES } from "./error";
+import {
+  STREAM_HEADER_BYTES,
+  TIMESTEPS_FIELD_OFFSET,
+  CHANNELS_FIELD_OFFSET,
+} from "./constants";
 
 /**
  * Streaming helpers for the sliding-window transcription driver in index.js.
@@ -91,11 +96,11 @@ export function buildWindowBuffer(
   channels: number,
   windowTimesteps: number,
 ): Uint8Array {
-  const out = new Uint8Array(8 + windowBody.byteLength);
+  const out = new Uint8Array(STREAM_HEADER_BYTES + windowBody.byteLength);
   const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
-  view.setUint32(0, windowTimesteps, true);
-  view.setUint32(4, channels, true);
-  out.set(windowBody, 8);
+  view.setUint32(TIMESTEPS_FIELD_OFFSET, windowTimesteps, true);
+  view.setUint32(CHANNELS_FIELD_OFFSET, channels, true);
+  out.set(windowBody, STREAM_HEADER_BYTES);
   return out;
 }
 

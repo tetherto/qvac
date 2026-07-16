@@ -64,8 +64,13 @@ describe('chat completions (blocking)', () => {
     assert.equal(body.choices.length, 1)
     assert.equal(body.choices[0].index, 0)
     assert.equal(body.choices[0].message.role, 'assistant')
-    assert.ok(body.choices[0].message.content.length > 0)
-    assert.equal(body.choices[0].finish_reason, 'stop')
+    // With captureThinking on, a reasoning model can spend the whole budget in
+    // its `<think>` block (routed to reasoning_content), leaving content null
+    // and finishing on the token cap, so assert generation in either channel.
+    const message = body.choices[0].message
+    const produced = (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
+    assert.ok(produced > 0)
+    assert.ok(['stop', 'length'].includes(body.choices[0].finish_reason))
     assert.equal(typeof body.usage.completion_tokens, 'number')
   })
 
@@ -76,7 +81,14 @@ describe('chat completions (blocking)', () => {
       max_completion_tokens: 8
     })
     const body = res.json() as any
-    assert.ok(body.choices[0].message.content.length > 0)
+    const message = body.choices[0].message
+    // A reasoning model can spend the whole tiny budget inside its `<think>`
+    // block, which is routed to `reasoning_content`, so assert generation
+    // happened in either channel rather than requiring visible content.
+    const produced = (message.content?.length ?? 0) + (message.reasoning_content?.length ?? 0)
+    assert.ok(produced > 0)
+    assert.equal(body.usage.completion_tokens, 8)
+    assert.equal(body.choices[0].finish_reason, 'length')
   })
 
   it('finish_reason=length when max_tokens exceeded (blocking)', async () => {
@@ -89,10 +101,59 @@ describe('chat completions (blocking)', () => {
     assert.equal(body.choices[0].finish_reason, 'length')
     assert.equal(body.usage.completion_tokens, 1)
   })
+
+  it('routes reasoning to reasoning_content and keeps content free of think tags', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is 17 + 25? Think step by step.' }],
+      max_tokens: 512
+    })
+    const body = res.json() as any
+    const message = body.choices[0].message
+    assert.ok(
+      typeof message.reasoning_content === 'string' && message.reasoning_content.length > 0,
+      'expected reasoning to be surfaced on reasoning_content'
+    )
+    assert.ok(
+      !String(message.content ?? '').includes('<think>'),
+      'content must not contain raw <think> tags'
+    )
+  })
+
+  it('reports prompt and completion token usage from SDK stats', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'Say hello and nothing else.' }],
+      max_tokens: 512
+    })
+    const body = res.json() as any
+    assert.ok(body.usage.prompt_tokens > 0, 'expected non-zero prompt_tokens')
+    assert.equal(body.usage.total_tokens, body.usage.prompt_tokens + body.usage.completion_tokens)
+  })
 })
 
 describe('chat completions (streaming)', () => {
   it('finish_reason=length when max_tokens exceeded (streaming)', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'Count from 1 to 100.' }],
+      stream: true,
+      max_tokens: 1,
+      stream_options: { include_usage: true }
+    })
+    const chunks = collectSSE(res.payload)
+      .map((e) => e.data)
+      .filter((d) => d !== '[DONE]') as any[]
+    // With include_usage, usage arrives in a trailing choices:[] chunk after the
+    // finish_reason chunk (OpenAI streaming shape).
+    const usageChunk = chunks[chunks.length - 1]
+    assert.deepEqual(usageChunk.choices, [])
+    assert.equal(usageChunk.usage.completion_tokens, 1)
+    const finishChunk = chunks.find((c) => c.choices[0]?.finish_reason === 'length')
+    assert.ok(finishChunk, 'expected a chunk carrying finish_reason=length')
+  })
+
+  it('omits streaming usage unless include_usage is set', async () => {
     const res = await post('/v1/chat/completions', {
       model: E2E.llm,
       messages: [{ role: 'user', content: 'Count from 1 to 100.' }],
@@ -102,9 +163,11 @@ describe('chat completions (streaming)', () => {
     const chunks = collectSSE(res.payload)
       .map((e) => e.data)
       .filter((d) => d !== '[DONE]') as any[]
+    // No opt-in: every chunk carries a choices entry and none carries usage.
+    assert.ok(chunks.every((c) => c.usage === undefined))
+    assert.ok(chunks.every((c) => Array.isArray(c.choices) && c.choices.length > 0))
     const last = chunks[chunks.length - 1]
     assert.equal(last.choices[0].finish_reason, 'length')
-    assert.equal(last.usage.completion_tokens, 1)
   })
 
   it('SSE stream returns valid chunks', async () => {
@@ -126,6 +189,22 @@ describe('chat completions (streaming)', () => {
     assert.ok(['stop', 'tool_calls'].includes(last.choices[0].finish_reason))
     const contentChunks = chunks.filter((c) => c.choices[0].delta.content)
     assert.ok(contentChunks.length > 0)
+  })
+
+  it('streams reasoning on reasoning_content deltas, not content', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is 17 + 25? Think step by step.' }],
+      stream: true,
+      max_tokens: 256
+    })
+    const chunks = collectSSE(res.payload)
+      .map((e) => e.data)
+      .filter((d) => d !== '[DONE]') as any[]
+    const reasoningChunks = chunks.filter((c) => c.choices[0].delta.reasoning_content)
+    assert.ok(reasoningChunks.length > 0, 'expected reasoning_content deltas')
+    const contentText = chunks.map((c) => c.choices[0].delta.content ?? '').join('')
+    assert.ok(!contentText.includes('<think>'), 'content deltas must not contain <think> tags')
   })
 })
 
@@ -167,6 +246,57 @@ describe('chat completions (tools / structured output)', () => {
     assert.equal(body.choices.length, 1)
     assert.ok(body.choices[0].message)
     assert.ok(['stop', 'tool_calls', 'length'].includes(body.choices[0].finish_reason))
+  })
+
+  // A follow-up turn replays a prior assistant tool call as history. The server
+  // re-renders it in the model's own dialect (resolved via getLoadedModelInfo);
+  // rendering it in a foreign dialect made the model emit a malformed tool frame
+  // that failed to parse and leaked raw `<tool_call>`/`<function=` markup into
+  // `content`. A structured `tool_calls` reply is the correct channel; raw markup
+  // in `content` is the regression this guards.
+  it('replays a prior tool call without leaking raw tool markup into content', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      max_tokens: 128,
+      messages: [
+        { role: 'user', content: 'How many .ts files are under src/? Use the tool, then answer.' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'bash',
+                arguments: '{"command":"find src -name \\"*.ts\\" | wc -l"}'
+              }
+            }
+          ]
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '2\n' }
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'bash',
+            description: 'Run a shell command.',
+            parameters: {
+              type: 'object',
+              properties: { command: { type: 'string' } },
+              required: ['command']
+            }
+          }
+        }
+      ]
+    })
+    assert.equal(res.statusCode, 200)
+    const message = (res.json() as any).choices[0].message
+    const content = message.content ?? ''
+    assert.ok(!content.includes('<tool_call>'), 'raw <tool_call> markup leaked into content')
+    assert.ok(!content.includes('<function='), 'raw <function= markup leaked into content')
+    assert.ok(!content.includes('<parameter='), 'raw <parameter= markup leaked into content')
   })
 })
 

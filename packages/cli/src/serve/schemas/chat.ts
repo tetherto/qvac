@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Tool } from '@qvac/sdk'
+import type { Tool, ToolDialect } from '@qvac/sdk'
 import {
   chatMessage,
   responseFormat,
@@ -26,7 +26,8 @@ export const chatCompletionsBody = z
     response_format: responseFormat.optional(),
     temperature: z.number().optional(),
     top_p: z.number().optional(),
-    max_tokens: z.number().int().optional()
+    max_tokens: z.number().int().optional(),
+    stream_options: z.object({ include_usage: z.boolean().optional() }).passthrough().optional()
   })
   .passthrough()
 
@@ -78,20 +79,27 @@ interface SdkHistoryItem {
   attachments?: Array<{ path: string }>
 }
 
-export function openaiMessagesToHistory(messages: OpenAIMessage[]): ChatHistoryItem[] {
+export function openaiMessagesToHistory(
+  messages: OpenAIMessage[],
+  dialect: ToolDialect
+): ChatHistoryItem[] {
   // Pure: decode + validate image parts to bytes (an unsupported image throws → 400). No file I/O —
   // writeChatImages materializes the bytes at the inference call, like routes/audio.ts.
   return messages.map((msg) => {
-    const decoded = decodeMessage(msg)
+    const decoded = decodeMessage(msg, dialect)
     return decoded.images.length > 0
       ? { role: decoded.role, content: decoded.content, attachments: decoded.images }
       : { role: decoded.role, content: decoded.content }
   })
 }
 
-function decodeMessage(msg: OpenAIMessage): DecodedMessage {
+function decodeMessage(msg: OpenAIMessage, dialect: ToolDialect): DecodedMessage {
   if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-    return { role: 'assistant', content: synthesizeToolCallContent(msg.tool_calls), images: [] }
+    return {
+      role: 'assistant',
+      content: synthesizeToolCallContent(msg.tool_calls, dialect),
+      images: []
+    }
   }
   if (Array.isArray(msg.content)) {
     return decodeMultimodalContent(msg.role, msg.content)
@@ -190,19 +198,64 @@ export async function writeChatImages(
   }
 }
 
-function synthesizeToolCallContent(toolCalls: NonNullable<OpenAIMessage['tool_calls']>): string {
-  return toolCalls
-    .map((tc) => {
-      let args: Record<string, unknown>
-      try {
-        args = JSON.parse(tc.function.arguments) as Record<string, unknown>
-      } catch {
-        args = {}
-      }
-      const callObj = { name: tc.function.name, arguments: args }
-      return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
-    })
+// A client round-trips a prior tool call as OpenAI-structured `tool_calls`, so
+// the model's original native framing is gone. Re-render it in the model's own
+// dialect: replaying a Qwen3.5 call as Hermes JSON makes the model imitate that
+// foreign shape next turn and emit a malformed hybrid frame, which then fails to
+// parse and leaks the raw markup into `content`.
+//
+// hermes/json models re-parse a Hermes envelope cleanly (their SDK parse chains
+// keep a Hermes/JSON fallback), so replaying as Hermes is safe for them. qwen35
+// is rendered natively below. gemma4/harmony/pythonic have single native parse
+// chains with no Hermes fallback, so a Hermes replay can provoke the same leak
+// for them — they still need native renderers (QVAC-22318).
+function synthesizeToolCallContent(
+  toolCalls: NonNullable<OpenAIMessage['tool_calls']>,
+  dialect: ToolDialect
+): string {
+  const render = dialect === 'qwen35' ? renderQwen35Call : renderHermesCall
+  return toolCalls.map(render).join('\n')
+}
+
+function parseToolCallArguments(rawArguments: string): Record<string, unknown> {
+  try {
+    return JSON.parse(rawArguments) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+function renderHermesCall(tc: NonNullable<OpenAIMessage['tool_calls']>[number]): string {
+  const callObj = {
+    name: tc.function.name,
+    arguments: parseToolCallArguments(tc.function.arguments)
+  }
+  return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
+}
+
+// Qwen3.5 Pythonic-XML: string values are raw text, arrays/objects are JSON,
+// numbers/booleans are their literal text — mirrors the SDK's qwen35 parser.
+function renderQwen35Call(tc: NonNullable<OpenAIMessage['tool_calls']>[number]): string {
+  const args = parseToolCallArguments(tc.function.arguments)
+  const params = Object.entries(args)
+    .map(([key, value]) => `<parameter=${key}>${renderQwen35Value(value)}</parameter>`)
     .join('\n')
+  const body = params.length > 0 ? `\n${params}\n` : '\n'
+  return `<tool_call>\n<function=${tc.function.name}>${body}</function>\n</tool_call>`
+}
+
+function renderQwen35Value(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
+}
+
+// Dialect only matters when a prior assistant tool call has to be replayed into
+// the prompt; a plain chat (even one requesting tools) needs no dialect lookup.
+export function messagesHaveToolCalls(messages: OpenAIMessage[]): boolean {
+  return messages.some(
+    (msg) => msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0
+  )
 }
 
 export type ChatCompletionsBody = z.infer<typeof chatCompletionsBody>
@@ -215,10 +268,10 @@ export interface SdkChatArgs {
   stream: boolean
 }
 
-export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
+export function toSdkChatArgs(body: ChatCompletionsBody, dialect: ToolDialect): SdkChatArgs {
   const responseFmt = extractResponseFormat(body as Record<string, unknown>)
   return {
-    history: openaiMessagesToHistory(body.messages as OpenAIMessage[]),
+    history: openaiMessagesToHistory(body.messages as OpenAIMessage[], dialect),
     tools: openaiToolsToSdk(body.tools as Parameters<typeof openaiToolsToSdk>[0]),
     generationParams: extractGenerationParams(
       body as Record<string, unknown>,

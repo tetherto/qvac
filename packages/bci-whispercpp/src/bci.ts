@@ -1,4 +1,5 @@
 import { QvacErrorAddonBCI, ERR_CODES, errorMessage } from "./lib/error";
+import { ADDON_EVENT } from "./lib/constants";
 import { checkConfig, type BCIConfigurationParams } from "./configChecker";
 
 const state = Object.freeze({
@@ -18,6 +19,18 @@ export const MAX_BUFFERED_BYTES = 500 * 1024 * 1024;
 
 export function nextSafeId(current: number): number {
   return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1;
+}
+
+/** Concatenate a list of byte chunks into a single contiguous Uint8Array. */
+export function concatChunks(chunks: Uint8Array[]): Uint8Array {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
 }
 
 /** Neural signal job payload handed to the native runner. */
@@ -135,16 +148,16 @@ export class BCIInterface {
         typeof (data as { text?: unknown }).text === "string");
 
     let mappedEvent = eventName;
-    if (eventName === "Error" || isError || eventName.includes("Error")) {
-      mappedEvent = "Error";
+    if (eventName === ADDON_EVENT.ERROR || isError || eventName.includes("Error")) {
+      mappedEvent = ADDON_EVENT.ERROR;
     } else if (
-      eventName === "JobEnded" ||
+      eventName === ADDON_EVENT.JOB_ENDED ||
       isStats ||
       eventName.includes("RuntimeStats")
     ) {
-      mappedEvent = "JobEnded";
-    } else if (eventName === "Output" || isTranscriptOutput) {
-      mappedEvent = "Output";
+      mappedEvent = ADDON_EVENT.JOB_ENDED;
+    } else if (eventName === ADDON_EVENT.OUTPUT || isTranscriptOutput) {
+      mappedEvent = ADDON_EVENT.OUTPUT;
     } else if (Array.isArray(data) && data.length === 0) {
       return;
     }
@@ -154,33 +167,33 @@ export class BCIInterface {
       return;
     }
 
-    if (mappedEvent === "Output") {
+    if (mappedEvent === ADDON_EVENT.OUTPUT) {
       this._setState(state.PROCESSING);
 
       if (Array.isArray(data)) {
         const segments = data as { text?: unknown }[];
         if (segments.length > 0 && typeof segments[0]?.text === "string") {
           for (const segment of segments) {
-            this._outputCb(addon, "Output", jobId, [segment], null);
+            this._outputCb(addon, ADDON_EVENT.OUTPUT, jobId, [segment], null);
           }
         } else {
-          this._outputCb(addon, "Output", jobId, data, null);
+          this._outputCb(addon, ADDON_EVENT.OUTPUT, jobId, data, null);
         }
       } else if (
         data !== null &&
         typeof data === "object" &&
         typeof (data as { text?: unknown }).text === "string"
       ) {
-        this._outputCb(addon, "Output", jobId, [data], null);
+        this._outputCb(addon, ADDON_EVENT.OUTPUT, jobId, [data], null);
       } else {
-        this._outputCb(addon, "Output", jobId, data, null);
+        this._outputCb(addon, ADDON_EVENT.OUTPUT, jobId, data, null);
       }
       return;
     }
 
     this._outputCb(addon, mappedEvent, jobId, data, isError ? error : null);
 
-    if (mappedEvent === "Error" || mappedEvent === "JobEnded") {
+    if (mappedEvent === ADDON_EVENT.ERROR || mappedEvent === ADDON_EVENT.JOB_ENDED) {
       this._activeJobId = null;
       this._setState(state.LISTENING);
     }
@@ -433,16 +446,6 @@ export class BCIInterface {
     if (this._bufferedSignal.length === 1) {
       return this._bufferedSignal[0];
     }
-    const totalLength = this._bufferedSignal.reduce(
-      (sum, chunk) => sum + chunk.byteLength,
-      0,
-    );
-    const merged = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of this._bufferedSignal) {
-      merged.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return merged;
+    return concatChunks(this._bufferedSignal);
   }
 }

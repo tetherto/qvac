@@ -7,6 +7,7 @@ exports.normalizeWord = normalizeWord;
 exports.stitchMerge = stitchMerge;
 exports.stitchSegments = stitchSegments;
 const error_1 = require("./error");
+const constants_1 = require("./constants");
 /**
  * Coerce a stream chunk into a Uint8Array without copying when possible.
  * Throws INVALID_STREAM_INPUT if the chunk isn't a recognised binary form.
@@ -59,11 +60,11 @@ function sliceBody(bodyChunks, bytesPerTimestep, startTs, endTs, totalBytes) {
  * batch input, reusing the per-window body bytes.
  */
 function buildWindowBuffer(windowBody, channels, windowTimesteps) {
-    const out = new Uint8Array(8 + windowBody.byteLength);
+    const out = new Uint8Array(constants_1.STREAM_HEADER_BYTES + windowBody.byteLength);
     const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
-    view.setUint32(0, windowTimesteps, true);
-    view.setUint32(4, channels, true);
-    out.set(windowBody, 8);
+    view.setUint32(constants_1.TIMESTEPS_FIELD_OFFSET, windowTimesteps, true);
+    view.setUint32(constants_1.CHANNELS_FIELD_OFFSET, channels, true);
+    out.set(windowBody, constants_1.STREAM_HEADER_BYTES);
     return out;
 }
 function normalizeWord(w) {

@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BCIInterface = exports.MAX_BUFFERED_BYTES = exports.END_OF_INPUT = void 0;
 exports.nextSafeId = nextSafeId;
+exports.concatChunks = concatChunks;
 const error_1 = require("./lib/error");
+const constants_1 = require("./lib/constants");
 const configChecker_1 = require("./configChecker");
 const state = Object.freeze({
     LOADING: "loading",
@@ -18,6 +20,17 @@ exports.END_OF_INPUT = "end of job";
 exports.MAX_BUFFERED_BYTES = 500 * 1024 * 1024;
 function nextSafeId(current) {
     return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1;
+}
+/** Concatenate a list of byte chunks into a single contiguous Uint8Array. */
+function concatChunks(chunks) {
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return merged;
 }
 /**
  * Low-level interface between the Bare C++ BCI addon and the JS runtime.
@@ -63,16 +76,16 @@ class BCIInterface {
                 typeof data === "object" &&
                 typeof data.text === "string");
         let mappedEvent = eventName;
-        if (eventName === "Error" || isError || eventName.includes("Error")) {
-            mappedEvent = "Error";
+        if (eventName === constants_1.ADDON_EVENT.ERROR || isError || eventName.includes("Error")) {
+            mappedEvent = constants_1.ADDON_EVENT.ERROR;
         }
-        else if (eventName === "JobEnded" ||
+        else if (eventName === constants_1.ADDON_EVENT.JOB_ENDED ||
             isStats ||
             eventName.includes("RuntimeStats")) {
-            mappedEvent = "JobEnded";
+            mappedEvent = constants_1.ADDON_EVENT.JOB_ENDED;
         }
-        else if (eventName === "Output" || isTranscriptOutput) {
-            mappedEvent = "Output";
+        else if (eventName === constants_1.ADDON_EVENT.OUTPUT || isTranscriptOutput) {
+            mappedEvent = constants_1.ADDON_EVENT.OUTPUT;
         }
         else if (Array.isArray(data) && data.length === 0) {
             return;
@@ -81,31 +94,31 @@ class BCIInterface {
         if (jobId === null) {
             return;
         }
-        if (mappedEvent === "Output") {
+        if (mappedEvent === constants_1.ADDON_EVENT.OUTPUT) {
             this._setState(state.PROCESSING);
             if (Array.isArray(data)) {
                 const segments = data;
                 if (segments.length > 0 && typeof segments[0]?.text === "string") {
                     for (const segment of segments) {
-                        this._outputCb(addon, "Output", jobId, [segment], null);
+                        this._outputCb(addon, constants_1.ADDON_EVENT.OUTPUT, jobId, [segment], null);
                     }
                 }
                 else {
-                    this._outputCb(addon, "Output", jobId, data, null);
+                    this._outputCb(addon, constants_1.ADDON_EVENT.OUTPUT, jobId, data, null);
                 }
             }
             else if (data !== null &&
                 typeof data === "object" &&
                 typeof data.text === "string") {
-                this._outputCb(addon, "Output", jobId, [data], null);
+                this._outputCb(addon, constants_1.ADDON_EVENT.OUTPUT, jobId, [data], null);
             }
             else {
-                this._outputCb(addon, "Output", jobId, data, null);
+                this._outputCb(addon, constants_1.ADDON_EVENT.OUTPUT, jobId, data, null);
             }
             return;
         }
         this._outputCb(addon, mappedEvent, jobId, data, isError ? error : null);
-        if (mappedEvent === "Error" || mappedEvent === "JobEnded") {
+        if (mappedEvent === constants_1.ADDON_EVENT.ERROR || mappedEvent === constants_1.ADDON_EVENT.JOB_ENDED) {
             this._activeJobId = null;
             this._setState(state.LISTENING);
         }
@@ -328,14 +341,7 @@ class BCIInterface {
         if (this._bufferedSignal.length === 1) {
             return this._bufferedSignal[0];
         }
-        const totalLength = this._bufferedSignal.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-        const merged = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of this._bufferedSignal) {
-            merged.set(chunk, offset);
-            offset += chunk.byteLength;
-        }
-        return merged;
+        return concatChunks(this._bufferedSignal);
     }
 }
 exports.BCIInterface = BCIInterface;

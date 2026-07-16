@@ -20,6 +20,12 @@ import {
   stitchSegments,
   type TranscriptSegment,
 } from "./lib/stream";
+import {
+  STREAM_HEADER_BYTES,
+  CHANNELS_FIELD_OFFSET,
+  FLOAT32_BYTES,
+  ADDON_EVENT,
+} from "./lib/constants";
 import { type BCIConfigurationParams } from "./configChecker";
 
 export interface BCIConfig {
@@ -561,7 +567,7 @@ export class BCIWhispercpp {
             chunk = combined;
             headerCarry = new Uint8Array(0);
           }
-          if (chunk.byteLength < 8) {
+          if (chunk.byteLength < STREAM_HEADER_BYTES) {
             headerCarry = chunk;
             continue;
           }
@@ -570,15 +576,15 @@ export class BCIWhispercpp {
             chunk.byteOffset,
             chunk.byteLength,
           );
-          channels = view.getUint32(4, true);
+          channels = view.getUint32(CHANNELS_FIELD_OFFSET, true);
           if (channels === 0) {
             throw new QvacErrorAddonBCI({
               code: ERR_CODES.INVALID_STREAM_HEADER,
               adds: "channels is zero",
             });
           }
-          bytesPerTimestep = channels * 4;
-          chunk = chunk.subarray(8);
+          bytesPerTimestep = channels * FLOAT32_BYTES;
+          chunk = chunk.subarray(STREAM_HEADER_BYTES);
           if (chunk.byteLength === 0) continue;
         }
 
@@ -601,7 +607,7 @@ export class BCIWhispercpp {
       if (channels === null && headerCarry.byteLength > 0) {
         throw new QvacErrorAddonBCI({
           code: ERR_CODES.INVALID_STREAM_HEADER,
-          adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need 8`,
+          adds: `stream ended with ${headerCarry.byteLength} header byte(s) buffered; need ${STREAM_HEADER_BYTES}`,
         });
       }
 
@@ -647,7 +653,7 @@ export class BCIWhispercpp {
         reject(err);
       };
       this._streamWindowHandler = (event, data, error) => {
-        if (event === "Error") {
+        if (event === ADDON_EVENT.ERROR) {
           cleanup();
           const err =
             error instanceof Error
@@ -658,7 +664,7 @@ export class BCIWhispercpp {
           reject(err);
           return;
         }
-        if (event === "Output") {
+        if (event === ADDON_EVENT.OUTPUT) {
           if (Array.isArray(data)) {
             for (const seg of data as { text?: unknown }[]) {
               if (seg && typeof seg.text === "string") {
@@ -674,7 +680,7 @@ export class BCIWhispercpp {
           }
           return;
         }
-        if (event === "JobEnded") {
+        if (event === ADDON_EVENT.JOB_ENDED) {
           cleanup();
           resolve(collected);
         }
@@ -857,18 +863,18 @@ export class BCIWhispercpp {
       this._streamWindowHandler(event, data, error);
       return;
     }
-    if (event === "Error") {
+    if (event === ADDON_EVENT.ERROR) {
       this.logger.error(
         `Job ${jobId} failed with error: ${errorMessage(error)}`,
       );
       this._job.fail(error as Error);
       return;
     }
-    if (event === "Output") {
+    if (event === ADDON_EVENT.OUTPUT) {
       this._job.output(data);
       return;
     }
-    if (event === "JobEnded") {
+    if (event === ADDON_EVENT.JOB_ENDED) {
       this.logger.info(`Job ${jobId} completed`);
       if (this.opts.stats) {
         this._job.end(data);
