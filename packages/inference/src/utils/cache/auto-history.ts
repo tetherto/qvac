@@ -1,5 +1,5 @@
-import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
-import type { CacheMessage } from './types'
+import { normalizeAssistantCacheContent } from '../cache-normalize.ts'
+import type { CacheMessage } from './types.ts'
 
 function normalizeAssistantMessage(message: CacheMessage): CacheMessage {
   if (message.role !== 'assistant') {

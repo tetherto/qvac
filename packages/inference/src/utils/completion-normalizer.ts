@@ -5,8 +5,8 @@ import type {
   NormalizerConfig,
   StopReason,
   ToolCall
-} from '@/schemas'
-import { parseToolCalls } from '@/server/utils/tools'
+} from '../schemas/index.ts'
+import { parseToolCalls } from './tools/index.ts'
 
 type NormalizerState = 'content' | 'thinkingFraming' | 'toolFraming' | 'contentFraming'
 

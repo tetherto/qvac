@@ -1,5 +1,5 @@
-// Shared by the auto-cache writer and reader on the server, and surfaced to
-// clients as `final.cacheableAssistantContent` so the next turn's `history`
+// Shared by the auto-cache writer and reader in the engine, and surfaced to
+// callers as `final.cacheableAssistantContent` so the next turn's `history`
 // produces a stable cache key.
 
 // Case-insensitive in case a model variant emits `<Think>`; the addon uses

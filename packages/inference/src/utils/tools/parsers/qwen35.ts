@@ -1,9 +1,5 @@
-import type { Tool, ToolCall, ToolCallError } from '@/schemas'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/server/utils/tools/shared'
+import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
+import { generateStableToolCallId, validateToolArguments, type ParserResult } from '../shared.ts'
 
 // Coerce raw parameter text to the type declared in the tool's JSON schema.
 // String values are raw (not JSON-quoted); arrays/objects are valid JSON.
@@ -20,8 +16,9 @@ function coerceParamValue(raw: string, schema?: { type?: string }): unknown {
     case 'integer': {
       if (trimmed.length === 0) throw new Error(`invalid integer value: ""`)
       const n = Number(trimmed)
-      if (Number.isNaN(n) || !Number.isInteger(n))
+      if (Number.isNaN(n) || !Number.isInteger(n)) {
         throw new Error(`invalid integer value: "${trimmed}"`)
+      }
       return n
     }
     case 'boolean': {

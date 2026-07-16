@@ -1,10 +1,10 @@
-import type { Tool } from '@/schemas/tools'
-import type { JsonSchema } from '@/schemas/json-schema'
-import type { McpClientInput, McpClient } from '@/schemas/mcp-adapter'
-import type { ToolHandler } from '@/utils/tool-helpers'
-import { mapValues } from '@/utils/object'
+import type { Tool } from '../schemas/tools.ts'
+import type { JsonSchema } from '../schemas/json-schema.ts'
+import type { McpClientInput, McpClient } from '../schemas/mcp-adapter.ts'
+import type { ToolHandler } from './tool-helpers.ts'
+import { mapValues } from './object.ts'
 
-export type { McpClient, McpClientInput } from '@/schemas/mcp-adapter'
+export type { McpClient, McpClientInput } from '../schemas/mcp-adapter.ts'
 
 export type ToolHandlerMap = Map<string, ToolHandler>
 
@@ -16,9 +16,8 @@ export type McpToolsResult = {
 const VALID_TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array'] as const
 
 type ValidType = (typeof VALID_TYPES)[number]
-type JsonSchemaEnumValue = string | number | boolean | null
-type PropEntry = { type: ValidType; description?: string; enum?: JsonSchemaEnumValue[] }
-type PropInput = { type?: unknown; description?: string; enum?: JsonSchemaEnumValue[] }
+type PropEntry = { type: ValidType; description?: string; enum?: string[] }
+type PropInput = { type?: unknown; description?: string; enum?: string[] }
 
 function isValidType(value: unknown): value is ValidType {
   return typeof value === 'string' && VALID_TYPES.includes(value as ValidType)

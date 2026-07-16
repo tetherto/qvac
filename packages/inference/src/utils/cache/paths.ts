@@ -1,16 +1,16 @@
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getConfiguredCacheDir } from '@/server/bare/registry/config-registry'
-import { getQvacPath } from '@/server/utils/qvac-paths'
-import type { ShardFileMetadata } from '@/schemas'
-import { calculateFileChecksum } from '@/server/utils/checksum'
-import { validateAndJoinPath } from '@/server/utils/path-security'
-import { generateShortHash } from '@/server/utils/formatting'
-import { getServerLogger } from '@/logging'
-import { nowMs } from '@/profiling'
-import { resolveClearStorageTarget } from '@/server/utils/clear-storage'
+import { getConfiguredCacheDir } from '../../runtime/state.ts'
+import { getQvacPath } from '../qvac-paths.ts'
+import type { ShardFileMetadata } from '../../schemas/index.ts'
+import { calculateFileChecksum } from '../checksum.ts'
+import { validateAndJoinPath } from '../path-security.ts'
+import { generateShortHash } from '../formatting.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import { nowMs } from '../../profiling/index.ts'
+import { resolveClearStorageTarget } from '../clear-storage.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function getCacheDir(subDir: string): string {
   const cacheDir = getQvacPath(subDir)
@@ -113,7 +113,7 @@ export function getShardPath(hyperdriveKey: string, shardFilename: string): stri
 }
 
 /**
- * Returns the deletion target for `clearStorage`. Scoped to the SDK cache
+ * Returns the deletion target for `clearStorage`. Scoped to the QVAC cache
  * directory — companion set and legacy ONNX paths delete the parent directory.
  */
 export function getClearStorageTarget(modelPath: string): {

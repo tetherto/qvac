@@ -1,7 +1,7 @@
 import fs from 'bare-fs'
 import crypto from 'bare-crypto'
-import { nowMs } from '@/profiling'
-import type { DownloadHooks } from '@/server/rpc/handlers/load-model/types'
+import { nowMs } from '../profiling/index.ts'
+import type { DownloadHooks } from '../handlers/load-model/types.ts'
 import { type Buffer } from 'bare-buffer'
 
 export async function calculateFileChecksum(filePath: string): Promise<string> {
@@ -10,8 +10,8 @@ export async function calculateFileChecksum(filePath: string): Promise<string> {
       const hash = crypto.createHash('sha-256')
       const stream = fs.createReadStream(filePath)
 
-      stream.on('data', (chunk: Buffer) => {
-        hash.update(chunk)
+      stream.on('data', (chunk) => {
+        hash.update(chunk as Buffer)
       })
 
       stream.on('end', () => {

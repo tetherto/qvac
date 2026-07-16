@@ -1,7 +1,5 @@
-/**
- * Pure string sanitization for path components. No runtime-specific dependencies.
- * Safe to import from both Bare (server) and Bun/Node (tests, client).
- */
+import path from 'bare-path'
+import { PathTraversalError } from '../errors/index.ts'
 
 /**
  * Sanitize a path component that will be joined to a base directory.
@@ -62,4 +60,33 @@ export function checkPathWithinBase(
 
   if (resolvedTarget === resolvedBase) return true
   return resolvedTarget.startsWith(resolvedBase + sep)
+}
+
+/**
+ * Check whether a target path is contained within a base directory.
+ * Both paths are resolved to absolute before comparison.
+ */
+export function isPathWithinBase(basePath: string, targetPath: string): boolean {
+  return checkPathWithinBase(
+    basePath,
+    targetPath,
+    (...args: [string, ...string[]]) => path.resolve(...args),
+    path.sep || '/'
+  )
+}
+
+/**
+ * Sanitize components, join them to a base path, and verify the result
+ * stays within the base directory. Throws PathTraversalError on escape.
+ */
+export function validateAndJoinPath(basePath: string, ...components: string[]): string {
+  const sanitized = components.map((c) => sanitizePathComponent(c))
+  const joined = path.join(basePath, ...sanitized)
+  const resolved = path.resolve(joined)
+
+  if (!isPathWithinBase(basePath, resolved)) {
+    throw new PathTraversalError(components.join('/'), basePath)
+  }
+
+  return resolved
 }

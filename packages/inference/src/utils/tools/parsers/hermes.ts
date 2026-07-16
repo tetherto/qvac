@@ -1,10 +1,10 @@
-import type { Tool, ToolCall, ToolCallError } from '@/schemas'
+import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
 import {
   generateStableToolCallId,
   isValidToolCall,
   validateToolArguments,
   type ParserResult
-} from '@/server/utils/tools/shared'
+} from '../shared.ts'
 
 // Qwen3.5/3.6 can fuse its two tool templates into one frame, embedding the
 // XML `<function=NAME>` token as a bare string key inside the JSON envelope:

@@ -1,11 +1,7 @@
 // Harmony-style tool calls: `<|channel|>commentary to=functions.<name>
 // <|constrain|>json<|message|>{...}<|call|>`.
-import type { Tool, ToolCall, ToolCallError } from '@/schemas'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/server/utils/tools/shared'
+import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
+import { generateStableToolCallId, validateToolArguments, type ParserResult } from '../shared.ts'
 
 const HARMONY_FRAME_RE =
   /to=functions\.([\w-]+)\s+<\|constrain\|>json<\|message\|>([\s\S]*?)(?=<\|call\|>|$)/g

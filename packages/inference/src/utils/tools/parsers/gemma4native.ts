@@ -1,9 +1,5 @@
-import type { Tool, ToolCall, ToolCallError } from '@/schemas'
-import {
-  generateStableToolCallId,
-  validateToolArguments,
-  type ParserResult
-} from '@/server/utils/tools/shared'
+import type { Tool, ToolCall, ToolCallError } from '../../../schemas/index.ts'
+import { generateStableToolCallId, validateToolArguments, type ParserResult } from '../shared.ts'
 
 // Transliterates Gemma 4's JS-literal argument body to valid JSON so it can
 // be parsed with JSON.parse. The body uses:

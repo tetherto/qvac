@@ -1,30 +1,31 @@
-import { promises as fsPromises } from 'bare-fs'
+import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import fs from 'bare-fs'
 import { createGunzip } from 'bare-zlib'
 import tarStream from 'tar-stream'
+import Buffer from 'bare-buffer'
+import type { AbortSignal } from 'bare-abort-controller'
 import {
   detectShardedModel,
   generateShardFilenames,
   extractTensorsFromShards,
   validateShardedModelCache
-} from './shard-utils'
+} from './shard-utils.ts'
 import {
   ModelLoadFailedError,
   ArchiveExtractionFailedError,
   ArchiveUnsupportedTypeError,
   ArchiveMissingShardsError,
   DownloadCancelledError
-} from '@/utils/errors-server'
-import { isPathWithinBase } from '@/server/utils/path-security'
-import { getServerLogger } from '@/logging'
+} from '../errors/index.ts'
+import { isPathWithinBase } from './path-security.ts'
+import { getEngineLogger } from '../logging/index.ts'
 import {
   SUPPORTED_ARCHIVE_EXTENSIONS,
   filenameToArchiveTypeSchema,
   type ArchiveType
-} from '@/schemas/archive'
+} from '../schemas/model-file.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Gzip magic bytes: 1f 8b 08
 const GZIP_MAGIC_0 = 0x1f
@@ -55,8 +56,8 @@ async function isGzip(archivePath: string) {
     const stream = fs.createReadStream(archivePath, { start: 0, end: 2 })
     const chunks: Buffer[] = []
 
-    stream.on('data', (chunk: Buffer) => {
-      chunks.push(chunk)
+    stream.on('data', (chunk) => {
+      chunks.push(chunk as Buffer)
     })
 
     stream.on('end', () => {
@@ -171,10 +172,13 @@ export async function extractTarStream(
 
     readStream = fs.createReadStream(archivePath)
 
+    // tar-stream's extract is a streamx Writable at runtime; cast past the
+    // nominal private brand its shim can't carry (see types/tar-stream).
+    const extractDest = extract as unknown as import('bare-stream').Writable
     if (gunzip) {
-      readStream.pipe(gunzip).pipe(extract)
+      readStream.pipe(gunzip).pipe(extractDest)
     } else {
-      readStream.pipe(extract)
+      readStream.pipe(extractDest)
     }
   })
 }

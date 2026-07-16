@@ -5,9 +5,9 @@ import type {
   CompletionStats,
   StopReason,
   ToolCall
-} from '@/schemas'
-import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
-import { attachHandlersToToolCalls, type ToolHandlerMap } from '@/utils/tool-helpers'
+} from '../schemas/index.ts'
+import { normalizeAssistantCacheContent } from './cache-normalize.ts'
+import { attachHandlersToToolCalls, type ToolHandlerMap } from './tool-helpers.ts'
 
 export type AggregatedEvents = {
   contentText: string
