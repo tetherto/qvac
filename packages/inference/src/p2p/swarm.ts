@@ -1,13 +1,13 @@
 import env from 'bare-env'
 import Hyperswarm from 'hyperswarm'
 import crypto from 'bare-crypto'
-import { envSchema, type FirewallConfig } from '@/schemas/provide'
-import { getSDKConfig } from '@/server/bare/registry/config-registry'
-import { registerSwarm, unregisterSwarm } from '@/server/bare/runtime-lifecycle'
-import { getServerLogger } from '@/logging'
+import { envSchema, type FirewallConfig } from '../schemas/provide.ts'
+import { getConfig } from '../runtime/state.ts'
+import { registerSwarm, unregisterSwarm } from '../runtime/runtime-lifecycle.ts'
+import { getEngineLogger } from '../logging/index.ts'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 function getHyperswarmSeedBuffer() {
   const parsedEnv = envSchema.safeParse(env)
@@ -63,7 +63,7 @@ function createSwarm(firewallConfig?: FirewallConfig) {
   const seed = getHyperswarmSeedBuffer()
   const firewall = createFirewallFunction(firewallConfig)
   const getRelays = () => {
-    const config = getSDKConfig()
+    const config = getConfig()
     const relayPublicKeys = config.swarmRelays
     if (!relayPublicKeys || relayPublicKeys.length === 0) {
       return null
@@ -82,7 +82,7 @@ function createSwarm(firewallConfig?: FirewallConfig) {
 
 let swarm: Hyperswarm | null = null
 
-// Delegation is always 1:1 (single provider service per SDK instance), but we
+// Delegation is always 1:1 (a single provider service per instance), but we
 // still use a counter to be resilient against duplicate provide/stopProvide
 // calls and to avoid ever reporting "no active providers" while one is still
 // running.

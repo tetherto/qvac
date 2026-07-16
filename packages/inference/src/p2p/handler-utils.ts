@@ -5,37 +5,28 @@ import {
   type RuntimeContext,
   type ProfilingRequestMeta,
   PROFILING_KEY
-} from '@/schemas'
+} from '../schemas/index.ts'
 import type RPC from 'bare-rpc'
-import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
-import { PluginHandlerTypeMismatchError } from '@/utils/errors-server'
-import { setSDKConfig } from '@/server/bare/registry/config-registry'
-import { setRuntimeContext } from '@/server/bare/registry/runtime-context-registry'
-import { type ServerProfiler } from './profiling'
-import { isTerminalChunk } from './rpc-utils'
-import { createProgressThrottle } from './progress-throttle'
-import { handlerSupportsProgress, selectHandler } from '@/server/rpc/handler-selection'
+import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers.ts'
+import { PluginHandlerTypeMismatchError } from '../errors/index.ts'
+import { setConfig, setRuntimeContext } from '../runtime/state.ts'
+import { type ServerProfiler } from '../profiling/index.ts'
+import { isTerminalChunk } from './rpc-utils.ts'
+import { createProgressThrottle } from './progress-throttle.ts'
+import { handlerSupportsProgress, selectHandler } from '../selection.ts'
+import type {
+  HandlerEntry,
+  ReplyHandler,
+  StreamHandler,
+  ProgressHandler,
+  DuplexStreamHandler
+} from '../handlers/types.ts'
 
 function getProfilingMetaFromRequest(request: Request): ProfilingRequestMeta | undefined {
   if (PROFILING_KEY in request) {
     return (request as Record<string, unknown>)[PROFILING_KEY] as ProfilingRequestMeta
   }
   return undefined
-}
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type ReplyHandler = (request: any, ...args: any[]) => Promise<Response> | Response
-type StreamHandler = (request: any, ...args: any[]) => AsyncGenerator<Response>
-type ProgressHandler = (request: any, ...args: any[]) => Promise<Response>
-type DuplexStreamHandler = (request: any, inputStream: any) => AsyncGenerator<Response>
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
-export type HandlerEntry = {
-  type: 'reply' | 'stream' | 'duplex'
-  handler: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
-  delegatedHandler?: ReplyHandler | StreamHandler | ProgressHandler | DuplexStreamHandler
-  isDelegated?: (request: Request) => boolean
-  supportsProgress?: boolean | ((request: Request) => boolean)
 }
 
 async function executeReplyHandler(
@@ -219,7 +210,7 @@ export function isInitConfigMessage(data: unknown): data is InitConfigMessage {
 export function handleInitConfig(req: RPC.IncomingRequest, data: InitConfigMessage) {
   try {
     if (data.config) {
-      setSDKConfig(data.config)
+      setConfig(data.config)
     }
     if (data.runtimeContext) {
       setRuntimeContext(data.runtimeContext)
@@ -236,10 +227,10 @@ export function handleInitConfig(req: RPC.IncomingRequest, data: InitConfigMessa
   }
 }
 
-// Internal pre-terminate cleanup signal. The SDK client sends this before
-// tearing down the bare runtime (e.g. Worklet.terminate() on mobile) so
-// addons can release env-bound state while their JS environment is still
-// alive. Reply success/failure, never throws to the dispatcher.
+// Internal pre-terminate cleanup signal, delivered before the runtime is torn
+// down (e.g. Worklet.terminate() on mobile) so addons can release env-bound
+// state while their JS environment is still alive. Reply success/failure,
+// never throws to the dispatcher.
 type ShutdownMessage = {
   type: '__shutdown__'
 }
@@ -255,10 +246,9 @@ export function isShutdownMessage(data: unknown): data is ShutdownMessage {
 
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
   try {
-    // Lazy import to avoid the import cycle:
-    //   handler-utils -> worker-core -> create-server -> handle-request
-    //   -> handler-utils. By the time this runs, all modules are loaded.
-    const { cleanupForTerminate } = await import('@/server/worker-core')
+    // Lazy import to avoid an import cycle with `./lifecycle`. By the time
+    // this runs, all modules are loaded.
+    const { cleanupForTerminate } = await import('../runtime/lifecycle.ts')
     await cleanupForTerminate()
     req.reply(JSON.stringify({ success: true }), 'utf-8')
   } catch (error) {

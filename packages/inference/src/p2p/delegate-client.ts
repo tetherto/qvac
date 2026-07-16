@@ -1,22 +1,22 @@
-import { getSwarm } from './hyperswarm'
-import { getSDKConfig } from '@/server/bare/registry/config-registry'
-import { ensureDhtBootstrapped, describeConnectFailure } from './delegate-connect-diagnostics'
+import { getSwarm } from './swarm.ts'
+import { getConfig } from '../runtime/state.ts'
+import { ensureDhtBootstrapped, describeConnectFailure } from './delegate-connect-diagnostics.ts'
 import RPC from 'bare-rpc'
 import type { Connection } from 'hyperswarm'
 import type { Duplex } from 'bare-stream'
-import { withTimeout } from '@/utils/withTimeout'
-import type { RPCOptions } from '@/schemas'
-import { DelegateConnectionFailedError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import { nowMs } from '@/profiling'
+import { withTimeout } from '../utils/withTimeout.ts'
+import type { RPCOptions } from '../schemas/index.ts'
+import { DelegateConnectionFailedError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { nowMs } from '../profiling/index.ts'
 import {
   cacheDelegationConnectionTime,
   clearPeerConnectionTracking
-} from '@/server/rpc/profiling/delegation-profiler'
-import { getNextCommandId } from '@/server/rpc/rpc-utils'
+} from '../profiling/delegation-profiler.ts'
+import { getNextCommandId } from './rpc-utils.ts'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // This needs to run on Bare, hence why it's in server and not in client
 
@@ -34,7 +34,7 @@ const inflightConnections = new Map<PeerPublicKey, Promise<RPC>>()
 const HEALTH_CHECK_TIMEOUT_MS = 1500
 
 function getConfiguredRelayCount(): number {
-  return getSDKConfig().swarmRelays?.length ?? 0
+  return getConfig().swarmRelays?.length ?? 0
 }
 
 function isHeartbeatResponse(payload: unknown): payload is { type: 'heartbeat' } {
@@ -245,7 +245,7 @@ export async function getRPC(publicKey: string, options: RPCOptions = {}): Promi
     // failure is *observed* on `tracked` itself — using `tracked.finally(...)`
     // returns a fresh promise that re-rejects with the original error, and
     // since nothing awaits that fresh promise it would surface as an
-    // unhandled rejection. The worker treats unhandled rejections as fatal
+    // unhandled rejection. The process treats unhandled rejections as fatal
     // and tears down the swarm + cancels all in-flight downloads, which then
     // breaks the legitimate fallback-to-local path that the caller awaits via
     // `withTimeout(inflight, ...)` below. Caller still observes the original

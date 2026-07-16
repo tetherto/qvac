@@ -1,13 +1,12 @@
-import type { UnloadModelRequest, UnloadModelResponse } from '@/schemas'
-import { getModelEntry, unregisterModel } from '@/server/bare/registry/model-registry'
-import { getRPC } from '@/server/bare/delegate-rpc-client'
-import { send } from '@/server/rpc/delegate-transport'
-import { hasActiveProviders } from '@/server/bare/hyperswarm'
-import { getRegistryStats } from '@/server/bare/registry/model-registry'
-import { ModelIsDelegatedError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
+import type { UnloadModelRequest, UnloadModelResponse } from '../schemas/index.ts'
+import { getModelEntry, unregisterModel, getRegistryStats } from '../runtime/model-registry.ts'
+import { getRPC } from './delegate-client.ts'
+import { send } from './delegate-transport.ts'
+import { hasActiveProviders } from './swarm.ts'
+import { ModelIsDelegatedError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleUnloadModelDelegated(
   request: UnloadModelRequest

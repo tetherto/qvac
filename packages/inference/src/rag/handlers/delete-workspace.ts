@@ -1,9 +1,12 @@
 import {
   isWorkspaceLoaded,
   deleteWorkspace as deleteWorkspaceFromManager
-} from '@/server/bare/rag-hyperdb/rag-workspace-manager'
-import { ragDeleteWorkspaceParamsSchema, type RagDeleteWorkspaceParams } from '@/schemas'
-import { RAGWorkspaceNotFoundError, RAGWorkspaceInUseError } from '@/utils/errors-server'
+} from '../rag-workspace-manager.ts'
+import {
+  ragDeleteWorkspaceParamsSchema,
+  type RagDeleteWorkspaceParams
+} from '../../schemas/index.ts'
+import { RAGWorkspaceNotFoundError, RAGWorkspaceInUseError } from '../../errors/index.ts'
 
 export async function deleteWorkspace(params: RagDeleteWorkspaceParams) {
   const { workspace } = ragDeleteWorkspaceParamsSchema.parse(params)

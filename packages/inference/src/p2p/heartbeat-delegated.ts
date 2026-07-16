@@ -1,11 +1,11 @@
-import type { HeartbeatRequest, HeartbeatResponse } from '@/schemas'
-import { getServerLogger } from '@/logging'
-import { getRPC } from '@/server/bare/delegate-rpc-client'
-import { send, type DelegateOptions } from '@/server/rpc/delegate-transport'
-import { DelegateConnectionFailedError } from '@/utils/errors-server'
-import type { DelegatedHandlerOptions } from '@/server/rpc/profiling'
+import type { HeartbeatRequest, HeartbeatResponse } from '../schemas/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { getRPC } from './delegate-client.ts'
+import { send, type DelegateOptions } from './delegate-transport.ts'
+import { DelegateConnectionFailedError } from '../errors/index.ts'
+import type { DelegatedHandlerOptions } from '../profiling/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function handleHeartbeatDelegated(
   request: HeartbeatRequest,

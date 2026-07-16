@@ -1,5 +1,5 @@
 import { LLMChunkAdapter } from '@qvac/rag'
-import { ragChunkParamsSchema, type RagChunkParams } from '@/schemas'
+import { ragChunkParamsSchema, type RagChunkParams } from '../../schemas/index.ts'
 
 export async function chunk(params: RagChunkParams) {
   const { documents, chunkOpts } = ragChunkParamsSchema.parse(params)

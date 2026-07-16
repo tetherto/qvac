@@ -1,9 +1,5 @@
-import {
-  closeRagInstance,
-  deleteWorkspace,
-  DEFAULT_WORKSPACE
-} from '@/server/bare/rag-hyperdb/rag-workspace-manager'
-import { ragCloseWorkspaceParamsSchema, type RagCloseWorkspaceParams } from '@/schemas'
+import { closeRagInstance, deleteWorkspace, DEFAULT_WORKSPACE } from '../rag-workspace-manager.ts'
+import { ragCloseWorkspaceParamsSchema, type RagCloseWorkspaceParams } from '../../schemas/index.ts'
 
 export async function closeWorkspace(params: RagCloseWorkspaceParams): Promise<void> {
   const { workspace, deleteOnClose } = ragCloseWorkspaceParamsSchema.parse(params)

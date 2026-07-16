@@ -1,4 +1,4 @@
-import { getRequestRegistry } from '@/server/bare/runtime'
+import { getRequestRegistry } from '../runtime/index.ts'
 
 // Sentinel for "no workspace specified". Mirrors the value re-exported
 // from `rag-workspace-manager.ts`; redeclared locally so this module is
@@ -23,7 +23,7 @@ const DEFAULT_WORKSPACE = 'default'
  *
  * This module owns the small workspace → requestId map that makes that
  * pre-emption decision routable from the dispatcher. The map is module-
- * scoped (one per Bare worker) so the dispatcher, the shutdown sweep
+ * scoped (one per Bare process) so the dispatcher, the shutdown sweep
  * (`cancelAllRagOperations`), and the workspace-close sweep (which
  * delegates to it via `rag-workspace-manager.ts`) all see the same state.
  */

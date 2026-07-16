@@ -1,5 +1,5 @@
-import type { Request } from '@/schemas'
-import type { HandlerEntry } from './handler-utils'
+import type { Request } from '../schemas/index.ts'
+import type { HandlerEntry } from '../handlers/types.ts'
 
 export function shouldUseStreamErrorTransport(
   entry: HandlerEntry | undefined,

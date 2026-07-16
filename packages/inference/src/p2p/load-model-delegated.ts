@@ -1,19 +1,23 @@
-import type { LoadModelSrcRequest, LoadModelResponse, ModelProgressUpdate } from '@/schemas'
-import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from '@/schemas'
-import type { DelegatedHandlerOptions } from '@/server/rpc/profiling'
-import type { ResponseWithDelegation } from '@/server/rpc/delegate-transport'
+import type {
+  LoadModelSrcRequest,
+  LoadModelResponse,
+  ModelProgressUpdate
+} from '../schemas/index.ts'
 import {
-  registerModel,
-  isModelLoaded,
-  unregisterModel
-} from '@/server/bare/registry/model-registry'
-import { send, stream, type DelegateOptions } from '@/server/rpc/delegate-transport'
-import { getRPC } from '@/server/bare/delegate-rpc-client'
-import { handleLoadModel } from './load-model'
-import { ModelLoadFailedError, DelegateNoFinalResponseError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
+  DELEGATION_BREAKDOWN_KEY,
+  OPERATION_EVENT_KEY,
+  modelInputToSrcSchema
+} from '../schemas/index.ts'
+import type { DelegatedHandlerOptions } from '../profiling/index.ts'
+import type { ResponseWithDelegation } from './delegate-transport.ts'
+import { registerModel, isModelLoaded, unregisterModel } from '../runtime/model-registry.ts'
+import { send, stream, type DelegateOptions } from './delegate-transport.ts'
+import { getRPC } from './delegate-client.ts'
+import { handleLoadModel } from '../handlers/load-model/index.ts'
+import { ModelLoadFailedError, DelegateNoFinalResponseError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface HandleLoadModelDelegatedOptions extends DelegatedHandlerOptions {
   progressCallback?: (update: ModelProgressUpdate) => void

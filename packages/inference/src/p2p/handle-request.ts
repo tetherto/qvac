@@ -5,14 +5,15 @@ import {
   type CanonicalModelType,
   type Request,
   type ProfilingRequestMeta
-} from '@/schemas'
-import { nowMs } from '@/profiling'
-import { resolveModelConfig } from '@/server/bare/registry/model-config-registry'
+} from '../schemas/index.ts'
+import { nowMs, createServerProfiler, type ServerProfiler } from '../profiling/index.ts'
+import { resolveModelConfig } from '../runtime/state.ts'
 import type RPC from 'bare-rpc'
-import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
-import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '@/utils/errors-server'
-import { registry } from './handler-registry'
-import type { HandlerEntry } from './handler-utils'
+import type Buffer from 'bare-buffer'
+import { sendErrorResponse, sendStreamErrorResponse } from './error-handlers.ts'
+import { RPCUnknownRequestTypeError, PluginHandlerTypeMismatchError } from '../errors/index.ts'
+import { registry } from '../registry.ts'
+import type { HandlerEntry } from '../handlers/types.ts'
 import {
   executeHandler,
   executeDuplexHandler,
@@ -20,10 +21,9 @@ import {
   isInitConfigMessage,
   handleShutdown,
   isShutdownMessage
-} from './handler-utils'
-import { createServerProfiler, type ServerProfiler } from './profiling'
-import { assertLifecycleAllowed } from '@/server/bare/runtime-lifecycle'
-import { shouldUseStreamErrorTransport } from './transport-selector'
+} from './handler-utils.ts'
+import { assertLifecycleAllowed } from '../runtime/runtime-lifecycle.ts'
+import { shouldUseStreamErrorTransport } from './transport-selector.ts'
 
 export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   let profiler: ServerProfiler | undefined
@@ -54,8 +54,8 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     }
 
     // Handle internal pre-terminate cleanup signal (bypasses schema). Lets
-    // the client tear addons down while the JS env is still alive so static
-    // js_ref_t state doesn't survive into the next worklet's isolate.
+    // the host tear addons down while the JS env is still alive so static
+    // js_ref_t state doesn't survive into the next isolate.
     if (isShutdownMessage(jsonData)) {
       await handleShutdown(req)
       return

@@ -1,18 +1,18 @@
-import type { StopProvideResponse } from '@/schemas/stop-provide'
-import { unregisterProvider } from '@/server/bare/hyperswarm'
-import { getServerLogger } from '@/logging'
+import type { StopProvideResponse } from '../schemas/provide.ts'
+import { unregisterProvider } from './swarm.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // Decrements the active-provider counter. The shared connection listener
-// (set up once in `provideHandler` per process) checks `hasActiveProviders()`
+// (set up once in `provideHandler`) checks `hasActiveProviders()`
 // before mounting an RPC server on incoming sockets, so once the counter
 // reaches 0 inbound peers are dropped and remote calls stop being served.
 //
 // We deliberately do NOT destroy the swarm or unbind the keyPair from the
-// DHT here, because the same swarm is also used by this SDK instance as a
-// consumer (delegate-rpc-client.ts). Stopping the provider role must not
-// kill outgoing delegation connections.
+// DHT here, because the same swarm also serves this instance's consumer role
+// (delegate-client.ts). Stopping the provider role must not kill outgoing
+// delegation connections.
 export function stopProvideHandler(): StopProvideResponse {
   try {
     unregisterProvider()

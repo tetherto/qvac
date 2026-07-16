@@ -1,12 +1,12 @@
-import type { CompletionStreamRequest, CompletionStreamResponse } from '@/schemas'
-import type { DelegatedHandlerOptions } from '@/server/rpc/profiling'
-import { getModelEntry } from '@/server/bare/registry/model-registry'
-import { getRPC } from '@/server/bare/delegate-rpc-client'
-import { stream, type DelegateOptions } from '@/server/rpc/delegate-transport'
-import { ModelIsDelegatedError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
+import type { CompletionStreamRequest, CompletionStreamResponse } from '../schemas/index.ts'
+import type { DelegatedHandlerOptions } from '../profiling/index.ts'
+import { getModelEntry } from '../runtime/model-registry.ts'
+import { getRPC } from './delegate-client.ts'
+import { stream, type DelegateOptions } from './delegate-transport.ts'
+import { ModelIsDelegatedError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export type HandleCompletionStreamDelegatedOptions = DelegatedHandlerOptions
 

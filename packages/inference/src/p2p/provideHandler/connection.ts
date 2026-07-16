@@ -2,11 +2,11 @@ import RPC from 'bare-rpc'
 import type { Duplex } from 'bare-stream'
 import type { Connection } from 'hyperswarm'
 import type Hyperswarm from 'hyperswarm'
-import { createRpcProxy } from './proxy'
-import { hasActiveProviders } from '@/server/bare/hyperswarm'
-import { getServerLogger } from '@/logging'
+import { createRpcProxy } from './proxy.ts'
+import { hasActiveProviders } from '../swarm.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export function setupConnectionHandlers(swarm: Hyperswarm) {
   logger.debug('👂 Setting up connection listener...')

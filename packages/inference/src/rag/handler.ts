@@ -1,5 +1,5 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { RagRequest, RagResponse, RagProgressUpdate } from '@/schemas'
+import type { RagRequest, RagResponse, RagProgressUpdate } from '../schemas/index.ts'
 import {
   chunk,
   ingest,
@@ -14,15 +14,15 @@ import {
   getActiveRagRequest,
   setActiveRagRequest,
   clearActiveRagRequest
-} from '@/server/bare/rag-hyperdb'
+} from './index.ts'
 import {
   getRequestRegistry,
   withRequestContext,
   type ManagedRequestContext
-} from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
-import { profileReplyHandler, registerOperationMetrics } from '@/server/rpc/profiling'
+} from '../runtime/index.ts'
+import { generateRandomRequestId } from '../runtime/request-id.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { profileReplyHandler, registerOperationMetrics } from '../profiling/index.ts'
 
 type ProgressOperation = 'ingest' | 'saveEmbeddings' | 'reindex'
 
@@ -145,9 +145,9 @@ async function handleRagInternal(
 
     case 'ingest': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateServerRequestId()
+      const requestId = request.requestId ?? generateRandomRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('ingest start')
       const handlerOptions = createHandlerOptions('ingest', workspace, ctx.signal, onProgress)
       const params = omitOnProgress(request)
@@ -163,9 +163,9 @@ async function handleRagInternal(
 
     case 'saveEmbeddings': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateServerRequestId()
+      const requestId = request.requestId ?? generateRandomRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('saveEmbeddings start')
       const handlerOptions = createHandlerOptions(
         'saveEmbeddings',
@@ -204,9 +204,9 @@ async function handleRagInternal(
 
     case 'reindex': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateServerRequestId()
+      const requestId = request.requestId ?? generateRandomRequestId()
       await using ctx = await beginRagContext(workspace, requestId)
-      const log = withRequestContext(getServerLogger(), ctx)
+      const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('reindex start')
       const handlerOptions = createHandlerOptions('reindex', workspace, ctx.signal, onProgress)
       const params = omitOnProgress(request)
