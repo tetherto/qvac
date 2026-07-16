@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Repackage GR00T-N1.7-3B's backbone weights as a standard Qwen3-VL HF checkpoint.
 
 GR00T's Qwen3Backbone wraps a full `Qwen3VLForConditionalGeneration` at the
@@ -37,6 +38,22 @@ from safetensors import safe_open
 from safetensors.torch import save_file
 
 BACKBONE_PREFIX = "backbone.model."
+
+# The backbone's real text-decoder dims. convert_groot_dit_to_gguf.py hardcodes
+# the SAME numbers as groot.text.* GGUF metadata (TEXT_HIDDEN_SIZE / TEXT_NUM_HEADS
+# / …) and groot.cpp reads them at load — but nothing there validates that copy
+# against the actual backbone config. Cross-check the cosmos config here, at the
+# one place that reads it, so a config whose factorization drifts from those
+# constants fails loudly at repackage time instead of silently producing a GGUF
+# with stale metadata. Keep in sync with convert_groot_dit_to_gguf.py's TEXT_*.
+EXPECTED_TEXT_CONFIG = {
+    "hidden_size": 2048,
+    "num_attention_heads": 16,
+    "num_key_value_heads": 8,
+    "head_dim": 128,
+    "intermediate_size": 6144,
+    "vocab_size": 151936,
+}
 CONFIG_COPY_FILES = [
     "tokenizer.json",
     "tokenizer_config.json",
@@ -97,6 +114,18 @@ def main():
     print(f"Wrote {len(tensors)} tensors to {args.out / 'model.safetensors'}")
 
     config = json.loads((args.cosmos_config_dir / "config.json").read_text())
+    text_config = config["text_config"]
+    mismatches = {
+        k: (text_config.get(k), v)
+        for k, v in EXPECTED_TEXT_CONFIG.items()
+        if k in text_config and text_config[k] != v
+    }
+    if mismatches:
+        raise ValueError(
+            "cosmos text_config diverges from the backbone dims hardcoded in "
+            "convert_groot_dit_to_gguf.py (groot.text.* metadata). Update both "
+            f"in lockstep. Mismatches (got, expected): {mismatches}"
+        )
     config["text_config"]["num_hidden_layers"] = args.num_layers
     (args.out / "config.json").write_text(json.dumps(config, indent=2))
     print(f"Wrote truncated config.json (num_hidden_layers={args.num_layers})")

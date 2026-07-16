@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Merge the 3 GR00T GGUF parts (text backbone, vision mmproj, action head) into
 one unified `groot.gguf`, matching the single-file convention the other vla-ggml
 architectures (SmolVLA, π₀.₅) ship as. Pure byte-copy, no numerics recomputed.

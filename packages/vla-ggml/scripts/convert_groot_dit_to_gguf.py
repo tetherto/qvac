@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Convert GR00T N1.7-3B's action-head weights (VL fusion + DiT + embodiment MLPs)
 to a GGUF file, single-embodiment-sliced for v1. Covers `action_head.*`; the
 backbone (Qwen3-VL vision + truncated-16-layer text decoder) is converted
@@ -125,12 +126,29 @@ def add_basic_transformer_block(
     dst_prefix: str,
     has_ada_norm: bool,
     has_cross_attn: bool,
+    inner_dim: int = None,
+    ffn_inner: int = None,
 ):
     """Port one diffusers BasicTransformerBlock's weights to `dst_prefix.*` GGUF tensors."""
-    def cp(src_suffix, dst_suffix, transpose=False):
+    def cp(src_suffix, dst_suffix, transpose=False, expect=None):
         t = reader.get(f"{src_prefix}.{src_suffix}")
         if transpose:
             t = t.t().contiguous()
+        # Guard the hardcoded arch constants against the real checkpoint: these
+        # dims are written verbatim into groot.* GGUF metadata and read by
+        # groot.cpp, which only cross-checks their internal consistency (e.g.
+        # num_heads*head_dim == inner_dim), never against an actual tensor. A
+        # checkpoint whose inner/ffn width differs would otherwise convert and
+        # load clean, then mis-shape attention/FFN at runtime with no error.
+        # NOTE: this catches wrong inner_dim/ffn_inner PRODUCTS only — the
+        # num_heads vs head_dim factorization (e.g. 48x32 vs 32x48) is a
+        # metadata-only choice with no weight-shape footprint, so it stays a
+        # hand-set constant that no assert here can verify.
+        if expect is not None:
+            assert tuple(t.shape) == tuple(expect), (
+                f"{src_prefix}.{src_suffix} shape {tuple(t.shape)} != expected "
+                f"{tuple(expect)} — checkpoint arch differs from the hardcoded "
+                f"constants in this converter")
         writer.add_tensor(f"{dst_prefix}.{dst_suffix}", t.numpy())
 
     if has_ada_norm:
@@ -142,7 +160,9 @@ def add_basic_transformer_block(
         cp("norm3.weight", "norm3.weight")
         cp("norm3.bias", "norm3.bias")
 
-    cp("attn1.to_q.weight", "attn_q.weight")
+    # nn.Linear weight is [out, in]; to_q maps inner_dim -> inner_dim.
+    cp("attn1.to_q.weight", "attn_q.weight",
+       expect=(inner_dim, inner_dim) if inner_dim else None)
     cp("attn1.to_q.bias", "attn_q.bias")
     cp("attn1.to_k.weight", "attn_k.weight")
     cp("attn1.to_k.bias", "attn_k.bias")
@@ -151,7 +171,9 @@ def add_basic_transformer_block(
     cp("attn1.to_out.0.weight", "attn_out.weight")
     cp("attn1.to_out.0.bias", "attn_out.bias")
 
-    cp("ff.net.0.proj.weight", "ffn_in.weight")
+    # ff.net.0.proj maps inner_dim -> ffn_inner (single non-gated GELU proj).
+    cp("ff.net.0.proj.weight", "ffn_in.weight",
+       expect=(ffn_inner, inner_dim) if (ffn_inner and inner_dim) else None)
     cp("ff.net.0.proj.bias", "ffn_in.bias")
     cp("ff.net.2.weight", "ffn_out.weight")
     cp("ff.net.2.bias", "ffn_out.bias")
@@ -231,6 +253,8 @@ def main():
             dst_prefix=f"vlfusion.blk.{i}",
             has_ada_norm=False,
             has_cross_attn=False,
+            inner_dim=VLFUSION_INNER_DIM,
+            ffn_inner=VLFUSION_FFN_INNER,
         )
 
     # --- Timestep encoder: sinusoidal proj (no weights) + 2-layer MLP ---
@@ -260,6 +284,8 @@ def main():
             dst_prefix=f"dit.blk.{i}",
             has_ada_norm=True,
             has_cross_attn=not is_self_attn_block,
+            inner_dim=DIT_INNER_DIM,
+            ffn_inner=DIT_FFN_INNER,
         )
 
     writer.add_tensor("dit.proj_out_1.weight", reader.get("action_head.model.proj_out_1.weight").numpy())
@@ -276,9 +302,15 @@ def main():
     def add_embodiment_linear(src_prefix: str, dst_prefix: str):
         w = reader.get_embodiment_slice(f"{src_prefix}.W", cat_id)  # [in, out]
         b = reader.get_embodiment_slice(f"{src_prefix}.b", cat_id)  # [out]
-        # CategorySpecificLinear.forward does x @ W (not W @ x), so W is stored
-        # [in, out] already — matches ggml_mul_mat's expected [in, out] layout
-        # directly, no transpose needed (unlike nn.Linear's [out, in] weight).
+        # CategorySpecificLinear.forward does x @ W (not nn.Linear's x @ W^T), so
+        # the sliced weight is numpy [in, out]. gguf-py reverses numpy shape into
+        # ggml ne, giving ne=[out, in] — the OPPOSITE of what ggml_mul_mat wants
+        # ([in, out]). We store it as-is here; groot.cpp's grootLinearXW applies
+        # the compensating ggml_cont(ggml_transpose(...)) at graph-build time.
+        # This is a two-sided invariant: DO NOT "simplify" either side without
+        # the other. See grootLinearXW in groot.cpp. (Emitting w.numpy().T here
+        # and dropping the C++ transpose would encode it once, but changes the
+        # on-disk tensor layout — requires reconverting the GGUF + a parity run.)
         writer.add_tensor(f"{dst_prefix}.weight", w.numpy())
         writer.add_tensor(f"{dst_prefix}.bias", b.numpy())
 

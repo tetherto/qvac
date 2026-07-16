@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Dump GR00T N1.7-3B PyTorch reference activations for ggml-port parity testing.
 
 Runs Isaac-GR00T's `Gr00tPolicy` on a fixed synthetic fixture and dumps named

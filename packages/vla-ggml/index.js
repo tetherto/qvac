@@ -49,6 +49,16 @@ function validateRunInput(input, hparams) {
       })
     }
   }
+  // Pixel-plane models (smolvla, pi05) take `3 · w · h` floats per camera.
+  // GR00T takes images already patchified by Gr00tPolicy — a
+  // `patches · patch_flat` buffer whose exact length the native side copies
+  // blindly (no source-length check before the memcpy), so it MUST be validated
+  // here. The length is fixed per model (imgWidth is pinned to visionImageSize),
+  // surfaced as `hparams.imagePatchElems`. `imageInputMode` is the
+  // distinguishing axis (both groot and smolvla are `continuous` state).
+  const imagesArePatches = hparams && hparams.imageInputMode === 'patches'
+  const patchElems = imagesArePatches ? hparams.imagePatchElems : 0
+  const patchElemsKnown = Number.isInteger(patchElems) && patchElems > 0
   const expectedPerImage = 3 * imgWidth * imgHeight
   for (let i = 0; i < input.images.length; i++) {
     const img = input.images[i]
@@ -58,7 +68,25 @@ function validateRunInput(input, hparams) {
         adds: `input.images[${i}] must be a Float32Array`
       })
     }
-    if (img.length !== expectedPerImage) {
+    if (imagesArePatches) {
+      // Exact length guards the native memcpy against an OOB read. The native
+      // side copies patchElems floats per image blindly (no source-length
+      // check), so the expected length MUST be known here; if the addon didn't
+      // surface imagePatchElems (version skew), fail closed rather than pass an
+      // unvalidated buffer to that memcpy.
+      if (!patchElemsKnown) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.images[${i}] (patches): addon did not surface hparams.imagePatchElems, cannot validate patch buffer length`
+        })
+      }
+      if (img.length !== patchElems) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.images[${i}] (patches) length ${img.length} != ${patchElems}`
+        })
+      }
+    } else if (img.length !== expectedPerImage) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,
         adds: `input.images[${i}] length ${img.length} != 3*${imgWidth}*${imgHeight}`
@@ -101,6 +129,20 @@ function validateRunInput(input, hparams) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,
         adds: `state.length (${input.state.length}) must be > 0 and <= hparams.maxStateDim (${hparams.maxStateDim})`
+      })
+    }
+  }
+
+  // GR00T (imageInputMode 'patches') is a continuous-state flow-matching model
+  // that does NOT sample noise internally — GrootModel::infer hard-rejects a
+  // null noise. The discrete branch below already enforces this for pi05; do the
+  // same for the continuous/patches path so a missing prior surfaces as a clean
+  // INVALID_INPUT rather than an opaque INFERENCE_FAILED from the worker.
+  if (hparams && hparams.imageInputMode === 'patches') {
+    if (!input.noise || !(input.noise instanceof Float32Array) || input.noise.length === 0) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'groot requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
       })
     }
   }

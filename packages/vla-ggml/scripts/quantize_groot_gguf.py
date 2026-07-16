@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Quantize a merged GR00T `groot.gguf` per a named profile, writing
 `groot-<profile>.gguf`. Standalone + re-runnable: the merge step stays a pure
 byte-copy, quantization is a separate profile-parameterized pass so we can sweep
