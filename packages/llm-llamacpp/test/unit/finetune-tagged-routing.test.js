@@ -52,12 +52,34 @@ test('finetune() registers a sink under the native id; tagged events route to it
   // Tagged streamed output routes through the sink to the finetune handler.
   model._addonOutputCallback(null, 'Output', 'epoch log line', null, 42)
 
-  // Tagged terminal resolves the finetune response and deregisters the sink.
+  // Tagged terminal resolves the finetune response; the sink stays registered
+  // to consume the scheduler's trailing jobEnded stats snapshot.
   model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null, 42)
-
   const result = await response.await()
   t.is(result.status, 'COMPLETED', 'the tagged terminal must resolve the finetune response')
-  t.absent(model._jobSinks.has(42), 'the terminal must deregister the finetune sink')
+  t.ok(model._jobSinks.has(42), 'the sink must survive until the scheduler terminal')
+
+  // The tagged TPS trailer (the scheduler's jobEnded for the exclusive job)
+  // is consumed by the sink and deregisters it — no skip flag involved.
+  model._addonOutputCallback(null, 'Output', { TPS: 3, tokens: 0 }, null, 42)
+  t.absent(model._jobSinks.has(42), 'the scheduler terminal must deregister the finetune sink')
+})
+
+test('an unknown tagged event never reaches an active finetune', async (t) => {
+  const model = createModelWithMockAddon()
+  model.addon.finetune.callsFake(() => 42)
+
+  const response = await model.finetune(FINETUNE_OPTS)
+
+  // A stale tagged event for a job nobody knows must not corrupt the
+  // in-flight finetune (this used to fall through to the finetune handler).
+  model._addonOutputCallback(null, 'Output', { TPS: 9, tokens: 9 }, null, 99)
+  model._addonOutputCallback(null, 'Error', null, new Error('stale'), 99)
+
+  // The finetune still completes normally afterwards.
+  model._addonOutputCallback(null, 'Output', { op: 'finetune', status: 'COMPLETED' }, null, 42)
+  const result = await response.await()
+  t.is(result.status, 'COMPLETED', 'stale tagged events must not settle or fail the finetune')
 })
 
 test('a tagged finetune Error rejects the finetune response and deregisters the sink', async (t) => {

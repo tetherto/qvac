@@ -257,9 +257,9 @@ class LlmLlamacpp {
     this._config = config
     this.logger = new QvacLogger(logger)
     this.opts = opts
-    // Finetune-only response holder. Native finetune does not go through the
-    // job scheduler, so its events carry no jobId and cannot route via
-    // _jobSinks; inference never touches this handler.
+    // Finetune-only response holder. Tagged finetune events reach it through
+    // the _finetuneSink adapter registered in _jobSinks under the exclusive
+    // job's native id; inference never touches this handler.
     // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
     this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() })
     this._run = exclusiveRunQueue()
@@ -301,8 +301,6 @@ class LlmLlamacpp {
       cancelHandler: (jobId) => this.addon?.cancelJob(jobId),
       runJob: (items) => this.addon.runJob(items)
     })
-    // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
-    this._addonEventState = { skipNextRuntimeStats: false }
     this.state = { configLoaded: false }
   }
 
@@ -529,10 +527,11 @@ class LlmLlamacpp {
 
   /// Route an output event to the correct sink. A tagged event owned by an
   /// in-flight batch group goes to that group's response; other tagged events
-  /// go to the per-job QvacResponse stored in _jobSinks (finetune registers
-  /// an adapter under its native id). Untagged events (jobId === undefined)
-  /// still fall back to _finetuneJob (streamed batch chunks are also untagged
-  /// but route by their per-prompt string id).
+  /// go to the per-job sink stored in _jobSinks (finetune registers an
+  /// adapter under its native id). An event with no registered destination is
+  /// dropped with a warning — never reinterpreted as belonging to another
+  /// job. Streamed batch chunks stay untagged and route by their per-prompt
+  /// string id; the finetune terminal is identified by its payload.
   _handleAddonOutputEvent(eventType, data, error, jobId) {
     if (eventType === 'LogMsg') {
       const logMsg = typeof data === 'string' ? data : data?.message || JSON.stringify(data)
@@ -563,7 +562,7 @@ class LlmLlamacpp {
       if (sink) {
         sink.failed(error)
       } else {
-        this._finetuneJob.fail(error)
+        this.logger?.warn?.('Dropped Error event with no registered job:', jobId)
       }
     } else if (eventType === 'BatchOutput') {
       // Streaming chunks are untagged; the handler routes them by their
@@ -573,7 +572,7 @@ class LlmLlamacpp {
       if (sink) {
         sink.updateOutput(data)
       } else {
-        this._finetuneJob.output(data)
+        this.logger?.warn?.('Dropped Output event with no registered job:', jobId)
       }
     } else if (eventType === 'FinetuneProgress') {
       if (this.opts.stats && data && data.stats) {
@@ -587,24 +586,24 @@ class LlmLlamacpp {
         data.op === 'finetune' &&
         typeof data.status === 'string'
       if (isFinetuneTerminal) {
-        // The tagged finetune sink (if registered) is done once its terminal
-        // payload lands; the id is carried by the event itself.
-        if (typeof jobId === 'number') this._jobSinks.delete(jobId)
+        // Payload-routed; the sink stays registered so the scheduler's
+        // trailing jobEnded stats snapshot is consumed (and deregisters it)
+        // instead of surfacing as an unknown tagged event.
         this._finetuneJob.end(null, data)
       } else if (sink) {
         if (this.opts.stats && data != null) sink.updateStats(data)
         sink.ended()
       } else {
-        this._finetuneJob.end(this.opts.stats ? data : null)
+        this.logger?.warn?.('Dropped JobEnded event with no registered job:', jobId)
       }
     }
   }
 
   /// Native output callback. The 5th arg carries the numeric jobId minted
-  /// natively for single and batch runs, or undefined for untagged events
-  /// (streamed batch chunks, finetune).
+  /// natively for single runs, batch groups, and finetune; only streamed
+  /// batch chunks arrive untagged (routed by their per-prompt string id).
   _addonOutputCallback(addon, event, data, error, jobId) {
-    const mapped = mapAddonEvent(event, data, error, this._addonEventState)
+    const mapped = mapAddonEvent(event, data, error)
     if (mapped === null) return
     this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error, jobId)
   }
