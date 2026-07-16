@@ -28,9 +28,9 @@
 namespace {
 
 // vision
-constexpr int N_IMAGES = 4;
+constexpr int N_IMAGES = 2; // LIBERO v4 fixture: image + wrist_image
 constexpr int GRID = 16;
-constexpr int N_VPOS = N_IMAGES * GRID * GRID; // 1024
+constexpr int N_VPOS = N_IMAGES * GRID * GRID; // 512
 constexpr int IN_FLAT = 1536;
 constexpr int V_EMBD = 1024;
 constexpr int V_HEAD = 16;
@@ -38,11 +38,11 @@ constexpr int V_HEAD_DIM = 64;
 constexpr int MERGE = 2;
 constexpr int NUM_POS_EMBD = 2304;
 constexpr int OUT_HIDDEN = 2048;
-constexpr int N_MERGED = 256;
+constexpr int N_MERGED = 128; // 2 images × 64 merged patches
 constexpr float V_EPS = 1e-6f;
 constexpr float V_ROPE_BASE = 10000.0f;
 // text
-constexpr int T_TOK = 280;
+constexpr int T_TOK = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
 constexpr int DIM = 2048;
 constexpr int T_LAYERS = 16;
 constexpr int T_HEAD = 16;
@@ -103,9 +103,9 @@ linW(struct ggml_context* c, const std::string& p) {
 
 TEST(GrootM4_6, EndToEndPipelineMatchesPytorch) {
   const char* ggufPath = envOrNull("GROOT_TEST_GGUF");
-  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V3");
+  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (ggufPath == nullptr || actPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V3 to run "
+    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V4 to run "
                     "the M4.6 end-to-end pipeline test.";
   }
 

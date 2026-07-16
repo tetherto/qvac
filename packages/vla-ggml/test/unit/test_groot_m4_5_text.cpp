@@ -27,7 +27,7 @@
 
 namespace {
 
-constexpr int T_TOK = 280;
+constexpr int T_TOK = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
 constexpr int DIM = 2048;
 constexpr int N_LAYERS = 16;
 constexpr int N_HEAD = 16;
@@ -70,9 +70,9 @@ struct ggml_tensor* gt(struct ggml_context* c, const std::string& n) {
 
 TEST(GrootM4_5, TextDecoderMatchesPytorch) {
   const char* ggufPath = envOrNull("GROOT_TEST_GGUF");
-  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V3");
+  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (ggufPath == nullptr || actPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V3 to run "
+    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V4 to run "
                     "the M4.5 text-decoder parity test.";
   }
 
@@ -165,7 +165,7 @@ TEST(GrootM4_5, TextDecoderMatchesPytorch) {
     }
   }
 
-  // Deepstack: scatter each [256,2048] into a [2048,280] map at the image
+  // Deepstack: scatter each [128,2048] into a [2048,148] map at the image
   // token positions (visual_pos_masks), zero elsewhere.
   std::vector<struct ggml_tensor*> deepstack(3, nullptr);
   for (int i = 0; i < 3; ++i) {
@@ -182,7 +182,7 @@ TEST(GrootM4_5, TextDecoderMatchesPytorch) {
         ++img;
       }
     }
-    ASSERT_EQ(img, 256) << "deepstack " << i << " image-token count mismatch";
+    ASSERT_EQ(img, 128) << "deepstack " << i << " image-token count mismatch";
     deepstack[i] = d;
   }
 

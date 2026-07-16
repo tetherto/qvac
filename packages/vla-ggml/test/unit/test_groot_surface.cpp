@@ -19,10 +19,10 @@
 
 namespace {
 
-constexpr int N_IMAGES = 4; // 2 cameras × 2 frames
+constexpr int N_IMAGES = 2; // LIBERO v4 fixture: image + wrist_image
 constexpr int PATCHES_PER_IMG = 256;
 constexpr int IN_FLAT = 1536;
-constexpr int T_TOK = 280;
+constexpr int T_TOK = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
 constexpr int IMAGE_TOKEN_ID = 151655;
 constexpr int STATE_DIM = 132;
 constexpr int N_ACT = 40;
@@ -30,7 +30,7 @@ constexpr int ACT_DIM = 132;
 constexpr int IMAGE_SIZE = 256;
 constexpr int NUM_CAMERAS = 2;
 constexpr int N_MERGED =
-    256; // 4 imgs × 64 merged patches — image-placeholder count
+    128; // 2 imgs × 64 merged patches — image-placeholder count
 
 const char* envOrNull(const char* name) {
   const char* v = std::getenv(name);
@@ -41,9 +41,9 @@ const char* envOrNull(const char* name) {
 
 TEST(GrootSurface, HparamsBackendSurfaceAndHostRejection) {
   const char* ggufPath = envOrNull("GROOT_TEST_GGUF");
-  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V3");
+  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (ggufPath == nullptr || actPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V3 to run "
+    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V4 to run "
                     "the GrootModel surface test.";
   }
 

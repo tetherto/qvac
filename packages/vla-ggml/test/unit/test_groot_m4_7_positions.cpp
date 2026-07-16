@@ -19,7 +19,7 @@
 
 namespace {
 
-constexpr int T_TOK = 280;
+constexpr int T_TOK = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
 constexpr int IMAGE_TOKEN_ID = 151655; // Qwen3-VL placeholder
 constexpr int MERGED_GRID = 8;         // 256/16/2 per image
 
@@ -31,20 +31,20 @@ const char* envOrNull(const char* n) {
 } // namespace
 
 TEST(GrootM4_7, MRopePositionsMatchPytorch) {
-  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V3");
+  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (actPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_ACTIVATIONS_V3 to run the M4.7 position-id "
+    GTEST_SKIP() << "Set GROOT_TEST_ACTIVATIONS_V4 to run the M4.7 position-id "
                     "parity test.";
   }
   qvac_vla_safetensors_lite::Reader act;
   ASSERT_NO_THROW(act.open(actPath));
 
-  // visual_pos_masks [1,280] — 1 at image-token positions.
+  // visual_pos_masks [1,148] — 1 at image-token positions.
   const std::vector<float> vpm =
       act.readF32("text_model_input.call0.kwargs.visual_pos_masks");
   ASSERT_EQ(vpm.size(), static_cast<size_t>(T_TOK));
 
-  // position_ids [3,1,280] — axis-major (temporal, height, width).
+  // position_ids [3,1,148] — axis-major (temporal, height, width).
   const std::vector<float> expPos =
       act.readF32("text_model_input.call0.kwargs.position_ids");
   ASSERT_EQ(expPos.size(), static_cast<size_t>(3 * T_TOK));

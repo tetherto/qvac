@@ -74,9 +74,9 @@ void check(const char* tag, const float* got, const std::vector<float>& exp) {
 
 TEST(GrootM4_2, EncodersMatchPytorch) {
   const char* ggufPath = envOrNull("GROOT_TEST_GGUF");
-  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V2");
+  const char* actPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (ggufPath == nullptr || actPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V2 "
+    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V4 "
                     "(augmented dump) to run the M4.2 encoder parity test.";
   }
 

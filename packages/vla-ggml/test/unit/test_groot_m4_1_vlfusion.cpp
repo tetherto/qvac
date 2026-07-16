@@ -1,6 +1,6 @@
 // M4.1 parity: GR00T VL fusion (vlln + 4-layer SelfAttentionTransformer),
 // fed the oracle's dumped backbone_features. Env vars: GROOT_TEST_GGUF,
-// GROOT_TEST_ACTIVATIONS.
+// GROOT_TEST_ACTIVATIONS_V4.
 //
 // Tolerance: oracle is bf16 (~0.4% relative noise) and these activations are
 // large-magnitude (abs-max ~44/~64), so a fixed absolute bar would measure the
@@ -23,8 +23,8 @@
 
 namespace {
 
-constexpr int N_TOKENS = 280;
-constexpr int DIM = 2048; // backbone_embedding_dim / vlfusion inner dim
+constexpr int N_TOKENS = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
+constexpr int DIM = 2048;     // backbone_embedding_dim / vlfusion inner dim
 constexpr int N_HEADS = 32;
 constexpr int HEAD_DIM = 64;
 constexpr int N_BLOCKS = 4;
@@ -76,10 +76,11 @@ struct ggml_tensor* get(struct ggml_context* ctx, const char* name) {
 
 TEST(GrootM4_1, VlFusionMatchesPytorch) {
   const char* ggufPath = envOrNull("GROOT_TEST_GGUF");
-  const char* activationsPath = envOrNull("GROOT_TEST_ACTIVATIONS");
+  const char* activationsPath = envOrNull("GROOT_TEST_ACTIVATIONS_V4");
   if (ggufPath == nullptr || activationsPath == nullptr) {
-    GTEST_SKIP() << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS to run the "
-                    "M4.1 VL-fusion parity test.";
+    GTEST_SKIP()
+        << "Set GROOT_TEST_GGUF and GROOT_TEST_ACTIVATIONS_V4 to run the "
+           "M4.1 VL-fusion parity test.";
   }
 
   // ── 1. Oracle: backbone features (input) + the two fusion outputs ─────
