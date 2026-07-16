@@ -2,6 +2,7 @@
 
 #include <any>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -125,6 +126,8 @@ private:
   };
   SynthesizeResult synthesize(const std::string& text,
                               const ChunkCallback& chunkCallback);
+  void recordSynthesisStats(std::size_t outSamples, double elapsedSec,
+                            int emittedRate, std::size_t textLength);
   static void validateConfig(const ChatterboxConfig& cfg);
 
   // Called under `engineMu_`.

@@ -211,7 +211,12 @@ function expandCanonicalReport (report, sourceFile) {
           wallMs: { mean: toNumberOrNull(m.wall_time_ms) },
           coldRtf: toNumberOrNull(m.cold_rtf),
           modelLoadMs: toNumberOrNull(m.model_load_ms),
-          tokensPerSecond: { mean: toNumberOrNull(m.tps) }
+          tokensPerSecond: { mean: toNumberOrNull(m.tps) },
+          memory: {
+            avgRssMb: toNumberOrNull(m.avg_rss_mb),
+            peakRssMb: toNumberOrNull(m.peak_rss_mb),
+            reclaimedMb: toNumberOrNull(m.reclaimed_mb)
+          }
         },
         correlation: { githubRunId: report.run_number }
       }, sourceFile))
@@ -225,6 +230,22 @@ function toNumberOrNull (value) {
   if (value === null || value === undefined) return null
   const num = Number(value)
   return Number.isFinite(num) ? num : null
+}
+
+// Prefer the structured summary.memory block (avg / peak / reclaimed MB written
+// by the RTF benchmark). Fall back to the legacy flat summary.peakRssBytes so
+// artifacts produced before the memory block was added still surface a peak.
+function memoryFromSummary (summary) {
+  const memory = (summary && summary.memory) || {}
+  const peakRssMb = toNumberOrNull(memory.peakRssMb)
+  const legacyPeakMb = summary && summary.peakRssBytes
+    ? Number(summary.peakRssBytes) / 1024 / 1024
+    : null
+  return {
+    avgRssMb: toNumberOrNull(memory.avgRssMb),
+    peakRssMb: peakRssMb !== null ? peakRssMb : legacyPeakMb,
+    reclaimedMb: toNumberOrNull(memory.reclaimedMb)
+  }
 }
 
 function deriveNoisy (rtf, summary) {
@@ -245,6 +266,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const memory = memoryFromSummary(summary)
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
   const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '')
@@ -271,7 +293,9 @@ function normalizeDesktopRecord (report, sourceFile) {
     stddev: toNumberOrNull(rtf.stddev),
     coldRtf: toNumberOrNull(summary.coldRtf),
     modelLoadMs: toNumberOrNull(summary.modelLoadMs),
-    peakRssMb: summary.peakRssBytes ? Number(summary.peakRssBytes) / 1024 / 1024 : null,
+    avgRssMb: memory.avgRssMb,
+    peakRssMb: memory.peakRssMb,
+    reclaimedMb: memory.reclaimedMb,
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : (report.model && report.model.sizeBytes ? Number(report.model.sizeBytes) / 1024 / 1024 : null),
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
@@ -287,6 +311,7 @@ function normalizeMobileRecord (record, sourceFile) {
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
   const tps = summary.tokensPerSecond || {}
+  const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
   const backend = normalizeBackend(platformFamily, useGPU, record.backendHint)
@@ -309,7 +334,9 @@ function normalizeMobileRecord (record, sourceFile) {
     stddev: toNumberOrNull(rtf.stddev),
     coldRtf: toNumberOrNull(summary.coldRtf),
     modelLoadMs: toNumberOrNull(summary.modelLoadMs),
-    peakRssMb: summary.peakRssBytes ? Number(summary.peakRssBytes) / 1024 / 1024 : null,
+    avgRssMb: memory.avgRssMb,
+    peakRssMb: memory.peakRssMb,
+    reclaimedMb: memory.reclaimedMb,
     modelSizeMb: summary.modelSizeBytes ? Number(summary.modelSizeBytes) / 1024 / 1024 : null,
     wallMs: toNumberOrNull(wallMs.mean),
     tokensPerSecond: toNumberOrNull(tps.mean),
@@ -342,7 +369,9 @@ function normalizeManualRecord (record, sourceFile) {
     stddev: toNumberOrNull(record.stddev),
     coldRtf: toNumberOrNull(record.coldRtf),
     modelLoadMs: toNumberOrNull(record.modelLoadMs),
+    avgRssMb: toNumberOrNull(record.avgRssMb),
     peakRssMb: toNumberOrNull(record.peakRssMb),
+    reclaimedMb: toNumberOrNull(record.reclaimedMb),
     modelSizeMb: toNumberOrNull(record.modelSizeMb),
     wallMs: toNumberOrNull(record.wallMs),
     tokensPerSecond: toNumberOrNull(record.tokensPerSecond),
@@ -534,8 +563,8 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('')
   lines.push('`Cold RTF` is the first warmup run after load (captures cold-path latency). `Noisy` flags rows where stddev / mean > 15%.')
   lines.push('')
-  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Model (MB) | Tokens/s | Noisy | Run |')
-  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|---------------|------------|----------|-------|-----|')
+  lines.push('| Source | Device | Platform | Engine | Variant | GPU | Backend | GPU Model | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Model (MB) | Tokens/s | Noisy | Run |')
+  lines.push('|--------|--------|----------|--------|---------|-----|---------|-----------|-------|----------|-----|-----|----------|----------------|-----------|--------------|---------------|----------------|------------|----------|-------|-----|')
 
   for (const r of records) {
     lines.push('| ' + [
@@ -554,7 +583,9 @@ function renderMarkdown (records, streamingRecords) {
       formatNumber(r.coldRtf),
       formatMaybeInteger(r.wallMs),
       formatMaybeInteger(r.modelLoadMs),
+      formatMaybeInteger(r.avgRssMb),
       formatMaybeInteger(r.peakRssMb),
+      formatMaybeInteger(r.reclaimedMb),
       formatModelSize(r.modelSizeMb),
       formatNumber(r.tokensPerSecond, 1),
       r.noisy === true ? '⚠' : '-',
@@ -639,4 +670,16 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeDesktopRecord,
+  normalizeMobileRecord,
+  normalizeManualRecord,
+  normalizeStreamingRecord,
+  expandCanonicalReport,
+  memoryFromSummary,
+  renderMarkdown
+}

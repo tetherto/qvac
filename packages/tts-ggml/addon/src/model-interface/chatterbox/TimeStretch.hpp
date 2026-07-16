@@ -119,6 +119,23 @@ private:
     }
   }
 
+  // Normalized cross-correlation of the candidate frame at input offset `inOff`
+  // (relative to inBase_) against the running similarity target_. Dividing out
+  // the candidate's energy favors the most similar waveform SHAPE over the
+  // loudest offset (classic WSOLA normalization); raw correlation would bias
+  // toward high-energy frames and smear transients. The target energy is
+  // constant across candidates, so it doesn't affect the argmax and is omitted.
+  float matchScore(std::size_t inOff) const {
+    float dot = 0.0f;
+    float energy = 0.0f;
+    for (int k = 0; k < N_; ++k) {
+      const float s = inBuf_[inOff + static_cast<std::size_t>(k)];
+      dot += s * target_[static_cast<std::size_t>(k)];
+      energy += s * s;
+    }
+    return dot / std::sqrt(energy + 1e-9f);
+  }
+
   // Find the frame start near `ideal` whose overlap region best matches the
   // running `target_` (the natural waveform continuation predicted from the
   // previously emitted frame).  Plain cross-correlation, classic WSOLA.
@@ -133,21 +150,7 @@ private:
     long best = lo;
     float bestScore = -std::numeric_limits<float>::infinity();
     for (long a = lo; a <= hi; ++a) {
-      const std::size_t inOff = static_cast<std::size_t>(a) - inBase_;
-      float dot = 0.0f;
-      float energy = 0.0f;
-      for (int k = 0; k < N_; ++k) {
-        const float s = inBuf_[inOff + static_cast<std::size_t>(k)];
-        dot += s * target_[static_cast<std::size_t>(k)];
-        energy += s * s;
-      }
-      // Normalized cross-correlation: divide out the candidate frame's energy
-      // so the match favors the most similar waveform SHAPE, not merely the
-      // loudest offset. Raw correlation biases toward high-energy frames and
-      // smears amplitude transients (classic WSOLA normalizes). The target
-      // energy is constant across candidates, so it doesn't affect the argmax
-      // and is omitted.
-      const float score = dot / std::sqrt(energy + 1e-9f);
+      const float score = matchScore(static_cast<std::size_t>(a) - inBase_);
       if (score > bestScore) {
         bestScore = score;
         best = a;
