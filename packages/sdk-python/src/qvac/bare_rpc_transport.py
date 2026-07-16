@@ -21,6 +21,8 @@ import tempfile
 from collections.abc import AsyncIterable, AsyncIterator, Sequence
 from typing import Any
 
+from .errors import reconstruct_error
+
 try:
     import bare_rpc
 except ImportError:
@@ -38,10 +40,12 @@ class BareRpcNotInstalledError(ImportError):
 
 
 def _json_or_raise(data: bytes) -> Any:
-    """Parse a JSON payload; the SDK reports failures in-band as {"type":"error"}."""
+    """Parse a JSON payload; the SDK reports failures in-band as
+    {"type": "error", ...} envelopes -- rebuild the typed error (or a generic
+    RPCError) so callers get `isinstance`-able classes, not strings."""
     obj = json.loads(data.decode("utf-8"))
     if isinstance(obj, dict) and obj.get("type") == "error":
-        raise RuntimeError("worker: " + str(obj.get("message", "unknown error")))
+        raise reconstruct_error(obj)
     return obj
 
 

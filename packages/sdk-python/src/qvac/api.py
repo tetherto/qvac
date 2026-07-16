@@ -26,6 +26,16 @@ from ._generated.models import (
     ModelRegistrySearchResponseModelsItem,
 )
 from ._transport import Transport
+
+# Re-exported so `qvac.api.CancelFailedError` etc. keep resolving; the classes
+# now live in qvac.errors as part of the one QvacError hierarchy.
+from .errors import (  # noqa: F401
+    CancelFailedError,
+    DeleteCacheFailedError,
+    InvalidDeleteCacheParamsError,
+    ModelRegistryQueryFailedError,
+    ModelUnloadFailedError,
+)
 from .schemas import (
     CancelRequest,
     CancelResponse,
@@ -44,28 +54,6 @@ from .schemas import (
     UnloadModelRequest,
     UnloadModelResponse,
 )
-
-
-class CancelFailedError(Exception):
-    pass
-
-
-class ModelUnloadFailedError(Exception):
-    def __init__(self, model_id: str) -> None:
-        super().__init__(f"failed to unload model {model_id!r}")
-
-
-class ModelRegistryQueryFailedError(Exception):
-    pass
-
-
-class InvalidDeleteCacheParamsError(Exception):
-    def __init__(self) -> None:
-        super().__init__("deleteCache needs either all=True or kv_cache_key")
-
-
-class DeleteCacheFailedError(Exception):
-    pass
 
 
 def _dump(model: Any) -> dict[str, Any]:
