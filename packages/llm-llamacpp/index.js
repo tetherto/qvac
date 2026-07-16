@@ -15,7 +15,8 @@ function normalizeRunOptions(runOptions) {
       prefill: false,
       generationParams: undefined,
       cacheKey: undefined,
-      saveCacheToDisk: false
+      saveCacheToDisk: false,
+      rejectWhenBusy: undefined
     }
   }
 
@@ -44,11 +45,17 @@ function normalizeRunOptions(runOptions) {
     throw new TypeError('saveCacheToDisk must be a boolean when provided')
   }
 
+  if (runOptions.rejectWhenBusy !== undefined && typeof runOptions.rejectWhenBusy !== 'boolean') {
+    throw new TypeError('rejectWhenBusy must be a boolean when provided')
+  }
+
   return {
     prefill: runOptions.prefill === true,
     generationParams: normalizeGenerationParams(runOptions.generationParams),
     cacheKey: runOptions.cacheKey,
-    saveCacheToDisk: runOptions.saveCacheToDisk === true
+    saveCacheToDisk: runOptions.saveCacheToDisk === true,
+    // Left undefined when unset so admission falls back to the instance default.
+    rejectWhenBusy: runOptions.rejectWhenBusy
   }
 }
 
@@ -283,6 +290,9 @@ class LlmLlamacpp {
     /// their items' runOptions). Defaults to throwing on the sequential
     /// path (`parallel: 1`, backward compat) and to queueing when the
     /// multi-job scheduler is active (`parallel >= 2`).
+    if (opts?.rejectWhenBusy !== undefined && typeof opts.rejectWhenBusy !== 'boolean') {
+      throw new TypeError('opts.rejectWhenBusy must be a boolean when provided')
+    }
     this._rejectWhenBusy = opts?.rejectWhenBusy ?? this._maxConcurrency === 1
     /// Maps the native-assigned jobId → response for active concurrent requests.
     this._jobSinks = new Map()
@@ -395,11 +405,14 @@ class LlmLlamacpp {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
+    // Validated BEFORE the capacity pre-check so malformed options (null, a
+    // truthy string, ...) fail as TypeErrors instead of steering admission.
+    const { rejectWhenBusy } = normalizeRunOptions(runOptions)
     // rejectWhenBusy gates only this fast-fail pre-check: true rejects the moment
     // the pool is full (never queues); false falls through to the scheduler's
     // nearly unbounded queue, so it's only refused (below) under a runaway backlog.
     if (
-      (runOptions.rejectWhenBusy ?? this._rejectWhenBusy) &&
+      (rejectWhenBusy ?? this._rejectWhenBusy) &&
       this.addon.activeJobs() >= this._maxConcurrency
     ) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)

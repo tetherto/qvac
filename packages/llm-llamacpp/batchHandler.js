@@ -65,6 +65,11 @@ class BatchHandler {
     for (const item of batchInput) {
       const value = BatchHandler._isWrapped(item) ? item.runOptions?.rejectWhenBusy : undefined
       if (value === undefined) continue
+      // Validated before the conflict comparison so a non-boolean can never
+      // become the group policy (nor mask a genuine conflict).
+      if (typeof value !== 'boolean') {
+        throw new TypeError('rejectWhenBusy must be a boolean when provided')
+      }
       if (policy !== undefined && policy !== value) {
         throw new TypeError(
           'Conflicting rejectWhenBusy across batch items: the batch is admitted as one job'
