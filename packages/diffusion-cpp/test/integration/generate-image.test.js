@@ -180,6 +180,50 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
       `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
     )
 
+    // ── Batch runtime stats ───────────────────────────────────────────────────
+    // stable-diffusion.cpp invokes its sampler once per batch item, then
+    // decodes all final latents. The phase tracker must include both sampler
+    // sequences in denoiseMs rather than folding the second into vaeMs.
+    images.length = 0
+    const batchSteps = 2
+    const batchResponse = await model.run({
+      prompt: 'a red fox in a snowy forest, photorealistic',
+      negative_prompt: 'blurry, low quality, watermark',
+      steps: batchSteps,
+      width: 512,
+      height: 512,
+      cfg_scale: 7.5,
+      seed: 100,
+      batch_count: 2
+    })
+    await batchResponse
+      .onUpdate((data) => {
+        if (data instanceof Uint8Array) images.push(data)
+      })
+      .await()
+
+    const batchStats = batchResponse.stats
+    t.is(images.length, 2, 'batch_count=2 returns two images')
+    t.ok(
+      typeof batchStats.denoiseMs === 'number' && batchStats.denoiseMs > 0,
+      `batch denoiseMs is positive (got ${batchStats.denoiseMs})`
+    )
+    t.ok(
+      typeof batchStats.stepsPerSecond === 'number' && batchStats.stepsPerSecond > 0,
+      `batch stepsPerSecond is positive (got ${batchStats.stepsPerSecond})`
+    )
+    t.ok(
+      Math.abs((batchStats.stepsPerSecond * batchStats.denoiseMs) / 1000 - batchSteps * 2) < 0.001,
+      'batch throughput accounts for both sampler sequences'
+    )
+    const batchPhaseMs =
+      batchStats.conditionerMs + batchStats.denoiseMs + batchStats.vaeMs + batchStats.postProcessMs
+    const batchTolerance = Math.max(2, batchStats.generationMs * 0.01)
+    t.ok(
+      Math.abs(batchPhaseMs - batchStats.generationMs) <= batchTolerance,
+      `batch phase times sum to generation time: ${batchPhaseMs.toFixed(0)}ms ≈ ${batchStats.generationMs}ms`
+    )
+
     // Save output for CI artifact upload — filename encodes test origin
     // Saved to modelDir so mobile has write permission to the same path
     const outPath = path.join(modelDir, 'generate-image--sd2-txt2img-seed42.png')

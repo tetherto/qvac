@@ -39,21 +39,20 @@ struct ProgressCtx {
 
   // Phase-boundary capture for conditioner / denoise / vae timing.
   //
-  // sd.cpp emits a *separate* progress sequence for each phase, and every
-  // sequence restarts at step==0 (sampling: stable-diffusion.cpp
-  // pretty_progress (0, steps) at the first denoise step; tiling:
-  // ggml_extend.hpp sd_tiling pretty_progress(0, num_tiles)). Within a
-  // generate_*() call the order is:
-  //   [denoise loop] -> [VAE decode, tiled when vae_tiling is on]
-  // and ESRGAN upscaling (which also tiles) fires *more* sequences after
-  // generate_*() has returned. We therefore only track the FIRST sequence (the
-  // denoise loop); the gap between its last tick and generate_*() returning is
-  // the VAE decode. This keeps VAE-tiling ticks out of denoiseMs and prevents
-  // post-generate upscaler ticks from corrupting the denoise boundary.
+  // sd.cpp emits a separate progress sequence for each sampler invocation and
+  // tiled VAE pass. Each sequence restarts at step==0 (sampling:
+  // stable-diffusion.cpp pretty_progress(0, steps); tiling:
+  // ggml_extend.hpp sd_tiling pretty_progress(0, num_tiles)). Image generation
+  // invokes the sampler once per batch item; video generation invokes it once
+  // for the full video-latent tensor. We capture exactly the known number of
+  // leading sampler sequences, leaving later VAE-tiling sequences out of the
+  // denoise window. ESRGAN upscaling runs after generate_*() returns.
   std::chrono::steady_clock::time_point denoiseFirstTime;
   std::chrono::steady_clock::time_point denoiseLastTime;
-  int denoiseTicks = 0;  // progress ticks observed in the denoise sequence
-  int denoiseSteps = 0;  // sampler step count ("total") reported during denoise
+  int expectedDenoiseSequences = 1;
+  int denoiseSequences = 0;
+  int denoiseTicks = 0;
+  int denoiseSteps = 0;  // sum of sampler "total" values across sequences
   int segmentCount = 0;  // number of step==0 sequence-starts seen this job
   int observedTicks = 0; // total progress ticks seen this job (all phases)
 };
@@ -83,19 +82,25 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   const auto now = std::chrono::steady_clock::now();
   auto& ctx = g_progressCtx;
 
-  // A step==0 tick marks the start of a new progress sequence (denoise, then
-  // VAE / upscaler tiling). The very first tick of the job always opens the
-  // denoise sequence even on the off chance an engine skips the step==0 start.
-  if (step == 0 || ctx.observedTicks == 0)
+  // A step==0 tick marks the start of a new progress sequence. The very first
+  // tick opens the first sequence as a defensive fallback for engines that
+  // omit the start tick.
+  const bool startsSequence = step == 0 || ctx.observedTicks == 0;
+  if (startsSequence)
     ++ctx.segmentCount;
   ++ctx.observedTicks;
 
-  // Capture only the first sequence (segmentCount == 1): the denoise loop.
-  if (ctx.segmentCount == 1) {
+  // The leading sequences are the known sampler invocations: one for video and
+  // one per image batch item. Subsequent sequences are VAE tiling and must not
+  // inflate denoiseMs.
+  if (ctx.segmentCount <= ctx.expectedDenoiseSequences) {
     if (ctx.denoiseTicks == 0)
       ctx.denoiseFirstTime = now;
+    if (startsSequence) {
+      ++ctx.denoiseSequences;
+      ctx.denoiseSteps += steps;
+    }
     ctx.denoiseLastTime = now;
-    ctx.denoiseSteps = steps; // sampler "total"; constant across the sequence
     ++ctx.denoiseTicks;
   }
 
@@ -113,12 +118,14 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   ctx.job->progressCallback(oss.str());
 }
 
-// Phase timings derived from the denoise progress sequence. A generate_*() call
-// runs [conditioning] -> [N denoise steps] -> [VAE decode], and the denoise
-// loop emits a step==0 start tick followed by one tick per step (see
-// ProgressCtx). Using only the denoise sequence's first/last tick:
+// Phase timings derived from the leading denoise progress sequences. A
+// generate_*() call runs [conditioning] -> [N denoise steps] -> [VAE decode].
+// Image batches have one consecutive denoise sequence per output; video has
+// one sequence for the full video latent. Each sequence emits a step==0 start
+// tick followed by one tick per step (see ProgressCtx). Using the combined
+// first/last denoise boundaries:
 //   conditionerMs = denoiseFirst - t0   (encode + setup before sampling)
-//   denoiseMs     = denoiseLast  - denoiseFirst
+//   denoiseMs     = denoiseLast  - denoiseFirst (all batch sampler calls)
 //   vaeMs         = tGen - denoiseLast   (decode, incl. any VAE tiling, before
 //                                         generate_*() returns)
 // Because vaeMs is bounded by tGen (captured the instant generate_*() returns),
@@ -140,21 +147,20 @@ PhaseStats computePhaseStats(
     return std::chrono::duration<double, std::milli>(d).count();
   };
   const auto& ctx = g_progressCtx;
-  if (ctx.denoiseTicks >= 2) {
+  if (ctx.denoiseTicks > ctx.denoiseSequences) {
     const double denoiseMs = toMs(ctx.denoiseLastTime - ctx.denoiseFirstTime);
-    // The denoise window spans (denoiseTicks - 1) step intervals, which equals
-    // the reported sampler "total" when every step fired a tick; prefer the
-    // reported total and fall back to the measured interval count.
-    const int steps =
-        ctx.denoiseSteps > 0 ? ctx.denoiseSteps : ctx.denoiseTicks - 1;
+    // Each sampler sequence has a leading step==0 tick, so subtract its count
+    // to derive the observed step intervals. Prefer the reported totals.
+    const int steps = ctx.denoiseSteps > 0
+                          ? ctx.denoiseSteps
+                          : ctx.denoiseTicks - ctx.denoiseSequences;
     ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
     ps.denoiseMs = denoiseMs;
     ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
     ps.stepsPerSecond = denoiseMs > 0.0 ? steps * 1000.0 / denoiseMs : 0.0;
-  } else if (ctx.denoiseTicks == 1) {
-    // Single tick (e.g. a 1-step distilled / LTX sampler): no interval to
-    // measure, so attribute everything before the tick to conditioning and
-    // everything after generate_*() returns to VAE; denoise/rate stay 0.
+  } else if (ctx.denoiseTicks > 0) {
+    // One tick per denoise sequence (e.g. a 1-step distilled / LTX sampler)
+    // gives no interval to measure, so denoise/rate stay 0.
     ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
     ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
   }
@@ -423,6 +429,8 @@ std::any SdModel::process(const std::any& input) {
   g_progressCtx.job = &job;
   g_progressCtx.startTime = std::chrono::steady_clock::now();
   // Reset phase-boundary capture for this job.
+  g_progressCtx.expectedDenoiseSequences = 1;
+  g_progressCtx.denoiseSequences = 0;
   g_progressCtx.denoiseTicks = 0;
   g_progressCtx.denoiseSteps = 0;
   g_progressCtx.segmentCount = 0;
@@ -782,6 +790,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   } // end gen.mode == "img2img"
 
   // -- Generate --------------------------------------------------------------
+  // stable-diffusion.cpp invokes sample() once per image batch item before
+  // decoding all final latents. Capture every leading sampler sequence.
+  g_progressCtx.expectedDenoiseSequences = gen.batchCount;
   const auto t0 = std::chrono::steady_clock::now();
 
   SdImageBatch results(
@@ -1098,6 +1109,9 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
   // -- Generate -------------------------------------------------------------
+  // The supported single-expert video path samples one full video-latent
+  // tensor. Wan 2.2's two-expert path is intentionally out of scope here.
+  g_progressCtx.expectedDenoiseSequences = 1;
   const auto t0 = std::chrono::steady_clock::now();
 
   // Upstream's master API returns success as a bool and hands back frames /
