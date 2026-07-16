@@ -34,7 +34,7 @@ const STANDALONE_CANCEL_DELAY = 250
 const CANCEL_ERROR_RE = /cancel|aborted|stopp?ed/i
 
 const SD21_MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 const ESRGAN_MODEL = {

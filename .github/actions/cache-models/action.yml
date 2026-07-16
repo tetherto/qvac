@@ -15,11 +15,22 @@ inputs:
     description: Bump to invalidate every cached entry for this addon.
     required: false
     default: v1
+  cache-key-suffix:
+    description: Optional suffix for independent caches within one package.
+    required: false
+    default: ''
+  group:
+    description: |
+      Optional manifest group to cache and warm. When set, only entries whose
+      `group` field matches are selected. Empty preserves legacy selection.
+    required: false
+    default: ''
   paths:
     description: |
       Optional multi-line override for cached paths. Supports
       `actions/cache` exclude patterns (lines starting with `!`).
-      Defaults to `packages/<package>/test/model`.
+      Defaults to exact files declared in models.manifest.json when present,
+      otherwise `packages/<package>/test/model`.
     required: false
     default: ''
   hash-files-glob:
@@ -41,22 +52,23 @@ inputs:
     description: |
       When 'true' (default) and the package has a
       `test/integration/models.manifest.json`, download every declared model
-      into `packages/<package>/test/model` right after the cache restore, so
-      the multi-GB fetch happens as an ordinary step (no per-test brittle
-      timeout) and the post-job save persists a complete set. No-op on a full
-      cache hit. Set 'false' for callers that provision models another way.
+      selected by `group` (excluding entries marked `warm: false`) into
+      `packages/<package>/test/model` right after the cache restore, so the
+      multi-GB fetch happens as an ordinary step (no per-test brittle timeout)
+      and the post-job save persists the selected set. No-op on a full cache
+      hit. Set 'false' for callers that provision models another way.
     required: false
     default: 'true'
   hf-token:
     description: |
-      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN for
-      gated model repositories.
+      Optional HuggingFace token, forwarded to the warm step as HF_TOKEN and
+      sent only to exact HTTPS huggingface.co requests for gated repositories.
     required: false
     default: ''
 
 outputs:
   cache-hit:
-    description: "'true' when cache was restored (download can be skipped)"
+    description: "'true' only when the exact primary cache key was restored"
     value: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
 
 runs:
@@ -87,6 +99,20 @@ runs:
         fi
         echo "glob=${glob}" >> "$GITHUB_OUTPUT"
 
+    - name: Resolve manifest model paths
+      id: model-paths
+      shell: bash
+      env:
+        PKG: ${{ inputs.package }}
+        MODEL_GROUP: ${{ inputs.group }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/warm-models.mjs" \
+          --package "$PKG" \
+          --group "$MODEL_GROUP" \
+          --root "$GITHUB_WORKSPACE" \
+          --paths-output "$GITHUB_OUTPUT"
+
     # Restore + automatic post-job save on trusted contexts (same-repo head,
     # push, workflow_dispatch, merge_group). The combined cache action
     # registers a post-step that saves models downloaded LATER in the job.
@@ -106,10 +132,10 @@ runs:
         github.event.pull_request.head.repo.full_name == github.repository
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
-        path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
-        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
+        path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         restore-keys: |
-          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+          models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Fork-PR (untrusted) path: restore only, never save.
@@ -122,28 +148,40 @@ runs:
         github.event.pull_request.head.repo.full_name != github.repository
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
-        path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
-        key: models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
+        path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         restore-keys: |
-          models-${{ inputs.package }}-${{ inputs.cache-version }}-
+          models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with
-    # no per-test (brittle) timeout. This is the fix for cold-cache runs where
+    # no per-test (brittle) timeout. Restored files are always verified against
+    # the manifest; cache contents are not treated as provenance.
+    # This is the fix for cold-cache runs where
     # heavy tests (e.g. Wan T2V/I2V) would otherwise have to fetch 10-14GB
     # inside a single test's timeout and fail. On a full cache hit every file is
     # already present (and verified when integrity is pinned), so this is a fast
-    # no-op. The trusted-context cache post-step then saves the now
-    # complete dir so subsequent runs restore instead of re-downloading.
+    # no-op. Entries marked warm:false stay lazy. The trusted-context cache
+    # post-step then saves the selected set so subsequent runs restore it
+    # instead of re-downloading.
     - name: Warm models (download any missing from manifest)
       if: ${{ inputs.warm == 'true' }}
       shell: bash
       env:
         PKG: ${{ inputs.package }}
+        MODEL_GROUP: ${{ inputs.group }}
         HF_TOKEN_INPUT: ${{ inputs.hf-token }}
+        # Verified-marker fast path: skip the redundant full rehash ONLY on an
+        # exact primary-key hit (restore-keys prefix hits report 'false'), and
+        # bind the marker to the exact key that produced it.
+        MODEL_CACHE_EXACT_HIT: ${{ steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
+        MODEL_CACHE_KEY: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
       run: |
         set -euo pipefail
         # Only override an inherited job-level HF_TOKEN when a token was passed
         # explicitly; otherwise let the ambient env (if any) pass through.
         if [ -n "${HF_TOKEN_INPUT:-}" ]; then export HF_TOKEN="$HF_TOKEN_INPUT"; fi
-        node "$GITHUB_ACTION_PATH/warm-models.mjs" --package "$PKG"
+        node "$GITHUB_ACTION_PATH/warm-models.mjs" \
+          --package "$PKG" \
+          --group "$MODEL_GROUP" \
+          --root "$GITHUB_WORKSPACE"

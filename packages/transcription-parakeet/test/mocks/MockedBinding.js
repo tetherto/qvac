@@ -10,7 +10,7 @@ const state = Object.freeze({
 })
 
 class MockedBinding {
-  constructor () {
+  constructor() {
     this._handle = null
     this._state = state.LOADING
     this._busy = false
@@ -38,7 +38,7 @@ class MockedBinding {
     }
   }
 
-  createInstance (interfaceType, configurationParams, outputCb, transitionCb = null) {
+  createInstance(interfaceType, configurationParams, outputCb, transitionCb = null) {
     console.log('Constructing the parakeet addon (ggml backend)')
     this._interfaceType = interfaceType
     this._config = configurationParams
@@ -48,13 +48,13 @@ class MockedBinding {
     return this._handle
   }
 
-  _callCallbacks (event, output, error = null) {
+  _callCallbacks(event, output, error = null) {
     if (this.outputCb) {
       this.outputCb(this, event, output, error)
     }
   }
 
-  loadWeights (handle, data) {
+  loadWeights(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     // Real binding accepts a single GGUF byte stream (`{ filename,
     // chunk, completed }`). The mock just logs the filename to
@@ -63,7 +63,7 @@ class MockedBinding {
     return true
   }
 
-  activate (handle) {
+  activate(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Activated the addon')
     this._state = state.LISTENING
@@ -73,7 +73,7 @@ class MockedBinding {
     }
   }
 
-  pause (handle) {
+  pause(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Paused the processing')
     this._state = state.PAUSED
@@ -82,7 +82,7 @@ class MockedBinding {
     }
   }
 
-  stop (handle) {
+  stop(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Stopped the processing')
     this._state = state.STOPPED
@@ -91,7 +91,7 @@ class MockedBinding {
     }
   }
 
-  cancel (handle) {
+  cancel(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Cancel job')
     this._runToken++
@@ -115,7 +115,7 @@ class MockedBinding {
   // real binding would; endStreaming is intentionally side-effect-free
   // because the JS wrapper synthesises its own JobEnded (see
   // parakeet.js).
-  startStreaming (handle, config = {}) {
+  startStreaming(handle, config = {}) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streamingActive) {
       throw new Error('Streaming session already active for this instance')
@@ -128,7 +128,7 @@ class MockedBinding {
     return true
   }
 
-  appendStreamingAudio (handle, data) {
+  appendStreamingAudio(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (!this._streamingActive) {
       throw new Error('No active streaming session for this instance')
@@ -145,26 +145,34 @@ class MockedBinding {
     const endS = ((chunkIndex + 1) * audioLength) / sampleRate
     process.nextTick(() => {
       if (!this._streamingActive) return
-      this._callCallbacks('Output', [{
-        text: `Mock streaming chunk ${chunkIndex}`,
-        start: startS,
-        end: endS,
-        toAppend: true,
-        isEndOfTurn: false,
-        startsWord: chunkIndex === 0
-      }], null)
+      this._callCallbacks(
+        'Output',
+        [
+          {
+            text: `Mock streaming chunk ${chunkIndex}`,
+            start: startS,
+            end: endS,
+            toAppend: true,
+            isEndOfTurn: false,
+            startsWord: chunkIndex === 0
+          }
+        ],
+        null
+      )
     })
     return true
   }
 
-  endStreaming (handle) {
+  endStreaming(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (!this._streamingActive) {
       return { cleaned: false, audioDurationMs: 0, totalSamples: 0 }
     }
-    const samplesFed = this._streamingLog.appended *
-      (this._streamingConfig?.sampleRate || 16000) *
-      (this._streamingConfig?.chunkMs || 1000) / 1000
+    const samplesFed =
+      (this._streamingLog.appended *
+        (this._streamingConfig?.sampleRate || 16000) *
+        (this._streamingConfig?.chunkMs || 1000)) /
+      1000
     this._streamingActive = false
     this._streamingChunkIndex = 0
     this._streamingConfig = null
@@ -176,12 +184,12 @@ class MockedBinding {
     }
   }
 
-  status (handle) {
+  status(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     return this._state
   }
 
-  runJob (handle, data) {
+  runJob(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._busy) {
       return false
@@ -202,9 +210,12 @@ class MockedBinding {
     process.nextTick(() => {
       if (runToken !== this._runToken) return
 
-      const audioLength = data.input.length ?? (data.input.byteLength / 4)
+      const audioLength = data.input.length ?? data.input.byteLength / 4
       const mockTranscription = {
-        text: audioLength > 0 ? `Mock transcription for ${audioLength} samples of audio` : '[No speech detected]',
+        text:
+          audioLength > 0
+            ? `Mock transcription for ${audioLength} samples of audio`
+            : '[No speech detected]',
         start: 0,
         end: audioLength / 16000,
         toAppend: true
@@ -215,22 +226,26 @@ class MockedBinding {
       // emits (see addon/src/model-interface/parakeet/ParakeetModel.cpp)
       // so tests inspecting stats see the GGUF-backend shape.
       const audioDurationMs = Math.floor((audioLength / 16000) * 1000)
-      this._callCallbacks('RuntimeStats', {
-        processCalls: 1,
-        totalSamples: audioLength,
-        totalTokens: 0,
-        totalTranscriptions: 1,
-        totalWallMs: 1,
-        totalTime: 1,
-        modelLoadMs: 0,
-        encoderMs: 1,
-        decoderMs: 0,
-        melSpecMs: 0,
-        totalEncodedFrames: 0,
-        audioDurationMs,
-        backendDevice: 0,
-        backendId: 0
-      }, null)
+      this._callCallbacks(
+        'RuntimeStats',
+        {
+          processCalls: 1,
+          totalSamples: audioLength,
+          totalTokens: 0,
+          totalTranscriptions: 1,
+          totalWallMs: 1,
+          totalTime: 1,
+          modelLoadMs: 0,
+          encoderMs: 1,
+          decoderMs: 0,
+          melSpecMs: 0,
+          totalEncodedFrames: 0,
+          audioDurationMs,
+          backendDevice: 0,
+          backendId: 0
+        },
+        null
+      )
       this._busy = false
       this._state = state.LISTENING
       if (this.transitionCb) this.transitionCb(this, this._state)
@@ -239,7 +254,7 @@ class MockedBinding {
     return true
   }
 
-  load (handle, configurationParams) {
+  load(handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Loaded configuration:', configurationParams)
     this._state = state.LOADING
@@ -248,7 +263,7 @@ class MockedBinding {
     }
   }
 
-  reload (handle, configurationParams) {
+  reload(handle, configurationParams) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Reloaded configuration:', configurationParams)
     this._runToken++
@@ -266,7 +281,7 @@ class MockedBinding {
     })
   }
 
-  unload (handle) {
+  unload(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Unloaded the addon')
     this._state = state.IDLE
@@ -275,21 +290,21 @@ class MockedBinding {
     }
   }
 
-  setLogger (callback) {
+  setLogger(callback) {
     console.log('Set logger')
   }
 
-  releaseLogger () {
+  releaseLogger() {
     console.log('Released logger')
   }
 
-  unloadWeights (handle) {
+  unloadWeights(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     console.log('Unloaded weights')
     return true
   }
 
-  destroyInstance (handle) {
+  destroyInstance(handle) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     this._runToken++
     this._busy = false

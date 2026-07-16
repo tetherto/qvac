@@ -3,6 +3,7 @@ import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '@/s
 import { InvalidToolsArrayError, InvalidToolSchemaError } from '@/utils/errors-client'
 
 type ZodObjectType = z.ZodObject<z.ZodRawShape>
+type JsonSchemaEnumValue = string | number | boolean | null
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>
 
@@ -48,7 +49,7 @@ export function convertToolInput(input: ToolInput): Tool {
     {
       type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array'
       description?: string
-      enum?: string[]
+      enum?: JsonSchemaEnumValue[]
     }
   > = {}
   const required: string[] = []
