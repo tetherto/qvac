@@ -284,3 +284,6 @@ C++ unit tests live under [`addon/test/`](./addon/test/) and exercise the native
 This project is licensed under the Apache-2.0 [License](./LICENSE) – see the LICENSE file for details.
 
 _For questions or issues, please open an issue on the GitHub repository._
+
+<!-- ci: throwaway smoke test for macos26 self-hosted runner migration (#3276) — do not merge -->
+
