@@ -214,7 +214,7 @@
     "@qvac/ocr-ggml": "^0.10.2",
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
-    "@qvac/transcription-parakeet": "^0.9.1",
+    "@qvac/transcription-parakeet": "^0.10.0",
     "@qvac/transcription-whispercpp": "^0.11.1",
     "@qvac/translation-nmtcpp": "^7.2.2",
     "@qvac/tts-ggml": "^0.4.2",
