@@ -674,19 +674,27 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   // which let the test framework's teardown free the addon out from under
   // an in-flight cancel and trip a destroyed-mutex UAF in JobRunner.
   auto addonCppRef = instance.addonCpp;
-  return js::JsAsyncTask::run(env, [addonCppRef, savePauseCheckpoint]() {
-    auto* llamaModel = tryGetLlamaModel(*addonCppRef);
-    if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
-        llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
-      llamaModel->finetuner().waitUntilFinetuningPauseComplete();
-    } else {
-      // cancelAll, not cancelJob(kNoJobId): under the multi-job scheduler a
-      // kNoJobId cancel resolves to cancelById(0), a no-op for the real tagged
-      // ids. cancelAll() routes to the model's whole-model cancel(), preserving
-      // the "cancel the in-flight work" behaviour for both single and parallel.
-      addonCppRef->cancelAllJobs();
-    }
-  });
+  // Snapshot the live job ids here, on the JS thread — where admissions also
+  // run — so a job started after this call is never touched by the deferred
+  // cancellation below.
+  std::vector<qvac_lib_inference_addon_cpp::JobId> liveJobs =
+      addonCppRef->liveJobIds();
+  return js::JsAsyncTask::run(
+      env,
+      [addonCppRef, savePauseCheckpoint, liveJobs = std::move(liveJobs)]() {
+        auto* llamaModel = tryGetLlamaModel(*addonCppRef);
+        if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
+            llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
+          llamaModel->finetuner().waitUntilFinetuningPauseComplete();
+        } else {
+          // cancelJobs(snapshot), not cancelAllJobs(): the snapshot carries
+          // the real tagged ids under the multi-job scheduler (cancelById
+          // lands on each) and the untagged sentinel under the single-job
+          // one, so "cancel the in-flight work" holds for both — while a job
+          // admitted after the cancel request survives it.
+          addonCppRef->cancelJobs(liveJobs);
+        }
+      });
 }
 JSCATCH
 

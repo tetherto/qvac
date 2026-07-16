@@ -134,7 +134,10 @@ class LlamaInterface {
   }
 
   /**
-   * Cancel current inference job
+   * Cancel every inference job live at the moment of this call (or pause a
+   * running finetune). Snapshot-based: the native binding captures the live
+   * job ids synchronously before deferring the cancellation, so a job started
+   * after this call is never touched.
    */
   async cancel(savePauseCheckpoint = 1) {
     if (!this._handle) return
