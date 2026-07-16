@@ -76,9 +76,31 @@ export function getReviewState(reviews) {
   return out;
 }
 
-// Display state: formal reviews + conversation comments. Comments contribute
-// synthetic COMMENTED entries; most recent non-COMMENTED still wins.
-export function getDisplayReviewState(reviews, comments, authorLogin) {
+// Open discussion events for 💬 display / comment-side engagement.
+// Resolved review threads are ignored — GitHub keeps the stale
+// PullRequestReview(state=COMMENTED) even after "Resolve conversation".
+export function openDiscussionEvents(reviewThreads, issueComments) {
+  const events = [];
+  for (const thread of reviewThreads || []) {
+    if (thread.isResolved) continue;
+    for (const comment of thread.comments?.nodes || []) {
+      const login = comment.author?.login;
+      if (!login || isBot(login) || !comment.createdAt) continue;
+      events.push({ login, ts: comment.createdAt });
+    }
+  }
+  for (const comment of issueComments || []) {
+    const login = comment.author?.login;
+    if (!login || isBot(login) || !comment.createdAt) continue;
+    events.push({ login, ts: comment.createdAt });
+  }
+  return events;
+}
+
+// Display state: decisive formal reviews + open discussions only.
+// Formal COMMENTED reviews are skipped (they linger after threads resolve);
+// 💬 comes from unresolved reviewThreads and top-level issue comments.
+export function getDisplayReviewState(reviews, comments, authorLogin, reviewThreads = []) {
   const eventsByLogin = new Map();
 
   function add(login, ts, state) {
@@ -88,10 +110,11 @@ export function getDisplayReviewState(reviews, comments, authorLogin) {
   }
 
   for (const review of reviews || []) {
+    if (review.state === "COMMENTED") continue;
     add(review.author?.login, review.submittedAt, review.state);
   }
-  for (const comment of comments || []) {
-    add(comment.author?.login, comment.createdAt, "COMMENTED");
+  for (const { login, ts } of openDiscussionEvents(reviewThreads, comments)) {
+    add(login, ts, "COMMENTED");
   }
 
   const out = new Map();
@@ -162,10 +185,13 @@ export function getMyReviewLatestAt(pr, me) {
 
 export function getMyLatestEngagementAt(pr, me) {
   let latest = getMyReviewLatestAt(pr, me);
-  for (const comment of pr.comments?.nodes || []) {
-    if (comment.author?.login !== me) continue;
-    if (!comment.createdAt) continue;
-    if (!latest || comment.createdAt > latest) latest = comment.createdAt;
+  // Comment-side engagement: open discussions only (resolved threads ignored).
+  for (const { login, ts } of openDiscussionEvents(
+    pr.reviewThreads?.nodes,
+    pr.comments?.nodes,
+  )) {
+    if (login !== me) continue;
+    if (!latest || ts > latest) latest = ts;
   }
   return latest;
 }
@@ -368,6 +394,14 @@ function fetchPRPage(
           }
           comments(first: 100) {
             nodes { createdAt author { login } }
+          }
+          reviewThreads(first: 100) {
+            nodes {
+              isResolved
+              comments(first: 50) {
+                nodes { createdAt author { login } }
+              }
+            }
           }
           commits(last: 20) {
             nodes {
@@ -597,8 +631,14 @@ export function collectPRActivity({
 
     const reviews = pr.reviews?.nodes || [];
     const comments = pr.comments?.nodes || [];
+    const reviewThreads = pr.reviewThreads?.nodes || [];
     const reviewState = getReviewState(reviews);
-    const displayReviewState = getDisplayReviewState(reviews, comments, pr.author.login);
+    const displayReviewState = getDisplayReviewState(
+      reviews,
+      comments,
+      pr.author.login,
+      reviewThreads,
+    );
     const ready = readySince(pr);
     const prRef = pr.isPrimaryRepo === false ? `${pr.repo}#${pr.number}` : `#${pr.number}`;
     const checkContexts = includeCiChecks
@@ -610,6 +650,7 @@ export function collectPRActivity({
       ...pr,
       files,
       comments: { nodes: comments },
+      reviewThreads: { nodes: reviewThreads },
       reviewState,
       displayReviewState,
       ready,
