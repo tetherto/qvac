@@ -26,6 +26,8 @@ from typing import Any
 _CODE_CANCEL_FAILED = 52408
 _CODE_MODEL_LOAD_FAILED = 52200
 _CODE_TRANSLATION_FAILED = 52405
+_CODE_TRANSCRIPTION_FAILED = 52403
+_CODE_TEXT_TO_SPEECH_STREAM_FAILED = 52415
 _CODE_MODEL_UNLOAD_FAILED = 52400
 _CODE_REQUEST_ID_CONFLICT = 52417
 _CODE_REQUEST_NOT_FOUND = 52418
@@ -225,6 +227,26 @@ class TranslationFailedError(QvacError):
         )
 
 
+class TranscriptionFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "transcription failed",
+            name="TRANSCRIPTION_FAILED",
+            code=_CODE_TRANSCRIPTION_FAILED,
+            cause=cause,
+        )
+
+
+class TextToSpeechStreamFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "text-to-speech stream failed",
+            name="TEXT_TO_SPEECH_STREAM_FAILED",
+            code=_CODE_TEXT_TO_SPEECH_STREAM_FAILED,
+            cause=cause,
+        )
+
+
 class StreamEndedError(QvacError):
     def __init__(self, *, cause: Any = None) -> None:
         super().__init__(
@@ -416,6 +438,8 @@ __all__ = [
     "ModelTypeRequiredError",
     "ModelSrcTypeMismatchError",
     "TranslationFailedError",
+    "TranscriptionFailedError",
+    "TextToSpeechStreamFailedError",
     "StreamEndedError",
     "InvalidResponseError",
     "ModelUnloadFailedError",

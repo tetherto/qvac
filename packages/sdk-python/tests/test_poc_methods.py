@@ -62,8 +62,14 @@ async def test_completion_stream_produces_real_text(transport) -> None:
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import CompletionStreamRequest, ModelType
 
+    # Qwen3 is a thinking model: the worker reserves context for the
+    # reasoning trace and fits the default window to device memory, so an
+    # empty modelConfig overflows intermittently. Pin the window explicitly.
     model_id = await _load(
-        transport, QWEN3_600M_INST_Q4.src, ModelType.llamacpp_completion
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
     )
 
     request = CompletionStreamRequest.model_validate(
@@ -223,6 +229,89 @@ async def test_text_to_speech_stream_duplex_produces_real_audio(transport) -> No
         saw_done = saw_done or chunk.done
     assert samples, "expected real synthesized audio via the PoC duplex stream"
     assert saw_done, "expected a terminal done=True event on the response stream"
+
+
+async def test_tts_session_produces_real_audio(transport) -> None:
+    """qvac.sessions push-style ergonomics end to end: text fragments are
+    write()n into the session (no prebuilt upstream iterable) and PCM frames
+    stream back, including the yielded terminal done frame."""
+    from qvac.models import TTS_EN_SUPERTONIC_Q4_0
+    from qvac.schemas import ModelType
+    from qvac.sessions import text_to_speech_stream_session
+
+    model_id = await _load(
+        transport,
+        TTS_EN_SUPERTONIC_Q4_0.src,
+        ModelType.tts_ggml,
+        model_config={"ttsEngine": "supertonic", "language": "en"},
+    )
+
+    session = text_to_speech_stream_session(transport, model_id=model_id)
+    session.write("Hello from QVAC. ")
+    session.write("This is a streaming session.")
+    session.end()
+
+    samples: list[float] = []
+    saw_done = False
+    async for frame in session:
+        samples.extend(frame.buffer)
+        saw_done = saw_done or frame.done
+    assert samples, "expected real synthesized audio via the session"
+    assert saw_done, "expected the terminal done frame to be yielded"
+
+
+async def test_transcribe_session_produces_real_text(transport) -> None:
+    """Push-style transcription: audio is write()n at real-time cadence from
+    a concurrent task while the session is being iterated -- the interleaved
+    write/read flow the raw prebuilt-upstream stub can't express."""
+    import asyncio as _asyncio
+
+    from qvac.models import PARAKEET_CTC_0_6B_Q4_0
+    from qvac.schemas import ModelType
+    from qvac.sessions import transcribe_stream_session
+
+    model_id = await _load(
+        transport, PARAKEET_CTC_0_6B_Q4_0.src, ModelType.parakeet_transcription
+    )
+
+    chunk_ms = 1000
+    pcm = _wav_to_s16le_mono_16k(DEFAULT_AUDIO)
+    bytes_per_chunk = int(16000 * chunk_ms / 1000) * 2
+    trailing_silence = bytes(int(16000 * 1.5) * 2)
+    chunks = [pcm[i : i + bytes_per_chunk] for i in range(0, len(pcm), bytes_per_chunk)]
+    chunks += [
+        trailing_silence[i : i + bytes_per_chunk]
+        for i in range(0, len(trailing_silence), bytes_per_chunk)
+    ]
+
+    session = transcribe_stream_session(
+        transport,
+        model_id=model_id,
+        parakeet_streaming_config={"chunkMs": chunk_ms, "emitPartials": True},
+    )
+
+    async def feed() -> None:
+        for i, chunk in enumerate(chunks):
+            session.write(chunk)
+            if i < len(chunks) - 1:
+                await _asyncio.sleep(chunk_ms / 1000)
+        session.end()
+
+    feeder = _asyncio.ensure_future(feed())
+    try:
+        text = ""
+        async for event in session:
+            # Conversation mode (parakeet config): text arrives as TextEvent.
+            if getattr(event, "type", None) == "text":
+                text += event.text
+        assert text.strip(), "expected real transcript text via the session"
+    finally:
+        if not feeder.done():
+            feeder.cancel()
+        try:
+            await feeder
+        except _asyncio.CancelledError:
+            pass
 
 
 async def test_classify_produces_real_labels(transport) -> None:
