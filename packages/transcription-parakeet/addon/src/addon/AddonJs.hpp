@@ -42,6 +42,28 @@ inline ParakeetConfig createParakeetConfig(
   return adapter.loadFromJSObject(configurationParams, env);
 }
 
+inline js::Object transcriptToJsObject(js_env_t* env, const Transcript& t) {
+  auto obj = js::Object::create(env);
+  obj.setProperty(env, "text", js::String::create(env, t.text));
+  obj.setProperty(env, "toAppend", js::Boolean::create(env, t.toAppend));
+  obj.setProperty(env, "start", js::Number::create(env, t.start));
+  obj.setProperty(env, "end", js::Number::create(env, t.end));
+  obj.setProperty(
+      env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
+  obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
+  obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
+  return obj;
+}
+
+inline js_value_t*
+transcriptsToJsArray(js_env_t* env, const std::vector<Transcript>& output) {
+  auto jsOutput = js::Array::create(env);
+  for (size_t i = 0; i < output.size(); ++i) {
+    jsOutput.set(env, i, transcriptToJsObject(env, output[i]));
+  }
+  return jsOutput;
+}
+
 struct JsParakeetOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<Transcript>> {
@@ -49,41 +71,7 @@ struct JsParakeetOutputHandler
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<Transcript>>(
             [this](const std::vector<Transcript>& output) -> js_value_t* {
-              auto jsOutput = js::Array::create(this->env_);
-              for (size_t i = 0; i < output.size(); ++i) {
-                auto jsTranscript = js::Object::create(this->env_);
-                jsTranscript.setProperty(
-                    this->env_,
-                    "text",
-                    js::String::create(this->env_, output[i].text));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "toAppend",
-                    js::Boolean::create(this->env_, output[i].toAppend));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "start",
-                    js::Number::create(this->env_, output[i].start));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "end",
-                    js::Number::create(this->env_, output[i].end));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "id",
-                    js::Number::create(
-                        this->env_, static_cast<uint64_t>(output[i].id)));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "isEndOfTurn",
-                    js::Boolean::create(this->env_, output[i].isEndOfTurn));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "startsWord",
-                    js::Boolean::create(this->env_, output[i].startsWord));
-                jsOutput.set(this->env_, i, jsTranscript);
-              }
-              return jsOutput;
+              return transcriptsToJsArray(this->env_, output);
             }) {}
 };
 
@@ -165,15 +153,78 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-// ─── Duplex streaming entry points ────────────────────────────────────────
-// Mirrors transcription-whispercpp's StreamingProcessor wiring. Each
-// addon instance can host at most one active streaming session at a
-// time. Audio appended via appendStreamingAudio() bypasses the
-// framework's append() -> runJob() -> process() lifecycle entirely;
-// per-segment Transcripts are queued straight into addonCpp->outputQueue,
-// so the existing JS `onUpdate` channel surfaces them as soon as the
-// engine emits each chunk. Tear down via endStreaming() (graceful) or
-// cancelWithStreaming() (forceful).
+// Duplex streaming entry points. One session per addon instance; audio from
+// appendStreamingAudio() bypasses the append()/runJob()/process() lifecycle
+// and queues per-segment Transcripts straight into addonCpp->outputQueue.
+
+inline ParakeetStreamingProcessor::Config
+streamingConfigFromModel(ParakeetModel& model) {
+  ParakeetStreamingProcessor::Config config;
+  config.sampleRate = model.getSampleRate();
+  config.chunkMs = model.getStreamingChunkMs();
+  config.historyMs = model.getStreamingHistoryMs();
+  config.emitPartials = model.getStreamingEmitPartials();
+  config.emitEnergyVad = model.getStreamingEnergyVad();
+  config.diarOnsetThreshold = model.getDiarOnsetThreshold();
+  config.diarMinSegmentMs =
+      static_cast<int>(model.getDiarMinDurationOn() * 1000.0F);
+  config.leftContextMs = model.getStreamingLeftContextMs();
+  config.rightLookaheadMs = model.getStreamingRightLookaheadMs();
+  config.spkCacheEnable = model.getStreamingSpkCacheEnable();
+  config.spkCacheLen = model.getStreamingSpkCacheLen();
+  config.fifoLen = model.getStreamingFifoLen();
+  config.chunkLeftContextMs = model.getStreamingChunkLeftContextMs();
+  config.chunkRightContextMs = model.getStreamingChunkRightContextMs();
+  config.spkCacheUpdatePeriod = model.getStreamingSpkCacheUpdatePeriod();
+  return config;
+}
+
+inline void overrideIfPositive(
+    js_env_t* env, js::Object& obj, const char* name, int& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    const int intValue = static_cast<int>(*value);
+    if (intValue > 0)
+      target = intValue;
+  }
+}
+
+inline void overrideIfNonNegative(
+    js_env_t* env, js::Object& obj, const char* name, int& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    const int intValue = static_cast<int>(*value);
+    if (intValue >= 0)
+      target = intValue;
+  }
+}
+
+inline void
+overrideBool(js_env_t* env, js::Object& obj, const char* name, bool& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(env, name)) {
+    target = *value;
+  }
+}
+
+inline void applyStreamingOverrides(
+    js_env_t* env, js::Object& configObj,
+    ParakeetStreamingProcessor::Config& config) {
+  overrideIfPositive(env, configObj, "chunkMs", config.chunkMs);
+  overrideIfPositive(env, configObj, "historyMs", config.historyMs);
+  overrideIfPositive(env, configObj, "leftContextMs", config.leftContextMs);
+  overrideIfNonNegative(
+      env, configObj, "rightLookaheadMs", config.rightLookaheadMs);
+  overrideBool(env, configObj, "emitPartials", config.emitPartials);
+  overrideBool(env, configObj, "emitEnergyVad", config.emitEnergyVad);
+  // AOSC per-call overrides (v2.1+ Sortformer only).
+  overrideBool(env, configObj, "spkCacheEnable", config.spkCacheEnable);
+  overrideIfPositive(env, configObj, "spkCacheLen", config.spkCacheLen);
+  overrideIfPositive(env, configObj, "fifoLen", config.fifoLen);
+  overrideIfNonNegative(
+      env, configObj, "chunkLeftContextMs", config.chunkLeftContextMs);
+  overrideIfNonNegative(
+      env, configObj, "chunkRightContextMs", config.chunkRightContextMs);
+  overrideIfPositive(
+      env, configObj, "spkCacheUpdatePeriod", config.spkCacheUpdatePeriod);
+}
 
 inline js_value_t*
 startStreaming(js_env_t* env, js_callback_info_t* info) try {
@@ -186,102 +237,9 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   auto& parakeetModel =
       dynamic_cast<ParakeetModel&>(instance.addonCpp->model.get());
 
-  ParakeetStreamingProcessor::Config config;
-  config.sampleRate         = parakeetModel.getSampleRate();
-  config.chunkMs            = parakeetModel.getStreamingChunkMs();
-  config.historyMs          = parakeetModel.getStreamingHistoryMs();
-  config.emitPartials       = parakeetModel.getStreamingEmitPartials();
-  config.emitEnergyVad      = parakeetModel.getStreamingEnergyVad();
-  config.diarOnsetThreshold = parakeetModel.getDiarOnsetThreshold();
-  config.diarMinSegmentMs   = static_cast<int>(
-      parakeetModel.getDiarMinDurationOn() * 1000.0F);
-  config.leftContextMs      = parakeetModel.getStreamingLeftContextMs();
-  config.rightLookaheadMs   = parakeetModel.getStreamingRightLookaheadMs();
-  // AOSC defaults sourced from the model's load-time ParakeetConfig.
-  config.spkCacheEnable = parakeetModel.getStreamingSpkCacheEnable();
-  config.spkCacheLen = parakeetModel.getStreamingSpkCacheLen();
-  config.fifoLen = parakeetModel.getStreamingFifoLen();
-  config.chunkLeftContextMs = parakeetModel.getStreamingChunkLeftContextMs();
-  config.chunkRightContextMs = parakeetModel.getStreamingChunkRightContextMs();
-  config.spkCacheUpdatePeriod =
-      parakeetModel.getStreamingSpkCacheUpdatePeriod();
-
-  if (auto chunkMs =
-          configObj.getOptionalProperty<js::Number>(env, "chunkMs");
-      chunkMs.has_value()) {
-    const auto v = static_cast<int>(chunkMs.value().as<double>(env));
-    if (v > 0) config.chunkMs = v;
-  }
-  if (auto historyMs =
-          configObj.getOptionalProperty<js::Number>(env, "historyMs");
-      historyMs.has_value()) {
-    const auto v = static_cast<int>(historyMs.value().as<double>(env));
-    if (v > 0) config.historyMs = v;
-  }
-  if (auto leftContextMs =
-          configObj.getOptionalProperty<js::Number>(env, "leftContextMs");
-      leftContextMs.has_value()) {
-    const auto v = static_cast<int>(leftContextMs.value().as<double>(env));
-    if (v > 0) config.leftContextMs = v;
-  }
-  if (auto rightLookaheadMs =
-          configObj.getOptionalProperty<js::Number>(env, "rightLookaheadMs");
-      rightLookaheadMs.has_value()) {
-    const auto v = static_cast<int>(rightLookaheadMs.value().as<double>(env));
-    if (v >= 0) config.rightLookaheadMs = v;
-  }
-  if (auto emitPartials =
-          configObj.getOptionalProperty<js::Boolean>(env, "emitPartials");
-      emitPartials.has_value()) {
-    config.emitPartials = emitPartials.value().as<bool>(env);
-  }
-  if (auto emitEnergyVad =
-          configObj.getOptionalProperty<js::Boolean>(env, "emitEnergyVad");
-      emitEnergyVad.has_value()) {
-    config.emitEnergyVad = emitEnergyVad.value().as<bool>(env);
-  }
-  // AOSC per-call overrides (v2.1+ Sortformer only).
-  if (auto spkCacheEnable =
-          configObj.getOptionalProperty<js::Boolean>(env, "spkCacheEnable");
-      spkCacheEnable.has_value()) {
-    config.spkCacheEnable = spkCacheEnable.value().as<bool>(env);
-  }
-  if (auto spkCacheLen =
-          configObj.getOptionalProperty<js::Number>(env, "spkCacheLen");
-      spkCacheLen.has_value()) {
-    const auto v = static_cast<int>(spkCacheLen.value().as<double>(env));
-    if (v > 0)
-      config.spkCacheLen = v;
-  }
-  if (auto fifoLen = configObj.getOptionalProperty<js::Number>(env, "fifoLen");
-      fifoLen.has_value()) {
-    const auto v = static_cast<int>(fifoLen.value().as<double>(env));
-    if (v > 0)
-      config.fifoLen = v;
-  }
-  if (auto chunkLeftContextMs =
-          configObj.getOptionalProperty<js::Number>(env, "chunkLeftContextMs");
-      chunkLeftContextMs.has_value()) {
-    const auto v = static_cast<int>(chunkLeftContextMs.value().as<double>(env));
-    if (v >= 0)
-      config.chunkLeftContextMs = v;
-  }
-  if (auto chunkRightContextMs =
-          configObj.getOptionalProperty<js::Number>(env, "chunkRightContextMs");
-      chunkRightContextMs.has_value()) {
-    const auto v =
-        static_cast<int>(chunkRightContextMs.value().as<double>(env));
-    if (v >= 0)
-      config.chunkRightContextMs = v;
-  }
-  if (auto spkCacheUpdatePeriod = configObj.getOptionalProperty<js::Number>(
-          env, "spkCacheUpdatePeriod");
-      spkCacheUpdatePeriod.has_value()) {
-    const auto v =
-        static_cast<int>(spkCacheUpdatePeriod.value().as<double>(env));
-    if (v > 0)
-      config.spkCacheUpdatePeriod = v;
-  }
+  ParakeetStreamingProcessor::Config config =
+      streamingConfigFromModel(parakeetModel);
+  applyStreamingOverrides(env, configObj, config);
 
   {
     std::lock_guard<std::mutex> lock(g_streamingMtx);
@@ -294,11 +252,7 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
             parakeetModel, instance.addonCpp->outputQueue, config);
   }
 
-  // The return value is informational only -- ParakeetInterface's
-  // startStreaming() in parakeet.js synthesises its own currentJobId and
-  // discards this value. Kept as Boolean(true) instead of switching to
-  // a void / undefined return so existing JS callers (and the
-  // MockedBinding parity tests) keep working unchanged.
+  // Informational only; parakeet.js synthesises its own jobId.
   return js::Boolean::create(env, true);
 }
 JSCATCH

@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   objects, and split large C++/JS functions (and their inlined loops) into
   smaller named helpers per the team coding standards. These are internal
   refactors with no public API change.
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`whisper-cpp` override 1.9.1#3, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (base f16 mean RTF 0.332 -> 0.097, base q8_0 0.127 -> 0.063, small f16 1.345 -> 0.343 on ubuntu-24.04-arm). The addon now loads the dynamically-loadable ggml backends on linux-arm64 (previously Android-only).
 
 ## [0.12.0] - 2026-07-14
 
