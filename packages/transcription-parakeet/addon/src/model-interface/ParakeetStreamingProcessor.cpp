@@ -110,13 +110,8 @@ void ParakeetStreamingProcessor::end() {
   }
   if (shouldSignal)
     cv_.notify_all();
-  // join() runs at most once across end() / cancel() / dtor's cancel(),
-  // even when they race on different threads. Without this guard the
-  // loser observed thread_.joinable() == true and called join() on an
-  // already-joined thread, raising std::system_error.
-  std::call_once(teardown_once_, [this] {
-    if (thread_.joinable()) thread_.join();
-  });
+  // call_once joins the worker exactly once even if end()/cancel()/dtor race.
+  joinWorkerOnce();
 }
 
 void ParakeetStreamingProcessor::cancel() {
@@ -136,6 +131,10 @@ void ParakeetStreamingProcessor::cancel() {
     }
     cv_.notify_all();
   }
+  joinWorkerOnce();
+}
+
+void ParakeetStreamingProcessor::joinWorkerOnce() {
   std::call_once(teardown_once_, [this] {
     if (thread_.joinable()) thread_.join();
   });
