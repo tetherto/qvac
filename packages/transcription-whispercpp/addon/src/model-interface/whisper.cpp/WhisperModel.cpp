@@ -73,19 +73,20 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
                     std::to_string(static_cast<int>(transcript.end)) + "|>";
 }
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
 namespace {
-// Android ships ggml with `GGML_BACKEND_DL=ON`, so no backend is
+// Android -- and, since ggml-speech 2026-07-14, desktop linux-arm64
+// prebuilds too -- ship ggml with `GGML_BACKEND_DL=ON`, so no backend is
 // statically registered. dlopen the per-arch CPU + GPU `.so` modules
 // once per process; otherwise whisper_init aborts on a NULL CPU device.
 // Mirrors packages/{diffusion-cpp,llm-llamacpp,classification-ggml,…}.
-void ensureBackendsLoadedAndroid(const std::string& backendsDir) {
+void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
     if (backendsDir.empty()) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "Android: configurationParams.backendsDir not set; falling back to "
+          "configurationParams.backendsDir not set; falling back to "
           "ggml_backend_load_all() (default search path). CPU/Vulkan/OpenCL "
           "registration may fail inside an APK.");
       ggml_backend_load_all();
@@ -101,13 +102,13 @@ void ensureBackendsLoadedAndroid(const std::string& backendsDir) {
 #endif
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("Android: loading ggml backends from: ") +
+        std::string("loading ggml backends from: ") +
             variantsDir.string());
     ggml_backend_load_all_from_path(variantsDir.string().c_str());
   });
 }
 } // namespace
-#endif // __ANDROID__
+#endif // __ANDROID__ || linux-arm64
 
 namespace {
 std::string toLowerCopy(std::string value) {
@@ -202,8 +203,8 @@ int adrenoOpenclGpuDeviceIndex() {
 void WhisperModel::load() {
   if (!ctx_) {
 
-#if defined(__ANDROID__)
-    ensureBackendsLoadedAndroid(cfg_.backendsDir);
+#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+    ensureBackendsLoaded(cfg_.backendsDir);
 #endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
