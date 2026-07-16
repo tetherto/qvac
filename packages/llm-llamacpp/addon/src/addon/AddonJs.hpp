@@ -82,6 +82,18 @@ makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   };
 }
 
+/// Tagged variant for finetune: progress stats are queued under the exclusive
+/// job's id, resolved through the same deferred hand-off as
+/// makeQueueOutputCallback's idFuture overload.
+inline LlamaFinetuner::ProgressCallback makeQueueProgressCallback(
+    qvac_lib_inference_addon_cpp::AddonJs& instance,
+    std::shared_future<qvac_lib_inference_addon_cpp::JobId> idFuture) {
+  return [&instance, idFuture = std::move(idFuture)](
+             const llama_finetuning_helpers::FinetuneProgressStats& s) {
+    instance.addonCpp->outputQueue->queueResult(std::any(s), idFuture.get());
+  };
+}
+
 struct JsFinetuneProgressOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           llama_finetuning_helpers::FinetuneProgressStats> {
@@ -719,18 +731,28 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         general_error::InvalidArgument, "Finetuning parameters not provided");
   }
 
+  // Tag finetune's streamed output and progress with the admission-minted id
+  // via the deferred future (the same hand-off runJob uses); JS registers its
+  // finetune sink under this id.
+  auto idPromise = make_shared<promise<JobId>>();
+  auto idFuture = idPromise->get_future().share();
+
   LlamaModel::Prompt prompt;
   prompt.finetuningParams = *paramsOpt;
-  prompt.outputCallback = makeQueueOutputCallback(instance);
-  prompt.progressCallback = makeQueueProgressCallback(instance);
+  prompt.outputCallback = makeQueueOutputCallback(instance, idFuture);
+  prompt.progressCallback =
+      makeQueueProgressCallback(instance, std::move(idFuture));
 
   // Finetune reloads weights, so it runs as an exclusive job — the scheduler
   // enforces the finetune<->inference mutual exclusion (see runExclusiveJob).
-  // The exclusive admission mints its id like any other; JS only checks the
-  // returned value's truthiness (id when admitted, false when refused), and
-  // finetune's streamed events stay untagged (makeQueueOutputCallback without
-  // id), so JS keeps routing them to the finetune handler.
-  return instance.runExclusiveJob(any(std::move(prompt)));
+  const optional<JobId> jobId =
+      instance.addonCpp->runExclusiveJob(any(std::move(prompt)));
+  idPromise->set_value(jobId.value_or(kNoJobId));
+  if (!jobId.has_value()) {
+    // Refused (jobs queued or in flight): JS expects boolean false.
+    return js::Boolean::create(env, false);
+  }
+  return js::Number::create(env, static_cast<double>(*jobId));
 }
 JSCATCH
 
