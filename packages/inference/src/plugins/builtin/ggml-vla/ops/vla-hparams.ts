@@ -1,5 +1,9 @@
-import { getModel } from '@/server/bare/registry/model-registry'
-import { type VlaHparamsRequest, type VlaHparamsResponse, vlaHparamsSchema } from '@/schemas'
+import { getModel } from '../../../../runtime/model-registry.ts'
+import {
+  type VlaHparamsRequest,
+  type VlaHparamsResponse,
+  vlaHparamsSchema
+} from '../../../../schemas/index.ts'
 
 interface VlaModelLike {
   hparams: unknown
@@ -8,7 +12,7 @@ interface VlaModelLike {
 
 export function vlaGetHparams(request: VlaHparamsRequest): Promise<VlaHparamsResponse> {
   const model = getModel(request.modelId) as unknown as VlaModelLike
-  // Validate the addon-reported hparams against our schema so the wire
+  // Validate the addon-reported hparams against our schema so the response
   // shape stays consistent even if the underlying addon changes.
   const parsed = vlaHparamsSchema.parse(model.hparams)
   return Promise.resolve({

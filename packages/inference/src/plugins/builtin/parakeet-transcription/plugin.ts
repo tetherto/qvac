@@ -20,15 +20,15 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type ResolveResult
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
 import {
   ModelLoadFailedError,
   TranscriptionFailedError,
   LegacyParakeetModelDeprecatedError
-} from '@/utils/errors-server'
-import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
+} from '../../../errors/index.ts'
+import { transcribe, transcribeStream } from '../../ops/transcribe.ts'
+import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
 
 function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
   const cfgRecord = cfg as unknown as Record<string, unknown>
@@ -145,7 +145,7 @@ export const parakeetPlugin = definePlugin({
       cancel: { scope: 'model', hard: true },
 
       // TODO(QVAC-17869-followup): wire `AbortSignal` through the duplex
-      // handler signature so the worker learns about consumer disconnects
+      // handler signature so the handler learns about consumer disconnects
       // without depending on `inputStream.end()` (which does not fire if the
       // client drops packets while TCP stays alive). Under sustained slow
       // consumers, `runStreaming` may buffer between the server generator and

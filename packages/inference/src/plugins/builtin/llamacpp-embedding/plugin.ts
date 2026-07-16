@@ -11,13 +11,13 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type EmbedConfig
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
-import { expandGGUFIntoShards } from '@/server/utils'
-import { embed } from '@/server/bare/ops/embed'
-import { forwardModelExecution } from '@/profiling/model-execution'
-import { isMobile } from '@/server/bare/registry/runtime-context-registry'
-import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging/index.ts'
+import { expandGGUFIntoShards } from '../../../utils/index.ts'
+import { embed } from '../../ops/embed.ts'
+import { forwardModelExecution } from '../../../profiling/model-execution.ts'
+import { isMobile } from '../../../runtime/state.ts'
+import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile.ts'
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -75,7 +75,7 @@ function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: 
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(config)
     if (stripped.length > 0) {
-      getServerLogger().warn(
+      getEngineLogger().warn(
         `[${ModelType.llamacppEmbedding}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
       )
     }

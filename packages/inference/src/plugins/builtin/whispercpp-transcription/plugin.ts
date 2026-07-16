@@ -18,10 +18,10 @@ import {
   type ResolveContext,
   type TranscribeSegment,
   type WhisperConfig
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
-import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
+import { transcribe, transcribeStream } from '../../ops/transcribe.ts'
+import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
 
 function createWhisperModel(
   modelId: string,

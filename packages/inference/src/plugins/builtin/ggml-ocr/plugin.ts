@@ -11,15 +11,15 @@ import {
   type OCRConfig,
   type ResolveContext,
   type ResolveResult
-} from '@/schemas'
-import { ModelLoadFailedError } from '@/utils/errors-server'
-import { hyperdriveUrlSchema } from '@/schemas/load-model'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
+} from '../../../schemas/index.ts'
+import { ModelLoadFailedError } from '../../../errors/index.ts'
+import { hyperdriveUrlSchema } from '../../../schemas/load-model.ts'
+import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
 import ocrAddonLogging from '@qvac/ocr-ggml/addonLogging'
 import { OcrGgml } from '@qvac/ocr-ggml'
-import { ocr } from '@/server/bare/plugins/ggml-ocr/ops/ocr-stream'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
-import { OCR_CRAFT } from '@/models/registry'
+import { ocr } from './ops/ocr-stream.ts'
+import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
+import { OCR_CRAFT } from '../../../models/registry/index.ts'
 
 const OCR_DETECTOR_FILENAME = 'craft_mlt_25k.gguf'
 
@@ -137,7 +137,7 @@ export const ocrPlugin = definePlugin({
       requestSchema: ocrStreamRequestSchema,
       responseSchema: ocrStreamResponseSchema,
       streaming: true,
-      // GGML OCR does not expose a cancel surface — SDK falls back
+      // GGML OCR does not expose a cancel surface — we fall back
       // to soft-cancel.
       cancel: { scope: 'none' },
 

@@ -1,4 +1,4 @@
-import type { BciConfig, ResolveContext } from '@/schemas'
+import type { BciConfig, ResolveContext } from '../../../schemas/index.ts'
 
 export async function resolveBciConfig(cfg: BciConfig, ctx: ResolveContext) {
   const { embedderModelSrc, ...bciConfig } = cfg

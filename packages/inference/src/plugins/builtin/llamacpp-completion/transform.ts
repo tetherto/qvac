@@ -1,4 +1,4 @@
-import { TOOLS_MODE, type LlmConfig } from '@/schemas'
+import { TOOLS_MODE, type LlmConfig } from '../../../schemas/index.ts'
 
 /**
  * Converts an LlmConfig into the flat string-keyed map the C++ addon expects.

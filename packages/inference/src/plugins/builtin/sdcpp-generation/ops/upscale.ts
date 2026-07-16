@@ -1,8 +1,13 @@
 import { EsrganUpscaler } from '@qvac/diffusion-cpp'
-import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
-import { ModelOperationNotSupportedError } from '@/utils/errors-server'
-import { ModelType } from '@/schemas'
-import type { UpscaleRequest, UpscaleStats, UpscaleStreamResponse } from '@/schemas/sdcpp-config'
+import Buffer from 'bare-buffer'
+import { getModel, getModelEntry } from '../../../../runtime/model-registry.ts'
+import { ModelOperationNotSupportedError } from '../../../../errors/index.ts'
+import { ModelType } from '../../../../schemas/index.ts'
+import type {
+  UpscaleRequest,
+  UpscaleStats,
+  UpscaleStreamResponse
+} from '../../../../schemas/sdcpp-config.ts'
 
 interface ResponseWithStats {
   stats?: UpscaleStats

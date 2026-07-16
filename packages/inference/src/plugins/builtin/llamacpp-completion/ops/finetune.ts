@@ -1,5 +1,5 @@
 import fs from 'bare-fs'
-import { getModel, type AnyModel } from '@/server/bare/registry/model-registry'
+import { getModel, type AnyModel } from '../../../../runtime/model-registry.ts'
 import type {
   FinetuneRunParams,
   FinetuneRunRequest,
@@ -9,11 +9,11 @@ import type {
   FinetuneStats,
   FinetuneStatus,
   FinetuneGetStateRequest
-} from '@/schemas'
-import { CompletionFailedError } from '@/utils/errors-server'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
+} from '../../../../schemas/index.ts'
+import { CompletionFailedError } from '../../../../errors/index.ts'
+import { getRequestRegistry, withRequestContext } from '../../../../runtime/index.ts'
+import { generateRandomRequestId } from '../../../../runtime/request-id.ts'
+import { getEngineLogger } from '../../../../logging/index.ts'
 
 const PAUSE_CHECKPOINT_PREFIX = 'pause_checkpoint_step_'
 
@@ -119,7 +119,7 @@ export async function startFinetune(
   // model.cancel().
   await using ctx = await getRequestRegistry()
     .begin({
-      requestId: request.requestId ?? generateServerRequestId(),
+      requestId: request.requestId ?? generateRandomRequestId(),
       kind: 'finetune',
       modelId: request.modelId
     })
@@ -127,7 +127,7 @@ export async function startFinetune(
       if (!wasRunning) clearFinetuneRuntimeState(request.modelId)
       throw err
     })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
   // Cleared on scope unwind; deferred before the listener detach so LIFO
   // removes the listener first.
   ctx.scope.defer(() => {

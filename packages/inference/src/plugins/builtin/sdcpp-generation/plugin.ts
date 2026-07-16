@@ -24,14 +24,14 @@ import {
   type ResolveContext,
   type ResolveResult,
   type SdcppConfig
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
-import { ModelLoadFailedError } from '@/utils/errors-server'
-import { isMobile } from '@/server/bare/registry/runtime-context-registry'
-import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
-import { diffusion } from './ops/diffusion'
-import { markLtxVideoModel, video } from './ops/video'
-import { upscale } from './ops/upscale'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging/index.ts'
+import { ModelLoadFailedError } from '../../../errors/index.ts'
+import { isMobile } from '../../../runtime/state.ts'
+import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile.ts'
+import { diffusion } from './ops/diffusion.ts'
+import { markLtxVideoModel, video } from './ops/video.ts'
+import { upscale } from './ops/upscale.ts'
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'
@@ -82,7 +82,7 @@ function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
 /**
  * Stable-diffusion.cpp plugin for image diffusion, upscaling, and Wan video.
  *
- * Video mode is supported on React Native, but the SDK-published Wan model
+ * Video mode is supported on React Native, but the QVAC-published Wan model
  * set is too large to load on typical mobile devices. Mobile apps should
  * pass a `delegate` to `loadModel(...)` to run video generation on a
  * desktop peer instead of loading the model on-device.
@@ -232,7 +232,7 @@ export const diffusionPlugin = definePlugin({
     if (isMobile()) {
       const stripped = stripMultiGpuKeys(config)
       if (stripped.length > 0) {
-        getServerLogger().warn(
+        getEngineLogger().warn(
           `[${ModelType.sdcppGeneration}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
         )
       }
@@ -406,7 +406,7 @@ export const diffusionPlugin = definePlugin({
       requestSchema: upscaleRequestSchema,
       responseSchema: upscaleStreamResponseSchema,
       streaming: true,
-      // sdcpp upscale path has no cancel surface today — SDK falls
+      // sdcpp upscale path has no cancel surface today — we fall
       // back to soft-cancel.
       cancel: { scope: 'none' },
       handler: upscale

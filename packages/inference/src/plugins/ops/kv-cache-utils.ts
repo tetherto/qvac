@@ -6,11 +6,11 @@ import {
   getAutoCacheLookupHistory,
   getKVCacheDir,
   validateAndJoinPath
-} from '@/server/utils'
-import { getServerLogger } from '@/logging'
+} from '../../utils/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 import { Buffer } from 'bare-buffer'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // In-memory KV-cache state lives in `KvCacheSession` (the single
 // mutation point for all three KV-cache bookkeeping layers). This

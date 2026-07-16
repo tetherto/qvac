@@ -1,22 +1,24 @@
 import type { AbortSignal } from 'bare-abort-controller'
-import type { BatchCompletionStreamPrompt, CompletionStats, ResponseFormat, Tool } from '@/schemas'
-import { TOOLS_MODE } from '@/schemas/tools'
-import { getModel, getModelConfig, type AnyModel } from '@/server/bare/registry/model-registry'
-import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
-import type { Logger } from '@/logging/types'
-import { getServerLogger } from '@/logging'
-import { nowMs } from '@/profiling'
-import { buildStreamResult } from '@/profiling/model-execution'
-import type { LlmStats } from '@/server/bare/types/addon-responses'
-import { getResponseFormatJsonSchema } from '@/server/utils/response-format'
-import {
-  transformMessages,
-  type CompletionGenerationParams
-} from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
-import { normalizeCompletionStats } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
-import { appendToolsToHistory, prependToolsToHistory } from '@/server/utils/tool-integration'
+import type {
+  BatchCompletionStreamPrompt,
+  CompletionStats,
+  ResponseFormat,
+  Tool
+} from '../../../../schemas/index.ts'
+import { TOOLS_MODE } from '../../../../schemas/tools.ts'
+import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry.ts'
+import type { DisposableScope } from '../../../../runtime/disposable-scope.ts'
+import type { Logger } from '../../../../logging/types.ts'
+import { getEngineLogger } from '../../../../logging/index.ts'
+import { nowMs } from '../../../../profiling/index.ts'
+import { buildStreamResult } from '../../../../profiling/model-execution.ts'
+import type { LlmStats } from '../../../../utils/addon-responses.ts'
+import { getResponseFormatJsonSchema } from '../../../../utils/response-format.ts'
+import { transformMessages, type CompletionGenerationParams } from './completion-stream.ts'
+import { normalizeCompletionStats } from './completion-stats.ts'
+import { appendToolsToHistory, prependToolsToHistory } from '../../../../utils/tool-integration.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 type AddonBatchOutputChunk = {
   id: string
@@ -105,7 +107,7 @@ function renderPromptHistory(
         : prependToolsToHistory(prompt.history, tools)
   }
 
-  // Uses the same attachment expansion as single completion: each SDK
+  // Uses the same attachment expansion as single completion: each
   // attachment becomes an addon `type: "media"` message before the text turn.
   return transformMessages(historyWithTools)
 }

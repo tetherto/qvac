@@ -1,4 +1,4 @@
-import { getModelEntry } from '@/server/bare/registry/model-registry'
+import { getModelEntry } from '../../runtime/model-registry.ts'
 import {
   translateServerParamsSchema,
   normalizeModelType,
@@ -6,21 +6,21 @@ import {
   type TranslateParams,
   type TranslationStats,
   AFRICAN_LANGUAGES_MAP
-} from '@/schemas'
+} from '../../schemas/index.ts'
 import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
 import type { GenerationParams, RunOptions } from '@qvac/llm-llamacpp'
 import { getLangName } from '@qvac/langdetect-text'
-import { nowMs } from '@/profiling'
-import { buildStreamResult } from '@/profiling/model-execution'
-import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
+import { nowMs } from '../../profiling/index.ts'
+import { buildStreamResult } from '../../profiling/model-execution.ts'
+import type { NmtResponse, LlmResponse } from '../../utils/addon-responses.ts'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
   ModelTypeMismatchError
-} from '@/utils/errors-server'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
+} from '../../errors/index.ts'
+import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
+import { generateRandomRequestId } from '../../runtime/request-id.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return ''
@@ -102,11 +102,11 @@ export async function* translate(
   // to completion in the background — acceptable because the result
   // is dropped either way.
   await using ctx = await getRequestRegistry().begin({
-    requestId: requestId ?? generateServerRequestId(),
+    requestId: requestId ?? generateRandomRequestId(),
     kind: 'translate',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   if (isLlm) {
     const onAbort = () => {

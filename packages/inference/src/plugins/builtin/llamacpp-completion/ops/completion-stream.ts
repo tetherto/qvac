@@ -8,42 +8,37 @@ import type {
   Tool,
   ToolCall,
   ToolDialect
-} from '@/schemas'
-import { TOOLS_MODE } from '@/schemas/tools'
-import {
-  logCacheDisabled,
-  logCacheInit,
-  logCacheSave,
-  logMessagesToAddon
-} from '@/server/bare/plugins/llamacpp-completion/ops/cache-logger'
-import { extractSystemPrompt, getCurrentCacheInfo } from '@/server/bare/ops/kv-cache-utils'
-import { getModel, getModelConfig, type AnyModel } from '@/server/bare/registry/model-registry'
-import { decideCachedHistorySlice } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state'
+} from '../../../../schemas/index.ts'
+import { TOOLS_MODE } from '../../../../schemas/tools.ts'
+import { logCacheDisabled, logCacheInit, logCacheSave, logMessagesToAddon } from './cache-logger.ts'
+import { extractSystemPrompt, getCurrentCacheInfo } from '../../../ops/kv-cache-utils.ts'
+import { getModel, getModelConfig, type AnyModel } from '../../../../runtime/model-registry.ts'
+import { decideCachedHistorySlice } from './kv-cache-state.ts'
 import {
   createKvCacheSession,
   generateConfigHash,
   type KvCacheSession,
   type TurnHandle
-} from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
-import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
+} from './kv-cache-session.ts'
+import type { DisposableScope } from '../../../../runtime/disposable-scope.ts'
 import {
   appendToolsToHistory,
   detectToolDialect,
   prependToolsToHistory
-} from '@/server/utils/tool-integration'
-import { parseToolCalls } from '@/server/utils/tools'
-import { getResponseFormatJsonSchema } from '@/server/utils/response-format'
-import { buildAutoCacheSaveHistory, type CacheMessage } from '@/server/utils'
-import { getServerLogger } from '@/logging'
-import type { Logger } from '@/logging/types'
-import { AttachmentNotFoundError } from '@/utils/errors-server'
-import { nowMs } from '@/profiling'
-import { buildStreamResult } from '@/profiling/model-execution'
-import type { LlmStats } from '@/server/bare/types/addon-responses'
-import { normalizeCompletionStats } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
+} from '../../../../utils/tool-integration.ts'
+import { parseToolCalls } from '../../../../utils/tools/index.ts'
+import { getResponseFormatJsonSchema } from '../../../../utils/response-format.ts'
+import { buildAutoCacheSaveHistory, type CacheMessage } from '../../../../utils/index.ts'
+import { getEngineLogger } from '../../../../logging/index.ts'
+import type { Logger } from '../../../../logging/types.ts'
+import { AttachmentNotFoundError } from '../../../../errors/index.ts'
+import { nowMs } from '../../../../profiling/index.ts'
+import { buildStreamResult } from '../../../../profiling/model-execution.ts'
+import type { LlmStats } from '../../../../utils/addon-responses.ts'
+import { normalizeCompletionStats } from './completion-stats.ts'
 import fs from 'bare-fs'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface ResponseWithStats {
   stats?: LlmStats
@@ -237,7 +232,7 @@ type HistoryMsg = {
  *   - The addon anchors the tool block after the last user message and
  *     trims tools + the assistant's tool-call output from the cache once
  *     the chain resolves. After that trim, the cache only holds messages
- *     up to the last user turn, so the SDK has to ship the right slice
+ *     up to the last user turn, so we ship the right slice
  *     plus the (possibly new) tool set:
  *       * tool-chain continuation (last role is "tool"): send the trailing
  *         consecutive tool messages, no tool block — tools are still
@@ -420,7 +415,7 @@ export async function* completion(
 
   // Hard-cancel wiring: when the registry aborts the request's signal,
   // forward to the addon so the C++ work stops as soon as it can. The
-  // SDK still treats `signal.aborted` as the truth for cancel detection
+  // we still treat `signal.aborted` as the truth for cancel detection
   // (post-completion bookkeeping below) — this listener only shortens
   // the latency between "user clicked stop" and "addon stops decoding".
   //
@@ -581,7 +576,7 @@ export async function* completion(
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
   // to rename to, so we let the deferred rollback drop the file. Once
-  // the SDK supports auto-cache for structured assistant/tool turns,
+  // we support auto-cache for structured assistant/tool turns,
   // this becomes a normal commit path.
   if (result.toolCalls.length > 0) {
     logger.warn(

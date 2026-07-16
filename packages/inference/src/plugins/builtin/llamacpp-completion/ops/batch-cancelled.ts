@@ -16,7 +16,7 @@
  * `qvac_errors::StatusError::codeString()` and formats as
  * `"[ <addonId> :: Cancelled ]"`. This helper lets the batch handler
  * recognise that rejection so it can complete the run with cancelled
- * terminal events (matching the SDK's graceful cancel semantics) instead
+ * terminal events (matching the graceful cancel semantics) instead
  * of surfacing a generic `CompletionFailedError`.
  */
 export function isAddonCancelledError(err: unknown): boolean {

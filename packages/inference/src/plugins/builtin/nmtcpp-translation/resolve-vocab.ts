@@ -4,8 +4,8 @@ import {
   type NmtConfig,
   type ResolveContext,
   type ResolveResult
-} from '@/schemas'
-import { ModelLoadFailedError } from '@/utils/errors-server'
+} from '../../../schemas/index.ts'
+import { ModelLoadFailedError } from '../../../errors/index.ts'
 
 export interface PivotModelConfig {
   modelSrc: string
@@ -44,7 +44,7 @@ export function deriveBergamotRegistryVocabSources(modelSrc: string) {
 }
 
 /**
- * Resolves Bergamot vocab sources to absolute filesystem paths via the SDK
+ * Resolves Bergamot vocab sources to absolute filesystem paths via the
  * resolver context, optionally including a pivot model.
  *
  * For `registry://` sources with auto-derived vocabs, this skips per-vocab

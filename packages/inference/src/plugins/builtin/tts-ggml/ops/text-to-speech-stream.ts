@@ -1,17 +1,18 @@
-import { getModel } from '@/server/bare/registry/model-registry'
+import { getModel } from '../../../../runtime/model-registry.ts'
 import {
   textToSpeechStreamRequestSchema,
   type TextToSpeechStreamRequest,
   type TtsStats
-} from '@/schemas'
-import { nowMs } from '@/profiling'
-import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
-import { TextToSpeechStreamFailedError } from '@/utils/errors-server'
+} from '../../../../schemas/index.ts'
+import Buffer from 'bare-buffer'
+import { nowMs } from '../../../../profiling/index.ts'
+import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
+import { TextToSpeechStreamFailedError } from '../../../../errors/index.ts'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
   collectTtsStats
-} from '@/server/bare/utils/tts-stats'
+} from '../../../../utils/tts-stats.ts'
 
 type RunStreamingModel = {
   runStreaming: (
@@ -59,7 +60,7 @@ async function* buffersToUtf8Fragments(
     const combined = pending.length === 0 ? buf : Buffer.concat([pending, buf])
     const completeEnd = findLastCompleteUtf8End(combined)
     if (completeEnd > 0) {
-      const s = combined.subarray(0, completeEnd).toString('utf8')
+      const s = (combined.subarray(0, completeEnd) as Buffer).toString('utf8')
       if (s.length > 0) {
         yield s
       }
@@ -115,6 +116,7 @@ export async function* textToSpeechStream(
   )
 
   for await (const data of response.iterate()) {
+    // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
     if (data.outputArray == null) {
       continue
     }

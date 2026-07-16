@@ -1,16 +1,16 @@
-import { getModel } from '@/server/bare/registry/model-registry'
-import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas'
-import { buildUnaryResult } from '@/profiling/model-execution'
+import { getModel } from '../../runtime/model-registry.ts'
+import { type EmbedParams, type EmbedStats, embedParamsSchema } from '../../schemas/index.ts'
+import { buildUnaryResult } from '../../profiling/model-execution.ts'
 import {
   EmbedNoEmbeddingsError,
   EmbedFailedError,
   InferenceCancelledError
-} from '@/utils/errors-server'
-import { nowMs } from '@/profiling'
-import type { EmbedResponse } from '@/server/bare/types/addon-responses'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
+} from '../../errors/index.ts'
+import { nowMs } from '../../profiling/index.ts'
+import type { EmbedResponse } from '../../utils/addon-responses.ts'
+import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
+import { generateRandomRequestId } from '../../runtime/request-id.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 
 export interface EmbedResult {
   embedding: number[] | number[][]
@@ -33,10 +33,10 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
-  // straight to this context's signal. Falls back to a server-generated
-  // id if the client didn't send one (older releases).
+  // straight to this context's signal. Falls back to a generated
+  // id if the caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
-    requestId: requestId ?? generateServerRequestId(),
+    requestId: requestId ?? generateRandomRequestId(),
     kind: 'embeddings',
     modelId
   })
@@ -45,7 +45,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   // shape, even when this op has no per-step emits beyond the
   // registry's own lifecycle lines. Future addon-level warns inside
   // this body should route through `requestLogger`.
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId)
 

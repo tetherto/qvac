@@ -3,31 +3,31 @@ import {
   normalizeModelType,
   type LoadModelServerParams,
   type CanonicalModelType
-} from '@/schemas'
-import type { LoadTimingStats } from '@/profiling/types'
-import { nowMs } from '@/profiling/clock'
-import { isModelLoaded, registerModel, type AnyModel } from '@/server/bare/registry/model-registry'
+} from '../../schemas/index.ts'
+import type { LoadTimingStats } from '../../profiling/types.ts'
+import { nowMs } from '../../profiling/clock.ts'
+import { isModelLoaded, registerModel, type AnyModel } from '../../runtime/model-registry.ts'
 import {
   startLogBuffering,
   stopLogBufferingWithTimeout
-} from '@/server/bare/registry/logging-stream-registry'
+} from '../../runtime/logging-stream-registry.ts'
 import {
   detectShardedModel,
   generateShardFilenames,
   validateShardedModelCache
-} from '@/server/utils'
+} from '../../utils/index.ts'
 import {
   PluginNotFoundError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError
-} from '@/utils/errors-server'
-import { getPlugin } from '@/server/plugins'
+} from '../../errors/index.ts'
+import { getPlugin } from '../index.ts'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getServerLogger } from '@/logging'
+import { getEngineLogger } from '../../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export interface LoadModelResult {
   timing?: LoadTimingStats

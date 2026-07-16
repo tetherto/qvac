@@ -1,6 +1,11 @@
-import { getModel } from '@/server/bare/registry/model-registry'
-import { classifyRequestSchema, type ClassifyRequest, type ClassificationResult } from '@/schemas'
-import { nowMs } from '@/profiling'
+import { getModel } from '../../../../runtime/model-registry.ts'
+import Buffer from 'bare-buffer'
+import {
+  classifyRequestSchema,
+  type ClassifyRequest,
+  type ClassificationResult
+} from '../../../../schemas/index.ts'
+import { nowMs } from '../../../../profiling/index.ts'
 
 type ClassifierModel = {
   classify(

@@ -7,19 +7,16 @@ import {
   getCurrentCacheInfo,
   renameCacheFile,
   deleteCache as deleteCacheUtil
-} from '@/server/bare/ops/kv-cache-utils'
-import type { CacheMessage } from '@/server/utils'
-import {
-  logCacheSaveError,
-  logCacheStatus
-} from '@/server/bare/plugins/llamacpp-completion/ops/cache-logger'
-import { getServerLogger } from '@/logging'
-import type { Logger } from '@/logging/types'
+} from '../../../ops/kv-cache-utils.ts'
+import type { CacheMessage } from '../../../../utils/index.ts'
+import { logCacheSaveError, logCacheStatus } from './cache-logger.ts'
+import { getEngineLogger } from '../../../../logging/index.ts'
+import type { Logger } from '../../../../logging/types.ts'
 
 // Used by cross-model paths that have no `RequestContext` (e.g.
 // `deleteKvCacheState`). Per-session call sites receive a logger from
 // the caller — typically `withRequestContext(...)`.
-const moduleLogger = getServerLogger()
+const moduleLogger = getEngineLogger()
 
 /**
  * Single owner of the three KV-cache bookkeeping layers.
@@ -82,9 +79,9 @@ const cachedMessageCounts = new Map<string, number>()
 /**
  * In-memory registry of caches initialized this session. The addon
  * defers disk writes, so the absence of a `.bin` file on disk isn't
- * proof that the cache hasn't been primed in this worker process. Keyed
+ * proof that the cache hasn't been primed in this process. Keyed
  * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
- * older worker runs still hit the lazy-load path in `beginTurn`.
+ * older process runs still hit the lazy-load path in `beginTurn`.
  */
 const initializedCaches = new Set<string>()
 
@@ -207,7 +204,7 @@ interface InternalTurnState {
 /**
  * Construct a session bound to one `(modelId, turn-owning request)`
  * scope. `options.logger` is the per-instance logger the session emits
- * through (typically `withRequestContext(getServerLogger(), ctx)`);
+ * through (typically `withRequestContext(getEngineLogger(), ctx)`);
  * falls back to the module-scoped logger when omitted.
  */
 export function createKvCacheSession(
@@ -241,7 +238,7 @@ export function createKvCacheSession(
     // In-memory registry check first — the addon defers disk writes, so
     // a freshly-primed cache may not yet exist on disk. If the
     // in-memory flag isn't set, fall back to a filesystem probe so
-    // caches surviving across worker restarts still hit the reuse path.
+    // caches surviving across process restarts still hit the reuse path.
     let exists = initializedCaches.has(registryKey)
     if (!exists) {
       try {
@@ -401,7 +398,7 @@ export function createKvCacheSession(
  *
  * Why this isn't a method on `KvCacheSession`: deletes are
  * cross-model (`all: true` has no model; the keyed form has
- * `modelId` optional on the wire). A session, by contrast, is
+ * `modelId` optional in the request). A session, by contrast, is
  * created with a *fixed* `modelId` for the duration of a turn. Making
  * delete a method would force callers to materialise an irrelevant
  * session for cross-model administrative cleanups.
@@ -480,8 +477,8 @@ export async function deleteKvCacheState(
  *     truncated KV state). Catching this requires either an
  *     addon-side change (have `CacheManager::writeCacheFile` check the
  *     return value of `llama_state_save_file` and throw on failure) or
- *     a structural hash check we can't currently compute from the
- *     SDK. Filed as a follow-up — see `cache-api.md` in the addon
+ *     a structural hash check we can't currently compute
+ *     engine-side. Filed as a follow-up — see `cache-api.md` in the addon
  *     repo / tracking ticket.
  *
  * On failure we best-effort `unlink` an empty leftover file (so the
@@ -584,7 +581,7 @@ function clearInitializedCachesByScope(scope: {
  * for cache state exclusively through the session API; the unit suite
  * for `kv-cache-session.test.ts` needs to seed and inspect raw state
  * to assert the rollback / commit invariants. Not part of the public
- * SDK surface.
+ * surface.
  *
  * @internal
  */

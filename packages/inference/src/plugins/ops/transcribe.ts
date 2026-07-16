@@ -3,7 +3,7 @@ import {
   getModel,
   getModelConfig,
   getModelEntry
-} from '@/server/bare/registry/model-registry'
+} from '../../runtime/model-registry.ts'
 import {
   ModelType,
   type TranscribeParams,
@@ -13,20 +13,21 @@ import {
   type WhisperConfig,
   type AudioFormat,
   type ParakeetStreamingRunConfig
-} from '@/schemas'
-import { createAudioStream } from '@/server/bare/utils/audio-input'
-import { getServerLogger } from '@/logging'
-import { TranscriptionFailedError } from '@/utils/errors-server'
-import type { TranscribeResponse } from '@/server/bare/types/addon-responses'
-import { nowMs } from '@/profiling'
-import { buildStreamResult } from '@/profiling/model-execution'
+} from '../../schemas/index.ts'
+import type Buffer from 'bare-buffer'
+import { createAudioStream } from '../../utils/audio-input.ts'
+import { getEngineLogger } from '../../logging/index.ts'
+import { TranscriptionFailedError } from '../../errors/index.ts'
+import type { TranscribeResponse } from '../../utils/addon-responses.ts'
+import { nowMs } from '../../profiling/index.ts'
+import { buildStreamResult } from '../../profiling/model-execution.ts'
 import {
   assertMetadataSupported,
   toTranscribeSegment,
   type WhisperAddonSegment
-} from '@/server/bare/utils/transcribe-metadata'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+} from '../../utils/transcribe-metadata.ts'
+import { getRequestRegistry, withRequestContext } from '../../runtime/index.ts'
+import { generateRandomRequestId } from '../../runtime/request-id.ts'
 
 export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }
 
@@ -142,14 +143,14 @@ export async function* transcribe(
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and `cancel({ modelId, kind: "transcribe" })`
-  // through this context. Falls back to a server-generated id if the
-  // client didn't send one.
+  // through this context. Falls back to a generated id if the
+  // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
-    requestId: requestId ?? generateServerRequestId(),
+    requestId: requestId ?? generateRandomRequestId(),
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
   assertMetadataSupported(modelId, engineType, metadata)
@@ -325,11 +326,11 @@ export async function* transcribeStream(
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
   // either shape.
   await using ctx = await getRequestRegistry().begin({
-    requestId: requestId ?? generateServerRequestId(),
+    requestId: requestId ?? generateRandomRequestId(),
     kind: 'transcribe',
     modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
   assertMetadataSupported(modelId, engineType, metadata)

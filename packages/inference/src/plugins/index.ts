@@ -1,11 +1,24 @@
-export { llmPlugin } from './llamacpp-completion/plugin'
-export { embeddingsPlugin } from './llamacpp-embedding/plugin'
-export { whisperPlugin } from './whispercpp-transcription/plugin'
-export { bciPlugin } from './bci-whispercpp-transcription/plugin'
-export { parakeetPlugin } from './parakeet-transcription/plugin'
-export { nmtPlugin } from './nmtcpp-translation/plugin'
-export { ttsPlugin } from './tts-ggml/plugin'
-export { ocrPlugin } from './ggml-ocr/plugin'
-export { diffusionPlugin } from './sdcpp-generation/plugin'
-export { vlaPlugin } from './ggml-vla/plugin'
-export { classificationPlugin } from './ggml-classification/plugin'
+import { registerPlugins } from './registry.ts'
+import * as hostApi from '../api/index.ts'
+import type { QvacPlugin } from '../schemas/plugin.ts'
+
+export {
+  registerPlugin,
+  registerPlugins,
+  getPlugin,
+  getPluginHandler,
+  hasPlugin,
+  getAllPlugins,
+  clearPlugins,
+  unregisterPlugin
+} from './registry.ts'
+
+/**
+ * Register a set of plugins and return the host API bound to them. The
+ * ergonomic entry point for assembling an explicit plugin subset — we ship
+ * no default plugins, so an app registers exactly the engines it needs.
+ */
+export function plugins(pluginList: readonly QvacPlugin[]): typeof hostApi {
+  registerPlugins(pluginList)
+  return hostApi
+}

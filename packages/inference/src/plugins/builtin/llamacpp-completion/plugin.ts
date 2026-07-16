@@ -24,29 +24,25 @@ import {
   type ToolDialect,
   type LlmConfig,
   type LlmConfigInput
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
-import { expandGGUFIntoShards } from '@/server/utils'
-import { completion } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
-import { batchCompletion } from '@/server/bare/plugins/llamacpp-completion/ops/batch-completion-stream'
-import { finetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
-import { translate } from '@/server/bare/ops/translate'
-import { transformLlmConfig } from '@/server/bare/plugins/llamacpp-completion/transform'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
-import { getModelConfig } from '@/server/bare/registry/model-registry'
-import { createCompletionNormalizer } from '@/server/utils/completion-normalizer'
-import { detectToolDialect } from '@/server/utils/tool-integration'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getServerLogger } from '@/logging'
-import { ContextOverflowError } from '@/utils/errors-server'
-import {
-  isAddonContextOverflowError,
-  parseContextOverflowMessage
-} from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
-import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
-import { isMobile } from '@/server/bare/registry/runtime-context-registry'
-import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger, getEngineLogger } from '../../../logging/index.ts'
+import { expandGGUFIntoShards } from '../../../utils/index.ts'
+import { completion } from './ops/completion-stream.ts'
+import { batchCompletion } from './ops/batch-completion-stream.ts'
+import { finetune } from './ops/finetune.ts'
+import { translate } from '../../ops/translate.ts'
+import { transformLlmConfig } from './transform.ts'
+import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
+import { getModelConfig } from '../../../runtime/model-registry.ts'
+import { createCompletionNormalizer } from '../../../utils/completion-normalizer.ts'
+import { detectToolDialect } from '../../../utils/tool-integration.ts'
+import { getRequestRegistry, withRequestContext } from '../../../runtime/index.ts'
+import { generateRandomRequestId } from '../../../runtime/request-id.ts'
+import { ContextOverflowError } from '../../../errors/index.ts'
+import { isAddonContextOverflowError, parseContextOverflowMessage } from './ops/context-overflow.ts'
+import { isAddonCancelledError } from './ops/batch-cancelled.ts'
+import { isMobile } from '../../../runtime/state.ts'
+import { stripMultiGpuKeys } from '../../../utils/multi-gpu-mobile.ts'
 
 function createLlmModel(
   modelId: string,
@@ -61,7 +57,7 @@ function createLlmModel(
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(llmConfigStrings)
     if (stripped.length > 0) {
-      getServerLogger().warn(
+      getEngineLogger().warn(
         `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
       )
     }
@@ -182,13 +178,16 @@ export const llmPlugin = definePlugin({
         }
 
         await using ctx = await getRequestRegistry().begin({
-          requestId: request.requestId ?? generateServerRequestId(),
+          requestId: request.requestId ?? generateRandomRequestId(),
           kind: 'batchCompletion',
           modelId: request.modelId
         })
-        const requestLogger = withRequestContext(getServerLogger(), ctx)
+        const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
-        if (Boolean(ctx.signal.aborted)) {
+        // Boolean(...) keeps `ctx.signal.aborted` a boolean so the later
+        // aborted checks aren't narrowed to false by this guard.
+        const abortedBeforeRun = Boolean(ctx.signal.aborted)
+        if (abortedBeforeRun) {
           const abortedIds = request.prompts.map((prompt, index) => prompt.id ?? String(index))
           yield {
             type: 'batchCompletionStream' as const,
@@ -350,18 +349,17 @@ export const llmPlugin = definePlugin({
         // Open a request-scoped lifecycle. The registry is the single
         // source of truth for "is this turn cancelled?" — we plumb the
         // signal into `completion()` and expose `requestId` so the
-        // client can target this run with `cancel({ requestId })`.
-        // Falls back to a server-generated id if the client (e.g. an
-        // older release) didn't send one.
+        // caller can target this run with `cancel({ requestId })`.
+        // Falls back to a generated id if the caller didn't send one.
         await using ctx = await getRequestRegistry().begin({
-          requestId: request.requestId ?? generateServerRequestId(),
+          requestId: request.requestId ?? generateRandomRequestId(),
           kind: 'completion',
           modelId: request.modelId
         })
 
-        const requestLogger = withRequestContext(getServerLogger(), ctx)
+        const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
-        // begin() can return already-aborted when the client cancels while
+        // begin() can return already-aborted when the caller cancels while
         // this completion is queued behind another same-model one. It never
         // decoded, so it must not touch the shared native context — emit a
         // cancelled terminal and return. Boolean(...) keeps ctx.signal.aborted
@@ -382,13 +380,9 @@ export const llmPlugin = definePlugin({
             modelId: request.modelId,
             kvCache: request.kvCache,
             ...(toolsActive && request.tools && { tools: request.tools }),
-            ...(request.generationParams && {
-              generationParams: request.generationParams
-            }),
+            ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
-            ...(request.responseFormat && {
-              responseFormat: request.responseFormat
-            })
+            ...(request.responseFormat && { responseFormat: request.responseFormat })
           },
           { signal: ctx.signal, scope: ctx.scope, logger: requestLogger }
         )
@@ -456,7 +450,7 @@ export const llmPlugin = definePlugin({
           // surfaces it as a JS Error with `.code = "[ <addonId> :: ContextOverflow ]"`
           // and `.message` carrying the C++-formatted detail. Rethrow as
           // a typed `ContextOverflowError` so consumers can switch on the
-          // class (and `err.code === SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW`)
+          // class (and `err.code === ERROR_CODES.CONTEXT_OVERFLOW`)
           // instead of substring-matching on the raw addon message.
           if (isAddonContextOverflowError(err)) {
             const { promptTokens, ctxSize } = parseContextOverflowMessage(

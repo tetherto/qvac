@@ -18,15 +18,12 @@ import {
   type NmtConfig,
   type ResolveContext,
   type ResolveResult
-} from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
+} from '../../../schemas/index.ts'
+import { createStreamLogger, registerAddonLogger } from '../../../logging/index.ts'
 import path from 'bare-path'
-import { translate } from '@/server/bare/ops/translate'
-import { attachModelExecutionMs } from '@/profiling/model-execution'
-import {
-  resolveBergamotVocab,
-  type PivotModelConfig
-} from '@/server/bare/plugins/nmtcpp-translation/resolve-vocab'
+import { translate } from '../../ops/translate.ts'
+import { attachModelExecutionMs } from '../../../profiling/model-execution.ts'
+import { resolveBergamotVocab, type PivotModelConfig } from './resolve-vocab.ts'
 
 /**
  * Derive absolute vocab paths from a resolved Bergamot model path.
@@ -186,7 +183,7 @@ export const nmtPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      // nmtcpp does not expose a cancel surface today — SDK falls
+      // nmtcpp does not expose a cancel surface today — we fall
       // back to soft-cancel (stop yielding, drop result, skip
       // post-processing; the C++ work runs to completion).
       cancel: { scope: 'none' },

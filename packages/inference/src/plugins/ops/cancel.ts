@@ -1,11 +1,11 @@
-import { getModel } from '@/server/bare/registry/model-registry'
-import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '@/schemas'
-import { ModelNotLoadedError } from '@/utils/errors-server'
-import { getRequestRegistry } from '@/server/bare/runtime'
-import type { RequestKind } from '@/server/bare/runtime'
-import { getServerLogger } from '@/logging'
+import { getModel } from '../../runtime/model-registry.ts'
+import { type CancelInferenceBaseParams, cancelInferenceBaseSchema } from '../../schemas/index.ts'
+import { ModelNotLoadedError } from '../../errors/index.ts'
+import { getRequestRegistry } from '../../runtime/index.ts'
+import type { RequestKind } from '../../runtime/index.ts'
+import { getEngineLogger } from '../../logging/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 /**
  * Broad cancel: abort every in-flight request matching `modelId` (and
@@ -21,14 +21,11 @@ const logger = getServerLogger()
  *
  * Returns the number of contexts whose abort was triggered by *this*
  * call (already-cancelled contexts are skipped so callers can rely on
- * the count to log "n requests cancelled" once). Used by the RPC
- * cancel handler to populate `CancelResponse.cancelled` and by
- * internal server-side callers that want to know whether anything
- * landed.
+ * the count to log "n requests cancelled" once). Used by the cancel
+ * handler to populate `CancelResponse.cancelled` and by internal
+ * callers that want to know whether anything landed.
  *
- * The legacy pre-registry addon-cancel fallback was removed in 0.11.0
- * once every handler had been migrated onto the registry; the function
- * now does exactly one thing — a registry walk.
+ * The function does exactly one thing — a registry walk.
  */
 export function cancel(params: CancelInferenceBaseParams, opts?: { kind?: RequestKind }): number {
   const { modelId } = cancelInferenceBaseSchema.parse(params)

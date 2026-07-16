@@ -1,15 +1,15 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { unregisterModel } from '@/server/bare/registry/model-registry'
-import { unregisterAllLoggingStreams } from '@/server/bare/registry/logging-stream-registry'
-import { clearFinetuneRuntimeState } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
-import { unregisterAddonLogger, getServerLogger } from '@/logging'
-import { type UnloadModelParams, unloadModelParamsSchema } from '@/schemas'
-import { ModelNotLoadedError } from '@/utils/errors-server'
-import { detectShardedModel } from '@/server/utils'
-import { getClearStorageTarget } from '@/server/utils/cache/paths'
+import { unregisterModel } from '../../runtime/model-registry.ts'
+import { unregisterAllLoggingStreams } from '../../runtime/logging-stream-registry.ts'
+import { clearFinetuneRuntimeState } from '../builtin/llamacpp-completion/ops/finetune.ts'
+import { unregisterAddonLogger, getEngineLogger } from '../../logging/index.ts'
+import { type UnloadModelParams, unloadModelParamsSchema } from '../../schemas/index.ts'
+import { ModelNotLoadedError } from '../../errors/index.ts'
+import { detectShardedModel } from '../../utils/index.ts'
+import { getClearStorageTarget } from '../../utils/cache/paths.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 export async function unloadModel(params: UnloadModelParams) {
   const { modelId, clearStorage } = unloadModelParamsSchema.parse(params)

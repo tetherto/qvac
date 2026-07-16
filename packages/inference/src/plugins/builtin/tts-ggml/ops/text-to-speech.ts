@@ -1,14 +1,14 @@
-import { getModel } from '@/server/bare/registry/model-registry'
-import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas'
-import { nowMs } from '@/profiling'
-import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
-import type { TtsResponse } from '@/server/bare/types/addon-responses'
-import { TextToSpeechFailedError } from '@/utils/errors-server'
+import { getModel } from '../../../../runtime/model-registry.ts'
+import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../schemas/index.ts'
+import { nowMs } from '../../../../profiling/index.ts'
+import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
+import type { TtsResponse } from '../../../../utils/addon-responses.ts'
+import { TextToSpeechFailedError } from '../../../../errors/index.ts'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
   collectTtsStats
-} from '@/server/bare/utils/tts-stats'
+} from '../../../../utils/tts-stats.ts'
 
 type RunStreamModel = {
   runStream: (
@@ -65,6 +65,7 @@ export async function* textToSpeech(
     if (!stream) {
       let completeBuffer: number[] = []
       for await (const data of response.iterate()) {
+        // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
         if (data.outputArray != null) {
           completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
         }
@@ -76,6 +77,7 @@ export async function* textToSpeech(
     }
 
     for await (const data of response.iterate()) {
+      // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
       if (data.outputArray == null) continue
       const buf = Array.from(data.outputArray)
       if (buf.length === 0) continue

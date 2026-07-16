@@ -1,21 +1,22 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import type { VideoRuntimeStats } from '@qvac/diffusion-cpp'
-import { getServerLogger } from '@/logging'
-import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+import Buffer from 'bare-buffer'
+import { getEngineLogger } from '../../../../logging/index.ts'
+import { getModel, getModelEntry } from '../../../../runtime/model-registry.ts'
+import { getRequestRegistry, withRequestContext } from '../../../../runtime/index.ts'
+import { generateRandomRequestId } from '../../../../runtime/request-id.ts'
 import {
   ModelOperationNotSupportedError,
   PluginRequestValidationFailedError
-} from '@/utils/errors-server'
-import { formatZodError } from '@/utils/zod-error'
-import { ModelType } from '@/schemas'
+} from '../../../../errors/index.ts'
+import { formatZodError } from '../../../../utils/zod-error.ts'
+import { ModelType } from '../../../../schemas/index.ts'
 import {
   ltxVideoRequestSchema,
   type VideoRequest,
   type VideoStreamResponse,
   type VideoStats
-} from '@/schemas/sdcpp-config'
+} from '../../../../schemas/sdcpp-config.ts'
 
 interface ResponseWithStats {
   stats?: VideoRuntimeStats
@@ -34,7 +35,7 @@ function parseLtxVideoRequest(request: VideoRequest) {
   }
 }
 
-// The addon reports `hasAudio` as a numeric flag (1/0); the SDK surfaces it as
+// The addon reports `hasAudio` as a numeric flag (1/0); it is surfaced as
 // a boolean so consumers get a readable `stats.hasAudio` instead of a magic
 // number. Everything else passes through and is validated client-side.
 function toVideoStats(stats: VideoRuntimeStats | undefined): VideoStats | undefined {
@@ -63,11 +64,11 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
 
 export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
-    requestId: request.requestId ?? generateServerRequestId(),
+    requestId: request.requestId ?? generateRandomRequestId(),
     kind: 'diffusion',
     modelId: request.modelId
   })
-  const requestLogger = withRequestContext(getServerLogger(), ctx)
+  const requestLogger = withRequestContext(getEngineLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
   if (ltxVideoModels.has(model)) parseLtxVideoRequest(request)
 
