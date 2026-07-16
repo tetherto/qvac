@@ -260,8 +260,23 @@ class LlmLlamacpp {
     this._checkpointSaveDir = null
     // Concurrency is the caller's configured `parallel` (n_seq_max); values
     // >= 2 enable multi-job routing. Fixed for the model's lifetime, so it is
-    // derived once here rather than queried from the loaded model.
-    this._maxConcurrency = Math.max(1, Number(config?.parallel) || 1)
+    // derived once here rather than queried from the loaded model. The 1..1024
+    // range mirrors the native kMaxParallelWorkers contract in createInstance
+    // (addon/src/addon/AddonJs.hpp) — keep the two in sync.
+    if (config?.parallel !== undefined) {
+      const parallel = Number(config.parallel)
+      if (
+        !/^[0-9]+$/.test(String(config.parallel)) ||
+        !Number.isSafeInteger(parallel) ||
+        parallel < 1 ||
+        parallel > 1024
+      ) {
+        throw new TypeError('parallel must be an integer between 1 and 1024')
+      }
+      this._maxConcurrency = parallel
+    } else {
+      this._maxConcurrency = 1
+    }
     /// Admission policy when at capacity: true throws RUN_BUSY, false lets the
     /// native multi-job scheduler admit/queue it. Overridable per call via
     /// `runOptions.rejectWhenBusy` (batch runs derive one group policy from
