@@ -2,12 +2,12 @@ import {
   ModelAlreadyRegisteredError,
   ModelNotFoundError,
   ModelIsDelegatedError
-} from '@/utils/errors-server'
-import type { CanonicalModelType } from '@/schemas'
-import { getServerLogger } from '@/logging'
+} from '../errors/index.ts'
+import type { CanonicalModelType } from '../schemas/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
 import type BaseInference from '@qvac/infer-base'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 interface AddonInterface {
   cancel(jobId?: string): Promise<void>

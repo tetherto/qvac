@@ -1,15 +1,31 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
-import { getQvacPath } from '@/server/utils/qvac-paths'
+import { getQvacPath } from '../utils/qvac-paths.ts'
 import {
   CacheDirNotAbsoluteError,
   CacheDirNotWritableError,
   ConfigAlreadySetError
-} from '@/utils/errors-server'
-import type { QvacConfig } from '@/schemas'
-import { getServerLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '@/logging'
+} from '../errors/index.ts'
+import type { QvacConfig, RuntimeContext, CanonicalModelType } from '../schemas/index.ts'
+import { getEngineLogger, setGlobalConsoleOutput, setGlobalLogLevel } from '../logging/index.ts'
 
-const logger = getServerLogger()
+export {
+  CANONICAL_TO_ALIAS,
+  MODEL_CONFIG_SCHEMAS,
+  BUILTIN_DEVICE_PATTERNS,
+  matchesPattern,
+  findAllMatchingPatterns,
+  getDefaultsFromPattern,
+  resolveModelConfigWithContext
+} from './model-config-utils.ts'
+
+import { BUILTIN_DEVICE_PATTERNS, resolveModelConfigWithContext } from './model-config-utils.ts'
+
+const logger = getEngineLogger()
+
+// ============================================
+// Global configuration
+// ============================================
 
 const configRegistry: QvacConfig = {
   cacheDirectory: undefined,
@@ -25,7 +41,7 @@ const configRegistry: QvacConfig = {
 let configIsSet = false
 
 /**
- * Sets the SDK configuration. This can only be called ONCE during initialization.
+ * Sets the QVAC configuration. This can only be called ONCE during initialization.
  * After the first call, the config becomes immutable and any subsequent calls will throw.
  *
  * @param config - The configuration to set
@@ -33,7 +49,7 @@ let configIsSet = false
  * @throws {CacheDirNotAbsoluteError} If cacheDirectory is not an absolute path
  * @throws {CacheDirNotWritableError} If cacheDirectory is not writable
  */
-export function setSDKConfig(config: QvacConfig) {
+export function setConfig(config: QvacConfig) {
   // Enforce immutability - config can only be set once
   if (configIsSet) {
     throw new ConfigAlreadySetError()
@@ -106,8 +122,17 @@ export function setSDKConfig(config: QvacConfig) {
   configIsSet = true
 }
 
-export function getSDKConfig(): QvacConfig {
+export function getConfig(): QvacConfig {
   return { ...configRegistry }
+}
+
+/**
+ * Whether config has been set (injected by a host or resolved from disk). A host
+ * that pushes config uses this to keep `initializeConfig` from resolving again —
+ * a second `setConfig` would throw {@link ConfigAlreadySetError}.
+ */
+export function isConfigSet(): boolean {
+  return configIsSet
 }
 
 function getDefaultCacheDir() {
@@ -116,4 +141,58 @@ function getDefaultCacheDir() {
 
 export function getConfiguredCacheDir(): string {
   return configRegistry.cacheDirectory || getDefaultCacheDir()
+}
+
+// ============================================
+// Runtime context
+// ============================================
+
+let context: RuntimeContext = {}
+let isSet = false
+
+export function setRuntimeContext(ctx: RuntimeContext) {
+  if (isSet) return
+  context = ctx
+  isSet = true
+}
+
+export function getRuntimeContext(): RuntimeContext {
+  return context
+}
+
+export function isMobile(): boolean {
+  return context.runtime === 'react-native'
+}
+
+export function isAndroid(): boolean {
+  return context.platform === 'android'
+}
+
+export function isIOS(): boolean {
+  return context.platform === 'ios'
+}
+
+// ============================================
+// Model config resolution
+// ============================================
+
+export function resolveModelConfig<T>(
+  modelType: CanonicalModelType,
+  userInput: Record<string, unknown>
+): T {
+  const ctx = getRuntimeContext()
+  const userPatterns = getConfig().deviceDefaults ?? []
+
+  return resolveModelConfigWithContext<T>(
+    modelType,
+    userInput,
+    ctx,
+    userPatterns,
+    BUILTIN_DEVICE_PATTERNS,
+    (log) => {
+      if (log.appliedPatterns.length > 0) {
+        logger.debug(`[device-defaults] ${modelType}: applied [${log.appliedPatterns.join(' → ')}]`)
+      }
+    }
+  )
 }

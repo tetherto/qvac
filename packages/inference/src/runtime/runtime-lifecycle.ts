@@ -1,8 +1,8 @@
-import type { LifecycleState, Request } from '@/schemas'
-import { getServerLogger } from '@/logging'
-import { LifecycleOperationBlockedError } from '@/utils/errors-server'
+import type { LifecycleState, Request } from '../schemas/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { LifecycleOperationBlockedError } from '../errors/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set(['suspend', 'resume', 'state'])
 

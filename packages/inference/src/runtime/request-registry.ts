@@ -1,13 +1,9 @@
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { createDisposableScope, type DisposableScope } from '@/server/bare/runtime/disposable-scope'
-import type {
-  RequestContext,
-  RequestKind,
-  RequestState
-} from '@/server/bare/runtime/request-context'
-import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/utils/errors-server'
-import { getServerLogger } from '@/logging'
-import type { Logger } from '@/logging/types'
+import { createDisposableScope, type DisposableScope } from './disposable-scope.ts'
+import type { RequestContext, RequestKind, RequestState } from './request-context.ts'
+import { RequestIdConflictError, RequestRejectedByPolicyError } from '../errors/index.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import type { Logger } from '../logging/types.ts'
 
 /**
  * Outcome the caller declares when terminating a request through
@@ -17,12 +13,12 @@ import type { Logger } from '@/logging/types'
 export type RequestOutcome = 'completed' | 'failed' | 'cancelled'
 
 export interface BeginOpts {
-  /** Stable identity. Caller-provided so the client and server agree. */
+  /** Stable identity. Caller-provided so a `cancel` can target it by id. */
   requestId: string
   kind: RequestKind
   modelId?: string
   /**
-   * Optional parent abort signal — typically the worker-level "shutdown"
+   * Optional parent abort signal — typically the process-level "shutdown"
    * signal. When the parent aborts, the request's own signal aborts too.
    * Composes through a `addEventListener("abort", ...)` hook so cancelling
    * the parent does not require iterating the registry.
@@ -48,13 +44,13 @@ export type CancelTarget = CancelByRequestId | CancelByModelId
  * admission control (every `begin(...)` is accepted as long as the
  * request id is unique).
  *
- * The policy turns admission into a per-`(lane, modelId)` FIFO queue with
+ * The policy turns admission into a per-`(kind, modelId)` FIFO queue with
  * a configurable concurrency limit. A second concurrent request to the
- * same `(lane, modelId)` *waits its turn* (default) rather than colliding
+ * same `(kind, modelId)` *waits its turn* (default) rather than colliding
  * on the single native llama.cpp context. The limit is forward-compatible
  * with addon-side continuous batching: bump `maxConcurrentPerModel` to the
  * addon's slot count to flip serial execution to N-way concurrent without
- * any further SDK change.
+ * any further change.
  *
  * Requests without a `modelId` are never gated (there is no per-model
  * identity to serialize against).
@@ -62,21 +58,21 @@ export type CancelTarget = CancelByRequestId | CancelByModelId
 export interface ConcurrencyPolicy {
   kind: RequestKind
   /**
-   * Max simultaneously in-flight requests per `(lane, modelId)`.
+   * Max simultaneously in-flight requests per `(kind, modelId)`.
    * Default: `Infinity` (no admission limit). Set `1` to serialize, or
    * `N` for N-way concurrency (the future continuous-batching slot
    * count). Non-finite values disable gating entirely.
    */
   maxConcurrentPerModel?: number
   /**
-   * What a `begin(...)` does when the `(lane, modelId)` is at capacity:
+   * What a `begin(...)` does when the `(kind, modelId)` is at capacity:
    *  - `"queue"` (default): wait FIFO for a slot to free.
    *  - `"reject"`: throw `RequestRejectedByPolicyError` immediately
    *    (the legacy `oneAtATimePerModel` behavior).
    */
   onOverflow?: 'queue' | 'reject'
   /**
-   * Max waiters allowed to queue per `(lane, modelId)` before further
+   * Max waiters allowed to queue per `(kind, modelId)` before further
    * begins reject with `RequestRejectedByPolicyError`. Bounds memory so a
    * runaway client can't grow the queue without limit. Default: `64`.
    * Only consulted when `onOverflow` is `"queue"`.
@@ -105,7 +101,7 @@ export interface ConcurrencyPolicy {
    * kinds on a single native context — e.g. `@qvac/llm-llamacpp` funnels
    * single-prompt `completion` and `batchCompletion` through one
    * per-instance run queue, so the two can't actually run at once on the
-   * same model. Sharing a lane makes the SDK's admission queue the
+   * same model. Sharing a lane makes the admission queue the
    * authoritative serialization point rather than relying on the addon's
    * internal queue.
    */
@@ -130,7 +126,7 @@ export interface ManagedRequestContext extends RequestContext {
 export interface RequestRegistry {
   /**
    * Open a new request. Returns a promise because admission may *queue*:
-   * when a concurrency policy caps the `(lane, modelId)` and it's at
+   * when a concurrency policy caps the `(kind, modelId)` and it's at
    * capacity with `onOverflow: "queue"`, the promise resolves once a slot
    * frees (FIFO). Callers write `await using ctx = await registry.begin(...)`.
    *
@@ -182,7 +178,7 @@ export interface RequestRegistry {
   cancel(target: CancelTarget): number
 
   /**
-   * Cancel every active request — the worker-shutdown / model-unload
+   * Cancel every active request — the process-shutdown / model-unload
    * sweep. The reason is forwarded to each request as the abort reason
    * so handler logs can distinguish a normal cancel from a sweep.
    * Resolves once all targeted contexts have flipped to `"cancelling"`;
@@ -205,13 +201,13 @@ interface RegistryEntry {
   /**
    * Cleanup hook removed from `parentSignal` after the request ends, so
    * a long-lived shutdown signal doesn't accumulate per-request listeners
-   * for the lifetime of the worker.
+   * for the lifetime of the process.
    */
   detachParent: () => void
   /** `Date.now()` at `begin(...)` — used for `durationMs` on the end emit. */
   startedAt: number
   /**
-   * Admission-slot key (`<lane>\0<modelId>`) this request holds, or
+   * Admission-slot key (`<kind>\0<modelId>`) this request holds, or
    * `undefined` when the request was admitted without gating (no policy,
    * no `modelId`, or an unbounded `maxConcurrentPerModel`). The slot is
    * handed back in `disposeEntry` once the scope has fully unwound.
@@ -282,18 +278,19 @@ interface KeyState {
 /**
  * Tuning knobs for the "cancelled-before-begin" bookkeeping set.
  *
- * The race window is bounded by the client-to-server round-trip: a
- * `cancel({ requestId })` issued by the client at the same time as the
- * matching `completion(...)` either lands first (and we need to remember
- * it long enough for the server's `begin(...)` to follow) or lands
- * second (and we never touch this set). 30 seconds is overkill for a
- * 500ms round-trip but gives slow networks / pause-the-debugger
- * scenarios enough slack while still bounding worst-case retention.
+ * The race window spans the gap between a `cancel({ requestId })` and
+ * the matching operation's `begin(...)`: a `cancel` issued at the same
+ * time as the matching `completion(...)` either lands first (and we need
+ * to remember it long enough for `begin(...)` to follow) or lands second
+ * (and we never touch this set). For a local call the gap is tiny; a
+ * delegated call adds the provider round-trip. 30 seconds is overkill for
+ * that but gives slow networks / pause-the-debugger scenarios enough
+ * slack while still bounding worst-case retention.
  *
- * The size cap protects against a buggy or malicious client firing a
+ * The size cap protects against a buggy or malicious caller firing a
  * stream of cancels for ids that never get a `begin(...)` follow-up —
  * each `cancel({ requestId })` that doesn't match an in-flight context
- * inserts one entry, so without a cap the worker would grow the map
+ * inserts one entry, so without a cap the process would grow the map
  * unbounded. At the cap, the oldest entry is evicted.
  *
  * Tweak with care: both bounds appear in the registry race test
@@ -303,7 +300,7 @@ const CANCEL_BEFORE_BEGIN_MAX_ENTRIES = 128
 const CANCEL_BEFORE_BEGIN_TTL_MS = 30_000
 
 /**
- * Default cap on waiters queued per `(lane, modelId)` when a policy uses
+ * Default cap on waiters queued per `(kind, modelId)` when a policy uses
  * `onOverflow: "queue"` without an explicit `maxQueueDepthPerModel`.
  * Bounds memory so a misbehaving client firing a flood of same-model
  * requests can't grow the queue without limit — the (depth + 1)th begin
@@ -312,12 +309,12 @@ const CANCEL_BEFORE_BEGIN_TTL_MS = 30_000
 const DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL = 64
 
 export function createRequestRegistry(options?: {
-  /** Defaults to `getServerLogger()`. Tests inject a stub. */
+  /** Defaults to `getEngineLogger()`. Tests inject a stub. */
   logger?: Logger
 }): RequestRegistry {
   const entries = new Map<string, RegistryEntry>()
   const policies = new Map<RequestKind, NormalizedPolicy>()
-  const logger = options?.logger ?? getServerLogger()
+  const logger = options?.logger ?? getEngineLogger()
 
   /**
    * Per-`(kind, modelId)` admission semaphores. Keyed by
@@ -408,9 +405,9 @@ export function createRequestRegistry(options?: {
   }
 
   function slotKey(lane: string, modelId: string): string {
-    // NUL separator can't appear in a lane (a closed-union kind or an
-    // SDK-controlled `sharedSlotGroup` label) or a modelId (sdkModelId is a
-    // generated handle), so the join is unambiguous.
+    // NUL separator can't appear in a lane (a closed-union kind or a
+    // controlled `sharedSlotGroup` label) or a modelId (a generated handle),
+    // so the join is unambiguous.
     return `${lane}\u0000${modelId}`
   }
 
@@ -454,7 +451,7 @@ export function createRequestRegistry(options?: {
     if (!policy || !Number.isFinite(policy.maxConcurrent)) {
       return { slotKey: undefined }
     }
-    // A parent (worker-shutdown) signal that's already aborted: don't
+    // A parent (process-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
@@ -725,7 +722,7 @@ export function createRequestRegistry(options?: {
         cancelQueuedWaiterGracefully(queued.key, queued.waiter, target.reason)
         return cancelled + 1
       }
-      // Stop-button race: the client beat its own
+      // Stop-button race: the cancel beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
       // request was matched, which is still the truth — but the
@@ -759,7 +756,7 @@ export function createRequestRegistry(options?: {
     // leave a `begin(...)` promise hung forever — which would in turn block
     // the unload waiting on a request that never resolves. Unlike the
     // targeted cancels above these *reject* rather than resolve-into-
-    // aborted: the model / worker they queued against is being torn down,
+    // aborted: the model / process they queued against is being torn down,
     // so there is nothing left for them to run. Snapshot first —
     // `removeWaiter` mutates `waitersById`.
     for (const { key, waiter } of Array.from(waitersById.values())) {
@@ -852,7 +849,7 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
 /**
  * Test-only knobs exported for `request-registry.test.ts` so the bound
  * assertions can pin the documented limits without re-reading them via
- * fragile string comparison. **Not part of the public SDK surface.**
+ * fragile string comparison. **Not part of the public surface.**
  *
  * @internal
  */

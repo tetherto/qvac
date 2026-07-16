@@ -1,50 +1,44 @@
 import env from 'bare-env'
-import { isBareKit } from 'which-runtime'
 import { z } from 'zod'
 
 const envSchema = z.object({
-  QVAC_IPC_SOCKET_PATH: z.string().optional(),
   HOME_DIR: z.string()
 })
 
-type WorkerEnv = z.infer<typeof envSchema>
+type Env = z.infer<typeof envSchema>
 
-let validatedEnv: WorkerEnv | null = null
+let validatedEnv: Env | null = null
 
 /**
- * Initialize the worker environment. Call once at worker startup.
- * Returns whether RPC config was parsed from arguments.
+ * Initialize the environment. Call once at startup.
  */
-export function initEnv(): { hasRPCConfig: boolean } {
+export function initEnv(): void {
   const defaultHomeDir =
     // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
     env['SNAP_USER_COMMON'] ?? env['HOME'] ?? env['USERPROFILE'] ?? '/tmp'
   let envConfig: Record<string, string | undefined> = {
     HOME_DIR: defaultHomeDir
   }
-  let hasRPCConfig = false
 
+  const isBareKit = typeof (globalThis as { BareKit?: unknown }).BareKit !== 'undefined'
   if (isBareKit && Bare.argv[0]) {
     envConfig['HOME_DIR'] = Bare.argv[0]
   }
 
-  // Try to parse any argument as JSON config (fail gracefully)
   if (Bare.argv[2]) {
     try {
-      const rpcArgs = JSON.parse(Bare.argv[2]) as Record<string, string>
-      envConfig = { ...envConfig, ...rpcArgs }
-      hasRPCConfig = true
+      const overrides = JSON.parse(Bare.argv[2]) as Record<string, string>
+      envConfig = { ...envConfig, ...overrides }
     } catch {
-      // Not JSON or invalid - use defaults (direct mode)
+      // Ignore non-JSON args
     }
   }
 
   validatedEnv = envSchema.parse(envConfig)
-  return { hasRPCConfig }
 }
 
 /**
- * Get the worker environment. Must call initEnv() first.
+ * Get the engine environment. Must call initEnv() first.
  */
 export function getEnv() {
   if (!validatedEnv) {

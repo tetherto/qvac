@@ -1,27 +1,27 @@
 import { QVACRegistryClient } from '@qvac/registry-client'
-import { getCacheDir } from '@/server/utils/cache/paths'
+import { getCacheDir } from '../utils/cache/paths.ts'
 import {
   registerSwarm,
   unregisterSwarm,
   registerCorestore,
   unregisterCorestore
-} from '@/server/bare/runtime-lifecycle'
-import { getServerLogger } from '@/logging'
-import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants'
+} from './runtime-lifecycle.ts'
+import { getEngineLogger } from '../logging/index.ts'
+import { DEFAULT_REGISTRY_CORE_KEY } from '../constants/index.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
 // fd-lock retry budget for the registry corestore.
 //
 // We pass `corestoreOpts: { wait: false }` (tryLock semantics) and provide a
 // JS-bounded retry budget here instead of letting Hypercore's underlying
 // fd-lock issue a blocking flock(LOCK_EX) on a libuv worker thread. The
-// blocking variant cannot be cancelled from JS, so if another SDK process
+// blocking variant cannot be cancelled from JS, so if another QVAC process
 // holds the lock indefinitely it leaves a pending native handle that
-// prevents Bare.exit() from terminating the worker — see QVAC-18197.
+// prevents Bare.exit() from terminating the process — see QVAC-18197.
 //
 // With tryLock + bounded retries we get the same "tolerate transient locks
-// during another SDK's startup/shutdown" property #1480 wanted, but every
+// during another QVAC process's startup/shutdown" property #1480 wanted, but every
 // retry step is a fresh non-blocking syscall that surfaces failure to JS,
 // so shutdown always remains cancellable.
 const MAX_RETRIES = 8

@@ -1,12 +1,12 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
 import os from 'bare-os'
-import { getServerLogger } from '@/logging'
-import { getQvacPath } from '@/server/utils/qvac-paths'
+import { getEngineLogger } from '../logging/index.ts'
+import { getQvacPath } from '../utils/qvac-paths.ts'
 
-const logger = getServerLogger()
+const logger = getEngineLogger()
 
-const LOCK_FILENAME = '.worker.lock'
+const LOCK_FILENAME = '.cache.lock'
 
 interface LockFileContent {
   pid: number
@@ -36,14 +36,14 @@ function readLockFile(lockPath: string): LockFileContent | null {
   }
 }
 
-export function acquireWorkerLock(): void {
+export function acquireCacheLock(): void {
   const lockPath = getLockFilePath()
   const existing = readLockFile(lockPath)
 
   if (existing) {
     if (isProcessAlive(existing.pid)) {
       logger.warn(
-        `Another worker (PID ${existing.pid}) is still running — lock file exists at ${lockPath}`
+        `Another process (PID ${existing.pid}) is still running — lock file exists at ${lockPath}`
       )
     } else {
       logger.warn(
@@ -60,23 +60,23 @@ export function acquireWorkerLock(): void {
   try {
     fs.mkdirSync(path.dirname(lockPath), { recursive: true })
     fs.writeFileSync(lockPath, JSON.stringify(content))
-    logger.debug(`Worker lock acquired (PID ${os.pid()})`)
+    logger.debug(`Cache lock acquired (PID ${os.pid()})`)
   } catch (error) {
     logger.error(
-      'Failed to write worker lock file:',
+      'Failed to write cache lock file:',
       error instanceof Error ? error.message : String(error)
     )
   }
 }
 
-export function releaseWorkerLock(): void {
+export function releaseCacheLock(): void {
   const lockPath = getLockFilePath()
 
   try {
     const existing = readLockFile(lockPath)
     if (existing && existing.pid === os.pid()) {
       fs.unlinkSync(lockPath)
-      logger.debug('Worker lock released')
+      logger.debug('Cache lock released')
     }
   } catch {
     // Best-effort — may already be gone

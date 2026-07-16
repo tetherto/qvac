@@ -1,28 +1,25 @@
 /**
- * Logging Stream Registry
+ * Logging stream registry.
  *
- * Manages RPC subscriptions for streaming logs from server to connected clients.
- *
- * Purpose:
- * - Registers client subscriptions to model/SDK log streams
- * - Routes log messages to subscribed clients via RPC
- * - Buffers logs during model loading (before client subscribes)
+ * - Registers subscriptions to log streams, keyed by source id
+ * - Routes log lines to their subscribers
+ * - Buffers logs during model loading, before a subscriber attaches
  * - Manages stream lifecycle (subscribe/unsubscribe)
- *
  */
 
 import type { LogLevel } from '@qvac/logging'
-import { SDK_ALL_LOG_ID } from '@/logging/namespaces'
+import { ALL_LOG_ID } from '../logging/namespaces.ts'
 
-// `sourceId` is the id the log was emitted under (a model id, SDK_LOG_ID, a RAG
+// `sourceId` is the id the log was emitted under (a model id, LOG_ID, a RAG
 // workspace key, …). It usually equals the subscription id, but for the global
-// SDK_ALL_LOG_ID stream it carries the real origin so subscribers can tell which
-// model/SDK/RAG source produced each line instead of always seeing "__all__".
+// ALL_LOG_ID stream it carries the real origin so subscribers can tell which
+// model, engine, or RAG source produced each line instead of always seeing
+// "__all__".
 type StreamHandler = (level: LogLevel, namespace: string, message: string, sourceId: string) => void
 
 const loggingStreams = new Map<string, Set<StreamHandler>>()
 
-// Buffering for logs emitted during model loading (before client subscribes)
+// Buffering for logs emitted during model loading (before a subscriber attaches)
 const MAX_BUFFERED_LOGS_PER_MODEL = 100
 const BUFFER_EXPIRY_MS = 30_000
 const BUFFERING_TIMEOUT_MS = 5_000
@@ -109,8 +106,8 @@ export function sendLogToStreams(id: string, level: LogLevel, namespace: string,
   // The originating id is preserved as `sourceId` so the global stream keeps the
   // real origin of each log instead of reporting the subscription id.
   deliverToStream(id, level, namespace, message, id)
-  if (id !== SDK_ALL_LOG_ID) {
-    deliverToStream(SDK_ALL_LOG_ID, level, namespace, message, id)
+  if (id !== ALL_LOG_ID) {
+    deliverToStream(ALL_LOG_ID, level, namespace, message, id)
   }
 }
 

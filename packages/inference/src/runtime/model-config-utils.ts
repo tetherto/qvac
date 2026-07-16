@@ -5,14 +5,17 @@ import {
   type DevicePattern,
   type DeviceMatch,
   type RuntimeContext
-} from '@/schemas'
-import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
-import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
-import { bciConfigSchema } from '@/schemas/bci-config'
-import { ocrConfigSchema } from '@/schemas/ocr'
-import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
-import { vlaConfigSchema } from '@/schemas/vla'
-import { classificationConfigSchema } from '@/schemas/classification'
+} from '../schemas/index.ts'
+import { llmConfigSchema, embedConfigSchema } from '../schemas/llamacpp-config.ts'
+import {
+  whisperConfigSchema,
+  parakeetRuntimeConfigSchema
+} from '../schemas/transcription-config.ts'
+import { bciConfigSchema } from '../schemas/bci-config.ts'
+import { ocrConfigSchema } from '../schemas/ocr.ts'
+import { sdcppConfigSchema } from '../schemas/sdcpp-config.ts'
+import { vlaConfigSchema } from '../schemas/vla.ts'
+import { classificationConfigSchema } from '../schemas/classification.ts'
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: 'llm',
@@ -44,7 +47,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
 // Ordered general → specific (later patterns override earlier)
 export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
   {
-    name: 'Android devices (SDK default)',
+    name: 'Android devices (default)',
     match: {
       platform: 'android'
     },
@@ -53,7 +56,7 @@ export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
     }
   },
   {
-    name: 'Pixel devices (SDK default)',
+    name: 'Pixel devices (default)',
     match: {
       platform: 'android',
       deviceBrand: 'google',
