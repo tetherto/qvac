@@ -2200,6 +2200,15 @@ class GetLoadedModelInfoRequest(GeneratedBaseModel):
     type: Literal["getLoadedModelInfo"]
 
 
+class LocalLoadedModelInfoToolDialect(Enum):
+    hermes = "hermes"
+    pythonic = "pythonic"
+    json = "json"
+    harmony = "harmony"
+    qwen35 = "qwen35"
+    gemma4 = "gemma4"
+
+
 class LocalLoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2213,6 +2222,10 @@ class LocalLoadedModelInfo(GeneratedBaseModel):
     loaded_at: Annotated[Any, Field(alias="loadedAt")]
     name: str | None = None
     path: str | None = None
+    tool_dialect: Annotated[
+        LocalLoadedModelInfoToolDialect | None,
+        Field(alias="toolDialect", title="LocalLoadedModelInfoToolDialect"),
+    ] = None
 
 
 class DelegatedLoadedModelInfoProviderInfo(GeneratedBaseModel):
