@@ -381,9 +381,9 @@ TEST(NeuralProcessor, DayProjectionMatchesNaiveReference) {
   std::filesystem::remove(path, ec);
 }
 
-// QVAC-19235 dynamic-backend-loading plumbing. These tests exercise the
-// pieces that DON'T need a loaded whisper context, so they can run in
-// the existing GoogleTest binary without model fixtures or network.
+// Dynamic-backend-loading plumbing. These tests exercise the pieces that
+// DON'T need a loaded whisper context, so they can run in the existing
+// GoogleTest binary without model fixtures or network.
 
 TEST(BCIConfig, BackendsDirDefaultsEmpty) {
   BCIConfig config;
@@ -435,7 +435,7 @@ TEST(BCIModel, RuntimeStatsExposesBackendIdentityKeys) {
   for (const auto* key :
        {"backendDevice", "backendId", "gpuMemTotalMb", "gpuMemFreeMb"}) {
     EXPECT_NE(findStat(stats, key), nullptr)
-        << "RuntimeStats is missing required QVAC-19235 key: " << key;
+        << "RuntimeStats is missing required backend-identity key: " << key;
   }
 }
 

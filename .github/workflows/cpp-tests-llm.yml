@@ -39,6 +39,7 @@ jobs:
             arch: x64
           - os: macos-15-xlarge
             platform: darwin
+            runner: qvac-macos26-arm64-gpu
             arch: arm64
           - os: windows-2025
             platform: windows
