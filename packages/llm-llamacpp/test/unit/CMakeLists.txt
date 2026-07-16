@@ -55,6 +55,7 @@ add_executable(
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
   test_reasoning_block_compactor.cpp
+  test_parse_unsigned.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
