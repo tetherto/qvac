@@ -6,10 +6,10 @@ import {
   callShapeByHandlerType,
   contractDir,
   renderContractFiles
-} from '@/scripts/contract/build-contract'
-import { buildModelsRegistry } from '@/scripts/contract/build-models-registry'
-import { constantsRegistry } from '@/schemas/constants-registry'
-import { methodShapes } from '@/server/rpc/method-shapes'
+} from '../scripts/contract/build-contract'
+import { buildModelsRegistry } from '../scripts/contract/build-models-registry'
+import { constantsRegistry } from '../scripts/contract/constants-registry'
+import { methodShapes } from '../scripts/contract/method-shapes'
 import { contractValidate } from './utils/contract-validator'
 
 type JsonSchema = Record<string, unknown>
@@ -227,7 +227,7 @@ test('cancel.request flattens allOf-of-union so both operations keep their field
 
 test('models registry catalog exports every named model constant', (t) => {
   // Regression guard for the Python (and future non-JS) client parity gap:
-  // JS consumers import named constants directly from @/models/registry
+  // JS consumers import named constants directly from @qvac/inference/models
   // (`QWEN3_600M_INST_Q4`, ...) and pass them straight as `modelSrc`. This
   // catalog is the language-neutral mirror of those same constants.
   const catalog = buildModelsRegistry()

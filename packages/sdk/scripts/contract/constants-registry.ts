@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { ModelType } from './model-types'
-import { VERBOSITY } from './llamacpp-config'
 import {
+  ModelType,
+  VERBOSITY,
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
@@ -12,12 +12,12 @@ import {
   PLUGIN_DIFFUSION,
   PLUGIN_AUDIOGEN,
   PLUGIN_VLA,
-  PLUGIN_CLASSIFICATION
-} from './plugin'
-import { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
+  PLUGIN_CLASSIFICATION,
+  SUPPORTED_AUDIO_FORMATS
+} from '@qvac/inference/surface'
 
 /**
- * Every public constant `enum` from index.ts that downstream (non-JS)
+ * Every public constant `enum` from the SDK surface that downstream (non-JS)
  * client generators should get as a real, named type instead of a
  * hardcoded string/number. `build-contract.ts` merges each of these
  * directly into `schema.json`'s `$defs` (same `z.toJSONSchema` call, same

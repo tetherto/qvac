@@ -6,7 +6,7 @@ import Ajv2020 from 'ajv/dist/2020'
  * exercise exactly what generated clients consume — not the live Zod schemas.
  */
 const schemaDocument = JSON.parse(
-  readFileSync(new URL('../../../contract/schema.json', import.meta.url), 'utf8')
+  readFileSync(new URL('../../contract/schema.json', import.meta.url), 'utf8')
 ) as Record<string, unknown>
 
 const ajv = new Ajv2020({ strict: false })

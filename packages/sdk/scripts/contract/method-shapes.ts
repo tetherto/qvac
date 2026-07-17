@@ -1,11 +1,10 @@
 /**
  * Call shape of every RPC method, keyed by the request `type` literal.
  *
- * This module must stay free of handler imports: the contract export
- * (`scripts/export-contract.ts`) loads it under Node, where the handler
- * graph's native bare-* modules cannot be required. `handler-registry.ts`
- * is type-bound to this map, so a registry entry whose key or `type`
- * diverges from it fails to compile.
+ * This is a contract-tooling input: `scripts/export-contract.ts` loads it
+ * under Node to pair each wire method with its call shape (reply / stream /
+ * duplex) in the generated manifest. It stays free of engine imports so the
+ * export runs under Node, where core's native `bare-*` modules cannot load.
  */
 export const methodShapes = {
   audioGenStream: 'stream',
