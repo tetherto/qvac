@@ -3,7 +3,7 @@ import {
   type DownloadAssetOptions as BaseDownloadAssetOptions,
   type RPCOptions,
   downloadAssetOptionsToRequestSchema
-} from '@/schemas'
+} from '@qvac/inference/surface'
 import {
   DownloadAssetFailedError,
   StreamEndedError,

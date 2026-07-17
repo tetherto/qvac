@@ -1,4 +1,7 @@
-import { addCodes, type ErrorCodesMap } from '@qvac/error'
+import { addCodes, isCodeRegistered, type ErrorCodesMap } from '@qvac/error'
+// Load @qvac/inference's registration first, then add only codes not already present, so a
+// shared @qvac/error instance (packed consumers, the Bare worker) is not double-registered.
+import '@qvac/inference/surface'
 
 // Client-side error codes (50,001-52,000 range for this SDK)
 export const SDK_CLIENT_ERROR_CODES = {
@@ -235,6 +238,9 @@ const clientErrorDefinitions: ErrorCodesMap = {
   }
 }
 
-addCodes(clientErrorDefinitions, { name: 'qvac-sdk-client', version: '1.2.0' })
+const clientDefinitionsToRegister: ErrorCodesMap = Object.fromEntries(
+  Object.entries(clientErrorDefinitions).filter(([code]) => !isCodeRegistered(Number(code)))
+)
+addCodes(clientDefinitionsToRegister, { name: 'qvac-sdk-client', version: '1.2.0' })
 
 export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS }

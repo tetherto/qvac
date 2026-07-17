@@ -4,8 +4,8 @@ import {
   type ServerBreakdown,
   type DelegationBreakdown,
   type OperationEvent
-} from '@/schemas'
-import { nowMs } from '@/profiling'
+} from '@qvac/inference/surface'
+import { nowMs } from '@qvac/inference/surface'
 
 export interface ServerProfilingContext {
   meta: ProfilingRequestMeta

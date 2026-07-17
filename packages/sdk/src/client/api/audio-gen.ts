@@ -1,4 +1,4 @@
-import type { AudioGenClientParams, AudioGenResult } from '@/schemas/audio-gen'
+import type { AudioGenClientParams, AudioGenResult } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { createAudioGenResult } from '@/client/api/audio-gen-result'
 

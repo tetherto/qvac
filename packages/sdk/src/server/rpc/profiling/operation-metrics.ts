@@ -12,11 +12,24 @@ import {
   type TtsStats,
   type DiffusionStats,
   type VideoStats
-} from '@/schemas'
-import { readModelExecutionMs } from '@/profiling/model-execution'
-import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
-import type { LoadModelProfilingMeta, DownloadStats } from '@/server/rpc/handlers/load-model/types'
-import { readBackendDiagnostics } from './backend-diagnostics'
+} from '@qvac/inference/surface'
+import { readModelExecutionMs } from '@qvac/inference/surface'
+import type { ProfilingEvent, ProfilingEventKind } from '@qvac/inference/surface'
+interface DownloadStats {
+  downloadTimeMs?: number
+  totalBytesDownloaded?: number
+  downloadSpeedBps?: number
+  checksumValidationTimeMs?: number
+  cacheHit?: boolean
+  sharedTransfer?: boolean
+}
+
+interface LoadModelProfilingMeta {
+  sourceType?: string
+  downloadStats?: DownloadStats
+  modelInitializationTimeMs?: number
+  totalLoadTimeMs?: number
+}
 
 export type MetricExtractor<T> = (data: T) => Record<string, number> | undefined
 
@@ -79,17 +92,14 @@ export function buildOperationEvent(
   ttfb?: number
 ): ProfilingEvent | undefined {
   const config = metricsRegistry.get(op)
-  const backend = readBackendDiagnostics(finalResponse)
   if (!config) {
-    const event: ProfilingEvent = {
+    return {
       ts,
       op,
       kind: 'handler',
       profileId,
       ms: executionMs
     }
-    if (backend) event.backend = backend
-    return event
   }
 
   const gauges: Record<string, number> = {}
@@ -130,9 +140,6 @@ export function buildOperationEvent(
 
   if (hasGauges) {
     event.gauges = gauges
-  }
-  if (backend) {
-    event.backend = backend
   }
   if (hasTags) {
     event.tags = tags

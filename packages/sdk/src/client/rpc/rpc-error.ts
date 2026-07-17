@@ -1,4 +1,4 @@
-import type { ErrorResponse } from '@/schemas'
+import type { ErrorResponse } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
   RequestIdConflictError,

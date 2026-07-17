@@ -14,7 +14,7 @@ import {
   type TranscribeStreamEvent,
   type TranscribeStreamResponse,
   type TranscribeStats
-} from '@/schemas'
+} from '@qvac/inference/surface'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
 import { TranscriptionFailedError } from '@/utils/errors-client'

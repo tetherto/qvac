@@ -5,7 +5,7 @@ import {
   type TranslateClientParams,
   type TranslationStats,
   type RPCOptions
-} from '@/schemas'
+} from '@qvac/inference/surface'
 
 /**
  * Translates text from one language to another using a specified translation model.

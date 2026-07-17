@@ -7,7 +7,7 @@ import {
   type AudioGenResult,
   type AudioGenStats,
   type AudioGenStreamRequest
-} from '@/schemas/audio-gen'
+} from '@qvac/inference/surface'
 import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64 } from '@/utils/encoding'

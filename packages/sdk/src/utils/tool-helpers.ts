@@ -1,5 +1,10 @@
 import type { z } from 'zod'
-import { toolSchema, type Tool, type ToolCall, type ToolCallWithCall } from '@/schemas/tools'
+import {
+  toolSchema,
+  type Tool,
+  type ToolCall,
+  type ToolCallWithCall
+} from '@qvac/inference/surface'
 import { InvalidToolsArrayError, InvalidToolSchemaError } from '@/utils/errors-client'
 
 type ZodObjectType = z.ZodObject<z.ZodRawShape>

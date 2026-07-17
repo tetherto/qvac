@@ -6,8 +6,8 @@ import {
   recordDelegationBreakdownPhases,
   type BaseTimings,
   type BaseEvent
-} from '@/profiling'
-import type { ProfilingResponseMeta } from '@/schemas'
+} from '@qvac/inference/surface'
+import type { ProfilingResponseMeta } from '@qvac/inference/surface'
 import { getGlobalSingleton } from '@/utils/global-singleton'
 
 interface ConnectionTrackingState {
