@@ -235,7 +235,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 
 **Error Handling:** All SDK errors expose a numeric `code` property for programmatic handling, with original errors preserved via `cause` chain. Errors are structured classes extending `QvacErrorBase`. Client (50,001–52,000) and server (52,001–54,000) error codes are strictly separated.
 
-**Worker Lifecycle:** Startup has two phases: `initializeWorkerCore()` parses environment, starts log buffering, and registers SIGTERM/SIGINT handlers; then plugins are registered; finally `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile) and begins accepting requests. On termination signal, the registered shutdown handler runs graceful cleanup: clear registries, unload models, destroy swarm, close RAG instances, cancel downloads, close registry client.
+**Worker Lifecycle:** Startup has two phases: `initializeWorker()` initializes the engine and worker (environment, log buffering, locks) and registers SIGTERM/SIGINT handlers; then plugins are registered; finally `ensureRPCSetup()` creates the IPC client (desktop) or BareKit RPC server (mobile) and begins accepting requests. On termination signal, the registered shutdown handler runs graceful cleanup: clear registries, unload models, destroy swarm, close RAG instances, cancel downloads, close registry client.
 
 ---
 
