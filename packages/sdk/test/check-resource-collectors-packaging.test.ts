@@ -11,7 +11,7 @@ import {
   runResourceCollectorPackagingCli,
   runResourceCollectorPackagingCheck,
   type ResourceCollectorCheckDependencies
-} from '@/scripts/check-resource-collectors-packaging'
+} from '../scripts/check-resource-collectors-packaging'
 import { RequestValidationFailedError } from '@/utils/errors-client'
 
 const REPORT: ResourceCollectorAcceptanceReport = {

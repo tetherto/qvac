@@ -7,8 +7,8 @@ import {
   loadCustomPluginToRequestSchema,
   isBuiltInModelType,
   type Request
-} from '@/schemas'
-import { LLAMA_3_2_1B_INST_Q4_0 } from '@/models/registry'
+} from '@qvac/inference/surface'
+import { LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
 import { formatZodError } from '@/utils/zod-error'
 import { parseClientInput } from '@/client/parse-input'
 import { send } from '@/client'

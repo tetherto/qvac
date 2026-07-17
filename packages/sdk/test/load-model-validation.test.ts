@@ -1,7 +1,8 @@
 import test from 'brittle'
 import { assertModelSrcMatchesModelType } from '@/utils/load-model-validation'
 import { ModelSrcTypeMismatchError } from '@/utils/errors-client'
-import { ModelType, SDK_CLIENT_ERROR_CODES } from '@/schemas'
+import { ModelType } from '@qvac/sdk'
+import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
 
 test('assertModelSrcMatchesModelType: descriptor engine vs incompatible canonical modelType throws', (t) => {
   const llamaDescriptor = {
