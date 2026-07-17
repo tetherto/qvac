@@ -16,12 +16,11 @@
 # Pulls from the tetherto/qvac-ext-stable-diffusion.cpp GitHub branch
 # 2026-07-03 (REF pinned to the branch tip for reproducibility).
 #
-# e17495a is the tip of the qvac/wan-vae-first-chunk-fix branch (PR #21 on top
-# of 9f587ad): it fixes the Wan VAE temporal upsample to match the reference
-# first-chunk "Rep" semantics (run time_conv with causal zero padding on chunk
-# 0, trim the first doubled frame, seed the temporal feat cache), restoring
-# decode parity with the PyTorch reference (cosine 1.000000 / 79 dB PSNR,
-# was 0.9959 / 27 dB). TESTING PIN - do not merge to main until PR #21 lands.
+# 6250dac is the tip of 2026-07-03 after merging PR #21: it fixes the Wan VAE
+# temporal upsample to match the reference first-chunk "Rep" semantics (run
+# time_conv with causal zero padding on chunk 0, trim the first doubled frame,
+# seed the temporal feat cache), restoring decode parity with the PyTorch
+# reference (cosine 1.000000 / 79 dB PSNR, was 0.9959 / 27 dB).
 #
 # 9f587ad is the tip of 2026-07-03 after merging PR #20 (Ideogram review
 # fixes) on top of PR #19: it registers/applies optional Ideogram weight_scale
@@ -51,8 +50,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF e17495a6d5af1b8026af8c4c2b2c18b6b245bb3e
-    SHA512 fd70ed40a85a5ac1196ce6278b6733cbeaa65eb9775f142cc0d79c2104c5a11acec5e246e244c5371e97eaf59f8d8a8bcd41e19128c166df02b0fd4b775a8692
+    REF 6250dac2b4a22976a3e0d6f096229174b7c6e5a9
+    SHA512 d4fa1b20421a189d1416d55b7cd80e6b3f8af7357a5abb9fd4776d8a6924842d90b903396252846ee6a8a182d084b46bd306b2f4fe15b56a41ce410e839bf223
 )
 
 set(SD_FLASH_ATTN OFF)
