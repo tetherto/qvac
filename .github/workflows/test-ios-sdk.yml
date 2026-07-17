@@ -48,6 +48,11 @@ on:
         description: 'JSON array of iOS device pools [{name, arn}]'
         required: true
         type: string
+      device-pool-name:
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from ios-device-pools is chosen."
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -441,16 +446,51 @@ jobs:
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
           retention-days: 7
 
+  select-pool:
+    name: "[ios] select-pool"
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      pool: ${{ steps.select.outputs.pool }}
+      name: ${{ steps.select.outputs.name }}
+      availability: ${{ steps.select.outputs.availability }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+
+      # Only random selection queries Device Farm (GetDevicePool + ListDevices);
+      # an explicit pool name needs no AWS access.
+      - name: Configure AWS credentials
+        if: ${{ inputs.device-pool-name == '' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+
+      - name: Select device pool
+        id: select
+        uses: ./.github/actions/sdk-device-farm-select-pool
+        with:
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.ios-device-pools)) }}
+          pool-name: ${{ inputs.device-pool-name }}
+
   device-farm:
     name: "[ios] device-farm"
-    needs: build
+    needs: [build, select-pool]
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        device: ${{ fromJson(inputs.ios-device-pools) }}
+        device: ${{ fromJson(needs.select-pool.outputs.pool) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -1012,7 +1052,7 @@ jobs:
 
   report-finalize:
     name: "[ios] report-finalize"
-    needs: [report-start, run-producer]
+    needs: [report-start, run-producer, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1033,10 +1073,12 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[ios] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm]
+    needs: [report-start, run-producer, cleanup-device-farm, select-pool]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1057,4 +1099,6 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          device-pool-name: ${{ needs.select-pool.outputs.name }}
+          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
           update-summary: "false"
