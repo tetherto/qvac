@@ -1,0 +1,146 @@
+name: Benchmark CLI — OpenAI serve provider compare
+
+# Harness unit tests on PRs that touch the benchmark or this workflow.
+# Live smoke/full sweeps are dispatch-only on a self-hosted macOS GPU runner
+# (LM Studio, Ollama, and qvac serve must already be configured there).
+
+on:
+  pull_request:
+    paths:
+      - 'packages/cli/benchmarks/serve-openai-providers/**'
+      - '.github/workflows/benchmark-cli-serve-openai-providers.yml'
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch/tag/SHA to run (default: current ref)'
+        required: false
+        type: string
+      mode:
+        description: 'harness-unit (pytest only) | smoke | full'
+        required: false
+        type: string
+        default: 'harness-unit'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  BENCH_DIR: packages/cli/benchmarks/serve-openai-providers
+
+jobs:
+  harness-unit:
+    name: Harness unit tests
+    if: >
+      github.event_name == 'pull_request' ||
+      inputs.mode == 'harness-unit' ||
+      inputs.mode == 'smoke' ||
+      inputs.mode == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install harness deps
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+
+      - name: Pytest
+        working-directory: ${{ env.BENCH_DIR }}
+        run: .venv/bin/python -m pytest test_benchmark.py -q
+
+  label-gate:
+    name: Authorise (label-gate)
+    if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'smoke' || inputs.mode == 'full')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ github.token }}
+
+  live:
+    name: Live provider ${{ inputs.mode }}
+    needs:
+      - harness-unit
+      - label-gate
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.mode == 'smoke' || inputs.mode == 'full') &&
+      needs.label-gate.outputs.authorised == 'true'
+    runs-on: [self-hosted, qvac-macos26-arm64-gpu]
+    timeout-minutes: 180
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install harness deps
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+
+      - name: Require runner config
+        working-directory: ${{ env.BENCH_DIR }}
+        run: |
+          if grep -q 'REPLACE_WITH_' benchmark.yaml; then
+            echo "::error::benchmark.yaml still contains REPLACE_WITH_ placeholders."
+            echo "Configure model IDs and gguf_path on the runner (or commit a CI overlay) before mode=${{ inputs.mode }}."
+            exit 1
+          fi
+
+      - name: Run live mode
+        working-directory: ${{ env.BENCH_DIR }}
+        run: .venv/bin/python benchmark.py ${{ inputs.mode }}
+
+      - name: Upload results
+        if: always() && inputs.mode == 'full'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: serve-openai-providers-${{ github.run_id }}
+          path: |
+            ${{ env.BENCH_DIR }}/results/
+            ${{ env.BENCH_DIR }}/environment.md
+          if-no-files-found: warn
