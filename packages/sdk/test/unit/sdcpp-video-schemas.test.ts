@@ -281,20 +281,20 @@ test('videoStreamResponseSchema: accepts progress, output, and final stats chunk
 
   t.is(
     videoStreamResponseSchema.safeParse({
-    type: 'videoStream',
-    done: true,
-    stats: {
-      generationMs: 1234,
-      conditionerMs: 100,
-      denoiseMs: 800,
-      vaeMs: 200,
-      postProcessMs: 134,
-      stepsPerSecond: 25,
-      totalVideos: 1,
-      totalVideoFrames: 5,
-      videoFrames: 5,
-      fps: 16
-    }
+      type: 'videoStream',
+      done: true,
+      stats: {
+        generationMs: 1234,
+        conditionerMs: 100,
+        denoiseMs: 800,
+        vaeMs: 200,
+        postProcessMs: 134,
+        stepsPerSecond: 25,
+        totalVideos: 1,
+        totalVideoFrames: 5,
+        videoFrames: 5,
+        fps: 16
+      }
     }).success,
     true
   )
