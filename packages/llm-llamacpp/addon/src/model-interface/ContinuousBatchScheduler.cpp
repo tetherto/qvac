@@ -259,6 +259,9 @@ void ContinuousBatchScheduler::ensureWorkerStartedLocked() {
   if (!workerStarted_) {
     workerStarted_ = true;
     worker_ = std::thread([this] { workerLoop(); });
+    // Published while still holding mutex_: the worker's first action is to
+    // acquire that mutex, so every callback it later runs observes the id.
+    workerThreadId_.store(worker_.get_id());
   }
 }
 
@@ -267,7 +270,7 @@ void ContinuousBatchScheduler::workerLoop() {
   while (true) {
     workCv_.wait(lock, [this] {
       return stopping_ || cancelRequested_.load() ||
-             !pendingSlotCancels_.empty() || clearRequested_ ||
+             hasPendingSlotCancels() || clearRequested_ ||
              pending_.size_approx() > 0 || hasWorkLocked();
     });
     if (stopping_) {
@@ -1018,17 +1021,41 @@ double RuntimeStatsSnapshot::prefillTokensPerSecond() const {
 }
 
 bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
+  if (std::this_thread::get_id() == workerThreadId_.load()) {
+    // A streaming callback (onToken/onAdmitted/onDone) is cancelling from
+    // the worker thread, which holds mutex_ while it streams: locking it
+    // here would self-deadlock (the hazard whole-model cancel dodges via
+    // the non-locking requestCancelAll flag). Record only -- no occupancy
+    // check, no notify. The worker is awake by definition and reconciles
+    // deferred teardown at its loop top and on every lock reacquisition
+    // before it can sleep or admit new work, so the cancel is applied
+    // before the slot can be recycled and no-ops if the slot is free.
+    recordPendingSlotCancel(seqId);
+    return true;
+  }
   std::scoped_lock lock(mutex_);
   const bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (occupied) {
     if (workerStarted_ && !stopping_) {
-      pendingSlotCancels_.push_back(seqId);
+      // Notified while mutex_ is held so the wakeup cannot slip between the
+      // worker's predicate check and its wait.
+      recordPendingSlotCancel(seqId);
       workCv_.notify_all();
     } else {
       cancelSlotLocked(seqId);
     }
   }
   return occupied;
+}
+
+void ContinuousBatchScheduler::recordPendingSlotCancel(uint32_t seqId) {
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  pendingSlotCancels_.push_back(seqId);
+}
+
+bool ContinuousBatchScheduler::hasPendingSlotCancels() const {
+  std::scoped_lock pendingLock(pendingCancelsMtx_);
+  return !pendingSlotCancels_.empty();
 }
 
 void ContinuousBatchScheduler::cancelSlotLocked(
@@ -1104,10 +1131,19 @@ void ContinuousBatchScheduler::cancelSlotLocked(
 }
 
 void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
-  for (const uint32_t seqId : pendingSlotCancels_) {
+  std::vector<uint32_t> pendingCancels;
+  try {
+    std::scoped_lock pendingLock(pendingCancelsMtx_);
+    pendingCancels.swap(pendingSlotCancels_);
+  } catch (...) {
+    // std::mutex::lock may throw std::system_error on an unrecoverable
+    // failure; leave the recorded cancels in place for the next drain
+    // rather than terminate from this noexcept teardown path.
+    logTeardownFailureNoexcept("deferred-cancel drain failed to lock");
+  }
+  for (const uint32_t seqId : pendingCancels) {
     cancelSlotLocked(seqId);
   }
-  pendingSlotCancels_.clear();
   if (clearRequested_) {
     clearRequested_ = false;
     clearLocked();

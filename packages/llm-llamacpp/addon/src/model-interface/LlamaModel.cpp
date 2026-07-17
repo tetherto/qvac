@@ -998,9 +998,10 @@ std::string LlamaModel::processConcurrent(
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
   // Bind the slot teardown as the cancel action at admission, before the
-  // slot decodes anything. The action never runs inside this observer
-  // (cancelById is another thread), so it may take the scheduler lock; it
-  // runs under the canceller's shared stateMtx_, so state_ stays valid.
+  // slot decodes anything. The action may run on any thread -- including the
+  // scheduler's own worker when cancelById is issued from a streaming
+  // callback: scheduler cancel() records lock-free on that thread. It runs
+  // under the canceller's shared stateMtx_, so state_ stays valid.
   const SeqAssignedObserver onSeqAssigned = [this, id](size_t, uint32_t seqId) {
     return liveJobs_.bind(id, [this, seqId] {
       if (state_ && state_->batchScheduler_) {
