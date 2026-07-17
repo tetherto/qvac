@@ -920,6 +920,540 @@ class ClassifyResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
+class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+    ]
+    content: Annotated[str, Field(description="Message content.")]
+    attachments: Annotated[
+        list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
+
+
+class KvCache(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
+    GeneratedBaseModel
+):
+    type: Annotated[
+        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
+        Field(
+            title="CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
+        ),
+    ]
+    description: str | None = None
+    enum: list[str | float | bool | None] | None = None
+
+
+class CompletionOrchestrateRequestToolsItemParametersProperties(
+    RootModel[dict[str, CompletionOrchestrateRequestToolsItemParametersPropertiesValue]]
+):
+    root: Annotated[
+        dict[str, CompletionOrchestrateRequestToolsItemParametersPropertiesValue],
+        Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
+    ]
+
+
+class CompletionOrchestrateRequestToolsItemParameters(GeneratedBaseModel):
+    type: Literal["object"]
+    properties: Annotated[
+        CompletionOrchestrateRequestToolsItemParametersProperties,
+        Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
+    ]
+    required: list[str] | None = None
+
+
+class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
+    type: Literal["function"]
+    name: str
+    description: str
+    parameters: Annotated[
+        CompletionOrchestrateRequestToolsItemParameters,
+        Field(title="CompletionOrchestrateRequestToolsItemParameters"),
+    ]
+
+
+class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    temp: Annotated[
+        float | None, Field(description="Sampling temperature (typically 0–2).")
+    ] = None
+    top_p: Annotated[
+        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+    ] = None
+    top_k: Annotated[
+        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+    ] = None
+    predict: Annotated[
+        float | None,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled."
+        ),
+    ] = None
+    seed: Annotated[
+        float | None, Field(description="Random seed for reproducibility.")
+    ] = None
+    frequency_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens based on frequency so far."),
+    ] = None
+    presence_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens that have already appeared."),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None, Field(description="Penalty applied to repeated tokens.")
+    ] = None
+    reasoning_budget: Annotated[
+        int | None,
+        Field(
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            ge=-1,
+            le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+        ),
+    ] = None
+
+
+class CompletionOrchestrateRequestToolDialect(Enum):
+    hermes = "hermes"
+    pythonic = "pythonic"
+    json = "json"
+    harmony = "harmony"
+    qwen35 = "qwen35"
+    gemma4 = "gemma4"
+
+
+class CompletionOrchestrateRequestResponseFormatText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"]
+
+
+class CompletionOrchestrateRequestResponseFormatJsonObject(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["json_object"]
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[
+        str,
+        Field(
+            description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
+            min_length=1,
+        ),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation."
+        ),
+    ] = None
+    schema_: Annotated[
+        CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema,
+        Field(
+            alias="schema",
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+    strict: Annotated[
+        bool | None,
+        Field(
+            description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`."
+        ),
+    ] = None
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchema(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["json_schema"]
+    json_schema: Annotated[
+        CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema,
+        Field(title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema"),
+    ]
+
+
+class CompletionOrchestrateRequest(GeneratedBaseModel):
+    history: Annotated[
+        list[CompletionOrchestrateRequestHistoryItem],
+        Field(description="Array of conversation messages sent to the model."),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the model to use for completion.",
+        ),
+    ]
+    kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    tools: Annotated[
+        list[CompletionOrchestrateRequestToolsItem] | None,
+        Field(
+            description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    stream: Annotated[
+        bool,
+        Field(
+            description="Whether to stream tokens (`true`) or return the complete response once (`false`)."
+        ),
+    ]
+    generation_params: Annotated[
+        CompletionOrchestrateRequestGenerationParams | None,
+        Field(
+            alias="generationParams",
+            description="Optional sampling / generation parameters.",
+            title="CompletionOrchestrateRequestGenerationParams",
+        ),
+    ] = None
+    capture_thinking: Annotated[
+        bool | None,
+        Field(
+            alias="captureThinking",
+            description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
+        ),
+    ] = None
+    emit_raw_deltas: Annotated[
+        bool | None,
+        Field(
+            alias="emitRawDeltas",
+            description="When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
+        ),
+    ] = None
+    tool_dialect: Annotated[
+        CompletionOrchestrateRequestToolDialect | None,
+        Field(
+            alias="toolDialect",
+            description="Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+            title="CompletionOrchestrateRequestToolDialect",
+        ),
+    ] = None
+    response_format: Annotated[
+        CompletionOrchestrateRequestResponseFormatText
+        | CompletionOrchestrateRequestResponseFormatJsonObject
+        | CompletionOrchestrateRequestResponseFormatJsonSchema
+        | None,
+        Field(
+            alias="responseFormat",
+            description="Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+            min_length=1,
+        ),
+    ] = None
+    type: Literal["completionOrchestrate"]
+    max_tool_turns: Annotated[
+        int | None,
+        Field(
+            alias="maxToolTurns",
+            description='Upper bound on generation turns the worker will run before ending the loop with `stopReason: "maxToolTurns"`. Each turn is one completion pass; a turn that requests tool calls consumes callbacks and starts the next turn. Defaults to 8.',
+            ge=1,
+            le=32,
+        ),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemContentDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["contentDelta"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemRawDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["rawDelta"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemThinkingDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["thinkingDelta"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemToolCallCallArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCallArguments"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemToolCallCall(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    name: str
+    arguments: Annotated[
+        CompletionOrchestrateResponseEventsItemToolCallCallArguments,
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCallArguments"),
+    ]
+    raw: str | None = None
+
+
+class CompletionOrchestrateResponseEventsItemToolCall(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["toolCall"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    call: Annotated[
+        CompletionOrchestrateResponseEventsItemToolCallCall,
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCall"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemToolErrorErrorCode(Enum):
+    parse_error = "PARSE_ERROR"
+    validation_error = "VALIDATION_ERROR"
+    unknown_tool = "UNKNOWN_TOOL"
+
+
+class CompletionOrchestrateResponseEventsItemToolErrorError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Annotated[
+        CompletionOrchestrateResponseEventsItemToolErrorErrorCode,
+        Field(title="CompletionOrchestrateResponseEventsItemToolErrorErrorCode"),
+    ]
+    message: str
+    raw: str | None = None
+
+
+class CompletionOrchestrateResponseEventsItemToolError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["toolError"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    error: Annotated[
+        CompletionOrchestrateResponseEventsItemToolErrorError,
+        Field(title="CompletionOrchestrateResponseEventsItemToolErrorError"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
+    prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    backend_device: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            title="CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice",
+        ),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionStats"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stats: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionStatsStats,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionStatsStats"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneErrorError(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    message: str
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    full_text: Annotated[str, Field(alias="fullText")]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionDone"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")]
+    error: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneErrorError,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneErrorError"),
+    ]
+    raw: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw | None,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw"),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneStopReason(Enum):
+    eos = "eos"
+    length = "length"
+    stop_sequence = "stopSequence"
+    cancelled = "cancelled"
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneRaw(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    full_text: Annotated[str, Field(alias="fullText")]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDone(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionDone"]
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneStopReason | None,
+        Field(
+            alias="stopReason",
+            title="CompletionOrchestrateResponseEventsItemCompletionDoneStopReason",
+        ),
+    ] = None
+    raw: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneRaw | None,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneRaw"),
+    ] = None
+
+
+class CompletionOrchestrateResponseToolCallbackArguments(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="CompletionOrchestrateResponseToolCallbackArguments"),
+    ]
+
+
+class CompletionOrchestrateResponseToolCallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    call_id: Annotated[
+        str,
+        Field(
+            alias="callId",
+            description="Correlates the upstream result line to this request.",
+        ),
+    ]
+    name: str
+    arguments: Annotated[
+        CompletionOrchestrateResponseToolCallbackArguments,
+        Field(title="CompletionOrchestrateResponseToolCallbackArguments"),
+    ]
+
+
+class CompletionOrchestrateResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionOrchestrate"]
+    turn: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
+    events: (
+        list[
+            CompletionOrchestrateResponseEventsItemContentDelta
+            | CompletionOrchestrateResponseEventsItemRawDelta
+            | CompletionOrchestrateResponseEventsItemThinkingDelta
+            | CompletionOrchestrateResponseEventsItemToolCall
+            | CompletionOrchestrateResponseEventsItemToolError
+            | CompletionOrchestrateResponseEventsItemCompletionStats
+            | CompletionOrchestrateResponseEventsItemCompletionDoneError
+            | CompletionOrchestrateResponseEventsItemCompletionDone
+        ]
+        | None
+    ) = None
+    tool_callback: Annotated[
+        CompletionOrchestrateResponseToolCallback | None,
+        Field(alias="toolCallback", title="CompletionOrchestrateResponseToolCallback"),
+    ] = None
+    done: bool | None = None
+
+
 class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -939,10 +1473,6 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
     ] = None
-
-
-class KvCache(RootModel[str]):
-    root: Annotated[str, Field(min_length=1)]
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
@@ -8345,6 +8875,7 @@ class Response(
         | BciTranscribeStreamResponse
         | CancelResponse
         | ClassifyResponse
+        | CompletionOrchestrateResponse
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
@@ -8388,6 +8919,7 @@ class Response(
         | BciTranscribeStreamResponse
         | CancelResponse
         | ClassifyResponse
+        | CompletionOrchestrateResponse
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
@@ -8443,6 +8975,7 @@ class Request(
         | BciTranscribeStreamRequest
         | Request_1
         | ClassifyRequest
+        | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest
@@ -8482,6 +9015,7 @@ class Request(
         | BciTranscribeStreamRequest
         | Request_1
         | ClassifyRequest
+        | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest

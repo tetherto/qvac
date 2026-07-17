@@ -25,6 +25,8 @@ from . import (
     CancelResponse,
     ClassifyRequest,
     ClassifyResponse,
+    CompletionOrchestrateRequest,
+    CompletionOrchestrateResponse,
     CompletionStreamRequest,
     CompletionStreamResponse,
     DeleteCacheRequest,
@@ -128,6 +130,14 @@ async def classify(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield ClassifyResponse.model_validate(chunk)
+
+
+async def completion_orchestrate(
+    transport: Transport, params: CompletionOrchestrateRequest, up: AsyncIterable[bytes]
+) -> AsyncIterator[CompletionOrchestrateResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_duplex(payload, up):
+        yield CompletionOrchestrateResponse.model_validate(chunk)
 
 
 async def completion_stream(
@@ -419,6 +429,7 @@ __all__ = [
     "bci_transcribe_stream",
     "cancel",
     "classify",
+    "completion_orchestrate",
     "completion_stream",
     "delete_cache",
     "diffusion_stream",

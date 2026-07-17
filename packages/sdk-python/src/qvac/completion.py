@@ -304,10 +304,153 @@ def completion(
     return run
 
 
+def completion_orchestrate(
+    transport: Transport,
+    *,
+    model_id: str,
+    history: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    max_tool_turns: int | None = None,
+    stream: bool = True,
+    generation_params: dict[str, Any] | None = None,
+    capture_thinking: bool | None = None,
+    tool_dialect: str | None = None,
+    request_id: str | None = None,
+) -> CompletionRun:
+    """Worker-orchestrated completion: the WORKER runs the multi-turn tool
+    loop; when the model requests a tool, the worker emits a `toolCallback`
+    frame down the duplex stream, this client executes the registered
+    handler and writes the result back up, and generation continues with the
+    extended history. Every tool therefore needs a `handler`.
+
+    `run.events` yields the inner completion events across every turn;
+    `run.final` folds the LAST turn -- the final answer -- once the worker's
+    terminal done frame arrives. Only a local worker may orchestrate: tool
+    handlers execute code on this machine."""
+    import json
+
+    from .schemas import CompletionOrchestrateRequest
+
+    resolved_request_id = (
+        request_id if request_id is not None else generate_client_request_id()
+    )
+    wire_tools, handlers = _normalize_tools(tools)
+    missing = [
+        tool["name"] for tool in wire_tools or [] if tool["name"] not in handlers
+    ]
+    if missing:
+        raise CompletionFailedError(
+            f"completion_orchestrate requires a handler for every tool; missing: {missing}"
+        )
+
+    payload: dict[str, Any] = {
+        "type": "completionOrchestrate",
+        "modelId": model_id,
+        "history": history,
+        "stream": stream,
+        "requestId": resolved_request_id,
+    }
+    if wire_tools:
+        payload["tools"] = wire_tools
+    if max_tool_turns is not None:
+        payload["maxToolTurns"] = max_tool_turns
+    if generation_params is not None:
+        payload["generationParams"] = generation_params
+    if capture_thinking is not None:
+        payload["captureThinking"] = capture_thinking
+    if tool_dialect is not None:
+        payload["toolDialect"] = tool_dialect
+
+    request = CompletionOrchestrateRequest.model_validate(payload)
+    run = CompletionRun(resolved_request_id)
+
+    upstream: asyncio.Queue[bytes | None] = asyncio.Queue()
+
+    async def up() -> Any:
+        while True:
+            chunk = await upstream.get()
+            if chunk is None:
+                return
+            yield chunk
+
+    async def run_callback(call_id: str, name: str, arguments: dict[str, Any]) -> None:
+        handler = handlers.get(name)
+        try:
+            if handler is None:
+                raise CompletionFailedError(f"no handler registered for tool {name!r}")
+            result = await handler(arguments)
+            line = json.dumps({"callId": call_id, "result": result})
+        except Exception as error:
+            line = json.dumps({"callId": call_id, "error": str(error)})
+        upstream.put_nowait(line.encode("utf-8") + b"\n")
+
+    async def pump() -> None:
+        # Events of the current turn only: `final` is the last turn's fold.
+        turn_events: list[Any] = []
+        current_turn = -1
+        try:
+            async for frame in _methods.completion_orchestrate(
+                transport, request, up()
+            ):
+                if frame.tool_callback is not None:
+                    callback = frame.tool_callback
+                    arguments = (
+                        callback.arguments.root
+                        if hasattr(callback.arguments, "root")
+                        else dict(callback.arguments)
+                    )
+                    await run_callback(callback.call_id, callback.name, dict(arguments))
+                    continue
+                if frame.events:
+                    if frame.turn is not None and frame.turn != current_turn:
+                        current_turn = frame.turn
+                        turn_events = []
+                    for event in frame.events:
+                        turn_events.append(event)
+                        run._queue.put_nowait(event)
+                if frame.done:
+                    final, error_message, cancelled = _fold_events(turn_events, {})
+                    if error_message is not None:
+                        run.final.set_exception(CompletionFailedError(error_message))
+                    elif cancelled:
+                        run.final.set_exception(
+                            InferenceCancelledError(
+                                resolved_request_id,
+                                partial_text=final.content_text,
+                                partial_stats=final.stats,
+                            )
+                        )
+                    else:
+                        run.final.set_result(final)
+                    break
+            if not run.final.done():
+                final, error_message, _cancelled = _fold_events(turn_events, {})
+                if error_message is not None:
+                    run.final.set_exception(CompletionFailedError(error_message))
+                else:
+                    run.final.set_result(final)
+            run._finished = run.final.exception() is None or isinstance(
+                run.final.exception(), InferenceCancelledError
+            )
+        except Exception as error:
+            if not run.final.done():
+                run.final.set_exception(error)
+            run._finished = False
+        finally:
+            if run.final.done() and run.final.exception() is not None:
+                run.final.exception()
+            upstream.put_nowait(None)
+            run._queue.put_nowait(None)
+
+    asyncio.get_running_loop().create_task(pump())
+    return run
+
+
 __all__ = [
     "CompletionFinal",
     "CompletionRun",
     "ToolCall",
     "completion",
+    "completion_orchestrate",
     "normalize_assistant_cache_content",
 ]

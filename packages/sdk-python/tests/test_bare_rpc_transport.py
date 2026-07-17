@@ -268,3 +268,40 @@ async def test_bci_transcribe_stream_duplex(transport) -> None:
         if piece:
             text += piece
     assert "controversial" in text.lower(), f"unexpected BCI transcript: {text!r}"
+
+
+async def test_completion_orchestrate_without_tools(transport) -> None:
+    """The worker-orchestrated duplex path end to end: one generation turn,
+    events forwarded through the orchestrate frames, the worker's terminal
+    done frame folding the final. Lives in this suite (not the poc one)
+    because orchestration keeps the upstream open for tool results, which
+    needs a transport that pumps upstream concurrently -- the PoC harness
+    exhausts the upstream before reading any response, by design."""
+    from qvac.completion import completion_orchestrate
+
+    load_request = LoadModelRequest.model_validate(
+        {
+            "type": "loadModel",
+            "modelSrc": QWEN3_600M_INST_Q4.src,
+            "modelType": "llamacpp-completion",
+            "modelConfig": {"n_ctx": 2048},
+        }
+    )
+    load_response = await load_model(transport, load_request)
+    assert load_response.success, load_response.error
+    assert load_response.model_id is not None
+
+    run = completion_orchestrate(
+        transport,
+        model_id=load_response.model_id,
+        history=[{"role": "user", "content": "Say hello in five words."}],
+        tools=[],
+        generation_params={"predict": 512, "temp": 0, "seed": 42},
+    )
+    saw_delta = False
+    async for event in run.events:
+        if event.type == "contentDelta":
+            saw_delta = True
+    final = await run.final
+    assert saw_delta, "expected streamed deltas through the orchestrate frames"
+    assert final.content_text.strip()

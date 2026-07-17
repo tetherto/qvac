@@ -217,3 +217,135 @@ async def test_invoke_without_handler_raises():
     assert not call.has_handler
     with pytest.raises(CompletionFailedError, match="no handler"):
         await call.invoke()
+
+
+# ---- worker-orchestrated completion --------------------------------------------
+
+
+def _orch(**fields: Any) -> dict[str, Any]:
+    return {"type": "completionOrchestrate", **fields}
+
+
+class OrchestratingFakeTransport:
+    """Plays the worker's side of the tool loop: emits a turn-0 tool call,
+    asks for the callback, waits for the client's upstream result line, then
+    produces the final answer turn."""
+
+    def __init__(self):
+        self.sent: Any = None
+        self.received: list[dict[str, Any]] = []
+
+    async def call(self, payload):
+        raise NotImplementedError
+
+    async def call_stream(self, payload):
+        raise NotImplementedError
+        yield
+
+    async def call_duplex(self, payload, up):
+        import json
+
+        self.sent = payload
+        up_iter = aiter(up)
+        yield _orch(
+            turn=0,
+            events=[
+                {
+                    "type": "toolCall",
+                    "seq": 0,
+                    "call": {
+                        "id": "call-1",
+                        "name": "get_weather",
+                        "arguments": {"city": "Tokyo"},
+                    },
+                },
+                _done(1, stopReason="eos", raw={"fullText": "<call get_weather>"}),
+            ],
+        )
+        yield _orch(
+            turn=0,
+            toolCallback={
+                "callId": "call-1",
+                "name": "get_weather",
+                "arguments": {"city": "Tokyo"},
+            },
+        )
+        self.received.append(json.loads(await anext(up_iter)))
+        yield _orch(
+            turn=1,
+            events=[
+                _delta(0, "22C."),
+                _done(1, stopReason="eos", raw={"fullText": "22C."}),
+            ],
+        )
+        yield _orch(done=True)
+
+
+WEATHER_TOOL = {
+    "name": "get_weather",
+    "description": "Get current weather",
+    "parameters": {
+        "type": "object",
+        "properties": {"city": {"type": "string"}},
+        "required": ["city"],
+    },
+}
+
+
+async def test_orchestrate_runs_handler_and_folds_final_turn():
+    from qvac.completion import completion_orchestrate
+
+    seen_args: list[dict[str, Any]] = []
+
+    async def handler(args: dict[str, Any]) -> Any:
+        seen_args.append(args)
+        return {"temp": 22}
+
+    transport = OrchestratingFakeTransport()
+    run = completion_orchestrate(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "weather in Tokyo?"}],
+        tools=[{**WEATHER_TOOL, "handler": handler}],
+    )
+    events = [event async for event in run.events]
+    final = await run.final
+
+    assert seen_args == [{"city": "Tokyo"}]
+    assert transport.received == [{"callId": "call-1", "result": {"temp": 22}}]
+    # Events surface every turn; final folds only the last (the answer).
+    assert any(event.type == "toolCall" for event in events)
+    assert final.content_text == "22C."
+    assert final.tool_calls == []
+    assert transport.sent["tools"][0]["name"] == "get_weather"
+    assert "handler" not in transport.sent["tools"][0]
+
+
+async def test_orchestrate_handler_error_is_reported_upstream():
+    from qvac.completion import completion_orchestrate
+
+    async def handler(args: dict[str, Any]) -> Any:
+        raise RuntimeError("api down")
+
+    transport = OrchestratingFakeTransport()
+    run = completion_orchestrate(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "weather?"}],
+        tools=[{**WEATHER_TOOL, "handler": handler}],
+    )
+    final = await run.final
+    assert transport.received == [{"callId": "call-1", "error": "api down"}]
+    assert final.content_text == "22C."
+
+
+async def test_orchestrate_requires_handlers_for_every_tool():
+    from qvac.completion import completion_orchestrate
+
+    with pytest.raises(CompletionFailedError, match="missing.*get_weather"):
+        completion_orchestrate(
+            OrchestratingFakeTransport(),
+            model_id="m-1",
+            history=[{"role": "user", "content": "x"}],
+            tools=[WEATHER_TOOL],
+        )
