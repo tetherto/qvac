@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
-const sdkRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const sdkRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(sdkRoot, 'node_modules', 'typescript', 'bin', 'tsc')
 const tscAlias = join(sdkRoot, 'node_modules', '.bin', 'tsc-alias')
 

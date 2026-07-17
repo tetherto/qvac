@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { waitForBareChildren, isAlive } from './utils/bare-children'
+import { waitForBareChildren, isAlive } from './fixtures/bare-children'
 
 // Planned close() must not surface as a worker crash to callers.
 test('close() after a successful call does not surface as a crash', async function (t) {

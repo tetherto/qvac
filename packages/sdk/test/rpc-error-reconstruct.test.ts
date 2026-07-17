@@ -1,17 +1,32 @@
 import test from 'brittle'
 import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
-import { createErrorResponse } from '@/schemas/error'
+// The worker serializes @qvac/inference's error classes with @qvac/inference's
+// `createErrorResponse`; the client rebuilds the SDK's classes with `reconstructError`.
+// Constructing the originals from @qvac/inference's classes exercises that real
+// cross-process path.
+import {
+  createErrorResponse,
+  ContextOverflowError as InferenceContextOverflowError,
+  RequestIdConflictError as InferenceRequestIdConflictError,
+  RequestNotFoundError as InferenceRequestNotFoundError,
+  RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
+  TranslationFailedError as InferenceTranslationFailedError
+} from '@qvac/inference/surface'
 import {
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  ModelNotLoadedError,
   TranslationFailedError
 } from '@/utils/errors-server'
 
 test('reconstructError: RequestRejectedByPolicyError round-trips via name + typedFields', (t) => {
-  const original = new RequestRejectedByPolicyError('rid-1', 'completion', 'model-1', 'queue full')
+  const original = new InferenceRequestRejectedByPolicyError(
+    'rid-1',
+    'completion',
+    'model-1',
+    'queue full'
+  )
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -31,7 +46,7 @@ test('reconstructError: RequestRejectedByPolicyError round-trips via name + type
 })
 
 test('reconstructError: RequestIdConflictError round-trips', (t) => {
-  const original = new RequestIdConflictError('rid-2')
+  const original = new InferenceRequestIdConflictError('rid-2')
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -42,7 +57,7 @@ test('reconstructError: RequestIdConflictError round-trips', (t) => {
 })
 
 test('reconstructError: RequestNotFoundError round-trips', (t) => {
-  const original = new RequestNotFoundError('rid-3')
+  const original = new InferenceRequestNotFoundError('rid-3')
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -53,7 +68,7 @@ test('reconstructError: RequestNotFoundError round-trips', (t) => {
 })
 
 test('reconstructError: ContextOverflowError round-trips with all fields', (t) => {
-  const original = new ContextOverflowError(5432, 4096, 'qwen3-4b')
+  const original = new InferenceContextOverflowError(5432, 4096, 'qwen3-4b')
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -76,7 +91,7 @@ test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
   // the server may throw `ContextOverflowError` with both fields
   // `undefined`. The reconstructor must accept that and not throw, and
   // `instanceof` must still hold.
-  const original = new ContextOverflowError()
+  const original = new InferenceContextOverflowError()
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)
@@ -90,19 +105,23 @@ test('reconstructError: ContextOverflowError tolerates missing fields', (t) => {
 })
 
 test('reconstructError: unknown error name falls through to RPCError', (t) => {
-  // A QvacError with no entry in the reconstructor map round-trips name +
-  // code via the legacy RPCError wrapper — instanceof RPCError must hold;
-  // the original class is NOT recovered (and isn't expected to be — the
-  // class isn't re-exported / registered for cross-RPC use).
-  const original = new ModelNotLoadedError('model-1')
-  const envelope = createErrorResponse(original)
+  // An envelope whose SCREAMING_SNAKE name has no entry in the reconstructor
+  // map — as the worker emits for a server-only QvacError like MODEL_NOT_LOADED
+  // — round-trips name + code via the legacy RPCError wrapper: instanceof
+  // RPCError must hold and no typed class is rebuilt.
+  const envelope = {
+    type: 'error' as const,
+    name: 'MODEL_NOT_LOADED',
+    code: 52003,
+    message: 'Model "model-1" is not loaded'
+  }
 
   const reconstructed = reconstructError(envelope)
 
   t.ok(reconstructed instanceof RPCError, 'unknown names must fall through to RPCError')
   t.absent(
-    reconstructed instanceof ModelNotLoadedError,
-    'an unregistered class is NOT magically rebuilt'
+    reconstructed instanceof RequestRejectedByPolicyError,
+    'an unregistered name is NOT rebuilt into a typed class'
   )
   const rpc = reconstructed as RPCError
   // `name` comes from the SCREAMING_SNAKE error-code name (the reconstructor
@@ -147,7 +166,12 @@ test('reconstructError: missing typedFields on a known name does not throw', (t)
 })
 
 test('reconstructError: remote stack/timestamp attach onto the reconstructed instance', (t) => {
-  const original = new RequestRejectedByPolicyError('rid-4', 'embeddings', 'model-2', 'queue full')
+  const original = new InferenceRequestRejectedByPolicyError(
+    'rid-4',
+    'embeddings',
+    'model-2',
+    'queue full'
+  )
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope) as RequestRejectedByPolicyError & {
@@ -162,7 +186,7 @@ test('reconstructError: remote stack/timestamp attach onto the reconstructed ins
 })
 
 test('reconstructError: TranslationFailedError round-trips', (t) => {
-  const original = new TranslationFailedError('could not detect source language')
+  const original = new InferenceTranslationFailedError('could not detect source language')
   const envelope = createErrorResponse(original)
 
   const reconstructed = reconstructError(envelope)

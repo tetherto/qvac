@@ -34,7 +34,10 @@ describe('selectExportTarget', () => {
 })
 
 describe('createSdkImportResolver', () => {
-  function fakeSdk(t: { after: (fn: () => void) => void }): {
+  function fakeSdk(
+    t: { after: (fn: () => void) => void },
+    opts: { withInference?: boolean } = {}
+  ): {
     realDir: string
     linkDir: string
   } {
@@ -47,11 +50,25 @@ describe('createSdkImportResolver', () => {
       JSON.stringify({
         name: '@qvac/sdk',
         exports: {
-          './worker-core': { import: './dist/server/worker-core.js' },
+          './worker-lifecycle': { import: './dist/server/worker-lifecycle.js' },
           './plugins': { import: './dist/server/plugins/index.js' }
         }
       })
     )
+    if (opts.withInference) {
+      const inferenceDir = path.join(realDir, 'node_modules', '@qvac', 'inference')
+      fs.mkdirSync(inferenceDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(inferenceDir, 'package.json'),
+        JSON.stringify({
+          name: '@qvac/inference',
+          exports: {
+            './package': './package.json',
+            './plugins': { import: './dist/plugins/index.js' }
+          }
+        })
+      )
+    }
     const linkDir = path.join(root, 'node_modules', '@qvac', 'sdk')
     fs.mkdirSync(path.dirname(linkDir), { recursive: true })
     fs.symlinkSync(realDir, linkDir)
@@ -63,10 +80,10 @@ describe('createSdkImportResolver', () => {
     const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
 
     const expected = pathToFileURL(
-      path.join(fs.realpathSync(realDir), 'dist', 'server', 'worker-core.js')
+      path.join(fs.realpathSync(realDir), 'dist', 'server', 'worker-lifecycle.js')
     ).href
-    assert.equal(resolve('@qvac/sdk/worker-core'), expected)
-    assert.ok(!resolve('@qvac/sdk/worker-core').includes('node_modules'))
+    assert.equal(resolve('@qvac/sdk/worker-lifecycle'), expected)
+    assert.ok(!resolve('@qvac/sdk/worker-lifecycle').includes('node_modules'))
   })
 
   it('passes through non-SDK specifiers unchanged', (t) => {
@@ -81,17 +98,31 @@ describe('createSdkImportResolver', () => {
     const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
     assert.equal(resolve('@qvac/sdk/not-exported'), '@qvac/sdk/not-exported')
   })
+
+  it('anchors @qvac/inference subpaths to the copy resolved from the SDK', (t) => {
+    const { realDir, linkDir } = fakeSdk(t, { withInference: true })
+    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
+    const inferenceRoot = fs.realpathSync(path.join(realDir, 'node_modules', '@qvac', 'inference'))
+    const expected = pathToFileURL(path.join(inferenceRoot, 'dist', 'plugins', 'index.js')).href
+    assert.equal(resolve('@qvac/inference/plugins'), expected)
+  })
+
+  it('leaves @qvac/inference specifiers unchanged when it cannot be resolved', (t) => {
+    const { linkDir } = fakeSdk(t)
+    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
+    assert.equal(resolve('@qvac/inference/plugins'), '@qvac/inference/plugins')
+  })
 })
 
 describe('generateWorkerEntry', () => {
   const tag = (specifier: string): string =>
     specifier.startsWith('@qvac/sdk') ? `RESOLVED:${specifier}` : specifier
 
-  it('routes SDK core imports through the resolver', () => {
+  it('routes SDK imports through the resolver and registers plugins into @qvac/inference', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk', tag)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-core"/)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/plugins"/)
+    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
     assert.match(entry, /from "RESOLVED:@qvac\/sdk\/logging"/)
+    assert.match(entry, /from "@qvac\/inference\/plugins"/)
   })
 
   it('routes builtin plugin imports through the resolver and keeps custom plugins', () => {
@@ -106,6 +137,6 @@ describe('generateWorkerEntry', () => {
 
   it('defaults to an identity resolver (imports stay bare specifiers)', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk')
-    assert.match(entry, /from "@qvac\/sdk\/worker-core"/)
+    assert.match(entry, /from "@qvac\/sdk\/worker-lifecycle"/)
   })
 })

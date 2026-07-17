@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { z } from 'zod'
-import { definePlugin, defineHandler } from '@/schemas'
-import { buildPluginContract } from '@/scripts/contract/plugin-contract'
+import { definePlugin, defineHandler } from '@qvac/sdk'
+import { buildPluginContract } from '../scripts/contract/plugin-contract'
 
 const plugin = definePlugin({
   modelType: 'echo-test',
