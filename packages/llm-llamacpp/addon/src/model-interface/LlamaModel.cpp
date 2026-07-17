@@ -1374,6 +1374,18 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
     }
+    // Same live-only prefill policy as the single-prompt path: batch items
+    // always run in scheduler lanes, and a lane wipes its warmed KV at
+    // teardown, so a prefill without persistence produces nothing reachable.
+    if (!isConcurrentEligible(prompt)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: prefill without saveCacheToDisk and a "
+          "cacheKey cannot run on a parallel model: its warmed context is "
+          "unreachable by concurrent jobs; persist the cache or load with "
+          "parallel=1");
+    }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
