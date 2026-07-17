@@ -185,6 +185,12 @@ Use the [Bun](https://bun.sh/) package manager:
 bun i
 ```
 
+`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+
+```bash
+bun run sdk-source:workspace
+```
+
 ```bash
 bun run build  # or `watch` for hotreload
 ```
