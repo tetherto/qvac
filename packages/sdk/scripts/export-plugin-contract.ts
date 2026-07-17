@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
-import { buildPluginContract } from '@/scripts/contract/plugin-contract'
-import type { QvacPlugin } from '@/schemas'
+import type { QvacPlugin } from '@qvac/inference/surface'
+import { buildPluginContract } from './contract/plugin-contract'
 
 // Usage: tsx scripts/export-plugin-contract.ts <plugin-module> <out.json>
 // The plugin module's default export must be a definePlugin(...) value.
