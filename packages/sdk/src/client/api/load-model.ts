@@ -17,7 +17,7 @@ import {
   normalizeModelType,
   inferModelTypeFromModelSrc,
   ModelType
-} from '@/schemas'
+} from '@qvac/inference/surface'
 import {
   ModelLoadFailedError,
   ModelTypeRequiredError,

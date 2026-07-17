@@ -130,8 +130,6 @@ export {
   type RagIngestStage,
   type RagReindexStage,
   type RagSaveStage,
-  SDK_CLIENT_ERROR_CODES,
-  SDK_SERVER_ERROR_CODES,
   RAG_ERROR_CODES,
   type QvacConfig,
   type ModelInfo,
@@ -198,11 +196,33 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,
   type ModelRegistryEntry,
   type ModelRegistryEntryAddon,
+  type ProfilerMode,
+  type FinetuneValidation,
+  type FinetuneRunParams,
+  type FinetuneGetStateParams,
+  type FinetuneStopParams,
+  type FinetuneParams,
+  type FinetuneStatus,
+  type FinetuneProgress,
+  type FinetuneStats,
+  type FinetuneResult
+} from '@qvac/inference/surface'
+
+// SDK-owned error-code objects: `SDK_CLIENT_ERROR_CODES` holds transport/client
+// codes absent from @qvac/inference, and `SDK_SERVER_ERROR_CODES` carries the
+// client-side error definitions (`addCodes` message registry) that
+// @qvac/inference's value-clean surface does not provide.
+export { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
+export { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
+
+// Built-in plugin ids under the public @qvac/sdk name (see `@/plugin-ids`).
+export {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
   PLUGIN_WHISPER,
@@ -215,28 +235,18 @@ export {
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION,
   SDK_DEFAULT_PLUGINS,
-  type BuiltinPlugin,
-  type ProfilerMode,
-  type FinetuneValidation,
-  type FinetuneRunParams,
-  type FinetuneGetStateParams,
-  type FinetuneStopParams,
-  type FinetuneParams,
-  type FinetuneStatus,
-  type FinetuneProgress,
-  type FinetuneStats,
-  type FinetuneResult
-} from './schemas'
+  type BuiltinPlugin
+} from '@/plugin-ids'
 
 export { type ToolInput, type ToolHandler } from './utils/tool-helpers'
 
 // Model types - canonical naming with backward-compatible aliases
-export { MODEL_TYPES, ModelType } from './schemas'
+export { MODEL_TYPES, ModelType } from '@qvac/inference/surface'
 
 // Model registry constants
-export * from './models/registry'
+export * from '@qvac/inference/models'
 
-export { SUPPORTED_AUDIO_FORMATS } from './constants/audio'
+export { SUPPORTED_AUDIO_FORMATS } from '@qvac/inference/surface'
 
 // Error classes that clients need for `instanceof` checks on rejected
 // promises. `InferenceCancelledError` rides the standard `QvacError`
@@ -286,11 +296,11 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler, attachBackendDiagnostics } from './profiling'
+export { profiler, attachBackendDiagnostics } from '@qvac/inference/surface'
 export type {
   ProfilerRuntimeOptions,
   ProfilerExport,
   ProfilingEvent,
   ProfilerGPUResourceGauge,
   ProfilerResourceGauge
-} from './profiling'
+} from '@qvac/inference/surface'

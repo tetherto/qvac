@@ -1,9 +1,9 @@
+import {
+  type GetSystemResourcesInput,
+  type GetSystemResourcesRequest,
+  type SystemResources
+} from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
-import type {
-  GetSystemResourcesInput,
-  GetSystemResourcesRequest,
-  SystemResources
-} from '@/schemas/system-resources'
 import { InvalidResponseError } from '@/utils/errors-client'
 
 export async function getSystemResources(

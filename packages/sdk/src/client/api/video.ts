@@ -1,4 +1,8 @@
-import { videoStreamResponseSchema, type VideoClientParams, type VideoStats } from '@/schemas'
+import {
+  videoStreamResponseSchema,
+  type VideoClientParams,
+  type VideoStats
+} from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { createVideoStreamRequest } from '@/client/api/video-request'

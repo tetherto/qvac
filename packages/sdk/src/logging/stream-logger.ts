@@ -1,4 +1,4 @@
-import { sendLogToStreams } from '@/server/bare/registry/logging-stream-registry'
+import { sendLogToStreams } from './logging-stream-registry'
 import { createBaseLogger } from './base-logger'
 import type { Logger, LoggerOptions } from './types'
 

@@ -17,7 +17,7 @@ import {
   WorkerCrashedError,
   WorkerShutdownError
 } from '@/utils/errors-client'
-import type { RuntimeContext } from '@/schemas'
+import type { RuntimeContext } from '@qvac/inference/surface'
 
 const RPC_INIT_TIMEOUT_MS = 30_000
 const WORKER_STDERR_TAIL_CHARS = 16_384
@@ -82,27 +82,25 @@ function resolvePackagedWorkerPath(): string | undefined {
 /**
  * Resolve the SDK's default worker entry via bundler-visible asset references.
  *
+ * The worker is transpiled with its `@/` aliases resolved into
+ * `dist/src/worker/index.js`; Bare cannot run the `@/`-laden source. This file
+ * compiles to `dist/src/client/rpc/node-rpc-client.js`, so the built worker sits
+ * at `../../worker/index.js` for both the dev and packaged layouts.
+ *
  * `path.resolve(__dirname, ...)` is invisible to static analysis, so packaged
- * consumers ship without worker.js. We use `import.meta.asset(<literal>)` on
+ * consumers ship without the worker. We use `import.meta.asset(<literal>)` on
  * Bare (detected by bare-module-lexer) and fall back to
- * `new URL(<literal>, import.meta.url)` elsewhere. Specs must be string
- * literals at the call site.
+ * `new URL(<literal>, import.meta.url)` elsewhere. The spec must be a string
+ * literal at the call site.
  */
 function getDefaultWorkerPath(): string {
   type ImportMetaAsset = { asset?: (spec: string) => string }
   const hasAsset = typeof (import.meta as ImportMetaAsset).asset === 'function'
 
-  const packagedUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../server/worker.js'))
-    : new URL('../../server/worker.js', import.meta.url)
-  const packaged = fileURLToPath(packagedUrl)
-  if (fs.existsSync(packaged)) return packaged
-
-  // Dev/source layout fallback
-  const devUrl = hasAsset
-    ? new URL((import.meta as ImportMetaAsset).asset!('../../dist/server/worker.js'))
-    : new URL('../../dist/server/worker.js', import.meta.url)
-  return fileURLToPath(devUrl)
+  const workerUrl = hasAsset
+    ? new URL((import.meta as ImportMetaAsset).asset!('../../worker/index.js'))
+    : new URL('../../worker/index.js', import.meta.url)
+  return fileURLToPath(workerUrl)
 }
 
 /**
@@ -113,7 +111,7 @@ function getDefaultWorkerPath(): string {
  * 4. Default SDK worker
  */
 function resolveWorkerPath(): string {
-  const envWorkerPath = process.env['QVAC_WORKER_PATH'] as string | undefined
+  const envWorkerPath = process.env['QVAC_WORKER_PATH']
   if (envWorkerPath) {
     const normalized = path.resolve(envWorkerPath)
     if (fs.existsSync(normalized)) {

@@ -1,4 +1,4 @@
-import { qvacConfigSchema, type QvacConfig } from '@/schemas'
+import { qvacConfigSchema, type QvacConfig } from '@qvac/inference/surface'
 import { ConfigValidationFailedError } from '@/utils/errors-client'
 import { formatZodError } from '@/utils/zod-error'
 

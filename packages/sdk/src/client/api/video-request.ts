@@ -1,4 +1,4 @@
-import type { VideoClientParams, VideoStreamRequest } from '@/schemas/sdcpp-config'
+import type { VideoClientParams, VideoStreamRequest } from '@qvac/inference/surface'
 import { encodeBase64 } from '@/utils/encoding'
 
 export function createVideoStreamRequest(params: VideoClientParams, requestId: string) {

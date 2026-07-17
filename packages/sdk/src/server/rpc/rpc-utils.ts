@@ -5,6 +5,6 @@ export function getNextCommandId(): number {
   return commandCounter
 }
 
-export function isTerminalChunk(value: unknown): value is { done: true } {
+export function isTerminalChunk<T>(value: T): value is T & { done: true } {
   return typeof value === 'object' && value !== null && 'done' in value && value.done === true
 }

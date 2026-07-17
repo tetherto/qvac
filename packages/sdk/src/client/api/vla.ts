@@ -12,7 +12,7 @@ import {
   vlaHparamsResponseSchema,
   vlaRunResponseSchema,
   vlaSetEmbodimentResponseSchema
-} from '@/schemas'
+} from '@qvac/inference/surface'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 import { invokePlugin } from './invoke-plugin'
 
