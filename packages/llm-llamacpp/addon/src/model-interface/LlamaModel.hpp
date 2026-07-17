@@ -163,12 +163,16 @@ public:
   void jobStarting(qvac_lib_inference_addon_cpp::JobId id) final;
 
   /// The complete terminal snapshot for a finished concurrent run (see
-  /// IModelJobStats), used as the tagged jobEnded payload: the whole-model
-  /// snapshot with the job's own observed figures in place of `TTFT`
-  /// (enqueue -> first token, ms), `TPS` (observed generation rate),
-  /// `generatedTokens` and `promptTokens`. For a tagged group run these are
-  /// the group aggregates (rates averaged, counts summed). Take-once: hands
-  /// over and erases the entry; unknown ids yield an empty snapshot.
+  /// IModelJobStats), used as the tagged jobEnded payload: the scheduler
+  /// stats at the moment the run finished with the job's own observed
+  /// figures in place of `TTFT` (enqueue -> first token, ms), `TPS`
+  /// (observed generation rate), `generatedTokens` and `promptTokens`. For
+  /// a tagged group run these are the group aggregates (rates averaged,
+  /// counts summed). The snapshot is built when the run finishes; consuming
+  /// it touches no live scheduler or llama_context state (in particular it
+  /// never resets the llama perf counters — only the explicit whole-model
+  /// runtimeStats() does). Take-once: hands over and erases the entry;
+  /// unknown ids yield an empty snapshot.
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   consumeJobStats(qvac_lib_inference_addon_cpp::JobId id) const final;
 
@@ -307,6 +311,15 @@ private:
   /// (single source of truth across all in-flight / queued batch work).
   /// Caller must hold `stateMtx_` shared.
   qvac_lib_inference_addon_cpp::RuntimeStats batchRuntimeStatsLocked() const;
+  /// Compose one finished job's complete terminal snapshot from the
+  /// scheduler stats its run returned (`BatchResult::stats`, captured under
+  /// the scheduler mutex when the group completed) and the job's observed
+  /// figures. Mirrors batchRuntimeStatsLocked's key set but reads no live
+  /// scheduler or llama_context state, so a finishing job can never race a
+  /// peer still decoding on the shared context.
+  qvac_lib_inference_addon_cpp::RuntimeStats jobTerminalStats(
+      const batching::RuntimeStatsSnapshot& stats,
+      const batching::ObservedRequestStats& observed) const;
   /// Build the JS-facing `RuntimeStats` from `llama_perf_context` for
   /// single-prompt runs. Caller must hold `stateMtx_` shared.
   qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
@@ -457,14 +470,15 @@ private:
   /// the whole-model cancel semantics.
   mutable JobCancelRegistry liveJobs_;
 
-  /// Observed stats a finished concurrent job leaves behind for
-  /// consumeJobStats(). Guarded by `jobStatsMtx_`. Bounded by the job
-  /// lifecycle: written only when the job's run returns, consumed (erased) by
-  /// the output queue's jobEnded event right after; a throwing job writes
-  /// nothing.
+  /// The complete terminal snapshot a finished concurrent job leaves behind
+  /// for consumeJobStats() (see jobTerminalStats). Guarded by
+  /// `jobStatsMtx_`. Bounded by the job lifecycle: written only when the
+  /// job's run returns, consumed (erased) by the output queue's jobEnded
+  /// event right after; a throwing job writes nothing.
   mutable std::mutex jobStatsMtx_;
   mutable std::unordered_map<
-      qvac_lib_inference_addon_cpp::JobId, batching::ObservedRequestStats>
+      qvac_lib_inference_addon_cpp::JobId,
+      qvac_lib_inference_addon_cpp::RuntimeStats>
       jobStats_;
 
   /// Cache keys being persisted by in-flight scheduler runs. Reserved at
