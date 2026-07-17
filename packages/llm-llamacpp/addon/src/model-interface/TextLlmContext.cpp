@@ -993,9 +993,6 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
           .rollbackOk = onCancel(outputCallback)};
     }
 
-    if (!spec_) {
-      break;
-    }
     if (nPast_ + 1 > ctxCeiling()) {
       applyContextDiscard();
       if (nPast_ + 1 > ctxCeiling()) {
@@ -1005,16 +1002,18 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
     }
 
     // 1. Draft from the MTP head.
-    common_speculative_draft_params& dp =
-        common_speculative_get_draft_params(spec_.get(), seqId_);
-    dp.drafting = true;
-    dp.n_max = nMax;
-    dp.n_past = nPast_;
-    dp.id_last = idLast;
-    dp.prompt = &specPromptDummy_;
     draft.clear();
-    dp.result = &draft;
-    common_speculative_draft(spec_.get());
+    if (spec_) {
+      common_speculative_draft_params& dp =
+          common_speculative_get_draft_params(spec_.get(), seqId_);
+      dp.drafting = true;
+      dp.n_max = nMax;
+      dp.n_past = nPast_;
+      dp.id_last = idLast;
+      dp.prompt = &specPromptDummy_;
+      dp.result = &draft;
+      common_speculative_draft(spec_.get());
+    }
 
     if (ctxDraft_) {
       clearSequenceMemory(ctxDraft_.get(), nPast_, -1);
@@ -1106,8 +1105,12 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
       }
       nPast_ = keepPos;
       if (!draft.empty()) {
-        common_speculative_accept(
-            spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+        // `spec_` may have been reset by decodeAndSpecProcess() above,
+        // accept is moot then.
+        if (spec_) {
+          common_speculative_accept(
+              spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+        }
         draftAccepted_ += static_cast<int64_t>(nAccepted);
         draftTotal_ += static_cast<int64_t>(draft.size());
       }
