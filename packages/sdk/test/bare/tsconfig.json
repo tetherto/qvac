@@ -1,14 +1,7 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["./**/*", "../../types/**/*"],
-  "exclude": [
-    "../../node_modules",
-    "../../dist",
-    "../../e2e",
-    "../../examples",
-    "../unit",
-    "../dist"
-  ],
+  "include": ["./**/*", "../../src/types/**/*"],
+  "exclude": ["../../node_modules", "../../dist", "../../e2e", "../../examples", "../dist"],
   "compilerOptions": {
     "outDir": "../dist",
     "rootDir": "../..",
