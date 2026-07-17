@@ -11,8 +11,7 @@
   seeded). This restores Wan2.2 VAE decode parity with the PyTorch reference
   (cosine 1.000000 / 79 dB PSNR, previously 0.9959 / 27 dB — visually
   near-identical but numerically wrong on the first frames). Encode and
-  TAEHV paths are unaffected. The port is resolved through a
-  package-scoped registry entry so no other dependency floors move.
+  TAEHV paths are unaffected.
 
 ## [0.15.0] - 2026-07-16
 
