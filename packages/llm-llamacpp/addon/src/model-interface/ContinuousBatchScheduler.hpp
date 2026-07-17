@@ -313,7 +313,15 @@ public:
   /// `llama_decode`, so mutating the shared `llama_context` from the
   /// calling thread would race the in-flight decode. Applied
   /// synchronously when no worker has been started.
-  /// @return whether the slot was occupied when the cancel was issued.
+  ///
+  /// Safe to call from the scheduler's own streaming callbacks
+  /// (onToken/onAdmitted/onDone run on the worker thread with `mutex_`
+  /// held): a call on the worker thread never takes `mutex_`, it only
+  /// records the cancel for the worker's next teardown reconciliation.
+  /// @return whether the slot was occupied when the cancel was issued;
+  /// a worker-thread call cannot check occupancy (no lock) and always
+  /// returns true -- the recorded cancel no-ops later if the slot is
+  /// already free.
   bool cancel(uint32_t seqId);
   void requestCancelAll();
 
@@ -420,6 +428,11 @@ private:
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
+  /// Append one deferred per-slot cancel under `pendingCancelsMtx_` only.
+  /// The single mutation path shared by worker-thread callers (which must
+  /// not touch `mutex_`) and cross-thread callers (which already hold it).
+  void recordPendingSlotCancel(uint32_t seqId);
+  [[nodiscard]] bool hasPendingSlotCancels() const;
   void
   completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
@@ -500,6 +513,16 @@ private:
   std::thread worker_;
   bool workerStarted_ = false;
   bool stopping_ = false;
+  /// The worker's thread id, set once when it starts (under `mutex_`, so it
+  /// is visible to every streaming callback the worker later runs). Lets
+  /// cancel() detect a call from the worker's own callbacks -- which hold
+  /// `mutex_` -- and record instead of self-deadlocking on it.
+  std::atomic<std::thread::id> workerThreadId_{};
+  /// Guarded by `pendingCancelsMtx_`, NOT `mutex_`: worker-thread callers
+  /// of cancel() (streaming callbacks fired with `mutex_` held) must be able
+  /// to record a cancel without touching the scheduler lock. Lock order is
+  /// always `mutex_` -> `pendingCancelsMtx_`, never the reverse.
+  mutable std::mutex pendingCancelsMtx_;
   std::vector<uint32_t> pendingSlotCancels_;
   bool clearRequested_ = false;
   RuntimeStatsSnapshot stats_;
