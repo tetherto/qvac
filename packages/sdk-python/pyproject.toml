@@ -20,6 +20,8 @@ dev = [
   "mypy==2.3.0",
   "lingua-language-detector==2.1.1",
   "numpy>=1.26",
+  "pandas>=2.2",
+  "pandas-stubs>=2.2",
 ]
 # translate() source-language auto-detection; optional so the thin client
 # stays lean when callers always pass `from_` themselves.
@@ -27,6 +29,10 @@ langdetect = ["lingua-language-detector==2.1.1"]
 # VLA tensor marshaling (qvac.vla): numpy-backed base64 codecs + image
 # preprocessing.
 vla = ["numpy>=1.26"]
+# qvac.notebook: the synchronous SyncClient facade with numpy/pandas
+# inputs and outputs (IPython, when present, upgrades live streaming
+# display from stdout to in-cell updates).
+notebook = ["numpy>=1.26", "pandas>=2.2"]
 # QVAC-21806 PoC only -- neither package is on PyPI yet (both v0.0.1, git-only).
 # Pinned to their current HEAD commits for reproducibility while unreleased.
 bare-rpc = [
