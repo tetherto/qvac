@@ -35,13 +35,13 @@ export function generateWorkerEntry(
 ${pluginsList}
  */
 
-import { initializeWorkerCore, ensureRPCSetup } from "${resolveImport(`${sdkName}/worker-core`)}";
-import { registerPlugin } from "${resolveImport(`${sdkName}/plugins`)}";
+import { initializeWorker, ensureRPCSetup } from "${resolveImport(`${sdkName}/worker-lifecycle`)}";
+import { registerPlugin } from "${resolveImport('@qvac/inference/plugins')}";
 import { getServerLogger } from "${resolveImport(`${sdkName}/logging`)}";
 
 ${importsStr}
 
-const { hasRPCConfig } = initializeWorkerCore();
+const { hasRPCConfig } = initializeWorker();
 
 const logger = getServerLogger();
 logger.info("🐻 QVAC Worker (custom bundle)");

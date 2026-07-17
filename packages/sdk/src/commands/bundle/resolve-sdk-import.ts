@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 
 export type SdkExportEntry = string | { [condition: string]: SdkExportEntry }
@@ -16,15 +17,28 @@ export function selectExportTarget(entry: SdkExportEntry | undefined): string | 
   return null
 }
 
-function readSdkExports(sdkPath: string): Record<string, SdkExportEntry> {
+function readPackageExports(packagePath: string): Record<string, SdkExportEntry> {
   try {
-    const raw = fs.readFileSync(path.join(sdkPath, 'package.json'), 'utf8')
+    const raw = fs.readFileSync(path.join(packagePath, 'package.json'), 'utf8')
     const pkg = JSON.parse(raw) as {
       exports?: Record<string, SdkExportEntry>
     }
     return pkg.exports ?? {}
   } catch {
     return {}
+  }
+}
+
+// The generated entry imports @qvac/inference directly (registerPlugin), while
+// the rest reaches it transitively through the SDK. Resolve it from the SDK so
+// both land on one instance — otherwise plugins register in one @qvac/inference
+// registry and dispatch reads another.
+function resolveInferencePath(sdkPath: string): string | null {
+  try {
+    const sdkRequire = createRequire(path.join(sdkPath, 'package.json'))
+    return fs.realpathSync(path.dirname(sdkRequire.resolve('@qvac/inference/package')))
+  } catch {
+    return null
   }
 }
 
@@ -45,13 +59,25 @@ export function createSdkImportResolver(
   } catch {
     // Keep sdkPath as-is if it cannot be canonicalized.
   }
-  const exportsMap = readSdkExports(resolvedSdkPath)
-  const prefix = `${sdkName}/`
+
+  const anchors = [{ prefix: `${sdkName}/`, root: resolvedSdkPath }]
+  const inferencePath = resolveInferencePath(resolvedSdkPath)
+  if (inferencePath) {
+    anchors.push({ prefix: '@qvac/inference/', root: inferencePath })
+  }
+  const resolved = anchors.map(({ prefix, root }) => ({
+    prefix,
+    root,
+    exports: readPackageExports(root)
+  }))
+
   return (specifier) => {
-    if (!specifier.startsWith(prefix)) return specifier
-    const subpath = `./${specifier.slice(prefix.length)}`
-    const target = selectExportTarget(exportsMap[subpath])
-    if (!target) return specifier
-    return pathToFileURL(path.join(resolvedSdkPath, target)).href
+    for (const { prefix, root, exports } of resolved) {
+      if (!specifier.startsWith(prefix)) continue
+      const subpath = `./${specifier.slice(prefix.length)}`
+      const target = selectExportTarget(exports[subpath])
+      return target ? pathToFileURL(path.join(root, target)).href : specifier
+    }
+    return specifier
   }
 }
