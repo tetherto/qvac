@@ -2,9 +2,8 @@ import test from 'brittle'
 import { z } from 'zod'
 import { plugins } from '@/client/plugins-factory'
 import { clearPlugins, getAllPlugins, hasPlugin } from '@/server/plugins'
-import { ModelType } from '@/schemas'
-import { PluginDefinitionInvalidError } from '@/utils/errors-server'
-import type { QvacPlugin } from '@/schemas/plugin'
+import { ModelType, PluginDefinitionInvalidError } from '@qvac/sdk'
+import type { QvacPlugin } from '@qvac/sdk'
 
 function makeValidPlugin(modelType: string): QvacPlugin {
   return {

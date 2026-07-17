@@ -5,8 +5,8 @@ import {
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_TASK_TYPES
 } from '@/index'
-import * as audioGenSchemas from '@/schemas/audio-gen'
-import { constantsRegistry } from '@/schemas/constants-registry'
+import * as audioGenSchemas from '@qvac/inference/surface'
+import { constantsRegistry } from '../scripts/contract/constants-registry'
 
 // Root-import contract: the vocabulary and PCM-layout constants documented as
 // public API must be reachable from the package root, not just the internal

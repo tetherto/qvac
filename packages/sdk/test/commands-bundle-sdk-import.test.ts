@@ -22,7 +22,7 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
       name: '@qvac/sdk',
       type: 'module',
       exports: {
-        './worker-core': './dist/worker-core.js',
+        './worker-lifecycle': './dist/worker-lifecycle.js',
         './plugins': './dist/plugins.js',
         './logging': './dist/logging.js',
         './llamacpp-completion/plugin': './dist/llm-plugin.js'
@@ -31,8 +31,8 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
   )
   fs.writeFileSync(path.join(sdkPath, 'bare-imports.json'), '{}\n')
   fs.writeFileSync(
-    path.join(sdkDistPath, 'worker-core.js'),
-    'export function initializeWorkerCore() { return { hasRPCConfig: false } }\n' +
+    path.join(sdkDistPath, 'worker-lifecycle.js'),
+    'export function initializeWorker() { return { hasRPCConfig: false } }\n' +
       'export function ensureRPCSetup() {}\n'
   )
   fs.writeFileSync(path.join(sdkDistPath, 'plugins.js'), 'export function registerPlugin() {}\n')
@@ -41,6 +41,22 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
     'export function getServerLogger() { return { info() {} } }\n'
   )
   fs.writeFileSync(path.join(sdkDistPath, 'llm-plugin.js'), 'export const llmPlugin = {}\n')
+
+  const inferenceDist = path.join(sdkPath, 'node_modules', '@qvac', 'inference', 'dist', 'plugins')
+  fs.mkdirSync(inferenceDist, { recursive: true })
+  fs.writeFileSync(
+    path.join(sdkPath, 'node_modules', '@qvac', 'inference', 'package.json'),
+    `${JSON.stringify({
+      name: '@qvac/inference',
+      type: 'module',
+      exports: {
+        './package': './package.json',
+        './plugins': './dist/plugins/index.js'
+      }
+    })}\n`
+  )
+  fs.writeFileSync(path.join(inferenceDist, 'index.js'), 'export function registerPlugin() {}\n')
+
   fs.writeFileSync(
     configPath,
     `${JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] })}\n`
@@ -81,7 +97,10 @@ describe('selectExportTarget', () => {
 })
 
 describe('createSdkImportResolver', () => {
-  function fakeSdk(t: { after: (fn: () => void) => void }): {
+  function fakeSdk(
+    t: { after: (fn: () => void) => void },
+    opts: { withInference?: boolean } = {}
+  ): {
     realDir: string
     linkDir: string
   } {
@@ -94,11 +113,25 @@ describe('createSdkImportResolver', () => {
       JSON.stringify({
         name: '@qvac/sdk',
         exports: {
-          './worker-core': { import: './dist/server/worker-core.js' },
+          './worker-lifecycle': { import: './dist/server/worker-lifecycle.js' },
           './plugins': { import: './dist/server/plugins/index.js' }
         }
       })
     )
+    if (opts.withInference) {
+      const inferenceDir = path.join(realDir, 'node_modules', '@qvac', 'inference')
+      fs.mkdirSync(inferenceDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(inferenceDir, 'package.json'),
+        JSON.stringify({
+          name: '@qvac/inference',
+          exports: {
+            './package': './package.json',
+            './plugins': { import: './dist/plugins/index.js' }
+          }
+        })
+      )
+    }
     const linkDir = path.join(root, 'node_modules', '@qvac', 'sdk')
     fs.mkdirSync(path.dirname(linkDir), { recursive: true })
     fs.symlinkSync(realDir, linkDir)
@@ -110,10 +143,10 @@ describe('createSdkImportResolver', () => {
     const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
 
     const expected = pathToFileURL(
-      path.join(fs.realpathSync(realDir), 'dist', 'server', 'worker-core.js')
+      path.join(fs.realpathSync(realDir), 'dist', 'server', 'worker-lifecycle.js')
     ).href
-    assert.equal(resolve('@qvac/sdk/worker-core'), expected)
-    assert.ok(!resolve('@qvac/sdk/worker-core').includes('node_modules'))
+    assert.equal(resolve('@qvac/sdk/worker-lifecycle'), expected)
+    assert.ok(!resolve('@qvac/sdk/worker-lifecycle').includes('node_modules'))
   })
 
   it('passes through non-SDK specifiers unchanged', (t) => {
@@ -128,17 +161,29 @@ describe('createSdkImportResolver', () => {
     const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
     assert.equal(resolve('@qvac/sdk/not-exported'), '@qvac/sdk/not-exported')
   })
+
+  it('does not anchor @qvac/inference subpaths even when inference is resolvable', (t) => {
+    const { linkDir } = fakeSdk(t, { withInference: true })
+    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
+    assert.equal(resolve('@qvac/inference/plugins'), '@qvac/inference/plugins')
+  })
+
+  it('leaves @qvac/inference specifiers unchanged', (t) => {
+    const { linkDir } = fakeSdk(t)
+    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
+    assert.equal(resolve('@qvac/inference/plugins'), '@qvac/inference/plugins')
+  })
 })
 
 describe('generateWorkerEntry', () => {
   const tag = (specifier: string): string =>
     specifier.startsWith('@qvac/sdk') ? `RESOLVED:${specifier}` : specifier
 
-  it('routes SDK core imports through the resolver', () => {
+  it('routes SDK imports through the resolver and registers plugins via @qvac/sdk/plugins', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk', tag)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-core"/)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/plugins"/)
+    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
     assert.match(entry, /from "RESOLVED:@qvac\/sdk\/logging"/)
+    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/plugins"/)
   })
 
   it('routes builtin plugin imports through the resolver and keeps custom plugins', () => {
@@ -153,15 +198,15 @@ describe('generateWorkerEntry', () => {
 
   it('defaults to an identity resolver (imports stay bare specifiers)', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk')
-    assert.match(entry, /from "@qvac\/sdk\/worker-core"/)
+    assert.match(entry, /from "@qvac\/sdk\/worker-lifecycle"/)
   })
 
   it('keeps the runtime entry relocatable while resolving the bundle entry', () => {
     const { runtimeEntry, bundleEntry } = generateWorkerEntries([], '@qvac/sdk', tag)
 
-    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-core"/)
+    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-lifecycle"/)
     assert.doesNotMatch(runtimeEntry, /RESOLVED:/)
-    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/worker-core"/)
+    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
   })
 })
 
@@ -178,7 +223,7 @@ describe('bundleSdk worker entries', () => {
     })
 
     const runtimeEntry = fs.readFileSync(path.join(outputDir, 'worker.entry.mjs'), 'utf8')
-    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-core"/)
+    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-lifecycle"/)
     assert.doesNotMatch(runtimeEntry, new RegExp(pathToFileURL(sdkPath).href))
     assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
     assert.ok(!fs.existsSync(path.join(outputDir, 'worker.bundle.entry.mjs')))

@@ -1,4 +1,4 @@
-import type { VideoClientParams } from '@/schemas/sdcpp-config'
+import type { VideoClientParams } from '@qvac/inference/surface'
 
 function acceptVideoParams(_params: VideoClientParams) {}
 

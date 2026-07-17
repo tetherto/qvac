@@ -6,8 +6,8 @@ import {
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
   TTS_COSYVOICE3_INSTRUCT_STYLES
 } from '@/index'
-import * as ttsSchemas from '@/schemas/text-to-speech'
-import { constantsRegistry } from '@/schemas/constants-registry'
+import * as ttsSchemas from '@qvac/inference/surface'
+import { constantsRegistry } from '../scripts/contract/constants-registry'
 
 // Root-import contract: the vocabulary constants documented as public API must
 // be reachable from the package root, not just the internal schemas module.

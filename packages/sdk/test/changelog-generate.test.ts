@@ -5,16 +5,13 @@ import path from 'path'
 import os from 'os'
 
 // --- Generic script imports ---
-const GENERIC_SCRIPT_PATH = path.join(__dirname, '../../../../scripts/generate-changelog-qvac.cjs')
+const GENERIC_SCRIPT_PATH = path.join(__dirname, '../../../scripts/generate-changelog-qvac.cjs')
 const { extractVersionFromTag, resolveBaseRef, generateBasicChangelog, parseArgs } = require(
   GENERIC_SCRIPT_PATH
 )
 
 // --- SDK wrapper imports ---
-const SDK_SCRIPT_PATH = path.join(
-  __dirname,
-  '../../../../scripts/sdk/generate-changelog-sdk-pod.cjs'
-)
+const SDK_SCRIPT_PATH = path.join(__dirname, '../../../scripts/sdk/generate-changelog-sdk-pod.cjs')
 const {
   extractCodeBlocks,
   extractBeforeAfter,
@@ -28,7 +25,7 @@ const {
 } = require(SDK_SCRIPT_PATH)
 
 // --- Mock data ---
-const MOCKS_DIR = path.join(__dirname, '../mocks')
+const MOCKS_DIR = path.join(__dirname, './mocks')
 
 function loadMock(filename: string) {
   return JSON.parse(fs.readFileSync(path.join(MOCKS_DIR, filename), 'utf-8'))

@@ -2,10 +2,10 @@ import test from 'brittle'
 import {
   loadModelOptionsToRequestSchema,
   downloadAssetOptionsToRequestSchema,
-  bciTranscribeStreamRequestSchema
-} from '@/schemas'
-import { ragRequestSchema } from '@/schemas/rag'
-import { ModelType } from '@/schemas/model-types'
+  bciTranscribeStreamRequestSchema,
+  ragRequestSchema
+} from '@qvac/inference/surface'
+import { ModelType } from '@qvac/sdk'
 
 // -----------------------------------------------------------------------------
 // requestId wire-shape round-trip — schema half.
