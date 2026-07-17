@@ -986,12 +986,15 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
 
   batching::BatchResult result =
       processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone);
-  // Leave the group-level observed figures behind for the tagged jobEnded
-  // event: TTFT/TPS averaged over the group's requests that produced them,
-  // token counts summed (see aggregateObservedStats).
+  // Leave the group's complete terminal snapshot behind for the tagged
+  // jobEnded event: model-level figures from the run's own stats snapshot,
+  // TTFT/TPS averaged over the group's requests that produced them, token
+  // counts summed (see aggregateObservedStats).
   if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
+        result.stats, batching::aggregateObservedStats(result.requestStats));
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
-    jobStats_[id] = batching::aggregateObservedStats(result.requestStats);
+    jobStats_[id] = std::move(terminal);
   }
   return std::move(result.outputs);
 }
@@ -1031,45 +1034,54 @@ std::string LlamaModel::processConcurrent(
   const std::vector<Prompt> singleBatch{prompt};
   batching::BatchResult result =
       processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone);
-  // Leave the job's observed figures behind for the tagged jobEnded event
-  // (consumeJobStats), queued right after this returns. A throwing job never
-  // gets a jobEnded, so nothing is stored on that path.
+  // Leave the job's complete terminal snapshot behind for the tagged
+  // jobEnded event (consumeJobStats), queued right after this returns. A
+  // throwing job never gets a jobEnded, so nothing is stored on that path.
   if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal =
+        jobTerminalStats(result.stats, result.requestStats.front());
     std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
-    jobStats_[id] = result.requestStats.front();
+    jobStats_[id] = std::move(terminal);
   }
   return result.outputs.empty() ? std::string{}
                                 : std::move(result.outputs.front());
 }
 
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
+    const batching::RuntimeStatsSnapshot& stats,
+    const batching::ObservedRequestStats& observed) const {
+  // batchRuntimeStatsLocked's key set with the job's own observed figures in
+  // place of the aggregate values. Composed purely from the run's returned
+  // snapshot — no live scheduler read, no llama_perf_context_reset: a peer
+  // job may be mid-decode on the shared context, and the reset belongs only
+  // to the explicitly requested whole-model runtimeStats().
+  return {
+      {"TTFT", observed.ttftMs},
+      {"TPS", observed.genTps},
+      {"ppTPS", stats.prefillTokensPerSecond()},
+      {"CacheTokens", stats.cacheTokens},
+      {"generatedTokens", observed.generatedTokens},
+      {"promptTokens", observed.promptTokens},
+      {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      // visionEncodeMs/Tiles intentionally omitted, matching
+      // batchRuntimeStatsLocked: concurrent prompts share the one
+      // per-context accumulator, so a per-job value would be misattributed.
+      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"backendDevice", runtimeBackendDevice_}};
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
     const qvac_lib_inference_addon_cpp::JobId id) const {
-  batching::ObservedRequestStats observed;
-  {
-    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
-    const auto found = jobStats_.find(id);
-    if (found == jobStats_.end()) {
-      return {};
-    }
-    observed = found->second;
-    jobStats_.erase(found);
+  // Pure take of the snapshot built when the job finished (see
+  // jobTerminalStats): the jobEnded path must not touch live model state.
+  std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+  const auto found = jobStats_.find(id);
+  if (found == jobStats_.end()) {
+    return {};
   }
-  // The job's complete terminal snapshot: the whole-model snapshot with the
-  // job's own observed figures in place of the aggregate values, under the
-  // key names the consumer already knows. Everything else (ppTPS,
-  // avgConcurrentSeq, backendDevice, ...) stays model-level.
-  qvac_lib_inference_addon_cpp::RuntimeStats stats = runtimeStats();
-  for (auto& [key, value] : stats) {
-    if (key == "TTFT") {
-      value = observed.ttftMs;
-    } else if (key == "TPS") {
-      value = observed.genTps;
-    } else if (key == "generatedTokens") {
-      value = observed.generatedTokens;
-    } else if (key == "promptTokens") {
-      value = observed.promptTokens;
-    }
-  }
+  qvac_lib_inference_addon_cpp::RuntimeStats stats = std::move(found->second);
+  jobStats_.erase(found);
   return stats;
 }
 
