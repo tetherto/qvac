@@ -28,6 +28,8 @@ _CODE_MODEL_LOAD_FAILED = 52200
 _CODE_TRANSLATION_FAILED = 52405
 _CODE_TRANSCRIPTION_FAILED = 52403
 _CODE_TEXT_TO_SPEECH_STREAM_FAILED = 52415
+_CODE_COMPLETION_FAILED = 52406
+_CODE_INFERENCE_CANCELLED = 52419
 _CODE_MODEL_UNLOAD_FAILED = 52400
 _CODE_REQUEST_ID_CONFLICT = 52417
 _CODE_REQUEST_NOT_FOUND = 52418
@@ -223,6 +225,43 @@ class TranslationFailedError(QvacError):
             str(message) if message else "translation failed",
             name="TRANSLATION_FAILED",
             code=_CODE_TRANSLATION_FAILED,
+            cause=cause,
+        )
+
+
+class CompletionFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "completion failed",
+            name="COMPLETION_FAILED",
+            code=_CODE_COMPLETION_FAILED,
+            cause=cause,
+        )
+
+
+class InferenceCancelledError(QvacError):
+    """A long-running inference was cancelled mid-flight. `final`-style
+    aggregates reject with this so a cancelled run can't be mistaken for a
+    successful one; the partial fields carry whatever the aggregator
+    accumulated up to the cancel point (mirrors the JS class)."""
+
+    def __init__(
+        self,
+        request_id: str,
+        *,
+        partial_text: str | None = None,
+        partial_tool_calls: Any = None,
+        partial_stats: Any = None,
+        cause: Any = None,
+    ) -> None:
+        self.request_id = request_id
+        self.partial_text = partial_text
+        self.partial_tool_calls = partial_tool_calls
+        self.partial_stats = partial_stats
+        super().__init__(
+            f"inference cancelled: {request_id}",
+            name="INFERENCE_CANCELLED",
+            code=_CODE_INFERENCE_CANCELLED,
             cause=cause,
         )
 
@@ -440,6 +479,8 @@ __all__ = [
     "TranslationFailedError",
     "TranscriptionFailedError",
     "TextToSpeechStreamFailedError",
+    "CompletionFailedError",
+    "InferenceCancelledError",
     "StreamEndedError",
     "InvalidResponseError",
     "ModelUnloadFailedError",

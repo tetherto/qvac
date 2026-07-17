@@ -1,0 +1,219 @@
+"""Unit tests for qvac.completion: the CompletionRun handles and the
+buildFinalFromEvents fold (content/thinking aggregation, tool-call handler
+attachment, cache normalization, error and cancellation contracts) over a
+fake transport."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from qvac.completion import (
+    CompletionFinal,
+    ToolCall,
+    completion,
+    normalize_assistant_cache_content,
+)
+from qvac.errors import CompletionFailedError, InferenceCancelledError
+
+
+class FakeTransport:
+    def __init__(self, stream_items=None):
+        self.stream_items = stream_items or []
+        self.sent: Any = None
+
+    async def call(self, payload):
+        raise NotImplementedError
+
+    async def call_stream(self, payload):
+        self.sent = payload
+        for item in self.stream_items:
+            yield item
+
+    async def call_duplex(self, payload, up):
+        raise NotImplementedError
+        yield
+
+
+def _chunk(events: list[dict[str, Any]], done: bool = False) -> dict[str, Any]:
+    return {"type": "completionStream", "events": events, "done": done}
+
+
+def _delta(seq: int, text: str, type: str = "contentDelta") -> dict[str, Any]:
+    return {"type": type, "seq": seq, "text": text}
+
+
+def _done(seq: int, **extra: Any) -> dict[str, Any]:
+    return {"type": "completionDone", "seq": seq, **extra}
+
+
+# ---- cache normalization -----------------------------------------------------
+
+
+def test_normalize_strips_think_blocks_and_unclosed_tail():
+    assert (
+        normalize_assistant_cache_content("<think>plan</think>Hello <Think>x</Think>!")
+        == "Hello !"
+    )
+    assert normalize_assistant_cache_content("Answer.<think>oops cut of") == "Answer."
+    assert normalize_assistant_cache_content("  plain  ") == "plain"
+
+
+# ---- run handles ----------------------------------------------------------------
+
+
+async def test_completion_aggregates_content_thinking_and_stats():
+    transport = FakeTransport(
+        stream_items=[
+            _chunk([_delta(0, "Hel"), _delta(1, "lo")]),
+            _chunk([_delta(2, " world", type="thinkingDelta")]),
+            _chunk(
+                [
+                    {
+                        "type": "completionStats",
+                        "seq": 3,
+                        "stats": {"generatedTokens": 5},
+                    },
+                    _done(
+                        4,
+                        stopReason="eos",
+                        raw={"fullText": "<think> world</think>Hello"},
+                    ),
+                ],
+                done=True,
+            ),
+        ]
+    )
+    run = completion(
+        transport, model_id="m-1", history=[{"role": "user", "content": "hi"}]
+    )
+    events = [event async for event in run.events]
+    assert [event.type for event in events] == [
+        "contentDelta",
+        "contentDelta",
+        "thinkingDelta",
+        "completionStats",
+        "completionDone",
+    ]
+    final = await run.final
+    assert isinstance(final, CompletionFinal)
+    assert final.content_text == "Hello"
+    assert final.thinking_text == " world"
+    assert final.stats.generated_tokens == 5
+    assert final.raw_full_text == "<think> world</think>Hello"
+    # Cache string strips the think block out of the raw text.
+    assert final.cacheable_assistant_content == "Hello"
+    assert final.stop_reason == "eos"
+    assert await run.text() == "Hello"
+    assert transport.sent["requestId"] == run.request_id
+
+
+async def test_tool_calls_get_invokable_handlers_and_no_cache_content():
+    async def lookup(args: dict[str, Any]) -> Any:
+        return {"temp": 22, "city": args["city"]}
+
+    transport = FakeTransport(
+        stream_items=[
+            _chunk(
+                [
+                    {
+                        "type": "toolCall",
+                        "seq": 0,
+                        "call": {
+                            "id": "call-1",
+                            "name": "get_weather",
+                            "arguments": {"city": "Tokyo"},
+                        },
+                    },
+                    _done(1, stopReason="eos"),
+                ],
+                done=True,
+            )
+        ]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "weather?"}],
+        tools=[
+            {
+                "name": "get_weather",
+                "description": "Get current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string"}},
+                    "required": ["city"],
+                },
+                "handler": lookup,
+            }
+        ],
+    )
+    final = await run.final
+    assert len(final.tool_calls) == 1
+    call = final.tool_calls[0]
+    assert isinstance(call, ToolCall)
+    assert call.name == "get_weather" and call.arguments == {"city": "Tokyo"}
+    assert call.has_handler
+    assert await call.invoke() == {"temp": 22, "city": "Tokyo"}
+    # Tool-call turns can't be auto-cached.
+    assert final.cacheable_assistant_content is None
+    # The wire tools were sent in full Tool shape without the handler.
+    sent_tool = transport.sent["tools"][0]
+    assert sent_tool["type"] == "function"
+    assert "handler" not in sent_tool
+
+
+async def test_error_done_rejects_final_and_events_raise():
+    transport = FakeTransport(
+        stream_items=[
+            _chunk(
+                [_done(0, stopReason="error", error={"message": "addon exploded"})],
+                done=True,
+            )
+        ]
+    )
+    run = completion(
+        transport, model_id="m-1", history=[{"role": "user", "content": "x"}]
+    )
+    with pytest.raises(CompletionFailedError, match="addon exploded"):
+        _ = [event async for event in run.events]
+    with pytest.raises(CompletionFailedError):
+        await run.final
+
+
+async def test_cancelled_done_ends_events_normally_but_rejects_final():
+    transport = FakeTransport(
+        stream_items=[
+            _chunk([_delta(0, "partial ")]),
+            _chunk([_done(1, stopReason="cancelled")], done=True),
+        ]
+    )
+    run = completion(
+        transport, model_id="m-1", history=[{"role": "user", "content": "x"}]
+    )
+    events = [event async for event in run.events]
+    # Events end normally: the consumer sees the cancelled completionDone.
+    assert events[-1].type == "completionDone"
+    with pytest.raises(InferenceCancelledError) as excinfo:
+        await run.final
+    assert excinfo.value.partial_text == "partial "
+    assert excinfo.value.request_id == run.request_id
+
+
+async def test_final_resolves_even_when_events_never_consumed():
+    transport = FakeTransport(
+        stream_items=[_chunk([_delta(0, "hi"), _done(1, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport, model_id="m-1", history=[{"role": "user", "content": "x"}]
+    )
+    final = await run.final
+    assert final.content_text == "hi"
+
+
+async def test_invoke_without_handler_raises():
+    call = ToolCall(id="c", name="ghost", arguments={})
+    assert not call.has_handler
+    with pytest.raises(CompletionFailedError, match="no handler"):
+        await call.invoke()

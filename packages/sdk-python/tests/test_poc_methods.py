@@ -705,6 +705,40 @@ async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> Non
     assert response.info.model_id == model_id
 
 
+async def test_completion_run_folds_final_against_real_worker(transport) -> None:
+    """qvac.completion end to end: the eager CompletionRun streams real
+    events and `final` folds them (content, raw text, cacheable string,
+    stats, stop reason) -- seeded and bounded like the raw stub tests."""
+    from qvac.completion import completion
+    from qvac.models import QWEN3_600M_INST_Q4
+    from qvac.schemas import ModelType
+
+    model_id = await _load(
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
+    )
+
+    run = completion(
+        transport,
+        model_id=model_id,
+        history=[{"role": "user", "content": "Say hello in five words."}],
+        generation_params={"predict": 512, "temp": 0, "seed": 42},
+    )
+    saw_delta = False
+    async for event in run.events:
+        if event.type == "contentDelta":
+            saw_delta = True
+    final = await run.final
+    assert saw_delta
+    assert final.content_text.strip()
+    assert final.raw_full_text
+    assert final.stop_reason in ("eos", "length", "stopSequence")
+    assert final.cacheable_assistant_content is not None
+    assert "<think>" not in final.cacheable_assistant_content
+
+
 async def test_api_translate_autodetects_source_against_real_worker(transport) -> None:
     """api.translate's LLM path end to end: `from_` omitted, so the source
     language ("French") is auto-detected client-side and drives the worker's
