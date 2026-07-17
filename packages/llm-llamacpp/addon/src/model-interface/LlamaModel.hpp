@@ -261,10 +261,13 @@ private:
   /// scheduler's worker thread with the scheduler lock held, so it must not
   /// call back into the scheduler; returning true instead makes the scheduler
   /// tear the slot down before it decodes (a cancel that arrived before the
-  /// slot existed). Lets the concurrent path bind a job id to its slot without
-  /// the single-prompt batch callers paying for it.
-  using SeqAssignedObserver =
-      std::function<bool(size_t requestIndex, uint32_t seqId)>;
+  /// slot existed). `admissionId` is the slot's ownership token for this
+  /// admission — the identity a cancel action must carry, since the bare
+  /// seqId is recycled to unrelated successors the moment the slot drains.
+  /// Lets the concurrent path bind a job id to its slot without the
+  /// single-prompt batch callers paying for it.
+  using SeqAssignedObserver = std::function<bool(
+      size_t requestIndex, uint32_t seqId, uint64_t admissionId)>;
   /// Observes the slot's end (fired from onDone, any outcome).
   using SeqObserver = std::function<void(size_t requestIndex, uint32_t seqId)>;
   batching::BatchResult processPromptBatchImpl(

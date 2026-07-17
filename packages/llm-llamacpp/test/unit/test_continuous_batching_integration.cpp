@@ -1634,13 +1634,19 @@ TEST_F(
   // The stub runs while stepLocked() holds no lock -- the same window a
   // concurrent caller's cancel() would hit. Issuing the cancel here records it
   // as deferred teardown, then delegates to the real decode so generation
-  // continues.
+  // continues. The live occupant's admission id is read through the peer
+  // (safe here: the unlock window holds no scheduler lock).
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
       [scheduler, &readyToCancel, &cancelIssued](
           llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
-          scheduler->cancel(kCancelSeqId);
+          const auto admissionId =
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
+          if (admissionId.has_value()) {
+            scheduler->cancel(kCancelSeqId, *admissionId);
+          }
         }
         return llama_decode(ctx, batch);
       });
@@ -1709,16 +1715,22 @@ TEST_F(
 
   // Issue the cancel from inside the decode unlock window so its teardown runs
   // in the StepUnlockGuard destructor, then delegate to the real decode so the
-  // surviving sequence keeps generating. Capture cancel()'s return: it is true
-  // only when seqId 1 was still occupied, i.e. the throwing teardown actually
-  // ran. Without it the test could pass vacuously when the slot finished first
-  // and the cancel was a no-op.
+  // surviving sequence keeps generating. Capture whether seqId 1 was still
+  // occupied (its admission id readable) when the cancel was issued, i.e. the
+  // throwing teardown actually ran. Without it the test could pass vacuously
+  // when the slot finished first and the cancel was a no-op.
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
       [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
           llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
-          cancelHitOccupied.store(scheduler->cancel(kCancelSeqId));
+          const auto admissionId =
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
+          cancelHitOccupied.store(admissionId.has_value());
+          if (admissionId.has_value()) {
+            scheduler->cancel(kCancelSeqId, *admissionId);
+          }
         }
         return llama_decode(ctx, batch);
       });
@@ -1801,8 +1813,9 @@ TEST_F(
   };
 
   // Job A: admitted alone, so it owns seqId 0. The canceller captures A's
-  // identity while A is live -- pre-fix that identity is nothing but the
-  // recyclable seqId -- and only fires it later, after the slot moved on.
+  // full identity -- (seqId, admissionId), exactly what the per-job cancel
+  // action now carries -- while A is live, and only fires it later, after
+  // the slot moved on.
   constexpr uint32_t kSharedSeqId = 0;
   std::atomic<size_t> aPieces = 0;
   auto promptA =
@@ -1813,6 +1826,10 @@ TEST_F(
   auto futureA = runAlone(std::move(promptA));
   ASSERT_TRUE(waitForFirstPiece(aPieces))
       << "test setup: job A never emitted a token";
+  const auto staleAdmissionId =
+      ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler, kSharedSeqId);
+  ASSERT_TRUE(staleAdmissionId.has_value())
+      << "test setup: job A's slot was not readable while A streamed";
   ASSERT_EQ(futureA.get().size(), 1u);
   ASSERT_EQ(scheduler->numActive(), 0u)
       << "test setup: job A must have released its slot";
@@ -1828,9 +1845,11 @@ TEST_F(
   ASSERT_TRUE(waitForFirstPiece(bPieces))
       << "test setup: job B never emitted a token";
 
-  // The canceller finally runs the cancel it captured for A.
+  // The canceller finally runs the cancel it captured for A. The admission
+  // id no longer matches the slot's current occupant, so it must no-op.
   const size_t piecesAtCancel = bPieces.load();
-  scheduler->cancel(kSharedSeqId);
+  EXPECT_FALSE(scheduler->cancel(kSharedSeqId, *staleAdmissionId))
+      << "a cancel aimed at a finished admission must report no live target";
 
   ASSERT_EQ(futureB.get().size(), 1u);
   // B, capped at 64 tokens on a long-form prompt, must keep generating well
@@ -2208,7 +2227,12 @@ TEST_F(
   ASSERT_TRUE(harness.waitForBlockedDecode())
       << "test setup: decode never started";
 
-  const bool wasActive = scheduler->cancel(0);
+  // The scheduler mutex is released across the blocked decode, so the live
+  // occupant's admission id is readable from here.
+  const auto admissionId =
+      ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler, 0);
+  ASSERT_TRUE(admissionId.has_value()) << "test setup: seqId 0 not occupied";
+  const bool wasActive = scheduler->cancel(0, *admissionId);
   EXPECT_TRUE(wasActive);
   EXPECT_EQ(scheduler->numActive(), 1u)
       << "RACE: cancel(seqId) mutated scheduler/llama_context state while "

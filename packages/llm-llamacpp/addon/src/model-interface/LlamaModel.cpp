@@ -12,7 +12,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <common/arg.h>
@@ -921,14 +923,17 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   liveJobs_.add(id);
   ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
 
-  // The group's live slots, shared with its cancel action. A slot joins at
-  // admission and leaves the moment it ends — the scheduler may recycle the
-  // seqId to a peer job, so a late group cancel must never see it.
-  // `cancelled` marks the whole group: requests admitted after the cancel
-  // are torn down at admission instead of outliving their group.
+  // The group's live slots, shared with its cancel action: every admission's
+  // (seqId -> admissionId) ownership pair. A slot joins at admission and
+  // leaves the moment it ends — the scheduler may recycle the seqId to a
+  // peer job, so a late group cancel must never see it; and because a
+  // snapshot taken before that removal can still race the recycle, each
+  // cancel also carries the admissionId so the scheduler itself rejects a
+  // stale target. `cancelled` marks the whole group: requests admitted after
+  // the cancel are torn down at admission instead of outliving their group.
   struct GroupSlots {
     std::mutex mtx;
-    std::unordered_set<uint32_t> seqs;
+    std::unordered_map<uint32_t, uint64_t> seqs;
     bool cancelled = false;
   };
   auto slots = std::make_shared<GroupSlots>();
@@ -938,7 +943,7 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
   // valid; it releases slots->mtx before touching the scheduler, so it never
   // holds both locks at once.
   const auto cancelGroup = [this, slots] {
-    std::vector<uint32_t> seqs;
+    std::vector<std::pair<uint32_t, uint64_t>> seqs;
     {
       std::lock_guard<std::mutex> seqsLock(slots->mtx);
       slots->cancelled = true;
@@ -946,20 +951,21 @@ std::vector<std::string> LlamaModel::processConcurrentBatch(
       slots->seqs.clear();
     }
     if (state_ && state_->batchScheduler_) {
-      for (const uint32_t seqId : seqs) {
-        state_->batchScheduler_->cancel(seqId);
+      for (const auto& [seqId, admissionId] : seqs) {
+        state_->batchScheduler_->cancel(seqId, admissionId);
       }
     }
   };
 
   const SeqAssignedObserver onSeqAssigned =
-      [this, id, slots, cancelGroup](size_t, uint32_t seqId) {
+      [this, id, slots, cancelGroup](
+          size_t, uint32_t seqId, uint64_t admissionId) {
         {
           std::lock_guard<std::mutex> seqsLock(slots->mtx);
           if (slots->cancelled) {
             return true;
           }
-          slots->seqs.insert(seqId);
+          slots->seqs[seqId] = admissionId;
         }
         // Re-arming per admission is idempotent — the action reads the live
         // set. A true return means a cancel parked before the group had any
@@ -1001,14 +1007,19 @@ std::string LlamaModel::processConcurrent(
   // slot decodes anything. The action may run on any thread -- including the
   // scheduler's own worker when cancelById is issued from a streaming
   // callback: scheduler cancel() records lock-free on that thread. It runs
-  // under the canceller's shared stateMtx_, so state_ stays valid.
-  const SeqAssignedObserver onSeqAssigned = [this, id](size_t, uint32_t seqId) {
-    return liveJobs_.bind(id, [this, seqId] {
-      if (state_ && state_->batchScheduler_) {
-        state_->batchScheduler_->cancel(seqId);
-      }
-    });
-  };
+  // under the canceller's shared stateMtx_, so state_ stays valid. The
+  // captured (seqId, admissionId) pair is this admission's full identity:
+  // the scheduler rejects the cancel once the admission is gone, so even an
+  // action copied out of the registry right before the job finished cannot
+  // hit the seqId's next occupant.
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id](size_t, uint32_t seqId, uint64_t admissionId) {
+        return liveJobs_.bind(id, [this, seqId, admissionId] {
+          if (state_ && state_->batchScheduler_) {
+            state_->batchScheduler_->cancel(seqId, admissionId);
+          }
+        });
+      };
   // Drop the job the moment the slot ends. The scheduler frees the seqId
   // here and may hand it to a peer job before this call returns and mapGuard
   // runs; removing now stops the stale action from making cancelById target
@@ -1411,25 +1422,31 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
     // `seen` fires the seq observer exactly once per slot: at admission
-    // (onAdmitted), with onToken/onDone as a fallback latch.
+    // (onAdmitted), with onToken/onDone as a fallback latch. Only the
+    // admission carries the slot's real ownership token; the fallback
+    // latches pass the never-matching sentinel, so a cancel action armed
+    // through them could never target a slot — acceptable because the
+    // scheduler always fires onAdmitted first and the latches only close a
+    // theoretical gap.
     auto seen = std::make_shared<std::atomic<bool>>(false);
-    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](uint32_t seqId) {
+    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](
+                         uint32_t seqId, uint64_t admissionId) {
       if (onSeqAssigned && !seen->exchange(true)) {
-        return onSeqAssigned(requestIndex, seqId);
+        return onSeqAssigned(requestIndex, seqId, admissionId);
       }
       return false;
     };
     sr.streams.onAdmitted = notifySeq;
     sr.streams.onToken = [userCb = prompt.outputCallback,
                           notifySeq](uint32_t seqId, const std::string& piece) {
-      notifySeq(seqId);
+      notifySeq(seqId, batching::kUnknownAdmissionId);
       if (userCb) {
         userCb(piece);
       }
     };
     sr.streams.onDone =
         [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
-          notifySeq(seqId);
+          notifySeq(seqId, batching::kUnknownAdmissionId);
           if (onSeqDone) {
             onSeqDone(requestIndex, seqId);
           }

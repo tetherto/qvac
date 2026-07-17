@@ -89,6 +89,10 @@ struct ObservedRequestStats {
 [[nodiscard]] ObservedRequestStats
 aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
 
+/// The never-matching admission id: no slot is ever stamped with it, so a
+/// cancel carrying it is always a no-op. Real admission ids start at 1.
+inline constexpr uint64_t kUnknownAdmissionId = 0;
+
 /// Per-request streaming sinks. All are optional; missing callbacks
 /// are no-ops.
 struct StreamCallbacks {
@@ -97,10 +101,13 @@ struct StreamCallbacks {
   /// Fired once when the request is admitted into a slot, before that slot
   /// decodes anything. Runs with the scheduler lock held (on the worker
   /// thread once it is driving), so it must not call back into the
-  /// scheduler. Returning true means the caller already holds a cancel for
-  /// this request — the scheduler tears the slot down before it ever
-  /// decodes.
-  std::function<bool(uint32_t seqId)> onAdmitted;
+  /// scheduler. `admissionId` is the slot's ownership token for this
+  /// admission — the only handle `cancel()` accepts, because the seqId
+  /// alone is a recyclable slot index that may already name a successor by
+  /// the time a cancel fires. Returning true means the caller already holds
+  /// a cancel for this request — the scheduler tears the slot down before
+  /// it ever decodes.
+  std::function<bool(uint32_t seqId, uint64_t admissionId)> onAdmitted;
 };
 
 struct SubmitRequest {
@@ -297,23 +304,30 @@ public:
   void resetRuntimeStats();
   [[nodiscard]] RuntimeStatsSnapshot runtimeStats() const;
 
-  /// Cancel one slot: frees the per-slot sampler and KV-cache entries
-  /// and fires onDone with `Cancelled`. While the worker thread is
-  /// running, the cancellation is only recorded and applied by the
-  /// worker between decode steps -- the worker releases `mutex_` across
-  /// `llama_decode`, so mutating the shared `llama_context` from the
-  /// calling thread would race the in-flight decode. Applied
-  /// synchronously when no worker has been started.
+  /// Cancel the admission identified by (`seqId`, `admissionId`): frees the
+  /// per-slot sampler and KV-cache entries and fires onDone with
+  /// `Cancelled`. `admissionId` is the ownership token onAdmitted handed
+  /// out for this admission; a slot whose current admission id differs
+  /// (the targeted request already finished and the seqId was recycled)
+  /// is left untouched -- the cancel quietly no-ops. Ownership is checked
+  /// when the cancel is requested (cross-thread calls) and re-checked when
+  /// a deferred cancel is applied, so a stale cancel can never land on the
+  /// slot's next occupant. While the worker thread is running, the
+  /// cancellation is only recorded and applied by the worker between
+  /// decode steps -- the worker releases `mutex_` across `llama_decode`,
+  /// so mutating the shared `llama_context` from the calling thread would
+  /// race the in-flight decode. Applied synchronously when no worker has
+  /// been started.
   ///
   /// Safe to call from the scheduler's own streaming callbacks
   /// (onToken/onAdmitted/onDone run on the worker thread with `mutex_`
   /// held): a call on the worker thread never takes `mutex_`, it only
   /// records the cancel for the worker's next teardown reconciliation.
-  /// @return whether the slot was occupied when the cancel was issued;
-  /// a worker-thread call cannot check occupancy (no lock) and always
-  /// returns true -- the recorded cancel no-ops later if the slot is
-  /// already free.
-  bool cancel(uint32_t seqId);
+  /// @return whether the targeted admission was still live when the cancel
+  /// was issued; a worker-thread call cannot check that (no lock) and
+  /// always returns true -- the recorded cancel no-ops later if the
+  /// admission is already gone.
+  bool cancel(uint32_t seqId, uint64_t admissionId);
   void requestCancelAll();
 
   /// Cancel every active request. Deferred to the worker thread when it
@@ -400,6 +414,12 @@ private:
     bool prefillOnly = false;
     /// Carried from SubmitRequest so the drain can compute observed stats.
     std::chrono::steady_clock::time_point enqueuedAt{};
+    /// Ownership token for this admission, strictly incrementing across the
+    /// scheduler's lifetime and never `kUnknownAdmissionId`. `cancel()`
+    /// only tears the slot down when the caller presents this exact id, so
+    /// a cancel aimed at a finished request cannot hit the recycled seqId's
+    /// next occupant.
+    uint64_t admissionId = kUnknownAdmissionId;
   };
 
   void ensureWorkerStartedLocked();
@@ -426,11 +446,24 @@ private:
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
+  /// One deferred targeted cancel, kept as the full (seqId, admissionId)
+  /// identity so the apply side can re-validate ownership: the slot may
+  /// have drained and been re-admitted between record and apply.
+  struct PendingSlotCancel {
+    uint32_t seqId = 0;
+    uint64_t admissionId = kUnknownAdmissionId;
+  };
+
   /// Append one deferred per-slot cancel under `pendingCancelsMtx_` only.
   /// The single mutation path shared by worker-thread callers (which must
   /// not touch `mutex_`) and cross-thread callers (which already hold it).
-  void recordPendingSlotCancel(uint32_t seqId);
+  void recordPendingSlotCancel(uint32_t seqId, uint64_t admissionId);
   [[nodiscard]] bool hasPendingSlotCancels() const;
+  /// Whether `seqId` currently holds the admission identified by
+  /// `admissionId`. False for free slots, out-of-range ids, and slots whose
+  /// admission id differs (the seqId was recycled to a newer request).
+  [[nodiscard]] bool
+  slotOwnedByLocked(uint32_t seqId, uint64_t admissionId) const noexcept;
   void
   completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group) noexcept;
   void failGroupLocked(
@@ -521,8 +554,12 @@ private:
   /// to record a cancel without touching the scheduler lock. Lock order is
   /// always `mutex_` -> `pendingCancelsMtx_`, never the reverse.
   mutable std::mutex pendingCancelsMtx_;
-  std::vector<uint32_t> pendingSlotCancels_;
+  std::vector<PendingSlotCancel> pendingSlotCancels_;
   bool clearRequested_ = false;
+  /// Source of the strictly-incrementing per-admission ownership tokens.
+  /// Guarded by `mutex_` (minted inside submitLocked). Starts past
+  /// `kUnknownAdmissionId` so the sentinel never matches a live slot.
+  uint64_t nextAdmissionId_ = kUnknownAdmissionId + 1;
   RuntimeStatsSnapshot stats_;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; a test

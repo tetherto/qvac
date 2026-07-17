@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <utility>
 
@@ -55,5 +58,19 @@ public:
   static void
   setEvalMediaFunc(Scheduler& scheduler, Scheduler::EvalMediaFunc fn) {
     scheduler.evalMediaFunc_ = std::move(fn);
+  }
+
+  /// The admission id currently stamped on `seqId`, or nullopt when the slot
+  /// is free / out of range. Takes the scheduler mutex, so it must not be
+  /// called from code the worker runs while holding it (streaming callbacks);
+  /// the decode unlock window and other threads are fine.
+  static std::optional<uint64_t>
+  admissionIdAt(Scheduler& scheduler, uint32_t seqId) {
+    std::scoped_lock lock(scheduler.mutex_);
+    if (seqId >= scheduler.slots_.size() ||
+        !scheduler.slots_[seqId].has_value()) {
+      return std::nullopt;
+    }
+    return scheduler.slots_[seqId]->admissionId;
   }
 };
