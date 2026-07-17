@@ -1,6 +1,6 @@
 import { QvacErrorBase } from '@qvac/error'
 import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
-import type { CompletionStats, ToolCallWithCall } from '@/schemas'
+import type { CompletionStats, ToolCallWithCall } from '@qvac/inference/surface'
 import { createErrorOptions } from './errors-base'
 
 /**
