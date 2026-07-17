@@ -1,106 +1,173 @@
 {
-  "cacheEpoch": 1,
-  "_comment": "Single source of truth for diffusion-cpp integration test models. Consumed by test/integration/utils.js (ensureModel) for URL resolution + sha256/bytes integrity, and by .github/actions/cache-models for the cache key. Every entry must pin at least bytes; sha256 is pinned only when computed from a fresh download. Use scripts/generate-model-manifest.mjs to refresh full sha256/bytes from fresh downloads. Bump cacheEpoch to force a hard cache eviction.",
+  "cacheEpoch": 2,
   "models": {
     "stable-diffusion-v2-1-Q8_0.gguf": {
       "urls": [
-        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf"
+        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/ef8fa11863cc80ab078276f9a0bf81601e5ed904/stable-diffusion-v2-1-Q8_0.gguf"
       ],
-      "sha256": null,
-      "bytes": 2322705024
-    },
-    "stable-diffusion-v2-1-Q4_0.gguf": {
-      "urls": [
-        "https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf"
-      ],
-      "sha256": null,
-      "bytes": 2185459424
+      "sha256": "7b73fa47b4d1401bdf3a0898827fac94bced6633bf64ef7fe55492b6115cc74b",
+      "bytes": 2322705024,
+      "group": "base"
     },
     "stable-diffusion-xl-base-1.0-Q4_0.gguf": {
       "urls": [
-        "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/main/stable-diffusion-xl-base-1.0-Q4_0.gguf"
+        "https://huggingface.co/gpustack/stable-diffusion-xl-base-1.0-GGUF/resolve/f00927e80a399ecb0bcacca868131d5e9d4e77aa/stable-diffusion-xl-base-1.0-Q4_0.gguf"
       ],
-      "sha256": null,
-      "bytes": 3940010720
+      "sha256": "4ab9818c9b3428eca96834c51fe294885608480991463f55bd9be53c822567c3",
+      "bytes": 3940010720,
+      "group": "base"
     },
     "sd3_medium_incl_clips.safetensors": {
       "urls": [
-        "https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors"
+        "https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/20e7d1a467ff5375da853eb2b80b8b3103ae549a/sd3_medium_incl_clips.safetensors"
       ],
-      "sha256": null,
-      "bytes": 5973224240
+      "sha256": "3bb7f21bc5fb450220f4eb78a2f276b15422309d5166a4bdeb8c3b763a3a0581",
+      "bytes": 5973224240,
+      "group": "base"
     },
     "flux-2-klein-4b-Q8_0.gguf": {
       "urls": [
-        "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf"
+        "https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q8_0.gguf"
       ],
-      "sha256": null,
-      "bytes": 4300629440
+      "sha256": "0bba6951258ec8f92d51114a8fa13e66828297bfff58a738f52729b3ef66fa28",
+      "bytes": 4300629440,
+      "group": "base"
     },
     "Qwen3-4B-Q4_K_M.gguf": {
       "urls": [
-        "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+        "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf"
       ],
-      "sha256": null,
-      "bytes": 2497281312
+      "sha256": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+      "bytes": 2497281312,
+      "group": "base"
     },
     "flux2-vae.safetensors": {
       "urls": [
-        "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors",
-        "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-4b/resolve/main/split_files/vae/flux2-vae.safetensors"
+        "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc27f91deacad38e78976d1f2b499d76a294/vae/diffusion_pytorch_model.safetensors"
       ],
-      "sha256": null,
+      "sha256": "ca70d2202afe6415bdbcb8793ba8cd99fd159cfe6192381504d6c4d3036e0f04",
       "bytes": 168120878,
-      "_note": "Two historical sources for the same local filename. black-forest-labs is primary; Comfy-Org is a mirror. If the sha-generation step finds their bytes differ, reconcile to a single source before pinning sha256."
+      "group": "base"
+    },
+    "ideogram4-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4-Q4_0.gguf"
+      ],
+      "sha256": "08431d93824e56513cccc84a4d10d327df992cff5b5a0dcfdc739f4d50c2cc9e",
+      "bytes": 5643820832,
+      "group": "ideogram"
+    },
+    "ideogram4_uncond-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/leejet/ideogram-4-GGUF/resolve/c93c0ac616d3abc7910c9af0bf117244ce3a11c4/ideogram4_uncond-Q4_0.gguf"
+      ],
+      "sha256": "2ac9c57c32dead6953da2985656cadd801991a993bd3d5205d3ac1a96686b45a",
+      "bytes": 5643820832,
+      "group": "ideogram"
+    },
+    "Qwen3-VL-8B-Instruct-Q4_K_M.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/b93a7ee713758252c555be4210c00540df954dc2/Qwen3-VL-8B-Instruct-Q4_K_M.gguf"
+      ],
+      "sha256": "108e7ff92b78eefd3db4741885104acba514255c11b617d3c7b197a5f46efe89",
+      "bytes": 5027785568,
+      "group": "ideogram"
     },
     "wan2.1_t2v_1.3B_fp16.safetensors": {
       "urls": [
-        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors"
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors"
       ],
-      "sha256": null,
-      "bytes": 2838303560
+      "sha256": "be531024cd9018cb5b48c40cfbb6a6191645b1c792eb8bf4f8c1c6e10f924dc5",
+      "bytes": 2838303560,
+      "group": "base"
     },
     "wan2.1-i2v-14b-480p-Q4_K_M.gguf": {
       "urls": [
-        "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf"
+        "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/b4b6b3b3f0f64975fb33b1d5d1a46ca24e065f03/wan2.1-i2v-14b-480p-Q4_K_M.gguf"
       ],
-      "sha256": null,
-      "bytes": 11341184384
+      "sha256": "d91f7139acadb42ea05cdf97b311e5099f714f11fbe4d90916500e2f53cbba82",
+      "bytes": 11341184384,
+      "group": "base"
     },
     "wan_2.1_vae.safetensors": {
       "urls": [
-        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/vae/wan_2.1_vae.safetensors"
       ],
-      "sha256": null,
-      "bytes": 253815318
+      "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+      "bytes": 253815318,
+      "group": "base"
     },
     "umt5_xxl_fp16.safetensors": {
       "urls": [
-        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp16.safetensors"
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/text_encoders/umt5_xxl_fp16.safetensors"
       ],
-      "sha256": null,
-      "bytes": 11366399385
+      "sha256": "7b8850f1961e1cf8a77cca4c964a358d303f490833c6c087d0cff4b2f99db2af",
+      "bytes": 11366399385,
+      "group": "base"
     },
     "clip_vision_h.safetensors": {
       "urls": [
-        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors"
+        "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/06e001fc51048fb03433a6fb25334de7836704a5/split_files/clip_vision/clip_vision_h.safetensors"
       ],
-      "sha256": null,
-      "bytes": 1264219396
+      "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161",
+      "bytes": 1264219396,
+      "group": "base"
     },
     "RealESRGAN_x4plus_anime_6B.pth": {
       "urls": [
         "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
       ],
-      "sha256": null,
-      "bytes": 17938799
+      "sha256": "f872d837d3c90ed2e05227bed711af5671a6fd1c9f7d7e91c911a61f155e99da",
+      "bytes": 17938799,
+      "group": "base"
     },
     "pytorch_lora_weights-sd21-comfyui.safetensors": {
       "urls": [
-        "https://huggingface.co/radames/sd-21-DPO-LoRA/resolve/main/pytorch_lora_weights-sd21-comfyui.safetensors"
+        "https://huggingface.co/radames/sd-21-DPO-LoRA/resolve/453432ac91e17f6ed3e3d236e6851df297b916a0/pytorch_lora_weights-sd21-comfyui.safetensors"
       ],
-      "sha256": null,
-      "bytes": 6695896
+      "sha256": "3a8c0d3f957d60473a87144f0eed44d4b8ad2b86744d91329600b037e905bcba",
+      "bytes": 6695896,
+      "group": "base"
+    },
+    "ltx-2.3-22b-distilled_video_vae.safetensors": {
+      "urls": [
+        "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_video_vae.safetensors"
+      ],
+      "sha256": "e68d6d8f8a42942ac9b862cc315beb3bc30805a8876c7ad63ba5bf7a2b8e168a",
+      "bytes": 1452256522,
+      "group": "ltx"
+    },
+    "ltx-2.3-22b-distilled_audio_vae.safetensors": {
+      "urls": [
+        "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/vae/ltx-2.3-22b-distilled_audio_vae.safetensors"
+      ],
+      "sha256": "3cd6a6eb8cb28f5ecc12f1f3126952b2a3d2b0b42ad3270e63cefafafe0d9b57",
+      "bytes": 364853140,
+      "group": "ltx"
+    },
+    "ltx-2.3-22b-distilled_embeddings_connectors.safetensors": {
+      "urls": [
+        "https://huggingface.co/unsloth/LTX-2.3-GGUF/resolve/96e8ed4925ead3db9ff4d0084f165ef6a74f28d0/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors"
+      ],
+      "sha256": "c61cbb396e2a8175d8b2da51f0fdac885a4ccd22c9f64dafa5aa2c455dc8a507",
+      "bytes": 2312144712,
+      "group": "ltx"
+    },
+    "LTX-2.3-22B-distilled-1.1-Q2_K.gguf": {
+      "urls": [
+        "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf"
+      ],
+      "sha256": "af151db26e3b0a87e805d899d3f105aa0a11f9124893d47ca3f39e47b27cfa8f",
+      "bytes": 12408656544,
+      "group": "ltx"
+    },
+    "gemma-3-12b-it-UD-Q2_K_XL.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/d15e4c7dc21dc55d56bf8549db57a71ad8a2a35d/gemma-3-12b-it-UD-Q2_K_XL.gguf"
+      ],
+      "sha256": "85e9f7e21c0ef9a13ceeb63ecb1a7015e92ff6bd359a9356e3e9b02d880fe980",
+      "bytes": 4860535136,
+      "group": "ltx"
     }
   }
 }

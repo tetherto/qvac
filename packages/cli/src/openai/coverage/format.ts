@@ -40,11 +40,22 @@ function appendUnknownNotice(lines: string[], report: CoverageReport): void {
   lines.push('')
 }
 
+function appendExtensionsNotice(lines: string[], report: CoverageReport): void {
+  if (report.extensions.length === 0) return
+  const word = report.extensions.length === 1 ? 'endpoint' : 'endpoints'
+  lines.push(`qvac extension ${word} beyond the OpenAI spec (not counted in coverage):`)
+  for (const key of report.extensions) {
+    lines.push(`  ${key}`)
+  }
+  lines.push('')
+}
+
 export function formatCoverageReportHuman(report: CoverageReport, rows: CoverageRow[]): string {
   const lines: string[] = []
   lines.push('qvac serve openai — coverage')
   lines.push('')
   appendUnknownNotice(lines, report)
+  appendExtensionsNotice(lines, report)
   lines.push(`Spec: ${report.specSource} (${report.rows.length} endpoints)`)
   lines.push(`Router: ${report.routerSource} (${report.implementedCount} implemented)`)
   lines.push('')

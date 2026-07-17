@@ -32,10 +32,14 @@ const GEMMA4_MODEL = {
     downloadUrl:
       'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
   },
+  // f16 projector, not bf16: the Adreno OpenCL backend has no bf16 kernels, so
+  // the bf16 mmproj aborts in ggml_cl_compute_forward now that the projector
+  // auto-defaults to GPU on Adreno 800+ (QVAC-21867). f16 covers bf16's value
+  // range for these weights and runs on every backend.
   projModel: {
-    modelName: 'mmproj-google_gemma-4-E2B-it-bf16.gguf',
+    modelName: 'mmproj-google_gemma-4-E2B-it-f16.gguf',
     downloadUrl:
-      'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf'
+      'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-f16.gguf'
   }
 }
 
