@@ -523,11 +523,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   return seqId;
 }
 
-bool ContinuousBatchScheduler::step() {
-  std::unique_lock lock(mutex_);
-  return stepLocked(&lock);
-}
-
 std::function<bool(const Request&)>
 ContinuousBatchScheduler::hasValidDriverF() const {
   return [this](const Request& req) {
