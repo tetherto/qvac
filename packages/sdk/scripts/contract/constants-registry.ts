@@ -1,6 +1,15 @@
 import { z } from 'zod'
-import { ModelType } from './model-types'
-import { VERBOSITY } from './llamacpp-config'
+import {
+  ModelType,
+  VERBOSITY,
+  SUPPORTED_AUDIO_FORMATS,
+  AUDIOGEN_TASK_TYPES,
+  TTS_PACES,
+  TTS_COSYVOICE3_EMOTIONS,
+  TTS_COSYVOICE3_INSTRUCT_DIALECTS,
+  TTS_COSYVOICE3_INSTRUCT_VOLUMES,
+  TTS_COSYVOICE3_INSTRUCT_STYLES
+} from '@qvac/inference/surface'
 import {
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
@@ -13,16 +22,7 @@ import {
   PLUGIN_AUDIOGEN,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION
-} from './plugin'
-import { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
-import { AUDIOGEN_TASK_TYPES } from './audio-gen'
-import {
-  TTS_PACES,
-  TTS_COSYVOICE3_EMOTIONS,
-  TTS_COSYVOICE3_INSTRUCT_DIALECTS,
-  TTS_COSYVOICE3_INSTRUCT_VOLUMES,
-  TTS_COSYVOICE3_INSTRUCT_STYLES
-} from './text-to-speech'
+} from '@/plugin-ids'
 
 // Uppercases each vocabulary value into an identifier-safe varname (e.g.
 // 'slow' -> 'SLOW', 'cover-nofsq' -> 'COVER_NOFSQ'), mirroring the
@@ -35,7 +35,7 @@ function enumFromVocabulary<const T extends readonly string[]>(values: T) {
 }
 
 /**
- * Every public constant `enum` from index.ts that downstream (non-JS)
+ * Every public constant `enum` from the SDK surface that downstream (non-JS)
  * client generators should get as a real, named type instead of a
  * hardcoded string/number. `build-contract.ts` merges each of these
  * directly into `schema.json`'s `$defs` (same `z.toJSONSchema` call, same
