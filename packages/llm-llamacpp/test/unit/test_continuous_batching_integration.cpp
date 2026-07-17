@@ -1765,6 +1765,83 @@ TEST_F(
          "teardown on seqId 1";
 }
 
+/// SeqIds are recycled slot indices: when a request drains, the worker frees
+/// its slot and may admit an unrelated request into the same seqId within one
+/// mutex hold. A canceller that captured a job's seqId while that job was
+/// live -- exactly what the per-job cancel action copied out of the cancel
+/// registry does -- can fire only after the job finished and its seqId was
+/// handed to a peer. That stale cancel must be a no-op: it was aimed at the
+/// finished job, not at whatever now occupies the slot.
+TEST_F(
+    ContinuousBatchingIntegrationTest, StaleCancelMustNotHitSlotsNextOccupant) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  const auto waitForFirstPiece = [](const std::atomic<size_t>& pieces) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(120);
+    while (pieces.load() == 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return pieces.load() > 0;
+  };
+  const auto runAlone = [&model](LlamaModel::Prompt&& prompt) {
+    return std::async(
+        std::launch::async, [&model, prompt = std::move(prompt)] {
+          std::vector<LlamaModel::Prompt> prompts{prompt};
+          return model->processPromptBatch(prompts);
+        });
+  };
+
+  // Job A: admitted alone, so it owns seqId 0. The canceller captures A's
+  // identity while A is live -- pre-fix that identity is nothing but the
+  // recyclable seqId -- and only fires it later, after the slot moved on.
+  constexpr uint32_t kSharedSeqId = 0;
+  std::atomic<size_t> aPieces = 0;
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  promptA.outputCallback = [&aPieces](const std::string&) {
+    aPieces.fetch_add(1);
+  };
+  auto futureA = runAlone(std::move(promptA));
+  ASSERT_TRUE(waitForFirstPiece(aPieces))
+      << "test setup: job A never emitted a token";
+  ASSERT_EQ(futureA.get().size(), 1u);
+  ASSERT_EQ(scheduler->numActive(), 0u)
+      << "test setup: job A must have released its slot";
+
+  // Job B: admitted alone as well, so it reuses the freed seqId 0.
+  std::atomic<size_t> bPieces = 0;
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  promptB.outputCallback = [&bPieces](const std::string&) {
+    bPieces.fetch_add(1);
+  };
+  auto futureB = runAlone(std::move(promptB));
+  ASSERT_TRUE(waitForFirstPiece(bPieces))
+      << "test setup: job B never emitted a token";
+
+  // The canceller finally runs the cancel it captured for A.
+  const size_t piecesAtCancel = bPieces.load();
+  scheduler->cancel(kSharedSeqId);
+
+  ASSERT_EQ(futureB.get().size(), 1u);
+  // B, capped at 64 tokens on a long-form prompt, must keep generating well
+  // past the stale cancel; being cut at (or near) piecesAtCancel means the
+  // cancel aimed at finished job A tore down its unrelated successor.
+  constexpr size_t kSurvivalMargin = 8;
+  EXPECT_GT(bPieces.load(), piecesAtCancel + kSurvivalMargin)
+      << "STALE-CANCEL VICTIM: the cancel captured for finished job A "
+         "(seqId 0) tore down job B, which merely reuses the recycled seqId";
+}
+
 /// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
 /// must slide (`contextSlides > 0`) and keep generating, like the
 /// single-prompt path does, instead of being hard-truncated at the window.
