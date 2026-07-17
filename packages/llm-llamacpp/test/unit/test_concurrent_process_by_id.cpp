@@ -304,11 +304,12 @@ TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
 }
 
 /// cancelById(id) must cancel only the targeted job: the cancelled job stops
-/// early (short output) while the other job runs to completion. The main
-/// thread fires cancelById as soon as the target emits its first token, so
-/// the cut happens mid-generation. cancelById must NOT be called from inside
-/// outputCallback: the scheduler invokes it on its worker thread with the
-/// scheduler mutex held, so an inline cancel self-deadlocks.
+/// early (short output) while the other job runs to completion. The target
+/// fires cancelById on its own first token so the cut happens mid-generation.
+/// That callback runs on the scheduler's worker thread while it streams, so
+/// this also pins the contract that cancelById is safe to call from inside
+/// outputCallback - it must never take a lock the streaming worker already
+/// holds.
 TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
   REQUIRE_MODEL(model_);
   // n_predict must fit under the per-sequence KV cap (ctx_size / parallel)
@@ -320,14 +321,17 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
   constexpr JobId kCancelId = 7;
   constexpr JobId kKeepId = 8;
 
-  std::atomic<bool> cancelTokenSeen = false;
+  std::atomic<bool> cancelFired = false;
   std::atomic<size_t> keepPieces = 0;
 
   auto cancelPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about the history of "
       "astronomy.");
-  cancelPrompt.outputCallback = [&cancelTokenSeen](const std::string&) {
-    cancelTokenSeen.store(true);
+  cancelPrompt.outputCallback = [&model, &cancelFired](const std::string&) {
+    bool expected = false;
+    if (cancelFired.compare_exchange_strong(expected, true)) {
+      model->cancelById(kCancelId);
+    }
   };
 
   auto keepPrompt = makePrompt(
@@ -345,16 +349,6 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
       std::async(std::launch::async, runJob, cancelPrompt, kCancelId);
   auto keepFuture = std::async(std::launch::async, runJob, keepPrompt, kKeepId);
 
-  const auto tokenDeadline =
-      std::chrono::steady_clock::now() + std::chrono::seconds(120);
-  while (!cancelTokenSeen.load() &&
-         std::chrono::steady_clock::now() < tokenDeadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-  ASSERT_TRUE(cancelTokenSeen.load())
-      << "test setup: cancelled job never emitted a token";
-  model->cancelById(kCancelId);
-
   ASSERT_EQ(
       cancelFuture.wait_for(std::chrono::seconds(120)),
       std::future_status::ready);
@@ -364,10 +358,12 @@ TEST_F(ConcurrentProcessByIdTest, CancelByIdCancelsOnlyTargetedJob) {
   const std::string cancelled = cancelFuture.get();
   const std::string kept = keepFuture.get();
 
+  ASSERT_TRUE(cancelFired.load())
+      << "test setup: cancelled job never emitted a token";
   EXPECT_FALSE(kept.empty()) << "untargeted job must run to completion";
   // The kept job, capped at 256 tokens on a long-form prompt, emits many
-  // pieces; the cancelled job is cut within a few tokens of its first, so it
-  // must be strictly shorter. cancelById hit only its own slot.
+  // pieces; the cancelled job is cut at its first token, so it must be
+  // strictly shorter. cancelById hit only its own slot.
   EXPECT_LT(cancelled.size(), kept.size())
       << "cancelById cancelled the wrong job (or none): cancelled='"
       << cancelled << "', kept-size=" << kept.size();
