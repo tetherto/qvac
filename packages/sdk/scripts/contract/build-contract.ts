@@ -452,7 +452,11 @@ function titleNestedSchemas(root: JsonSchema, rootTitle: string, seenTitles: Set
   }
 }
 
-function toWireJsonSchema(schema: z.ZodType, io: 'input' | 'output', defName: string): JsonSchema {
+export function toWireJsonSchema(
+  schema: z.ZodType,
+  io: 'input' | 'output',
+  defName: string
+): JsonSchema {
   const json = z.toJSONSchema(schema, {
     target: 'draft-2020-12',
     io,
