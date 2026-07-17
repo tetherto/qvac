@@ -145,6 +145,18 @@ function validateRunInput(input, hparams) {
         adds: 'groot requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
       })
     }
+    // Exact length guards the native memcpy against an OOB read: GrootModel::infer
+    // copies chunkSize*maxActionDim floats blindly from this buffer (no source-length
+    // check), so a short array reads adjacent heap memory into the action prior.
+    if (Number.isInteger(hparams.chunkSize) && Number.isInteger(hparams.maxActionDim)) {
+      const expectedNoise = hparams.chunkSize * hparams.maxActionDim
+      if (input.noise.length !== expectedNoise) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`
+        })
+      }
+    }
   }
 
   if (hparams && hparams.stateInputMode === 'discrete') {
@@ -168,6 +180,18 @@ function validateRunInput(input, hparams) {
         code: ERR_CODES.INVALID_INPUT,
         adds: 'pi05 requires input.noise (Float32Array) — flow matching needs a noise prior at t=1'
       })
+    }
+    // Same native-memcpy OOB guard as the groot branch: pi05 xT is action_horizon *
+    // action_dim floats, surfaced as chunkSize * maxActionDim (max_action_dim maps
+    // to action_dim for pi05), copied blindly from this buffer.
+    if (Number.isInteger(hparams.chunkSize) && Number.isInteger(hparams.maxActionDim)) {
+      const expectedNoise = hparams.chunkSize * hparams.maxActionDim
+      if (input.noise.length !== expectedNoise) {
+        throw new QvacErrorAddonVla({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `input.noise length ${input.noise.length} != ${expectedNoise} (chunkSize*maxActionDim)`
+        })
+      }
     }
   }
 

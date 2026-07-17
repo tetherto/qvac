@@ -1564,7 +1564,10 @@ struct ggml_tensor* grootBuildPatchEmbedLinear(
       for (int ph = 0; ph < patch; ++ph) {
         for (int pw = 0; pw < patch; ++pw) {
           const size_t src =
-              static_cast<size_t>(pw) + patch * (ph + patch * (c + numCh * oc));
+              static_cast<size_t>(pw) +
+              static_cast<size_t>(patch) *
+                  (ph + static_cast<size_t>(patch) *
+                            (c + static_cast<size_t>(numCh) * oc));
           for (int t = 0; t < temporalPatch; ++t) {
             const int flat =
                 ((c * temporalPatch + t) * patch + ph) * patch + pw;
