@@ -1413,7 +1413,11 @@ TEST_F(
       << "test setup: no token was emitted, so cancel never fired";
 }
 
-TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
+/// A live-only prefill (no saveCacheToDisk + cacheKey) inside a batch has no
+/// product that survives the slot teardown: the lane's KV is wiped and no
+/// cache file is written. The same policy that rejects it on the single
+/// tagged path must reject it per batch item, before anything is scheduled.
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -1422,11 +1426,17 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("Say plain text."), std::move(prefillPrompt)};
 
-  auto outputs = model->processPromptBatch(prompts);
-
-  ASSERT_EQ(outputs.size(), 2u);
-  EXPECT_FALSE(outputs[0].empty());
-  EXPECT_TRUE(outputs[1].empty());
+  try {
+    model->processPromptBatch(prompts);
+    FAIL() << "expected processPromptBatch to reject a live-only prefill item";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        e.codeString().find(
+            toString(qvac_errors::general_error::InvalidArgument)),
+        std::string::npos);
+    EXPECT_NE(std::string(e.what()).find("prefill"), std::string::npos)
+        << "unexpected rejection: " << e.what();
+  }
 }
 
 /// Two-stage batch test for prefill-only + cache lifecycle.
