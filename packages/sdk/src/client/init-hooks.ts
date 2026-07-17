@@ -1,4 +1,4 @@
-import type { QvacConfig, RuntimeContext } from '@/schemas'
+import type { QvacConfig, RuntimeContext } from '@qvac/inference/surface'
 import { getClientLogger, setGlobalLogLevel, setGlobalConsoleOutput } from '@/logging'
 import { SetConfigFailedError } from '@/utils/errors-client'
 

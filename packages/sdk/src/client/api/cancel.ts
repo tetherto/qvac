@@ -1,5 +1,9 @@
 import { send } from '@/client/rpc/rpc-client'
-import { type CancelClientInput, type CancelParams, type CancelRequest } from '@/schemas'
+import {
+  type CancelClientInput,
+  type CancelParams,
+  type CancelRequest
+} from '@qvac/inference/surface'
 import { InvalidResponseError, CancelFailedError } from '@/utils/errors-client'
 
 /**

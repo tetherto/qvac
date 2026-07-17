@@ -1,7 +1,6 @@
 {
   "#rpc": {
     "react-native": "./dist/src/client/rpc/expo-rpc-client.js",
-    "bare": "./dist/src/client/rpc/bare-client.js",
     "default": "./dist/src/client/rpc/node-rpc-client.js"
   },
   "child_process": {

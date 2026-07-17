@@ -1,6 +1,6 @@
 import { type Logger, getClientLogger } from '@/logging'
 import { loggingStream } from './api/logging-stream'
-import type { LoggingStreamResponse } from '@/schemas/logging-stream'
+import type { LoggingStreamResponse } from '@qvac/inference/surface'
 
 const logger = getClientLogger()
 
