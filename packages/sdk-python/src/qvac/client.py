@@ -70,6 +70,18 @@ def _resolve_command(
     if worker_path and bare_path:
         return bare_path, worker_path
 
+    # Self-contained wheel: scripts/build_wheel.py stages the Bare runtime
+    # and the built worker under qvac/_bundle/, so an installed bundled
+    # wheel needs no explicit paths, env, or sdk checkout at all.
+    bundle = Path(__file__).parent / "_bundle"
+    bundled_worker = bundle / "worker" / "dist" / "server" / "worker.js"
+    bundled_bare = bundle / "runtime" / "bare"
+    if bundled_worker.exists() and bundled_bare.exists():
+        return (
+            bare_path or str(bundled_bare),
+            worker_path or str(bundled_worker),
+        )
+
     sdk_dir = sdk_dir or os.environ.get("QVAC_SDK_DIR")
     if not sdk_dir:
         raise WorkerNotFoundError(

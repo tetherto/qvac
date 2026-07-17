@@ -33,6 +33,8 @@ vla = ["numpy>=1.26"]
 # inputs and outputs (IPython, when present, upgrades live streaming
 # display from stdout to in-cell updates).
 notebook = ["numpy>=1.26", "pandas>=2.2"]
+# scripts/build_wheel.py: the self-contained per-platform wheel build.
+release = ["build>=1.2"]
 # QVAC-21806 PoC only -- neither package is on PyPI yet (both v0.0.1, git-only).
 # Pinned to their current HEAD commits for reproducibility while unreleased.
 bare-rpc = [
@@ -46,6 +48,10 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/qvac"]
+# The staged runtime+worker bundle is gitignored (build_wheel.py creates it
+# transiently); artifacts overrides hatchling's VCS-ignore exclusion so the
+# self-contained wheel actually carries it. Harmless when absent (thin wheel).
+artifacts = ["src/qvac/_bundle/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
