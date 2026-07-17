@@ -16,9 +16,9 @@ export function selectExportTarget(entry: SdkExportEntry | undefined): string | 
   return null
 }
 
-function readSdkExports(sdkPath: string): Record<string, SdkExportEntry> {
+function readPackageExports(packagePath: string): Record<string, SdkExportEntry> {
   try {
-    const raw = fs.readFileSync(path.join(sdkPath, 'package.json'), 'utf8')
+    const raw = fs.readFileSync(path.join(packagePath, 'package.json'), 'utf8')
     const pkg = JSON.parse(raw) as {
       exports?: Record<string, SdkExportEntry>
     }
@@ -45,13 +45,21 @@ export function createSdkImportResolver(
   } catch {
     // Keep sdkPath as-is if it cannot be canonicalized.
   }
-  const exportsMap = readSdkExports(resolvedSdkPath)
-  const prefix = `${sdkName}/`
+
+  const anchors = [{ prefix: `${sdkName}/`, root: resolvedSdkPath }]
+  const resolved = anchors.map(({ prefix, root }) => ({
+    prefix,
+    root,
+    exports: readPackageExports(root)
+  }))
+
   return (specifier) => {
-    if (!specifier.startsWith(prefix)) return specifier
-    const subpath = `./${specifier.slice(prefix.length)}`
-    const target = selectExportTarget(exportsMap[subpath])
-    if (!target) return specifier
-    return pathToFileURL(path.join(resolvedSdkPath, target)).href
+    for (const { prefix, root, exports } of resolved) {
+      if (!specifier.startsWith(prefix)) continue
+      const subpath = `./${specifier.slice(prefix.length)}`
+      const target = selectExportTarget(exports[subpath])
+      return target ? pathToFileURL(path.join(root, target)).href : specifier
+    }
+    return specifier
   }
 }
