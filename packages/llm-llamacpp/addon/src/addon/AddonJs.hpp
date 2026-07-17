@@ -20,6 +20,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <inference-addon-cpp/queue/QueueCallbacks.hpp>
 
 #include "addon/JsBatchIds.hpp"
 #include "addon/PayloadHandler.hpp"
@@ -50,48 +51,6 @@ getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
         general_error::InternalError, "Model is not a LlamaModel");
   }
   return llamaModel;
-}
-
-inline std::function<void(const std::string&)> makeQueueOutputCallback(
-    qvac_lib_inference_addon_cpp::AddonJs& instance,
-    qvac_lib_inference_addon_cpp::JobId id =
-        qvac_lib_inference_addon_cpp::kNoJobId) {
-  return [&instance, id](const std::string& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s), id);
-  };
-}
-
-/// Tags streamed tokens with a job id that is only known after admission: the
-/// scheduler mints the id and runJob returns it, but the prompt (and this
-/// callback) must be built first. The future is fulfilled right after
-/// admission on the JS thread; a worker that races ahead blocks on get() for
-/// at most that hand-off (tokens only start after prefill, so in practice it
-/// never waits).
-inline std::function<void(const std::string&)> makeQueueOutputCallback(
-    qvac_lib_inference_addon_cpp::AddonJs& instance,
-    std::shared_future<qvac_lib_inference_addon_cpp::JobId> idFuture) {
-  return [&instance, idFuture = std::move(idFuture)](const std::string& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s), idFuture.get());
-  };
-}
-
-inline LlamaFinetuner::ProgressCallback
-makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return [&instance](const llama_finetuning_helpers::FinetuneProgressStats& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s));
-  };
-}
-
-/// Tagged variant for finetune: progress stats are queued under the exclusive
-/// job's id, resolved through the same deferred hand-off as
-/// makeQueueOutputCallback's idFuture overload.
-inline LlamaFinetuner::ProgressCallback makeQueueProgressCallback(
-    qvac_lib_inference_addon_cpp::AddonJs& instance,
-    std::shared_future<qvac_lib_inference_addon_cpp::JobId> idFuture) {
-  return [&instance, idFuture = std::move(idFuture)](
-             const llama_finetuning_helpers::FinetuneProgressStats& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s), idFuture.get());
-  };
 }
 
 struct JsFinetuneProgressOutputHandler
@@ -659,7 +618,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   LlamaModel::Prompt prompt = parsePromptInputs(
       env,
       inputs,
-      makeQueueOutputCallback(instance, idPromise->get_future().share()));
+      makeQueueCallback<string>(
+          instance.addonCpp->outputQueue, idPromise->get_future().share()));
 
   const optional<JobId> jobId =
       instance.addonCpp->runJob(any(std::move(prompt)));
@@ -739,9 +699,11 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
 
   LlamaModel::Prompt prompt;
   prompt.finetuningParams = *paramsOpt;
-  prompt.outputCallback = makeQueueOutputCallback(instance, idFuture);
+  prompt.outputCallback =
+      makeQueueCallback<string>(instance.addonCpp->outputQueue, idFuture);
   prompt.progressCallback =
-      makeQueueProgressCallback(instance, std::move(idFuture));
+      makeQueueCallback<llama_finetuning_helpers::FinetuneProgressStats>(
+          instance.addonCpp->outputQueue, std::move(idFuture));
 
   // Finetune reloads weights, so it runs as an exclusive job — the scheduler
   // enforces the finetune<->inference mutual exclusion (see runExclusiveJob).
