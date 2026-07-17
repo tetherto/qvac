@@ -215,6 +215,17 @@ def resolve_titles(
         (fake_generated / "__init__.py").write_text("")
         shutil.copytree(models_dir, fake_generated / "models")
 
+        # Snapshot any already-imported real qvac modules so they can be
+        # restored afterwards. Deleting them without restoring would make a
+        # later in-process `from .x import y` re-import a FRESH copy of a
+        # qvac module -- module-level state (e.g. the logging-stream
+        # registry) would silently fork from the copies callers already
+        # hold. Only bites same-process users (pytest); a CLI run exits.
+        saved_qvac_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "qvac" or name.startswith("qvac.")
+        }
         sys.path.insert(0, fake_src)
         try:
             models_pkg = importlib.import_module("qvac._generated.models")
@@ -263,6 +274,7 @@ def resolve_titles(
             for module_name in list(sys.modules):
                 if module_name == "qvac" or module_name.startswith("qvac."):
                     del sys.modules[module_name]
+            sys.modules.update(saved_qvac_modules)
 
 
 def render_index(resolved: dict[str, tuple[str | None, str]]) -> str:

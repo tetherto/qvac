@@ -45,6 +45,10 @@ from .errors import (  # noqa: F401
     TranslationFailedError,
 )
 from .language_detect import detect_one
+from .logging_streams import (
+    start_logging_stream_for_model,
+    stop_logging_stream_for_model,
+)
 from .model_types import (
     assert_model_src_matches_model_type,
     infer_model_type_from_model_src,
@@ -87,6 +91,19 @@ def generate_client_request_id() -> str:
     return str(uuid.uuid4())
 
 
+def _start_model_logging(transport: Transport, model_id: str, logger: Any) -> None:
+    """Best-effort: a broken logging stream must not fail the load (JS
+    catches and warns the same way)."""
+    try:
+        start_logging_stream_for_model(transport, model_id, logger)
+    except Exception:
+        warnings.warn(
+            f"Failed to start logging stream for model {model_id}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+
 async def load_model(
     transport: Transport,
     *,
@@ -99,6 +116,7 @@ async def load_model(
     request_id: str | None = None,
     seed: bool | None = None,
     delegate: dict[str, Any] | None = None,
+    logger: Any = None,
 ) -> str:
     """Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:
 
@@ -117,6 +135,9 @@ async def load_model(
       to hold the id before awaiting.
     - `on_progress` switches to the streaming call shape and receives each
       ModelProgressResponse.
+    - `logger` (anything stdlib-logging-shaped) starts a background logging
+      stream forwarding the model's worker logs, mirroring JS's
+      startLoggingStreamForModel side effect; `unload_model` stops it.
     """
     is_reload_config = model_id is not None and model_src is None
 
@@ -169,6 +190,8 @@ async def load_model(
             if not event.success:
                 raise ModelLoadFailedError(event.error)
             assert event.model_id is not None
+            if logger is not None:
+                _start_model_logging(transport, event.model_id, logger)
             return event.model_id
         raise StreamEndedError()
 
@@ -176,6 +199,8 @@ async def load_model(
     if not response.success:
         raise ModelLoadFailedError(response.error)
     assert response.model_id is not None
+    if logger is not None:
+        _start_model_logging(transport, response.model_id, logger)
     return response.model_id
 
 
@@ -329,17 +354,16 @@ async def cancel(
 async def unload_model(
     transport: Transport, model_id: str, clear_storage: bool = False
 ) -> None:
-    """Core wire semantics only — no client-side auto-close of the
-    connection or logging-stream cleanup, since a thin per-call Python
-    transport has no persistent connection/logging-stream registry to clean
-    up (see the JS `unloadModel`'s `autoClose`/`stopLoggingStreamForModel`,
-    which depend on that client-side state)."""
+    """Core wire semantics plus the logging-stream cleanup JS's
+    `unloadModel` performs (stopLoggingStreamForModel); connection auto-close
+    stays out of scope for the thin per-call transport."""
     request = UnloadModelRequest.model_validate(
         {"type": "unloadModel", "modelId": model_id, "clearStorage": clear_storage}
     )
     response = UnloadModelResponse.model_validate(await transport.call(_dump(request)))
     if not response.success:
         raise ModelUnloadFailedError(model_id)
+    stop_logging_stream_for_model(model_id)
 
 
 async def invoke_plugin(
