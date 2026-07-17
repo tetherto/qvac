@@ -314,6 +314,55 @@ async def test_transcribe_session_produces_real_text(transport) -> None:
             pass
 
 
+async def test_vla_synthetic_inference_produces_real_actions(transport) -> None:
+    """qvac.vla end to end against a real SmolVLA model: hparams sizing,
+    preprocessed synthetic camera frames, BOS-only instruction tokens --
+    mirrors the SDK e2e vla executor's synthetic-inference path."""
+    import numpy as np
+
+    from qvac.models import SMOLVLA_LIBERO_VISION_Q8
+    from qvac.schemas import ModelType
+    from qvac.vla import vla, vla_hparams, vla_pad_state, vla_preprocess_image
+
+    model_id = await _load(transport, SMOLVLA_LIBERO_VISION_Q8.src, ModelType.ggml_vla)
+
+    hparams, _backend = await vla_hparams(transport, model_id=model_id)
+    assert hparams.vision_image_size > 0
+
+    size = hparams.vision_image_size
+    dummy = np.full(size * size * 3, 128, dtype=np.uint8)
+    images = [
+        vla_preprocess_image(dummy, size, size, size=size)
+        for _ in range(hparams.num_cameras or 2)
+    ]
+    tokens = np.zeros(hparams.tokenizer_max_length, dtype=np.int32)
+    mask = np.zeros(hparams.tokenizer_max_length, dtype=np.uint8)
+    # BOS-only "instruction": exercises the full prefill path without a
+    # tokenizer at test time (same trick as the SDK e2e executor).
+    tokens[0] = 1
+    mask[0] = 1
+    state = (
+        np.zeros(0, dtype=np.float32)
+        if hparams.state_input_mode == "discrete"
+        else vla_pad_state([0, 0, 0, 0, 0, 0], hparams.max_state_dim)
+    )
+    noise = np.zeros(hparams.chunk_size * hparams.max_action_dim, dtype=np.float32)
+
+    result = await vla(
+        transport,
+        model_id=model_id,
+        images=images,
+        img_width=size,
+        img_height=size,
+        state=state,
+        tokens=tokens,
+        mask=mask,
+        noise=noise,
+    )
+    assert len(result.actions) == result.chunk_size * result.action_dim
+    assert np.isfinite(result.actions).all()
+
+
 async def test_classify_produces_real_labels(transport) -> None:
     """The classification model ships inside @qvac/classification-ggml itself.
     The plugin resolves its model path as `config.modelPath ?? (params.modelPath
