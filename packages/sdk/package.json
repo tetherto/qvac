@@ -55,119 +55,119 @@
     "whisper"
   ],
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
     },
     "./package": "./package.json",
-    "./dist/server/worker.js": {
-      "import": "./dist/server/worker.js",
-      "require": "./dist/server/worker.js"
+    "./dist/src/server/worker.js": {
+      "import": "./dist/src/server/worker.js",
+      "require": "./dist/src/server/worker.js"
     },
     "./llamacpp-completion/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-completion/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-completion/plugin.js"
+      "types": "./dist/src/server/bare/plugins/llamacpp-completion/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/llamacpp-completion/plugin.js"
     },
     "./llamacpp-embedding/plugin": {
-      "types": "./dist/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/llamacpp-embedding/plugin.js"
+      "types": "./dist/src/server/bare/plugins/llamacpp-embedding/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/llamacpp-embedding/plugin.js"
     },
     "./whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/whispercpp-transcription/plugin.js"
+      "types": "./dist/src/server/bare/plugins/whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/whispercpp-transcription/plugin.js"
     },
     "./bci-whispercpp-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/bci-whispercpp-transcription/plugin.js"
+      "types": "./dist/src/server/bare/plugins/bci-whispercpp-transcription/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/bci-whispercpp-transcription/plugin.js"
     },
     "./parakeet-transcription/plugin": {
-      "types": "./dist/server/bare/plugins/parakeet-transcription/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/parakeet-transcription/plugin.js"
+      "types": "./dist/src/server/bare/plugins/parakeet-transcription/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/parakeet-transcription/plugin.js"
     },
     "./nmtcpp-translation/plugin": {
-      "types": "./dist/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/nmtcpp-translation/plugin.js"
+      "types": "./dist/src/server/bare/plugins/nmtcpp-translation/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/nmtcpp-translation/plugin.js"
     },
     "./tts-ggml/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "types": "./dist/src/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/tts-ggml/plugin.js"
     },
     "./onnx-tts/plugin": {
-      "types": "./dist/server/bare/plugins/tts-ggml/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/tts-ggml/plugin.js"
+      "types": "./dist/src/server/bare/plugins/tts-ggml/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/tts-ggml/plugin.js"
     },
     "./ggml-ocr/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-ocr/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-ocr/plugin.js"
+      "types": "./dist/src/server/bare/plugins/ggml-ocr/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/ggml-ocr/plugin.js"
     },
     "./sdcpp-generation/plugin": {
-      "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
+      "types": "./dist/src/server/bare/plugins/sdcpp-generation/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/sdcpp-generation/plugin.js"
     },
     "./audiogen-ggml/plugin": {
       "types": "./dist/server/bare/plugins/audiogen-ggml/plugin.d.ts",
       "import": "./dist/server/bare/plugins/audiogen-ggml/plugin.js"
     },
     "./ggml-vla/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
+      "types": "./dist/src/server/bare/plugins/ggml-vla/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/ggml-vla/plugin.js"
     },
     "./ggml-classification/plugin": {
-      "types": "./dist/server/bare/plugins/ggml-classification/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/ggml-classification/plugin.js"
+      "types": "./dist/src/server/bare/plugins/ggml-classification/plugin.d.ts",
+      "import": "./dist/src/server/bare/plugins/ggml-classification/plugin.js"
     },
     "./plugin-utils": {
-      "types": "./dist/schemas/plugin.d.ts",
-      "import": "./dist/schemas/plugin.js"
+      "types": "./dist/src/schemas/plugin.d.ts",
+      "import": "./dist/src/schemas/plugin.js"
     },
-    "./expo-plugin": "./dist/expo/plugins/index.js",
+    "./expo-plugin": "./dist/src/expo/plugins/index.js",
     "./electron-forge": {
-      "require": "./electron-forge/index.cjs",
-      "import": "./electron-forge/index.cjs",
-      "default": "./electron-forge/index.cjs"
+      "require": "./src/electron-forge/index.cjs",
+      "import": "./src/electron-forge/index.cjs",
+      "default": "./src/electron-forge/index.cjs"
     },
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-core": {
-      "import": "./dist/server/worker-core.js"
+      "import": "./dist/src/server/worker-core.js"
     },
     "./plugins": {
-      "import": "./dist/server/plugins/index.js"
+      "import": "./dist/src/server/plugins/index.js"
     },
     "./logging": {
-      "import": "./dist/logging/index.js"
+      "import": "./dist/src/logging/index.js"
     },
     "./commands": {
-      "types": "./dist/commands/index.d.ts",
-      "import": "./dist/commands/index.js"
+      "types": "./dist/src/commands/index.d.ts",
+      "import": "./dist/src/commands/index.js"
     },
     "./models": {
-      "types": "./dist/models/registry/index.d.ts",
-      "import": "./dist/models/registry/index.js",
-      "require": "./dist/models/registry/index.js"
+      "types": "./dist/src/models/registry/index.d.ts",
+      "import": "./dist/src/models/registry/index.js",
+      "require": "./dist/src/models/registry/index.js"
     },
-    "./pear-pre": "./dist/pear/pre.js"
+    "./pear-pre": "./dist/src/pear/pre.js"
   },
   "imports": {
     "#rpc": {
-      "react-native": "./dist/client/rpc/expo-rpc-client.js",
-      "bare": "./dist/client/rpc/bare-client.js",
-      "default": "./dist/client/rpc/node-rpc-client.js"
+      "react-native": "./dist/src/client/rpc/expo-rpc-client.js",
+      "bare": "./dist/src/client/rpc/bare-client.js",
+      "default": "./dist/src/client/rpc/node-rpc-client.js"
     }
   },
   "expo": {
     "plugins": [
-      "./dist/expo/plugins/index.js"
+      "./dist/src/expo/plugins/index.js"
     ]
   },
   "files": [
     "bare-imports.json",
     "dist/**/*",
-    "electron-forge/**/*",
-    "expo/plugins/patches/**/*",
+    "src/electron-forge/**/*",
+    "src/expo/plugins/patches/**/*",
     "!dist/**/*.map",
     "!**/package-lock.json",
     "!**/yarn.lock",
@@ -193,7 +193,7 @@
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
-    "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
+    "watch": "nodemon --watch src --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
     "bare:ensureprebuilds:embeddings": "cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/embed-llamacpp/prebuilds/android-arm64 node_modules/@qvac/embed-llamacpp/prebuilds/android-x64",

@@ -6,17 +6,17 @@
     "target": "ES2022",
     "module": "ES2022",
     "types": ["node"],
-    "typeRoots": ["./types", "./node_modules/@types"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@qvac/sdk": ["./index.ts"],
+      "@qvac/sdk": ["./src/index.ts"],
       "@qvac/sdk/llamacpp-completion/plugin": [
-        "./server/bare/plugins/llamacpp-completion/plugin.ts"
+        "./src/server/bare/plugins/llamacpp-completion/plugin.ts"
       ],
-      "@/*": ["./*"]
+      "@/*": ["./src/*"]
     },
     "outDir": "./dist",
     "declaration": true,
