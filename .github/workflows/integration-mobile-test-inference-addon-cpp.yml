@@ -1,0 +1,279 @@
+name: Mobile Integration Tests (inference-addon-cpp)
+
+# Runs the inference-addon-cpp integration suite on real iOS + Android devices
+# (AWS Device Farm), mirroring integration-mobile-test-embed-llamacpp.yml.
+#
+# inference-addon-cpp is a header-only library with no published npm package and
+# no prebuild pipeline, so — unlike the llamacpp addons — this workflow BUILDS
+# the mobile test addon's `.bare` prebuilds itself in the prebuild-android /
+# prebuild-ios jobs and hands them to the shared
+# run-mobile-integration-tests/setup action via per-matrix artifacts
+# (`infer-cpp-<platform>-arm64`). Everything downstream (app build, Device Farm
+# upload/schedule/monitor) is the shared composite action, unchanged.
+#
+# Test scope (phase 1): the js-create-double marshalling test only. Advisory
+# (continue-on-error) until on-device flake is characterised. See
+# packages/inference-addon-cpp/mobile/.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+
+env:
+  ADDON_WORKDIR: packages/inference-addon-cpp/mobile
+  PREBUILD_PREFIX: infer-cpp-
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build the mobile test addon's native prebuilds. The header-only library +
+  # cmake-bare build has no vcpkg / private-registry dependency, so this is a
+  # plain cross-compile. Android needs `-D ANDROID_STL=c++_shared` for libc++
+  # (same flag the C++ unit-test workflow uses); iOS builds for device (arm64),
+  # and setup/ derives the simulator variant.
+  # ---------------------------------------------------------------------------
+  prebuild-android:
+    name: Prebuild (Android arm64)
+    runs-on: qvac-ubuntu2204-x64
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install Bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Configure Android cross-compilation
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64" >> "$GITHUB_ENV"
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> "$GITHUB_ENV"
+
+      - name: Build Android prebuild
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        run: |
+          npm install --ignore-scripts
+          bare-make generate --platform android --arch arm64 -D ANDROID_STL=c++_shared
+          bare-make build
+          bare-make install
+          test -f prebuilds/android-arm64/inference-addon-cpp-mobile-tests.bare
+
+      - name: Upload Android prebuild artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ env.PREBUILD_PREFIX }}android-arm64
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          if-no-files-found: error
+          retention-days: 1
+
+  prebuild-ios:
+    name: Prebuild (iOS arm64)
+    runs-on: macos-14
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install Bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Setup CMake on macOS
+        run: |
+          cd ..
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz -o cmake-3.31.6-macos-universal.tar.gz
+          tar -xzf cmake-3.31.6-macos-universal.tar.gz
+          echo "$PWD/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+
+      - name: Build iOS prebuild
+        working-directory: ${{ env.ADDON_WORKDIR }}
+        run: |
+          npm install --ignore-scripts
+          bare-make generate --platform ios --arch arm64
+          bare-make build
+          bare-make install
+          test -f prebuilds/ios-arm64/inference-addon-cpp-mobile-tests.bare
+
+      - name: Upload iOS prebuild artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ env.PREBUILD_PREFIX }}ios-arm64
+          path: ${{ env.ADDON_WORKDIR }}/prebuilds
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build the Device Farm app around the prebuilt addon and run the suite on
+  # real devices. Identical shape to integration-mobile-test-embed-llamacpp.yml.
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    name: Build ${{ matrix.platform }} and Run E2E Tests
+    needs:
+      - prebuild-android
+      - prebuild-ios
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    timeout-minutes: 120
+    continue-on-error: true # advisory until on-device flake is characterised
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Android
+            os: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
+
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Validate mobile tests are up-to-date
+        working-directory: addon/${{ env.ADDON_WORKDIR }}
+        run: npm run test:mobile:validate || true
+
+      - name: Setup mobile test environment
+        uses: ./.github/actions/run-mobile-integration-tests/setup
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ env.ADDON_WORKDIR }}
+          addon-npm-name: 'inference-addon-cpp-mobile-tests'
+          prebuild-artifact-prefix: ${{ env.PREBUILD_PREFIX }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ env.ADDON_WORKDIR }}
+          addon-npm-name: 'inference-addon-cpp-mobile-tests'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload to Device Farm
+        id: upload
+        uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: ${{ env.ADDON_WORKDIR }}
+          app-path: ${{ steps.build.outputs.app-path }}
+          app-type: ${{ steps.build.outputs.app-type }}
+          app-name: ${{ steps.build.outputs.app-name }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          device-farm-project-arn: ${{ secrets.INFERCPP_AWS_DEVICE_FARM_PROJECT_ARN }}
+          enables-perf: 'false'
+
+      - name: Schedule Device Farm test run
+        id: schedule
+        uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
+        with:
+          platform: ${{ matrix.platform }}
+          device-farm-project-arn: ${{ secrets.INFERCPP_AWS_DEVICE_FARM_PROJECT_ARN }}
+          android-device-pool-arn: ${{ secrets.INFERCPP_ANDROID_DEVICE_POOL_ARN }}
+          ios-device-pool-arn: ${{ secrets.INFERCPP_IOS_DEVICE_POOL_ARN }}
+          app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
+          test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: 'single-pool'
+
+      - name: Monitor Device Farm test run
+        id: monitor
+        uses: ./.github/actions/run-mobile-integration-tests/monitor-test-run
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          run-count: ${{ steps.schedule.outputs.run-count }}
+          test-specs: ${{ steps.upload.outputs.test-specs }}
+
+      - name: Cancel Device Farm runs on workflow cancellation
+        if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: ./.github/actions/run-mobile-integration-tests/cancel-device-farm-runs
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Collect and upload Device Farm logs
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/collect-and-upload-logs
+        with:
+          platform: ${{ matrix.platform }}
+          addon-npm-name: 'inference-addon-cpp-mobile-tests'
+          enables-perf: 'false'
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Comment results on PR
+        if: always() && !cancelled()
+        uses: ./.github/actions/run-mobile-integration-tests/comment-on-pr
+        with:
+          addon-npm-name: 'inference-addon-cpp-mobile-tests'
+          platform: ${{ matrix.platform }}
+          test-result: ${{ steps.monitor.outputs.test-result }}
+          test-total: ${{ steps.monitor.outputs.test-total }}
+          test-passed: ${{ steps.monitor.outputs.test-passed }}
+          test-failed: ${{ steps.monitor.outputs.test-failed }}
+          test-skipped: ${{ steps.monitor.outputs.test-skipped }}
+          user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
+          user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}

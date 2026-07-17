@@ -1,0 +1,97 @@
+name: On PR Trigger (inference-addon-cpp)
+
+# Gated entrypoint for the inference-addon-cpp mobile integration tests.
+# Mirrors on-pr-llm-llamacpp.yml's gating (label-gate + ci-router), trimmed to
+# just the mobile stage. The desktop C++/JS suites keep their own dedicated
+# `pull_request` workflows (pr-test-inference-addon-cpp*.yml) — this file only
+# adds the privileged, secret-bearing mobile-on-Device-Farm path.
+#
+# Mobile runs only when BOTH labels are present on the PR:
+#   - `verified`                 (applied by a trusted actor; authorises secrets)
+#   - `run-mobile-addon-tests`   (selects the mobile stage)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/inference-addon-cpp/**"
+      - ".github/workflows/*inference-addon-cpp*.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_mobile: ${{ steps.route.outputs.run_mobile }}
+    steps:
+      - name: Checkout ci-router composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
+  run-mobile-integration-tests:
+    needs:
+      - label-gate
+      - ci-router
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true'
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-inference-addon-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
