@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "qvac"
+version = "0.1.0"
+description = "Generated Python client for the QVAC SDK worker RPC"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = ["pydantic>=2.6,<3"]
+
+[project.optional-dependencies]
+gen = ["datamodel-code-generator==0.68.0", "black==26.5.1", "ruff==0.15.21"]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.15.21", "mypy==2.3.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/qvac"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+# black owns line-wrapping; E501 only fires on lines black leaves long
+# because splitting them would be wrong (e.g. a single string literal),
+# so it's pure noise on top of an already-formatted codebase.
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "qvac._generated.models._internal"
+# JSON Schema can only express a default as a bare value (e.g.
+# `"default": "diffusion"`); datamodel-code-generator carries that
+# straight through as a plain str literal even when the field's type is
+# an enum, so mypy sees `field: SomeEnum | None = "diffusion"` as a
+# genuine mismatch. It's not one at runtime: qvac._generated_base sets
+# validate_default=True, so pydantic coerces the literal into the right
+# enum member on construction (verified: `Model().field == SomeEnum.x`
+# is True). Scoped to this one generated module, not project-wide.
+disable_error_code = ["assignment"]

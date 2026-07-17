@@ -20,6 +20,13 @@ inline constexpr int kBackendDeviceGpu = 1;
 // loaded".
 inline constexpr int kBackendIdNone = -1;
 
+// n_gpu_layers value meaning "offload every layer to the GPU", forwarded to
+// tts-cpp when a caller expresses GPU intent via the boolean useGpu switch
+// without an explicit layer count (llama.cpp's large-number convention;
+// tts-cpp clamps it to the model's real layer count). Shared by both engines
+// so the useGpu->layers mapping can't drift between them.
+inline constexpr int kOffloadAllGpuLayers = 99;
+
 inline int backendIdFromName(const std::string& name) {
   if (name == "CPU") return 0;
   if (name.rfind("Metal",  0) == 0 || name.rfind("MTL", 0) == 0) return 1;
