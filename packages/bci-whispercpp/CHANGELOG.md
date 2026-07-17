@@ -9,7 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `bci.js`, `configChecker.js`, `addonLogging.js`, `lib/*.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and transcription output are unchanged.
 - Faster desktop neural-signal preprocessing on the GPU (Vulkan) and CPU paths. Public API and transcription output are unchanged.
+- Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`whisper-cpp` override 1.9.1#3, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels. The addon now loads the dynamically-loadable ggml backends on linux-arm64 (previously Android-only).
+- Refactored the JS and native internals to the team coding standards: extracted loops and large functions into named helpers, replaced magic numbers and repeated string literals with named constants (shared stream-header layout and addon-event names), and removed tracker-coupled comments. Behavior-preserving; public API and transcription output are unchanged.
 
 ## [0.5.0] - 2026-07-14
 

@@ -653,7 +653,7 @@ test('run | warns when moe_boundary is set without highNoiseDiffusionModel', asy
   )
 })
 
-test('run | does NOT warn about Wan 2.2 fields when highNoiseDiffusionModel is set', async (t) => {
+test('run | warns when Wan 2.2 phase stats are not yet supported', async (t) => {
   const { logger, events } = makeRecording()
   const m = new VideoStableDiffusion({
     files: {
@@ -674,9 +674,13 @@ test('run | does NOT warn about Wan 2.2 fields when highNoiseDiffusionModel is s
     }),
     /Addon not initialized/
   )
+  t.ok(
+    events.warn.some((w) => /phase timing stats.*single-expert/.test(w)),
+    'warns that phase timing does not aggregate Wan 2.2 experts'
+  )
   t.absent(
     events.warn.some((w) => /Wan 2\.2-only/.test(w)),
-    'no false warning when high-noise expert is configured'
+    'does not warn that configured high-noise fields will be ignored'
   )
 })
 

@@ -1,6 +1,11 @@
 'use strict'
 
-const { countScalars } = require('./textChunker')
+const { countScalars, defaultMaxChunkScalars } = require('./textChunker')
+
+// Idle flush delay: emit the buffered fragment when no new fragment arrives
+// within this window (timer reset on each fragment). Shared with the
+// runStreaming default in index.js so the two never drift.
+const DEFAULT_FLUSH_AFTER_MS = 500
 
 /**
  * @param {string} s
@@ -47,8 +52,7 @@ function buildSentenceEndTester(opts) {
  * @param {string} [language]
  */
 function defaultMaxBufferScalars(language) {
-  const lang = (language || 'en').toLowerCase()
-  return lang === 'ko' ? 120 : 300
+  return defaultMaxChunkScalars(language)
 }
 
 /**
@@ -66,7 +70,7 @@ function defaultMaxBufferScalars(language) {
  * @returns {AsyncGenerator<string, void, void>}
  */
 async function* accumulateTextStream(source, opts) {
-  const flushAfterMs = opts.flushAfterMs != null ? opts.flushAfterMs : 500
+  const flushAfterMs = opts.flushAfterMs != null ? opts.flushAfterMs : DEFAULT_FLUSH_AFTER_MS
   const defaultMax = defaultMaxBufferScalars(opts.language)
   let maxScalars
   if (opts.maxBufferScalars == null) {
@@ -169,5 +173,6 @@ module.exports = {
   accumulateTextStream,
   defaultMaxBufferScalars,
   buildSentenceEndTester,
-  splitGraphemeHead
+  splitGraphemeHead,
+  DEFAULT_FLUSH_AFTER_MS
 }
