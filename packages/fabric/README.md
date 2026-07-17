@@ -77,3 +77,5 @@ npm run build   # bare-make generate && bare-make build && bare-make install
 | Windows | (default MSVC) | static inside `.bare` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |
 | iOS | `arm64-ios` | static inside `.bare` |
+
+<!-- merge-guard validation no-op (addon), QVAC-18048 -->
