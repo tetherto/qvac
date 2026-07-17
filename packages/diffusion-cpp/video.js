@@ -533,10 +533,18 @@ class VideoStableDiffusion {
     }
 
     // ── Wan 2.2 sanity check ─────────────────────────────────────────────
-    // Friendly warning when high-noise-only params are set without a
-    // high-noise expert configured on the context.
+    // Phase timings currently track the supported single-expert sampler path.
+    // A Wan 2.2 job uses separate high- and low-noise sampler invocations, so
+    // its phase fields cannot yet report the combined denoise duration/rate.
     const hasHighNoiseExpert = !!this._files.highNoiseDiffusionModel
-    if (!hasHighNoiseExpert) {
+    if (hasHighNoiseExpert) {
+      this.logger.warn(
+        'Wan 2.2 phase timing stats currently cover only single-expert generation; ' +
+          'the high- and low-noise sampling stages are not yet measured together.'
+      )
+    } else {
+      // Friendly warning when high-noise-only params are set without a
+      // high-noise expert configured on the context.
       const highNoiseParams = [
         'high_noise_steps',
         'high_noise_sampler',

@@ -1,30 +1,41 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
   "addon": true,
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js index.d.ts addon.d.ts",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
-    "lint": "standard --ignore \"addon/**\"",
-    "lint:fix": "standard --ignore \"addon/**\" --fix",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",
+    "lint:js": "standard --ignore \"addon/**\"",
+    "lint:js:fix": "standard --ignore \"addon/**\" --fix",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
-    "test": "npm run test:integration",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run test:types && npm run test:integration",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
-    "test:dts": "tsc -p tsconfig.dts.json",
+    "test:dts": "npm run test:types",
+    "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
   },
   "standard": {
     "ignore": [
+      "index.js",
+      "addon.js",
       "addon/**",
       "third-party/**",
       "prebuilds/**",
@@ -37,6 +48,7 @@
     "index.js",
     "addon.js",
     "index.d.ts",
+    "addon.d.ts",
     "prebuilds",
     "weights",
     "test/mobile",
@@ -61,8 +73,12 @@
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "standard": "^17.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/infer-base": "^0.4.0",
@@ -79,9 +95,7 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
-    },
-    "./addon.js": "./addon.js",
-    "./binding.js": "./binding.js"
+    }
   },
   "types": "index.d.ts"
 }
