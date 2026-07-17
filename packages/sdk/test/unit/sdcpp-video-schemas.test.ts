@@ -52,6 +52,11 @@ test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
   const result = videoStatsSchema.safeParse({
     modelLoadMs: 500,
     generationMs: 1234,
+    conditionerMs: 100,
+    denoiseMs: 800,
+    vaeMs: 200,
+    postProcessMs: 134,
+    stepsPerSecond: 25,
     totalGenerationMs: 1234,
     totalWallMs: 1734,
     totalSteps: 20,
@@ -276,15 +281,20 @@ test('videoStreamResponseSchema: accepts progress, output, and final stats chunk
 
   t.is(
     videoStreamResponseSchema.safeParse({
-      type: 'videoStream',
-      done: true,
-      stats: {
-        generationMs: 1234,
-        totalVideos: 1,
-        totalVideoFrames: 5,
-        videoFrames: 5,
-        fps: 16
-      }
+    type: 'videoStream',
+    done: true,
+    stats: {
+      generationMs: 1234,
+      conditionerMs: 100,
+      denoiseMs: 800,
+      vaeMs: 200,
+      postProcessMs: 134,
+      stepsPerSecond: 25,
+      totalVideos: 1,
+      totalVideoFrames: 5,
+      videoFrames: 5,
+      fps: 16
+    }
     }).success,
     true
   )
