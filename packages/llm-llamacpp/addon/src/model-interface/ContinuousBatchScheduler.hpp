@@ -290,15 +290,6 @@ public:
   /// `clear()`) when admitting a batch and any one request fails.
   [[nodiscard]] uint32_t submit(SubmitRequest&& request);
 
-  /// Drives one fillBatch + decode + advance + sample iteration.
-  /// Returns `true` on a successful decode *or* a no-op (no slot had
-  /// tokens to feed). Returns `false` if `llama_decode` reported a
-  /// non-zero rc; in that case every still-active slot has already
-  /// been finalised with `StopReason::DecodeError`, KV-cleared, and
-  /// drained, so the caller's only obligation is to break out of its
-  /// driving loop.
-  [[nodiscard]] bool step();
-
   [[nodiscard]] bool hasWork() const;
 
   [[nodiscard]] unsigned numActive() const;
@@ -415,6 +406,13 @@ private:
   void workerLoop();
   void admitPendingIntoFreeSlotsLocked();
   [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
+  /// Drives one fillBatch + decode + advance + sample iteration.
+  /// Returns `true` on a successful decode *or* a no-op (no slot had
+  /// tokens to feed). Returns `false` if `llama_decode` reported a
+  /// non-zero rc; in that case every still-active slot has already
+  /// been finalised with `StopReason::DecodeError`, KV-cleared, and
+  /// drained, so the caller's only obligation is to break out of its
+  /// driving loop.
   [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
   /// Evaluate the head media barrier of one awaiting slot (lowest seqId)
   /// via its driver, unlocking around the embedded `llama_decode`. A
