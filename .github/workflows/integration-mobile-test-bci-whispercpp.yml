@@ -191,6 +191,11 @@ jobs:
           platform: ${{ matrix.platform }}
           step-summary-title: 'Mobile Performance: bci (${{ matrix.platform }})'
           artifact-name: perf-report-bci-whispercpp-${{ matrix.platform }}-${{ github.run_number }}
+          # iOS (and multi-device Android pools) write the PERF_REPORT markers
+          # into bare_console.log inside Customer_Artifacts.zip; unzip them so
+          # extract-from-log.js can find the per-device performance reports.
+          # Without this iOS produces no benchmark rows. Mirrors parakeet.
+          unzip-customer-artifacts: 'true'
 
       - name: Comment results on PR
         if: always() && !cancelled()

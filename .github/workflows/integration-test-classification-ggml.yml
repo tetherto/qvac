@@ -84,20 +84,32 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: npm install --ignore-scripts
 
-      - name: Download prebuild artifacts
+      # Prebuilds live in the merged `prebuilds` bundle artifact, which is always present
+      # regardless of how they were produced: the prebuild `merge` job uploads it on a fresh
+      # build, and prebuild-artifact-reuse re-publishes it on a reuse-cache hit. The per-PR
+      # per-platform artifacts (classification-ggml-<platform>-<arch>) only exist on a fresh
+      # build, so downloading by that name matched nothing on a reuse hit and the copy below
+      # failed. The bundle is laid out as top-level <platform>-<arch>/ dirs; extract just this
+      # job's platform below.
+      - name: Download prebuilds bundle
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: classification-ggml-${{ matrix.platform }}-${{ matrix.arch }}*
+          name: prebuilds
           path: ${{ runner.temp }}/prebuilds-staging
-          merge-multiple: true
 
       - name: Move prebuilds from staging to workspace (Unix)
         if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
         shell: bash
         run: |
+          SRC="${{ runner.temp }}/prebuilds-staging/${{ matrix.platform }}-${{ matrix.arch }}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            ls -la "${{ runner.temp }}/prebuilds-staging" 2>/dev/null || true
+            exit 1
+          fi
           mkdir -p ${{ env.PKG_DIR }}/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ env.PKG_DIR }}/prebuilds/
+          cp -r "$SRC" ${{ env.PKG_DIR }}/prebuilds/
           echo "Prebuilds moved from staging area"
           ls -la ${{ env.PKG_DIR }}/prebuilds/
 
@@ -109,9 +121,15 @@ jobs:
         if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
         shell: powershell
         run: |
+          $src = "${{ runner.temp }}\prebuilds-staging\${{ matrix.platform }}-${{ matrix.arch }}"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
+            if (Test-Path "${{ runner.temp }}\prebuilds-staging") { Get-ChildItem -Force "${{ runner.temp }}\prebuilds-staging" | Format-Table -AutoSize }
+            exit 1
+          }
           $dst = "${{ env.PKG_DIR }}/prebuilds"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Copy-Item -Recurse -Force $src $dst
           Write-Host "Prebuilds moved from staging area"
           Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 

@@ -23,10 +23,12 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const BASE_TIMEOUT = 600000
 const testTimeout = isWindows || isMobileDevice ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
-// Smallest model for fast behavior tests
+// SD2.1 model for fast behavior tests. Q8_0 is used (not Q4_0): the gpustack
+// Q4_0 file is served over legacy LFS with a stored blob whose bytes do not
+// match its own content address, so it cannot be provenance-verified. Q8_0 is
+// Xet-backed with a matching content address.
 const MODEL = {
-  name: 'stable-diffusion-v2-1-Q4_0.gguf',
-  url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q4_0.gguf'
+  name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
 
 // Many steps so cancel has time to fire before completion
@@ -61,8 +63,7 @@ async function setupModel(t) {
   setupJsLogger(binding)
 
   const [modelName, modelDir] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
+    modelName: MODEL.name
   })
 
   const model = new ImgStableDiffusion({
@@ -128,11 +129,11 @@ safeTest('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, 
     if (!isWarmup) {
       t.comment(
         recordPerformance(
-          '[SD2.1 Q4_0 txt2img 256x256] [' + (useCpu ? 'CPU' : 'GPU') + ']',
+          '[SD2.1 Q8_0 txt2img 256x256] [' + (useCpu ? 'CPU' : 'GPU') + ']',
           response.stats,
           {
             scenario: 'txt2img',
-            model: 'stable-diffusion-v2-1-Q4_0',
+            model: 'stable-diffusion-v2-1-Q8_0',
             execution_provider: useCpu ? 'cpu' : 'gpu',
             ttfbMs
           }
@@ -253,8 +254,7 @@ safeTest('cancel | run: can run again after cancel', { timeout: testTimeout }, a
 
 safeTest('run() before load() throws clear initialization error', { timeout: 60000 }, async (t) => {
   const [, modelDir] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
+    modelName: MODEL.name
   })
 
   const model = new ImgStableDiffusion({

@@ -189,10 +189,10 @@ jobs:
               case "$sel" in
                 linux-cpu)   host=linux;   backend=cpu; runner=$cpu_runner;             no_gpu=true ;;
                 linux-gpu)   host=linux;   backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
-                # macOS arm64 (Apple Silicon): same GitHub-hosted runner for both
+                # macOS arm64 (Apple Silicon): same self-hosted runner for both
                 # backends — gpu means Metal there, selected by the addon at runtime.
-                macos-cpu)   host=macos;   backend=cpu; runner=macos-15-xlarge;          no_gpu=true ;;
-                macos-gpu)   host=macos;   backend=gpu; runner=macos-15-xlarge;          no_gpu=false ;;
+                macos-cpu)   host=macos;   backend=cpu; runner=qvac-macos26-arm64-gpu;   no_gpu=true ;;
+                macos-gpu)   host=macos;   backend=gpu; runner=qvac-macos26-arm64-gpu;   no_gpu=false ;;
                 # Bare-metal Apple M4 (self-hosted Mac mini) — real-hardware Metal
                 # numbers vs the virtualized macos-* runner above.
                 macmini-cpu) host=macmini; backend=cpu; runner=mac-mini-m4-gpu;          no_gpu=true ;;

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "GGML-backed OCR addon for qvac (EasyOCR pipeline on GGUF weights)",
   "addon": true,
   "engines": {

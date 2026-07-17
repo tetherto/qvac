@@ -13,17 +13,21 @@ function makeId(prefix: string): string {
 async function withRegisteredVideoModel<T>(
   runImpl: (params: unknown) => Promise<unknown>,
   body: (modelId: string) => Promise<T>,
-  cancelImpl: () => Promise<void> = async function () {}
+  cancelImpl: () => Promise<void> = async function () {},
+  isLtx = false
 ) {
-  const [{ registerModel, unregisterModel }, { ModelType }] = await Promise.all([
-    import('@/server/bare/registry/model-registry'),
-    import('@/schemas')
-  ])
+  const [{ registerModel, unregisterModel }, { ModelType }, { markLtxVideoModel }] =
+    await Promise.all([
+      import('@/server/bare/registry/model-registry'),
+      import('@/schemas'),
+      import('@/server/bare/plugins/sdcpp-generation/ops/video')
+    ])
   const modelId = makeId('test-video')
   const fakeModel = Object.create(VideoStableDiffusion.prototype) as Record<string, unknown>
   fakeModel['load'] = async function () {}
   fakeModel['run'] = runImpl
   fakeModel['cancel'] = cancelImpl
+  if (isLtx) markLtxVideoModel(fakeModel as unknown as VideoStableDiffusion)
 
   try {
     registerModel(modelId, {
@@ -97,6 +101,81 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
   )
 })
 
+test('video op: maps addon numeric hasAudio to a boolean in final stats', async function (t) {
+  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+
+  await withRegisteredVideoModel(
+    async function () {
+      return {
+        // Addon reports hasAudio as a 1/0 flag; the op must surface a boolean.
+        stats: {
+          generationMs: 1200,
+          totalVideos: 1,
+          videoFrames: 121,
+          fps: 24,
+          hasAudio: 1,
+          audioSampleRate: 48000
+        },
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async (modelId) => {
+      const chunks = []
+      for await (const chunk of videoOp({
+        modelId,
+        mode: 'txt2vid',
+        prompt: 'a jazz band with synced audio',
+        video_frames: 121
+      })) {
+        chunks.push(chunk)
+      }
+
+      const finalChunk = chunks[chunks.length - 1]
+      t.is(finalChunk?.done, true)
+      t.is(finalChunk?.stats?.hasAudio, true, 'numeric 1 → boolean true')
+      t.is(finalChunk?.stats?.audioSampleRate, 48000)
+    }
+  )
+})
+
+test('video op: silent video maps hasAudio 0 to false', async function (t) {
+  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+
+  await withRegisteredVideoModel(
+    async function () {
+      return {
+        stats: {
+          generationMs: 1200,
+          totalVideos: 1,
+          videoFrames: 121,
+          fps: 24,
+          hasAudio: 0,
+          audioSampleRate: 0
+        },
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async (modelId) => {
+      const chunks = []
+      for await (const chunk of videoOp({
+        modelId,
+        mode: 'txt2vid',
+        prompt: 'a silent clip',
+        video_frames: 121
+      })) {
+        chunks.push(chunk)
+      }
+
+      const finalChunk = chunks[chunks.length - 1]
+      t.is(finalChunk?.stats?.hasAudio, false, 'numeric 0 → boolean false')
+    }
+  )
+})
+
 test('video op: forwards img2vid init_image and strength to model.run', async function (t) {
   const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
   let observed: Record<string, unknown> | undefined
@@ -129,6 +208,147 @@ test('video op: forwards img2vid init_image and strength to model.run', async fu
       t.ok(observed?.['init_image'] instanceof Uint8Array)
       t.is((observed?.['init_image'] as Uint8Array).length > 0, true)
     }
+  )
+})
+
+test('video op: LTX-2 img2vid forwards init_image, strength, and temporal_tiling', async function (t) {
+  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  let observed: Record<string, unknown> | undefined
+
+  await withRegisteredVideoModel(
+    async function (params: unknown) {
+      observed = params as Record<string, unknown>
+      return {
+        stats: { generationMs: 1, totalVideos: 1 },
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async (modelId) => {
+      for await (const _chunk of videoOp({
+        modelId,
+        mode: 'img2vid',
+        prompt: 'the subject slowly turns and smiles',
+        init_image: PNG_B64,
+        strength: 0.85,
+        video_frames: 121,
+        temporal_tiling: true
+      })) {
+        // drain
+      }
+
+      t.ok(observed, 'model.run was called')
+      t.is(observed?.['mode'], 'img2vid')
+      t.ok(observed?.['init_image'] instanceof Uint8Array)
+      t.is(observed?.['strength'], 0.85)
+      t.is(observed?.['temporal_tiling'], true)
+    }
+  )
+})
+
+test('video op: forwards temporal_tiling to model.run (LTX-2 video VAE knob)', async function (t) {
+  const { video: videoOp } = await import('@/server/bare/plugins/sdcpp-generation/ops/video')
+  let observed: Record<string, unknown> | undefined
+
+  await withRegisteredVideoModel(
+    async function (params: unknown) {
+      observed = params as Record<string, unknown>
+      return {
+        stats: { generationMs: 1, totalVideos: 1 },
+        iterate: async function* () {
+          yield new Uint8Array([82, 73, 70, 70])
+        }
+      }
+    },
+    async (modelId) => {
+      for await (const _chunk of videoOp({
+        modelId,
+        mode: 'txt2vid',
+        prompt: 'a claymation cat playing jazz',
+        video_frames: 121,
+        temporal_tiling: true
+      })) {
+        // drain
+      }
+
+      t.ok(observed, 'model.run was called')
+      t.is(observed?.['temporal_tiling'], true)
+    }
+  )
+})
+
+test('video op: rejects invalid LTX-2 dimensions and frame counts before generation', async function (t) {
+  const [{ video: videoOp }, { PluginRequestValidationFailedError }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/video'),
+    import('@/utils/errors-server')
+  ])
+  let runCalls = 0
+
+  await withRegisteredVideoModel(
+    async function () {
+      runCalls++
+      return {
+        iterate: async function* () {}
+      }
+    },
+    async function (modelId) {
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 528,
+            height: 320,
+            video_frames: 121
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 496,
+            video_frames: 121
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 320,
+            video_frames: 13
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      await t.exception(
+        async function () {
+          await videoOp({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'a fox',
+            width: 512,
+            height: 320,
+            video_frames: 265
+          }).next()
+        },
+        PluginRequestValidationFailedError as unknown as new () => Error
+      )
+      t.is(runCalls, 0, 'invalid LTX-2 requests never reach model.run')
+    },
+    async function () {},
+    true
   )
 })
 

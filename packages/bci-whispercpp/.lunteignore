@@ -9,3 +9,8 @@ test/unit/all.js
 test/integration/all.js
 test/results
 *.d.ts
+index.js
+bci.js
+configChecker.js
+addonLogging.js
+lib

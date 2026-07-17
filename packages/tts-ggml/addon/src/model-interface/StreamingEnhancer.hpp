@@ -135,6 +135,29 @@ private:
     return std::clamp(v, 0L, static_cast<long>(len));
   }
 
+  // Append the contiguous output span out[from, to) to result.
+  static void emitRange(std::vector<float>& result,
+                        const std::vector<float>& out, long from, long to) {
+    for (long j = from; j < to; ++j) {
+      result.push_back(out[static_cast<std::size_t>(j)]);
+    }
+  }
+
+  // Append a linear crossfade of the `xl` held samples into the new window's
+  // output (starting at oSent): weight w ramps 1/(xl+1) .. xl/(xl+1), so the
+  // previous window fades out as the new one fades in across the shared region.
+  static void emitCrossfade(std::vector<float>& result,
+                            const std::vector<float>& held,
+                            const std::vector<float>& out, long oSent,
+                            std::size_t xl) {
+    for (std::size_t k = 0; k < xl; ++k) {
+      const double w =
+          static_cast<double>(k + 1) / static_cast<double>(xl + 1);
+      result.push_back(static_cast<float>(
+          (1.0 - w) * held[k] + w * out[static_cast<std::size_t>(oSent) + k]));
+    }
+  }
+
   std::vector<float> process(bool finalPass) {
     const int64_t availEnd = inTotal_;
     // How far we can finalize: keep `marginIn_` of look-ahead on non-final
@@ -171,18 +194,10 @@ private:
     const long span = std::max(0L, oHeldEnd - oSent);
     const std::size_t xl =
         std::min(held_.size(), static_cast<std::size_t>(span));
-    for (std::size_t k = 0; k < xl; ++k) {
-      const double w = static_cast<double>(k + 1) / static_cast<double>(xl + 1);
-      result.push_back(
-          static_cast<float>(
-              (1.0 - w) * held_[k] +
-              w * out[static_cast<std::size_t>(oSent) + k]));
-    }
+    emitCrossfade(result, held_, out, oSent, xl);
     // Cover any rounding drift between the two windows' lengths with the new
     // window's samples (keeps the emitted stream input-contiguous).
-    for (long j = oSent + static_cast<long>(xl); j < oHeldEnd; ++j) {
-      result.push_back(out[static_cast<std::size_t>(j)]);
-    }
+    emitRange(result, out, oSent + static_cast<long>(xl), oHeldEnd);
 
     // --- Region B: fresh contiguous output (heldEndIn_, newSentEnd). ---
     // Hold back `crossfadeIn_` of just-committed audio (grid-snapped) so the
@@ -191,9 +206,7 @@ private:
         finalPass ? commitEnd
                   : std::max(heldEndIn_, alignDown(commitEnd - crossfadeIn_));
     const long oNewSent = outIndex(newSentEnd, winStart, L);
-    for (long j = oHeldEnd; j < oNewSent; ++j) {
-      result.push_back(out[static_cast<std::size_t>(j)]);
-    }
+    emitRange(result, out, oHeldEnd, oNewSent);
     sentIn_ = newSentEnd;
 
     // --- Reserve the new held (crossfade) span [newSentEnd, commitEnd). ---
