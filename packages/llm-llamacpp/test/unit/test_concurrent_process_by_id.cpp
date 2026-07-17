@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
@@ -215,6 +216,59 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsReportsObservedFigures) {
           test_common::getStatValue(generic, "generatedTokens")),
       perJobGenerated)
       << "the aggregate must equal the sum of the jobs' own counts";
+}
+
+/// Consuming a finished tagged job's stats is a pure hand-over of the
+/// terminal snapshot built when that run finished: it must not read - and
+/// above all must not reset - the live llama_context perf counters. A peer
+/// job can still be inside a decode step the scheduler runs with its mutex
+/// released, and llama.cpp commits those counters as plain non-atomic
+/// fields, so a reset from the jobEnded path is an unsynchronized data race
+/// on the shared context. The counters may only be reset by the explicitly
+/// requested whole-model runtimeStats().
+TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  std::any out = model->process(
+      std::any(makePrompt("What is two plus two? One word.")), JobId{1});
+  EXPECT_FALSE(std::any_cast<std::string>(out).empty());
+
+  // The finished run left its decode work in the context's perf counters.
+  const llama_perf_context_data before =
+      llama_perf_context(model->getContext());
+  ASSERT_GT(before.n_eval, 0)
+      << "test setup: the run left no eval work in the perf counters";
+
+  const auto stats = model->consumeJobStats(JobId{1});
+  ASSERT_FALSE(stats.empty()) << "job 1 left no observed stats";
+  // The terminal snapshot must still carry the complete model-level key set
+  // alongside the job's own figures.
+  for (const char* key :
+       {"TTFT",
+        "TPS",
+        "ppTPS",
+        "CacheTokens",
+        "generatedTokens",
+        "promptTokens",
+        "contextSlides",
+        "thinkingBlockDiscards",
+        "avgConcurrentSeq",
+        "backendDevice"}) {
+    const bool present =
+        std::any_of(stats.begin(), stats.end(), [key](const auto& stat) {
+          return stat.first == key;
+        });
+    EXPECT_TRUE(present) << "terminal snapshot lost model-level key: " << key;
+  }
+
+  const llama_perf_context_data after =
+      llama_perf_context(model->getContext());
+  EXPECT_EQ(after.n_eval, before.n_eval)
+      << "consumeJobStats reset the live llama perf counters; with a peer "
+         "mid-decode on the shared context that reset is an unsynchronized "
+         "data race";
 }
 
 /// Variant: multiple concurrent batched runs (micro-batch < parallel). Each
