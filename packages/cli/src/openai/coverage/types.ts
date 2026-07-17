@@ -48,6 +48,8 @@ export interface CoverageReport {
   specSource: string
   routerSource: string
   implementedCount: number
+  /** qvac-only endpoints implemented beyond the OpenAI spec (e.g. Open WebUI compatibility). */
+  extensions: string[]
   rows: CoverageRow[]
   summary: CoverageSummary
 }

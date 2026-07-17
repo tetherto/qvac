@@ -163,12 +163,12 @@
       "sha256": "b5310340b3a23d31655d7119d100d5df1b2d8ee17b3ca8b0a23ad7e9eb5fa705",
       "bytes": 3462678272
     },
-    "mmproj-google_gemma-4-E2B-it-bf16.gguf": {
+    "mmproj-google_gemma-4-E2B-it-f16.gguf": {
       "urls": [
-        "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf"
+        "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"
       ],
-      "sha256": "d460bb51ce5115232a723a7366694c8ee70d8aa8f60159d182a1da0777d10db3",
-      "bytes": 986833408
+      "sha256": "3397f2e15859d268dc91782e92e70c485c7780448d57d622d145374390168f71",
+      "bytes": 985653760
     },
     "SmolVLM2-500M-Video-Instruct-Q8_0.gguf": {
       "urls": [

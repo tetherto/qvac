@@ -38,6 +38,14 @@ inputs:
     description: "Whether to append the rendered report to GITHUB_STEP_SUMMARY"
     required: false
     default: "true"
+  device-pool-name:
+    description: "Selected Device Farm pool name (mobile families only; empty to omit)."
+    required: false
+    default: ""
+  device-pool-availability:
+    description: "Selected pool availability at scheduling time (HIGHLY_AVAILABLE | AVAILABLE | BUSY | TEMPORARY_NOT_AVAILABLE | UNKNOWN)."
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -80,6 +88,8 @@ runs:
         FILTER: ${{ inputs.filter }}
         EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
         UPDATE_SUMMARY: ${{ inputs.update-summary }}
+        DEVICE_POOL_NAME: ${{ inputs.device-pool-name }}
+        DEVICE_POOL_AVAILABILITY: ${{ inputs.device-pool-availability }}
       with:
         script: |
           const fs = require('fs');
@@ -109,6 +119,23 @@ runs:
           const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
           const configLine =
             `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
+
+          // Device pool status line (mobile only). Weather emojis are used on
+          // purpose so availability is not confused with pass/fail red/green.
+          const devicePoolName = process.env.DEVICE_POOL_NAME || '';
+          const devicePoolAvailability = (process.env.DEVICE_POOL_AVAILABILITY || '').trim();
+          const availabilityBadge = (value) => {
+            switch (value) {
+              case 'HIGHLY_AVAILABLE': return '☀️ highly available';
+              case 'AVAILABLE': return '⛅ available';
+              case 'BUSY': return '⛈️ busy';
+              case 'TEMPORARY_NOT_AVAILABLE': return '🌪️ temporarily unavailable';
+              default: return '❔ unknown';
+            }
+          };
+          const devicePoolLine = devicePoolName
+            ? `**Device pool:** \`${devicePoolName}\` — ${availabilityBadge(devicePoolAvailability)}`
+            : null;
 
           const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
             owner: context.repo.owner,
@@ -206,8 +233,9 @@ runs:
                 mark,
                 `### QVAC E2E — \`${platform}\` — ✅ all tests passed (${passed}/${total}, ${duration}s)`,
                 configLine,
+                devicePoolLine,
                 linksLine,
-              ];
+              ].filter((line) => line !== null);
               return lines.join('\n');
             }
 
@@ -216,10 +244,11 @@ runs:
               `### QVAC E2E — \`${platform}\` — ❌ failed`,
               `**Totals:** ${passed}/${total} passed · ${failed} failed · ${rate}% · ${duration}s`,
               configLine,
+              devicePoolLine,
               linksLine,
               '',
               '**Results by section**',
-            ];
+            ].filter((line) => line !== null);
 
             const failingCats = Object.entries(categories)
               .filter(([, c]) => Number(c.failed || 0) > 0)
@@ -305,10 +334,11 @@ runs:
                 marker(platform),
                 `### QVAC E2E — \`${platform}\` — ⚠️ no results`,
                 configLine,
+                devicePoolLine,
                 linksLine,
                 '',
-                'The test job did not produce a results artifact. Check the run for job-level failures.',
-              ].join('\n');
+                'The test job did not produce a results artifact (e.g. no device started within the start-timeout, or a job-level failure). Check the run and the device pool status above.',
+              ].filter((line) => line !== null).join('\n');
             } else {
               let results;
               try {
