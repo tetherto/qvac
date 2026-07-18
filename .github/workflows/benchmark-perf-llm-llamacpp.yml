@@ -437,7 +437,7 @@ jobs:
         env:
           COMPARE_RUN_ID: ${{ inputs.compare_run_id }}
         run: |
-          if ! find baseline-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          if [ "$(find baseline-reports -name '*.json' -type f 2>/dev/null | wc -l)" -eq 0 ]; then
             echo "::error::No baseline artifacts found for run $COMPARE_RUN_ID (wrong run ID, or artifacts expired past the 90-day retention). A comparison was requested but cannot be produced."
             exit 1
           fi
@@ -450,7 +450,12 @@ jobs:
           ADDON_VERSION: ${{ steps.addon_ver.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          if ! find combined-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          # Count with wc, not `find | grep -q`: under `set -o pipefail` grep -q
+          # closes the pipe on the first match, find gets SIGPIPE, and the
+          # pipeline reports a false non-zero — misreading a present (and, with
+          # more shards, larger) report set as "none found". wc consumes all of
+          # find's output, so find never gets SIGPIPE.
+          if [ "$(find combined-reports -name '*.json' -type f 2>/dev/null | wc -l)" -eq 0 ]; then
             echo "::error::No benchmark reports found for run $ARTIFACT_RUN_ID. Nothing to render."
             exit 1
           fi
@@ -465,7 +470,7 @@ jobs:
           if [ -n "$ADDON_VERSION" ]; then
             ARGS+=(--addon-version "$ADDON_VERSION")
           fi
-          if [ -d baseline-reports ] && find baseline-reports -name "*.json" -type f 2>/dev/null | grep -q .; then
+          if [ -d baseline-reports ] && [ "$(find baseline-reports -name '*.json' -type f 2>/dev/null | wc -l)" -ne 0 ]; then
             ARGS+=(--compare-dir baseline-reports)
             if [ -n "$COMPARE_RUN_ID" ]; then
               ARGS+=(--baseline-run-id "$COMPARE_RUN_ID")
