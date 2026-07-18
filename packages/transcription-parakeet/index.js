@@ -1,6 +1,4 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.TranscriptionParakeet = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const QvacLogger = require("@qvac/logging");
@@ -281,7 +279,6 @@ class TranscriptionParakeet {
         return this.addon;
     }
 }
-exports.TranscriptionParakeet = TranscriptionParakeet;
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the package's established class namespace API.
 (function (TranscriptionParakeet) {
     /**
@@ -296,6 +293,5 @@ exports.TranscriptionParakeet = TranscriptionParakeet;
         BackendId[BackendId["OpenCL"] = 4] = "OpenCL";
         BackendId[BackendId["Other"] = 99] = "Other";
     })(BackendId = TranscriptionParakeet.BackendId || (TranscriptionParakeet.BackendId = {}));
-})(TranscriptionParakeet || (exports.TranscriptionParakeet = TranscriptionParakeet = {}));
-exports.default = TranscriptionParakeet;
+})(TranscriptionParakeet || (TranscriptionParakeet = {}));
 module.exports = TranscriptionParakeet;

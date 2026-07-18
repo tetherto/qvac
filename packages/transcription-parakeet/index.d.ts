@@ -3,9 +3,9 @@ import { type QvacResponse } from "@qvac/infer-base";
 import type { Readable } from "stream";
 import { ParakeetInterface, type BackendInfo as ParakeetBackendInfo, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 /** Model type auto-detected from the loaded GGUF metadata. */
-export type ModelType = "tdt" | "ctc" | "eou" | "sortformer";
+type ModelType = "tdt" | "ctc" | "eou" | "sortformer";
 /** Parakeet-specific configuration options. */
-export interface ParakeetConfig {
+interface ParakeetConfig {
     /** Maximum CPU threads for inference (0 lets the engine pick). */
     maxThreads?: number;
     /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
@@ -60,23 +60,23 @@ export interface ParakeetConfig {
      */
     openclCacheDir?: string;
 }
-export interface TranscriptionParakeetFiles {
+interface TranscriptionParakeetFiles {
     /** Absolute path to a CTC, TDT, EOU, or Sortformer `.gguf` checkpoint. */
     model?: string;
 }
-export interface TranscriptionParakeetArgs {
+interface TranscriptionParakeetArgs {
     files?: TranscriptionParakeetFiles;
     config?: TranscriptionParakeetConfig;
     logger?: QvacLogger.LoggerInterface;
     exclusiveRun?: boolean;
     [key: string]: unknown;
 }
-export interface TranscriptionParakeetConfig {
+interface TranscriptionParakeetConfig {
     enableStats?: boolean;
     parakeetConfig?: ParakeetConfig;
     [key: string]: unknown;
 }
-export interface TranscriptionSegment {
+interface TranscriptionSegment {
     text: string;
     start: number;
     end: number;
@@ -87,8 +87,8 @@ export interface TranscriptionSegment {
     /** True when the segment begins a new SentencePiece word. */
     startsWord?: boolean;
 }
-export type OutputEvent = "JobStarted" | "Output" | "JobEnded" | "Error";
-export type AppendInput = {
+type OutputEvent = "JobStarted" | "Output" | "JobEnded" | "Error";
+type AppendInput = {
     type: "audio";
     data: ArrayBuffer;
     priority?: number;
@@ -96,8 +96,8 @@ export type AppendInput = {
     type: "end of job";
 };
 /** Per-call overrides for a duplex streaming session. */
-export type StreamingRunConfig = StreamingConfig;
-export interface Addon {
+type StreamingRunConfig = StreamingConfig;
+interface Addon {
     activate(): Promise<void>;
     append(input: AppendInput): Promise<number>;
     cancel(jobId?: number): Promise<void>;
@@ -117,7 +117,7 @@ export interface Addon {
     endStreaming(): Promise<void>;
     cancelStreaming(): Promise<void>;
 }
-export interface InferenceClientState {
+interface InferenceClientState {
     configLoaded: boolean;
     weightsLoaded: boolean;
     destroyed: boolean;
@@ -130,7 +130,7 @@ interface InternalConfig extends TranscriptionParakeetConfig {
  * Accepts CTC, TDT, EOU, and Sortformer GGUF checkpoints; model type is
  * auto-detected from GGUF metadata.
  */
-export declare class TranscriptionParakeet {
+declare class TranscriptionParakeet {
     readonly logger: QvacLogger;
     readonly exclusiveRun: boolean;
     state: InferenceClientState;
@@ -182,7 +182,7 @@ type NamespaceAppendInput = AppendInput;
 type NamespaceAddon = Addon;
 type NamespaceInferenceClientState = InferenceClientState;
 type NamespaceStreamingRunConfig = StreamingRunConfig;
-export declare namespace TranscriptionParakeet {
+declare namespace TranscriptionParakeet {
     /**
      * Numeric code identifying the compute backend selected by the engine.
      */
@@ -226,4 +226,4 @@ export declare namespace TranscriptionParakeet {
     type InferenceClientState = NamespaceInferenceClientState;
     type StreamingRunConfig = NamespaceStreamingRunConfig;
 }
-export default TranscriptionParakeet;
+export = TranscriptionParakeet;

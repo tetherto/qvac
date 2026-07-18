@@ -24,10 +24,10 @@ import {
 import { toFloat32Chunk } from "./lib/audio";
 
 /** Model type auto-detected from the loaded GGUF metadata. */
-export type ModelType = "tdt" | "ctc" | "eou" | "sortformer";
+type ModelType = "tdt" | "ctc" | "eou" | "sortformer";
 
 /** Parakeet-specific configuration options. */
-export interface ParakeetConfig {
+interface ParakeetConfig {
   /** Maximum CPU threads for inference (0 lets the engine pick). */
   maxThreads?: number;
   /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
@@ -83,12 +83,12 @@ export interface ParakeetConfig {
   openclCacheDir?: string;
 }
 
-export interface TranscriptionParakeetFiles {
+interface TranscriptionParakeetFiles {
   /** Absolute path to a CTC, TDT, EOU, or Sortformer `.gguf` checkpoint. */
   model?: string;
 }
 
-export interface TranscriptionParakeetArgs {
+interface TranscriptionParakeetArgs {
   files?: TranscriptionParakeetFiles;
   config?: TranscriptionParakeetConfig;
   logger?: QvacLogger.LoggerInterface;
@@ -96,13 +96,13 @@ export interface TranscriptionParakeetArgs {
   [key: string]: unknown;
 }
 
-export interface TranscriptionParakeetConfig {
+interface TranscriptionParakeetConfig {
   enableStats?: boolean;
   parakeetConfig?: ParakeetConfig;
   [key: string]: unknown;
 }
 
-export interface TranscriptionSegment {
+interface TranscriptionSegment {
   text: string;
   start: number;
   end: number;
@@ -114,16 +114,16 @@ export interface TranscriptionSegment {
   startsWord?: boolean;
 }
 
-export type OutputEvent = "JobStarted" | "Output" | "JobEnded" | "Error";
+type OutputEvent = "JobStarted" | "Output" | "JobEnded" | "Error";
 
-export type AppendInput =
+type AppendInput =
   | { type: "audio"; data: ArrayBuffer; priority?: number }
   | { type: "end of job" };
 
 /** Per-call overrides for a duplex streaming session. */
-export type StreamingRunConfig = StreamingConfig;
+type StreamingRunConfig = StreamingConfig;
 
-export interface Addon {
+interface Addon {
   activate(): Promise<void>;
   append(input: AppendInput): Promise<number>;
   cancel(jobId?: number): Promise<void>;
@@ -146,7 +146,7 @@ export interface Addon {
   cancelStreaming(): Promise<void>;
 }
 
-export interface InferenceClientState {
+interface InferenceClientState {
   configLoaded: boolean;
   weightsLoaded: boolean;
   destroyed: boolean;
@@ -167,7 +167,7 @@ type AudioStream =
  * Accepts CTC, TDT, EOU, and Sortformer GGUF checkpoints; model type is
  * auto-detected from GGUF metadata.
  */
-export class TranscriptionParakeet {
+class TranscriptionParakeet {
   readonly logger: QvacLogger;
   readonly exclusiveRun: boolean;
   state: InferenceClientState;
@@ -553,7 +553,7 @@ type NamespaceInferenceClientState = InferenceClientState;
 type NamespaceStreamingRunConfig = StreamingRunConfig;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the package's established class namespace API.
-export namespace TranscriptionParakeet {
+namespace TranscriptionParakeet {
   /**
    * Numeric code identifying the compute backend selected by the engine.
    */
@@ -605,6 +605,4 @@ export namespace TranscriptionParakeet {
   export type StreamingRunConfig = NamespaceStreamingRunConfig;
 }
 
-export default TranscriptionParakeet;
-
-module.exports = TranscriptionParakeet;
+export = TranscriptionParakeet;
