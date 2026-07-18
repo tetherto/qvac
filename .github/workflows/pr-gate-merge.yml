@@ -1,0 +1,193 @@
+name: Merge Guard
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  changes:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.pkglist.outputs.packages }}
+      packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
+      any: ${{ steps.filter.outputs.pkg-any }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg-any:
+              - "packages/**"
+              - ".github/workflows/prebuilds-*.yml"
+            bci-whispercpp:
+              - "packages/bci-whispercpp/**"
+              - ".github/workflows/prebuilds-bci-whispercpp.yml"
+            classification-ggml:
+              - "packages/classification-ggml/**"
+              - ".github/workflows/prebuilds-classification-ggml.yml"
+            decoder-audio:
+              - "packages/decoder-audio/**"
+            diffusion-cpp:
+              - "packages/diffusion-cpp/**"
+              - ".github/workflows/prebuilds-diffusion-cpp.yml"
+            embed-llamacpp:
+              - "packages/embed-llamacpp/**"
+              - ".github/workflows/prebuilds-embed-llamacpp.yml"
+            llm-llamacpp:
+              - "packages/llm-llamacpp/**"
+              - ".github/workflows/prebuilds-llm-llamacpp.yml"
+            ocr-ggml:
+              - "packages/ocr-ggml/**"
+              - ".github/workflows/prebuilds-ocr-ggml.yml"
+            ocr-onnx:
+              - "packages/ocr-onnx/**"
+              - ".github/workflows/prebuilds-ocr-onnx.yml"
+            onnx:
+              - "packages/onnx/**"
+              - ".github/workflows/prebuilds-onnx.yml"
+            transcription-parakeet:
+              - "packages/transcription-parakeet/**"
+              - ".github/workflows/prebuilds-transcription-parakeet.yml"
+            transcription-whispercpp:
+              - "packages/transcription-whispercpp/**"
+              - ".github/workflows/prebuilds-transcription-whispercpp.yml"
+            translation-nmtcpp:
+              - "packages/translation-nmtcpp/**"
+              - ".github/workflows/prebuilds-translation-nmtcpp.yml"
+            tts-ggml:
+              - "packages/tts-ggml/**"
+              - ".github/workflows/prebuilds-tts-ggml.yml"
+            fabric:
+              - "packages/fabric/**"
+              - ".github/workflows/prebuilds-fabric.yml"
+            vla:
+              - "packages/vla-ggml/**"
+              - ".github/workflows/prebuilds-vla.yml"
+
+      # Package dir names mostly match the filter/job key (packages/<key>),
+      # except vla (packages/vla-ggml) - mapped explicitly here so
+      # sanity-checks' workdir is always correct. Two outputs: a flat name
+      # list (for prebuilds-caller's `contains(...)` checks) and a
+      # name+path list (for the sanity-checks matrix's workdir).
+      - name: Build package lists
+        id: pkglist
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any"))')
+          echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "packages-with-path=$(echo "$CHANGED" | jq -c '
+            map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})
+          ')" >> "$GITHUB_OUTPUT"
+
+  sanity-checks:
+    # Runs per-package (matches how ./.github/actions/sanity-checks is
+    # already invoked from every on-pr-<pkg>.yml - workdir is a package
+    # path, there is no root package.json in this monorepo).
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.any == 'true'
+    needs: [authorize, label-gate, changes]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.packages-with-path || '[]') }}
+    runs-on: ubuntu-latest
+    name: sanity-checks (${{ matrix.package }})
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: ${{ matrix.path }}
+
+  prebuilds-caller:
+    needs: [authorize, label-gate, changes]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-caller.yml
+    secrets: inherit
+    with:
+      changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  merge-guard:
+    needs: [authorize, label-gate, changes, sanity-checks, prebuilds-caller]
+    if: |
+      always() && !cancelled() &&
+      (needs.changes.result == 'success' || needs.changes.result == 'skipped')
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
+      build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
