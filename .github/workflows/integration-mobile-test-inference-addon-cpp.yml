@@ -223,7 +223,7 @@ jobs:
           app-type: ${{ steps.build.outputs.app-type }}
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          device-farm-project-arn: ${{ secrets.INFERCPP_AWS_DEVICE_FARM_PROJECT_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
           enables-perf: 'false'
 
       - name: Schedule Device Farm test run
@@ -231,9 +231,9 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/schedule-test-run
         with:
           platform: ${{ matrix.platform }}
-          device-farm-project-arn: ${{ secrets.INFERCPP_AWS_DEVICE_FARM_PROJECT_ARN }}
-          android-device-pool-arn: ${{ secrets.INFERCPP_ANDROID_DEVICE_POOL_ARN }}
-          ios-device-pool-arn: ${{ secrets.INFERCPP_IOS_DEVICE_POOL_ARN }}
+          device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          android-device-pool-arn: ${{ secrets.ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
+          ios-device-pool-arn: ${{ secrets.IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED }}
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
