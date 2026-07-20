@@ -74,8 +74,14 @@ public:
    * @param id Optional job id. Present cancels only that job; a scheduler that
    *        cannot map the id to a job warns and does nothing. Absent cancels
    *        every job live right now: the id snapshot is taken here, on the JS
-   *        thread — where admissions also run — so jobs started after this
-   *        call are never touched by the deferred cancellation.
+   *        thread — where admissions also run — and only that set is passed
+   *        to the deferred cancellation. On the tagged multi-job path ids are
+   *        never reused, so jobs started after this call are never touched.
+   *        The untagged single-job path can only snapshot the kNoJobId
+   *        sentinel, which pins the slot rather than the job: a cancel
+   *        executing after the snapshotted job already finished can land on
+   *        the slot's next occupant, unless the model itself pins cancels to
+   *        the run they were aimed at (as llm-llamacpp does).
    * @return JavaScript Promise that resolves when cancellation completes
    * @note This is a non-blocking operation that returns a future/promise
    */

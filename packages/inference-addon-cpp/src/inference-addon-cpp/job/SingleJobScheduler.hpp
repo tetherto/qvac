@@ -197,7 +197,11 @@ public:
 
   void cancelAll() override { cancelImpl(); }
 
-  /// The single slot's live id is the untagged sentinel.
+  /// The single slot's live id is the untagged sentinel — it names the slot,
+  /// not the job occupying it, so a cancelJobs() of this snapshot deferred
+  /// past the job's end lands on the slot's next occupant. A caller needing
+  /// job-pinned cancellation must pin inside the model (llm-llamacpp does)
+  /// or use a tagged scheduler.
   [[nodiscard]] std::vector<JobId> liveJobIds() const override {
     std::scoped_lock lock(mtx_);
     if (job_.has_value()) {

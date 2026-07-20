@@ -52,7 +52,11 @@ struct IJobScheduler {
 
   /// Ids of every live (queued + in-flight) job. Pairs with cancelJobs(): a
   /// caller snapshots on its admission thread and cancels the snapshot later,
-  /// so jobs admitted in between are never touched.
+  /// so jobs admitted in between are never touched — provided ids identify
+  /// jobs uniquely (the tagged path). An untagged scheduler can only report
+  /// the kNoJobId sentinel, which names its slot rather than a job, so a
+  /// deferred cancel of that snapshot may land on the slot's next occupant
+  /// (see SingleJobScheduler::liveJobIds).
   [[nodiscard]] virtual std::vector<JobId> liveJobIds() const = 0;
 
   /// Cancel exactly the jobs in @p ids; finished or unknown ids are no-ops.

@@ -301,7 +301,7 @@ classDiagram
 3. **AddonCpp** (Non-Template Class - Framework Core)
    - Constructor: Takes output callback, model, and an optional `IJobScheduler` (defaults to a single-job scheduler when omitted)
    - Job execution: `runJob(std::any input)` / `runExclusiveJob(...)` - admits jobs via the scheduler and returns the `JobId` it assigned (`std::nullopt` when rejected)
-   - Cancellation: `cancelJob(JobId id = kNoJobId)` cancels one job; `cancelAllJobs()` cancels every job live at call time; `liveJobIds()` + `cancelJobs(ids)` support snapshot-based cancel-all (the JS binding snapshots on its thread, so jobs admitted after the request survive the deferred cancellation)
+   - Cancellation: `cancelJob(JobId id = kNoJobId)` cancels one job; `cancelAllJobs()` cancels every job live at call time; `liveJobIds()` + `cancelJobs(ids)` support snapshot-based cancel-all (the JS binding snapshots on its thread; on the tagged multi-job path ids are never reused, so jobs admitted after the request survive the deferred cancellation — the untagged single-job path only snapshots the slot sentinel, which cannot pin a specific job)
    - Introspection: `activeJobs()` - number of in-flight + queued jobs per the scheduler
    - Lifecycle: `activate()` - Start processing
 
