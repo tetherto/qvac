@@ -68,9 +68,9 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.5#1): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
+- inference-addon-cpp (≥1.3.0): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
-- @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
+- @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper
 - bare-process: runtime/process integration used by the JS package surface
 - Bare Runtime (≥1.24.0): JavaScript runtime
@@ -130,7 +130,7 @@ graph TB
 |---------|------|---------|
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
-| inference-addon-cpp | Native | C++ addon framework (single-job runner) |
+| inference-addon-cpp | Native | C++ addon framework (multi-job scheduler) |
 | qvac-fabric-llm.cpp | Native | Inference engine |
 | bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
@@ -155,7 +155,7 @@ graph TB
 
 ### Main Class: LlmLlamacpp
 
-`LlmLlamacpp` is a standalone class (no inheritance). It composes a job handler (`createJobHandler`), a single-job run queue (`exclusiveRunQueue`), and a `LlamaInterface` native bridge.
+`LlmLlamacpp` is a standalone class (no inheritance). It composes a job handler (`createJobHandler`), an admission-serializing run queue (`exclusiveRunQueue` — jobs themselves run concurrently once admitted), and a `LlamaInterface` native bridge.
 
 ```mermaid
 classDiagram
@@ -332,7 +332,7 @@ graph TB
 |-------|------------|----------------|----------|----------------|
 | 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, job/response lifecycle, shard streaming | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Multi-job scheduler, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, ModelMetadata, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
@@ -400,9 +400,9 @@ graph TB
 **Responsibility:** Addon-cpp framework integration; LLM addon provides createInstance and runJob over JsInterface
 
 **Why C++:**
-- Single-job runner (one job at a time, runJob returns boolean accepted)
-- Dedicated processing thread via addon-cpp JobRunner
-- Thread-safe job submission and cancellation (IModelCancel)
+- Multi-job scheduler (`parallel` worker lanes plus a waiting queue; runJob resolves an AdmissionResult carrying the scheduler-minted job id)
+- Dedicated worker threads via addon-cpp MultiJobScheduler
+- Thread-safe job submission and cancellation (whole-model IModelCancel plus per-job IModelCancelById)
 - Output dispatching via uv_async
 
 **LLM specialization:** createInstance builds LlamaModel with config; runJob parses inputs array (media + text) into LlamaModel::Prompt
@@ -799,8 +799,8 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 <summary>⚡ TL;DR</summary>
 
 **Chose:** Promise-based exclusive run queue stored as `this._run` from `exclusiveRunQueue()`
-**Why:** Ensure atomic multi-step operations (text + media + end-of-input) complete without interruption  
-**Cost:** One inference request at a time per model instance
+**Why:** Ensure atomic multi-step operations (admission, load/unload transitions) complete without interruption  
+**Cost:** One admission at a time per model instance; admitted jobs run concurrently when `parallel >= 2`
 
 </details>
 
@@ -810,21 +810,21 @@ A single inference request sends one `runJob(inputs)` call with an array of inpu
 1. Zero or more `{ type: 'media', content: Uint8Array }` - in-memory media bytes. The JS layer only forwards `Uint8Array` media payloads; path-string media is not currently passed through by `index.js`.
 2. One `{ type: 'text', input: JSON.stringify(messages) }` - Chat history
 
-Without coordination, concurrent requests could call `runJob()` while a job is already set or running; the addon returns `false` (not accepted) in that case.
+Without coordination, a `run()` could interleave with `load()`/`unload()` transitions, and concurrent admissions could race the capacity pre-check.
 
 ### Decision
 
-Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)` so only one native operation is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
+Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)`. The queue serializes the *admission* section only: `run()`'s wrapped body resolves once the native scheduler has admitted the job and returned its id, so with `parallel >= 2` many admitted jobs generate concurrently while the next admission proceeds. When the effective `rejectWhenBusy` policy is `true` and the pool is full — always the case at `parallel: 1`, the backward-compatible default — the admission fails fast with the consistent busy error:
 - `"Cannot set new job: a job is already set or being processed"`
 
-**Note:** C++ level thread safety (single-job runner with mutex-protected job state, optional IModelCancel) is handled by the addon-cpp 1.1.x framework; see addon-cpp docs for architecture and decisions.
+**Note:** C++ level thread safety (multi-job scheduler with per-slot admission ids, whole-model IModelCancel plus per-job IModelCancelById) is handled by the addon-cpp 1.3.x framework; see addon-cpp docs for architecture and decisions.
 
 ### Rationale
 
 **Atomicity:**
 - Ensures multi-part messages (media + text + end-of-input) are sent as complete units
 - Prevents another request from inserting messages mid-stream
-- Each request gets exclusive run so only one runJob is in flight at a time
+- Each request gets an exclusive admission so only one runJob call is in flight at a time
 
 **Message Integrity:**
 - Model receives coherent message sequences
@@ -833,11 +833,11 @@ Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helpe
 
 ### Trade-offs
 - ✅ Simple promise-based queue (no complex locking)
-- ✅ Predictable sequential execution order
-- ❌ One request at a time per model instance
-- ❌ Head-of-line blocking (long request delays subsequent ones)
+- ✅ Predictable sequential admission order
+- ❌ One request at a time per model instance at `parallel: 1`
+- ❌ Head-of-line blocking on admission (a slow admission delays subsequent ones)
 
-**Mitigation:** Create multiple model instances for parallel requests
+**Mitigation:** Load with `parallel >= 2` for concurrent requests on one instance, or create multiple model instances
 
 ---
 
