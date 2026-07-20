@@ -843,18 +843,37 @@ std::any LlamaModel::process(
   }
   // A tagged single-path prompt owns no scheduler slot: its cancel action
   // stops the single-prompt context. The run-counter gate keeps a late
-  // cancel from leaving a stale stop flag on an idle engine; the action runs
-  // under the canceller's shared stateMtx_ (see cancelById), so state_ stays
-  // valid.
+  // cancel from leaving a stale stop flag on an idle engine, and the
+  // ownership check keeps a cancel that outlived its job — the registry
+  // entry is still live through the run's completion tail, and cancel()
+  // executes an action copy outside the registry lock — from stopping a
+  // successor; the action runs under the canceller's shared stateMtx_ (see
+  // cancelById), so state_ stays valid.
   const auto processSinglePath = [this, &input, id] {
+    // An escaped cancel for a previous job may have set the context's stop
+    // flag after that run's last check. Cleared before the run counter is
+    // visible and before the parked-cancel re-issue below, so every stop
+    // aimed at THIS job — counter-gated or re-issued — lands after the
+    // clear.
+    {
+      std::shared_lock stateLock(stateMtx_);
+      if (state_ && state_->llmContext_) {
+        state_->llmContext_->resetStopFlag();
+      }
+    }
     // Counted before arming: both the armed action and the whole-model
     // cancelImpl gate their context stop on this counter, so a cancel landing
     // any time from arming onwards can stop the eval loop; the loop consumes
     // the flag at its first check, before any decode.
     activeSingleJobs_.fetch_add(1);
-    ScopeGuard countGuard([this] { activeSingleJobs_.fetch_sub(1); });
-    const bool parkedCancel = liveJobs_.add(id, [this] {
-      if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
+    currentSingleJobId_.store(id);
+    ScopeGuard countGuard([this] {
+      currentSingleJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+      activeSingleJobs_.fetch_sub(1);
+    });
+    const bool parkedCancel = liveJobs_.add(id, [this, id] {
+      if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0 &&
+          currentSingleJobId_.load() == id) {
         state_->llmContext_->stop();
       }
     });
