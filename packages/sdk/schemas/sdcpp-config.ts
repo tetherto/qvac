@@ -251,7 +251,27 @@ export const diffusionStatsSchema = z.object({
   generationMs: z
     .number()
     .optional()
-    .describe('Wall-clock time in milliseconds spent generating images.'),
+    .describe('Wall-clock time in milliseconds spent generating the output.'),
+  conditionerMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent conditioning the prompt before denoising.'),
+  denoiseMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent in the diffusion denoising loop.'),
+  vaeMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent decoding diffusion latents with the VAE.'),
+  postProcessMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.'),
+  stepsPerSecond: z
+    .number()
+    .optional()
+    .describe('Diffusion denoising throughput in sampling steps per second.'),
   totalGenerationMs: z
     .number()
     .optional()
@@ -281,6 +301,11 @@ export const videoStatsSchema = diffusionStatsSchema
   .pick({
     modelLoadMs: true,
     generationMs: true,
+    conditionerMs: true,
+    denoiseMs: true,
+    vaeMs: true,
+    postProcessMs: true,
+    stepsPerSecond: true,
     totalGenerationMs: true,
     totalWallMs: true,
     totalSteps: true,

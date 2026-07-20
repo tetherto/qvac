@@ -74,6 +74,20 @@ The legacy `release` environment is kept for backwards-compatibility while the `
 
 ---
 
+## `license-override` — license compliance gate override
+
+The license compliance gate ([`license-compliance.yml`](../../.github/workflows/license-compliance.yml), delegating to the org's `public-reusable-license.yml`) classifies each newly added PR dependency against the org license policy. A **High** finding (an unknown or review-required license, or a shipped component missing attribution) blocks the check once the gate is enforcing.
+
+| | |
+|---|---|
+| **Purpose** | Downgrade the targeted **High** finding to a warning **for this PR only**, so the check does not block while a maintainer accepts a one-off. |
+| **Who can apply** | A Tier-1 reviewer (see [TEAMS.md](TEAMS.md)) after an actual compliance review — not the PR author self-serving. |
+| **What it does NOT do** | It cannot override a **Critical** finding (a disallowed license such as AGPL/SSPL/GPL on a runtime/shipped path). Those must be removed/replaced, or the org policy changed. |
+| **Durable alternative** | For a decision that should persist across PRs, record it in [`.github/license-allowlist.yml`](../../.github/license-allowlist.yml) (CODEOWNERS-reviewed) instead of relying on the label. The label is a stop-gap; the allowlist is the audit trail. |
+| **Current stage** | The gate runs in **warn-only** (shadow) mode today, so nothing blocks yet and the label is a no-op in practice — it is wired now so it is ready when the check is promoted to required. |
+
+---
+
 ## Other CI-relevant labels
 
 The following labels are recognised by CI workflows but are not part of the `label-gate` flow.
@@ -94,6 +108,7 @@ The following labels are recognised by CI workflows but are not part of the `lab
 | `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E test workflows | Long-running; use for release branches and major changes. |
 | `e2e-tested` | Set automatically by the E2E workflow once a run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
+| `license-override` | Downgrades a **High** license-compliance finding to a warning for this PR only, so the [license gate](#license-override--license-compliance-gate-override) does not block. **Critical** findings (a disallowed license on a runtime/shipped path) can never be overridden. | `license-compliance.yml` (→ `public-reusable-license.yml`) | One-off stop-gap. The durable, auditable record is an entry in [`.github/license-allowlist.yml`](../../.github/license-allowlist.yml). Apply only after a real compliance review. |
 
 Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue`, `help wanted`, `question`, `wontfix`, `duplicate`, `invalid`) and Dependabot/CodeQL labels (`dependencies`, `javascript`, `github_actions`) are unchanged.
 
