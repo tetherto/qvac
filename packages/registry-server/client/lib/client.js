@@ -369,10 +369,7 @@ class QVACRegistryClient extends ReadyResource {
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(model.blobBinding, {
           wait: true,
@@ -380,27 +377,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try {
-              await blobs.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob instance', { error: cleanupError.message })
-            }
-          }
-          if (core) {
-            try {
-              await core.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob core', { error: cleanupError.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        stream.once('end', () => this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd))
       }
 
       this.logger.info('Model downloaded successfully')
@@ -412,25 +389,7 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      // Stop replication before clearing to prevent blocks from being refetched.
-      if (rangeDownload) rangeDownload.destroy()
-      if (core && blockStart != null) {
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-      }
-      if (blobs) {
-        try {
-          await blobs.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob instance on error', { error: cleanupError.message })
-        }
-      }
-      if (core) {
-        try {
-          await core.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob core on error', { error: cleanupError.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
     }
@@ -515,10 +474,7 @@ class QVACRegistryClient extends ReadyResource {
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(pointer, {
           wait: true,
@@ -526,27 +482,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try {
-              await blobs.close()
-            } catch (e) {
-              this.logger.warn('Error closing blob instance', { error: e.message })
-            }
-          }
-          if (core) {
-            try {
-              await core.close()
-            } catch (e) {
-              this.logger.warn('Error closing blob core', { error: e.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        stream.once('end', () => this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd))
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -555,31 +491,34 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      // Stop replication before clearing to prevent blocks from being refetched.
-      if (rangeDownload) rangeDownload.destroy()
-      if (core && blockStart != null) {
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-      }
-      if (blobs) {
-        try {
-          await blobs.close()
-        } catch (e) {
-          this.logger.warn('Error closing blob instance on error', { error: e.message })
-        }
-      }
-      if (core) {
-        try {
-          await core.close()
-        } catch (e) {
-          this.logger.warn('Error closing blob core on error', { error: e.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
     }
   }
 
-  async _clearBlobBlocks(core, start, end) {
+  async _releaseDownload (core, blobs, rangeDownload, blockStart, blockEnd) {
+    // Stop replication before clearing to prevent blocks from being refetched.
+    if (rangeDownload) rangeDownload.destroy()
+
+    if (core && blockStart != null) {
+      await this._clearBlobBlocks(core, blockStart, blockEnd)
+    }
+    if (blobs) {
+      try { await blobs.close() } catch (e) {
+        this.logger.warn('Error closing blob instance', { error: e.message })
+      }
+    }
+    if (core) {
+      try { await core.close() } catch (e) {
+        this.logger.warn('Error closing blob core', { error: e.message })
+      }
+    }
+
+    this.logger.debug('Blob resources released')
+  }
+
+  async _clearBlobBlocks (core, start, end) {
     try {
       const cleared = await core.clear(start, end, { diff: true })
       await core.compact()
