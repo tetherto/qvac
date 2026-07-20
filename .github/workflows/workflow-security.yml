@@ -117,6 +117,10 @@ jobs:
           python-version: "3.x"
 
       - name: Install zizmor
+        # continue-on-error keeps the shadow-mode contract even if PyPI hiccups: a
+        # failed install leaves zizmor missing, the audit step captures exit 127,
+        # and "Report outcome" warns (never blocks) unless ENFORCE=true.
+        continue-on-error: true
         shell: bash
         run: pip install "zizmor==${ZIZMOR_VERSION}"
 
@@ -189,7 +193,11 @@ jobs:
               echo "<details><summary>Findings</summary>"
               echo
               if [ -f zizmor.sarif ]; then
-                jq -r '.runs[].results[]? | "- `" + (.locations[0].physicalLocation.artifactLocation.uri // "?") + ":" + ((.locations[0].physicalLocation.region.startLine // 0) | tostring) + "` — **" + (.ruleId // "?") + "** — " + ((.message.text // "") | gsub("\n"; " "))' zizmor.sarif | head -n 100
+                # Slice to the first 100 results INSIDE jq. Piping to `head` closes
+                # the pipe early, and jq's resulting SIGPIPE write-error fails this
+                # step under `bash -e -o pipefail` — which would break the warn-only
+                # contract. `|| true` is a further backstop.
+                jq -r '[.runs[].results[]?] | .[0:100][] | "- `" + (.locations[0].physicalLocation.artifactLocation.uri // "?") + ":" + ((.locations[0].physicalLocation.region.startLine // 0) | tostring) + "` — **" + (.ruleId // "?") + "** — " + ((.message.text // "") | gsub("\n"; " "))' zizmor.sarif || true
               fi
               echo
               echo "</details>"
@@ -200,6 +208,8 @@ jobs:
 
       - name: Upload zizmor SARIF
         if: always() && hashFiles('zizmor.sarif') != ''
+        # Artifact upload is diagnostic-only; a hiccup must not block the merge.
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: zizmor-sarif
@@ -212,6 +222,9 @@ jobs:
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           (steps.summary.outputs.findings == 'true' || steps.summary.outputs.errored == 'true')
+        # A failed comment (transient API error, or a fork's read-only token) must
+        # not block the merge in shadow mode.
+        continue-on-error: true
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         env:
           # Pass dynamic values through env (read via process.env) instead of
