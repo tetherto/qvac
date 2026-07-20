@@ -49,6 +49,7 @@ add_executable(
   test_concurrent_process_by_id.cpp
   test_concurrent_prefill.cpp
   test_batch_group_cancel.cpp
+  test_save_failure_containment.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   test_reasoning_budget.cpp
