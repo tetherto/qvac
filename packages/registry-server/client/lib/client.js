@@ -304,7 +304,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs, blockStart, blockEnd
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading model', { path, source })
@@ -344,7 +344,7 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: model.blobBinding.blockOffset,
         length: model.blobBinding.blockLength
       })
@@ -454,7 +454,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs, blockStart, blockEnd
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading blob directly', {
@@ -495,7 +495,7 @@ class QVACRegistryClient extends ReadyResource {
       blockStart = pointer.blockOffset
       blockEnd = blockStart + pointer.blockLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: pointer.blockOffset,
         length: pointer.blockLength
       })
