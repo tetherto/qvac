@@ -244,8 +244,9 @@ public:
    * @param outputCallback - the output callback.
    * @return - ok=false for context overflow; cancelled=true when generation
    * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * could not restore the pre-request recurrent state and callers must skip
-   * cache persistence for this request.
+   * or prediction-limit truncation inside reasoning could not restore the
+   * pre-request recurrent state and callers must skip cache persistence for
+   * this request.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;

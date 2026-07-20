@@ -139,6 +139,11 @@ test('diffusionStatsSchema: accepts all C++ RuntimeStats fields', (t) => {
   const result = diffusionStatsSchema.safeParse({
     modelLoadMs: 500,
     generationMs: 1234,
+    conditionerMs: 100,
+    denoiseMs: 800,
+    vaeMs: 200,
+    postProcessMs: 134,
+    stepsPerSecond: 25,
     totalGenerationMs: 1234,
     totalWallMs: 1734,
     totalSteps: 20,
@@ -1206,6 +1211,11 @@ test('diffusion plugin: stats with all RuntimeStats fields passes response valid
   const fullStats = {
     modelLoadMs: 500,
     generationMs: 1234,
+    conditionerMs: 100,
+    denoiseMs: 800,
+    vaeMs: 200,
+    postProcessMs: 134,
+    stepsPerSecond: 25,
     totalGenerationMs: 1234,
     totalWallMs: 1734,
     totalSteps: 20,
@@ -1245,6 +1255,11 @@ test('diffusion plugin: stats with all RuntimeStats fields passes response valid
 
       t.is(receivedStats.modelLoadMs, 500)
       t.is(receivedStats.generationMs, 1234)
+      t.is(receivedStats.conditionerMs, 100)
+      t.is(receivedStats.denoiseMs, 800)
+      t.is(receivedStats.vaeMs, 200)
+      t.is(receivedStats.postProcessMs, 134)
+      t.is(receivedStats.stepsPerSecond, 25)
       t.is(receivedStats.totalGenerationMs, 1234)
       t.is(receivedStats.totalWallMs, 1734)
       t.is(receivedStats.totalSteps, 20)

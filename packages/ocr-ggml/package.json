@@ -1,18 +1,25 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "GGML-backed OCR addon for qvac (EasyOCR pipeline on GGUF weights)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js ocr-ggml.js addonLogging.js lib/error.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts lib/error.d.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "mobile:generate-urls": "bash ./scripts/generate-ocr-ggml-presigned-urls.sh",
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
     "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
@@ -20,8 +27,9 @@
     "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test": "npm run lint && npm run test:unit && npm run test:integration",
-    "test:dts": "tsc -p tsconfig.dts.json",
+    "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
+    "test:types": "npm run typecheck && npm run check:generated",
+    "test:dts": "npm run test:types",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
@@ -35,6 +43,7 @@
     "binding.js",
     "index.js",
     "ocr-ggml.js",
+    "ocr-ggml.d.ts",
     "prebuilds",
     "lib",
     "index.d.ts",
@@ -73,8 +82,14 @@
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "standard": "^17.0.0",
-    "typescript": "^5.9.2"
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
@@ -83,19 +98,15 @@
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js"
   },
-  "types": "index.d.ts",
-  "standard": {
-    "ignore": [
-      "build/**",
-      "prebuilds/**",
-      "examples/**"
-    ]
-  }
+  "types": "index.d.ts"
 }

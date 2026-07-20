@@ -1686,7 +1686,42 @@ class DiffusionStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="generationMs",
-            description="Wall-clock time in milliseconds spent generating images.",
+            description="Wall-clock time in milliseconds spent generating the output.",
+        ),
+    ] = None
+    conditioner_ms: Annotated[
+        float | None,
+        Field(
+            alias="conditionerMs",
+            description="Time in milliseconds spent conditioning the prompt before denoising.",
+        ),
+    ] = None
+    denoise_ms: Annotated[
+        float | None,
+        Field(
+            alias="denoiseMs",
+            description="Time in milliseconds spent in the diffusion denoising loop.",
+        ),
+    ] = None
+    vae_ms: Annotated[
+        float | None,
+        Field(
+            alias="vaeMs",
+            description="Time in milliseconds spent decoding diffusion latents with the VAE.",
+        ),
+    ] = None
+    post_process_ms: Annotated[
+        float | None,
+        Field(
+            alias="postProcessMs",
+            description="Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+        ),
+    ] = None
+    steps_per_second: Annotated[
+        float | None,
+        Field(
+            alias="stepsPerSecond",
+            description="Diffusion denoising throughput in sampling steps per second.",
         ),
     ] = None
     total_generation_ms: Annotated[
@@ -8146,7 +8181,42 @@ class VideoStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="generationMs",
-            description="Wall-clock time in milliseconds spent generating images.",
+            description="Wall-clock time in milliseconds spent generating the output.",
+        ),
+    ] = None
+    conditioner_ms: Annotated[
+        float | None,
+        Field(
+            alias="conditionerMs",
+            description="Time in milliseconds spent conditioning the prompt before denoising.",
+        ),
+    ] = None
+    denoise_ms: Annotated[
+        float | None,
+        Field(
+            alias="denoiseMs",
+            description="Time in milliseconds spent in the diffusion denoising loop.",
+        ),
+    ] = None
+    vae_ms: Annotated[
+        float | None,
+        Field(
+            alias="vaeMs",
+            description="Time in milliseconds spent decoding diffusion latents with the VAE.",
+        ),
+    ] = None
+    post_process_ms: Annotated[
+        float | None,
+        Field(
+            alias="postProcessMs",
+            description="Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+        ),
+    ] = None
+    steps_per_second: Annotated[
+        float | None,
+        Field(
+            alias="stepsPerSecond",
+            description="Diffusion denoising throughput in sampling steps per second.",
         ),
     ] = None
     total_generation_ms: Annotated[

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.1] - 2026-07-17
+
+### Fixed
+
+- Bumped the `stable-diffusion-cpp` vcpkg dependency to `2026-07-03#5`: the
+  Wan VAE temporal upsample now matches the reference first-chunk "Rep"
+  semantics (`time_conv` runs with causal zero padding on the first latent
+  chunk, the first doubled frame is trimmed, and the temporal feat cache is
+  seeded). This restores Wan2.2 VAE decode parity with the PyTorch reference
+  (cosine 1.000000 / 79 dB PSNR, previously 0.9959 / 27 dB — visually
+  near-identical but numerically wrong on the first frames). Encode and
+  TAEHV paths are unaffected.
+
 ## [0.15.0] - 2026-07-16
 
 This release adds an exhaustive per-phase timing breakdown to image and video

@@ -837,6 +837,90 @@ TEST_F(
   // replay path succeeded on both slots.
 }
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["ctx_size"] = "512";
+  config_["parallel"] = "2";
+  config_["n_predict"] = "-1";
+  config_["n_discarded"] = "0";
+  config_["temp"] = "0";
+  auto model = loadModel(qwen35HybridModel_);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-qwen35-seqlimit-rollback-" + uniqueTestId() + ".bin");
+
+  const char* systemMsg =
+      R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
+  const char* userTurn1 =
+      R"({"role":"user","content":"What is the capital of France?"})";
+
+  LlamaModel::Prompt primer;
+  primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  primer.generationParams.reasoning_budget = 0;
+  primer.generationParams.n_predict = 16;
+  auto primerOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{primer});
+  ASSERT_EQ(primerOutputs.size(), 1u);
+  ASSERT_TRUE(containsCaseInsensitive(primerOutputs[0], "Paris"))
+      << "primer should answer from the clean cache seed: " << primerOutputs[0];
+  ASSERT_TRUE(fs::exists(cachePath));
+  const double primeCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(primeCacheTokens, 0.0) << "primer did not populate CacheTokens";
+
+  auto makeLimitPrompt = [systemMsg, userTurn1] {
+    LlamaModel::Prompt p;
+    p.input =
+        std::string("[") + systemMsg + "," + userTurn1 +
+        R"(,{"role":"assistant","content":"Paris"},{"role":"user","content":"Before answering, reason in detail for at least 80 sentences, then answer: What is the capital of France?"}])";
+    p.generationParams.remove_thinking_from_context = true;
+    return p;
+  };
+
+  auto limit = makeLimitPrompt();
+  limit.cacheKey = cachePath.string();
+  limit.saveCacheToDisk = true;
+  auto limitOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{limit});
+  ASSERT_EQ(limitOutputs.size(), 1u);
+  EXPECT_FALSE(limitOutputs[0].empty());
+  const double limitGeneratedTokens =
+      test_common::getStatValue(model->runtimeStats(), "generatedTokens");
+  const double limitCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  SCOPED_TRACE(
+      "limitGeneratedTokens=" + std::to_string(limitGeneratedTokens) +
+      ", primeCacheTokens=" + std::to_string(primeCacheTokens) +
+      ", limitCacheTokens=" + std::to_string(limitCacheTokens) +
+      ", limit output (first 240 chars): " + limitOutputs[0].substr(0, 240));
+  EXPECT_GE(limitGeneratedTokens, 64.0)
+      << "n_predict is unbounded, so a long generation here means the "
+         "scheduler slot cap, not n_predict, truncated the request";
+  EXPECT_LE(std::abs(limitCacheTokens - primeCacheTokens), 1.0)
+      << "sequence-limit truncation must roll back to the warm cache baseline";
+
+  auto sibling = makePrompt("What is 2+2? Answer with just the number.");
+  sibling.generationParams.reasoning_budget = 0;
+  sibling.generationParams.n_predict = 16;
+  std::vector<LlamaModel::Prompt> prompts{
+      makeLimitPrompt(), std::move(sibling)};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "sequence-limit truncated prompt should still return partial output";
+  EXPECT_FALSE(outputs[1].empty())
+      << "healthy sibling request must complete instead of being failed by "
+         "the truncated recurrent reasoning request";
+
+  fs::remove(cachePath);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchHarmonyToolCalls) {
   REQUIRE_MODEL(harmonyModel_);
   config_["ctx_size"] = "4096";
