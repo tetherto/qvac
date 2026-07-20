@@ -442,7 +442,10 @@ private:
   void failSlotLocked(uint32_t seqId, std::exception_ptr error);
   [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
   /// Extract finished requests and run the full per-slot drain (terminal
-  /// driver hook with output flushing, stats, cache save, KV clear).
+  /// driver hook with output flushing, stats, cache save, KV clear). A
+  /// cache-save throw is contained per slot: it fails only that slot's
+  /// group (via failSlotLocked), never the sibling slots decoding for
+  /// other groups.
   void drainFinishedLocked();
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
