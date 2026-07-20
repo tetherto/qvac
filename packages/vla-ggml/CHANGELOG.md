@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `addon.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and inference output are unchanged.
+
 ## [0.12.0] - 2026-07-14
 
 ### Fixed
