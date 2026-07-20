@@ -14,15 +14,21 @@ name: NOTICE drift
 # this repo's package layout, models.prod.json, and vcpkg registries. So the gate
 # is a self-contained in-repo workflow that runs those scripts directly.
 #
-# Rollout stage: WARN-ONLY (shadow mode). Drift is surfaced in the job summary and
-# (for same-repo PRs) as a PR comment, but the job does NOT fail. This mirrors
-# license-compliance.yml and is required because package lockfiles are gitignored
-# in this repo (docs/devops/TIER-1-SCOPE.md §B1): without committed lockfiles the
-# JS/Python scans resolve latest-compatible versions, so an unrelated upstream
-# patch release can produce benign NOTICE drift. Promotion to a required blocking
-# check is a follow-up, gated on resolving that non-determinism (commit lockfiles
-# or scope the drift check to the deterministic model/C++ sections) plus TL
-# sign-off. Use the workflow_dispatch `enforce` input to trial blocking behavior.
+# Rollout stage: WARN-ONLY (shadow mode). NOTHING in the job fails a merge —
+# neither a generator crash (the regenerate step is `continue-on-error`) nor
+# detected drift (the "Report outcome" step only `exit 1`s when ENFORCE=true, set
+# via workflow_dispatch). This is required because package lockfiles are
+# gitignored in this repo (docs/devops/TIER-1-SCOPE.md §B1): without committed
+# lockfiles the JS/Python scans resolve latest-compatible versions, so an
+# unrelated upstream patch release can produce benign NOTICE drift. Promotion to
+# a required blocking check is a follow-up, gated on resolving that
+# non-determinism (commit lockfiles or scope the drift check to the deterministic
+# model/C++ sections) plus TL sign-off.
+#
+# Prerequisite for a real signal: NPM_TOKEN must be provisioned as a repo/org
+# secret (GitHub renders an unset secret as an empty string, which the generator
+# preflight rejects). Until then every run warns "generation did not complete"
+# instead of producing drift results — it just never blocks.
 #
 # Fork PRs are skipped: NOTICE generation needs org secrets (PAT_TOKEN for the
 # private qvac-registry-vcpkg + GitHub Packages, NPM_TOKEN for npm) that fork PRs
@@ -99,10 +105,11 @@ jobs:
       # portfiles + repo license lookups) and GitHub Packages npm auth. The repo
       # PAT_TOKEN has the cross-repo read scope the built-in GITHUB_TOKEN lacks.
       GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # NPM_TOKEN must be provisioned as a repo/org secret for the generator's
+      # preflight to pass (an unset secret renders as an empty string, which the
+      # generator rejects). Until then the regenerate step below fails and, in
+      # shadow mode, is reported as a warning rather than blocking.
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      # Not required by the scanners today (model data is read locally from
-      # models.prod.json) but wired for parity with the skill's prerequisites.
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
     steps:
       - name: Harden Runner
@@ -127,16 +134,28 @@ jobs:
           python-version: "3.x"
 
       - name: Regenerate NOTICE files for all shipping packages
+        id: regen
+        # Tolerate generator failure so the warn-only (shadow-mode) contract
+        # actually holds: a crash here (missing NPM_TOKEN, npm/PyPI/GitHub API
+        # hiccup) must not hard-fail the job — otherwise the schedule / push:main
+        # backstops go permanently red. "Report outcome" below converts a failure
+        # into a warning unless ENFORCE=true. continue-on-error is intentional
+        # here precisely because this is a shadow-mode gate, not a Tier-1 blocker.
+        continue-on-error: true
         run: node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all
 
       - name: Detect NOTICE drift
         id: drift
+        if: steps.regen.outcome == 'success'
         shell: bash
         run: |
           set -uo pipefail
-          # Only NOTICE files are tracked outputs; node_modules, package-lock.json,
-          # and per-package .npmrc the generator touches are all gitignored, so a
-          # NOTICE-scoped diff is a clean drift signal.
+          # Mark any newly-required (untracked) NOTICE as intent-to-add so it shows
+          # up in the diff. A missing committed NOTICE is the compliance case this
+          # gate most needs to catch, and plain `git diff` only reports changes to
+          # tracked files. node_modules, package-lock.json, and per-package .npmrc
+          # the generator also touches stay gitignored, so the diff is still clean.
+          git add --intent-to-add -- ':(glob)**/NOTICE'
           mapfile -t changed < <(git diff --name-only -- ':(glob)**/NOTICE')
           if [ ${#changed[@]} -eq 0 ]; then
             echo "drift=false" >> "$GITHUB_OUTPUT"
@@ -160,6 +179,7 @@ jobs:
 
       - name: Comment drift on PR
         if: >-
+          steps.regen.outcome == 'success' &&
           steps.drift.outputs.drift == 'true' &&
           github.event_name == 'pull_request'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
@@ -207,13 +227,32 @@ jobs:
               });
             }
 
-      - name: Report drift outcome
-        if: steps.drift.outputs.drift == 'true'
+      - name: Report outcome
+        if: always()
         shell: bash
+        env:
+          REGEN_OUTCOME: ${{ steps.regen.outcome }}
+          DRIFT: ${{ steps.drift.outputs.drift }}
         run: |
           set -uo pipefail
-          if [ "${ENFORCE}" = "true" ]; then
-            echo "::error::NOTICE drift detected (enforce mode). Failing the job."
-            exit 1
+          # Shadow mode (ENFORCE != true): nothing here fails the job — neither a
+          # generator crash nor detected drift. ENFORCE=true (workflow_dispatch)
+          # flips both into hard failures for a blocking trial.
+          if [ "$REGEN_OUTCOME" != "success" ]; then
+            msg="NOTICE generation did not complete — see the 'Regenerate' step logs (e.g. a missing NPM_TOKEN secret)."
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::$msg Failing (enforce mode)."
+              exit 1
+            fi
+            echo "::warning::$msg Not failing (shadow mode); no drift signal was produced this run."
+            exit 0
           fi
-          echo "::warning::NOTICE drift detected (shadow mode). Not failing — see the job summary and PR comment."
+          if [ "$DRIFT" = "true" ]; then
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::NOTICE drift detected (enforce mode). Failing the job."
+              exit 1
+            fi
+            echo "::warning::NOTICE drift detected (shadow mode). Not failing — see the job summary and PR comment."
+            exit 0
+          fi
+          echo "NOTICE files are in sync."
