@@ -18,8 +18,8 @@ namespace {
 
 constexpr int REASONING_BUDGET = 3;
 constexpr int PREDICT_TOKENS = 10;
-constexpr const char* THINKING_START_TAG = "<think>\n";
-constexpr const char* THINKING_END_TAG = "\n</think>\n\n";
+constexpr const char* THINKING_START_TAG = "<think>";
+constexpr const char* THINKING_END_TAG = "</think>";
 
 std::string sliceReasoning(const std::string& text) {
   const size_t open = text.find(THINKING_START_TAG);

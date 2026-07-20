@@ -49,13 +49,13 @@ test('Full OCR test suite', { timeout: 40 * 60 * 1000, skip: isMobile }, async f
       runOptions: testCase.options,
       perfLabel: `[EasyOCR full-suite ${baseName}]`,
       perfOpts: { imagePath },
-      assertResult (output) {
+      assertResult(output) {
         t.ok(Array.isArray(output), testCase.imagePath + ': output should be an array')
-        const texts = output.map(o => o[1])
+        const texts = output.map((o) => o[1])
         t.comment('Detected texts: ' + JSON.stringify(texts))
 
         for (const expected of testCase.expectedTexts) {
-          const found = texts.some(w => w.toLowerCase().includes(expected.toLowerCase()))
+          const found = texts.some((w) => w.toLowerCase().includes(expected.toLowerCase()))
           t.ok(found, testCase.imagePath + `: should detect "${expected}"`)
         }
       }

@@ -28,10 +28,10 @@ test('OCR basic test', { timeout: TEST_TIMEOUT }, async function (t) {
     runOptions: { paragraph: false },
     perfLabel: '[EasyOCR basic_test]',
     perfOpts: { imagePath },
-    assertResult (output) {
+    assertResult(output) {
       t.ok(Array.isArray(output), 'output should be an array')
       t.ok(output.length === 3, `output length should be 3, got ${output.length}`)
-      const outputTexts = output.map(o => o[1])
+      const outputTexts = output.map((o) => o[1])
       t.ok(outputTexts.includes('tilted'), 'should contain "tilted"')
       t.ok(outputTexts.includes('normal'), 'should contain "normal"')
       t.ok(outputTexts.includes('vertical'), 'should contain "vertical"')

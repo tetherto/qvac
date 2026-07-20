@@ -4,7 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const ImageClassifier = require('..')
 
-async function main () {
+async function main() {
   const imagePath = path.join(__dirname, '..', 'test', 'images', 'meal_1.jpg')
   const image = fs.readFileSync(imagePath)
   const classifier = new ImageClassifier()

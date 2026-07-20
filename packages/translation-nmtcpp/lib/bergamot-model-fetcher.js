@@ -18,8 +18,7 @@ const path = require('bare-path')
 
 const FIREFOX_RECORDS_URL =
   'https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records'
-const FIREFOX_ATTACHMENT_BASE =
-  'https://firefox-settings-attachments.cdn.mozilla.net'
+const FIREFOX_ATTACHMENT_BASE = 'https://firefox-settings-attachments.cdn.mozilla.net'
 
 // ============================================================================
 // Helpers
@@ -32,7 +31,7 @@ const FIREFOX_ATTACHMENT_BASE =
 // narrow — add entries only when a concrete Firefox record requires it.
 const BCP47_LANG_ALIASES = Object.freeze({ zh: 'zh-Hans' })
 
-function normalizeBcp47Lang (lang) {
+function normalizeBcp47Lang(lang) {
   return BCP47_LANG_ALIASES[lang] || lang
 }
 
@@ -40,10 +39,11 @@ function normalizeBcp47Lang (lang) {
  * Returns expected Bergamot model filenames for a language pair.
  * CJK target languages (zh, ja, ko) use separate src/trg vocabs.
  */
-function getBergamotFileNames (srcLang, dstLang) {
+function getBergamotFileNames(srcLang, dstLang) {
   const pair = `${srcLang}${dstLang}`
   const cjk = ['zh', 'ja', 'ko']
-  const separateVocab = cjk.includes(dstLang) || (cjk.includes(srcLang) && dstLang === 'en' && srcLang !== 'en')
+  const separateVocab =
+    cjk.includes(dstLang) || (cjk.includes(srcLang) && dstLang === 'en' && srcLang !== 'en')
 
   return {
     modelName: `model.${pair}.intgemm.alphas.bin`,
@@ -57,10 +57,10 @@ function getBergamotFileNames (srcLang, dstLang) {
  * Checks whether a directory already contains a valid Bergamot model
  * (at minimum an .intgemm model file and a .spm vocab file).
  */
-function hasBergamotModelFiles (dir) {
+function hasBergamotModelFiles(dir) {
   try {
     const files = fs.readdirSync(dir)
-    return files.some(f => f.includes('.intgemm')) && files.some(f => f.endsWith('.spm'))
+    return files.some((f) => f.includes('.intgemm')) && files.some((f) => f.endsWith('.spm'))
   } catch {
     return false
   }
@@ -81,7 +81,7 @@ const MIN_VALID_FILE_BYTES = 1024
  * across duplicate records within a single invocation (Firefox's records
  * collection has production + dev variants sharing the same filename).
  */
-function _isDownloadedFile (destPath) {
+function _isDownloadedFile(destPath) {
   try {
     const stat = fs.statSync(destPath)
     return stat.isFile() && stat.size >= MIN_VALID_FILE_BYTES
@@ -95,7 +95,7 @@ function _isDownloadedFile (destPath) {
  * Follows redirects via bare-fetch.
  * Skips the fetch entirely if the file already exists with non-trivial size.
  */
-async function downloadFile (url, destPath) {
+async function downloadFile(url, destPath) {
   if (_isDownloadedFile(destPath)) {
     return fs.statSync(destPath).size
   }
@@ -115,10 +115,12 @@ async function downloadFile (url, destPath) {
  * Downloads Bergamot model files from Mozilla's Firefox Remote Settings CDN.
  * This is the same source Firefox itself uses for translation models.
  */
-async function downloadBergamotFromFirefox (srcLang, dstLang, destDir) {
+async function downloadBergamotFromFirefox(srcLang, dstLang, destDir) {
   const fetch = require('bare-fetch')
 
-  console.log(`[bergamot-fetcher] Downloading ${srcLang}-${dstLang} from Firefox Remote Settings CDN...`)
+  console.log(
+    `[bergamot-fetcher] Downloading ${srcLang}-${dstLang} from Firefox Remote Settings CDN...`
+  )
 
   const res = await fetch(FIREFOX_RECORDS_URL)
   if (!res.ok) throw new Error(`Failed to fetch Firefox model records: HTTP ${res.status}`)
@@ -129,13 +131,13 @@ async function downloadBergamotFromFirefox (srcLang, dstLang, destDir) {
   const toLangMatch = normalizeBcp47Lang(dstLang)
 
   const pairRecords = records.filter(
-    r => r.fromLang === fromLangMatch && r.toLang === toLangMatch && r.attachment
+    (r) => r.fromLang === fromLangMatch && r.toLang === toLangMatch && r.attachment
   )
 
   if (pairRecords.length === 0) {
     throw new Error(
       `No Firefox Translations model found for ${srcLang}-${dstLang}. ` +
-      'Check https://github.com/mozilla/firefox-translations-models for supported pairs.'
+        'Check https://github.com/mozilla/firefox-translations-models for supported pairs.'
     )
   }
 
@@ -194,7 +196,7 @@ async function downloadBergamotFromFirefox (srcLang, dstLang, destDir) {
  * @param {string} destDir  Directory to store model files
  * @returns {Promise<string>} Resolved path to the model directory
  */
-async function ensureBergamotModelFiles (srcLang, dstLang, destDir) {
+async function ensureBergamotModelFiles(srcLang, dstLang, destDir) {
   if (hasBergamotModelFiles(destDir)) {
     console.log(`[bergamot-fetcher] Model already available at ${destDir}`)
     return destDir

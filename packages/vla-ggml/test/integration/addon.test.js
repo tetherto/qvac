@@ -37,23 +37,26 @@ try {
       runner: 'device-farm'
     }
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         _results.push({
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            total_time_ms: null,
-            vision_time_ms: null,
-            smollm2_compute_time_ms: null,
-            smollm2_total_time_ms: null,
-            ode_time_ms: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              total_time_ms: null,
+              vision_time_ms: null,
+              smollm2_compute_time_ms: null,
+              smollm2_total_time_ms: null,
+              ode_time_ms: null
+            },
+            metrics
+          ),
           quality: (extra && extra.quality) || undefined,
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
         })
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -63,7 +66,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         const dirs = []
         if (global.testDir) dirs.push(global.testDir)
@@ -75,15 +78,17 @@ try {
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
-            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(d, { recursive: true })
+            } catch (_) {}
             const p = path.join(d, 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
           } catch (_) {}
         }
       },
-      writeStepSummary () {},
-      writeToConsole () {
+      writeStepSummary() {},
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           const CHUNK = 800
@@ -93,12 +98,23 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (_) {}
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -117,7 +133,7 @@ const _reportPath = path.resolve('.', 'test/results/performance-report.json')
 // ensureIndicTransModel).
 // ---------------------------------------------------------------------------
 
-function _loadUrlsConfig () {
+function _loadUrlsConfig() {
   if (!global.assetPaths) return null
   const candidates = [
     '../../testAssets/smolvla-urls.json',
@@ -138,18 +154,30 @@ function _loadUrlsConfig () {
   return null
 }
 
-function _streamDownload (url, destPath, maxRedirects = 5) {
+function _streamDownload(url, destPath, maxRedirects = 5) {
   const https = require('bare-https')
   return new Promise((resolve, reject) => {
     let resolved = false
-    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
 
     console.log(`[vla-model] downloading: ${url.substring(0, 60)}...`)
     const file = fs.createWriteStream(destPath)
     file.on('error', (err) => {
       file.destroy()
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
       safeReject(err)
     })
 
@@ -158,7 +186,9 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
         // Drain the redirect body so bare-https can release the underlying socket.
         if (typeof res.resume === 'function') res.resume()
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         const location = res.headers.location
         if (location && maxRedirects > 0) {
           _streamDownload(location, destPath, maxRedirects - 1).then(safeResolve, safeReject)
@@ -170,7 +200,9 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         if (typeof res.resume === 'function') res.resume()
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
         return
       }
@@ -183,14 +215,17 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
         downloadedBytes += chunk.length
         if (downloadedBytes >= nextLogBytes) {
           const mb = downloadedBytes / (1024 * 1024)
-          const pct = contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
+          const pct =
+            contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
           console.log(`[vla-model] progress: ${mb.toFixed(0)}MB${pct}`)
           nextLogBytes += LOG_INTERVAL_BYTES
         }
       })
       res.on('error', (err) => {
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         safeReject(err)
       })
       res.pipe(file)
@@ -202,20 +237,24 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
     })
     req.on('error', (err) => {
       file.destroy()
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
       safeReject(err)
     })
     req.end()
   })
 }
 
-async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+async function _downloadFile(url, destPath, maxRedirects = 5, maxRetries = 3) {
   let lastErr = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
-      const backoffMs = 500 * (2 ** (attempt - 1))
-      console.log(`[vla-model] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`)
-      await new Promise(resolve => setTimeout(resolve, backoffMs))
+      const backoffMs = 500 * 2 ** (attempt - 1)
+      console.log(
+        `[vla-model] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`
+      )
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
     try {
       await _streamDownload(url, destPath, maxRedirects)
@@ -223,22 +262,34 @@ async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
     } catch (err) {
       lastErr = err
       if (err && /HTTP \d{3}/.test(err.message || '')) throw err
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
     }
   }
-  throw new Error(`[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
+  throw new Error(
+    `[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`
+  )
 }
 
 // Streaming SHA-256 over a local file. Used to validate the downloaded GGUF
 // against the publisher-supplied digest in smolvla-urls.json. Returns lower-
 // case hex; resolves to null if the bare-crypto stream isn't available so
 // the caller can fall back to size-only validation.
-async function _sha256File (filePath) {
+async function _sha256File(filePath) {
   let crypto
-  try { crypto = require('bare-crypto') } catch (_) { return null }
+  try {
+    crypto = require('bare-crypto')
+  } catch (_) {
+    return null
+  }
   return await new Promise((resolve, reject) => {
     let hash
-    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    try {
+      hash = crypto.createHash('sha256')
+    } catch (_) {
+      return resolve(null)
+    }
     const stream = fs.createReadStream(filePath)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
@@ -249,7 +300,7 @@ async function _sha256File (filePath) {
 // Verify a cached GGUF against publisher metadata. Strictest check first:
 // exact byte size, then sha256 if both publisher and runtime can compute it.
 // Returns { ok: true } on match, { ok: false, reason } otherwise.
-async function _verifyCachedModel (filePath, urlConfig) {
+async function _verifyCachedModel(filePath, urlConfig) {
   const stat = fs.statSync(filePath)
   if (urlConfig && Number.isInteger(urlConfig.sizeBytes)) {
     if (stat.size !== urlConfig.sizeBytes) {
@@ -271,11 +322,13 @@ async function _verifyCachedModel (filePath, urlConfig) {
   return { ok: true }
 }
 
-async function _ensureMobileModel () {
+async function _ensureMobileModel() {
   const modelFilename = 'smolvla-libero-vision-q8.gguf'
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'vla-models')
-  try { fs.mkdirSync(modelsDir, { recursive: true }) } catch (_) {}
+  try {
+    fs.mkdirSync(modelsDir, { recursive: true })
+  } catch (_) {}
   const destPath = path.join(modelsDir, modelFilename)
 
   const urlConfig = _loadUrlsConfig()
@@ -293,7 +346,9 @@ async function _ensureMobileModel () {
       return destPath
     }
     console.log(`[vla-model] cached GGUF rejected (${verdict.reason}) — re-downloading`)
-    try { fs.unlinkSync(destPath) } catch (_) {}
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
   }
 
   await _downloadFile(urlConfig.modelUrl, destPath)
@@ -305,7 +360,7 @@ async function _ensureMobileModel () {
 }
 
 let _reportFlushed = false
-function _flushPerfReport () {
+function _flushPerfReport() {
   if (_reportFlushed) return
   _reportFlushed = true
   if (_perfReporter.length === 0) return
@@ -339,7 +394,7 @@ process.on('exit', _flushPerfReport)
 //     Bare/mobile.
 // ---------------------------------------------------------------------------
 
-function _resolveAssetPath (relName) {
+function _resolveAssetPath(relName) {
   const candidates = [
     path.resolve('.', `test/integration/assets/${relName}`),
     path.resolve(__dirname, `assets/${relName}`)
@@ -356,7 +411,7 @@ function _resolveAssetPath (relName) {
   return null
 }
 
-function _loadReference (name) {
+function _loadReference(name) {
   const p = _resolveAssetPath(`pt_actions_libero_${name}.json`)
   if (!p) return null
   try {
@@ -366,7 +421,7 @@ function _loadReference (name) {
   }
 }
 
-function _loadRealPixels () {
+function _loadRealPixels() {
   const left = _resolveAssetPath('libero_real_left.bin')
   const right = _resolveAssetPath('libero_real_right.bin')
   if (!left || !right) return null
@@ -383,7 +438,7 @@ function _loadRealPixels () {
   }
 }
 
-function _compareActions (actual, reference) {
+function _compareActions(actual, reference) {
   const expected = []
   for (const row of reference) for (const v of row) expected.push(v)
   const n = Math.min(actual.length, expected.length)
@@ -401,7 +456,7 @@ function _compareActions (actual, reference) {
     normA += actual[i] * actual[i]
     normE += expected[i] * expected[i]
   }
-  const cos = (normA > 0 && normE > 0) ? dot / (Math.sqrt(normA) * Math.sqrt(normE)) : 0
+  const cos = normA > 0 && normE > 0 ? dot / (Math.sqrt(normA) * Math.sqrt(normE)) : 0
   return {
     action_max_abs_diff: maxAbs,
     action_mean_abs_diff: n > 0 ? sumAbs / n : 0,
@@ -422,22 +477,41 @@ test('integration: module exports expected surface', (t) => {
 
 test('integration: VlaModel rejects missing/invalid files.model', (t) => {
   let err1 = null
-  try { const m = new VlaModel({ files: { model: [] } }); t.absent(m) } catch (e) { err1 = e }
+  try {
+    const m = new VlaModel({ files: { model: [] } })
+    t.absent(m)
+  } catch (e) {
+    err1 = e
+  }
   t.ok(err1 && /non-empty array/.test(err1.message))
 
   let err2 = null
-  try { const m = new VlaModel(); t.absent(m) } catch (e) { err2 = e }
+  try {
+    const m = new VlaModel()
+    t.absent(m)
+  } catch (e) {
+    err2 = e
+  }
   t.ok(err2 && /non-empty array/.test(err2.message))
 
   let err3 = null
-  try { const m = new VlaModel({ files: { model: ['relative/path.gguf'] } }); t.absent(m) } catch (e) { err3 = e }
+  try {
+    const m = new VlaModel({ files: { model: ['relative/path.gguf'] } })
+    t.absent(m)
+  } catch (e) {
+    err3 = e
+  }
   t.ok(err3 && /absolute path/.test(err3.message))
 })
 
 test('integration: VlaModel.load rejects missing GGUF file', async (t) => {
   const m = new VlaModel({ files: { model: ['/definitely/does/not/exist.gguf'] } })
   let err = null
-  try { await m.load() } catch (e) { err = e }
+  try {
+    await m.load()
+  } catch (e) {
+    err = e
+  }
   t.ok(err, 'expected an error for missing GGUF')
 })
 
@@ -459,7 +533,7 @@ test('integration: VlaModel.load rejects missing GGUF file', async (t) => {
 // Build the inputs for a fixture. Returns `null` if the fixture's assets
 // aren't available (so callers can skip gracefully); throws if the fixture
 // is malformed.
-function _buildFixtureInputs (name, hp) {
+function _buildFixtureInputs(name, hp) {
   if (name === 'fixed') {
     const size = hp.visionImageSize
     const dummy = new Uint8Array(size * size * 3).fill(128)
@@ -482,14 +556,14 @@ function _buildFixtureInputs (name, hp) {
     if (ref.image_size !== size) {
       throw new Error(
         `real fixture image_size=${ref.image_size} but addon visionImageSize=${size}; ` +
-        'regenerate test/integration/assets/pt_actions_libero_real.json with matching dims'
+          'regenerate test/integration/assets/pt_actions_libero_real.json with matching dims'
       )
     }
     const expectedBytes = size * size * 3
     if (pixels.left.length !== expectedBytes || pixels.right.length !== expectedBytes) {
       throw new Error(
         `real fixture pixel buffer size mismatch (left=${pixels.left.length}, right=${pixels.right.length}, expected=${expectedBytes}); ` +
-        'regenerate libero_real_{left,right}.bin'
+          'regenerate libero_real_{left,right}.bin'
       )
     }
 
@@ -528,7 +602,7 @@ function _buildFixtureInputs (name, hp) {
   throw new Error(`unknown fixture name: ${name}`)
 }
 
-async function _runEndToEnd (t, modelPath, backend, fixtureName) {
+async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // Each iteration owns its own VlaModel and explicitly `unload()`s before
   // returning so memory-constrained mobile devices don't hold two copies of
   // the weights at once. `t.teardown` would defer release to end-of-test,
@@ -551,7 +625,7 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
     if (!inputs) {
       t.comment(
         `[${tag}] skipping: real fixture assets not found ` +
-        '(run scripts/generate_reference.py --fixture real)'
+          '(run scripts/generate_reference.py --fixture real)'
       )
       return
     }
@@ -564,16 +638,22 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
 
     // Per-component timings must be present and non-negative numbers.
     t.ok(stats && typeof stats === 'object')
-    for (const key of ['vision_ms', 'smollm2_compute_ms', 'smollm2_total_ms', 'ode_ms', 'total_ms']) {
+    for (const key of [
+      'vision_ms',
+      'smollm2_compute_ms',
+      'smollm2_total_ms',
+      'ode_ms',
+      'total_ms'
+    ]) {
       t.is(typeof stats[key], 'number', `stats.${key} is a number`)
       t.ok(stats[key] >= 0, `stats.${key} >= 0`)
     }
     console.log(
       `[VLA TIMING ${tag}] vision=${stats.vision_ms.toFixed(0)}ms ` +
-      `smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}ms ` +
-      `smollm2_total=${stats.smollm2_total_ms.toFixed(0)}ms ` +
-      `ode=${stats.ode_ms.toFixed(0)}ms ` +
-      `total=${stats.total_ms.toFixed(0)}ms`
+        `smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}ms ` +
+        `smollm2_total=${stats.smollm2_total_ms.toFixed(0)}ms ` +
+        `ode=${stats.ode_ms.toFixed(0)}ms ` +
+        `total=${stats.total_ms.toFixed(0)}ms`
     )
 
     const ref = _loadReference(fixtureName)
@@ -581,15 +661,15 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
     if (ref && (ref.chunk_size !== hp.chunkSize || ref.action_dim !== hp.actionDim)) {
       t.fail(
         `[${tag}] reference shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim}); ` +
-        `regenerate test/integration/assets/pt_actions_libero_${fixtureName}.json with matching dims`
+          `regenerate test/integration/assets/pt_actions_libero_${fixtureName}.json with matching dims`
       )
     } else if (ref) {
       const cmp = _compareActions(actions, ref.actions)
       quality = cmp
       console.log(
         `[VLA QUALITY ${tag}] vs ${ref.model}: max|Δ|=${cmp.action_max_abs_diff.toFixed(4)} ` +
-        `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
-        `(${cmp.compared} values)`
+          `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
+          `(${cmp.compared} values)`
       )
       // Tolerances differ per fixture so the synthetic gripper-flip noise
       // doesn't drag the bound on the real-LIBERO fixture down with it:
@@ -623,21 +703,27 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
         `[${tag}] cosine similarity ${cmp.action_cos_sim.toFixed(4)} > ${cosBound} vs PyTorch`
       )
     } else {
-      t.comment(`[${tag}] skipping reference comparison: pt_actions_libero_${fixtureName}.json not found`)
+      t.comment(
+        `[${tag}] skipping reference comparison: pt_actions_libero_${fixtureName}.json not found`
+      )
     }
 
     const ep = model.backendName || null
     console.log(`[VLA BACKEND ${tag}] execution_provider=${ep ?? 'unknown'}`)
-    _perfReporter.record(`end-to-end inference (${tag})`, {
-      total_time_ms: stats.total_ms,
-      vision_time_ms: stats.vision_ms,
-      smollm2_compute_time_ms: stats.smollm2_compute_ms,
-      smollm2_total_time_ms: stats.smollm2_total_ms,
-      ode_time_ms: stats.ode_ms
-    }, {
-      execution_provider: ep,
-      ...(quality ? { quality } : {})
-    })
+    _perfReporter.record(
+      `end-to-end inference (${tag})`,
+      {
+        total_time_ms: stats.total_ms,
+        vision_time_ms: stats.vision_ms,
+        smollm2_compute_time_ms: stats.smollm2_compute_ms,
+        smollm2_total_time_ms: stats.smollm2_total_ms,
+        ode_time_ms: stats.ode_ms
+      },
+      {
+        execution_provider: ep,
+        ...(quality ? { quality } : {})
+      }
+    )
 
     // Mobile: flush after every record so the perf-report markers land in
     // logcat / iOS console *before* the BareKit process exits. The
@@ -665,58 +751,70 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
 // — and importantly, a successful run() right after a rejected run() proves
 // `_hasActiveResponse` was cleared, addressing PR #1784 review threads
 // gianni-cor:3197537469 (img-shape) and gianni-cor:3197537587 (wedge).
-test('integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000 }, async (t) => {
-  const modelPath = process.env.QVAC_VLA_MODEL
-  if (!modelPath || !fs.existsSync(modelPath)) {
-    t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
-    t.pass()
-    return
-  }
-
-  const model = new VlaModel({ files: { model: [path.resolve(modelPath)] } })
-  try {
-    await model.load({ backend: 'cpu' })
-    const hp = model.hparams
-    const size = hp.visionImageSize
-    const wrongSize = size === 256 ? 512 : 256
-
-    // Build inputs whose pixel buffers ARE consistent with the (wrong) imgWidth/Height
-    // so we don't trip the earlier "pixel.length === 3*imgW*imgH" check.
-    // The only thing wrong is imgWidth != hp.visionImageSize.
-    const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
-    const tokens = new Int32Array(hp.tokenizerMaxLength)
-    const mask = new Uint8Array(hp.tokenizerMaxLength)
-    tokens[0] = 1
-    mask[0] = 1
-    const badInput = {
-      images: [dummyPixels, dummyPixels],
-      imgWidth: wrongSize,
-      imgHeight: wrongSize,
-      state: padState([0, 0, 0, 0, 0, 0], hp.maxStateDim),
-      tokens,
-      mask
+test(
+  'integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)',
+  { timeout: 600000 },
+  async (t) => {
+    const modelPath = process.env.QVAC_VLA_MODEL
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
+      t.pass()
+      return
     }
 
-    let rejectErr = null
-    try { await model.run(badInput) } catch (e) { rejectErr = e }
-    t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
-    t.ok(
-      rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
-      `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
-    )
+    const model = new VlaModel({ files: { model: [path.resolve(modelPath)] } })
+    try {
+      await model.load({ backend: 'cpu' })
+      const hp = model.hparams
+      const size = hp.visionImageSize
+      const wrongSize = size === 256 ? 512 : 256
 
-    // After the rejection, a fresh canonical-shape run() must succeed.
-    // If `_hasActiveResponse` had been left set (the wedge bug), this would
-    // throw JOB_ALREADY_RUNNING immediately.
-    const goodInputs = _buildFixtureInputs('fixed', hp)
-    const response = await model.run(goodInputs)
-    const { actions } = await response.await()
-    t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
-    t.is(actions.length, hp.chunkSize * hp.actionDim, 'follow-up run actions length matches chunk_size*action_dim')
-  } finally {
-    await model.unload().catch(() => {})
+      // Build inputs whose pixel buffers ARE consistent with the (wrong) imgWidth/Height
+      // so we don't trip the earlier "pixel.length === 3*imgW*imgH" check.
+      // The only thing wrong is imgWidth != hp.visionImageSize.
+      const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
+      const tokens = new Int32Array(hp.tokenizerMaxLength)
+      const mask = new Uint8Array(hp.tokenizerMaxLength)
+      tokens[0] = 1
+      mask[0] = 1
+      const badInput = {
+        images: [dummyPixels, dummyPixels],
+        imgWidth: wrongSize,
+        imgHeight: wrongSize,
+        state: padState([0, 0, 0, 0, 0, 0], hp.maxStateDim),
+        tokens,
+        mask
+      }
+
+      let rejectErr = null
+      try {
+        await model.run(badInput)
+      } catch (e) {
+        rejectErr = e
+      }
+      t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
+      t.ok(
+        rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
+        `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
+      )
+
+      // After the rejection, a fresh canonical-shape run() must succeed.
+      // If `_hasActiveResponse` had been left set (the wedge bug), this would
+      // throw JOB_ALREADY_RUNNING immediately.
+      const goodInputs = _buildFixtureInputs('fixed', hp)
+      const response = await model.run(goodInputs)
+      const { actions } = await response.await()
+      t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
+      t.is(
+        actions.length,
+        hp.chunkSize * hp.actionDim,
+        'follow-up run actions length matches chunk_size*action_dim'
+      )
+    } finally {
+      await model.unload().catch(() => {})
+    }
   }
-})
+)
 
 test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1800000 }, async (t) => {
   let modelPath = process.env.QVAC_VLA_MODEL

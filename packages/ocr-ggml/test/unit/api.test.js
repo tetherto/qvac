@@ -4,7 +4,7 @@ const test = require('brittle')
 const OcrGgml = require('../..').OcrGgml
 const { ERR_CODES, QvacErrorAddonOcrGgml } = require('../..')
 
-async function captureRejection (fn) {
+async function captureRejection(fn) {
   try {
     await fn()
   } catch (err) {
@@ -13,7 +13,7 @@ async function captureRejection (fn) {
   return null
 }
 
-test('OcrGgml constructor exposes initial state', t => {
+test('OcrGgml constructor exposes initial state', (t) => {
   const ocr = new OcrGgml({
     params: {
       pathDetector: 'unused',
@@ -29,7 +29,7 @@ test('OcrGgml constructor exposes initial state', t => {
   })
 })
 
-test('OcrGgml.load rejects when pathDetector is missing', async t => {
+test('OcrGgml.load rejects when pathDetector is missing', async (t) => {
   const ocr = new OcrGgml({
     params: {
       pathRecognizer: '/tmp/recognizer.gguf',
@@ -40,10 +40,14 @@ test('OcrGgml.load rejects when pathDetector is missing', async t => {
   const err = await captureRejection(() => ocr.load())
   t.ok(err, 'load() rejected')
   t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
-  t.is(err && err.code, ERR_CODES.MISSING_REQUIRED_PARAMETER, 'error.code is MISSING_REQUIRED_PARAMETER')
+  t.is(
+    err && err.code,
+    ERR_CODES.MISSING_REQUIRED_PARAMETER,
+    'error.code is MISSING_REQUIRED_PARAMETER'
+  )
 })
 
-test('OcrGgml.load rejects when pathRecognizer is missing', async t => {
+test('OcrGgml.load rejects when pathRecognizer is missing', async (t) => {
   const ocr = new OcrGgml({
     params: {
       pathDetector: '/tmp/detector.gguf',
@@ -54,10 +58,14 @@ test('OcrGgml.load rejects when pathRecognizer is missing', async t => {
   const err = await captureRejection(() => ocr.load())
   t.ok(err, 'load() rejected')
   t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
-  t.is(err && err.code, ERR_CODES.MISSING_REQUIRED_PARAMETER, 'error.code is MISSING_REQUIRED_PARAMETER')
+  t.is(
+    err && err.code,
+    ERR_CODES.MISSING_REQUIRED_PARAMETER,
+    'error.code is MISSING_REQUIRED_PARAMETER'
+  )
 })
 
-test('OcrGgml.load rejects when langList is empty', async t => {
+test('OcrGgml.load rejects when langList is empty', async (t) => {
   const ocr = new OcrGgml({
     params: {
       pathDetector: '/tmp/detector.gguf',
@@ -69,9 +77,13 @@ test('OcrGgml.load rejects when langList is empty', async t => {
   const err = await captureRejection(() => ocr.load())
   t.ok(err, 'load() rejected')
   t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
-  t.is(err && err.code, ERR_CODES.MISSING_REQUIRED_PARAMETER, 'error.code is MISSING_REQUIRED_PARAMETER')
+  t.is(
+    err && err.code,
+    ERR_CODES.MISSING_REQUIRED_PARAMETER,
+    'error.code is MISSING_REQUIRED_PARAMETER'
+  )
 })
 
-test('OcrGgml.getModelKey returns deterministic key', t => {
+test('OcrGgml.getModelKey returns deterministic key', (t) => {
   t.is(OcrGgml.getModelKey(), 'ocr-ggml')
 })
