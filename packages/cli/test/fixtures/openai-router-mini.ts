@@ -16,6 +16,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   app.post('/v1/files', {}, async () => ({}))
   // lunte-disable-next-line require-await
   app.get('/v1/files/:id', {}, async () => ({}))
+  // lunte-disable-next-line require-await
+  app.get('/v1/audio/models', {}, async () => ({}))
 }
 
 export default plugin

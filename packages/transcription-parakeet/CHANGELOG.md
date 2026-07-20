@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated the published JavaScript wrapper to generated TypeScript sources and added declarations for the supported `./parakeet` subpath export, while preserving the existing CommonJS runtime API.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`parakeet-cpp` >= 2026-07-13#1, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16/i8mm kernels, leaving quantized models slow (tdt q4_0 mean RTF 0.2285 -> 0.0612 on ubuntu-24.04-arm; q4_0 now beats q8_0 like on every other desktop platform).
 
 ### Fixed

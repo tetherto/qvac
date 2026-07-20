@@ -295,8 +295,8 @@ export const diffusionStreamingProgress = createDiffusionTest(
 
 // ---- stats ----
 
-export const diffusionStatsPresent = createDiffusionTest(
-  'diffusion-stats-present',
+export const diffusionStatsValid = createDiffusionTest(
+  'diffusion-stats-valid',
   {
     prompt: 'a white circle on black background',
     width: 256,
@@ -434,7 +434,7 @@ export const diffusionTests = [
   diffusionImg2imgInvalidStrength,
   diffusionStreaming,
   diffusionStreamingProgress,
-  diffusionStatsPresent,
+  diffusionStatsValid,
   diffusionFaAccepted,
   diffusionFaDisabledAccepted,
   diffusionFusionFlux2Basic,

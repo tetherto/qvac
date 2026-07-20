@@ -54,9 +54,17 @@ on:
         type: number
         default: 90
       device-farm-start-timeout:
-        description: "Device Farm scheduling timeout before producer starts (minutes)"
+        description: "Minutes to wait for a device before failing. Kept short so a busy Device Farm fails fast instead of burning CI minutes."
         type: number
-        default: 90
+        default: 15
+      android-device-pool:
+        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_ANDROID_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
+      ios-device-pool:
+        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
@@ -99,7 +107,13 @@ on:
         default: 90
       device-farm-start-timeout:
         type: number
-        default: 90
+        default: 15
+      android-device-pool:
+        type: string
+        default: ""
+      ios-device-pool:
+        type: string
+        default: ""
       desktop-platforms:
         type: string
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
@@ -191,9 +205,10 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
-      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
 
@@ -215,8 +230,9 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
-      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.ios-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
