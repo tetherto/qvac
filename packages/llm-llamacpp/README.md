@@ -43,7 +43,7 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 - **Non-Adreno GPUs**: Normal GPU selection applies (no special behavior).
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
+- inference-addon-cpp (≥1.3.0): C++ addon framework (multi-job scheduler)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
@@ -325,21 +325,29 @@ try {
 
 ### API behavior by state
 
-The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs a job running). `cancel` can be called on the model (`model.cancel()`) or on the response (`response.cancel()`); both target the same underlying job.
+The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
+
+- `response.cancel()` — **targeted**: cancels only the job (or batch group) that `run()` call produced, leaving other concurrent jobs running.
+- `model.cancel()` — **global**: cancels every live job (in-flight and queued) at the moment of the call, plus any finetuning in progress.
 
 | Current state | Action called | What happens |
 |---------------|----------------|----------------------------------------------------------------|
 | idle          | run            | **Allowed** — starts inference, returns `QvacResponse`        |
 | idle          | cancel         | **Allowed** — no-op (no job to cancel); Promise resolves      |
-| run           | run            | **Throw** — second `run()` throws "a job is already set or being processed" (can wait very briefly for previous job completion) |
-| run           | cancel         | **Allowed** — cancels current job; Promise resolves when job has stopped |
+| busy, `parallel: 1` (or `rejectWhenBusy: true`) | run | **Throw** — `"Cannot set new job: a job is already set or being processed"` the moment the slot pool is full |
+| busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
+| busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
+| busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |
 
-When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
-- `"Cannot set new job: a job is already set or being processed"`
+Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
+
+#### Prefill (cache warming) with `parallel >= 2`
+
+A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it is *persistable*: `saveCacheToDisk: true` plus a `cacheKey`. A live-only prefill (no persistence) warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
 
 #### Cancelling a batch
 
-When more prompts are submitted in one batch than the configured `parallel` slots, the overflow prompts wait in an internal queue until a slot frees up. `cancel` treats the two groups differently, mirroring how cancelling a single request behaves:
+`response.cancel()` on a `BatchResponse` cancels only that batch group — other concurrent runs (single or batch) keep going; `model.cancel()` cancels every live job. Within the cancelled group, when more prompts were submitted than the configured `parallel` slots the overflow prompts wait in an internal queue until a slot frees up, and cancel treats the two subsets differently, mirroring how cancelling a single request behaves:
 
 - **In-flight prompts** (already decoding in a slot) are cancelled gracefully: they keep whatever they generated so far and the call resolves normally — no error.
 - **Queued prompts** (still waiting, never admitted to a slot) had no chance to run and produced nothing. These are surfaced as an error rather than silent empty results: the batch call rejects with a `Cancelled` `StatusError`.

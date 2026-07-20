@@ -135,6 +135,12 @@ export interface LlmLlamacppArgs {
   files: { model: string[]; projectionModel?: string }
   config: LlamaConfig
   logger?: QvacLogger | Console | null
+  /**
+   * `rejectWhenBusy` is the instance-level admission policy when the worker
+   * pool is full; defaults to `true` for `parallel: 1` and `false` for
+   * `parallel >= 2`, and can be overridden per call via
+   * `RunOptions.rejectWhenBusy` (see its doc for the full contract).
+   */
   opts?: { stats?: boolean; rejectWhenBusy?: boolean }
 }
 
@@ -294,6 +300,14 @@ export interface GenerationParams {
 }
 
 export interface RunOptions {
+  /**
+   * Run prefill only (cache warming): the prompt is evaluated but no tokens
+   * are generated. On a model loaded with `parallel >= 2` a prefill is
+   * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
+   * `cacheKey`) — a live-only prefill warms context state that no concurrent
+   * job could reach and is rejected with `InvalidArgument`; run live-only
+   * prefills on a `parallel: 1` model. The same rule applies per batch item.
+   */
   prefill?: boolean
   generationParams?: GenerationParams
   cacheKey?: string
@@ -340,6 +354,12 @@ export interface BatchPrompt {
    */
   id?: string
   prompt: Message[]
+  /**
+   * Per-item options. `rejectWhenBusy` is a group policy — a batch is
+   * admitted as one native job, so items that set it must agree (a conflict
+   * throws `TypeError` before admission) and the agreed value gates the
+   * whole group.
+   */
   runOptions?: RunOptions
 }
 
@@ -516,13 +536,25 @@ export default class LlmLlamacpp {
   load(): Promise<void>
   /**
    * Run inference. When the model was loaded with `config.parallel >= 2`,
-   * multiple `run()` calls may be concurrently in flight (continuous batching).
-   * Each call returns an independent `QvacResponse` that receives only its own
-   * output tokens. Throws `RUN_BUSY` when the model's concurrency cap is full.
+   * multiple `run()` calls may be concurrently in flight (continuous
+   * batching): separate top-level calls are decoded together across slots,
+   * and each call returns an independent `QvacResponse` that receives only
+   * its own output tokens and stats. A call at capacity throws `RUN_BUSY`
+   * when the effective `rejectWhenBusy` policy is `true` (the default for
+   * `parallel: 1`), and queues until a slot frees when it is `false` (the
+   * default for `parallel >= 2`). Use `response.cancel()` to cancel just
+   * that call's job or batch group.
    */
   run(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse>
   run(prompt: (Message[] | BatchPrompt)[]): Promise<BatchResponse>
   finetune(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>
+  /**
+   * Global cancel: stops every job live at the moment of the call — in-flight
+   * and queued, across all concurrent `run()` calls — plus any finetuning in
+   * progress (its pause checkpoint is removed so the next `finetune()` starts
+   * fresh). For cancelling a single request or batch group, use
+   * `response.cancel()` on that call's response instead.
+   */
   cancel(): Promise<void>
   pause(): Promise<void>
   unload(): Promise<void>

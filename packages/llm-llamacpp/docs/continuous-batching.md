@@ -9,6 +9,8 @@
 - [What it does](#what-it-does)
 - [Enabling it](#enabling-it)
 - [JS API](#js-api)
+  - [Admission, job ids and `rejectWhenBusy`](#admission-job-ids-and-rejectwhenbusy)
+  - [Prefill rules (persistable vs live-only)](#prefill-rules-persistable-vs-live-only)
 - [How a batch flows from JS to native slots](#how-a-batch-flows-from-js-to-native-slots)
 - [Components](#components)
   - [ContinuousBatchScheduler](#continuousbatchscheduler)
@@ -30,6 +32,11 @@
 In the default single-prompt path, the GPU sits idle between generation steps while sampling and I/O run on the CPU. Concurrent callers each get their own sequential decode loop, so there is no GPU work sharing between them.
 
 With continuous batching enabled, a single worker thread runs a shared decode loop. On every step it collects one token from each active sequence into one `llama_batch`, calls `llama_decode` once, then samples a token per sequence. A new sequence can join at any step as soon as a slot frees up.
+
+Sequences reach that loop two ways, and they share it freely:
+
+- **One batch-array call** — `run([promptA, promptB, ...])` submits several prompts as one group.
+- **Separate concurrent `run()` calls** — each top-level call (single prompt or batch) is admitted as its own job by the multi-job scheduler and decodes alongside whatever else is in flight, so multiple responses can be active at once.
 
 ---
 
@@ -102,6 +109,21 @@ interface BatchResult {
 ```
 
 Streaming chunks arrive in decode order, interleaved across sequences. The `id` field correlates each chunk to the prompt that produced it. `await()` resolves once all sequences finish and returns results in the original input order.
+
+### Admission, job ids and `rejectWhenBusy`
+
+Every `run()` call is admitted by the native multi-job scheduler before it resolves. Admission mints a native job id — the group id for a batch run — which routes that call's streamed output and terminal stats to its own response, and is what `response.cancel()` targets. The JS-facing per-prompt `ids` (`batch-N` mints or caller-supplied) are separate; see [Sequence ids and streaming](#sequence-ids-and-streaming).
+
+Whether a call at capacity is rejected or queued is the `rejectWhenBusy` policy:
+
+- `true` — fail fast: throw `RUN_BUSY` the moment active jobs reach the `parallel` pool size.
+- `false` — queue: the job waits in the scheduler's nearly unbounded queue and starts as slots free.
+
+The instance default follows `parallel` (`true` at `1`, `false` at `>= 2`); `opts.rejectWhenBusy` overrides it per instance and `runOptions.rejectWhenBusy` per call. A batch run derives ONE group policy from its items' `runOptions` — a batch is one native job, so items that disagree are refused with a `TypeError` before admission.
+
+### Prefill rules (persistable vs live-only)
+
+A prefill-only item (`runOptions.prefill: true`) earns a scheduler lane exactly when its product survives the slot teardown: `saveCacheToDisk: true` plus a `cacheKey` (*persistable* prefill). A *live-only* prefill's product is warm state in a context that concurrent jobs can never reach, so on a parallel model it is rejected with `InvalidArgument` — both as a single `run()` and per batch item. Load with `parallel: 1` for live-only cache warming. See [cache-api.md](cache-api.md).
 
 ### Stats
 
@@ -314,7 +336,12 @@ The single-prompt path keeps one `TextLlmContext` for the model's lifetime, so i
 
 ## Cancellation semantics
 
-Cancellation behaves differently depending on where a prompt is when `cancel()` fires:
+Two cancel scopes exist:
+
+- **Targeted** — `response.cancel()` calls the native `cancelJob(id)` with the job id minted at admission (the group id for a batch run). Only that job/group's in-flight slots and queued prompts are cancelled; concurrent jobs from other `run()` calls keep decoding. A stale targeted cancel can never land on a slot's next occupant: cancels are validated against the slot's admission id.
+- **Global** — `model.cancel()` cancels a snapshot of the jobs live at the moment of the call (in-flight and queued), plus any finetuning in progress. Jobs admitted after the snapshot proceed normally.
+
+Within a cancelled job/group, the effect depends on where each prompt is when the cancel fires:
 
 | Prompt state | What happens |
 |--------------|--------------|
@@ -323,7 +350,7 @@ Cancellation behaves differently depending on where a prompt is when `cancel()` 
 
 If a batch had overflow prompts still in `pending_`, the batch call rejects with `Cancelled`. Callers should handle that rejection rather than expecting empty strings for the prompts that never ran.
 
-`requestCancelAll()` sets `cancelRequested_` atomically. The worker loop detects the flag after each step: it drains `pending_` (failing pending groups) before the flag is cleared, so active and queued prompts are both covered.
+Natively, a targeted cancel stops only the slots and pending entries registered under that job's admission id, while `requestCancelAll()` sets `cancelRequested_` atomically for the global path. The worker loop detects the flag after each step: it drains `pending_` (failing pending groups) before the flag is cleared, so active and queued prompts are both covered.
 
 ---
 
@@ -526,7 +553,8 @@ backend, not a slow model. Per-step accounting: see
 | `tools_compact` | Supported |
 | Per-prompt `cacheKey` | Supported (read sharing allowed; write sharing rejected) |
 | Context shifting (`n_discarded`) | Supported, against per-slot window |
-| Multiple consecutive `run()` calls | Do not batch together; submit all prompts in one `run()` call |
+| Concurrent top-level `run()` calls | Supported — each call is its own scheduler job and decodes alongside the others (see [Admission](#admission-job-ids-and-rejectwhenbusy)) |
+| Live-only prefill (`prefill: true` without `saveCacheToDisk` + `cacheKey`) | Rejected with `InvalidArgument`; persistable prefill is supported (see [Prefill rules](#prefill-rules-persistable-vs-live-only)) |
 | `parallel < 2` | Batch input throws `InvalidArgument` before admission |
 
 For the JS-side cancellation contract, see [README — Cancelling a batch](../README.md#cancelling-a-batch). For the cache API, see [cache-api.md](cache-api.md).

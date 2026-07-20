@@ -10,15 +10,15 @@ This document contains detailed diagrams showing how data moves through the `@qv
 <summary>⚡ TL;DR: Data Flow Overview</summary>
 
 **Communication Pattern:**
-- Two-thread architecture: JavaScript thread + dedicated C++ processing thread
+- Multi-thread architecture: JavaScript thread + C++ scheduler worker threads (`parallel` lanes)
 - Synchronization via mutex and condition variables
-- Cross-thread flow: JS → submit job via `runJob(inputs)` → wake C++ → process single job → output → uv_async_send → JS callback
+- Cross-thread flow: JS → submit job via `runJob(inputs)` → scheduler admits/queues → worker processes job → output → uv_async_send → JS callback
 
 **Inference Path:**
-- JS calls `run(messages)` → returns QvacResponse immediately (non-blocking)
-- JS builds inputs array (media items + text), calls `addon.runJob(inputs)` once; returns boolean (accepted or job already active)
-- C++ single-job runner takes the job, calls `model.process(std::any)` → generates tokens
-- Queues output events → triggers JS callback asynchronously
+- JS calls `run(messages)` → returns QvacResponse after admission (non-blocking)
+- JS builds inputs array (media items + text), calls `addon.runJob(inputs)` once; resolves an AdmissionResult (`accepted` plus the scheduler-minted job id used to route output and targeted cancels)
+- A C++ scheduler worker takes the job, calls `model.process(std::any, jobId)` → generates tokens; with `parallel >= 2` several jobs decode together (continuous batching)
+- Queues output events (tagged by job id) → triggers JS callback asynchronously
 - Emits: Output (streaming), JobStarted, JobEnded, Error
 
 **Weight Loading:**
@@ -66,7 +66,7 @@ flowchart TD
     CreateResp --> ReturnJS([Return to JavaScript])
     
     RunJob -.->|Enters C++| LockMutex[Lock mutex]
-    LockMutex --> SetJob[Set single job input]
+    LockMutex --> SetJob[Enqueue job - scheduler admission]
     SetJob --> NotifyCV[Notify condition variable]
     NotifyCV --> UnlockMutex[Unlock mutex]
     
@@ -138,7 +138,7 @@ flowchart TD
 | 5 | JS | <0.1ms | Set job input | No |
 | 6 | JS | <0.1ms | Signal CV | No |
 | 7 | JS | <0.1ms | Unlock mutex | No |
-| 8 | JS | <0.1ms | Return accepted (boolean) | No |
+| 8 | JS | <0.1ms | Return AdmissionResult (accepted + job id) | No |
 | 9 | C++ | - | Wake from cv.wait() | - |
 
 **Phase 2: Processing (C++ Background Thread)**
