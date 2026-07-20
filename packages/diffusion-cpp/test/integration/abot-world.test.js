@@ -47,7 +47,7 @@ const skip = noGpu || (!overrideDir && !canFetchS3)
 
 console.log('[ABot-World] skip:', skip, 'override:', !!overrideDir, 'awsCreds:', haveAwsCreds)
 
-function run (cmd, args, opts) {
+function run(cmd, args, opts) {
   const { spawn } = require('bare-subprocess')
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: 'inherit', ...opts })
@@ -59,7 +59,7 @@ function run (cmd, args, opts) {
   })
 }
 
-async function provisionFromS3 (dir) {
+async function provisionFromS3(dir) {
   fs.mkdirSync(dir, { recursive: true })
   for (const name of [SUMS_NAME, DIT_NAME, VAE_NAME]) {
     const dest = path.join(dir, name)
@@ -70,46 +70,50 @@ async function provisionFromS3 (dir) {
   await run('sha256sum', ['--check', '--ignore-missing', SUMS_NAME], { cwd: dir })
 }
 
-test('ABot-World: model set loads; batch generation is guarded', { skip, timeout: 2_400_000 }, async (t) => {
-  setupJsLogger()
+test(
+  'ABot-World: model set loads; batch generation is guarded',
+  { skip, timeout: 2_400_000 },
+  async (t) => {
+    setupJsLogger()
 
-  const dir = overrideDir || path.resolve(__dirname, '../model/abot')
-  if (!overrideDir) {
-    await provisionFromS3(dir)
-    t.pass('ABot GGUFs fetched from S3 and sha256-verified')
+    const dir = overrideDir || path.resolve(__dirname, '../model/abot')
+    if (!overrideDir) {
+      await provisionFromS3(dir)
+      t.pass('ABot GGUFs fetched from S3 and sha256-verified')
+    }
+
+    const t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
+
+    const world = new VideoStableDiffusion({
+      files: {
+        model: path.join(dir, DIT_NAME),
+        vae: path.join(dir, VAE_NAME),
+        t5Xxl
+      },
+      config: {
+        device: 'gpu',
+        offload_to_cpu: true,
+        vae_on_cpu: true
+      },
+      logger: console
+    })
+
+    await t.execution(world.load(), 'ABot DiT + Wan2.2 VAE + UMT5 load via the addon')
+
+    const generation = world.run({
+      mode: 'txt2vid',
+      prompt: 'a coastal street',
+      width: 832,
+      height: 480,
+      video_frames: 9
+    })
+
+    await t.exception(
+      generation,
+      /ABot-World|not supported by batch|interactive session/i,
+      'batch generation rejected with the documented ABot message'
+    )
+
+    await world.unload().catch(() => {})
   }
-
-  const t5Xxl = await ensureModelPath({ modelName: 'umt5_xxl_fp16.safetensors' })
-
-  const world = new VideoStableDiffusion({
-    files: {
-      model: path.join(dir, DIT_NAME),
-      vae: path.join(dir, VAE_NAME),
-      t5Xxl
-    },
-    config: {
-      device: 'gpu',
-      offload_to_cpu: true,
-      vae_on_cpu: true
-    },
-    logger: console
-  })
-
-  await t.execution(world.load(), 'ABot DiT + Wan2.2 VAE + UMT5 load via the addon')
-
-  const generation = world.run({
-    mode: 'txt2vid',
-    prompt: 'a coastal street',
-    width: 832,
-    height: 480,
-    video_frames: 9
-  })
-
-  await t.exception(
-    generation,
-    /ABot-World|not supported by batch|interactive session/i,
-    'batch generation rejected with the documented ABot message'
-  )
-
-  await world.unload().catch(() => {})
-})
+)
