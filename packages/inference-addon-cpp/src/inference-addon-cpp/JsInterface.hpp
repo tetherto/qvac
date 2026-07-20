@@ -138,6 +138,26 @@ public:
     }
     return js::Number(env_, args_[argIndex]).as<CppNumberType>(env_);
   }
+
+  /// @brief Like getIntegralOptional, but the number is parsed through
+  /// js::Number::asChecked: it must be a finite, non-negative integer
+  /// <= 2^53 - 1, anything else throws InvalidArgument instead of being
+  /// truncated by the cast. Use for untrusted numbers that address or size
+  /// native state (job ids, counts, indices).
+  template <typename CppNumberType>
+  std::optional<CppNumberType> getCheckedIntegralOptional(int argIndex) {
+    static_assert(
+        std::is_integral_v<CppNumberType>,
+        "CppNumberType must be an integral type");
+    if (argIndex < 0 || argIndex >= args_.size()) {
+      return std::nullopt;
+    }
+    if (js::is<js::Null>(env_, args_[argIndex]) ||
+        js::is<js::Undefined>(env_, args_[argIndex])) {
+      return std::nullopt;
+    }
+    return js::Number(env_, args_[argIndex]).asChecked<CppNumberType>(env_);
+  }
 };
 
 using namespace qvac_errors;
@@ -308,7 +328,7 @@ public:
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto& instance = getInstance(env, argsParser.get(0, "instance"));
-    return instance.cancelJob(argsParser.getIntegralOptional<JobId>(1));
+    return instance.cancelJob(argsParser.getCheckedIntegralOptional<JobId>(1));
   }
   JSCATCH
 };
