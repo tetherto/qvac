@@ -772,8 +772,22 @@ void ContinuousBatchScheduler::drainFinishedLocked() {
     // cancelled request into the on-disk cache. The last known-good
     // cache from a prior turn is preserved. The subsequent
     // `clearSeqKv` still wipes the sequence in memory.
+    //
+    // A failed disk save (e.g. unwritable cacheKey) is the finishing
+    // request's own error, not the scheduler's: nothing shared is corrupted
+    // by a failed file write, so it must fail only this slot's group.
+    // Letting it escape to workerLoop's catch would tear down every
+    // in-flight slot and drain the whole queue with an error naming this
+    // request's cacheKey. failSlotLocked routes a grouped slot through
+    // failGroupLocked (settling the whole group -- one job -- with this
+    // error, `SaveCachePolicy::Skip` on its remaining slots) and frees the
+    // slot either way; the loop below still clears this seqId's KV.
     if (rollbackOk) {
-      saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+      try {
+        saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+      } catch (...) {
+        failSlotLocked(req.seqId, std::current_exception());
+      }
     }
   }
   for (const auto& req : finished) {
