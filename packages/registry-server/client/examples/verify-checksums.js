@@ -25,7 +25,7 @@ const { QVACRegistryClient } = require('../index')
  * @param {string} filePath - Path to file
  * @returns {Promise<string>} Hex-encoded SHA256 hash
  */
-async function computeSha256 (filePath) {
+async function computeSha256(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256')
     const stream = fs.createReadStream(filePath)
@@ -41,14 +41,14 @@ async function computeSha256 (filePath) {
  * @param {number} bytes
  * @returns {string}
  */
-function formatSize (bytes) {
+function formatSize(bytes) {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
   }
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
-async function verifyChecksums () {
+async function verifyChecksums() {
   const downloadDir = process.argv[2]
     ? path.resolve(process.argv[2])
     : path.join(process.cwd(), 'downloaded')

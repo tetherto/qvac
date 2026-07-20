@@ -1,9 +1,9 @@
 'use strict'
 
-function getModelFiles (doc) {
+function getModelFiles(doc) {
   if (!doc) return []
   if (Array.isArray(doc.files)) {
-    return doc.files.filter(file => file?.type === 'model')
+    return doc.files.filter((file) => file?.type === 'model')
   }
   if (doc.files && Array.isArray(doc.files.model)) {
     return doc.files.model
@@ -13,7 +13,9 @@ function getModelFiles (doc) {
 
 module.exports = {
   mapByTags: (doc) => {
-    return (doc.metadata && Array.isArray(doc.metadata.tags)) ? doc.metadata.tags.map(tag => ({ tag })) : []
+    return doc.metadata && Array.isArray(doc.metadata.tags)
+      ? doc.metadata.tags.map((tag) => ({ tag }))
+      : []
   },
   mapByHuggingfaceURL: (doc) => {
     return getModelFiles(doc).reduce((acc, file) => {

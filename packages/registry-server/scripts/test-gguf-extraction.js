@@ -11,7 +11,7 @@ const { extractGGUFMetadata, isGGUFSource } = require('../lib/gguf-helpers')
 const logger = require('../lib/logger')
 const RegistryConfig = require('../lib/config')
 
-async function testGGUFExtraction () {
+async function testGGUFExtraction() {
   const args = process.argv.slice(2)
   let modelsFile = './data/models.prod.json'
   let modelIndex = null
@@ -43,7 +43,7 @@ async function testGGUFExtraction () {
 
   const ggufModels = modelsData
     .map((model, index) => ({ ...model, index }))
-    .filter(model => isGGUFSource(model.source))
+    .filter((model) => isGGUFSource(model.source))
 
   if (ggufModels.length === 0) {
     logger.info('No GGUF models found in test file')
@@ -91,7 +91,7 @@ async function testGGUFExtraction () {
 
   let modelsToTest = filteredModels
   if (modelIndex !== null) {
-    const model = ggufModels.find(m => m.index === modelIndex)
+    const model = ggufModels.find((m) => m.index === modelIndex)
     if (!model) {
       logger.error(`Model at index ${modelIndex} is not a GGUF model`)
       process.exit(1)
@@ -106,7 +106,7 @@ async function testGGUFExtraction () {
 
     // Apply start-from if specified
     if (startFrom) {
-      const startIndex = modelsToTest.findIndex(m => {
+      const startIndex = modelsToTest.findIndex((m) => {
         const filename = m.source.split('/').pop()
         return filename.includes(startFrom)
       })
@@ -115,7 +115,9 @@ async function testGGUFExtraction () {
         process.exit(1)
       }
       const matchedFilename = modelsToTest[startIndex].source.split('/').pop()
-      logger.info(`Starting from model: ${matchedFilename} (position ${startIndex + 1} of ${modelsToTest.length})`)
+      logger.info(
+        `Starting from model: ${matchedFilename} (position ${startIndex + 1} of ${modelsToTest.length})`
+      )
       modelsToTest = modelsToTest.slice(startIndex)
     }
 
@@ -165,10 +167,12 @@ async function testGGUFExtraction () {
         }
 
         const s3Client = new S3Client(s3Config)
-        const { Body } = await s3Client.send(new GetObjectCommand({
-          Bucket: bucket,
-          Key: key
-        }))
+        const { Body } = await s3Client.send(
+          new GetObjectCommand({
+            Bucket: bucket,
+            Key: key
+          })
+        )
 
         const writeStream = createWriteStream(localPath)
         await pipeline(Body, writeStream)
@@ -214,13 +218,18 @@ async function testGGUFExtraction () {
 
       const keyCount = Object.keys(filteredMetadata).length
       const architecture = filteredMetadata['general.architecture'] || 'unknown'
-      const contextLength = filteredMetadata[`${architecture}.context_length`] || filteredMetadata['llama.context_length'] || 'N/A'
+      const contextLength =
+        filteredMetadata[`${architecture}.context_length`] ||
+        filteredMetadata['llama.context_length'] ||
+        'N/A'
       const fileType = filteredMetadata['general.file_type'] || 'N/A'
 
       logger.info(`  Architecture: ${architecture}`)
       logger.info(`  Context Length: ${contextLength}`)
       logger.info(`  File Type: ${fileType}`)
-      logger.info(`  Total Fields: ${keyCount} (${tokenizerFieldsSkipped} tokenizer fields excluded)`)
+      logger.info(
+        `  Total Fields: ${keyCount} (${tokenizerFieldsSkipped} tokenizer fields excluded)`
+      )
 
       const metadataSize = JSON.stringify(filteredMetadata).length
       logger.info(`  Metadata Size: ${(metadataSize / 1024).toFixed(2)} KB`)
@@ -230,9 +239,8 @@ async function testGGUFExtraction () {
         const sampleKeys = Object.keys(filteredMetadata).slice(0, 10)
         for (const key of sampleKeys) {
           const value = filteredMetadata[key]
-          const displayValue = typeof value === 'string' && value.length > 50
-            ? value.substring(0, 50) + '...'
-            : value
+          const displayValue =
+            typeof value === 'string' && value.length > 50 ? value.substring(0, 50) + '...' : value
           logger.info(`    ${key}: ${JSON.stringify(displayValue)}`)
         }
         if (keyCount > 10) {
@@ -260,9 +268,9 @@ async function testGGUFExtraction () {
   logger.info('Summary:')
   logger.info('='.repeat(60))
 
-  const successful = results.filter(r => r.success).length
-  const failed = results.filter(r => !r.success && !r.skipped).length
-  const skipped = results.filter(r => r.skipped).length
+  const successful = results.filter((r) => r.success).length
+  const failed = results.filter((r) => !r.success && !r.skipped).length
+  const skipped = results.filter((r) => r.skipped).length
 
   logger.info(`Total tested: ${results.length}`)
   logger.info(`Successful: ${successful}`)
@@ -273,14 +281,14 @@ async function testGGUFExtraction () {
 
   if (successful > 0) {
     logger.info('\nSuccessful extractions:')
-    for (const result of results.filter(r => r.success)) {
+    for (const result of results.filter((r) => r.success)) {
       logger.info(`  ✓ ${result.model} (${result.keyCount} fields, arch: ${result.architecture})`)
     }
   }
 
   if (failed > 0) {
     logger.info('\nFailed extractions (in test order):')
-    const failedResults = results.filter(r => !r.success && !r.skipped)
+    const failedResults = results.filter((r) => !r.success && !r.skipped)
     for (const result of failedResults) {
       logger.info(`  ✗ ${result.model}: ${result.error}`)
     }
@@ -294,7 +302,7 @@ async function testGGUFExtraction () {
   process.exit(failed > 0 ? 1 : 0)
 }
 
-function detectShard (sourceUrl) {
+function detectShard(sourceUrl) {
   // Pattern: filename-00001-of-00005.gguf, filename-00002-of-00005.gguf, etc.
   const shardPattern = /-(\d{5})-of-(\d{5})\.gguf$/i
   const match = sourceUrl.match(shardPattern)
@@ -314,7 +322,7 @@ function detectShard (sourceUrl) {
   }
 }
 
-function parseHfDownloadUrl (urlString) {
+function parseHfDownloadUrl(urlString) {
   const u = new URL(urlString)
   if (u.hostname !== 'huggingface.co') return null
 

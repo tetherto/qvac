@@ -4,7 +4,7 @@ const test = require('brittle')
 const { decodeCoreKey, collectStats, formatStats, formatSummary } = require('../../lib/profiler')
 const IdEnc = require('hypercore-id-encoding')
 
-test('profiler module exports', async t => {
+test('profiler module exports', async (t) => {
   t.ok(typeof decodeCoreKey === 'function', 'decodeCoreKey is a function')
   t.ok(typeof collectStats === 'function', 'collectStats is a function')
   t.ok(typeof formatStats === 'function', 'formatStats is a function')
@@ -13,14 +13,14 @@ test('profiler module exports', async t => {
 
 // --- decodeCoreKey ---
 
-test('decodeCoreKey - Buffer passthrough', async t => {
+test('decodeCoreKey - Buffer passthrough', async (t) => {
   const buf = Buffer.alloc(32, 0xab)
   const result = decodeCoreKey(buf)
   t.ok(Buffer.isBuffer(result), 'returns a Buffer')
   t.ok(result.equals(buf), 'returns the same buffer')
 })
 
-test('decodeCoreKey - object with data array', async t => {
+test('decodeCoreKey - object with data array', async (t) => {
   const original = Buffer.alloc(32, 0xcd)
   const obj = { data: Array.from(original) }
   const result = decodeCoreKey(obj)
@@ -28,7 +28,7 @@ test('decodeCoreKey - object with data array', async t => {
   t.ok(result.equals(original), 'decodes correctly from data array')
 })
 
-test('decodeCoreKey - z32 string', async t => {
+test('decodeCoreKey - z32 string', async (t) => {
   const buf = Buffer.alloc(32, 0xef)
   const encoded = IdEnc.normalize(buf)
   const result = decodeCoreKey(encoded)
@@ -38,7 +38,7 @@ test('decodeCoreKey - z32 string', async t => {
 
 // --- collectStats ---
 
-function createMockSwarmStats () {
+function createMockSwarmStats() {
   return {
     dhtStats: {
       udxBytesReceived: 1048576,
@@ -57,24 +57,26 @@ function createMockSwarmStats () {
   }
 }
 
-function createMockHypercoreStats () {
+function createMockHypercoreStats() {
   return { totalHotswaps: 5 }
 }
 
-function createMockBlobCore () {
+function createMockBlobCore() {
   const key = Buffer.alloc(32, 0x01)
   return {
     contiguousLength: 100,
     length: 120,
-    peers: [{
-      remotePublicKey: key,
-      remoteLength: 120,
-      remoteContiguousLength: 115
-    }]
+    peers: [
+      {
+        remotePublicKey: key,
+        remoteLength: 120,
+        remoteContiguousLength: 115
+      }
+    ]
   }
 }
 
-test('collectStats - returns structured snapshot', async t => {
+test('collectStats - returns structured snapshot', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
   const core = createMockBlobCore()
@@ -109,7 +111,7 @@ test('collectStats - returns structured snapshot', async t => {
   t.is(stats.peers[0].remoteContiguous, 115)
 })
 
-test('collectStats - handles zero elapsed', async t => {
+test('collectStats - handles zero elapsed', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
   const core = createMockBlobCore()
@@ -119,7 +121,7 @@ test('collectStats - handles zero elapsed', async t => {
   t.is(stats.network.txPerSec, 0, 'no division by zero')
 })
 
-test('collectStats - handles no peers', async t => {
+test('collectStats - handles no peers', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
   const core = { contiguousLength: 0, length: 0, peers: [] }
@@ -131,7 +133,7 @@ test('collectStats - handles no peers', async t => {
 
 // --- formatStats ---
 
-test('formatStats - contains expected sections', async t => {
+test('formatStats - contains expected sections', async (t) => {
   const stats = {
     elapsedSec: 12.5,
     network: {
@@ -180,7 +182,7 @@ test('formatStats - contains expected sections', async t => {
   t.ok(output.includes('remote=55/60'), 'has peer remote info')
 })
 
-test('formatStats - no peers section when empty', async t => {
+test('formatStats - no peers section when empty', async (t) => {
   const stats = {
     elapsedSec: 1,
     network: {
@@ -216,7 +218,7 @@ test('formatStats - no peers section when empty', async t => {
 
 // --- formatSummary ---
 
-test('formatSummary - contains expected fields', async t => {
+test('formatSummary - contains expected fields', async (t) => {
   const output = formatSummary({
     modelPath: 'test/model.gguf',
     totalBytes: 1073741824,

@@ -4,7 +4,7 @@ const RegistryConfig = require('../lib/config')
 const logger = require('../lib/logger')
 const { connectToRegistry } = require('./utils/rpc-client')
 
-async function deleteModel () {
+async function deleteModel() {
   const args = process.argv.slice(2)
   let modelPath = null
   let source = null
@@ -25,9 +25,13 @@ async function deleteModel () {
   }
 
   if (!modelPath || !source) {
-    logger.error('Usage: node scripts/delete-model.js --path <model-path> --source <hf|s3> [--storage <path>] [--primary-key <key>]')
+    logger.error(
+      'Usage: node scripts/delete-model.js --path <model-path> --source <hf|s3> [--storage <path>] [--primary-key <key>]'
+    )
     logger.error('')
-    logger.error('Example: node scripts/delete-model.js --path "BSC-LT/salamandraTA-2B-instruct-GGUF/blob/.../model.gguf" --source hf')
+    logger.error(
+      'Example: node scripts/delete-model.js --path "BSC-LT/salamandraTA-2B-instruct-GGUF/blob/.../model.gguf" --source hf'
+    )
     logger.error('Example: node scripts/delete-model.js --path "bucket/key/model.bin" --source s3')
     process.exit(1)
   }

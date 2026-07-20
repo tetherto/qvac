@@ -15,7 +15,9 @@ test('parseCanonicalSource - S3 URL with bucket', async (t) => {
 })
 
 test('parseCanonicalSource - S3 URL without bucket', async (t) => {
-  const result = parseCanonicalSource('s3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
+  const result = parseCanonicalSource(
+    's3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf'
+  )
 
   t.is(result.protocol, 's3')
   t.is(result.bucket, null, 'bucket should be null when omitted')

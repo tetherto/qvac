@@ -4,14 +4,14 @@ const fs = require('fs').promises
 const readline = require('readline')
 const RegistryConfig = require('../lib/config')
 
-async function cleanup () {
+async function cleanup() {
   console.log('⚠️  QVAC Registry Cleanup Tool')
   console.log('This will DELETE all registry data and reset the environment!')
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
   })
-  const answer = await new Promise(resolve => {
+  const answer = await new Promise((resolve) => {
     rl.question('Are you sure you want to proceed? (y/n) ', resolve)
   })
   rl.close()
@@ -34,6 +34,10 @@ async function cleanup () {
   console.log('\nCleanup complete!')
 }
 
-if (require.main === module) cleanup().catch(err => { console.error('Cleanup failed:', err); process.exit(1) })
+if (require.main === module)
+  cleanup().catch((err) => {
+    console.error('Cleanup failed:', err)
+    process.exit(1)
+  })
 
 module.exports = { cleanup }

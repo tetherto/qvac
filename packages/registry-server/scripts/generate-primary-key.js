@@ -3,7 +3,8 @@
 const { command, flag } = require('paparam')
 const { generatePrimaryKey, generateWriterKeyPair } = require('../utils/key-generator')
 
-const generateCmd = command('generate-primary-key',
+const generateCmd = command(
+  'generate-primary-key',
   flag('--passphrase [text]', 'Passphrase for deterministic key generation (testing only)'),
   flag('--writer-keypair', 'Generate ed25519 writer keypair instead of primary key'),
   async function ({ flags }) {
