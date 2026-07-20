@@ -40,10 +40,9 @@ runs:
         export NM="${TOOLCHAIN}/bin/llvm-nm"
         EXTRA=""
         if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
-        # Fabric consumers link the shared runtime (DT_NEEDED qvac__fabric@0.bare),
-        # which ships in node_modules -- not beside the addon -- and is pre-loaded
-        # at runtime. Index it as an external provider so its ggml_* exports resolve
-        # the addon's UND engine symbols instead of a false-positive hard-fail.
+        # When @qvac/fabric is installed, index its prebuilds as an external provider.
+        # The script matches provider exports to each binary's DT_NEEDED by soname, so
+        # mere presence of the package in node_modules cannot mask a genuine UND.
         FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
         if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform android $EXTRA
@@ -59,10 +58,9 @@ runs:
         set -euo pipefail
         EXTRA=""
         if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
-        # Fabric consumers link the shared runtime (DT_NEEDED qvac__fabric@0.bare),
-        # which ships in node_modules -- not beside the addon -- and is pre-loaded
-        # at runtime. Index it as an external provider so its ggml_* exports resolve
-        # the addon's UND engine symbols instead of a false-positive hard-fail.
+        # When @qvac/fabric is installed, index its prebuilds as an external provider.
+        # The script matches provider exports to each binary's DT_NEEDED by soname, so
+        # mere presence of the package in node_modules cannot mask a genuine UND.
         FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
         if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform "$PLATFORM" $EXTRA

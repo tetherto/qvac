@@ -27,18 +27,23 @@
 //      Pass `--enforce-exports` to turn leaked engine exports into a hard fail
 //      (see packages/transcription-parakeet/symbols.map for the fix template).
 //
-// A DT_NEEDED provider does not have to sit in the scanned prebuilds/ tree. The
-// shared @qvac/fabric runtime (`qvac__fabric@0.bare`) ships in node_modules, not
-// beside the addon, and is pre-loaded (`require('@qvac/fabric')` in binding.js)
-// before the addon is dlopen'd -- so its `ggml_*` exports resolve the addon's UND
-// engine symbols at runtime. Point the check at it with
-// `--provider-dir node_modules/@qvac/fabric/prebuilds` so those symbols count as
-// provided instead of reading as a false-positive UND hard-fail. A provider dir's
-// exports form a GLOBAL satisfied pool (they are NOT matched to a DT_NEEDED soname:
-// the addon needs the ABI-versioned `qvac__fabric@0.bare` while the file on disk is
-// the unversioned `qvac__fabric.bare`). The pool only ever satisfies symbols the
-// runtime truly exports, so a symbol nobody provides still fails. Provider dirs are
-// never themselves checked.
+// A DT_NEEDED provider does not have to sit in the scanned prebuilds/ tree. A shared
+// runtime like @qvac/fabric (`qvac__fabric@0.bare`) ships in node_modules, not beside
+// the addon, and is pre-loaded (`require('@qvac/fabric')` in binding.js) before the
+// addon is dlopen'd -- so its `ggml_*` exports resolve the addon's UND engine symbols
+// at runtime. Point the check at it with `--provider-dir <path>` (repeatable) and its
+// binaries join DT_NEEDED resolution exactly like co-located libs, with two twists:
+//   * they are indexed by their real DT_SONAME (read from the binary), not their
+//     on-disk basename -- the addon's DT_NEEDED is the ABI-versioned soname
+//     `qvac__fabric@0.bare` while the staged file is the unversioned `qvac__fabric.bare`,
+//     so a basename key would never match.
+//   * they are never themselves checked (a runtime legitimately carries its own UND
+//     backend symbols + engine exports that would false-positive the UND / export checks).
+// Because resolution is still keyed on each binary's own DT_NEEDED, a provider only
+// satisfies symbols for addons that actually link it: a package that merely has the
+// provider in node_modules without a matching DT_NEEDED is NOT masked, and a symbol
+// nobody exports still fails. The mechanism is generic -- pass any provider tree; there
+// is no runtime-specific special-casing.
 //
 // Usage:
 //   node verify-prebuild-symbols.mjs --dir <prebuilds-dir> [options]
@@ -46,9 +51,10 @@
 //
 // Options:
 //   --dir <path>            Directory to scan recursively (repeatable). Default: ./prebuilds
-//   --provider-dir <path>   Extra directory (repeatable) whose binaries contribute
-//                           DT_NEEDED-provider exports but are NOT checked. Use for
-//                           the shared @qvac/fabric runtime in node_modules.
+//   --provider-dir <path>   Extra directory (repeatable) whose binaries are indexed by
+//                           their DT_SONAME to satisfy DT_NEEDED imports but are NOT
+//                           themselves checked. Use for a shared runtime that ships
+//                           outside the addon tree (e.g. @qvac/fabric in node_modules).
 //   --platform <p>          linux|android|darwin|ios|win32 (informational; affects messaging)
 //   --engine-prefixes <csv> Symbol roots treated as engine-internal.
 //                           Default: ggml,gguf,llama,whisper,clip,mtmd,sd,stable_diffusion
@@ -254,6 +260,22 @@ function neededOf (tools, path, format) {
   return needed
 }
 
+// The DT_SONAME a binary advertises -- this is what a consumer's DT_NEEDED holds,
+// and it can diverge from the on-disk filename (e.g. `qvac__fabric@0.bare` soname
+// staged as `qvac__fabric.bare`). ELF-only; '' when absent or readelf unavailable.
+function sonameOf (tools, path, format) {
+  if (format !== 'elf' || !tools.readelf) return ''
+  let out = ''
+  try {
+    out = execFileSync(tools.readelf, ['-d', '--wide', path], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  } catch (e) { out = e.stdout ? e.stdout.toString() : '' }
+  for (const line of out.split('\n')) {
+    const m = line.match(/\(SONAME\)\s+Library soname:\s+\[([^\]]+)\]/)
+    if (m) return m[1]
+  }
+  return ''
+}
+
 // ---------------------------------------------------------------------------
 // Core check
 // ---------------------------------------------------------------------------
@@ -282,54 +304,43 @@ function main () {
     process.exit(0)
   }
 
-  // Pre-index exported symbols by soname (on-disk basename) so DT_NEEDED lookups
-  // resolve against co-located libraries. External --provider-dir trees (e.g. the
-  // shared @qvac/fabric runtime, which lives in node_modules rather than beside
-  // the addon) contribute their exports to the SAME index but are never checked.
+  // Index exported symbols by DT_NEEDED key so per-binary lookups resolve against
+  // their declared dependencies. Co-located libs are keyed by on-disk basename
+  // (filename == soname for qvac's backend libs today). External --provider-dir
+  // trees are keyed by their real DT_SONAME instead, since a shared runtime's soname
+  // diverges from its staged filename (`qvac__fabric@0.bare` vs `qvac__fabric.bare`);
+  // provider exports are never themselves checked.
   const exportsBySoname = new Map()
   const fmtByPath = new Map()
 
-  function indexExports (p) {
-    const fmt = detectFormat(p)
-    if (fmt === 'unknown') return fmt
-    const { exported } = symbolsOf(tools, p, fmt)
-    const key = basename(p)
+  function addExports (key, exported) {
     const prev = exportsBySoname.get(key)
-    // Union across hosts/dirs: the same soname (qvac__fabric@0.bare) appears once
+    // Union across hosts/dirs: the same key (e.g. qvac__fabric@0.bare) appears once
     // per platform subdir; each exports the same C ABI, so merging is correct.
     if (prev) for (const s of exported) prev.add(s)
     else exportsBySoname.set(key, new Set(exported))
-    return fmt
   }
 
   for (const p of binaries) {
-    fmtByPath.set(p, indexExports(p))
+    const fmt = detectFormat(p)
+    fmtByPath.set(p, fmt)
+    if (fmt === 'unknown') continue
+    addExports(basename(p), symbolsOf(tools, p, fmt).exported)
   }
 
-  // Provider binaries (--provider-dir) contribute their exports to a GLOBAL pool
-  // that satisfies any addon's UND engine imports -- NOT keyed by DT_NEEDED soname.
-  // Passing a provider dir is an explicit assertion that those libs are supplied at
-  // runtime (e.g. @qvac/fabric, preloaded via require('@qvac/fabric') before the
-  // addon is dlopen'd). Soname-matching them is wrong here: the addon's DT_NEEDED is
-  // the ABI-versioned soname `qvac__fabric@0.bare`, but the file staged on disk is
-  // the unversioned `qvac__fabric.bare` (bare maps the soname to the loaded module
-  // by name at runtime), so a basename lookup would always miss. The pool can only
-  // satisfy symbols the runtime actually exports, so a genuinely-unprovided symbol
-  // (nobody exports it) still fails. Provider binaries are never themselves checked
-  // (the fabric runtime legitimately carries its own UND backend symbols + ggml_*
-  // exports, which would false-positive under the UND / export-hygiene checks).
-  const providerExports = new Set()
   const providerBinaries = []
   for (const d of opts.providerDirs) walk(resolve(d), providerBinaries)
   for (const p of providerBinaries) {
     const fmt = detectFormat(p)
     if (fmt === 'unknown') continue
-    const { exported } = symbolsOf(tools, p, fmt)
-    for (const s of exported) providerExports.add(s)
+    // Key on the advertised soname (fallback to basename) so it matches consumers'
+    // DT_NEEDED entries, not the on-disk filename.
+    const key = sonameOf(tools, p, fmt) || basename(p)
+    addExports(key, symbolsOf(tools, p, fmt).exported)
   }
 
   if (opts.providerDirs.length > 0 && !opts.quiet) {
-    console.log(`verify-prebuild-symbols: pooled ${providerExports.size} exported symbol(s) from ${providerBinaries.length} external provider binary(ies) in ${opts.providerDirs.join(', ')}.`)
+    console.log(`verify-prebuild-symbols: indexed ${providerBinaries.length} external provider binary(ies) by soname from ${opts.providerDirs.join(', ')}.`)
   }
 
   // DT_NEEDED provider resolution (ELF) requires readelf; without it every
@@ -351,14 +362,15 @@ function main () {
 
     const { undefined_, exported } = symbolsOf(tools, p, fmt)
 
-    // Provider set = exported symbols of co-located DT_NEEDED libs.
-    // NOTE: exportsBySoname is keyed by on-disk basename, while DT_NEEDED holds
-    // sonames. They coincide for qvac's backend libs today (filename == soname),
-    // but if a soname (libfoo.so.1) ever diverged from the filename
-    // (libfoo.so.1.2.3 + a symlink) and the symlink weren't staged in prebuilds/,
-    // this lookup would miss and a genuinely-resolved symbol would read as
-    // unresolved. Latent fragility -- revisit if a backend lib grows a versioned
-    // soname.
+    // Provider set = exported symbols of this binary's DT_NEEDED libs, resolved
+    // against the shared index. That index keys co-located libs by on-disk basename
+    // (filename == soname for qvac's backend libs today) and --provider-dir libs by
+    // their real DT_SONAME, so a shared runtime whose soname diverges from its staged
+    // filename (`qvac__fabric@0.bare` vs `qvac__fabric.bare`) still resolves. A binary
+    // that does not DT_NEEDED a provider gets nothing from it -- so the pool cannot
+    // mask a genuine UND on an addon that merely has the provider in node_modules.
+    // (Latent fragility: a co-located backend lib whose soname diverged from its
+    // filename -- libfoo.so.1 vs libfoo.so.1.2.3 -- would miss the basename key.)
     const needed = neededOf(tools, p, fmt)
     const provided = new Set()
     for (const soname of needed) {
@@ -370,7 +382,6 @@ function main () {
     for (const s of undefined_) {
       if (!isEngineSymbol(s, opts.enginePrefixes)) continue
       if (provided.has(s)) continue
-      if (providerExports.has(s)) continue // supplied by a --provider-dir runtime
       unresolvedEngine.push(s)
     }
 
