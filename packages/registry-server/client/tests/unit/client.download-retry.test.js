@@ -267,6 +267,65 @@ test('downloadModel aborts the reconnect wait when the signal is cancelled', asy
   t.is(attempt, 1, 'no second attempt started after the cancel')
 })
 
+// A cancelled/failed download must free the blocks it already pulled into the
+// corestore; otherwise they leak (they are live, so compaction never reclaims
+// them) and disk grows unbounded across distinct cancelled loads.
+test('downloadModel clears cached blocks when the download fails', async t => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient()
+  const clears = []
+  client._clearBlobBlocks = async (core, start, end) => {
+    client._events.push('clear')
+    clears.push({ start, end })
+  }
+  client._streamBlobToFile = async () => {
+    client._events.push('stream')
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile }),
+    /Download cancelled/,
+    'the failed download rejects'
+  )
+
+  t.is(clears.length, 1, 'partial blocks cleared exactly once on the failure path')
+  t.alike(clears[0], { start: 0, end: 10 }, 'cleared the model block range')
+  t.ok(
+    client._events.indexOf('stream') < client._events.indexOf('clear'),
+    'blocks are cleared after the download fails (in the catch)'
+  )
+})
+
+test('downloadBlob clears cached blocks when the download fails', async t => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'blob.bin')
+
+  const client = makeClient()
+  client.ready = async () => {}
+  const clears = []
+  client._clearBlobBlocks = async (core, start, end) => { clears.push({ start, end }) }
+  client._streamBlobToFile = async () => { throw new Error('Download cancelled') }
+
+  const blobBinding = {
+    coreKey: Buffer.alloc(32),
+    blockOffset: 3,
+    blockLength: 7,
+    byteLength: 700
+  }
+
+  await t.exception(
+    () => client.downloadBlob(blobBinding, { outputFile }),
+    /Download cancelled/,
+    'the failed direct blob download rejects'
+  )
+
+  t.is(clears.length, 1, 'partial blocks cleared exactly once on the failure path')
+  t.alike(clears[0], { start: 3, end: 10 }, 'cleared the blob block range')
+})
+
 // Locks the generic retry contract the download path relies on.
 test('withRetry retries only listed codes and stays bounded', async (t) => {
   let calls = 0

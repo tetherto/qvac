@@ -304,7 +304,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd
 
     try {
       this.logger.info('Downloading model', { path, source })
@@ -349,8 +349,8 @@ class QVACRegistryClient extends ReadyResource {
         length: model.blobBinding.blockLength
       })
 
-      const blockStart = model.blobBinding.blockOffset
-      const blockEnd = blockStart + model.blobBinding.blockLength
+      blockStart = model.blobBinding.blockOffset
+      blockEnd = blockStart + model.blobBinding.blockLength
 
       let artifact
       if (options.outputFile) {
@@ -412,6 +412,11 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
+      // Free the partially-downloaded blocks so a cancelled/failed download does
+      // not leak them into the corestore (success paths already clear them).
+      if (core && blockStart != null) {
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
+      }
       if (blobs) {
         try {
           await blobs.close()
@@ -449,7 +454,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd
 
     try {
       this.logger.info('Downloading blob directly', {
@@ -487,8 +492,8 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
-      const blockStart = pointer.blockOffset
-      const blockEnd = blockStart + pointer.blockLength
+      blockStart = pointer.blockOffset
+      blockEnd = blockStart + pointer.blockLength
 
       const rangeDownload = core.download({
         start: pointer.blockOffset,
@@ -550,6 +555,11 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
+      // Free the partially-downloaded blocks so a cancelled/failed download does
+      // not leak them into the corestore (success paths already clear them).
+      if (core && blockStart != null) {
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
+      }
       if (blobs) {
         try {
           await blobs.close()
