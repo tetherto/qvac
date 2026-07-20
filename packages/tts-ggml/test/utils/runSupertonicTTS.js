@@ -22,9 +22,15 @@ async function loadSupertonicTTS(params = {}) {
     config.useGPU = false
   }
 
+  const files = { supertonicModel: supertonicPath }
+  // The enhancer / denoiser paths are the "on" switches for the LavaSR stages;
+  // only set them when a path was resolved so an unset value leaves the stage off.
+  if (params.lavasrEnhancerPath) files.lavasrEnhancer = params.lavasrEnhancerPath
+  if (params.lavasrDenoiserPath) files.lavasrDenoiser = params.lavasrDenoiserPath
+
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
-    files: { supertonicModel: supertonicPath },
+    files,
     voice: params.voice || 'F1',
     steps: params.steps,
     speed: params.speed,
