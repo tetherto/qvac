@@ -279,17 +279,25 @@ public:
       -> js_value_t* try {
     JsArgsParser argsParser(env, info);
     auto handle = argsParser.getRawPointer(0, "instance");
-    std::scoped_lock lockGuard{instancesMtx_};
-    auto found = std::find_if(
-        instances_.begin(),
-        instances_.end(),
-        [handle](auto& instanceUniquePtr) {
-          return static_cast<void*>(instanceUniquePtr.get()) == handle;
-        });
-    if (found == instances_.end()) {
-      throw StatusError(general_error::InvalidArgument, "Invalid handle");
+    std::unique_ptr<AddonJs> removed;
+    {
+      std::scoped_lock lockGuard{instancesMtx_};
+      auto found = std::find_if(
+          instances_.begin(),
+          instances_.end(),
+          [handle](auto& instanceUniquePtr) {
+            return static_cast<void*>(instanceUniquePtr.get()) == handle;
+          });
+      if (found == instances_.end()) {
+        throw StatusError(general_error::InvalidArgument, "Invalid handle");
+      }
+      removed = std::move(*found);
+      instances_.erase(found);
     }
-    instances_.erase(found);
+    // Destroyed outside instancesMtx_: teardown delivers the remaining output
+    // events synchronously, and a callback that re-enters a binding taking
+    // the mutex (getInstance, create/destroyInstance) must not deadlock.
+    removed.reset();
     return nullptr;
   }
   JSCATCH
