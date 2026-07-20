@@ -163,6 +163,13 @@
       "sha256": "b5310340b3a23d31655d7119d100d5df1b2d8ee17b3ca8b0a23ad7e9eb5fa705",
       "bytes": 3462678272
     },
+    "google_gemma-4-E2B-it-Q4_0.gguf": {
+      "urls": [
+        "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_0.gguf"
+      ],
+      "sha256": "9a1814fdb06f2a8b7f0a277b22bd3fc0083685fb39ff67836ab143bd19ff3bae",
+      "bytes": 3378738944
+    },
     "mmproj-google_gemma-4-E2B-it-f16.gguf": {
       "urls": [
         "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf"

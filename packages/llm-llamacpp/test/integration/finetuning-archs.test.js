@@ -9,12 +9,7 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const {
-  ensureModel,
-  setupParams,
-  cleanupCheckpoints,
-  safeTest
-} = require('./utils')
+const { ensureModel, setupParams, cleanupCheckpoints, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 const proc = require('bare-process')
@@ -39,9 +34,9 @@ const QWEN35_MODEL = {
 }
 
 const GEMMA4_MODEL = {
-  id: 'gemma-4-e4b-q4_0',
-  name: 'google_gemma-4-E4B-it-Q4_0.gguf',
-  url: 'https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_0.gguf'
+  id: 'gemma-4-e2b-q4_0',
+  name: 'google_gemma-4-E2B-it-Q4_0.gguf',
+  url: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_0.gguf'
 }
 
 const FINETUNE_MODELS = isMobile ? [QWEN35_MODEL] : [QWEN35_MODEL, GEMMA4_MODEL]
@@ -49,14 +44,14 @@ const FINETUNE_MODELS = isMobile ? [QWEN35_MODEL] : [QWEN35_MODEL, GEMMA4_MODEL]
 // Dense FFN gate + down; gradients flow through the gated-delta-net / attn mixers.
 const LORA_MODULES = 'ffn_gate,ffn_down'
 
-function assertFiniteIfPresent (t, stats, key, id) {
+function assertFiniteIfPresent(t, stats, key, id) {
   const v = stats?.[key]
   if (v == null || (typeof v === 'number' && isNaN(v))) return
   t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
   t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not Inf), got: ${v}`)
 }
 
-async function runLoraInference (t, id, modelPath, loraAdapterPath) {
+async function runLoraInference(t, id, modelPath, loraAdapterPath) {
   t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
   const inferModel = new LlmLlamacpp({
     files: { model: [modelPath] },
@@ -74,76 +69,104 @@ async function runLoraInference (t, id, modelPath, loraAdapterPath) {
     await inferModel.load()
     const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
     let generated = ''
-    await response.onUpdate(token => { generated += token }).await()
+    await response
+      .onUpdate((token) => {
+        generated += token
+      })
+      .await()
     t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
-    t.comment(`[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`)
+    t.comment(
+      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
+    )
   } finally {
     await inferModel.unload().catch(() => {})
   }
 }
 
-safeTest('small LoRA finetune covers gated-delta-net + dense gemma4 archs', { timeout: FINETUNE_TIMEOUT_MS, skip: skipFinetuning }, async t => {
-  for (const m of FINETUNE_MODELS) {
-    const [modelName, modelDir] = await ensureModel({ modelName: m.name, downloadUrl: m.url })
+safeTest(
+  'small LoRA finetune covers gated-delta-net + dense gemma4 archs',
+  { timeout: FINETUNE_TIMEOUT_MS, skip: skipFinetuning },
+  async (t) => {
+    for (const m of FINETUNE_MODELS) {
+      const [modelName, modelDir] = await ensureModel({ modelName: m.name, downloadUrl: m.url })
 
-    const finetuneConfig = setupParams(modelDir, {
-      testId: `archs-${m.id}`,
-      loraModules: LORA_MODULES,
-      datasetSize: isMobile ? 8 : 16,
-      checkpointSaveSteps: 0
-    })
-
-    const modelPath = path.join(modelDir, modelName)
-    const loggerHandle = attachSpecLogger({ forwardToConsole: true })
-
-    const model = new LlmLlamacpp({
-      files: { model: [modelPath] },
-      config: {
-        gpu_layers: '999',
-        ctx_size: '512',
-        device: forceCpuDevice ? 'cpu' : 'gpu',
-        verbosity: '2'
-      },
-      logger: console,
-      opts: { stats: true }
-    })
-
-    try {
-      await model.load()
-
-      const handle = await model.finetune(finetuneConfig)
-      let progressCount = 0
-      handle.on('stats', stats => {
-        progressCount++
-        t.ok(!isNaN(stats.loss), `[${m.id}] progress loss must not be NaN (step ${stats.global_steps})`)
-        t.ok(!isNaN(stats.accuracy), `[${m.id}] progress accuracy must not be NaN (step ${stats.global_steps})`)
-        t.comment(`[${m.id}] step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`)
+      const finetuneConfig = setupParams(modelDir, {
+        testId: `archs-${m.id}`,
+        loraModules: LORA_MODULES,
+        datasetSize: isMobile ? 8 : 16,
+        checkpointSaveSteps: 0
       })
 
-      const result = await handle.await()
-      t.ok(result, `[${m.id}] finetune must return a result`)
-      t.ok(progressCount > 0, `[${m.id}] must receive at least one progress stats event`)
-      t.is(result.status, 'COMPLETED', `[${m.id}] finetune should COMPLETE (got ${result.status})`)
-      t.comment(`[${m.id}] finetune result: ${JSON.stringify(result)}`)
+      const modelPath = path.join(modelDir, modelName)
+      const loggerHandle = attachSpecLogger({ forwardToConsole: true })
 
-      const stats = result.stats
-      t.ok(stats, `[${m.id}] terminal result must include stats`)
-      t.ok(!isNaN(stats.train_loss) && stats.train_loss > 0, `[${m.id}] train_loss must be positive finite (got ${stats.train_loss})`)
-      assertFiniteIfPresent(t, stats, 'train_loss', m.id)
-      assertFiniteIfPresent(t, stats, 'train_loss_uncertainty', m.id)
-      assertFiniteIfPresent(t, stats, 'val_loss', m.id)
-      assertFiniteIfPresent(t, stats, 'train_accuracy', m.id)
-      assertFiniteIfPresent(t, stats, 'val_accuracy', m.id)
+      const model = new LlmLlamacpp({
+        files: { model: [modelPath] },
+        config: {
+          gpu_layers: '999',
+          ctx_size: '512',
+          device: forceCpuDevice ? 'cpu' : 'gpu',
+          verbosity: '2'
+        },
+        logger: console,
+        opts: { stats: true }
+      })
 
-      await model.unload().catch(() => {})
+      try {
+        await model.load()
 
-      const loraAdapterPath = path.join(finetuneConfig.outputParametersDir, 'trained-lora-adapter.gguf')
-      await runLoraInference(t, m.id, modelPath, loraAdapterPath)
-      t.pass(`[${m.id}] small LoRA finetune + inference completed`)
-    } finally {
-      loggerHandle.release()
-      await model.unload().catch(() => {})
-      cleanupCheckpoints(finetuneConfig.checkpointSaveDir)
+        const handle = await model.finetune(finetuneConfig)
+        let progressCount = 0
+        handle.on('stats', (stats) => {
+          progressCount++
+          t.ok(
+            !isNaN(stats.loss),
+            `[${m.id}] progress loss must not be NaN (step ${stats.global_steps})`
+          )
+          t.ok(
+            !isNaN(stats.accuracy),
+            `[${m.id}] progress accuracy must not be NaN (step ${stats.global_steps})`
+          )
+          t.comment(
+            `[${m.id}] step=${stats.global_steps} loss=${stats.loss?.toFixed(4)} acc=${(stats.accuracy * 100)?.toFixed(1)}%`
+          )
+        })
+
+        const result = await handle.await()
+        t.ok(result, `[${m.id}] finetune must return a result`)
+        t.ok(progressCount > 0, `[${m.id}] must receive at least one progress stats event`)
+        t.is(
+          result.status,
+          'COMPLETED',
+          `[${m.id}] finetune should COMPLETE (got ${result.status})`
+        )
+        t.comment(`[${m.id}] finetune result: ${JSON.stringify(result)}`)
+
+        const stats = result.stats
+        t.ok(stats, `[${m.id}] terminal result must include stats`)
+        t.ok(
+          !isNaN(stats.train_loss) && stats.train_loss > 0,
+          `[${m.id}] train_loss must be positive finite (got ${stats.train_loss})`
+        )
+        assertFiniteIfPresent(t, stats, 'train_loss', m.id)
+        assertFiniteIfPresent(t, stats, 'train_loss_uncertainty', m.id)
+        assertFiniteIfPresent(t, stats, 'val_loss', m.id)
+        assertFiniteIfPresent(t, stats, 'train_accuracy', m.id)
+        assertFiniteIfPresent(t, stats, 'val_accuracy', m.id)
+
+        await model.unload().catch(() => {})
+
+        const loraAdapterPath = path.join(
+          finetuneConfig.outputParametersDir,
+          'trained-lora-adapter.gguf'
+        )
+        await runLoraInference(t, m.id, modelPath, loraAdapterPath)
+        t.pass(`[${m.id}] small LoRA finetune + inference completed`)
+      } finally {
+        loggerHandle.release()
+        await model.unload().catch(() => {})
+        cleanupCheckpoints(finetuneConfig.checkpointSaveDir)
+      }
     }
   }
-})
+)
