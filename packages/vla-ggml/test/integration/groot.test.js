@@ -423,3 +423,105 @@ test('groot integration: VlaModel rejects missing/invalid files.model', (t) => {
   }
   t.ok(err2 && /absolute path/.test(err2.message))
 })
+
+// GR00T's embodiment is fixed-shape (2 cameras, state.length === maxStateDim).
+// The validator must fail these closed as INVALID_INPUT *before* native infer,
+// since GrootModel::infer accepts nImages >= 1 and would otherwise produce
+// actions for the wrong camera layout, and the shared continuous-state check
+// only enforces state.length <= maxStateDim (not exact). Mirrors pi05's
+// "rejects cleanly and leaves model usable" test.
+test(
+  'groot integration: wrong camera count / short state reject cleanly and leave model usable (needs GGUF)',
+  { timeout: 600000 },
+  async (t) => {
+    let inputs
+    if (_isMobile) {
+      const mobileGguf = await _ensureMobileModel()
+      inputs = _buildSyntheticInputs(mobileGguf)
+    } else {
+      if (_assetsState.state === 'SKIP') {
+        t.comment('skipping: ' + SKIP_REASON)
+        return
+      }
+      if (_assetsState.state === 'FAIL') {
+        t.fail(_assetsState.reason)
+        return
+      }
+      inputs = _loadInputs()
+    }
+    const { ggufPath, images, state, tokens, mask, noise } = inputs
+
+    const model = new VlaModel({
+      files: { model: [path.resolve(ggufPath)] },
+      config: { verbosity: 1 }
+    })
+    try {
+      await model.load({ backend: 'cpu' })
+
+      // One camera instead of two: non-empty images, so it clears the generic
+      // array check and reaches the GR00T numCameras guard.
+      let camErr = null
+      try {
+        await model.run({
+          images: [images[0]],
+          imgWidth: IMAGE_SIZE,
+          imgHeight: IMAGE_SIZE,
+          state,
+          tokens,
+          mask,
+          noise
+        })
+      } catch (e) {
+        camErr = e
+      }
+      t.ok(camErr, 'expected run() to reject on wrong camera count')
+      t.ok(
+        camErr && /patch image buffers/.test(camErr.message || ''),
+        `error mentions patch image buffers (got: ${camErr && camErr.message})`
+      )
+
+      // state.length maxStateDim-1: passes the loose shared check (<= maxStateDim)
+      // but must fail GR00T's exact-length guard.
+      let stateErr = null
+      try {
+        await model.run({
+          images,
+          imgWidth: IMAGE_SIZE,
+          imgHeight: IMAGE_SIZE,
+          state: state.slice(0, STATE_DIM - 1),
+          tokens,
+          mask,
+          noise
+        })
+      } catch (e) {
+        stateErr = e
+      }
+      t.ok(stateErr, 'expected run() to reject on short state')
+      t.ok(
+        stateErr && /state\.length === /.test(stateErr.message || ''),
+        `error mentions exact state.length (got: ${stateErr && stateErr.message})`
+      )
+
+      // Model still usable after the rejections (guards against a wedged
+      // _hasActiveResponse, same regression pi05/smolvla guard against).
+      const response = await model.run({
+        images,
+        imgWidth: IMAGE_SIZE,
+        imgHeight: IMAGE_SIZE,
+        state,
+        tokens,
+        mask,
+        noise
+      })
+      const { actions } = await response.await()
+      t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
+      t.is(
+        actions.length,
+        N_ACT * ACT_DIM,
+        'follow-up run actions length matches chunk_size*action_dim'
+      )
+    } finally {
+      await model.unload().catch(() => {})
+    }
+  }
+)

@@ -188,7 +188,14 @@ jobs:
           SMOLVLA_MODEL_SHA256: ${{ env.SMOLVLA_MODEL_SHA256 }}
         run: |
           echo "📝 Creating model URL config files for mobile app bundling..."
-          echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
+            echo "::add-mask::${SMOLVLA_MODEL_URL}"
+            echo "   SMOLVLA_MODEL_URL: SET"
+          else
+            echo "   SMOLVLA_MODEL_URL: NOTSET"
+          fi
           echo "   SMOLVLA_MODEL_SIZE: ${SMOLVLA_MODEL_SIZE:-unknown}"
           echo "   SMOLVLA_MODEL_SHA256: ${SMOLVLA_MODEL_SHA256:+SET}${SMOLVLA_MODEL_SHA256:-NOTSET}"
 
@@ -243,7 +250,14 @@ jobs:
           GROOT_MODEL_SHA256: ${{ env.GROOT_MODEL_SHA256 }}
         run: |
           echo "Creating GR00T model URL config for mobile app bundling..."
-          echo "   GROOT_MODEL_URL: ${GROOT_MODEL_URL:+SET}${GROOT_MODEL_URL:-NOTSET}"
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${GROOT_MODEL_URL:-}" ]; then
+            echo "::add-mask::${GROOT_MODEL_URL}"
+            echo "   GROOT_MODEL_URL: SET"
+          else
+            echo "   GROOT_MODEL_URL: NOTSET"
+          fi
           echo "   GROOT_MODEL_SIZE: ${GROOT_MODEL_SIZE:-unknown}"
           echo "   GROOT_MODEL_SHA256: ${GROOT_MODEL_SHA256:+SET}${GROOT_MODEL_SHA256:-NOTSET}"
 

@@ -139,6 +139,24 @@ function validateRunInput(input, hparams) {
   // same for the continuous/patches path so a missing prior surfaces as a clean
   // INVALID_INPUT rather than an opaque INFERENCE_FAILED from the worker.
   if (hparams && hparams.imageInputMode === 'patches') {
+    // Fail closed on GR00T's fixed-shape embodiment contract before the noise
+    // checks. GrootModel::infer derives the image-placeholder count from
+    // nImages and accepts nImages >= 1, so a one-camera input against a
+    // two-camera checkpoint would silently produce actions for the wrong camera
+    // layout instead of a clean INVALID_INPUT. The shared continuous-state
+    // check above allows state.length <= maxStateDim; GR00T needs it exact.
+    if (Number.isInteger(hparams.numCameras) && input.images.length !== hparams.numCameras) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `groot requires exactly ${hparams.numCameras} patch image buffers (got ${input.images.length})`
+      })
+    }
+    if (Number.isInteger(hparams.maxStateDim) && input.state.length !== hparams.maxStateDim) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `groot requires state.length === ${hparams.maxStateDim} (got ${input.state.length})`
+      })
+    }
     if (!input.noise || !(input.noise instanceof Float32Array) || input.noise.length === 0) {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,

@@ -1523,6 +1523,16 @@ struct ggml_tensor* grootBuildTextDecoderGraph(
 
 // ── M4.5: Qwen3-VL vision tower ─────────────────────────────────────────
 
+// GR00T reads patch/position-embedding weights host-side and assumes raw F32 or
+// F16 element storage. Quantized tensors use block layouts, so reinterpreting
+// their bytes as ggml_fp16_t[] would read garbage or past the element layout; a
+// malformed GGUF could also carry an unexpected type. Require contiguous
+// F32/F16 before any raw data[] index so these paths fail closed instead.
+static bool grootIsRawF32OrF16(const struct ggml_tensor* t) {
+  return t != nullptr && ggml_is_contiguous(t) &&
+         (t->type == GGML_TYPE_F32 || t->type == GGML_TYPE_F16);
+}
+
 struct ggml_tensor* grootBuildPatchEmbedLinear(
     struct ggml_context* ctx, const struct ggml_tensor* conv0,
     const struct ggml_tensor* conv1, int nEmbd, int inChannels,
@@ -1544,6 +1554,11 @@ struct ggml_tensor* grootBuildPatchEmbedLinear(
   // failure).
   const int64_t convNeed = static_cast<int64_t>(patch) * patch * numCh * nEmbd;
   if (ggml_nelements(conv0) < convNeed || ggml_nelements(conv1) < convNeed) {
+    return nullptr;
+  }
+  // readVal below reinterprets conv data[] as raw F32/F16; reject any other
+  // (e.g. quantized block) layout before the host reads.
+  if (!grootIsRawF32OrF16(conv0) || !grootIsRawF32OrF16(conv1)) {
     return nullptr;
   }
 
@@ -1600,6 +1615,10 @@ static struct ggml_tensor* grootBuildVisionPosEmbed(
   // declared dims exceed the real position_embd tensor would read out of bounds
   // (garbage into the vision embeddings). Reject the mismatch cleanly.
   if (static_cast<int64_t>(side) * side * nEmbd > ggml_nelements(table)) {
+    return nullptr;
+  }
+  // tableVal reinterprets table data[] as raw F32/F16; reject any other layout.
+  if (!grootIsRawF32OrF16(table)) {
     return nullptr;
   }
 
