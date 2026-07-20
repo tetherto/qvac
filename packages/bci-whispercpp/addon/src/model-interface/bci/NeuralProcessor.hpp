@@ -17,6 +17,7 @@ class NeuralProcessor {
 public:
   static constexpr int K_WHISPER_N_MEL = 512;       // n_mels in GGML model
   static constexpr int K_WHISPER_MEL_FRAMES = 3000;
+  static constexpr int K_PASSTHROUGH_DAY_IDX = -1;
 
   struct EmbedderWeights {
     bool loaded = false;
@@ -57,6 +58,8 @@ public:
   int getMelFrames() const { return K_WHISPER_MEL_FRAMES; }
 
 private:
+  void rebuildDayProjectionCache(int dayIndex, uint32_t nf, uint32_t r) const;
+
   EmbedderWeights weights_;
 
   // Memoized dense projection (W, bias) per resolved day index. The

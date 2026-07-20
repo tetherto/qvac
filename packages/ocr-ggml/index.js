@@ -34,7 +34,7 @@ class OcrGgml {
    * @param {boolean} [args.opts.stats] - emit timing stats on finish
    * @param {Object} [args.logger]
    */
-  constructor ({ params, opts = {}, logger = null }) {
+  constructor({ params, opts = {}, logger = null }) {
     this.opts = opts
     this.logger = new QvacLogger(logger)
     this.addon = null
@@ -55,11 +55,11 @@ class OcrGgml {
   /**
    * @returns {{configLoaded: boolean, weightsLoaded: boolean, destroyed: boolean}}
    */
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load () {
+  async load() {
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
@@ -71,7 +71,7 @@ class OcrGgml {
    * @param {{ path: string, options?: Object }} input
    * @returns {Promise<import('@qvac/infer-base').QvacResponse>}
    */
-  async run (input) {
+  async run(input) {
     return this._run(() => this._runInternal(input))
   }
 
@@ -80,11 +80,11 @@ class OcrGgml {
    * `load()`; `null` before load or after unload.
    * @returns {{ requested: string, backendDevice: string, backendName: string, deviceIndex: number, backendDescription: string, fallbackReason: string }|null}
    */
-  getBackendInfo () {
+  getBackendInfo() {
     return this._backendInfo
   }
 
-  async unload () {
+  async unload() {
     if (this.addon) {
       await this.addon.destroy()
       this.addon = null
@@ -94,12 +94,12 @@ class OcrGgml {
     this.state.weightsLoaded = false
   }
 
-  async destroy () {
+  async destroy() {
     await this.unload()
     this.state.destroyed = true
   }
 
-  async _load () {
+  async _load() {
     if (!this.params || typeof this.params !== 'object') {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
@@ -127,7 +127,7 @@ class OcrGgml {
     }
 
     const SUPPORTED_LANGUAGES = new Set(['en'])
-    const hasSupported = this.params.langList.some(l => SUPPORTED_LANGUAGES.has(l))
+    const hasSupported = this.params.langList.some((l) => SUPPORTED_LANGUAGES.has(l))
     if (!hasSupported) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.UNSUPPORTED_LANGUAGE,
@@ -188,7 +188,7 @@ class OcrGgml {
     this.logger.info('ocr-ggml model loaded')
   }
 
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     const binding = require('./binding')
     const { OcrGgmlInterface } = require('./ocr-ggml')
     return new OcrGgmlInterface(
@@ -199,7 +199,7 @@ class OcrGgml {
     )
   }
 
-  async _runInternal (input) {
+  async _runInternal(input) {
     this.logger.info('Starting OCR inference')
 
     if (!this.addon) {
@@ -232,7 +232,7 @@ class OcrGgml {
    * @param {string} imagePath
    * @returns {{ data: Buffer, isEncoded?: boolean, width?: number, height?: number, bitsPerPixel?: number }}
    */
-  _readImage (imagePath) {
+  _readImage(imagePath) {
     this.logger.debug('Reading image from path:', imagePath)
     const contents = fs.readFileSync(imagePath)
     if (!contents || contents.length < 4) {
@@ -244,15 +244,20 @@ class OcrGgml {
     }
 
     // JPEG: starts with 0xFF 0xD8
-    if (contents[0] === 0xFF && contents[1] === 0xD8) {
+    if (contents[0] === 0xff && contents[1] === 0xd8) {
       return { data: contents, isEncoded: true }
     }
     // PNG: 0x89 P N G
-    if (contents[0] === 0x89 && contents[1] === 0x50 && contents[2] === 0x4E && contents[3] === 0x47) {
+    if (
+      contents[0] === 0x89 &&
+      contents[1] === 0x50 &&
+      contents[2] === 0x4e &&
+      contents[3] === 0x47
+    ) {
       return { data: contents, isEncoded: true }
     }
     // BMP: 'BM'
-    if (contents[0] === 0x42 && contents[1] === 0x4D) {
+    if (contents[0] === 0x42 && contents[1] === 0x4d) {
       return this._decodeBmp(contents, imagePath)
     }
 
@@ -263,7 +268,7 @@ class OcrGgml {
     })
   }
 
-  _decodeBmp (contents, imagePath) {
+  _decodeBmp(contents, imagePath) {
     if (contents.length < 14 + 4) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.INVALID_IMAGE_OR_INSUFFICIENT_DATA,
@@ -344,7 +349,7 @@ class OcrGgml {
     return { width, height: rows, data: unpaddedData, bitsPerPixel }
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     if (event && event.includes('Error')) {
       return this._job.fail(error)
     }
@@ -382,11 +387,13 @@ class OcrGgml {
   }
 
   /** Inference Manager diagnostics hook (parity with ocr-onnx). */
-  _getDiagnosticsJSON () {
+  _getDiagnosticsJSON() {
     return JSON.stringify({
       status: this.state.destroyed
         ? 'destroyed'
-        : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
+        : this.state.configLoaded
+          ? 'loaded'
+          : 'not_loaded',
       params: this.params,
       backend: this._backendInfo
     })
@@ -397,7 +404,7 @@ class OcrGgml {
     noAdditionalDownload: true
   }
 
-  static getModelKey () {
+  static getModelKey() {
     return 'ocr-ggml'
   }
 }
@@ -405,9 +412,15 @@ class OcrGgml {
 module.exports = {
   OcrGgml,
   modelClass: OcrGgml,
-  get modelFile () { return require.addon.resolve('.') },
+  get modelFile() {
+    return require.addon.resolve('.')
+  },
   QvacErrorAddonOcrGgml,
   ERR_CODES,
-  get binding () { return require('./binding') },
-  get addonLogging () { return require('./addonLogging') }
+  get binding() {
+    return require('./binding')
+  },
+  get addonLogging() {
+    return require('./addonLogging')
+  }
 }
