@@ -267,9 +267,6 @@ test('downloadModel aborts the reconnect wait when the signal is cancelled', asy
   t.is(attempt, 1, 'no second attempt started after the cancel')
 })
 
-// A cancelled/failed download must free the blocks it already pulled into the
-// corestore; otherwise they leak (they are live, so compaction never reclaims
-// them) and disk grows unbounded across distinct cancelled loads.
 test('downloadModel clears cached blocks when the download fails', async t => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
