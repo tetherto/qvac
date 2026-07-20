@@ -474,6 +474,54 @@ test('downloadBlob clears cached blocks when the download fails', async t => {
   )
 })
 
+test('downloadModel releases nothing when it fails before the core is opened', async t => {
+  const client = makeClient(t)
+  let clears = 0
+  client._clearBlobBlocks = async () => {
+    clears++
+    t.comment('step: _clearBlobBlocks called')
+  }
+  client.getModel = async () => {
+    t.comment('step: getModel returning null, failing before _getBlobsCore')
+    return null
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/missing.gguf', 's3'),
+    /Model not found/,
+    'the missing model rejects'
+  )
+
+  t.is(clears, 0, 'nothing cleared when no core or block range exists yet')
+})
+
+test('downloadModel closes the core without clearing when the range is unknown', async t => {
+  const client = makeClient(t)
+  let clears = 0
+  let closed = 0
+  client._clearBlobBlocks = async () => {
+    clears++
+    t.comment('step: _clearBlobBlocks called')
+  }
+  client._core.close = async () => {
+    closed++
+    t.comment('step: core.close() called')
+  }
+  client._core.update = async () => {
+    t.comment('step: core.update() rejecting before the block range is computed')
+    throw new Error('core update failed')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3'),
+    /core update failed/,
+    'the failed core update rejects'
+  )
+
+  t.is(clears, 0, 'no clear attempted while blockStart is still unassigned')
+  t.is(closed, 1, 'the opened core is still closed on the way out')
+})
+
 // Locks the generic retry contract the download path relies on.
 test('withRetry retries only listed codes and stays bounded', async (t) => {
   let calls = 0
