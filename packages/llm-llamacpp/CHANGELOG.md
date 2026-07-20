@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.36.4] - 2026-07-20
+
+Back-port of QVAC-22472 to the 0.36 line (for @qvac/sdk 0.15): hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.
+
+### Fixed
+
+- Qwen3.5 text and multimodal requests now roll back the current request when `n_predict` is reached inside an open reasoning span, avoiding recurrent compaction failures when no close marker was captured.
+- Continuous batching now propagates scheduler-imposed per-sequence slot truncation as `SequenceLimit`, allowing the driver to use the same rollback path as prediction-limit truncation.
+- Batch stop-reason precedence now preserves `Eos` > `PredictionLimit` > `Antiprompt`, so `n_predict` truncation still triggers rollback when a stop string would also match on the same token.
+- Added focused C++ regression coverage for MTMD `n_predict` rollback, scheduler `LimitReached` propagation, Qwen3.5 continuous-batching sequence-limit rollback, and sibling request survival.
+
+### Pull Requests
+
+- [#3337](https://github.com/tetherto/qvac/pull/3337) - QVAC-22472 fix: back-port n_predict-inside-reasoning rollback to llm-llamacpp 0.36.4
+- [#3318](https://github.com/tetherto/qvac/pull/3318) - QVAC-22472 fix: handle Qwen3.5 n_predict cutoff inside reasoning
+
 ## [0.36.3] - 2026-07-09
 
 This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
