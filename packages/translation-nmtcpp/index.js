@@ -15,40 +15,34 @@ class QvacIndicTransResponse extends QvacResponse {
    * @param {string} dstLang
    * @param {Object} handlers
    */
-  constructor (processor, dstLang, handlers) {
+  constructor(processor, dstLang, handlers) {
     super(handlers)
     this.processor = processor
     this.dstLang = dstLang
   }
 
-  onCancel (callback) {
+  onCancel(callback) {
     return super.onCancel(callback)
   }
 
-  onError (callback) {
+  onError(callback) {
     return super.onError(callback)
   }
 
-  onFinish (callback) {
+  onFinish(callback) {
     return super.onFinish(callback)
   }
 
-  onUpdate (callback) {
+  onUpdate(callback) {
     return super.onUpdate((data) => {
-      const [postProcessedText] = this.processor.postprocessBatch(
-        [data],
-        this.dstLang
-      )
+      const [postProcessedText] = this.processor.postprocessBatch([data], this.dstLang)
       return callback(postProcessedText)
     })
   }
 
-  async * iterate () {
+  async *iterate() {
     for await (const output of super.iterate()) {
-      const [postProcessedText] = this.processor.postprocessBatch(
-        [output],
-        this.dstLang
-      )
+      const [postProcessedText] = this.processor.postprocessBatch([output], this.dstLang)
       yield postProcessedText
     }
   }
@@ -88,7 +82,7 @@ class TranslationNmtcpp {
    * @param {Object} [args.logger=null] - Optional logger instance
    * @param {Object} [args.opts={}] - Options (e.g. { stats: true })
    */
-  constructor ({ files, params, config = {}, logger = null, opts = {}, ...args }) {
+  constructor({ files, params, config = {}, logger = null, opts = {}, ...args }) {
     this.opts = opts
     this.logger = new QvacLogger(logger)
     this.addon = null
@@ -106,7 +100,7 @@ class TranslationNmtcpp {
     if (this._modelType === 'Opus') {
       throw new Error(
         'ModelTypes.Opus has been deprecated. Use ModelTypes.Bergamot instead. ' +
-        'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
+          'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
       )
     }
 
@@ -122,14 +116,14 @@ class TranslationNmtcpp {
    * Returns the current state of the inference client.
    * @returns {{configLoaded: boolean, weightsLoaded: boolean, destroyed: boolean}}
    */
-  getState () {
+  getState() {
     return this.state
   }
 
   /**
    * Loads the model. If already loaded, unloads first.
    */
-  async load () {
+  async load() {
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info('Reload requested - unloading existing model first')
       await this.unload()
@@ -143,14 +137,14 @@ class TranslationNmtcpp {
    * @param {string} input - Text to translate
    * @returns {Promise<QvacResponse>}
    */
-  async run (input) {
+  async run(input) {
     return this._run(() => this._runInternal(input))
   }
 
   /**
    * Unloads the model and frees resources.
    */
-  async unload () {
+  async unload() {
     if (this.addon) {
       await this.addon.destroy()
       this.addon = null
@@ -162,7 +156,7 @@ class TranslationNmtcpp {
   /**
    * Destroys the model permanently.
    */
-  async destroy () {
+  async destroy() {
     await this.unload()
     this.state.destroyed = true
   }
@@ -175,7 +169,7 @@ class TranslationNmtcpp {
    *   - 'CPU'          — GGML backend loaded, only CPU backend registered
    * @returns {string}
    */
-  getActiveBackendName () {
+  getActiveBackendName() {
     if (!this.addon) {
       return 'Unloaded'
     }
@@ -188,7 +182,7 @@ class TranslationNmtcpp {
    * Returns '' when no GPU backend is loaded or model is unloaded.
    * @returns {string}
    */
-  getActiveBackendDescription () {
+  getActiveBackendDescription() {
     if (!this.addon) {
       return ''
     }
@@ -200,7 +194,7 @@ class TranslationNmtcpp {
    * @private
    * @returns {boolean}
    */
-  _isBergamotModel () {
+  _isBergamotModel() {
     return this._modelType === TranslationNmtcpp.ModelTypes.Bergamot
   }
 
@@ -209,7 +203,7 @@ class TranslationNmtcpp {
    * @private
    * @param {Object} configurationParams - The configuration object to modify
    */
-  _configureBergamotModel (configurationParams) {
+  _configureBergamotModel(configurationParams) {
     if (!this._isBergamotModel()) return
 
     const vocabConfig = {}
@@ -247,7 +241,7 @@ class TranslationNmtcpp {
     }
   }
 
-  async _load () {
+  async _load() {
     const otherConfig = { ...this._config }
 
     // Accept camelCase aliases for the GPU keys so the config object can
@@ -264,7 +258,10 @@ class TranslationNmtcpp {
     if (otherConfig.gpu_device === undefined && otherConfig.gpuDevice !== undefined) {
       otherConfig.gpu_device = otherConfig.gpuDevice
     }
-    if (otherConfig.op_offload_min_batch === undefined && otherConfig.opOffloadMinBatch !== undefined) {
+    if (
+      otherConfig.op_offload_min_batch === undefined &&
+      otherConfig.opOffloadMinBatch !== undefined
+    ) {
       otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch
     }
     delete otherConfig.useGPU
@@ -298,7 +295,7 @@ class TranslationNmtcpp {
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacIndicTransResponse>} Translation response
    */
-  async _runIndicTrans (input) {
+  async _runIndicTrans(input) {
     const processor = new IndicProcessor()
     const [processedText] = processor.preprocessBatch(
       [input],
@@ -311,11 +308,9 @@ class TranslationNmtcpp {
       input: processedText
     })
 
-    const response = new QvacIndicTransResponse(
-      processor,
-      this._params.dstLang,
-      { cancelHandler: () => this.addon.cancel() }
-    )
+    const response = new QvacIndicTransResponse(processor, this._params.dstLang, {
+      cancelHandler: () => this.addon.cancel()
+    })
 
     return this._job.startWith(response)
   }
@@ -326,7 +321,7 @@ class TranslationNmtcpp {
    * @param {string} input - Input text
    * @returns {string} Processed input text
    */
-  _prepareInputText (input) {
+  _prepareInputText(input) {
     if (this._params.srcLang === 'en' && this._params.dstLang === 'pt') {
       return `>>por<< ${input}`
     }
@@ -338,7 +333,7 @@ class TranslationNmtcpp {
    * @private
    * @returns {QvacResponse} Response object with configured handlers
    */
-  _createStandardResponse () {
+  _createStandardResponse() {
     const response = new QvacResponse({ cancelHandler: () => this.addon.cancel() })
 
     const originalOnUpdate = response.onUpdate.bind(response)
@@ -358,7 +353,7 @@ class TranslationNmtcpp {
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacResponse>} Translation response
    */
-  async _runStandardTranslation (input) {
+  async _runStandardTranslation(input) {
     const text = this._prepareInputText(input)
     await this.addon.runJob({ type: 'text', input: text })
     const response = this._createStandardResponse()
@@ -366,7 +361,7 @@ class TranslationNmtcpp {
     return this._job.startWith(response)
   }
 
-  async _runInternal (input) {
+  async _runInternal(input) {
     if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
       return this._runIndicTrans(input)
     }
@@ -379,7 +374,7 @@ class TranslationNmtcpp {
    * @param {string[]} texts - Array of texts to translate
    * @returns {Promise<string[]>} - Array of translated texts (same order as input)
    */
-  async runBatch (texts) {
+  async runBatch(texts) {
     if (!this.addon) {
       throw new Error('Model not loaded. Call load() first.')
     }
@@ -393,13 +388,9 @@ class TranslationNmtcpp {
 
     if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
       processor = new IndicProcessor()
-      processedTexts = processor.preprocessBatch(
-        texts,
-        this._params.srcLang,
-        this._params.dstLang
-      )
+      processedTexts = processor.preprocessBatch(texts, this._params.srcLang, this._params.dstLang)
     } else {
-      processedTexts = texts.map(text => this._prepareInputText(text))
+      processedTexts = texts.map((text) => this._prepareInputText(text))
     }
 
     await this.addon.runJob({ type: 'sequences', input: processedTexts })
@@ -407,24 +398,29 @@ class TranslationNmtcpp {
     const response = this._job.start()
 
     return new Promise((resolve, reject) => {
-      response.onFinish(([batchResults]) => {
-        if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
-          resolve(processor.postprocessBatch(batchResults, this._params.dstLang))
-        } else {
-          const cleanedResults = batchResults.map(text =>
-            text.replace(/^>>[a-z]+\s*<<\s*/i, '')
-          )
-          resolve(cleanedResults)
-        }
-      }).onError(error => {
-        reject(error)
-      })
+      response
+        .onFinish(([batchResults]) => {
+          if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
+            resolve(processor.postprocessBatch(batchResults, this._params.dstLang))
+          } else {
+            const cleanedResults = batchResults.map((text) =>
+              text.replace(/^>>[a-z]+\s*<<\s*/i, '')
+            )
+            resolve(cleanedResults)
+          }
+        })
+        .onError((error) => {
+          reject(error)
+        })
     })
   }
 
-  _addonOutputCallback (addon, event, data, error) {
-    const isStatsObject = typeof data === 'object' && data !== null && !Array.isArray(data) &&
-                         Object.keys(data).some(k => k.endsWith('TPS'))
+  _addonOutputCallback(addon, event, data, error) {
+    const isStatsObject =
+      typeof data === 'object' &&
+      data !== null &&
+      !Array.isArray(data) &&
+      Object.keys(data).some((k) => k.endsWith('TPS'))
 
     if (isStatsObject) {
       return this._job.end(this.opts?.stats ? data : null)

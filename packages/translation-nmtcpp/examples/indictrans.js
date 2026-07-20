@@ -42,7 +42,7 @@ const logger = VERBOSE
 
 const text = 'How are you'
 
-async function main () {
+async function main() {
   // Use local model path if provided, otherwise auto-download from QVAC registry
   const defaultModelPath = path.join('./model/indictrans', getIndicTransFileName())
   const modelPath = process.env.INDICTRANS_MODEL_PATH || defaultModelPath
@@ -63,7 +63,7 @@ async function main () {
     const response = await model.run(text)
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         console.log(data)
       })
       .await()

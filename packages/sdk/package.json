@@ -205,7 +205,7 @@
     "@qvac/bci-whispercpp": "^0.5.0",
     "@qvac/classification-ggml": "^0.10.2",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.13.3",
+    "@qvac/diffusion-cpp": "^0.15.0",
     "@qvac/embed-llamacpp": "^0.26.2",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",

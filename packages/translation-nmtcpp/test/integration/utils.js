@@ -42,22 +42,25 @@ try {
       name: _platform,
       platform: _platform,
       os_version: '',
-      arch: (os && os.arch) ? os.arch() : '',
+      arch: os && os.arch ? os.arch() : '',
       runner: 'device-farm'
     }
 
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         const entry = {
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            total_time_ms: null,
-            decode_time_ms: null,
-            generated_tokens: null,
-            tps: null,
-            chrfpp: null
-          }, metrics || {}),
+          metrics: Object.assign(
+            {
+              total_time_ms: null,
+              decode_time_ms: null,
+              generated_tokens: null,
+              tps: null,
+              chrfpp: null
+            },
+            metrics || {}
+          ),
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null,
           reference: (extra && extra.reference) || null
@@ -67,7 +70,7 @@ try {
         if (extra && extra.quality) entry.quality = extra.quality
         _results.push(entry)
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -77,7 +80,7 @@ try {
           results: _results
         }
       },
-      writeReport (destPath) {
+      writeReport(destPath) {
         const json = JSON.stringify(this.toJSON())
         // Write JSON to best-effort device paths so Device Farm artifact
         // collection can grab it. Mirrors OCR's inline reporter.
@@ -100,7 +103,9 @@ try {
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
-            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(d, { recursive: true })
+            } catch (_) {}
             const p = path.join(d, 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
@@ -111,13 +116,17 @@ try {
         // simulator host with shared filesystem).
         if (destPath) {
           try {
-            try { fs.mkdirSync(path.dirname(destPath), { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(path.dirname(destPath), { recursive: true })
+            } catch (_) {}
             fs.writeFileSync(destPath, json)
           } catch (_) {}
         }
       },
-      writeStepSummary () { /* no step summary on mobile */ },
-      writeToConsole () {
+      writeStepSummary() {
+        /* no step summary on mobile */
+      },
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           // Chunk large payloads so Android logcat per-entry size limits
@@ -129,14 +138,25 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (err) {
           console.log('[perf-reporter] mobile console write failed: ' + err.message)
         }
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -155,23 +175,57 @@ try {
   // files. Keep them in sync if the on-disk fixtures change.
   const _inlineFixtures = {
     'bergamot.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'validated 2026-04-23 (informal register)' }
+      {
+        source: 'Hello, how are you?',
+        src_lang: 'en',
+        dst_lang: 'it',
+        reference: 'Ciao, come stai?',
+        notes: 'validated 2026-04-23 (informal register)'
+      }
     ],
     'indictrans.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'validated 2026-04-23 (formal register, आप)' },
-      { source: 'नमस्ते, आप कैसे हैं?', src_lang: 'hin_Deva', dst_lang: 'eng_Latn', reference: 'Hello, how are you?', notes: 'validated 2026-06-01 (reverse direction, QVAC-19836)' }
+      {
+        source: 'Hello, how are you?',
+        src_lang: 'eng_Latn',
+        dst_lang: 'hin_Deva',
+        reference: 'नमस्ते, आप कैसे हैं?',
+        notes: 'validated 2026-04-23 (formal register, आप)'
+      },
+      {
+        source: 'नमस्ते, आप कैसे हैं?',
+        src_lang: 'hin_Deva',
+        dst_lang: 'eng_Latn',
+        reference: 'Hello, how are you?',
+        notes: 'validated 2026-06-01 (reverse direction, QVAC-19836)'
+      }
     ],
     'pivot-bergamot.quality.json': [
-      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'validated 2026-04-23 (informal register)' },
-      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'validated 2026-04-23 (formal register, usted)' }
+      {
+        source: 'Buenos días, ¿cómo estás hoy?',
+        src_lang: 'es',
+        dst_lang: 'it',
+        reference: 'Buongiorno, come stai oggi?',
+        notes: 'validated 2026-04-23 (informal register)'
+      },
+      {
+        source: "Bonjour, comment allez-vous aujourd'hui?",
+        src_lang: 'fr',
+        dst_lang: 'es',
+        reference: 'Hola, ¿cómo está usted hoy?',
+        notes: 'validated 2026-04-23 (formal register, usted)'
+      }
     ]
   }
 
-  function _cleanWhitespace (text) {
-    return String(text).replace(/\r\n/g, '\n').replace(/[\t\v\f]/g, ' ').replace(/ {2,}/g, ' ').trim()
+  function _cleanWhitespace(text) {
+    return String(text)
+      .replace(/\r\n/g, '\n')
+      .replace(/[\t\v\f]/g, ' ')
+      .replace(/ {2,}/g, ' ')
+      .trim()
   }
 
-  function _extractCharNgrams (text, n) {
+  function _extractCharNgrams(text, n) {
     const stripped = text.replace(/\s+/g, '')
     const grams = new Map()
     if (stripped.length < n) return grams
@@ -182,7 +236,7 @@ try {
     return grams
   }
 
-  function _extractWordNgrams (text, n) {
+  function _extractWordNgrams(text, n) {
     const words = text.split(/\s+/).filter(Boolean)
     const grams = new Map()
     if (words.length < n) return grams
@@ -193,7 +247,7 @@ try {
     return grams
   }
 
-  function _computePR (hGrams, rGrams) {
+  function _computePR(hGrams, rGrams) {
     let hTotal = 0
     for (const c of hGrams.values()) hTotal += c
     let rTotal = 0
@@ -207,7 +261,7 @@ try {
     return { p: matches / hTotal, r: matches / rTotal }
   }
 
-  function _chrfpp (hypothesis, reference) {
+  function _chrfpp(hypothesis, reference) {
     const h = _cleanWhitespace(hypothesis)
     const r = _cleanWhitespace(reference)
     if (h.length === 0 || r.length === 0) return 0
@@ -235,10 +289,12 @@ try {
     const avgR = recSum / validOrders
     if (avgP === 0 && avgR === 0) return 0
     const b2 = 4 // beta=2 squared
-    return (1 + b2) * avgP * avgR / (b2 * avgP + avgR)
+    return ((1 + b2) * avgP * avgR) / (b2 * avgP + avgR)
   }
 
-  function _round4 (v) { return Math.round(v * 10000) / 10000 }
+  function _round4(v) {
+    return Math.round(v * 10000) / 10000
+  }
 
   evaluateTranslationQuality = function (hypothesis, groundTruthEntry) {
     if (!groundTruthEntry || typeof groundTruthEntry !== 'object') return null
@@ -275,7 +331,7 @@ const _perfReporter = createPerformanceReporter({
 const _reportPath = path.resolve(__dirname, '../../test/results/performance-report.json')
 let _reportScheduled = false
 
-function _scheduleReportWrite () {
+function _scheduleReportWrite() {
   if (_reportScheduled) return
   _reportScheduled = true
   process.on('exit', () => {
@@ -328,7 +384,7 @@ const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
  * @returns {Promise<void>}
  * @throws {Error} If download fails or redirects exceed limit
  */
-async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+async function downloadFile(url, destPath, maxRedirects = 5, maxRetries = 3) {
   const fetch = require('bare-fetch')
 
   // Retry loop for transient network errors (CONNECTION_LOST, socket hang up).
@@ -339,9 +395,11 @@ async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
   let lastErr = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
-      const backoffMs = 500 * (2 ** (attempt - 1))
-      console.log(`   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`)
-      await new Promise(resolve => setTimeout(resolve, backoffMs))
+      const backoffMs = 500 * 2 ** (attempt - 1)
+      console.log(
+        `   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`
+      )
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
     try {
       console.log(`Downloading: ${url.substring(0, 60)}...`)
@@ -353,7 +411,9 @@ async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
           console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
           return downloadFile(location, destPath, maxRedirects - 1, maxRetries)
         }
-        throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
+        throw new Error(
+          `HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`
+        )
       }
 
       if (!response.ok) {
@@ -362,7 +422,9 @@ async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
 
       const buffer = await response.arrayBuffer()
       fs.writeFileSync(destPath, Buffer.from(buffer))
-      console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      console.log(
+        `Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`
+      )
       return
     } catch (err) {
       lastErr = err
@@ -387,7 +449,7 @@ async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
  * @param {string} filename - Configuration filename (e.g., 'bergamot-urls.json')
  * @returns {Object|null} Parsed JSON configuration or null if not found
  */
-function loadConfigFromAssets (filename) {
+function loadConfigFromAssets(filename) {
   let urlConfig = null
 
   // Mobile: Check global.assetPaths (set by test framework)
@@ -402,7 +464,10 @@ function loadConfigFromAssets (filename) {
     for (const candidate of candidates) {
       if (global.assetPaths[candidate]) {
         try {
-          const configData = fs.readFileSync(global.assetPaths[candidate].replace('file://', ''), 'utf8')
+          const configData = fs.readFileSync(
+            global.assetPaths[candidate].replace('file://', ''),
+            'utf8'
+          )
           urlConfig = JSON.parse(configData)
           console.log(`   Loaded config from asset: ${candidate}`)
           return urlConfig
@@ -446,7 +511,7 @@ function loadConfigFromAssets (filename) {
  * @returns {Promise<string>} Path to IndicTrans model file
  * @throws {Error} If model not found/available or corrupted (< 100MB)
  */
-async function ensureIndicTransModel () {
+async function ensureIndicTransModel() {
   const modelFilename = 'ggml-indictrans2-en-indic-dist-200M-q4_0.bin'
   const relativeDir = '../../model/indictrans'
   const modelPath = path.resolve(__dirname, relativeDir, modelFilename)
@@ -456,7 +521,9 @@ async function ensureIndicTransModel () {
     const stats = fs.statSync(modelPath)
     const sizeMB = stats.size / (1024 * 1024)
     if (sizeMB < 100) {
-      throw new Error(`IndicTrans model file seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
+      throw new Error(
+        `IndicTrans model file seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`
+      )
     }
     return modelPath
   }
@@ -500,7 +567,9 @@ async function ensureIndicTransModel () {
   const stats = fs.statSync(destPath)
   const sizeMB = stats.size / (1024 * 1024)
   if (sizeMB < 100) {
-    throw new Error(`Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
+    throw new Error(
+      `Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`
+    )
   }
 
   return destPath
@@ -516,8 +585,10 @@ async function ensureIndicTransModel () {
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
  */
-async function ensureBergamotModel () {
-  const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+async function ensureBergamotModel() {
+  const {
+    ensureBergamotModelFiles
+  } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 
   // Check pre-existing local model first
   const relativeDir = '../../model/bergamot/enit'
@@ -525,8 +596,8 @@ async function ensureBergamotModel () {
 
   if (fs.existsSync(modelDir)) {
     const files = fs.readdirSync(modelDir)
-    const hasIntgemm = files.some(f => f.includes('.intgemm'))
-    const hasVocab = files.some(f => f.includes('.spm'))
+    const hasIntgemm = files.some((f) => f.includes('.intgemm'))
+    const hasVocab = files.some((f) => f.includes('.spm'))
 
     if (hasIntgemm && hasVocab) {
       return modelDir
@@ -534,7 +605,7 @@ async function ensureBergamotModel () {
   }
 
   // Not found locally — download from Firefox CDN
-  const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
+  const writableRoot = isMobile ? global.testDir || '/tmp' : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
 
   return ensureBergamotModelFiles('en', 'it', destDir)
@@ -551,7 +622,7 @@ async function ensureBergamotModel () {
  *
  * @returns {Object} Logger object with error, warn, info, debug methods and getLevel
  */
-function createLogger () {
+function createLogger() {
   return {
     error: (msg) => console.log('[C++ ERROR]:', msg),
     warn: (msg) => console.log('[C++ WARN]:', msg),
@@ -571,7 +642,7 @@ function createLogger () {
  *
  * @returns {Object} Collector with tracking methods and metrics getters
  */
-function createPerformanceCollector () {
+function createPerformanceCollector() {
   let startTime = null
   let firstTokenTime = null
   let generatedText = ''
@@ -580,7 +651,7 @@ function createPerformanceCollector () {
     /**
      * Sets the start time for performance measurement
      */
-    start () {
+    start() {
       startTime = Date.now()
       firstTokenTime = null
       generatedText = ''
@@ -590,7 +661,7 @@ function createPerformanceCollector () {
      * Called when new output is received (onUpdate handler)
      * @param {string} data - The output chunk received
      */
-    onToken (data) {
+    onToken(data) {
       if (firstTokenTime === null && startTime) {
         firstTokenTime = Date.now()
       }
@@ -605,7 +676,7 @@ function createPerformanceCollector () {
      * @param {Object} [addonStats={}] - Native stats from response.stats (totalTime, totalTokens, decodeTime, TPS)
      * @returns {Object} Performance metrics
      */
-    getMetrics (prompt, addonStats = {}) {
+    getMetrics(prompt, addonStats = {}) {
       // The pivot addon reports per-sub-model stats under prefixed keys
       // (e.g. "BERGAMOT : ->totalTokens", "BERGAMOT : ->TPS") rather than
       // flat keys, so a naive `addonStats.totalTokens` read returns 0 for
@@ -615,7 +686,7 @@ function createPerformanceCollector () {
       // or "-"), but NOT for time — when the addon only reports prefix
       // stats, those reflect a single sub-model, and wall-clock time is
       // a more faithful "pivot total time" for the composite operation.
-      function _extractStat (key, { allowPrefix = true } = {}) {
+      function _extractStat(key, { allowPrefix = true } = {}) {
         if (addonStats == null) return null
         if (typeof addonStats[key] === 'number') return addonStats[key]
         if (!allowPrefix) return null
@@ -635,17 +706,15 @@ function createPerformanceCollector () {
       // onUpdate once at the end rather than streaming, so firstTokenTime
       // ≈ completion time.
       const now = Date.now()
-      const wallClockTotalMs = startTime ? (now - startTime) : 0
+      const wallClockTotalMs = startTime ? now - startTime : 0
 
       const addonTotalSec = _extractStat('totalTime', { allowPrefix: false })
       const addonDecodeSec = _extractStat('decodeTime', { allowPrefix: false })
 
-      const totalTimeMs = (addonTotalSec && addonTotalSec > 0)
-        ? addonTotalSec * 1000
-        : wallClockTotalMs
-      const decodeTimeMs = (addonDecodeSec && addonDecodeSec > 0)
-        ? addonDecodeSec * 1000
-        : totalTimeMs
+      const totalTimeMs =
+        addonTotalSec && addonTotalSec > 0 ? addonTotalSec * 1000 : wallClockTotalMs
+      const decodeTimeMs =
+        addonDecodeSec && addonDecodeSec > 0 ? addonDecodeSec * 1000 : totalTimeMs
 
       // Token count and TPS: accept prefixed values too (pivot). If TPS
       // is missing but tokens + decode are available, compute it so the
@@ -684,15 +753,8 @@ function createPerformanceCollector () {
  *                                             actual runtime backend still tag records sensibly.
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics, opts = {}) {
-  const {
-    totalTime,
-    generatedTokens,
-    prompt,
-    tps,
-    fullOutput,
-    decodeTime
-  } = metrics
+function formatPerformanceMetrics(label, metrics, opts = {}) {
+  const { totalTime, generatedTokens, prompt, tps, fullOutput, decodeTime } = metrics
 
   const totalTimeMs = typeof totalTime === 'number' ? totalTime : 0
   const totalSeconds = (totalTimeMs / 1000).toFixed(2)
@@ -716,27 +778,32 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
   // accurate even when the test label says '[GPU]' but a silent CPU
   // fallback happened. Fall back to regex-parsing the label so call sites
   // that don't know the runtime backend still tag records sensibly.
-  const ep = opts.execution_provider ||
+  const ep =
+    opts.execution_provider ||
     (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
-  _perfReporter.record(label, {
-    total_time_ms: Math.round(totalTimeMs),
-    decode_time_ms: Math.round(decodeTimeMs),
-    generated_tokens: generatedTokens || null,
-    tps: (typeof tps === 'number' && tps > 0) ? parseFloat(tpsValue) : null,
-    chrfpp: quality ? quality.chrfpp : null
-  }, {
-    execution_provider: ep,
-    input: prompt || null,
-    output: fullOutput || null,
-    // `quality` is duplicated from metrics.chrfpp so that aggregate.js's
-    // Quality Summary section (which reads `result.quality.*`) renders a
-    // chrF++ column in the HTML/MD mobile + desktop perf-reports. The
-    // Step Summary table keeps reading metrics.chrfpp — no behaviour
-    // change there.
-    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null,
-    reference: quality ? quality.reference : null
-  })
+  _perfReporter.record(
+    label,
+    {
+      total_time_ms: Math.round(totalTimeMs),
+      decode_time_ms: Math.round(decodeTimeMs),
+      generated_tokens: generatedTokens || null,
+      tps: typeof tps === 'number' && tps > 0 ? parseFloat(tpsValue) : null,
+      chrfpp: quality ? quality.chrfpp : null
+    },
+    {
+      execution_provider: ep,
+      input: prompt || null,
+      output: fullOutput || null,
+      // `quality` is duplicated from metrics.chrfpp so that aggregate.js's
+      // Quality Summary section (which reads `result.quality.*`) renders a
+      // chrF++ column in the HTML/MD mobile + desktop perf-reports. The
+      // Step Summary table keeps reading metrics.chrfpp — no behaviour
+      // change there.
+      quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null,
+      reference: quality ? quality.reference : null
+    }
+  )
   _scheduleReportWrite()
 
   // On mobile, the Bare process is hosted inside the native app and
@@ -747,9 +814,13 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
   // Also emit markers to stdout so Device Farm log collection can
   // recover the report via extract-from-log.js if pullFile fails.
   if (isMobile && typeof _perfReporter.writeReport === 'function') {
-    try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+    try {
+      _perfReporter.writeReport(_reportPath)
+    } catch (_) {}
     if (typeof _perfReporter.writeToConsole === 'function') {
-      try { _perfReporter.writeToConsole() } catch (_) {}
+      try {
+        _perfReporter.writeToConsole()
+      } catch (_) {}
     }
   }
 
@@ -786,9 +857,7 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
  * - `BLAS` — GGML's CPU-side matmul helper on macOS. Reports as a "device"
  *   in enumeration but is conceptually CPU work, not a separate GPU.
  */
-const CPU_SENTINEL_BACKENDS = new Set([
-  'CPU', 'Unloaded', 'Bergamot-CPU', 'BLAS'
-])
+const CPU_SENTINEL_BACKENDS = new Set(['CPU', 'Unloaded', 'Bergamot-CPU', 'BLAS'])
 
 /**
  * Normalise an addon `getActiveBackendName()` result into the
@@ -805,7 +874,7 @@ const CPU_SENTINEL_BACKENDS = new Set([
  *   (QVAC-17640 / QVAC-17880), the same row auto-flips to the real backend
  *   tag without further CI work.
  */
-function resolveExecutionProvider (backendName, useGpu) {
+function resolveExecutionProvider(backendName, useGpu) {
   if (backendName && !CPU_SENTINEL_BACKENDS.has(backendName)) {
     return backendName.toLowerCase().replace(/\s+/g, '-').replace(/\d+$/, '')
   }
@@ -838,7 +907,7 @@ let _gpuDevicePromise = null
  *
  * @returns {Promise<{ index: number, name: string }[]>}
  */
-function discoverGpuDevices () {
+function discoverGpuDevices() {
   if (_gpuDevicePromise !== null) return _gpuDevicePromise
   _gpuDevicePromise = _probeGpuDevices()
   return _gpuDevicePromise
@@ -858,7 +927,7 @@ let _gpuBackendPromise = null
  *
  * @returns {Promise<{ index: number, name: string, backend: string }[]>}
  */
-function discoverGpuBackends () {
+function discoverGpuBackends() {
   if (_gpuBackendPromise !== null) return _gpuBackendPromise
   _gpuBackendPromise = _probeGpuBackends()
   return _gpuBackendPromise
@@ -877,12 +946,12 @@ const _logger = createLogger()
  * @param {string} name - ggml backend device name
  * @returns {string|null} ordinal string used as deduplication key, or null if no trailing digit
  */
-function _extractPhysicalGpuKey (name) {
+function _extractPhysicalGpuKey(name) {
   const match = name.match(/(\d+)$/)
   return match ? match[1] : null
 }
 
-async function _probeGpuDevices () {
+async function _probeGpuDevices() {
   const devices = []
   const seenBackends = new Set()
   const modelPath = await ensureIndicTransModel()
@@ -903,7 +972,9 @@ async function _probeGpuDevices () {
       if (platform === 'android') {
         const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
         config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover')
-        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+        try {
+          fs.mkdirSync(config.openclCacheDir, { recursive: true })
+        } catch (_) {}
       }
       model = new TranslationNmtcpp({
         files: { model: modelPath },
@@ -932,9 +1003,19 @@ async function _probeGpuDevices () {
       seenBackends.add(name)
       devices.push({ index: idx, name, description })
     } catch (err) {
-      _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
-        ' failed: ' + (err && err.message ? err.message : String(err)))
-      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      _logger.warn(
+        '[discoverGpuDevices] probe at gpu_device=' +
+          idx +
+          ' failed: ' +
+          (err && err.message ? err.message : String(err))
+      )
+      if (model) {
+        try {
+          await model.unload()
+        } catch (__) {
+          /* noop */
+        }
+      }
       break
     }
   }
@@ -949,9 +1030,17 @@ async function _probeGpuDevices () {
   for (const device of devices) {
     const physKey = _extractPhysicalGpuKey(device.name)
     if (physKey !== null && seen.has(physKey)) {
-      _logger.info('[discoverGpuDevices] Skipping ' + device.name +
-        ' (gpu_device=' + device.index + ') — same physical GPU as ' +
-        seen.get(physKey).name + ' (ordinal ' + physKey + ')')
+      _logger.info(
+        '[discoverGpuDevices] Skipping ' +
+          device.name +
+          ' (gpu_device=' +
+          device.index +
+          ') — same physical GPU as ' +
+          seen.get(physKey).name +
+          ' (ordinal ' +
+          physKey +
+          ')'
+      )
       continue
     }
     if (physKey !== null) seen.set(physKey, device)
@@ -959,13 +1048,20 @@ async function _probeGpuDevices () {
   }
 
   if (unique.length < devices.length) {
-    _logger.info('[discoverGpuDevices] Deduplicated ' + devices.length +
-      ' backends → ' + unique.length + ' unique physical GPU(s)')
+    _logger.info(
+      '[discoverGpuDevices] Deduplicated ' +
+        devices.length +
+        ' backends → ' +
+        unique.length +
+        ' unique physical GPU(s)'
+    )
   }
 
   if (unique.length > 0) {
-    _logger.info('[discoverGpuDevices] Discovered GPUs: ' +
-      unique.map(d => d.name + (d.description ? ' (' + d.description + ')' : '')).join(', '))
+    _logger.info(
+      '[discoverGpuDevices] Discovered GPUs: ' +
+        unique.map((d) => d.name + (d.description ? ' (' + d.description + ')' : '')).join(', ')
+    )
   }
 
   return unique
@@ -980,7 +1076,7 @@ const BACKEND_TYPES_TO_PROBE = [
   { label: 'opencl', gpuBackend: 'opencl' }
 ]
 
-async function _probeGpuBackends () {
+async function _probeGpuBackends() {
   const backends = []
   const modelPath = await ensureIndicTransModel()
   const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
@@ -997,8 +1093,13 @@ async function _probeGpuBackends () {
       }
       if (platform === 'android') {
         const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
-        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover-' + backendType.label)
-        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+        config.openclCacheDir = path.join(
+          writableRoot,
+          'opencl-cache-discover-' + backendType.label
+        )
+        try {
+          fs.mkdirSync(config.openclCacheDir, { recursive: true })
+        } catch (_) {}
       }
       model = new TranslationNmtcpp({
         files: { model: modelPath },
@@ -1012,18 +1113,35 @@ async function _probeGpuBackends () {
       await model.unload()
 
       if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
-        _logger.info('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
-          ' resolved to CPU — skipping')
+        _logger.info(
+          '[discoverGpuBackends] gpu_backend=' +
+            backendType.gpuBackend +
+            ' resolved to CPU — skipping'
+        )
         continue
       }
       backends.push({ index: 0, name, description, backend: backendType.label })
-      _logger.info('[discoverGpuBackends] Found: ' + name +
-        (description ? ' (' + description + ')' : '') +
-        ' via gpu_backend=' + backendType.gpuBackend)
+      _logger.info(
+        '[discoverGpuBackends] Found: ' +
+          name +
+          (description ? ' (' + description + ')' : '') +
+          ' via gpu_backend=' +
+          backendType.gpuBackend
+      )
     } catch (err) {
-      _logger.warn('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
-        ' failed: ' + (err && err.message ? err.message : String(err)))
-      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      _logger.warn(
+        '[discoverGpuBackends] gpu_backend=' +
+          backendType.gpuBackend +
+          ' failed: ' +
+          (err && err.message ? err.message : String(err))
+      )
+      if (model) {
+        try {
+          await model.unload()
+        } catch (__) {
+          /* noop */
+        }
+      }
     }
   }
 
@@ -1038,12 +1156,14 @@ async function _probeGpuBackends () {
 // Shared cancel test inputs
 // ============================================================================
 
-const CANCEL_LONG_TEXT_EN = 'This is a deliberately long sentence intended to give the ' +
+const CANCEL_LONG_TEXT_EN =
+  'This is a deliberately long sentence intended to give the ' +
   'translation process enough work to still be running when we cancel it, ' +
   'so that the cancel path is exercised mid-inference rather than after ' +
   'the job has already completed on its own.'
 
-const CANCEL_LONG_TEXT_ES = 'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
+const CANCEL_LONG_TEXT_ES =
+  'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
   'Queremos asegurarnos de que la cancelación funcione correctamente durante la traducción pivote. ' +
   'El texto sigue y sigue para dar tiempo al proceso de ser cancelado antes de terminar.'
 

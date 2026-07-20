@@ -34,7 +34,7 @@ const text = `
   Alice was not a bit hurt, and she jumped up on to her feet in a moment: she looked up, but it was all dark overhead; before her was another long passage, and the White Rabbit was still in sight, hurrying down it. There was not a moment to be lost: away went Alice like the wind, and was just in time to hear it say, as it turned a corner, "Oh my ears and whiskers, how late it's getting!" She was close behind it when she turned the corner, but the Rabbit was no longer to be seen: she found herself in a long, low hall, which was lit up by a row of lamps hanging from the roof.
   `
 
-async function main () {
+async function main() {
   console.log('[TEST] Entering main function')
 
   // BERGAMOT_MODEL_PATH is required
@@ -47,7 +47,9 @@ async function main () {
     console.error('  BERGAMOT_MODEL_PATH=/path/to/bergamot/model bare test/test-bergamot.js')
     console.error('')
     console.error('Example:')
-    console.error('  BERGAMOT_MODEL_PATH=~/.local/share/bergamot/models/firefox/base-memory/enit bare test/test-bergamot.js')
+    console.error(
+      '  BERGAMOT_MODEL_PATH=~/.local/share/bergamot/models/firefox/base-memory/enit bare test/test-bergamot.js'
+    )
     process.exit(1)
   }
 
@@ -60,15 +62,17 @@ async function main () {
 
   // Auto-detect model and vocab files
   const files = fs.readdirSync(bergamotPath)
-  const modelName = files.find(f => f.includes('.intgemm.') && f.endsWith('.bin'))
+  const modelName = files.find((f) => f.includes('.intgemm.') && f.endsWith('.bin'))
 
   // Try to find vocab files: srcvocab/trgvocab (separate) or vocab (shared)
-  let srcVocabName = files.find(f => f.startsWith('srcvocab.') && f.endsWith('.spm'))
-  let dstVocabName = files.find(f => (f.startsWith('trgvocab.') || f.startsWith('dstvocab.')) && f.endsWith('.spm'))
+  let srcVocabName = files.find((f) => f.startsWith('srcvocab.') && f.endsWith('.spm'))
+  let dstVocabName = files.find(
+    (f) => (f.startsWith('trgvocab.') || f.startsWith('dstvocab.')) && f.endsWith('.spm')
+  )
 
   // Fallback to shared vocab file
   if (!srcVocabName) {
-    srcVocabName = files.find(f => f.startsWith('vocab.') && f.endsWith('.spm'))
+    srcVocabName = files.find((f) => f.startsWith('vocab.') && f.endsWith('.spm'))
   }
   if (!dstVocabName) {
     dstVocabName = srcVocabName
@@ -95,8 +99,9 @@ async function main () {
   const modelLower = modelName.toLowerCase()
 
   // Extract language pair from path or model name (e.g., "esen", "enit", "enfr")
-  const langPairMatch = pathLower.match(/\/(en[a-z]{2}|[a-z]{2}en)(?:\/|$)/) ||
-                        modelLower.match(/\.(en[a-z]{2}|[a-z]{2}en)\./)
+  const langPairMatch =
+    pathLower.match(/\/(en[a-z]{2}|[a-z]{2}en)(?:\/|$)/) ||
+    modelLower.match(/\.(en[a-z]{2}|[a-z]{2}en)\./)
 
   let detectedSrcLang = 'en'
   let detectedTrgLang = 'it' // Default fallback
@@ -110,7 +115,9 @@ async function main () {
 
     if (detectedSrcLang !== 'en') {
       console.error('')
-      console.error(`[ERROR] ⚠️  Model expects ${detectedSrcLang.toUpperCase()} source input, NOT English!`)
+      console.error(
+        `[ERROR] ⚠️  Model expects ${detectedSrcLang.toUpperCase()} source input, NOT English!`
+      )
       console.error('[ERROR] This test uses ENGLISH text as input.')
       console.error(`[ERROR] Use an en→X model (e.g., en${detectedSrcLang}) for this test.`)
       console.error('')
@@ -156,7 +163,7 @@ async function main () {
     const response = await model.run(text)
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         console.log(data)
       })
       .await()
