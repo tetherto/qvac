@@ -28,10 +28,11 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
-find_package(tts-cpp CONFIG REQUIRED)
-# Pull ggml in directly (in addition to the transitive find via tts-cppConfig)
-# so GGML_AVAILABLE_BACKENDS / ggml::<backend> IMPORTED targets are visible for
-# the dynamic-backend install plumbing below (mirrors tts-ggml).
+find_package(audiogen-cpp CONFIG REQUIRED)
+# Pull ggml in directly (in addition to the transitive find via
+# audiogen-cppConfig) so GGML_AVAILABLE_BACKENDS / ggml::<backend> IMPORTED
+# targets are visible for the dynamic-backend install plumbing below
+# (mirrors tts-ggml).
 find_package(ggml CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -98,7 +99,7 @@ target_include_directories(
 target_link_libraries(
   ${audiogen-ggml}
   PRIVATE
-    tts-cpp::tts-cpp
+    audiogen-cpp::audiogen-cpp
 )
 
 target_compile_definitions(${audiogen-ggml} PUBLIC JS_LOGGER)

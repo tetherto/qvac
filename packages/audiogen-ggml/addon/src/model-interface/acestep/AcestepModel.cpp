@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "tts-cpp/acestep/engine.h"
+#include "audiogen-cpp/acestep/engine.h"
 
 namespace qvac::audiogenggml::acestep {
 
@@ -107,6 +107,12 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.lyrics = in.lyrics;
   params.vocal_language = in.vocalLanguage;
   params.seed = in.seed;
+  params.bpm = in.bpm;
+  params.keyscale = in.keyscale;
+  params.timesignature = in.timesignature;
+  // Pass duration straight through: >0 caps the track to that many seconds,
+  // 0 (the default) lets LM Phase-1 decide the full song length.
+  params.duration = in.duration;
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
@@ -139,10 +145,12 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
+  // RuntimeStats is a key/value list (vector<pair<string, variant<double,
+  // int64_t>>>) in inference-addon-cpp; mirror tts-ggml's shape.
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
-  stats.totalTimeMs = totalTime_;
-  stats.audioDurationMs = audioDurationMs_;
-  stats.realTimeFactor = realTimeFactor_;
+  stats.emplace_back("totalTimeMs", totalTime_);
+  stats.emplace_back("realTimeFactor", realTimeFactor_);
+  stats.emplace_back("audioDurationMs", audioDurationMs_);
   return stats;
 }
 

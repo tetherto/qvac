@@ -3,7 +3,7 @@
 // @qvac/audiogen-ggml
 //
 // Audio generation (music) addon for qvac, ggml backend. Text prompt in ->
-// stereo 48 kHz audio out, powered by the ACE-Step engine in tts-cpp
+// stereo 48 kHz audio out, powered by the ACE-Step engine in audiogen-cpp
 // (text-encoder + LM + DiT + VAE), compiled natively per-platform and linked
 // via vcpkg — same shape as @qvac/tts-ggml.
 //
@@ -12,6 +12,7 @@
 // destroyInstance. `AudioGen` wraps it with a small async facade.
 
 const binding = require('./binding')
+const { encodePcm, pcmToWav, SUPPORTED_FORMATS } = require('./lib/audio-format')
 
 const ENGINE_ACESTEP = 'acestep'
 
@@ -59,6 +60,10 @@ class AudioGen {
    * @param {string} [opts.lyrics="[Instrumental]"]
    * @param {number} [opts.seed]
    * @param {string} [opts.vocalLanguage]
+   * @param {number} [opts.bpm]        Beats per minute (0/undefined => LM infers).
+   * @param {string} [opts.keyscale]   e.g. "C minor".
+   * @param {string} [opts.timesignature] e.g. "4/4".
+   * @param {number} [opts.duration]   Target seconds (undefined => LM decides).
    */
   async generate (caption, opts = {}) {
     return this._binding.runJob(this._handle, {
@@ -66,7 +71,11 @@ class AudioGen {
       input: caption,
       lyrics: opts.lyrics ?? '[Instrumental]',
       seed: opts.seed,
-      vocalLanguage: opts.vocalLanguage
+      vocalLanguage: opts.vocalLanguage,
+      bpm: opts.bpm,
+      keyscale: opts.keyscale,
+      timesignature: opts.timesignature,
+      duration: opts.duration
     })
   }
 
@@ -84,6 +93,24 @@ class AudioGen {
   async unload () {
     return this.destroy()
   }
+
+  /**
+   * Encode interleaved Int16 PCM (as delivered by the output callback) into the
+   * requested output format.
+   * @param {Buffer|Uint8Array} pcm
+   * @param {'pcm'|'wav'} [format='wav']
+   * @param {Object} [opts] { sampleRate=48000, channels=2 }
+   * @returns {{ data: Buffer, extension: string }}
+   */
+  static encode (pcm, format = 'wav', opts = {}) {
+    return encodePcm(pcm, format, opts)
+  }
 }
 
-module.exports = { AudioGen, ENGINE_ACESTEP }
+module.exports = {
+  AudioGen,
+  ENGINE_ACESTEP,
+  encodePcm,
+  pcmToWav,
+  OUTPUT_FORMATS: SUPPORTED_FORMATS
+}

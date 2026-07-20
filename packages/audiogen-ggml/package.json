@@ -1,7 +1,7 @@
 {
   "name": "@qvac/audiogen-ggml",
   "version": "0.0.1",
-  "description": "Audio generation (music) addon for qvac (ggml backend, wrapping the ACE-Step engine from tts-cpp). Text prompt in, stereo 48kHz audio out.",
+  "description": "Audio generation (music) addon for qvac (ggml backend, wrapping the ACE-Step engine from audiogen-cpp). Text prompt in, stereo 48kHz audio out.",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"

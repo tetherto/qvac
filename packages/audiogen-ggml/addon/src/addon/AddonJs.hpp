@@ -2,6 +2,7 @@
 
 #include <any>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -86,11 +87,33 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  // The caption is the primary text input; lyrics/seed/language default from
-  // config (per-call overrides land once the framework job object is threaded
-  // through — see QVAC-21921 plan).
+  // The caption is the primary text input; lyrics/seed/language/bpm/keyscale/
+  // timesignature/duration are read as optional per-call overrides from the
+  // same job object the framework hands us at arg index 1.
+  auto jobObj = args.getJsObject(1, "inputObj");
+  auto optStr = [&](const char* key) -> std::optional<std::string> {
+    return jobObj.getOptionalPropertyAs<js::String, std::string>(env, key);
+  };
+  auto optNum = [&](const char* key) -> std::optional<double> {
+    js_value_t* raw = jobObj.getProperty(env, key);
+    if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+      return std::nullopt;
+    }
+    if (js::is<js::Number>(env, raw)) {
+      return js::Number::fromValue(raw).as<double>(env);
+    }
+    return std::nullopt;
+  };
+
   AcestepModel::AnyInput modelInput;
   modelInput.caption = js::String(env, jsInput).as<std::string>(env);
+  if (auto v = optStr("lyrics")) modelInput.lyrics = *v;
+  if (auto v = optStr("vocalLanguage")) modelInput.vocalLanguage = *v;
+  if (auto v = optStr("keyscale")) modelInput.keyscale = *v;
+  if (auto v = optStr("timesignature")) modelInput.timesignature = *v;
+  if (auto v = optNum("seed")) modelInput.seed = static_cast<long long>(*v);
+  if (auto v = optNum("bpm")) modelInput.bpm = static_cast<int>(*v);
+  if (auto v = optNum("duration")) modelInput.duration = static_cast<float>(*v);
   return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH

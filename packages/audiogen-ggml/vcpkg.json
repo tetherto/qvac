@@ -8,25 +8,13 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
-    {
-      "name": "tts-cpp",
-      "version>=": "2026-07-13#1"
-    }
+    "audiogen-cpp"
   ],
   "features": {
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
         "gtest"
-      ]
-    },
-    "vulkan": {
-      "description": "Enable Vulkan GPU acceleration",
-      "dependencies": [
-        {
-          "name": "tts-cpp",
-          "features": ["vulkan"]
-        }
       ]
     }
   }

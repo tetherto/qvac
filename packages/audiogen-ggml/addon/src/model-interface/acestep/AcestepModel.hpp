@@ -35,7 +35,11 @@ public:
     std::string caption;
     std::string lyrics = "[Instrumental]";
     std::string vocalLanguage;
-    int seed = -1;
+    long long   seed = -1;      // <0 = random (uint32 range, torch/philox parity)
+    int         bpm = 0;        // 0 => let the LM infer
+    std::string keyscale;       // optional, e.g. "C minor"
+    std::string timesignature;  // optional, e.g. "4/4"
+    float       duration = 0.0F;  // 0 => keep engine default / let LM decide
   };
 
   explicit AcestepModel(AcestepConfig config);

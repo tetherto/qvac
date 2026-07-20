@@ -3,15 +3,13 @@
 Audio generation (music) addon for qvac, ggml backend. Text prompt in, stereo
 48 kHz audio out. Powered by the [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 pipeline (text-encoder → LM → DiT → VAE), compiled natively per-platform and
-linked against `tts-cpp` via vcpkg — the same shape as `@qvac/tts-ggml`.
+linked against `audiogen-cpp` via vcpkg — the same shape as `@qvac/tts-ggml`.
 
-> **Status: v0 scaffold.** The native addon structure, build wiring and stable
-> JS API are in place. Generation is gated on the `tts_cpp::acestep::Engine`
-> port (DiT/LM/text-encoder onto our ggml-speech fork, CPU-first). Only the VAE
-> stage is ported so far. See
-> `tts-cpp/docs/QVAC-21921-audiogen-plan.md` for the roadmap.
+> The native addon wraps the `tts_cpp::acestep::Engine` shipped by the
+> `audiogen-cpp` engine library (a sibling of `tts-cpp` / `parakeet-cpp` in the
+> qvac-ext-lib-whisper.cpp repo), built on our ggml-speech fork (CPU-first).
 >
-> No binaries: the addon compiles the C++ for every platform tts-cpp supports.
+> No binaries: the addon compiles the C++ for every platform audiogen-cpp supports.
 
 ## Architecture
 
@@ -25,8 +23,8 @@ index.js ── binding (BARE_MODULE) ── AcestepModel ── tts_cpp::aceste
 - `addon/src/addon/AddonJs.hpp` — `createInstance` / `activate` / `runJob`.
 - `addon/src/model-interface/acestep/` — `AcestepModel` implements the
   `qvac_lib_inference_addon_cpp` model interface, wrapping the engine.
-- Build: `cmake-bare` + `cmake-vcpkg`, `find_package(tts-cpp)`,
-  `add_bare_module`. `vcpkg.json` depends on `tts-cpp`.
+- Build: `cmake-bare` + `cmake-vcpkg`, `find_package(audiogen-cpp)`,
+  `add_bare_module`. `vcpkg.json` depends on `audiogen-cpp`.
 
 ## Build
 

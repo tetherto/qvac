@@ -1,0 +1,4 @@
+The package ggml provides CMake integration:
+
+  find_package(ggml CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE ggml::ggml)
