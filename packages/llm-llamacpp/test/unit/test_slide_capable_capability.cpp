@@ -44,8 +44,11 @@ public:
     return {};
   }
   void onSequenceEnd(const std::function<void(const std::string&)>&) override {}
-  void onGenerationFinished(
-      const std::function<void(const std::string&)>&) override {}
+  [[nodiscard]] bool onGenerationFinished(
+      const std::function<void(const std::string&)>&,
+      GenerationStopReason = GenerationStopReason::None) override {
+    return true;
+  }
   [[nodiscard]] bool
   onCancel(const std::function<void(const std::string&)>&) override {
     return true;
