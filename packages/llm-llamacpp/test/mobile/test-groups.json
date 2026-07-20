@@ -1,16 +1,39 @@
 {
   "ios": {
-    "finetuning": ["runFinetuningPauseResumeTest"],
-    "toolCalling": ["runToolCallingTest"],
-    "reasoning": ["runReasoningTest"],
-    "slidingContext": ["runSlidingContextTest"],
-    "imageFruitPlate": ["runImageFruitPlateTest"],
-    "imageMmprojGpu": ["runImageMmprojGpuTest"],
-    "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
-    "gemma": ["runGemma4Test"],
-    "quantizedKvcache": ["runQuantizedKvcacheTest"],
-    "continuousBatching": ["runContinuousBatchingTest"],
-    "mtp": ["runMtpTest"],
+    "finetuning": [
+      "runFinetuningPauseResumeTest"
+    ],
+    "toolCalling": [
+      "runToolCallingTest"
+    ],
+    "reasoning": [
+      "runReasoningTest"
+    ],
+    "slidingContext": [
+      "runSlidingContextTest"
+    ],
+    "imageFruitPlate": [
+      "runImageFruitPlateTest"
+    ],
+    "imageMmprojGpu": [
+      "runImageMmprojGpuTest"
+    ],
+    "imageTileMode": [
+      "runQwen35ImageTileModeTokensTest"
+    ],
+    "gemma": [
+      "runGemma4Test"
+    ],
+    "quantizedKvcache": [
+      "runQuantizedKvcacheTest"
+    ],
+    "continuousBatching": [
+      "runContinuousBatchingTest"
+    ],
+    "mtp": [
+      "runMtpTest",
+      "runMtpMtmdTest"
+    ],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -32,8 +55,13 @@
     ]
   },
   "android": {
-    "continuousBatching": ["runContinuousBatchingTest"],
-    "mtp": ["runMtpTest"],
+    "continuousBatching": [
+      "runContinuousBatchingTest"
+    ],
+    "mtp": [
+      "runMtpTest",
+      "runMtpMtmdTest"
+    ],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runConfigParametersTest",
