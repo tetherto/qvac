@@ -58,6 +58,8 @@ const model = new LlmLlamacpp({
 
 `parallel` maps to `n_seq_max` in llama.cpp. The KV cache is split uniformly: with `ctx_size: '8192'` and `parallel: '4'`, each slot gets a 2048-token window. Values less than 2 leave the single-prompt path active; batch `run()` calls throw `InvalidArgument` in that case.
 
+`parallel` also sizes the native multi-job scheduler's worker pool one-to-one: that many OS threads are created eagerly at load and held for the model's lifetime, whether or not requests are in flight. This is deliberate — a serving deployment pays the whole cost upfront and is then ready to serve at full concurrency with no warm-up — but it makes a large `parallel` a real resource commitment (threads and stack address space, plus the smaller per-slot KV window) even while idle. Size it to the concurrency you actually intend to serve.
+
 Continuous batching works on both text and multimodal (vision) models. A batch prompt may include media messages; each sequence runs its own per-slot MTMD driver that loads its media, sharing the model's mmproj weights.
 
 ---

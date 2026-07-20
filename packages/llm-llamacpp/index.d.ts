@@ -126,6 +126,14 @@ export interface LlamaConfig {
    * concurrent top-level `run()` calls are both decoded together across slots,
    * so multiple responses can be active at once. Default `1` (sequential, a
    * single response active at a time, batching disabled).
+   *
+   * Cost: `parallel` is a real resource commitment, sized upfront so a busy
+   * server is ready to serve at full concurrency with no warm-up. It sizes
+   * the native scheduler's worker pool one-to-one — that many OS threads are
+   * created at load and held for the model's lifetime, idle or not — and the
+   * KV cache is split evenly across the slots (each gets `ctx_size /
+   * parallel` tokens). Size it to the concurrency you actually intend to
+   * serve, not to a generous upper bound.
    */
   parallel?: NumericLike
   [key: string]: string | number | boolean | string[] | undefined

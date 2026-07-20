@@ -520,7 +520,12 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // out-of-range value throws before the model or scheduler is constructed.
   auto config = args.getSubmap(1, "config");
   // Explicit safe ceiling for the scheduler's thread pool; keep in sync with
-  // the JS constructor validation in index.js.
+  // the JS constructor validation in index.js. The pool is thread-per-slot
+  // and eager: `parallel` OS threads are spawned at load and live for the
+  // model's lifetime, so a server pays the whole cost upfront and is ready
+  // to serve at full concurrency with no warm-up. The ceiling only bounds
+  // the config; the per-value cost is the user's documented choice (see
+  // `parallel` in index.d.ts and docs/continuous-batching.md).
   constexpr unsigned kMaxParallelWorkers = 1024;
   unsigned maxConcurrency = 1;
   if (auto it = config.find("parallel"); it != config.end()) {
