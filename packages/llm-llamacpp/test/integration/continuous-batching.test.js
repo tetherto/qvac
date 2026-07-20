@@ -464,6 +464,9 @@ safeTest(
 // runs on the Device Farm pools: it is the minimum shape that proves the batch
 // scheduler drives a vision slot on device (parallel: 2, one image), keeping
 // per-slot context and device time within mobile budgets.
+// safeTest (not plain test like the other MTMD cases): on Device Farm a thrown
+// native-addon error would abort the whole mobile shard; safeTest converts it
+// into a readable t.fail instead.
 safeTest(
   'continuous batching MTMD: mobile smoke — image and text slots decode together',
   { timeout: 900_000, skip: isDarwin },
@@ -484,17 +487,7 @@ safeTest(
     // One image slot beside one text slot. Vision encode is serialized across
     // slots, so this pairing is what would expose an encode barrier starving the
     // text slot: the text sequence must keep decoding while the image encodes.
-    const batchInput = [
-      buildBatchItem(imageCase),
-      {
-        id: textCase.id,
-        prompt: [
-          { role: 'system', content: 'Answer with one word only.' },
-          { role: 'user', content: textCase.user }
-        ],
-        runOptions: { generationParams: { predict: 16 } }
-      }
-    ]
+    const batchInput = [buildBatchItem(imageCase), buildVlmBatchItem(textCase)]
 
     const batchResponse = await model.run(batchInput)
     const streamingProgress = logStreamingProgress(batchResponse, 'cb-mtmd-mobile')
@@ -522,13 +515,17 @@ safeTest(
       )
     }
 
-    // Both sequences are admitted in the same wave, so they overlap for at least
-    // the steps before the shorter text slot finishes. A mean pinned at exactly
-    // 1.0 means the slots never decoded together and batching collapsed to
-    // serial execution.
+    // avgConcurrentSeq counts every scheduler step (prefill and media-barrier
+    // steps included, see RuntimeStatsSnapshot::recordDecodeStep), so it
+    // measures slot co-residency, not decode interleaving — co-batched prefill
+    // alone can clear 1.0 even with decode pipelining regressed. 1.2 is the
+    // same bar the 2-slot rolling-admission test uses; the measured value is a
+    // deterministic 1.571 on Android/Windows/Linux (seed 42, temp 0), leaving
+    // ~30% margin. Decode-phase correctness is guarded by the per-slot output
+    // assertions above, not by this stat.
     t.ok(
-      avgConcurrentSeq > 1.0,
-      `avgConcurrentSeq (${avgConcurrentSeq}) > 1.0 confirms the image and text slots decoded together`
+      avgConcurrentSeq > 1.2,
+      `avgConcurrentSeq (${avgConcurrentSeq}) > 1.2 confirms the image and text slots were batched together`
     )
   }
 )
