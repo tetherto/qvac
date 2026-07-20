@@ -14,7 +14,7 @@
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
     "continuousBatching": ["runContinuousBatchingTest"],
-    "mtp": ["runMtpTest"],
+    "mtp": ["runMtpTest", "runMtpMtmdTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -35,8 +35,13 @@
     ]
   },
   "android": {
-    "continuousBatching": ["runContinuousBatchingTest"],
-    "mtp": ["runMtpTest"],
+    "continuousBatching": [
+      "runContinuousBatchingTest"
+    ],
+    "mtp": [
+      "runMtpTest",
+      "runMtpMtmdTest"
+    ],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runFinetuningCancelSlotReleaseTest",
