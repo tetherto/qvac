@@ -14,13 +14,9 @@ class OcrGgmlInterface {
    *   `info`/`warn`/`error`/`debug` methods. When provided, C++ log lines are
    *   forwarded via `binding.setLogger`.
    */
-  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+  constructor(binding, configurationParams, outputCb, transitionCb = null) {
     this._binding = binding
-    this._handle = this._binding.createInstance(
-      this,
-      configurationParams,
-      outputCb
-    )
+    this._handle = this._binding.createInstance(this, configurationParams, outputCb)
 
     this._loggerInitialized = false
     if (transitionCb && typeof transitionCb === 'object') {
@@ -35,18 +31,18 @@ class OcrGgmlInterface {
     }
   }
 
-  async destroyInstance () {
+  async destroyInstance() {
     await this.destroy()
   }
 
-  async unload () {
+  async unload() {
     await this.destroy()
   }
 
   /**
    * Moves the addon to LISTENING after construction-time work is finished.
    */
-  async activate () {
+  async activate() {
     try {
       this._binding.activate(this._handle)
     } catch (err) {
@@ -58,7 +54,7 @@ class OcrGgmlInterface {
     }
   }
 
-  async cancel () {
+  async cancel() {
     try {
       await this._binding.cancel(this._handle)
     } catch (err) {
@@ -81,7 +77,7 @@ class OcrGgmlInterface {
    * @param {number} [data.options.boxMarginMultiplier]
    * @param {number[]} [data.options.rotationAngles]
    */
-  async runJob (data) {
+  async runJob(data) {
     try {
       return this._binding.runJob(this._handle, data)
     } catch (err) {
@@ -97,14 +93,14 @@ class OcrGgmlInterface {
    * Returns the backend device the C++ pipeline resolved for inference.
    * @returns {{ requested: string, backendDevice: string, backendName: string, deviceIndex: number, backendDescription: string, fallbackReason: string }}
    */
-  getBackendInfo () {
+  getBackendInfo() {
     if (this._handle === null) {
       return null
     }
     return this._binding.getBackendInfo(this._handle)
   }
 
-  async destroy () {
+  async destroy() {
     if (this._handle === null) {
       return
     }
