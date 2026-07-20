@@ -367,8 +367,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
       &generationPrompt);
 
   EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
-  EXPECT_EQ(thinkingStartTag, "<think>\n");
-  EXPECT_EQ(thinkingEndTag, "\n</think>\n\n");
+  EXPECT_EQ(thinkingStartTag, "<think>");
+  EXPECT_EQ(thinkingEndTag, "</think>");
   EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_FALSE(thinkingForcedOpen);
 }
