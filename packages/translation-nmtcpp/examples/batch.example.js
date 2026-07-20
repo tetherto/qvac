@@ -53,7 +53,7 @@ const textsToTranslate = [
   'Thank you for your help again.'
 ]
 
-async function testBatchTranslation () {
+async function testBatchTranslation() {
   console.log('\n=== Batch Translation Example ===\n')
 
   const {

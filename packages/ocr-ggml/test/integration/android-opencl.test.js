@@ -29,79 +29,89 @@ const { platform, getImagePath, ensureModelPath, safeUnload } = require('./utils
 const TEST_TIMEOUT = 300 * 1000
 const shouldSkip = platform !== 'android'
 
-test('android opencl: selects OpenCL or reports CPU fallback, with correct OCR output', { timeout: TEST_TIMEOUT, skip: shouldSkip }, async function (t) {
-  const detectorPath = await ensureModelPath('detector_craft')
-  const recognizerPath = await ensureModelPath('recognizer_latin')
-  const imagePath = getImagePath('/test/images/basic_test.bmp')
+test(
+  'android opencl: selects OpenCL or reports CPU fallback, with correct OCR output',
+  { timeout: TEST_TIMEOUT, skip: shouldSkip },
+  async function (t) {
+    const detectorPath = await ensureModelPath('detector_craft')
+    const recognizerPath = await ensureModelPath('recognizer_latin')
+    const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      backendDevice: 'opencl'
-    },
-    opts: { stats: true }
-  })
-
-  await ocrGgml.load()
-  t.pass('loaded with backendDevice: opencl')
-
-  const backendInfo = ocrGgml.getBackendInfo()
-  t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
-  t.is(backendInfo.requested, 'opencl', 'requested device recorded as opencl')
-  // Probe: surface the actual device GPU (name + description) in Device Farm logs.
-  t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
-
-  const openclSelected =
-    backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
-
-  if (openclSelected) {
-    t.is(backendInfo.fallbackReason, '', 'no fallback reason when OpenCL is selected')
-    t.ok(/opencl/i.test(backendInfo.backendName), 'selected backend name mentions OpenCL (' + backendInfo.backendName + ')')
-  } else {
-    // No usable OpenCL device (none present, or no backend lib shipped): the
-    // fallback to CPU MUST be reported explicitly.
-    t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
-    t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
-    t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
-  }
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
+    const ocrGgml = new OcrGgml({
+      params: {
+        pathDetector: detectorPath,
+        pathRecognizer: recognizerPath,
+        langList: ['en'],
+        backendDevice: 'opencl'
+      },
+      opts: { stats: true }
     })
 
-    let outputTexts = []
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'output should be an array')
-        outputTexts = output.map(o => o[1])
+    await ocrGgml.load()
+    t.pass('loaded with backendDevice: opencl')
+
+    const backendInfo = ocrGgml.getBackendInfo()
+    t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
+    t.is(backendInfo.requested, 'opencl', 'requested device recorded as opencl')
+    // Probe: surface the actual device GPU (name + description) in Device Farm logs.
+    t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
+
+    const openclSelected =
+      backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
+
+    if (openclSelected) {
+      t.is(backendInfo.fallbackReason, '', 'no fallback reason when OpenCL is selected')
+      t.ok(
+        /opencl/i.test(backendInfo.backendName),
+        'selected backend name mentions OpenCL (' + backendInfo.backendName + ')'
+      )
+    } else {
+      // No usable OpenCL device (none present, or no backend lib shipped): the
+      // fallback to CPU MUST be reported explicitly.
+      t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
+      t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
+      t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
+    }
+
+    try {
+      const response = await ocrGgml.run({
+        path: imagePath,
+        options: { paragraph: false }
       })
-      .onError(error => {
-        t.fail('unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
 
-    const stats = response.stats || {}
-    t.comment('Native addon stats: ' + JSON.stringify(stats))
+      let outputTexts = []
+      await response
+        .onUpdate((output) => {
+          t.ok(Array.isArray(output), 'output should be an array')
+          outputTexts = output.map((o) => o[1])
+        })
+        .onError((error) => {
+          t.fail('unexpected error: ' + JSON.stringify(error))
+        })
+        .await()
 
-    // The numeric `backendIsGpu` stat must agree with the resolved device.
-    t.is(
-      stats.backendIsGpu,
-      openclSelected ? 1 : 0,
-      'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
-    )
+      const stats = response.stats || {}
+      t.comment('Native addon stats: ' + JSON.stringify(stats))
 
-    // Accuracy gate: whichever backend ran, the output must be correct. A
-    // numerically-broken OpenCL device would produce garbage here and fail.
-    t.ok(outputTexts.length > 0, 'inference produced text regions')
-    t.ok(outputTexts.includes('normal'), 'recognized expected text "normal" (backend: ' + backendInfo.backendDevice + ')')
+      // The numeric `backendIsGpu` stat must agree with the resolved device.
+      t.is(
+        stats.backendIsGpu,
+        openclSelected ? 1 : 0,
+        'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
+      )
 
-    t.pass('android opencl path exercised (' + backendInfo.backendDevice + ')')
-  } finally {
-    await safeUnload(ocrGgml)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+      // Accuracy gate: whichever backend ran, the output must be correct. A
+      // numerically-broken OpenCL device would produce garbage here and fail.
+      t.ok(outputTexts.length > 0, 'inference produced text regions')
+      t.ok(
+        outputTexts.includes('normal'),
+        'recognized expected text "normal" (backend: ' + backendInfo.backendDevice + ')'
+      )
+
+      t.pass('android opencl path exercised (' + backendInfo.backendDevice + ')')
+    } finally {
+      await safeUnload(ocrGgml)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
   }
-})
+)

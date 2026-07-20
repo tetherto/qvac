@@ -16,17 +16,24 @@ const _bareHost = typeof globalThis !== 'undefined' ? globalThis.Bare : undefine
 if (_bareHost && typeof _bareHost.on === 'function') {
   _bareHost.on('unhandledRejection', (reason) => {
     if (!_integrationFatalError) _integrationFatalError = reason || new Error('unhandledRejection')
-    console.error('[integration-runner] Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+    console.error(
+      '[integration-runner] Unhandled rejection:',
+      reason instanceof Error ? reason.stack : reason
+    )
   })
   _bareHost.on('uncaughtException', (err) => {
     if (!_integrationFatalError) _integrationFatalError = err || new Error('uncaughtException')
-    console.error('[integration-runner] Uncaught exception:', err instanceof Error ? err.stack : err)
+    console.error(
+      '[integration-runner] Uncaught exception:',
+      err instanceof Error ? err.stack : err
+    )
   })
   _bareHost.on('beforeExit', () => {
     if (!_integrationFatalError) return
     console.error('[integration-runner] FATAL: failing run due to an earlier unhandled error.')
     if (typeof _bareHost.exit === 'function') _bareHost.exit(1)
-    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit) globalThis.process.exit(1)
+    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit)
+      globalThis.process.exit(1)
   })
 }
 
@@ -48,7 +55,7 @@ if (_bareHost && typeof _bareHost.on === 'function') {
 let __filterLoaded = false
 let __filterRe = null
 
-function tryLoadFilter (filePath) {
+function tryLoadFilter(filePath) {
   try {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8').trim()
@@ -56,7 +63,9 @@ function tryLoadFilter (filePath) {
         __filterRe = new RegExp(raw)
         console.log('[TestFilter] loaded pattern from ' + filePath + ': ' + raw)
       }
-      try { fs.unlinkSync(filePath) } catch (_) {}
+      try {
+        fs.unlinkSync(filePath)
+      } catch (_) {}
       return true
     }
   } catch (e) {
@@ -65,7 +74,7 @@ function tryLoadFilter (filePath) {
   return false
 }
 
-global.__shouldRunTest = function shouldRunTest (testName) {
+global.__shouldRunTest = function shouldRunTest(testName) {
   if (!__filterLoaded) {
     __filterLoaded = true
 
@@ -80,7 +89,7 @@ global.__shouldRunTest = function shouldRunTest (testName) {
   return __filterRe.test(testName)
 }
 
-async function runIntegrationModule (relativeModulePath, options = {}) {
+async function runIntegrationModule(relativeModulePath, options = {}) {
   const modulePath = path.join(__dirname, relativeModulePath)
 
   if (!fs.existsSync(modulePath)) {
