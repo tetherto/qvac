@@ -1,0 +1,308 @@
+name: Workflow security
+
+# Canonical GitHub Actions workflow-security validator (zizmor static analysis)
+# running on Tier-1 PRs per QVAC-21551. Audits THIS repo's own workflow and
+# composite-action definitions for the high-risk patterns codified in
+# .cursor/rules/devops/github-actions.mdc and
+# .cursor/rules/devops/secrets-and-credentials.mdc — template injection,
+# dangerous triggers / "pwn requests", unpinned action refs, excessive
+# permissions, cache poisoning, credential persistence, and more. It is the §B4
+# enforcement surface in docs/devops/TIER-1-SCOPE.md, the workflow-hardening
+# sibling of the §B2 security baseline (TruffleHog + CodeQL).
+#
+# Why this gate lives IN-repo (like §B3 notice-drift, unlike §B1/§B2 which are
+# thin callers to tetherto/qvac-actions reusable workflows): it audits this
+# repo's .github/ tree with a repo-pinned engine and repo-specific rollout
+# semantics (warn-only shadow mode + an enforce toggle). If/when the org
+# publishes a public-reusable-workflow-security.yml, this can be reduced to a
+# thin caller like the license/security-baseline gates.
+#
+# Engine: zizmor (https://docs.zizmor.sh), pinned to a fixed version so results
+# are deterministic — a zizmor bump can add or drop findings, so version changes
+# are deliberate (freeze-and-pin, mirroring the reusable-workflow SHA pins). Run
+# OFFLINE (--offline): the deterministic PR-gate contract (TIER-1-SCOPE §B)
+# favors reproducibility and zero-secret operation over the extra online-only
+# audits (impostor-commit / ref resolution). Promoting to online mode (read-only
+# GITHUB_TOKEN) is a follow-up.
+#
+# Rollout stage: WARN-ONLY (shadow mode). Findings are annotated inline on the PR
+# (zizmor --format=github), summarized in the job summary, and upserted as a
+# single PR comment, but NOTHING fails a merge. A workflow_dispatch run with
+# enforce=true flips findings (and tool errors) into hard failures for a blocking
+# trial. Promotion to a required blocking status check is a follow-up, gated on
+# shadow-mode telemetry (false-positive rate, time-to-resolve) plus TL sign-off,
+# matching the §B1/§B2/§B3 rollout sequencing.
+#
+# Fork-safe: zizmor needs no secrets and runs offline, so this gate runs on fork
+# PRs too (a fork can change a workflow). Only the PR-comment step is gated to
+# same-repo PRs — fork PRs get a read-only GITHUB_TOKEN, so they rely on the
+# inline annotations and job summary instead.
+#
+# Promotion caveat: pull_request `paths` filtering means PRs that touch no
+# workflow/action files never start this job. That is correct in shadow mode, but
+# a REQUIRED status check that is path-filtered stays permanently "pending" on
+# unrelated PRs and blocks them. Resolve that (a required-check shim, or drop the
+# path filter) as part of promoting this gate to blocking.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/zizmor.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/zizmor.yml"
+  schedule:
+    # Weekly freshness backstop (Mon 05:00 UTC), matching the §B3 notice-drift
+    # schedule: re-audits the full .github/ tree so a newly-characterized class of
+    # finding surfaces on the next scheduled run even if no workflow changed.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: "Fail the job on workflow-security findings (default: warn-only shadow mode)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-security:
+    name: workflow-security
+    runs-on: ubuntu-latest
+    # zizmor is a fast Rust binary; runtime is dominated by pip install plus the
+    # audit of ~100 workflows, both well under a minute. 15m is generous headroom.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Upsert a single findings comment on same-repo PRs. Honored only for
+      # same-repo PRs — fork PRs get a read-only token (the comment step is
+      # skipped for them).
+      pull-requests: write
+    env:
+      # Freeze-and-pin: bump deliberately (a version change can move findings).
+      ZIZMOR_VERSION: "1.27.0"
+      # workflow_dispatch enforce=true turns findings and tool errors into hard
+      # failures; every other trigger runs warn-only (shadow mode).
+      ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit only: this gate holds no secrets and runs zizmor offline; the
+          # sole egress is pip reaching PyPI to install the pinned zizmor. Promote
+          # to block once that egress is characterized from the audit logs.
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # Read-only audit: no git operations after checkout (comments go through
+          # the github-script token), so don't leave the token in .git/config.
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.x"
+
+      - name: Install zizmor
+        shell: bash
+        run: pip install "zizmor==${ZIZMOR_VERSION}"
+
+      - name: Run zizmor (SARIF)
+        id: sarif
+        # continue-on-error so a tool/internal error (exit 1/2/3) cannot hard-fail
+        # the shadow-mode job; "Report outcome" converts it to a warning (or, under
+        # ENFORCE, a failure). In --format=sarif mode zizmor suppresses the 11-14
+        # "findings" exit codes and exits 0 unless it genuinely errors, so this
+        # pass exists purely to produce the machine-readable results file.
+        continue-on-error: true
+        shell: bash
+        # zizmor has no --output flag: SARIF goes to stdout (logs go to stderr), so
+        # redirect stdout to the results file.
+        run: zizmor --persona=regular --offline --no-progress --format=sarif .github/ > zizmor.sarif
+
+      - name: Run zizmor (PR annotations + severity)
+        id: audit
+        shell: bash
+        # A second offline pass in GitHub-annotation format: emits `::warning` /
+        # `::error` workflow commands so findings land inline on the PR diff (works
+        # on fork PRs — no token needed). Its exit code encodes the HIGHEST finding
+        # severity (11=info, 12=low, 13=medium, 14=high; 0=clean; 1/2/3=tool
+        # error), which drives the gate. `set +e` captures it without failing the
+        # step.
+        run: |
+          set +e
+          zizmor --persona=regular --offline --no-progress --format=github .github/
+          code=$?
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize findings
+        id: summary
+        if: always()
+        shell: bash
+        env:
+          AUDIT_CODE: ${{ steps.audit.outputs.exit_code }}
+        run: |
+          set -uo pipefail
+          code="${AUDIT_CODE:-1}"
+          case "$code" in
+            0)  severity="none";          findings="false"; errored="false" ;;
+            11) severity="informational"; findings="true";  errored="false" ;;
+            12) severity="low";           findings="true";  errored="false" ;;
+            13) severity="medium";        findings="true";  errored="false" ;;
+            14) severity="high";          findings="true";  errored="false" ;;
+            *)  severity="unknown";       findings="false"; errored="true"  ;;
+          esac
+          count=0
+          if [ -f zizmor.sarif ]; then
+            count=$(jq '[.runs[].results[]?] | length' zizmor.sarif 2>/dev/null || echo 0)
+          fi
+          {
+            echo "findings=${findings}"
+            echo "errored=${errored}"
+            echo "severity=${severity}"
+            echo "count=${count}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Workflow security (zizmor ${ZIZMOR_VERSION}) — shadow mode"
+            echo
+            if [ "$errored" = "true" ]; then
+              echo ":warning: zizmor did not complete (exit ${code}). See the 'Run zizmor' step logs. No finding signal was produced this run."
+            elif [ "$findings" = "false" ]; then
+              echo ":white_check_mark: No workflow-security findings across \`.github/\`."
+            else
+              echo "Found **${count}** finding(s); highest severity: **${severity}**. This check is **warn-only** and does not block the merge."
+              echo
+              echo "<details><summary>Findings</summary>"
+              echo
+              if [ -f zizmor.sarif ]; then
+                jq -r '.runs[].results[]? | "- `" + (.locations[0].physicalLocation.artifactLocation.uri // "?") + ":" + ((.locations[0].physicalLocation.region.startLine // 0) | tostring) + "` — **" + (.ruleId // "?") + "** — " + ((.message.text // "") | gsub("\n"; " "))' zizmor.sarif | head -n 100
+              fi
+              echo
+              echo "</details>"
+              echo
+              echo "Reproduce locally: \`pipx run zizmor==${ZIZMOR_VERSION} --offline .github/\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload zizmor SARIF
+        if: always() && hashFiles('zizmor.sarif') != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: zizmor-sarif
+          path: zizmor.sarif
+          if-no-files-found: ignore
+
+      - name: Comment findings on PR
+        if: >-
+          always() &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          (steps.summary.outputs.findings == 'true' || steps.summary.outputs.errored == 'true')
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          # Pass dynamic values through env (read via process.env) instead of
+          # interpolating ${{ }} into the script body — the latter is exactly the
+          # template-injection pattern this gate exists to catch.
+          WS_ERRORED: ${{ steps.summary.outputs.errored }}
+          WS_COUNT: ${{ steps.summary.outputs.count }}
+          WS_SEVERITY: ${{ steps.summary.outputs.severity }}
+          WS_ZIZMOR_VERSION: ${{ env.ZIZMOR_VERSION }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- workflow-security -->';
+            const errored = process.env.WS_ERRORED === 'true';
+            const count = process.env.WS_COUNT;
+            const severity = process.env.WS_SEVERITY;
+            const zizmorVersion = process.env.WS_ZIZMOR_VERSION;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = errored
+              ? [
+                  marker,
+                  '## Workflow security (shadow mode)',
+                  '',
+                  `:warning: zizmor did not complete this run — no finding signal was produced. See the [run logs](${runUrl}). This check is **warn-only** and does not block the merge.`,
+                ].join('\n')
+              : [
+                  marker,
+                  '## Workflow security (shadow mode)',
+                  '',
+                  `zizmor found **${count}** finding(s) in \`.github/\` (highest severity: **${severity}**). This check is **warn-only** and does not block the merge.`,
+                  '',
+                  `Findings are annotated inline on the changed files and listed in the [job summary](${runUrl}).`,
+                  '',
+                  'Reproduce locally:',
+                  '',
+                  '```bash',
+                  `pipx run zizmor==${zizmorVersion} --offline .github/`,
+                  '```',
+                ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Report outcome
+        if: always()
+        shell: bash
+        env:
+          FINDINGS: ${{ steps.summary.outputs.findings }}
+          ERRORED: ${{ steps.summary.outputs.errored }}
+          SEVERITY: ${{ steps.summary.outputs.severity }}
+          COUNT: ${{ steps.summary.outputs.count }}
+        run: |
+          set -uo pipefail
+          # Shadow mode (ENFORCE != true): nothing here fails the job — neither a
+          # zizmor crash nor detected findings. ENFORCE=true (workflow_dispatch)
+          # flips both into hard failures for a blocking trial.
+          if [ "$ERRORED" = "true" ]; then
+            msg="zizmor did not complete — see the 'Run zizmor' step logs."
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::${msg} Failing (enforce mode)."
+              exit 1
+            fi
+            echo "::warning::${msg} Not failing (shadow mode); no finding signal this run."
+            exit 0
+          fi
+          if [ "$FINDINGS" = "true" ]; then
+            msg="workflow-security: ${COUNT} finding(s), highest severity ${SEVERITY}."
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::${msg} Failing (enforce mode)."
+              exit 1
+            fi
+            echo "::warning::${msg} Not failing (shadow mode) — see the job summary, PR comment, and inline annotations."
+            exit 0
+          fi
+          echo "workflow-security: no findings across .github/."

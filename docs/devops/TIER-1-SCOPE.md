@@ -66,3 +66,56 @@ TruffleHog secret scanning + CodeQL static analysis, via
 → `public-reusable-security.yml`. Rolled out under QVAC-21550; documented in
 `tetherto/qvac-actions/docs/security-baseline.md`. Listed here for context — it
 is the sibling pillar the license gate is modeled on.
+
+### §B4 — Workflow security
+
+**Goal:** the repo's own GitHub Actions definitions can't silently regress into
+the high-risk patterns the DevOps rules forbid — template injection, dangerous
+triggers / "pwn requests", unpinned action refs, excessive permissions, cache
+poisoning, credential persistence — caught in CI when a workflow/action changes
+instead of only by a human running the `qv-devops-pr-review` checklist. This is
+the workflow-hardening sibling of the §B2 security baseline (which scans repo
+*source*; this scans repo *CI*).
+
+- **Gate:** [`.github/workflows/workflow-security.yml`](../../.github/workflows/workflow-security.yml).
+  Runs [`zizmor`](https://docs.zizmor.sh) static analysis over the `.github/`
+  tree (workflows + composite actions). The audited patterns map onto the
+  A1–A15 checklist in
+  [`.cursor/skills/qv-devops-pr-review`](../../.cursor/skills/qv-devops-pr-review/SKILL.md),
+  which stays the human fallback for the repo-specific conventions zizmor does
+  not model (mandatory `harden-runner`, the `# v<ver>` pin comment, per-job
+  `timeout-minutes`, filename conventions).
+- **In-repo, not a `qvac-actions` reusable workflow:** like the in-repo NOTICE
+  drift gate (QVAC-21558, landing as §B3), it audits this repo's `.github/` tree
+  with a repo-pinned engine and repo-specific rollout semantics, rather than
+  delegating like the §B1/§B2 thin callers. If the org later publishes a
+  `public-reusable-workflow-security.yml` this can shrink to a thin caller.
+- **Secrets:** none. zizmor runs `--offline`, so the gate needs no token and runs
+  on fork PRs too (a fork can change a workflow). Only the PR-comment step is
+  gated to same-repo PRs; fork PRs rely on the inline annotations and job
+  summary.
+- **Engine pin:** zizmor is pinned to a fixed version (freeze-and-pin, like the
+  reusable-workflow SHA pins) so results are deterministic — a zizmor bump can
+  add or drop findings, so version changes are deliberate.
+- **Coverage limitation:** `--offline` skips the online-only audits
+  (impostor-commit detection, action-ref resolution). Promotion to online mode
+  (read-only `GITHUB_TOKEN`) is a follow-up. Separately, the `pull_request`
+  `paths` filter means the job never starts on PRs that touch no workflow/action
+  files — correct in shadow mode, but a *required* path-filtered check stays
+  permanently "pending" on unrelated PRs, so promotion to blocking must add a
+  required-check shim or drop the path filter.
+- **Existing backlog / noise:** the first audit over the current `.github/` tree
+  reports ~1,250 findings (the `regular` persona already suppresses ~1,450 more),
+  including a few hundred `high`. This is the pre-existing debt shadow mode exists
+  to surface and burn down — it is why the gate never blocks on day one. The gate
+  audits the *whole* tree on every run, so a PR touching one workflow still
+  surfaces the repo-wide backlog; scoping PR-time feedback to the changed
+  workflow/action files (and/or a `.github/zizmor.yml` ignore policy for accepted
+  findings) is a triage follow-up that must precede promotion to blocking.
+- **Rollout stage:** **warn-only (shadow mode)** — annotates the PR inline, in
+  the job summary, and via a single upserted PR comment, but never blocks.
+  `workflow_dispatch` with `enforce=true` flips findings (and tool errors) into
+  hard failures for a blocking trial. Promotion to a required blocking check is a
+  follow-up, gated on shadow-mode telemetry (false-positive rate,
+  time-to-resolve) plus TL sign-off.
+- **Rolled out under QVAC-21551.**
