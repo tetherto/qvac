@@ -1,9 +1,12 @@
 #include <any>
 #include <chrono>
+#include <condition_variable>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -128,6 +131,84 @@ TEST(CppOutputHandlerTest, OutputCallbackCppProcessesLogMsg) {
   handler.handleOutput(std::any(logMsg));
   // QLOG outputs with format "[INFO]: message\n" when JS_LOGGER is not defined
   EXPECT_EQ(capture.getOutput(), "[INFO]: Test log from callback\n");
+}
+
+/// Records every string it delivers and blocks on the first one until the
+/// test releases it — models a handler still delivering terminal events when
+/// teardown calls stop().
+class GatedRecordingHandler : public out_handl::OutputHandlerInterface<void> {
+  mutable std::mutex mtx_;
+  mutable std::condition_variable firstSeenCv_;
+  mutable std::condition_variable releasedCv_;
+  mutable bool firstSeen_ = false;
+  mutable bool released_ = false;
+  mutable std::vector<std::string> handled_;
+
+public:
+  void handleOutput(const std::any& output) const override {
+    std::unique_lock<std::mutex> lock(mtx_);
+    if (!firstSeen_) {
+      firstSeen_ = true;
+      firstSeenCv_.notify_all();
+      releasedCv_.wait(lock, [this]() { return released_; });
+    }
+    handled_.push_back(std::any_cast<std::string>(output));
+  }
+
+  [[nodiscard]] bool canHandle(const std::any& input) const override {
+    return input.type() == typeid(std::string);
+  }
+
+  void waitForFirstEvent() {
+    std::unique_lock<std::mutex> lock(mtx_);
+    firstSeenCv_.wait(lock, [this]() { return firstSeen_; });
+  }
+
+  void release() {
+    {
+      std::scoped_lock lock{mtx_};
+      released_ = true;
+    }
+    releasedCv_.notify_all();
+  }
+
+  std::vector<std::string> handled() const {
+    std::scoped_lock lock{mtx_};
+    return handled_;
+  }
+};
+
+TEST(CppOutputHandlerTest, StopDeliversQueuedEventsBeforeExiting) {
+  /// PR #2990 r3586448187: terminal events queued during AddonCpp teardown
+  /// must not be dropped when stop() races the processing thread's drain.
+  auto gate = std::make_shared<GatedRecordingHandler>();
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>> handlers;
+  handlers.add(gate);
+  OutputCallBackCpp callback(std::move(handlers));
+
+  MockModel mockModel;
+  auto outputQueue = std::make_shared<OutputQueue>(callback, mockModel);
+  callback.initializeProcessingThread(outputQueue);
+
+  const std::vector<std::string> events = {"ended-1", "error-2", "ended-3"};
+  for (const auto& event : events) {
+    outputQueue->queueResult(std::any(event));
+  }
+
+  // The processing thread is now mid-drain, blocked delivering events[0].
+  gate->waitForFirstEvent();
+
+  // Release the handler only after stop() has requested shutdown, so the
+  // remaining drain iterations run with the stop request already visible.
+  std::thread releaser([&gate]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    gate->release();
+  });
+  callback.stop();
+  releaser.join();
+
+  EXPECT_EQ(gate->handled(), events)
+      << "stop() must deliver every queued event before exiting";
 }
 
 // ============================================================================
