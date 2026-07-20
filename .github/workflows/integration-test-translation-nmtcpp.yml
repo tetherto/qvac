@@ -58,6 +58,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64

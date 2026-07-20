@@ -9,24 +9,25 @@ const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 const groupsFile = path.join(mobileDir, 'test-groups.json')
 
-function getIntegrationFiles () {
+function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(entry => entry.endsWith('.test.js'))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((entry) => entry.endsWith('.test.js'))
     .sort()
 }
 
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
-function buildFileContents (files) {
+function buildFileContents(files) {
   const lines = []
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
@@ -40,7 +41,9 @@ function buildFileContents (files) {
 
   lines.push('/* global __shouldRunTest */')
   lines.push('')
-  lines.push('const __FILTERED = { modulePath: \'filtered\', summary: { total: 0, passed: 0, failed: 0 } }')
+  lines.push(
+    "const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }"
+  )
   lines.push('')
 
   for (let i = 0; i < files.length; i++) {
@@ -48,7 +51,9 @@ function buildFileContents (files) {
     const fnName = toFunctionName(file)
     const relativePath = `../integration/${file}`
     lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars`)
-    lines.push(`  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`)
+    lines.push(
+      `  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`
+    )
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
     lines.push('}')
     if (i < files.length - 1) {
@@ -59,7 +64,7 @@ function buildFileContents (files) {
   return `${lines.join('\n')}\n`
 }
 
-function validateGroups (functionNames) {
+function validateGroups(functionNames) {
   if (!fs.existsSync(groupsFile)) {
     console.warn('[warn] test-groups.json not found — skipping split validation')
     return
@@ -68,25 +73,31 @@ function validateGroups (functionNames) {
   const nameSet = new Set(functionNames)
   for (const [platform, splits] of Object.entries(groups)) {
     const covered = new Set(Object.values(splits).flat())
-    const missing = functionNames.filter(n => !covered.has(n))
-    const extra = [...covered].filter(n => !nameSet.has(n))
+    const missing = functionNames.filter((n) => !covered.has(n))
+    const extra = [...covered].filter((n) => !nameSet.has(n))
     if (missing.length) {
       throw new Error(
-        '[' + platform + '] Tests not assigned to any group in test-groups.json:\n  ' +
-        missing.join('\n  ') + '\nAdd them to a group in test/mobile/test-groups.json.'
+        '[' +
+          platform +
+          '] Tests not assigned to any group in test-groups.json:\n  ' +
+          missing.join('\n  ') +
+          '\nAdd them to a group in test/mobile/test-groups.json.'
       )
     }
     if (extra.length) {
       throw new Error(
-        '[' + platform + '] test-groups.json references non-existent tests:\n  ' +
-        extra.join('\n  ') + '\nRemove them or check for typos.'
+        '[' +
+          platform +
+          '] test-groups.json references non-existent tests:\n  ' +
+          extra.join('\n  ') +
+          '\nRemove them or check for typos.'
       )
     }
   }
   console.log('Group coverage validated — all tests assigned for every platform.')
 }
 
-function main () {
+function main() {
   const files = getIntegrationFiles()
   if (files.length === 0) {
     throw new Error(`No integration test files found inside ${integrationDir}`)

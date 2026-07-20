@@ -21,10 +21,14 @@ const GPU_SWEEP = [
 ]
 
 for (const modelFile of GPU_SWEEP) {
-  test('Mobile perf ' + modelFile.replace(/\.bin$/, '') + ' GPU', { timeout: 600000 }, async (t) => {
-    await runMobilePerfCase(t, {
-      modelFile,
-      useGPU: true
-    })
-  })
+  test(
+    'Mobile perf ' + modelFile.replace(/\.bin$/, '') + ' GPU',
+    { timeout: 600000 },
+    async (t) => {
+      await runMobilePerfCase(t, {
+        modelFile,
+        useGPU: true
+      })
+    }
+  )
 }

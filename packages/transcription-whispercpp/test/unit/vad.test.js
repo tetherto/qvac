@@ -9,7 +9,7 @@ const { WhisperInterface } = require('../../whisper')
 const process = require('bare-process')
 global.process = process
 
-function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5.1.2.bin' } = {}) {
+function createTestModel({ onOutput = () => {}, vadModelPath = 'ggml-silero-v5.1.2.bin' } = {}) {
   TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
@@ -24,8 +24,10 @@ function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5
   }
   const model = new TranscriptionWhispercpp(args, config)
   let capturedConfigResolve
-  const capturedConfig = new Promise(resolve => { capturedConfigResolve = resolve })
-  model._createAddon = configurationParams => {
+  const capturedConfig = new Promise((resolve) => {
+    capturedConfigResolve = resolve
+  })
+  model._createAddon = (configurationParams) => {
     capturedConfigResolve(configurationParams)
     const binding = new MockedBinding()
     binding.enableVadTestMode()
@@ -66,20 +68,22 @@ test('VAD mode processes audio with voice activity detection', async (t) => {
 
   // Check that we received Output events with stronger assertions
   console.log(events)
-  const outputEvents = events.filter(e => e.event === 'Output' && e.jobId === 1)
+  const outputEvents = events.filter((e) => e.event === 'Output' && e.jobId === 1)
   t.ok(outputEvents.length > 0, 'Should receive Output events for VAD processing')
 
   if (outputEvents.length > 0) {
     t.ok(outputEvents[0].output, 'Should have transcription output')
     t.ok(Array.isArray(outputEvents[0].output), 'Output should be wrapped in array')
     const transcript = outputEvents[0].output[0]
-    t.ok(transcript.text.includes('Mock transcription') ||
-      transcript.text.includes('Silent audio detected'),
-    'Should contain mock transcription or silence detection text')
+    t.ok(
+      transcript.text.includes('Mock transcription') ||
+        transcript.text.includes('Silent audio detected'),
+      'Should contain mock transcription or silence detection text'
+    )
   }
 
   // Check that we received a JobEnded event
-  const jobEndedEvent = events.find(e => e.event === 'JobEnded' && e.jobId === 1)
+  const jobEndedEvent = events.find((e) => e.event === 'JobEnded' && e.jobId === 1)
   t.ok(jobEndedEvent, 'Should receive a JobEnded event for job 1')
 })
 
@@ -93,8 +97,16 @@ test('VAD model path is correctly configured', async (t) => {
   const capturedConfig = await capturedConfigFut
 
   t.ok(capturedConfig, 'Configuration should be captured')
-  t.is(capturedConfig.whisperConfig.vad_model_path, 'ggml-silero-v5.1.2.bin', 'VAD model path should be correctly passed')
-  t.is(capturedConfig.contextParams.model, 'ggml-tiny.bin', 'Model filename should be correctly passed')
+  t.is(
+    capturedConfig.whisperConfig.vad_model_path,
+    'ggml-silero-v5.1.2.bin',
+    'VAD model path should be correctly passed'
+  )
+  t.is(
+    capturedConfig.contextParams.model,
+    'ggml-tiny.bin',
+    'Model filename should be correctly passed'
+  )
 })
 
 test('VAD handles invalid audio input gracefully', async (t) => {
@@ -124,6 +136,6 @@ test('VAD handles invalid audio input gracefully', async (t) => {
 
   await wait()
 
-  const outputEvents = events.filter(e => e.event === 'Output')
+  const outputEvents = events.filter((e) => e.event === 'Output')
   t.ok(outputEvents.length > 0, 'Should still process valid audio after errors')
 })

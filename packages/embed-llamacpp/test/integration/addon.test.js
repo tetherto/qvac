@@ -747,7 +747,7 @@ const DEVICE_API = isDarwinX64 || isLinuxArm64 ? 'cpu' : 'gpu'
 const MODEL_NAME_API = getModelConfigs()[0]?.modelName ?? 'embeddinggemma-300M-Q8_0.gguf'
 
 async function setupModelApiBehavior(t) {
-  await ensureModel(MODEL_NAME_API)
+  await ensureModel({ modelName: MODEL_NAME_API })
   const { inference } = await createEmbeddingsTestInstance(
     t,
     MODEL_NAME_API,

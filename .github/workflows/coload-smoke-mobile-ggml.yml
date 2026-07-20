@@ -122,5 +122,5 @@ jobs:
       consumer-timeout: 1200
       device-farm-timeout: 90
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
-      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
     secrets: inherit

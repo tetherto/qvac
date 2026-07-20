@@ -46,9 +46,18 @@ The canonical shape includes:
 | `summary.tokensPerSecond.{mean,...}` | object | no    | Available on engines that report `tokensPerSecond`. |
 | `summary.coldRtf`             | number?  | no       | RTF of the first warmup run (captures cold path). |
 | `summary.modelLoadMs`         | number?  | no       | `load()` wall time. |
-| `summary.peakRssBytes`        | number?  | no       | Max RSS observed across warmup + measured runs. |
+| `summary.peakRssBytes`        | number?  | no       | Legacy flat peak RSS. Still read as a fallback for `Peak RSS (MB)` when `summary.memory` is absent. |
+| `summary.memory.avgRssMb`     | number?  | no       | Average process RSS sampled during inference. Shown as `Avg RSS (MB)`. |
+| `summary.memory.peakRssMb`    | number?  | no       | Peak RSS across all runs (never below the post-load footprint). Shown as `Peak RSS (MB)`; preferred over `summary.peakRssBytes`. |
+| `summary.memory.reclaimedMb`  | number?  | no       | Memory returned to the OS after the model is unloaded (`rssAfterLoadMb - rssAfterUnloadMb`, clamped at 0). Shown as `Reclaimed (MB)`. |
 | `summary.modelSizeBytes`      | number?  | no       | Same value as `model.sizeBytes`; either field is acceptable. |
 | `summary.noisy`               | boolean? | no       | When `true`, aggregator prints `⚠`. If absent, derived from `stddev/mean > 0.15`. |
+
+The optional `summary.memory` block captures process resident-set-size (RSS)
+usage for the engine/platform/variant under test. On mobile the same three
+figures arrive as `avg_rss_mb` / `peak_rss_mb` / `reclaimed_mb` metrics in the
+canonical `[PERF_REPORT_START]` payload. Rows without any memory data render as
+`n/a` in those columns, so older artifacts remain valid.
 
 Absolute minimum to get a row rendered: `platform`, `engine`, `labels.backend`,
 `labels.device`, `requested.useGPU`, `summary.rtf.{mean,p50,p95}`.

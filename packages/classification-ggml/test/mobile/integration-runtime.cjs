@@ -22,23 +22,30 @@ const _bareHost = typeof globalThis !== 'undefined' ? globalThis.Bare : undefine
 if (_bareHost && typeof _bareHost.on === 'function') {
   _bareHost.on('unhandledRejection', (reason) => {
     if (!_integrationFatalError) _integrationFatalError = reason || new Error('unhandledRejection')
-    console.error('[integration-runner] Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+    console.error(
+      '[integration-runner] Unhandled rejection:',
+      reason instanceof Error ? reason.stack : reason
+    )
   })
   _bareHost.on('uncaughtException', (err) => {
     if (!_integrationFatalError) _integrationFatalError = err || new Error('uncaughtException')
-    console.error('[integration-runner] Uncaught exception:', err instanceof Error ? err.stack : err)
+    console.error(
+      '[integration-runner] Uncaught exception:',
+      err instanceof Error ? err.stack : err
+    )
   })
   _bareHost.on('beforeExit', () => {
     if (!_integrationFatalError) return
     console.error('[integration-runner] FATAL: failing run due to an earlier unhandled error.')
     if (typeof _bareHost.exit === 'function') _bareHost.exit(1)
-    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit) globalThis.process.exit(1)
+    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit)
+      globalThis.process.exit(1)
   })
 }
 
 const GC_PAUSE_MS = 3000
 
-async function runIntegrationModule (relativeModulePath, options = {}) {
+async function runIntegrationModule(relativeModulePath, options = {}) {
   const modulePath = path.join(__dirname, relativeModulePath)
 
   if (!fs.existsSync(modulePath)) {
@@ -53,7 +60,7 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
     global.gc()
     console.log(`[integration-runner] GC triggered after ${relativeModulePath}`)
   }
-  await new Promise(resolve => setTimeout(resolve, options.gcPauseMs || GC_PAUSE_MS))
+  await new Promise((resolve) => setTimeout(resolve, options.gcPauseMs || GC_PAUSE_MS))
   console.log(`[integration-runner] ${GC_PAUSE_MS}ms cooldown complete`)
 
   return modulePath

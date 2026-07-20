@@ -8,17 +8,18 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
 
-function getIntegrationTestFiles () {
+function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(f => f.endsWith('.test.js'))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((f) => f.endsWith('.test.js'))
     .sort()
 }
 
-function getGeneratedIntegrationRefs (content) {
+function getGeneratedIntegrationRefs(content) {
   const references = new Set()
   const referencePattern = /runIntegrationModule\('\.\.\/integration\/([^']+)'(?:,\s*options)?\)/g
   let match = referencePattern.exec(content)
@@ -31,13 +32,13 @@ function getGeneratedIntegrationRefs (content) {
   return references
 }
 
-function setDiff (left, right) {
-  return [...left].filter(item => !right.has(item)).sort()
+function setDiff(left, right) {
+  return [...left].filter((item) => !right.has(item)).sort()
 }
 
-function printMismatchDetails (label, items) {
+function printMismatchDetails(label, items) {
   console.error(`   ${label}:`)
-  items.forEach(item => console.error(`     - ${item}`))
+  items.forEach((item) => console.error(`     - ${item}`))
 }
 
 try {
@@ -74,7 +75,7 @@ try {
 
   // Keep timestamp validation as a fast stale-content signal for edited tests.
   const latestIntegrationTime = Math.max(
-    ...integrationFiles.map(f => fs.statSync(path.join(integrationDir, f)).mtimeMs)
+    ...integrationFiles.map((f) => fs.statSync(path.join(integrationDir, f)).mtimeMs)
   )
   const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
 

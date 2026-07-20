@@ -2,7 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildCoverageReport } from '../src/openai/coverage/build-report.js'
+import { buildCoverageReport, DEFAULT_ROUTER } from '../src/openai/coverage/build-report.js'
 import { categorize } from '../src/openai/coverage/categorize.js'
 import { filterCoverageRows, formatCoverageReportHuman } from '../src/openai/coverage/format.js'
 import { parseRouter } from '../src/openai/coverage/parse-router.js'
@@ -99,6 +99,7 @@ describe('openai coverage live report (fixture)', () => {
       specSource: 'test',
       routerSource: 'test',
       implementedCount: 1,
+      extensions: [],
       rows: [
         {
           method: 'POST' as const,
@@ -167,6 +168,33 @@ describe('openai coverage live report (fixture)', () => {
     }
     assert.ok(filtered.some((r) => r.key === 'POST /v1/chat/completions'))
     assert.ok(!filtered.some((r) => r.key === 'GET /v1/models'))
+  })
+})
+
+describe('openai coverage qvac extension endpoints', () => {
+  it('reports known qvac-only endpoints separately instead of throwing', async () => {
+    // Regression: GET /v1/audio/models and /v1/audio/voices are qvac-only
+    // (Open WebUI compatibility) and are absent from the real OpenAI spec.
+    const report = await buildCoverageReport({
+      specPath: FIXTURE_SPEC,
+      routerPath: FIXTURE_ROUTER
+    })
+    assert.deepEqual(report.extensions, ['GET /v1/audio/models'])
+    assert.ok(!report.rows.some((r) => r.key === 'GET /v1/audio/models'))
+  })
+})
+
+describe('openai coverage default router (real repo routes)', () => {
+  it('DEFAULT_ROUTER resolves to an existing directory relative to the running module, not a hardcoded src/ sibling', () => {
+    // Regression: DEFAULT_ROUTER used to hardcode a 'src' path segment, which
+    // does not exist in the published npm package (only dist/ ships).
+    const implementedKeys = parseRouter(DEFAULT_ROUTER)
+    assert.ok(implementedKeys.includes('POST /v1/chat/completions'))
+    assert.ok(implementedKeys.includes('POST /v1/embeddings'))
+    assert.ok(implementedKeys.includes('GET /v1/models'))
+    assert.ok(implementedKeys.includes('GET /v1/files'))
+    assert.ok(implementedKeys.includes('POST /v1/files'))
+    assert.ok(implementedKeys.includes('GET /v1/files/{file_id}'))
   })
 })
 
