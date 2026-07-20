@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from qvac import api
+from qvac import _api as api
 
 
 class FakeTransport:

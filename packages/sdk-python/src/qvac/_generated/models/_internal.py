@@ -97,7 +97,7 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatText(GeneratedBaseMod
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["text"]
+    type: Literal["text"] = "text"
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(
@@ -106,7 +106,7 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonObject(
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["json_object"]
+    type: Literal["json_object"] = "json_object"
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchemaSchema(
@@ -162,7 +162,7 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["json_schema"]
+    type: Literal["json_schema"] = "json_schema"
     json_schema: Annotated[
         BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchemaJsonSchema,
         Field(
@@ -215,7 +215,7 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties(
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseModel):
-    type: Literal["object"]
+    type: Literal["object"] = "object"
     properties: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParametersProperties,
         Field(
@@ -226,7 +226,7 @@ class BatchCompletionStreamRequestPromptsItemToolsItemParameters(GeneratedBaseMo
 
 
 class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
-    type: Literal["function"]
+    type: Literal["function"] = "function"
     name: str
     description: str
     parameters: Annotated[
@@ -336,14 +336,14 @@ class BatchCompletionStreamRequest(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    type: Literal["batchCompletionStream"]
+    type: Literal["batchCompletionStream"] = "batchCompletionStream"
 
 
 class BatchCompletionStreamResponseEventsItemEventContentDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["contentDelta"]
+    type: Literal["contentDelta"] = "contentDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -352,7 +352,7 @@ class BatchCompletionStreamResponseEventsItemEventRawDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rawDelta"]
+    type: Literal["rawDelta"] = "rawDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -361,7 +361,7 @@ class BatchCompletionStreamResponseEventsItemEventThinkingDelta(GeneratedBaseMod
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["thinkingDelta"]
+    type: Literal["thinkingDelta"] = "thinkingDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -396,7 +396,7 @@ class BatchCompletionStreamResponseEventsItemEventToolCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["toolCall"]
+    type: Literal["toolCall"] = "toolCall"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     call: Annotated[
         BatchCompletionStreamResponseEventsItemEventToolCallCall,
@@ -426,7 +426,7 @@ class BatchCompletionStreamResponseEventsItemEventToolError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["toolError"]
+    type: Literal["toolError"] = "toolError"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     error: Annotated[
         BatchCompletionStreamResponseEventsItemEventToolErrorError,
@@ -467,7 +467,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStats(GeneratedBaseM
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionStats"]
+    type: Literal["completionStats"] = "completionStats"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     stats: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStats,
@@ -499,9 +499,9 @@ class BatchCompletionStreamResponseEventsItemEventCompletionDoneError(
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionDone"]
+    type: Literal["completionDone"] = "completionDone"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
-    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")] = "error"
     error: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionDoneErrorError,
         Field(
@@ -534,7 +534,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionDone(GeneratedBaseMo
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionDone"]
+    type: Literal["completionDone"] = "completionDone"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     stop_reason: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionDoneStopReason | None,
@@ -594,7 +594,7 @@ class BatchCompletionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["batchCompletionStream"]
+    type: Literal["batchCompletionStream"] = "batchCompletionStream"
     done: bool | None = None
     ids: list[str] | None = None
     events: list[BatchCompletionStreamResponseEventsItem]
@@ -607,7 +607,7 @@ class BatchCompletionStreamResponse(GeneratedBaseModel):
 class BciTranscribeRequestNeuralDataBase64(GeneratedBaseModel):
     type: Annotated[
         Literal["base64"], Field(description="Inline base64-encoded neural bytes.")
-    ]
+    ] = "base64"
     value: Annotated[
         str,
         Field(description="Base64-encoded contents of a BCI neural `.bin` recording."),
@@ -617,7 +617,7 @@ class BciTranscribeRequestNeuralDataBase64(GeneratedBaseModel):
 class BciTranscribeRequestNeuralDataFilePath(GeneratedBaseModel):
     type: Annotated[
         Literal["filePath"], Field(description="Local neural `.bin` file path.")
-    ]
+    ] = "filePath"
     value: Annotated[
         str, Field(description="Path to a BCI neural `.bin` recording on the provider.")
     ]
@@ -644,7 +644,7 @@ class BciTranscribeRequest(GeneratedBaseModel):
             description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
         ),
     ]
-    type: Literal["bciTranscribe"]
+    type: Literal["bciTranscribe"] = "bciTranscribe"
     request_id: Annotated[
         str | None,
         Field(
@@ -704,7 +704,7 @@ class BciTranscribeResponse(GeneratedBaseModel):
     segment: Annotated[
         BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
     ] = None
-    type: Literal["bciTranscribe"]
+    type: Literal["bciTranscribe"] = "bciTranscribe"
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
@@ -754,7 +754,7 @@ class BciTranscribeStreamRequest(GeneratedBaseModel):
             description="When true, responses yield transcript segment metadata objects (`{ text, startMs, endMs, append, id }`) instead of joined text."
         ),
     ] = None
-    type: Literal["bciTranscribeStream"]
+    type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
     stream_opts: Annotated[
         BciTranscribeStreamRequestStreamOpts | None,
         Field(alias="streamOpts", title="BciTranscribeStreamRequestStreamOpts"),
@@ -820,12 +820,14 @@ class BciTranscribeStreamResponse(GeneratedBaseModel):
         BciTranscribeStreamResponseSegment | None,
         Field(title="BciTranscribeStreamResponseSegment"),
     ] = None
-    type: Literal["bciTranscribeStream"]
+    type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
 
 
 class CancelRequestRequest(GeneratedBaseModel):
-    type: Literal["cancel"]
-    operation: Annotated[Literal["request"], Field(description="Operation type")]
+    type: Literal["cancel"] = "cancel"
+    operation: Annotated[Literal["request"], Field(description="Operation type")] = (
+        "request"
+    )
     request_id: Annotated[
         str,
         Field(
@@ -860,8 +862,10 @@ class CancelRequestBroadKind(Enum):
 
 
 class CancelRequestBroad(GeneratedBaseModel):
-    type: Literal["cancel"]
-    operation: Annotated[Literal["broad"], Field(description="Operation type")]
+    type: Literal["cancel"] = "cancel"
+    operation: Annotated[Literal["broad"], Field(description="Operation type")] = (
+        "broad"
+    )
     model_id: Annotated[
         str,
         Field(
@@ -881,7 +885,7 @@ class CancelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["cancel"]
+    type: Literal["cancel"] = "cancel"
     success: bool
     cancelled: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
     error: str | None = None
@@ -900,7 +904,7 @@ class ClassifyRequest(GeneratedBaseModel):
         None
     )
     channels: Literal[3] | None = None
-    type: Literal["classify"]
+    type: Literal["classify"] = "classify"
 
 
 class ClassifyResponseResultsItem(GeneratedBaseModel):
@@ -915,8 +919,542 @@ class ClassifyResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["classify"]
+    type: Literal["classify"] = "classify"
     results: list[ClassifyResponseResultsItem]
+    done: bool | None = None
+
+
+class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(description='Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
+    ]
+    content: Annotated[str, Field(description="Message content.")]
+    attachments: Annotated[
+        list[CompletionOrchestrateRequestHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
+
+
+class KvCache(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValueType(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+
+
+class CompletionOrchestrateRequestToolsItemParametersPropertiesValue(
+    GeneratedBaseModel
+):
+    type: Annotated[
+        CompletionOrchestrateRequestToolsItemParametersPropertiesValueType,
+        Field(
+            title="CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
+        ),
+    ]
+    description: str | None = None
+    enum: list[str | float | bool | None] | None = None
+
+
+class CompletionOrchestrateRequestToolsItemParametersProperties(
+    RootModel[dict[str, CompletionOrchestrateRequestToolsItemParametersPropertiesValue]]
+):
+    root: Annotated[
+        dict[str, CompletionOrchestrateRequestToolsItemParametersPropertiesValue],
+        Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
+    ]
+
+
+class CompletionOrchestrateRequestToolsItemParameters(GeneratedBaseModel):
+    type: Literal["object"] = "object"
+    properties: Annotated[
+        CompletionOrchestrateRequestToolsItemParametersProperties,
+        Field(title="CompletionOrchestrateRequestToolsItemParametersProperties"),
+    ]
+    required: list[str] | None = None
+
+
+class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
+    type: Literal["function"] = "function"
+    name: str
+    description: str
+    parameters: Annotated[
+        CompletionOrchestrateRequestToolsItemParameters,
+        Field(title="CompletionOrchestrateRequestToolsItemParameters"),
+    ]
+
+
+class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    temp: Annotated[
+        float | None, Field(description="Sampling temperature (typically 0–2).")
+    ] = None
+    top_p: Annotated[
+        float | None, Field(description="Top-p (nucleus) sampling cutoff (0–1).")
+    ] = None
+    top_k: Annotated[
+        float | None, Field(description="Top-k sampling — keep only the top K tokens.")
+    ] = None
+    predict: Annotated[
+        float | None,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled."
+        ),
+    ] = None
+    seed: Annotated[
+        float | None, Field(description="Random seed for reproducibility.")
+    ] = None
+    frequency_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens based on frequency so far."),
+    ] = None
+    presence_penalty: Annotated[
+        float | None,
+        Field(description="Penalty applied to tokens that have already appeared."),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None, Field(description="Penalty applied to repeated tokens.")
+    ] = None
+    reasoning_budget: Annotated[
+        int | None,
+        Field(
+            description="Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+            ge=-1,
+            le=2147483647,
+        ),
+    ] = None
+    remove_thinking_from_context: Annotated[
+        bool | None,
+        Field(
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+        ),
+    ] = None
+
+
+class CompletionOrchestrateRequestToolDialect(Enum):
+    hermes = "hermes"
+    pythonic = "pythonic"
+    json = "json"
+    harmony = "harmony"
+    qwen35 = "qwen35"
+    gemma4 = "gemma4"
+
+
+class CompletionOrchestrateRequestResponseFormatText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+
+
+class CompletionOrchestrateRequestResponseFormatJsonObject(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["json_object"] = "json_object"
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[
+        str,
+        Field(
+            description="Schema identifier; OpenAI-compatibility only — not used by the addon.",
+            min_length=1,
+        ),
+    ]
+    description: Annotated[
+        str | None,
+        Field(
+            description="Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation."
+        ),
+    ] = None
+    schema_: Annotated[
+        CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema,
+        Field(
+            alias="schema",
+            description="JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+            title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema",
+        ),
+    ]
+    strict: Annotated[
+        bool | None,
+        Field(
+            description="Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`."
+        ),
+    ] = None
+
+
+class CompletionOrchestrateRequestResponseFormatJsonSchema(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["json_schema"] = "json_schema"
+    json_schema: Annotated[
+        CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema,
+        Field(title="CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema"),
+    ]
+
+
+class CompletionOrchestrateRequest(GeneratedBaseModel):
+    history: Annotated[
+        list[CompletionOrchestrateRequestHistoryItem],
+        Field(description="Array of conversation messages sent to the model."),
+    ]
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="The identifier of the model to use for completion.",
+        ),
+    ]
+    kv_cache: Annotated[bool | KvCache | None, Field(alias="kvCache")] = None
+    tools: Annotated[
+        list[CompletionOrchestrateRequestToolsItem] | None,
+        Field(
+            description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    stream: Annotated[
+        bool,
+        Field(
+            description="Whether to stream tokens (`true`) or return the complete response once (`false`)."
+        ),
+    ]
+    generation_params: Annotated[
+        CompletionOrchestrateRequestGenerationParams | None,
+        Field(
+            alias="generationParams",
+            description="Optional sampling / generation parameters.",
+            title="CompletionOrchestrateRequestGenerationParams",
+        ),
+    ] = None
+    capture_thinking: Annotated[
+        bool | None,
+        Field(
+            alias="captureThinking",
+            description="When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
+        ),
+    ] = None
+    emit_raw_deltas: Annotated[
+        bool | None,
+        Field(
+            alias="emitRawDeltas",
+            description="When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
+        ),
+    ] = None
+    tool_dialect: Annotated[
+        CompletionOrchestrateRequestToolDialect | None,
+        Field(
+            alias="toolDialect",
+            description="Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+            title="CompletionOrchestrateRequestToolDialect",
+        ),
+    ] = None
+    response_format: Annotated[
+        CompletionOrchestrateRequestResponseFormatText
+        | CompletionOrchestrateRequestResponseFormatJsonObject
+        | CompletionOrchestrateRequestResponseFormatJsonSchema
+        | None,
+        Field(
+            alias="responseFormat",
+            description="Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+            min_length=1,
+        ),
+    ] = None
+    type: Literal["completionOrchestrate"] = "completionOrchestrate"
+    max_tool_turns: Annotated[
+        int | None,
+        Field(
+            alias="maxToolTurns",
+            description='Upper bound on generation turns the worker will run before ending the loop with `stopReason: "maxToolTurns"`. Each turn is one completion pass; a turn that requests tool calls consumes callbacks and starts the next turn. Defaults to 8.',
+            ge=1,
+            le=32,
+        ),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemContentDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["contentDelta"] = "contentDelta"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemRawDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["rawDelta"] = "rawDelta"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemThinkingDelta(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["thinkingDelta"] = "thinkingDelta"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    text: str
+
+
+class CompletionOrchestrateResponseEventsItemToolCallCallArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCallArguments"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemToolCallCall(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    name: str
+    arguments: Annotated[
+        CompletionOrchestrateResponseEventsItemToolCallCallArguments,
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCallArguments"),
+    ]
+    raw: str | None = None
+
+
+class CompletionOrchestrateResponseEventsItemToolCall(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["toolCall"] = "toolCall"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    call: Annotated[
+        CompletionOrchestrateResponseEventsItemToolCallCall,
+        Field(title="CompletionOrchestrateResponseEventsItemToolCallCall"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemToolErrorErrorCode(Enum):
+    parse_error = "PARSE_ERROR"
+    validation_error = "VALIDATION_ERROR"
+    unknown_tool = "UNKNOWN_TOOL"
+
+
+class CompletionOrchestrateResponseEventsItemToolErrorError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    code: Annotated[
+        CompletionOrchestrateResponseEventsItemToolErrorErrorCode,
+        Field(title="CompletionOrchestrateResponseEventsItemToolErrorErrorCode"),
+    ]
+    message: str
+    raw: str | None = None
+
+
+class CompletionOrchestrateResponseEventsItemToolError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["toolError"] = "toolError"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    error: Annotated[
+        CompletionOrchestrateResponseEventsItemToolErrorError,
+        Field(title="CompletionOrchestrateResponseEventsItemToolErrorError"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    time_to_first_token: Annotated[float | None, Field(alias="timeToFirstToken")] = None
+    tokens_per_second: Annotated[float | None, Field(alias="tokensPerSecond")] = None
+    cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
+    prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    backend_device: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            title="CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice",
+        ),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemCompletionStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionStats"] = "completionStats"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stats: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionStatsStats,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionStatsStats"),
+    ]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneErrorError(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    message: str
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    full_text: Annotated[str, Field(alias="fullText")]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionDone"] = "completionDone"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")] = "error"
+    error: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneErrorError,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneErrorError"),
+    ]
+    raw: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw | None,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw"),
+    ] = None
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneStopReason(Enum):
+    eos = "eos"
+    length = "length"
+    stop_sequence = "stopSequence"
+    cancelled = "cancelled"
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDoneRaw(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    full_text: Annotated[str, Field(alias="fullText")]
+
+
+class CompletionOrchestrateResponseEventsItemCompletionDone(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionDone"] = "completionDone"
+    seq: Annotated[int, Field(ge=0, le=9007199254740991)]
+    stop_reason: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneStopReason | None,
+        Field(
+            alias="stopReason",
+            title="CompletionOrchestrateResponseEventsItemCompletionDoneStopReason",
+        ),
+    ] = None
+    raw: Annotated[
+        CompletionOrchestrateResponseEventsItemCompletionDoneRaw | None,
+        Field(title="CompletionOrchestrateResponseEventsItemCompletionDoneRaw"),
+    ] = None
+
+
+class CompletionOrchestrateResponseToolCallbackArguments(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(title="CompletionOrchestrateResponseToolCallbackArguments"),
+    ]
+
+
+class CompletionOrchestrateResponseToolCallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    call_id: Annotated[
+        str,
+        Field(
+            alias="callId",
+            description="Correlates the upstream result line to this request.",
+        ),
+    ]
+    name: str
+    arguments: Annotated[
+        CompletionOrchestrateResponseToolCallbackArguments,
+        Field(title="CompletionOrchestrateResponseToolCallbackArguments"),
+    ]
+
+
+class CompletionOrchestrateResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["completionOrchestrate"] = "completionOrchestrate"
+    turn: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
+    events: (
+        list[
+            CompletionOrchestrateResponseEventsItemContentDelta
+            | CompletionOrchestrateResponseEventsItemRawDelta
+            | CompletionOrchestrateResponseEventsItemThinkingDelta
+            | CompletionOrchestrateResponseEventsItemToolCall
+            | CompletionOrchestrateResponseEventsItemToolError
+            | CompletionOrchestrateResponseEventsItemCompletionStats
+            | CompletionOrchestrateResponseEventsItemCompletionDoneError
+            | CompletionOrchestrateResponseEventsItemCompletionDone
+        ]
+        | None
+    ) = None
+    tool_callback: Annotated[
+        CompletionOrchestrateResponseToolCallback | None,
+        Field(alias="toolCallback", title="CompletionOrchestrateResponseToolCallback"),
+    ] = None
     done: bool | None = None
 
 
@@ -939,10 +1477,6 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
         list[CompletionStreamRequestHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
     ] = None
-
-
-class KvCache(RootModel[str]):
-    root: Annotated[str, Field(min_length=1)]
 
 
 class CompletionStreamRequestToolsItemParametersPropertiesValueType(Enum):
@@ -973,7 +1507,7 @@ class CompletionStreamRequestToolsItemParametersProperties(
 
 
 class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
-    type: Literal["object"]
+    type: Literal["object"] = "object"
     properties: Annotated[
         CompletionStreamRequestToolsItemParametersProperties,
         Field(title="CompletionStreamRequestToolsItemParametersProperties"),
@@ -982,7 +1516,7 @@ class CompletionStreamRequestToolsItemParameters(GeneratedBaseModel):
 
 
 class CompletionStreamRequestToolsItem(GeneratedBaseModel):
-    type: Literal["function"]
+    type: Literal["function"] = "function"
     name: str
     description: str
     parameters: Annotated[
@@ -1053,14 +1587,14 @@ class CompletionStreamRequestResponseFormatText(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["text"]
+    type: Literal["text"] = "text"
 
 
 class CompletionStreamRequestResponseFormatJsonObject(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["json_object"]
+    type: Literal["json_object"] = "json_object"
 
 
 class CompletionStreamRequestResponseFormatJsonSchemaJsonSchemaSchema(
@@ -1112,7 +1646,7 @@ class CompletionStreamRequestResponseFormatJsonSchema(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["json_schema"]
+    type: Literal["json_schema"] = "json_schema"
     json_schema: Annotated[
         CompletionStreamRequestResponseFormatJsonSchemaJsonSchema,
         Field(title="CompletionStreamRequestResponseFormatJsonSchemaJsonSchema"),
@@ -1192,14 +1726,14 @@ class CompletionStreamRequest(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    type: Literal["completionStream"]
+    type: Literal["completionStream"] = "completionStream"
 
 
 class CompletionStreamResponseEventsItemContentDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["contentDelta"]
+    type: Literal["contentDelta"] = "contentDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -1208,7 +1742,7 @@ class CompletionStreamResponseEventsItemRawDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rawDelta"]
+    type: Literal["rawDelta"] = "rawDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -1217,7 +1751,7 @@ class CompletionStreamResponseEventsItemThinkingDelta(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["thinkingDelta"]
+    type: Literal["thinkingDelta"] = "thinkingDelta"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     text: str
 
@@ -1248,7 +1782,7 @@ class CompletionStreamResponseEventsItemToolCall(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["toolCall"]
+    type: Literal["toolCall"] = "toolCall"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     call: Annotated[
         CompletionStreamResponseEventsItemToolCallCall,
@@ -1278,7 +1812,7 @@ class CompletionStreamResponseEventsItemToolError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["toolError"]
+    type: Literal["toolError"] = "toolError"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     error: Annotated[
         CompletionStreamResponseEventsItemToolErrorError,
@@ -1314,7 +1848,7 @@ class CompletionStreamResponseEventsItemCompletionStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionStats"]
+    type: Literal["completionStats"] = "completionStats"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     stats: Annotated[
         CompletionStreamResponseEventsItemCompletionStatsStats,
@@ -1340,9 +1874,9 @@ class CompletionStreamResponseEventsItemCompletionDoneError(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionDone"]
+    type: Literal["completionDone"] = "completionDone"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
-    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")]
+    stop_reason: Annotated[Literal["error"], Field(alias="stopReason")] = "error"
     error: Annotated[
         CompletionStreamResponseEventsItemCompletionDoneErrorError,
         Field(title="CompletionStreamResponseEventsItemCompletionDoneErrorError"),
@@ -1371,7 +1905,7 @@ class CompletionStreamResponseEventsItemCompletionDone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionDone"]
+    type: Literal["completionDone"] = "completionDone"
     seq: Annotated[int, Field(ge=0, le=9007199254740991)]
     stop_reason: Annotated[
         CompletionStreamResponseEventsItemCompletionDoneStopReason | None,
@@ -1390,7 +1924,7 @@ class CompletionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["completionStream"]
+    type: Literal["completionStream"] = "completionStream"
     done: bool | None = None
     events: list[
         CompletionStreamResponseEventsItemContentDelta
@@ -1455,12 +1989,12 @@ class Verbosity(Enum):
 
 
 class DeleteCacheAllRequest(GeneratedBaseModel):
-    type: Literal["deleteCache"]
-    all: Literal[True]
+    type: Literal["deleteCache"] = "deleteCache"
+    all: Literal[True] = True
 
 
 class DeleteCacheKvEntryRequest(GeneratedBaseModel):
-    type: Literal["deleteCache"]
+    type: Literal["deleteCache"] = "deleteCache"
     kv_cache_key: Annotated[str, Field(alias="kvCacheKey")]
     model_id: Annotated[str | None, Field(alias="modelId")] = None
 
@@ -1469,7 +2003,7 @@ class DeleteCacheResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["deleteCache"]
+    type: Literal["deleteCache"] = "deleteCache"
     success: bool
     error: str | None = None
 
@@ -1668,7 +2202,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
             description="Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig."
         ),
     ] = None
-    type: Literal["diffusionStream"]
+    type: Literal["diffusionStream"] = "diffusionStream"
 
 
 class DiffusionStreamResponseStats(GeneratedBaseModel):
@@ -1746,7 +2280,7 @@ class DiffusionStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["diffusionStream"]
+    type: Literal["diffusionStream"] = "diffusionStream"
     step: float | None = None
     total_steps: Annotated[float | None, Field(alias="totalSteps")] = None
     elapsed_ms: Annotated[float | None, Field(alias="elapsedMs")] = None
@@ -1759,7 +2293,7 @@ class DiffusionStreamResponse(GeneratedBaseModel):
 
 
 class DownloadAssetRequest(GeneratedBaseModel):
-    type: Literal["downloadAsset"]
+    type: Literal["downloadAsset"] = "downloadAsset"
     asset_src: Annotated[str, Field(alias="assetSrc")]
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
@@ -1777,7 +2311,7 @@ class DownloadAssetResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["downloadAsset"]
+    type: Literal["downloadAsset"] = "downloadAsset"
     success: bool
     asset_id: Annotated[str | None, Field(alias="assetId")] = None
     error: str | None = None
@@ -1820,7 +2354,7 @@ class EmbedRequest(GeneratedBaseModel):
             description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`."
         ),
     ]
-    type: Literal["embed"]
+    type: Literal["embed"] = "embed"
     request_id: Annotated[
         str | None,
         Field(
@@ -1868,7 +2402,7 @@ class EmbedResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["embed"]
+    type: Literal["embed"] = "embed"
     success: bool
     embedding: Annotated[
         list[float] | list[list[float]],
@@ -1891,7 +2425,7 @@ class ErrorResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["error"]
+    type: Literal["error"] = "error"
     message: str
     stack: str | None = None
     timestamp: str | None = None
@@ -1908,14 +2442,14 @@ class FinetuneRunRequestOptionsValidationNone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["none"]
+    type: Literal["none"] = "none"
 
 
 class FinetuneRunRequestOptionsValidationSplit(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["split"]
+    type: Literal["split"] = "split"
     fraction: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
 
 
@@ -1923,7 +2457,7 @@ class FinetuneRunRequestOptionsValidationDataset(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["dataset"]
+    type: Literal["dataset"] = "dataset"
     path: Annotated[str, Field(min_length=1)]
 
 
@@ -2007,7 +2541,7 @@ class FinetuneRunRequest(GeneratedBaseModel):
     options: Annotated[
         FinetuneRunRequestOptions, Field(title="FinetuneRunRequestOptions")
     ]
-    type: Literal["finetune"]
+    type: Literal["finetune"] = "finetune"
     operation: Annotated[
         FinetuneRunRequestOperation | None, Field(title="FinetuneRunRequestOperation")
     ] = None
@@ -2026,14 +2560,14 @@ class FinetuneGetStateRequestOptionsValidationNone(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["none"]
+    type: Literal["none"] = "none"
 
 
 class FinetuneGetStateRequestOptionsValidationSplit(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["split"]
+    type: Literal["split"] = "split"
     fraction: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
 
 
@@ -2041,7 +2575,7 @@ class FinetuneGetStateRequestOptionsValidationDataset(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["dataset"]
+    type: Literal["dataset"] = "dataset"
     path: Annotated[str, Field(min_length=1)]
 
 
@@ -2120,8 +2654,8 @@ class FinetuneGetStateRequest(GeneratedBaseModel):
     options: Annotated[
         FinetuneGetStateRequestOptions, Field(title="FinetuneGetStateRequestOptions")
     ]
-    type: Literal["finetune"]
-    operation: Literal["getState"]
+    type: Literal["finetune"] = "finetune"
+    operation: Literal["getState"] = "getState"
 
 
 class FinetuneStopRequestOperation(Enum):
@@ -2134,7 +2668,7 @@ class FinetuneStopRequest(GeneratedBaseModel):
         extra="forbid",
     )
     model_id: Annotated[str, Field(alias="modelId")]
-    type: Literal["finetune"]
+    type: Literal["finetune"] = "finetune"
     operation: Annotated[
         FinetuneStopRequestOperation, Field(title="FinetuneStopRequestOperation")
     ]
@@ -2169,7 +2703,7 @@ class FinetuneResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["finetune"]
+    type: Literal["finetune"] = "finetune"
     status: Annotated[FinetuneResponseStatus, Field(title="FinetuneResponseStatus")]
     stats: Annotated[
         FinetuneResponseStats | None, Field(title="FinetuneResponseStats")
@@ -2191,13 +2725,13 @@ class FinetuneProgressResponse(GeneratedBaseModel):
     total_batches: Annotated[int, Field(ge=0, le=9007199254740991)]
     elapsed_ms: Annotated[float, Field(ge=0.0)]
     eta_ms: Annotated[float, Field(ge=0.0)]
-    type: Literal["finetune:progress"]
+    type: Literal["finetune:progress"] = "finetune:progress"
     model_id: Annotated[str, Field(alias="modelId")]
 
 
 class GetLoadedModelInfoRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
-    type: Literal["getLoadedModelInfo"]
+    type: Literal["getLoadedModelInfo"] = "getLoadedModelInfo"
 
 
 class LocalLoadedModelInfoToolDialect(Enum):
@@ -2214,7 +2748,7 @@ class LocalLoadedModelInfo(GeneratedBaseModel):
         extra="forbid",
     )
     model_id: Annotated[str, Field(alias="modelId")]
-    is_delegated: Annotated[Literal[False], Field(alias="isDelegated")]
+    is_delegated: Annotated[Literal[False], Field(alias="isDelegated")] = False
     model_type: Annotated[str, Field(alias="modelType")]
     handlers: list[str]
     display_name: Annotated[str | None, Field(alias="displayName")] = None
@@ -2240,7 +2774,7 @@ class DelegatedLoadedModelInfo(GeneratedBaseModel):
         extra="forbid",
     )
     model_id: Annotated[str, Field(alias="modelId")]
-    is_delegated: Annotated[Literal[True], Field(alias="isDelegated")]
+    is_delegated: Annotated[Literal[True], Field(alias="isDelegated")] = True
     handlers: list[str]
     provider_info: Annotated[
         DelegatedLoadedModelInfoProviderInfo,
@@ -2252,7 +2786,7 @@ class GetLoadedModelInfoResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["getLoadedModelInfo"]
+    type: Literal["getLoadedModelInfo"] = "getLoadedModelInfo"
     info: LocalLoadedModelInfo | DelegatedLoadedModelInfo
 
 
@@ -2263,7 +2797,7 @@ class GetModelInfoRequest(GeneratedBaseModel):
             description="The model's registry name (as found in the SDK's built-in catalog)."
         ),
     ]
-    type: Literal["getModelInfo"]
+    type: Literal["getModelInfo"] = "getModelInfo"
 
 
 class GetModelInfoResponseModelInfoAddon(Enum):
@@ -2476,7 +3010,7 @@ class GetModelInfoResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["getModelInfo"]
+    type: Literal["getModelInfo"] = "getModelInfo"
     model_info: Annotated[
         GetModelInfoResponseModelInfo,
         Field(alias="modelInfo", title="GetModelInfoResponseModelInfo"),
@@ -2510,7 +3044,7 @@ class HeartbeatRequestDelegate(GeneratedBaseModel):
 
 
 class HeartbeatRequest(GeneratedBaseModel):
-    type: Literal["heartbeat"]
+    type: Literal["heartbeat"] = "heartbeat"
     delegate: Annotated[
         HeartbeatRequestDelegate | None, Field(title="HeartbeatRequestDelegate")
     ] = None
@@ -2520,7 +3054,7 @@ class HeartbeatResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["heartbeat"]
+    type: Literal["heartbeat"] = "heartbeat"
     number: float
 
 
@@ -2709,7 +3243,7 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -2726,7 +3260,9 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["llamacpp-completion"], Field(alias="modelType")]
+    model_type: Annotated[Literal["llamacpp-completion"], Field(alias="modelType")] = (
+        "llamacpp-completion"
+    )
     model_config_: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfig,
         Field(
@@ -2947,7 +3483,7 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -2964,7 +3500,9 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["whispercpp-transcription"], Field(alias="modelType")]
+    model_type: Annotated[
+        Literal["whispercpp-transcription"], Field(alias="modelType")
+    ] = "whispercpp-transcription"
     model_config_: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfig,
         Field(
@@ -3156,7 +3694,7 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -3175,7 +3713,7 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
     ] = None
     model_type: Annotated[
         Literal["bci-whispercpp-transcription"], Field(alias="modelType")
-    ]
+    ] = "bci-whispercpp-transcription"
     model_config_: Annotated[
         LoadModelSrcRequestBciWhispercppTranscriptionModelConfig,
         Field(
@@ -3311,7 +3849,7 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -3328,7 +3866,9 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["parakeet-transcription"], Field(alias="modelType")]
+    model_type: Annotated[
+        Literal["parakeet-transcription"], Field(alias="modelType")
+    ] = "parakeet-transcription"
     model_config_: Annotated[
         LoadModelSrcRequestParakeetTranscriptionModelConfig | None,
         Field(
@@ -3473,7 +4013,7 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -3490,7 +4030,9 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["llamacpp-embedding"], Field(alias="modelType")]
+    model_type: Annotated[Literal["llamacpp-embedding"], Field(alias="modelType")] = (
+        "llamacpp-embedding"
+    )
     model_config_: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfig,
         Field(
@@ -3946,7 +4488,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel
     temperature: float | None = None
     topk: float | None = None
     topp: float | None = None
-    engine: Literal["Bergamot"]
+    engine: Literal["Bergamot"] = "Bergamot"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom,
         Field(
@@ -4051,7 +4593,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseMod
     temperature: float | None = None
     topk: float | None = None
     topp: float | None = None
-    engine: Literal["IndicTrans"]
+    engine: Literal["IndicTrans"] = "IndicTrans"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom,
         Field(
@@ -4069,7 +4611,7 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -4086,7 +4628,9 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["nmtcpp-translation"], Field(alias="modelType")]
+    model_type: Annotated[Literal["nmtcpp-translation"], Field(alias="modelType")] = (
+        "nmtcpp-translation"
+    )
     model_config_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamot
         | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans,
@@ -4434,7 +4978,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["chatterbox"], Field(alias="ttsEngine")]
+    tts_engine: Annotated[Literal["chatterbox"], Field(alias="ttsEngine")] = (
+        "chatterbox"
+    )
     language: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage,
         Field(title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"),
@@ -4642,7 +5188,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["supertonic"], Field(alias="ttsEngine")]
+    tts_engine: Annotated[Literal["supertonic"], Field(alias="ttsEngine")] = (
+        "supertonic"
+    )
     language: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage,
         Field(title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"),
@@ -4701,7 +5249,7 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -4718,7 +5266,7 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["tts-ggml"], Field(alias="modelType")]
+    model_type: Annotated[Literal["tts-ggml"], Field(alias="modelType")] = "tts-ggml"
     model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonic,
@@ -4862,7 +5410,7 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -4879,7 +5427,7 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["ggml-ocr"], Field(alias="modelType")]
+    model_type: Annotated[Literal["ggml-ocr"], Field(alias="modelType")] = "ggml-ocr"
     model_config_: Annotated[
         LoadModelSrcRequestGgmlOcrModelConfig,
         Field(alias="modelConfig", title="LoadModelSrcRequestGgmlOcrModelConfig"),
@@ -5655,7 +6203,7 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -5672,7 +6220,9 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["sdcpp-generation"], Field(alias="modelType")]
+    model_type: Annotated[Literal["sdcpp-generation"], Field(alias="modelType")] = (
+        "sdcpp-generation"
+    )
     model_config_: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfig | None,
         Field(
@@ -5748,7 +6298,7 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -5765,7 +6315,7 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["ggml-vla"], Field(alias="modelType")]
+    model_type: Annotated[Literal["ggml-vla"], Field(alias="modelType")] = "ggml-vla"
     model_config_: Annotated[
         LoadModelSrcRequestGgmlVlaModelConfig | None,
         Field(alias="modelConfig", title="LoadModelSrcRequestGgmlVlaModelConfig"),
@@ -5824,7 +6374,7 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -5841,7 +6391,9 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
-    model_type: Annotated[Literal["ggml-classification"], Field(alias="modelType")]
+    model_type: Annotated[Literal["ggml-classification"], Field(alias="modelType")] = (
+        "ggml-classification"
+    )
     model_config_: Annotated[
         LoadModelSrcRequestGgmlClassificationModelConfig | None,
         Field(
@@ -5898,7 +6450,7 @@ class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
 
 
 class LoadModelCustomPluginRequest(GeneratedBaseModel):
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_src: Annotated[str, Field(alias="modelSrc")]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -6112,7 +6664,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
 
 
 class ReloadConfigRequest(GeneratedBaseModel):
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     model_id: Annotated[str, Field(alias="modelId", pattern="^[0-9a-f]{16}$")]
     model_src: Annotated[Any | None, Field(alias="modelSrc")] = None
     with_progress: Annotated[Any | None, Field(alias="withProgress")] = None
@@ -6136,7 +6688,7 @@ class LoadModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loadModel"]
+    type: Literal["loadModel"] = "loadModel"
     success: bool
     model_id: Annotated[str | None, Field(alias="modelId")] = None
     error: str | None = None
@@ -6144,7 +6696,7 @@ class LoadModelResponse(GeneratedBaseModel):
 
 class LoggingStreamRequest(GeneratedBaseModel):
     id: str
-    type: Literal["loggingStream"]
+    type: Literal["loggingStream"] = "loggingStream"
 
 
 class LoggingStreamResponseLevel(Enum):
@@ -6159,7 +6711,7 @@ class LoggingStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["loggingStream"]
+    type: Literal["loggingStream"] = "loggingStream"
     id: str
     level: Annotated[
         LoggingStreamResponseLevel, Field(title="LoggingStreamResponseLevel")
@@ -6198,7 +6750,7 @@ class ModelProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["modelProgress"]
+    type: Literal["modelProgress"] = "modelProgress"
     downloaded: float
     total: float
     percentage: float
@@ -6214,7 +6766,7 @@ class ModelProgressResponse(GeneratedBaseModel):
 
 
 class ModelRegistryGetModelRequest(GeneratedBaseModel):
-    type: Literal["modelRegistryGetModel"]
+    type: Literal["modelRegistryGetModel"] = "modelRegistryGetModel"
     registry_path: Annotated[str, Field(alias="registryPath")]
     registry_source: Annotated[str, Field(alias="registrySource")]
 
@@ -6342,7 +6894,7 @@ class ModelRegistryGetModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["modelRegistryGetModel"]
+    type: Literal["modelRegistryGetModel"] = "modelRegistryGetModel"
     success: bool
     model: Annotated[
         ModelRegistryGetModelResponseModel | None,
@@ -6352,7 +6904,7 @@ class ModelRegistryGetModelResponse(GeneratedBaseModel):
 
 
 class ModelRegistryListRequest(GeneratedBaseModel):
-    type: Literal["modelRegistryList"]
+    type: Literal["modelRegistryList"] = "modelRegistryList"
 
 
 class ModelRegistryListResponseModelsItemAddon(Enum):
@@ -6478,7 +7030,7 @@ class ModelRegistryListResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["modelRegistryList"]
+    type: Literal["modelRegistryList"] = "modelRegistryList"
     success: bool
     models: list[ModelRegistryListResponseModelsItem] | None = None
     error: str | None = None
@@ -6501,7 +7053,7 @@ class ModelRegistrySearchRequestAddon(Enum):
 
 
 class ModelRegistrySearchRequest(GeneratedBaseModel):
-    type: Literal["modelRegistrySearch"]
+    type: Literal["modelRegistrySearch"] = "modelRegistrySearch"
     filter: str | None = None
     engine: str | None = None
     quantization: str | None = None
@@ -6634,19 +7186,19 @@ class ModelRegistrySearchResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["modelRegistrySearch"]
+    type: Literal["modelRegistrySearch"] = "modelRegistrySearch"
     success: bool
     models: list[ModelRegistrySearchResponseModelsItem] | None = None
     error: str | None = None
 
 
 class OcrStreamRequestImageBase64(GeneratedBaseModel):
-    type: Literal["base64"]
+    type: Literal["base64"] = "base64"
     value: str
 
 
 class OcrStreamRequestImageFilePath(GeneratedBaseModel):
-    type: Literal["filePath"]
+    type: Literal["filePath"] = "filePath"
     value: str
 
 
@@ -6660,7 +7212,7 @@ class OcrStreamRequest(GeneratedBaseModel):
     options: Annotated[
         OcrStreamRequestOptions | None, Field(title="OcrStreamRequestOptions")
     ] = None
-    type: Literal["ocrStream"]
+    type: Literal["ocrStream"] = "ocrStream"
 
 
 class OcrStreamResponseBlocksItem(GeneratedBaseModel):
@@ -6685,7 +7237,7 @@ class OcrStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["ocrStream"]
+    type: Literal["ocrStream"] = "ocrStream"
     blocks: list[OcrStreamResponseBlocksItem] | None = None
     done: bool | None = None
     error: str | None = None
@@ -6695,7 +7247,7 @@ class OcrStreamResponse(GeneratedBaseModel):
 
 
 class PluginInvokeRequest(GeneratedBaseModel):
-    type: Literal["pluginInvoke"]
+    type: Literal["pluginInvoke"] = "pluginInvoke"
     model_id: Annotated[str, Field(alias="modelId")]
     handler: str
     params: Any
@@ -6705,12 +7257,12 @@ class PluginInvokeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["pluginInvoke"]
+    type: Literal["pluginInvoke"] = "pluginInvoke"
     result: Any
 
 
 class PluginInvokeStreamRequest(GeneratedBaseModel):
-    type: Literal["pluginInvokeStream"]
+    type: Literal["pluginInvokeStream"] = "pluginInvokeStream"
     model_id: Annotated[str, Field(alias="modelId")]
     handler: str
     params: Any
@@ -6720,7 +7272,7 @@ class PluginInvokeStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["pluginInvokeStream"]
+    type: Literal["pluginInvokeStream"] = "pluginInvokeStream"
     result: Any
     done: bool | None = None
 
@@ -6744,14 +7296,14 @@ class ProvideRequest(GeneratedBaseModel):
     firewall: Annotated[
         ProvideRequestFirewall | None, Field(title="ProvideRequestFirewall")
     ] = None
-    type: Literal["provide"]
+    type: Literal["provide"] = "provide"
 
 
 class ProvideResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["provide"]
+    type: Literal["provide"] = "provide"
     success: bool
     error: str | None = None
     public_key: Annotated[str | None, Field(alias="publicKey")] = None
@@ -6789,8 +7341,8 @@ class RagRequestChunk(GeneratedBaseModel):
         RagRequestChunkChunkOpts | None,
         Field(alias="chunkOpts", title="RagRequestChunkChunkOpts"),
     ] = None
-    type: Literal["rag"]
-    operation: Literal["chunk"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["chunk"] = "chunk"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6834,8 +7386,8 @@ class RagRequestIngest(GeneratedBaseModel):
     ] = None
     on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
-    type: Literal["rag"]
-    operation: Literal["ingest"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["ingest"] = "ingest"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6865,8 +7417,8 @@ class RagRequestSaveEmbeddings(GeneratedBaseModel):
     ] = None
     on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
-    type: Literal["rag"]
-    operation: Literal["saveEmbeddings"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["saveEmbeddings"] = "saveEmbeddings"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6876,8 +7428,8 @@ class RagRequestSearch(GeneratedBaseModel):
     query: Annotated[str, Field(min_length=1)]
     top_k: Annotated[float | None, Field(alias="topK", gt=0.0)] = 5
     n: Annotated[float | None, Field(gt=0.0)] = 3
-    type: Literal["rag"]
-    operation: Literal["search"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["search"] = "search"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6885,8 +7437,8 @@ class RagRequestDeleteEmbeddings(GeneratedBaseModel):
     model_id: Annotated[str | None, Field(alias="modelId")] = None
     workspace: str | None = None
     ids: Annotated[list[str], Field(min_length=1)]
-    type: Literal["rag"]
-    operation: Literal["deleteEmbeddings"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["deleteEmbeddings"] = "deleteEmbeddings"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6895,29 +7447,29 @@ class RagRequestReindex(GeneratedBaseModel):
     workspace: str | None = None
     on_progress: Annotated[Any | None, Field(alias="onProgress")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
-    type: Literal["rag"]
-    operation: Literal["reindex"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["reindex"] = "reindex"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
 class RagRequestListWorkspaces(GeneratedBaseModel):
-    type: Literal["rag"]
-    operation: Literal["listWorkspaces"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["listWorkspaces"] = "listWorkspaces"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
 class RagRequestCloseWorkspace(GeneratedBaseModel):
     workspace: str | None = None
     delete_on_close: Annotated[bool | None, Field(alias="deleteOnClose")] = None
-    type: Literal["rag"]
-    operation: Literal["closeWorkspace"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["closeWorkspace"] = "closeWorkspace"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
 class RagRequestDeleteWorkspace(GeneratedBaseModel):
     workspace: Annotated[str, Field(min_length=1)]
-    type: Literal["rag"]
-    operation: Literal["deleteWorkspace"]
+    type: Literal["rag"] = "rag"
+    operation: Literal["deleteWorkspace"] = "deleteWorkspace"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
 
 
@@ -6933,10 +7485,10 @@ class RagResponseChunk(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["chunk"]
+    operation: Literal["chunk"] = "chunk"
     chunks: list[RagResponseChunkChunksItem]
 
 
@@ -6961,10 +7513,10 @@ class RagResponseIngest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["ingest"]
+    operation: Literal["ingest"] = "ingest"
     processed: list[RagResponseIngestProcessedItem]
     dropped_indices: Annotated[list[float], Field(alias="droppedIndices")]
 
@@ -6990,10 +7542,10 @@ class RagResponseSaveEmbeddings(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["saveEmbeddings"]
+    operation: Literal["saveEmbeddings"] = "saveEmbeddings"
     processed: list[RagResponseSaveEmbeddingsProcessedItem]
 
 
@@ -7010,10 +7562,10 @@ class RagResponseSearch(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["search"]
+    operation: Literal["search"] = "search"
     results: list[RagResponseSearchResultsItem]
 
 
@@ -7021,10 +7573,10 @@ class RagResponseDeleteEmbeddings(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["deleteEmbeddings"]
+    operation: Literal["deleteEmbeddings"] = "deleteEmbeddings"
 
 
 class RagResponseReindexResultDetails(RootModel[dict[str, Any]]):
@@ -7046,10 +7598,10 @@ class RagResponseReindex(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["reindex"]
+    operation: Literal["reindex"] = "reindex"
     result: Annotated[RagResponseReindexResult, Field(title="RagResponseReindexResult")]
 
 
@@ -7065,10 +7617,10 @@ class RagResponseListWorkspaces(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["listWorkspaces"]
+    operation: Literal["listWorkspaces"] = "listWorkspaces"
     workspaces: list[RagResponseListWorkspacesWorkspacesItem]
 
 
@@ -7076,20 +7628,20 @@ class RagResponseCloseWorkspace(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["closeWorkspace"]
+    operation: Literal["closeWorkspace"] = "closeWorkspace"
 
 
 class RagResponseDeleteWorkspace(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag"]
+    type: Literal["rag"] = "rag"
     success: bool
     error: str | None = None
-    operation: Literal["deleteWorkspace"]
+    operation: Literal["deleteWorkspace"] = "deleteWorkspace"
 
 
 class RagProgressResponseOperation(Enum):
@@ -7102,7 +7654,7 @@ class RagProgressResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["rag:progress"]
+    type: Literal["rag:progress"] = "rag:progress"
     operation: Annotated[
         RagProgressResponseOperation, Field(title="RagProgressResponseOperation")
     ]
@@ -7114,18 +7666,18 @@ class RagProgressResponse(GeneratedBaseModel):
 
 
 class ResumeRequest(GeneratedBaseModel):
-    type: Literal["resume"]
+    type: Literal["resume"] = "resume"
 
 
 class ResumeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["resume"]
+    type: Literal["resume"] = "resume"
 
 
 class StateRequest(GeneratedBaseModel):
-    type: Literal["state"]
+    type: Literal["state"] = "state"
 
 
 class StateResponseState(Enum):
@@ -7139,7 +7691,7 @@ class StateResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["state"]
+    type: Literal["state"] = "state"
     state: Annotated[StateResponseState, Field(title="StateResponseState")]
 
 
@@ -7147,27 +7699,27 @@ class StopProvideRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["stopProvide"]
+    type: Literal["stopProvide"] = "stopProvide"
 
 
 class StopProvideResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["stopProvide"]
+    type: Literal["stopProvide"] = "stopProvide"
     success: bool
     error: str | None = None
 
 
 class SuspendRequest(GeneratedBaseModel):
-    type: Literal["suspend"]
+    type: Literal["suspend"] = "suspend"
 
 
 class SuspendResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["suspend"]
+    type: Literal["suspend"] = "suspend"
 
 
 class TextToSpeechRequest(GeneratedBaseModel):
@@ -7182,7 +7734,7 @@ class TextToSpeechRequest(GeneratedBaseModel):
     sentence_stream_max_chunk_scalars: Annotated[
         float | None, Field(alias="sentenceStreamMaxChunkScalars", gt=0.0)
     ] = None
-    type: Literal["textToSpeech"]
+    type: Literal["textToSpeech"] = "textToSpeech"
 
 
 class TextToSpeechResponseStats(GeneratedBaseModel):
@@ -7197,7 +7749,7 @@ class TextToSpeechResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["textToSpeech"]
+    type: Literal["textToSpeech"] = "textToSpeech"
     buffer: list[float]
     done: bool
     stats: Annotated[
@@ -7232,7 +7784,7 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         float | None, Field(alias="maxBufferScalars", gt=0.0)
     ] = None
     flush_after_ms: Annotated[float | None, Field(alias="flushAfterMs", gt=0.0)] = None
-    type: Literal["textToSpeechStream"]
+    type: Literal["textToSpeechStream"] = "textToSpeechStream"
 
 
 class TextToSpeechStreamResponseStats(GeneratedBaseModel):
@@ -7247,7 +7799,7 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["textToSpeechStream"]
+    type: Literal["textToSpeechStream"] = "textToSpeechStream"
     buffer: list[float]
     done: bool
     stats: Annotated[
@@ -7261,12 +7813,12 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
 
 
 class TranscribeRequestAudioChunkBase64(GeneratedBaseModel):
-    type: Literal["base64"]
+    type: Literal["base64"] = "base64"
     value: str
 
 
 class TranscribeRequestAudioChunkFilePath(GeneratedBaseModel):
-    type: Literal["filePath"]
+    type: Literal["filePath"] = "filePath"
     value: str
 
 
@@ -7278,7 +7830,7 @@ class TranscribeRequest(GeneratedBaseModel):
         TranscribeRequestAudioChunkBase64 | TranscribeRequestAudioChunkFilePath,
         Field(alias="audioChunk"),
     ]
-    type: Literal["transcribe"]
+    type: Literal["transcribe"] = "transcribe"
     request_id: Annotated[
         str | None,
         Field(
@@ -7337,7 +7889,7 @@ class TranscribeResponseEndOfTurnWhisper(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    source: Literal["whisper"]
+    source: Literal["whisper"] = "whisper"
     silence_duration_ms: Annotated[float, Field(alias="silenceDurationMs")]
 
 
@@ -7345,7 +7897,7 @@ class TranscribeResponseEndOfTurnParakeet(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    source: Literal["parakeet"]
+    source: Literal["parakeet"] = "parakeet"
 
 
 class TranscribeResponse(GeneratedBaseModel):
@@ -7368,7 +7920,7 @@ class TranscribeResponse(GeneratedBaseModel):
         TranscribeResponseEndOfTurnWhisper | TranscribeResponseEndOfTurnParakeet | None,
         Field(alias="endOfTurn"),
     ] = None
-    type: Literal["transcribe"]
+    type: Literal["transcribe"] = "transcribe"
 
 
 class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
@@ -7408,7 +7960,7 @@ class TranscribeStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     prompt: str | None = None
     metadata: bool | None = None
-    type: Literal["transcribeStream"]
+    type: Literal["transcribeStream"] = "transcribeStream"
     emit_vad_events: Annotated[bool | None, Field(alias="emitVadEvents")] = None
     end_of_turn_silence_ms: Annotated[
         int | None,
@@ -7487,7 +8039,7 @@ class TranscribeStreamResponseEndOfTurnWhisper(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    source: Literal["whisper"]
+    source: Literal["whisper"] = "whisper"
     silence_duration_ms: Annotated[float, Field(alias="silenceDurationMs")]
 
 
@@ -7495,7 +8047,7 @@ class TranscribeStreamResponseEndOfTurnParakeet(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    source: Literal["parakeet"]
+    source: Literal["parakeet"] = "parakeet"
 
 
 class TranscribeStreamResponse(GeneratedBaseModel):
@@ -7522,7 +8074,7 @@ class TranscribeStreamResponse(GeneratedBaseModel):
         | None,
         Field(alias="endOfTurn"),
     ] = None
-    type: Literal["transcribeStream"]
+    type: Literal["transcribeStream"] = "transcribeStream"
 
 
 class Text2(RootModel[str]):
@@ -7582,7 +8134,7 @@ class TranslateNmtRequest(GeneratedBaseModel):
             title="TranslateNmtRequestModelType",
         ),
     ]
-    type: Literal["translate"]
+    type: Literal["translate"] = "translate"
     request_id: Annotated[
         str | None,
         Field(
@@ -7637,7 +8189,7 @@ class TranslateLlmRequest(GeneratedBaseModel):
             description="Optional translation context passed to the LLM as a system hint."
         ),
     ] = None
-    type: Literal["translate"]
+    type: Literal["translate"] = "translate"
     request_id: Annotated[
         str | None,
         Field(
@@ -7700,7 +8252,7 @@ class TranslateResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["translate"]
+    type: Literal["translate"] = "translate"
     token: str
     done: bool | None = None
     stats: Annotated[
@@ -7710,7 +8262,7 @@ class TranslateResponse(GeneratedBaseModel):
 
 
 class UnloadModelRequest(GeneratedBaseModel):
-    type: Literal["unloadModel"]
+    type: Literal["unloadModel"] = "unloadModel"
     model_id: Annotated[str, Field(alias="modelId")]
     clear_storage: Annotated[bool | None, Field(alias="clearStorage")] = False
 
@@ -7719,7 +8271,7 @@ class UnloadModelResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["unloadModel"]
+    type: Literal["unloadModel"] = "unloadModel"
     success: bool
     error: str | None = None
     has_active_models: Annotated[bool | None, Field(alias="hasActiveModels")] = None
@@ -7752,7 +8304,7 @@ class UpscaleStreamRequest(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
-    type: Literal["upscaleStream"]
+    type: Literal["upscaleStream"] = "upscaleStream"
 
 
 class UpscaleStreamResponseStatsBackendDevice(Enum):
@@ -7833,7 +8385,7 @@ class UpscaleStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["upscaleStream"]
+    type: Literal["upscaleStream"] = "upscaleStream"
     data: str | None = None
     output_index: Annotated[float | None, Field(alias="outputIndex")] = None
     done: bool | None = None
@@ -8128,7 +8680,7 @@ class VideoStreamRequest(GeneratedBaseModel):
             le=1.0,
         ),
     ] = None
-    type: Literal["videoStream"]
+    type: Literal["videoStream"] = "videoStream"
 
 
 class VideoStreamResponseStats(GeneratedBaseModel):
@@ -8244,7 +8796,7 @@ class VideoStreamResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["videoStream"]
+    type: Literal["videoStream"] = "videoStream"
     step: float | None = None
     total_steps: Annotated[float | None, Field(alias="totalSteps")] = None
     elapsed_ms: Annotated[float | None, Field(alias="elapsedMs")] = None
@@ -8345,6 +8897,7 @@ class Response(
         | BciTranscribeStreamResponse
         | CancelResponse
         | ClassifyResponse
+        | CompletionOrchestrateResponse
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
@@ -8388,6 +8941,7 @@ class Response(
         | BciTranscribeStreamResponse
         | CancelResponse
         | ClassifyResponse
+        | CompletionOrchestrateResponse
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
@@ -8443,6 +8997,7 @@ class Request(
         | BciTranscribeStreamRequest
         | Request_1
         | ClassifyRequest
+        | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest
@@ -8482,6 +9037,7 @@ class Request(
         | BciTranscribeStreamRequest
         | Request_1
         | ClassifyRequest
+        | CompletionOrchestrateRequest
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest

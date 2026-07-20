@@ -62,8 +62,14 @@ async def test_completion_stream_produces_real_text(transport) -> None:
     from qvac.models import QWEN3_600M_INST_Q4
     from qvac.schemas import CompletionStreamRequest, ModelType
 
+    # Qwen3 is a thinking model: the worker reserves context for the
+    # reasoning trace and fits the default window to device memory, so an
+    # empty modelConfig overflows intermittently. Pin the window explicitly.
     model_id = await _load(
-        transport, QWEN3_600M_INST_Q4.src, ModelType.llamacpp_completion
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
     )
 
     request = CompletionStreamRequest.model_validate(
@@ -72,6 +78,10 @@ async def test_completion_stream_produces_real_text(transport) -> None:
             "modelId": model_id,
             "history": [{"role": "user", "content": "Say hello in five words."}],
             "stream": True,
+            # Bound + seed the generation: Qwen3's thinking trace otherwise
+            # rambles nondeterministically and can outgrow n_ctx mid-stream,
+            # surfacing as a flaky CONTEXT_OVERFLOW.
+            "generationParams": {"predict": 512, "temp": 0, "seed": 42},
         }
     )
     text = ""
@@ -223,6 +233,138 @@ async def test_text_to_speech_stream_duplex_produces_real_audio(transport) -> No
         saw_done = saw_done or chunk.done
     assert samples, "expected real synthesized audio via the PoC duplex stream"
     assert saw_done, "expected a terminal done=True event on the response stream"
+
+
+async def test_tts_session_produces_real_audio(transport) -> None:
+    """qvac.sessions push-style ergonomics end to end: text fragments are
+    write()n into the session (no prebuilt upstream iterable) and PCM frames
+    stream back, including the yielded terminal done frame."""
+    from qvac.models import TTS_EN_SUPERTONIC_Q4_0
+    from qvac.schemas import ModelType
+    from qvac.sessions import text_to_speech_stream_session
+
+    model_id = await _load(
+        transport,
+        TTS_EN_SUPERTONIC_Q4_0.src,
+        ModelType.tts_ggml,
+        model_config={"ttsEngine": "supertonic", "language": "en"},
+    )
+
+    session = text_to_speech_stream_session(transport, model_id=model_id)
+    session.write("Hello from QVAC. ")
+    session.write("This is a streaming session.")
+    session.end()
+
+    samples: list[float] = []
+    saw_done = False
+    async for frame in session:
+        samples.extend(frame.buffer)
+        saw_done = saw_done or frame.done
+    assert samples, "expected real synthesized audio via the session"
+    assert saw_done, "expected the terminal done frame to be yielded"
+
+
+async def test_transcribe_session_produces_real_text(transport) -> None:
+    """Push-style transcription: audio is write()n at real-time cadence from
+    a concurrent task while the session is being iterated -- the interleaved
+    write/read flow the raw prebuilt-upstream stub can't express."""
+    import asyncio as _asyncio
+
+    from qvac.models import PARAKEET_CTC_0_6B_Q4_0
+    from qvac.schemas import ModelType
+    from qvac.sessions import transcribe_stream_session
+
+    model_id = await _load(
+        transport, PARAKEET_CTC_0_6B_Q4_0.src, ModelType.parakeet_transcription
+    )
+
+    chunk_ms = 1000
+    pcm = _wav_to_s16le_mono_16k(DEFAULT_AUDIO)
+    bytes_per_chunk = int(16000 * chunk_ms / 1000) * 2
+    trailing_silence = bytes(int(16000 * 1.5) * 2)
+    chunks = [pcm[i : i + bytes_per_chunk] for i in range(0, len(pcm), bytes_per_chunk)]
+    chunks += [
+        trailing_silence[i : i + bytes_per_chunk]
+        for i in range(0, len(trailing_silence), bytes_per_chunk)
+    ]
+
+    session = transcribe_stream_session(
+        transport,
+        model_id=model_id,
+        parakeet_streaming_config={"chunkMs": chunk_ms, "emitPartials": True},
+    )
+
+    async def feed() -> None:
+        for i, chunk in enumerate(chunks):
+            session.write(chunk)
+            if i < len(chunks) - 1:
+                await _asyncio.sleep(chunk_ms / 1000)
+        session.end()
+
+    feeder = _asyncio.ensure_future(feed())
+    try:
+        text = ""
+        async for event in session:
+            # Conversation mode (parakeet config): text arrives as TextEvent.
+            if getattr(event, "type", None) == "text":
+                text += event.text
+        assert text.strip(), "expected real transcript text via the session"
+    finally:
+        if not feeder.done():
+            feeder.cancel()
+        try:
+            await feeder
+        except _asyncio.CancelledError:
+            pass
+
+
+async def test_vla_synthetic_inference_produces_real_actions(transport) -> None:
+    """qvac.vla end to end against a real SmolVLA model: hparams sizing,
+    preprocessed synthetic camera frames, BOS-only instruction tokens --
+    mirrors the SDK e2e vla executor's synthetic-inference path."""
+    import numpy as np
+
+    from qvac.models import SMOLVLA_LIBERO_VISION_Q8
+    from qvac.schemas import ModelType
+    from qvac.vla import vla, vla_hparams, vla_pad_state, vla_preprocess_image
+
+    model_id = await _load(transport, SMOLVLA_LIBERO_VISION_Q8.src, ModelType.ggml_vla)
+
+    hparams, _backend = await vla_hparams(transport, model_id=model_id)
+    assert hparams.vision_image_size > 0
+
+    size = hparams.vision_image_size
+    dummy = np.full(size * size * 3, 128, dtype=np.uint8)
+    images = [
+        vla_preprocess_image(dummy, size, size, size=size)
+        for _ in range(hparams.num_cameras or 2)
+    ]
+    tokens = np.zeros(hparams.tokenizer_max_length, dtype=np.int32)
+    mask = np.zeros(hparams.tokenizer_max_length, dtype=np.uint8)
+    # BOS-only "instruction": exercises the full prefill path without a
+    # tokenizer at test time (same trick as the SDK e2e executor).
+    tokens[0] = 1
+    mask[0] = 1
+    state = (
+        np.zeros(0, dtype=np.float32)
+        if hparams.state_input_mode == "discrete"
+        else vla_pad_state([0, 0, 0, 0, 0, 0], hparams.max_state_dim)
+    )
+    noise = np.zeros(hparams.chunk_size * hparams.max_action_dim, dtype=np.float32)
+
+    result = await vla(
+        transport,
+        model_id=model_id,
+        images=images,
+        img_width=size,
+        img_height=size,
+        state=state,
+        tokens=tokens,
+        mask=mask,
+        noise=noise,
+    )
+    assert len(result.actions) == result.chunk_size * result.action_dim
+    assert np.isfinite(result.actions).all()
 
 
 async def test_classify_produces_real_labels(transport) -> None:
@@ -561,6 +703,86 @@ async def test_get_loaded_model_info_returns_real_loaded_model(transport) -> Non
     )
     response = await get_loaded_model_info(transport, request)
     assert response.info.model_id == model_id
+
+
+async def test_completion_run_folds_final_against_real_worker(transport) -> None:
+    """qvac.completion end to end: the eager CompletionRun streams real
+    events and `final` folds them (content, raw text, cacheable string,
+    stats, stop reason) -- seeded and bounded like the raw stub tests."""
+    from qvac import completion
+    from qvac.models import QWEN3_600M_INST_Q4
+    from qvac.schemas import ModelType
+
+    model_id = await _load(
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
+    )
+
+    run = completion(
+        transport,
+        model_id=model_id,
+        history=[{"role": "user", "content": "Say hello in five words."}],
+        generation_params={"predict": 512, "temp": 0, "seed": 42},
+    )
+    saw_delta = False
+    async for event in run.events:
+        if event.type == "contentDelta":
+            saw_delta = True
+    final = await run.final
+    assert saw_delta
+    assert final.content_text.strip()
+    assert final.raw_full_text
+    assert final.stop_reason in ("eos", "length", "stopSequence")
+    assert final.cacheable_assistant_content is not None
+    assert "<think>" not in final.cacheable_assistant_content
+
+
+async def test_api_translate_autodetects_source_against_real_worker(transport) -> None:
+    """api.translate's LLM path end to end: `from_` omitted, so the source
+    language ("French") is auto-detected client-side and drives the worker's
+    translation prompt; asserts the mechanism (detection + a real completion
+    round trip), not translation quality -- same as the SDK e2e suite's
+    autodetect case, since a 0.6B model translates unreliably. Thinking
+    model, so give it an explicit context window."""
+    from qvac import _api as api
+    from qvac.models import QWEN3_600M_INST_Q4
+    from qvac.schemas import ModelType
+
+    model_id = await _load(
+        transport,
+        QWEN3_600M_INST_Q4.src,
+        ModelType.llamacpp_completion,
+        model_config={"n_ctx": 2048},
+    )
+
+    run = api.translate(
+        transport,
+        model_id=model_id,
+        text="Bonjour le monde, comment allez-vous aujourd'hui?",
+        to="English",
+        model_type="llamacpp-completion",
+        stream=False,
+    )
+    text = await run.text
+    assert isinstance(text, str) and text.strip(), "expected real LLM output"
+    stats = await run.stats
+    assert stats is not None and stats.total_tokens
+
+
+async def test_api_load_model_infers_type_against_real_worker(transport) -> None:
+    """api.load_model's ergonomic path end to end: a bare ModelConstant (no
+    model_type) infers llamacpp-completion from the descriptor's engine and
+    loads on a real worker."""
+    from qvac import _api as api
+    from qvac.models import QWEN3_600M_INST_Q4
+
+    model_id = await api.load_model(transport, model_src=QWEN3_600M_INST_Q4)
+    try:
+        assert isinstance(model_id, str) and model_id
+    finally:
+        await api.unload_model(transport, model_id)
 
 
 async def test_download_asset_succeeds_on_a_real_registry_src(transport) -> None:

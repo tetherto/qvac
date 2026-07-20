@@ -59,7 +59,7 @@ async def test_state_reply_round_trips_through_generated_stub(transport) -> None
 
 
 async def test_model_registry_list_and_search_against_real_worker(transport) -> None:
-    from qvac import api
+    from qvac import _api as api
 
     all_models = await api.model_registry_list(transport)
     assert len(all_models) > 0
@@ -70,14 +70,14 @@ async def test_model_registry_list_and_search_against_real_worker(transport) -> 
 
 
 async def test_delete_cache_all_against_real_worker(transport) -> None:
-    from qvac import api
+    from qvac import _api as api
 
     result = await api.delete_cache(transport, all=True)
     assert result == {"success": True}
 
 
 async def test_cancel_broad_on_unloaded_model_against_real_worker(transport) -> None:
-    from qvac import api
+    from qvac import _api as api
 
     # A broad cancel validates the model is loaded (shared with internal
     # server-side broad cancels, per cancelHandler.ts) -- targeting a model

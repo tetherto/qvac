@@ -36,7 +36,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 from poc_heartbeat import QvacWorker  # noqa: E402
 from poc_transport import PocTransport  # noqa: E402
 
-from qvac.api import unload_model  # noqa: E402
+from qvac import unload_model  # noqa: E402
 from qvac.methods import completion_stream, load_model_with_progress  # noqa: E402
 from qvac.models import LLAMA_3_2_1B_INST_Q4_0  # noqa: E402
 from qvac.schemas import (  # noqa: E402
