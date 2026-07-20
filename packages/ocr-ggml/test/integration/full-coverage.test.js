@@ -8,7 +8,7 @@ const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 120 * 1000
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
-function createMinimalOcr () {
+function createMinimalOcr() {
   return new OcrGgml({
     params: {
       pathDetector: 'models/craft_mlt_25k.gguf',
@@ -18,7 +18,7 @@ function createMinimalOcr () {
   })
 }
 
-async function loadOcr () {
+async function loadOcr() {
   const detectorPath = await ensureModelPath('detector_craft')
   const recognizerPath = await ensureModelPath('recognizer_latin')
 
@@ -64,8 +64,12 @@ test('_addonOutputCallback routes stats object (with totalTime) to _job.end', fu
   const response = ocrGgml._job.start()
   let ended = false
   let receivedStats = null
-  response.on('stats', s => { receivedStats = s })
-  response.on('end', () => { ended = true })
+  response.on('stats', (s) => {
+    receivedStats = s
+  })
+  response.on('end', () => {
+    ended = true
+  })
 
   const statsData = { totalTime: 1.5, detectionTime: 0.5, recognitionTime: 1.0 }
   ocrGgml._addonOutputCallback(null, 'SomeMangledType', statsData, null)
@@ -80,7 +84,9 @@ test('_addonOutputCallback routes Error event to _job.fail', function (t) {
 
   const response = ocrGgml._job.start()
   let receivedError = null
-  response.onError(err => { receivedError = err })
+  response.onError((err) => {
+    receivedError = err
+  })
 
   ocrGgml._addonOutputCallback(null, 'SomethingError', 'error payload', 'the error')
 
@@ -93,9 +99,14 @@ test('_addonOutputCallback routes array data to _job.output', function (t) {
 
   const response = ocrGgml._job.start()
   let receivedData = null
-  response.onUpdate(d => { receivedData = d })
+  response.onUpdate((d) => {
+    receivedData = d
+  })
 
-  const outputData = [['box1', 'text1'], ['box2', 'text2']]
+  const outputData = [
+    ['box1', 'text1'],
+    ['box2', 'text2']
+  ]
   ocrGgml._addonOutputCallback(null, 'PipelineResult', outputData, null)
 
   t.alike(receivedData, outputData, 'output data should be routed')
@@ -107,7 +118,9 @@ test('_addonOutputCallback ignores unmapped non-array non-stats events', functio
 
   const response = ocrGgml._job.start()
   let outputCalled = false
-  response.onUpdate(() => { outputCalled = true })
+  response.onUpdate(() => {
+    outputCalled = true
+  })
 
   ocrGgml._addonOutputCallback(null, 'CustomEvent', 'string data', null)
 
@@ -137,114 +150,148 @@ test('addonLogging setLogger and releaseLogger execute without error', function 
 // Optional performance params: defaultRotationAngles, contrastRetry
 // =============================================
 
-test('load() accepts defaultRotationAngles and contrastRetry', { timeout: TEST_TIMEOUT }, async function (t) {
-  const detectorPath = await ensureModelPath('detector_craft')
-  const recognizerPath = await ensureModelPath('recognizer_latin')
-  const imagePath = getImagePath('/test/images/basic_test.bmp')
+test(
+  'load() accepts defaultRotationAngles and contrastRetry',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const detectorPath = await ensureModelPath('detector_craft')
+    const recognizerPath = await ensureModelPath('recognizer_latin')
+    const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      defaultRotationAngles: [90, 180, 270],
-      contrastRetry: true
-    }
-  })
-
-  await ocrGgml.load()
-  t.pass('Loaded with defaultRotationAngles + contrastRetry')
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
+    const ocrGgml = new OcrGgml({
+      params: {
+        pathDetector: detectorPath,
+        pathRecognizer: recognizerPath,
+        langList: ['en'],
+        defaultRotationAngles: [90, 180, 270],
+        contrastRetry: true
+      }
     })
 
-    await response
-      .onUpdate(function (output) {
-        t.ok(Array.isArray(output), 'Output should be an array')
-      })
-      .onError(function (error) {
-        t.fail('Unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
+    await ocrGgml.load()
+    t.pass('Loaded with defaultRotationAngles + contrastRetry')
 
-    t.pass('Inference completed with extra params')
-  } finally {
-    await ocrGgml.unload()
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    try {
+      const response = await ocrGgml.run({
+        path: imagePath,
+        options: { paragraph: false }
+      })
+
+      await response
+        .onUpdate(function (output) {
+          t.ok(Array.isArray(output), 'Output should be an array')
+        })
+        .onError(function (error) {
+          t.fail('Unexpected error: ' + JSON.stringify(error))
+        })
+        .await()
+
+      t.pass('Inference completed with extra params')
+    } finally {
+      await ocrGgml.unload()
+      await new Promise(function (resolve) {
+        setTimeout(resolve, 1000)
+      })
+    }
   }
-})
+)
 
 // =============================================
 // OcrGgmlInterface catch blocks via monkey-patching
 // (ocr-ggml.js: activate, runJob, destroy)
 // =============================================
 
-test('activate catch wraps error as FAILED_TO_ACTIVATE', { timeout: TEST_TIMEOUT }, async function (t) {
-  const ocrGgml = await loadOcr()
-  const addonRef = ocrGgml.addon
+test(
+  'activate catch wraps error as FAILED_TO_ACTIVATE',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const ocrGgml = await loadOcr()
+    const addonRef = ocrGgml.addon
 
-  const original = binding.activate
-  binding.activate = function () { throw new Error('simulated activate failure') }
+    const original = binding.activate
+    binding.activate = function () {
+      throw new Error('simulated activate failure')
+    }
 
-  try {
-    await addonRef.activate()
-    t.fail('Should have thrown')
-  } catch (err) {
-    t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
-    t.is(err.code, ERR_CODES.FAILED_TO_ACTIVATE)
-    t.ok(err.message.includes('simulated activate failure'))
-  } finally {
-    binding.activate = original
-    await ocrGgml.unload()
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    try {
+      await addonRef.activate()
+      t.fail('Should have thrown')
+    } catch (err) {
+      t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
+      t.is(err.code, ERR_CODES.FAILED_TO_ACTIVATE)
+      t.ok(err.message.includes('simulated activate failure'))
+    } finally {
+      binding.activate = original
+      await ocrGgml.unload()
+      await new Promise(function (resolve) {
+        setTimeout(resolve, 1000)
+      })
+    }
   }
-})
+)
 
-test('runJob catch wraps error as FAILED_TO_RUN_JOB', { timeout: TEST_TIMEOUT }, async function (t) {
-  const ocrGgml = await loadOcr()
-  const addonRef = ocrGgml.addon
+test(
+  'runJob catch wraps error as FAILED_TO_RUN_JOB',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const ocrGgml = await loadOcr()
+    const addonRef = ocrGgml.addon
 
-  const original = binding.runJob
-  binding.runJob = function () { throw new Error('simulated runJob failure') }
+    const original = binding.runJob
+    binding.runJob = function () {
+      throw new Error('simulated runJob failure')
+    }
 
-  try {
-    await addonRef.runJob({ type: 'image', input: {}, options: {} })
-    t.fail('Should have thrown')
-  } catch (err) {
-    t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
-    t.is(err.code, ERR_CODES.FAILED_TO_RUN_JOB)
-    t.ok(err.message.includes('simulated runJob failure'))
-  } finally {
-    binding.runJob = original
-    await ocrGgml.unload()
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    try {
+      await addonRef.runJob({ type: 'image', input: {}, options: {} })
+      t.fail('Should have thrown')
+    } catch (err) {
+      t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
+      t.is(err.code, ERR_CODES.FAILED_TO_RUN_JOB)
+      t.ok(err.message.includes('simulated runJob failure'))
+    } finally {
+      binding.runJob = original
+      await ocrGgml.unload()
+      await new Promise(function (resolve) {
+        setTimeout(resolve, 1000)
+      })
+    }
   }
-})
+)
 
-test('destroy catch wraps error as FAILED_TO_DESTROY', { timeout: TEST_TIMEOUT }, async function (t) {
-  const ocrGgml = await loadOcr()
-  const addonRef = ocrGgml.addon
+test(
+  'destroy catch wraps error as FAILED_TO_DESTROY',
+  { timeout: TEST_TIMEOUT },
+  async function (t) {
+    const ocrGgml = await loadOcr()
+    const addonRef = ocrGgml.addon
 
-  const original = binding.destroyInstance
-  binding.destroyInstance = function () { throw new Error('simulated destroy failure') }
+    const original = binding.destroyInstance
+    binding.destroyInstance = function () {
+      throw new Error('simulated destroy failure')
+    }
 
-  try {
-    await addonRef.destroy()
-    t.fail('Should have thrown')
-  } catch (err) {
-    t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
-    t.is(err.code, ERR_CODES.FAILED_TO_DESTROY)
-    t.ok(err.message.includes('simulated destroy failure'))
-  } finally {
-    binding.destroyInstance = original
-    try { await addonRef.destroy() } catch (e) { /* real cleanup */ }
-    ocrGgml.addon = null
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    try {
+      await addonRef.destroy()
+      t.fail('Should have thrown')
+    } catch (err) {
+      t.ok(err instanceof QvacErrorAddonOcrGgml, 'Error is QvacErrorAddonOcrGgml')
+      t.is(err.code, ERR_CODES.FAILED_TO_DESTROY)
+      t.ok(err.message.includes('simulated destroy failure'))
+    } finally {
+      binding.destroyInstance = original
+      try {
+        await addonRef.destroy()
+      } catch (e) {
+        /* real cleanup */
+      }
+      ocrGgml.addon = null
+      await new Promise(function (resolve) {
+        setTimeout(resolve, 1000)
+      })
+    }
   }
-})
+)
 
 // =============================================
 // OcrGgmlInterface.cancel and .unload delegation
@@ -257,7 +304,9 @@ test('cancel calls binding.cancel', { timeout: TEST_TIMEOUT }, async function (t
 
   let cancelCalled = false
   const original = binding.cancel
-  binding.cancel = function () { cancelCalled = true }
+  binding.cancel = function () {
+    cancelCalled = true
+  }
 
   try {
     await addonRef.cancel()
@@ -265,7 +314,9 @@ test('cancel calls binding.cancel', { timeout: TEST_TIMEOUT }, async function (t
   } finally {
     binding.cancel = original
     await ocrGgml.unload()
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 1000)
+    })
   }
 })
 
@@ -287,6 +338,8 @@ test('OcrGgmlInterface.unload delegates to destroy', { timeout: TEST_TIMEOUT }, 
   } finally {
     binding.destroyInstance = original
     ocrGgml.addon = null
-    await new Promise(function (resolve) { setTimeout(resolve, 1000) })
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 1000)
+    })
   }
 })

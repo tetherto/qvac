@@ -275,6 +275,11 @@ registerOperationMetrics<{ modelId?: string }, { stats?: DiffusionStats }>({
     if (!res.stats) return undefined
     const gauges: Record<string, number> = {}
     if (res.stats.generationMs !== undefined) gauges['generationMs'] = res.stats.generationMs
+    if (res.stats.conditionerMs !== undefined) gauges['conditionerMs'] = res.stats.conditionerMs
+    if (res.stats.denoiseMs !== undefined) gauges['denoiseMs'] = res.stats.denoiseMs
+    if (res.stats.vaeMs !== undefined) gauges['vaeMs'] = res.stats.vaeMs
+    if (res.stats.postProcessMs !== undefined) gauges['postProcessMs'] = res.stats.postProcessMs
+    if (res.stats.stepsPerSecond !== undefined) gauges['stepsPerSecond'] = res.stats.stepsPerSecond
     if (res.stats.totalSteps !== undefined) gauges['totalSteps'] = res.stats.totalSteps
     if (res.stats.totalImages !== undefined) gauges['totalImages'] = res.stats.totalImages
     if (res.stats.totalPixels !== undefined) gauges['totalPixels'] = res.stats.totalPixels
@@ -290,6 +295,11 @@ registerOperationMetrics<{ modelId?: string }, { stats?: VideoStats }>({
     if (!res.stats) return undefined
     const gauges: Record<string, number> = {}
     if (res.stats.generationMs !== undefined) gauges['generationMs'] = res.stats.generationMs
+    if (res.stats.conditionerMs !== undefined) gauges['conditionerMs'] = res.stats.conditionerMs
+    if (res.stats.denoiseMs !== undefined) gauges['denoiseMs'] = res.stats.denoiseMs
+    if (res.stats.vaeMs !== undefined) gauges['vaeMs'] = res.stats.vaeMs
+    if (res.stats.postProcessMs !== undefined) gauges['postProcessMs'] = res.stats.postProcessMs
+    if (res.stats.stepsPerSecond !== undefined) gauges['stepsPerSecond'] = res.stats.stepsPerSecond
     if (res.stats.totalSteps !== undefined) gauges['totalSteps'] = res.stats.totalSteps
     if (res.stats.totalVideos !== undefined) gauges['totalVideos'] = res.stats.totalVideos
     if (res.stats.totalVideoFrames !== undefined)
