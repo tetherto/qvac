@@ -276,6 +276,7 @@ test('downloadModel clears cached blocks when the download fails', async t => {
 
   const client = makeClient()
   const clears = []
+  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
@@ -297,6 +298,11 @@ test('downloadModel clears cached blocks when the download fails', async t => {
     client._events.indexOf('stream') < client._events.indexOf('clear'),
     'blocks are cleared after the download fails (in the catch)'
   )
+  const destroyedAt = client._events.indexOf('destroy')
+  t.ok(
+    destroyedAt !== -1 && destroyedAt < client._events.indexOf('clear'),
+    'replication is stopped before clearing so blocks are not refetched'
+  )
 })
 
 test('downloadBlob clears cached blocks when the download fails', async t => {
@@ -306,7 +312,11 @@ test('downloadBlob clears cached blocks when the download fails', async t => {
   const client = makeClient()
   client.ready = async () => {}
   const clears = []
-  client._clearBlobBlocks = async (core, start, end) => { clears.push({ start, end }) }
+  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
+  client._clearBlobBlocks = async (core, start, end) => {
+    client._events.push('clear')
+    clears.push({ start, end })
+  }
   client._streamBlobToFile = async () => { throw new Error('Download cancelled') }
 
   const blobBinding = {
@@ -324,6 +334,11 @@ test('downloadBlob clears cached blocks when the download fails', async t => {
 
   t.is(clears.length, 1, 'partial blocks cleared exactly once on the failure path')
   t.alike(clears[0], { start: 3, end: 10 }, 'cleared the blob block range')
+  const destroyedAt = client._events.indexOf('destroy')
+  t.ok(
+    destroyedAt !== -1 && destroyedAt < client._events.indexOf('clear'),
+    'replication is stopped before clearing so blocks are not refetched'
+  )
 })
 
 // Locks the generic retry contract the download path relies on.

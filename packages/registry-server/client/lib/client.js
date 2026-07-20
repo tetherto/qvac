@@ -414,6 +414,7 @@ class QVACRegistryClient extends ReadyResource {
 
       // Free the partially-downloaded blocks so a cancelled/failed download does
       // not leak them into the corestore (success paths already clear them).
+      if (rangeDownload) rangeDownload.destroy()
       if (core && blockStart != null) {
         await this._clearBlobBlocks(core, blockStart, blockEnd)
       }
@@ -557,6 +558,7 @@ class QVACRegistryClient extends ReadyResource {
 
       // Free the partially-downloaded blocks so a cancelled/failed download does
       // not leak them into the corestore (success paths already clear them).
+      if (rangeDownload) rangeDownload.destroy()
       if (core && blockStart != null) {
         await this._clearBlobBlocks(core, blockStart, blockEnd)
       }
