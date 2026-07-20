@@ -28,23 +28,20 @@ const DETECTOR_REGISTRY_SOURCES: Record<OcrPipelineType, string> = {
 // CRNN weight loader with a raw missing-tensor error (QVAC-22514).
 // Recognize the known DocTR registry artifacts by name and opt in to
 // the DocTR pipeline automatically.
-function inferPipelineType (recognizerSrc: string): OcrPipelineType | undefined {
+function inferPipelineType(recognizerSrc: string): OcrPipelineType | undefined {
   const path = srcPathname(recognizerSrc)
   const filename = path.split('/').pop() ?? ''
-  if (
-    filename === 'crnn_mobilenet_v3_small.gguf' ||
-    path.includes('/gguf/doctr')
-  ) {
+  if (filename === 'crnn_mobilenet_v3_small.gguf' || path.includes('/gguf/doctr')) {
     return 'doctr'
   }
   return undefined
 }
 
-function srcPathname (src: string): string {
+function srcPathname(src: string): string {
   return (src.split(/[?#]/)[0] ?? '').toLowerCase()
 }
 
-function srcToString (src: ModelSrcInput): string {
+function srcToString(src: ModelSrcInput): string {
   return typeof src === 'string' ? src : src.src
 }
 
@@ -52,7 +49,7 @@ function srcToString (src: ModelSrcInput): string {
 // "@qvac/ocr-onnx" engine; the ggml-ocr addon can only open GGUF, so a
 // raw "failed to open GGUF" surfaces mid-load. Fail fast with the
 // supported configurations instead (QVAC-22514).
-function assertGgufSource (src: string, role: 'recognizer' | 'detector'): void {
+function assertGgufSource(src: string, role: 'recognizer' | 'detector'): void {
   if (!srcPathname(src).endsWith('.onnx')) return
   throw new ModelLoadFailedError(
     `ggml-ocr only loads GGUF models, but the ${role} source points to an ONNX file: ${src}. ` +
@@ -62,10 +59,7 @@ function assertGgufSource (src: string, role: 'recognizer' | 'detector'): void {
   )
 }
 
-function deriveDetectorSource (
-  modelSrc: string,
-  pipelineType: OcrPipelineType
-): string | undefined {
+function deriveDetectorSource(modelSrc: string, pipelineType: OcrPipelineType): string | undefined {
   if (modelSrc.startsWith('pear://')) {
     const { key } = hyperdriveUrlSchema.parse(modelSrc)
     return `pear://${key}/${DETECTOR_FILENAMES[pipelineType]}`
@@ -76,7 +70,7 @@ function deriveDetectorSource (
   return undefined
 }
 
-export async function resolveOcrConfig (
+export async function resolveOcrConfig(
   cfg: OCRConfig,
   ctx: ResolveContext
 ): Promise<ResolveResult<Record<string, unknown>, 'detectorModelPath'>> {
@@ -84,11 +78,9 @@ export async function resolveOcrConfig (
 
   assertGgufSource(ctx.modelSrc, 'recognizer')
 
-  const pipelineType =
-    ocrConfig.pipelineType ?? inferPipelineType(ctx.modelSrc) ?? 'easyocr'
+  const pipelineType = ocrConfig.pipelineType ?? inferPipelineType(ctx.modelSrc) ?? 'easyocr'
 
-  const detectorSrc =
-    detectorModelSrc ?? deriveDetectorSource(ctx.modelSrc, pipelineType)
+  const detectorSrc = detectorModelSrc ?? deriveDetectorSource(ctx.modelSrc, pipelineType)
   if (!detectorSrc) {
     throw new ModelLoadFailedError(
       `Detector model required for OCR (${pipelineType} pipeline expects ` +

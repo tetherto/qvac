@@ -2,16 +2,13 @@ import test from 'brittle'
 import { resolveOcrConfig } from '@/server/bare/plugins/ggml-ocr/resolve-config'
 import { OCR_CRAFT, OCR_DOCTR, OCR_DOCTR_1, OCR_LATIN } from '@/models/registry'
 import type { ModelSrcInput, OCRConfig, ResolveContext } from '@/schemas'
-import {
-  ModelLoadFailedError,
-  PluginNotFoundError
-} from '@/utils/errors-server'
+import { ModelLoadFailedError, PluginNotFoundError } from '@/utils/errors-server'
 
 interface MockResolveCall {
   src: ModelSrcInput
 }
 
-function makeCtx (modelSrc: string): {
+function makeCtx(modelSrc: string): {
   ctx: ResolveContext
   calls: MockResolveCall[]
 } {
@@ -28,7 +25,7 @@ function makeCtx (modelSrc: string): {
   return { ctx, calls }
 }
 
-async function resolve (modelSrc: string, cfg: OCRConfig = {}) {
+async function resolve(modelSrc: string, cfg: OCRConfig = {}) {
   const { ctx, calls } = makeCtx(modelSrc)
   const result = await resolveOcrConfig(cfg, ctx)
   return { result, calls }
@@ -129,10 +126,7 @@ test('resolveConfig: .onnx detectorModelSrc rejected with actionable error (Case
   } catch (err) {
     t.ok(err instanceof ModelLoadFailedError)
     t.ok((err as Error).message.includes('only loads GGUF'))
-    t.ok(
-      (err as Error).message.includes('OCR_DOCTR'),
-      'error names a supported configuration'
-    )
+    t.ok((err as Error).message.includes('OCR_DOCTR'), 'error names a supported configuration')
   }
 })
 
