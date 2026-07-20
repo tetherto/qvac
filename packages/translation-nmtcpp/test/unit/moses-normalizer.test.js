@@ -3,9 +3,7 @@
  */
 
 const test = require('brittle')
-const {
-  MosesPunctNormalizer
-} = require('../../third-party/indic-processor-deps/sacremoses')
+const { MosesPunctNormalizer } = require('../../third-party/indic-processor-deps/sacremoses')
 
 test('MosesPunctNormalizer should normalize documents correctly', (t) => {
   const moses = new MosesPunctNormalizer()
@@ -40,8 +38,7 @@ test('MosesPunctNormalizer should handle quote comma normalization correctly', (
   const expectedNormQuote = 'THIS EBOOK IS OTHERWISE PROVIDED TO YOU "AS-IS."'
   t.is(mosesNormQuote.normalize(text), expectedNormQuote)
 
-  const expectedNoNormQuote =
-    'THIS EBOOK IS OTHERWISE PROVIDED TO YOU "AS-IS".'
+  const expectedNoNormQuote = 'THIS EBOOK IS OTHERWISE PROVIDED TO YOU "AS-IS".'
   const result = mosesNoNormQuote.normalize(text)
   console.log(result, expectedNoNormQuote)
   t.is(mosesNoNormQuote.normalize(text), expectedNoNormQuote)

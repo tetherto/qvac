@@ -23,52 +23,73 @@ test('DocTR lab results - download models', { timeout: DOCTR_TEST_TIMEOUT }, asy
 })
 
 const EXPECTED_WORDS = [
-  'parameter', 'results', 'calculated', 'direct', 'values',
-  'clinical', 'blood', 'patient', 'medivista', 'hospital',
-  'biochemistry', 'department', 'arterial', 'gases',
-  'oxygen', 'electrolyte', 'metabolite', 'oximetry'
+  'parameter',
+  'results',
+  'calculated',
+  'direct',
+  'values',
+  'clinical',
+  'blood',
+  'patient',
+  'medivista',
+  'hospital',
+  'biochemistry',
+  'department',
+  'arterial',
+  'gases',
+  'oxygen',
+  'electrolyte',
+  'metabolite',
+  'oximetry'
 ]
 
-function runLabResultsTest (device, run) {
+function runLabResultsTest(device, run) {
   const tag = device.toUpperCase()
 
-  test(`DocTR lab results [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`, { timeout: DOCTR_TEST_TIMEOUT }, async function (t) {
-    if (!modelsAvailable) { t.comment('Skipped — models unavailable'); return }
-    const imagePath = getImagePath('/test/images/lab_results.png')
-
-    t.comment(`Testing DocTR on medical lab results image [${tag}] (run ${run}/${PERF_RUNS})`)
-    t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
-
-    // On a GPU host this records a Vulkan ([GPU]) and a forced-CPU ([CPU]) row
-    // for the same test; on non-GPU/local it stays a single CPU pass. The
-    // assertions run on each pass. The `[${tag}]` token (always CPU here) is
-    // normalized to the actual backend by formatOCRPerformanceMetrics.
-    await runDoctrComparison(t, {
-      params: {
-        pathDetector: DB_MOBILENET,
-        pathRecognizer: CRNN_MOBILENET
-      },
-      imagePath,
-      perfLabel: `[DocTR lab_results] [${tag}]`,
-      perfOpts: { imagePath },
-      assertResult (results) {
-        const texts = results.map(r => r.text)
-        t.comment('Detected texts: ' + JSON.stringify(texts))
-
-        t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
-
-        const lowerTexts = texts.map(w => w.toLowerCase())
-        for (const word of EXPECTED_WORDS) {
-          t.ok(
-            lowerTexts.some(w => w.includes(word)),
-            `should detect "${word}" in lab results`
-          )
-        }
+  test(
+    `DocTR lab results [${tag}] run ${run} - db_mobilenet + crnn_mobilenet`,
+    { timeout: DOCTR_TEST_TIMEOUT },
+    async function (t) {
+      if (!modelsAvailable) {
+        t.comment('Skipped — models unavailable')
+        return
       }
-    })
+      const imagePath = getImagePath('/test/images/lab_results.png')
 
-    t.pass(`DocTR lab results [${tag}] run ${run} completed successfully`)
-  })
+      t.comment(`Testing DocTR on medical lab results image [${tag}] (run ${run}/${PERF_RUNS})`)
+      t.comment('Detector: db_mobilenet_v3_large, Recognizer: crnn_mobilenet_v3_small (CTC)')
+
+      // On a GPU host this records a Vulkan ([GPU]) and a forced-CPU ([CPU]) row
+      // for the same test; on non-GPU/local it stays a single CPU pass. The
+      // assertions run on each pass. The `[${tag}]` token (always CPU here) is
+      // normalized to the actual backend by formatOCRPerformanceMetrics.
+      await runDoctrComparison(t, {
+        params: {
+          pathDetector: DB_MOBILENET,
+          pathRecognizer: CRNN_MOBILENET
+        },
+        imagePath,
+        perfLabel: `[DocTR lab_results] [${tag}]`,
+        perfOpts: { imagePath },
+        assertResult(results) {
+          const texts = results.map((r) => r.text)
+          t.comment('Detected texts: ' + JSON.stringify(texts))
+
+          t.ok(results.length > 0, `should detect text regions, got ${results.length}`)
+
+          const lowerTexts = texts.map((w) => w.toLowerCase())
+          for (const word of EXPECTED_WORDS) {
+            t.ok(
+              lowerTexts.some((w) => w.includes(word)),
+              `should detect "${word}" in lab results`
+            )
+          }
+        }
+      })
+
+      t.pass(`DocTR lab results [${tag}] run ${run} completed successfully`)
+    }
+  )
 }
 
 for (let i = 1; i <= PERF_RUNS; i++) runLabResultsTest('cpu', i)

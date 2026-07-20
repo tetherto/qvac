@@ -26,95 +26,107 @@ const DESKTOP_TIMEOUT = 180 * 1000 // 3 minutes: runs the pipeline twice
 // std::getenv reads — so the toggle wouldn't take effect.
 const ENV_KEYS = ['OCR_GGML_CONV1X1_MULMAT', 'OCR_GGML_CONV1X1_CONV2D']
 
-test('EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)', { timeout: DESKTOP_TIMEOUT }, async function (t) {
-  if (isMobile) {
-    t.pass('skipped on mobile (env toggle is a desktop-only A/B lever)')
-    return
-  }
-  if (platform === 'win32') {
-    t.pass('skipped on win32 (SetEnvironmentVariableW does not reach the addon CRT getenv)')
-    return
-  }
+test(
+  'EasyOCR 1x1-conv mul_mat matches conv_2d (CRAFT)',
+  { timeout: DESKTOP_TIMEOUT },
+  async function (t) {
+    if (isMobile) {
+      t.pass('skipped on mobile (env toggle is a desktop-only A/B lever)')
+      return
+    }
+    if (platform === 'win32') {
+      t.pass('skipped on win32 (SetEnvironmentVariableW does not reach the addon CRT getenv)')
+      return
+    }
 
-  const hasGetEnv = typeof os.getEnv === 'function'
-  const hasSetEnv = typeof os.setEnv === 'function'
-  const prev = new Map()
-  for (const key of ENV_KEYS) {
-    prev.set(key, (hasGetEnv ? os.getEnv(key) : process.env[key]) || '')
-  }
-
-  function setEnv (key, val) {
-    if (hasSetEnv) os.setEnv(key, val)
-    process.env[key] = val
-  }
-
-  // Force exactly one path on (key=1) and clear every other toggle, so the
-  // backend-aware default never leaks into either pass.
-  function forceOnly (onKey) {
-    for (const key of ENV_KEYS) setEnv(key, key === onKey ? '1' : '')
-  }
-
-  function restoreEnv () {
+    const hasGetEnv = typeof os.getEnv === 'function'
+    const hasSetEnv = typeof os.setEnv === 'function'
+    const prev = new Map()
     for (const key of ENV_KEYS) {
-      const original = prev.get(key)
-      if (original) {
-        setEnv(key, original)
-        continue
+      prev.set(key, (hasGetEnv ? os.getEnv(key) : process.env[key]) || '')
+    }
+
+    function setEnv(key, val) {
+      if (hasSetEnv) os.setEnv(key, val)
+      process.env[key] = val
+    }
+
+    // Force exactly one path on (key=1) and clear every other toggle, so the
+    // backend-aware default never leaks into either pass.
+    function forceOnly(onKey) {
+      for (const key of ENV_KEYS) setEnv(key, key === onKey ? '1' : '')
+    }
+
+    function restoreEnv() {
+      for (const key of ENV_KEYS) {
+        const original = prev.get(key)
+        if (original) {
+          setEnv(key, original)
+          continue
+        }
+        if (typeof os.unsetEnv === 'function') os.unsetEnv(key)
+        else if (hasSetEnv) os.setEnv(key, '')
+        // bare-process's env proxy rejects `delete` (TypeError under strict mode); '' is sufficient since the addon reads via std::getenv.
+        process.env[key] = ''
       }
-      if (typeof os.unsetEnv === 'function') os.unsetEnv(key)
-      else if (hasSetEnv) os.setEnv(key, '')
-      // bare-process's env proxy rejects `delete` (TypeError under strict mode); '' is sufficient since the addon reads via std::getenv.
-      process.env[key] = ''
-    }
-  }
-
-  function assertCorrect (output, tag) {
-    t.ok(Array.isArray(output), tag + ': output should be an array')
-    t.is(output.length, 3, tag + `: output length should be 3, got ${output.length}`)
-    const texts = output.map(o => o[1])
-    t.ok(texts.includes('tilted'), tag + ': should contain "tilted"')
-    t.ok(texts.includes('normal'), tag + ': should contain "normal"')
-    t.ok(texts.includes('vertical'), tag + ': should contain "vertical"')
-  }
-
-  try {
-    const detectorPath = await ensureModelPath('detector_craft')
-    const recognizerPath = await ensureModelPath('recognizer_latin')
-    const imagePath = getImagePath('/test/images/basic_test.bmp')
-    const baseCfg = {
-      params: { pathDetector: detectorPath, pathRecognizer: recognizerPath, langList: ['en'] },
-      imagePath,
-      runOptions: { paragraph: false },
-      perfOpts: { skipReport: true }
     }
 
-    t.comment('Pass A: forced conv_2d path; image: ' + imagePath + ', platform: ' + platform)
-    forceOnly('OCR_GGML_CONV1X1_CONV2D')
-    const resConv = await runOcrComparison(t, {
-      ...baseCfg,
-      perfLabel: '[EasyOCR basic_test conv2d]',
-      assertResult (output) { assertCorrect(output, 'conv_2d') }
-    })
-    const outConv = resConv.output
-
-    t.comment('Pass B: forced 1x1 mul_mat path')
-    forceOnly('OCR_GGML_CONV1X1_MULMAT')
-    const resMul = await runOcrComparison(t, {
-      ...baseCfg,
-      perfLabel: '[EasyOCR basic_test 1x1-mulmat]',
-      assertResult (output) { assertCorrect(output, 'mul_mat') }
-    })
-    const outMul = resMul.output
-
-    // Equivalence: the mul_mat rewrite must match conv_2d region-for-region.
-    t.is(outMul.length, outConv.length, 'mul_mat and conv_2d produce the same number of regions')
-    const n = Math.min(outMul.length, outConv.length)
-    for (let i = 0; i < n; i++) {
-      t.is(outMul[i][1], outConv[i][1], `region ${i}: mul_mat text matches conv_2d ("${outConv[i][1]}")`)
+    function assertCorrect(output, tag) {
+      t.ok(Array.isArray(output), tag + ': output should be an array')
+      t.is(output.length, 3, tag + `: output length should be 3, got ${output.length}`)
+      const texts = output.map((o) => o[1])
+      t.ok(texts.includes('tilted'), tag + ': should contain "tilted"')
+      t.ok(texts.includes('normal'), tag + ': should contain "normal"')
+      t.ok(texts.includes('vertical'), tag + ': should contain "vertical"')
     }
 
-    t.pass('1x1-conv mul_mat path matches conv_2d output')
-  } finally {
-    restoreEnv()
+    try {
+      const detectorPath = await ensureModelPath('detector_craft')
+      const recognizerPath = await ensureModelPath('recognizer_latin')
+      const imagePath = getImagePath('/test/images/basic_test.bmp')
+      const baseCfg = {
+        params: { pathDetector: detectorPath, pathRecognizer: recognizerPath, langList: ['en'] },
+        imagePath,
+        runOptions: { paragraph: false },
+        perfOpts: { skipReport: true }
+      }
+
+      t.comment('Pass A: forced conv_2d path; image: ' + imagePath + ', platform: ' + platform)
+      forceOnly('OCR_GGML_CONV1X1_CONV2D')
+      const resConv = await runOcrComparison(t, {
+        ...baseCfg,
+        perfLabel: '[EasyOCR basic_test conv2d]',
+        assertResult(output) {
+          assertCorrect(output, 'conv_2d')
+        }
+      })
+      const outConv = resConv.output
+
+      t.comment('Pass B: forced 1x1 mul_mat path')
+      forceOnly('OCR_GGML_CONV1X1_MULMAT')
+      const resMul = await runOcrComparison(t, {
+        ...baseCfg,
+        perfLabel: '[EasyOCR basic_test 1x1-mulmat]',
+        assertResult(output) {
+          assertCorrect(output, 'mul_mat')
+        }
+      })
+      const outMul = resMul.output
+
+      // Equivalence: the mul_mat rewrite must match conv_2d region-for-region.
+      t.is(outMul.length, outConv.length, 'mul_mat and conv_2d produce the same number of regions')
+      const n = Math.min(outMul.length, outConv.length)
+      for (let i = 0; i < n; i++) {
+        t.is(
+          outMul[i][1],
+          outConv[i][1],
+          `region ${i}: mul_mat text matches conv_2d ("${outConv[i][1]}")`
+        )
+      }
+
+      t.pass('1x1-conv mul_mat path matches conv_2d output')
+    } finally {
+      restoreEnv()
+    }
   }
-})
+)

@@ -85,7 +85,7 @@ target_include_directories(
 target_link_libraries(
   ${embed-llamacpp}
   PRIVATE
-    llama::llama llama::common
+    llama::llama llama::llama-common
 )
 
 target_compile_definitions(${embed-llamacpp} PUBLIC JS_LOGGER)

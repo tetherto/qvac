@@ -81,13 +81,15 @@ public:
   [[nodiscard]] bool hasOpenSpan() const noexcept {
     return thinkSpan_.has_value();
   }
+  [[nodiscard]] bool hasCapturedCloseSpan() const noexcept {
+    return thinkSpan_.has_value() && thinkSpan_->second >= 0;
+  }
   // Test accessor: true when a span has been opened AND its close
   // position has been committed (i.e. the `requestCloseCapture()` →
-  // `onCloseCommitted()` handshake completed). Unit-test seam for the
-  // close-capture contract; production callers should not key off the
-  // close-position directly — `compact()` is the only consumer.
+  // `onCloseCommitted()` handshake completed). Kept for compatibility
+  // with unit tests; production code should use `hasCapturedCloseSpan()`.
   [[nodiscard]] bool hasCapturedCloseSpanForTesting() const noexcept {
-    return thinkSpan_.has_value() && thinkSpan_->second >= 0;
+    return hasCapturedCloseSpan();
   }
   void clearSpan() noexcept {
     thinkSpan_.reset();
