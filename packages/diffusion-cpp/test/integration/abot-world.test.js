@@ -21,7 +21,7 @@ const proc = require('bare-process')
 const test = require('brittle')
 
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
-const { detectPlatform, setupJsLogger } = require('./utils')
+const { setupJsLogger } = require('./utils')
 
 const noGpu = String(proc.env.NO_GPU || '').toLowerCase() === 'true'
 const modelsDir = proc.env.ABOT_MODELS_DIR || ''
