@@ -2,7 +2,14 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const { isMobile, getImagePath, ensureModelPath, safeUnload, findOpenCLBackendLib, PREBUILDS_DIR } = require('./utils')
+const {
+  isMobile,
+  getImagePath,
+  ensureModelPath,
+  safeUnload,
+  findOpenCLBackendLib,
+  PREBUILDS_DIR
+} = require('./utils')
 
 // QVAC-19798: opt-in OpenCL GGML backend. Requesting `backendDevice: 'opencl'`
 // must EITHER run inference on an OpenCL device, OR report an explicit CPU
@@ -28,83 +35,87 @@ const openclBackendLib = findOpenCLBackendLib(PREBUILDS_DIR)
 // host that did not ship an OpenCL backend lib.
 const shouldSkip = isMobile || !openclBackendLib
 
-test('backendDevice opencl: selects OpenCL or reports an explicit CPU fallback', { timeout: TEST_TIMEOUT, skip: shouldSkip }, async function (t) {
-  const detectorPath = await ensureModelPath('detector_craft')
-  const recognizerPath = await ensureModelPath('recognizer_latin')
-  const imagePath = getImagePath('/test/images/basic_test.bmp')
+test(
+  'backendDevice opencl: selects OpenCL or reports an explicit CPU fallback',
+  { timeout: TEST_TIMEOUT, skip: shouldSkip },
+  async function (t) {
+    const detectorPath = await ensureModelPath('detector_craft')
+    const recognizerPath = await ensureModelPath('recognizer_latin')
+    const imagePath = getImagePath('/test/images/basic_test.bmp')
 
-  t.comment('OpenCL backend lib: ' + openclBackendLib)
+    t.comment('OpenCL backend lib: ' + openclBackendLib)
 
-  const ocrGgml = new OcrGgml({
-    params: {
-      pathDetector: detectorPath,
-      pathRecognizer: recognizerPath,
-      langList: ['en'],
-      backendDevice: 'opencl'
-    },
-    opts: { stats: true }
-  })
-
-  await ocrGgml.load()
-  t.pass('loaded with backendDevice: opencl')
-
-  const backendInfo = ocrGgml.getBackendInfo()
-  t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
-  t.is(backendInfo.requested, 'opencl', 'requested device recorded as opencl')
-  t.is(typeof backendInfo.deviceIndex, 'number', 'deviceIndex is a number')
-  t.is(typeof backendInfo.backendDescription, 'string', 'backendDescription is a string')
-  t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
-
-  const openclSelected =
-    backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
-
-  if (openclSelected) {
-    t.is(backendInfo.fallbackReason, '', 'no fallback reason when OpenCL is selected')
-    t.ok(/opencl/i.test(backendInfo.backendName), 'selected backend name mentions OpenCL')
-    // A selected GPU device reports its ggml device index (>= 0).
-    t.ok(backendInfo.deviceIndex >= 0, 'selected GPU reports a non-negative ggml deviceIndex')
-  } else {
-    // No OpenCL device available: the fallback to CPU MUST be reported.
-    t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
-    t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
-    t.is(backendInfo.deviceIndex, -1, 'CPU fallback reports deviceIndex -1')
-    t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
-  }
-
-  try {
-    const response = await ocrGgml.run({
-      path: imagePath,
-      options: { paragraph: false }
+    const ocrGgml = new OcrGgml({
+      params: {
+        pathDetector: detectorPath,
+        pathRecognizer: recognizerPath,
+        langList: ['en'],
+        backendDevice: 'opencl'
+      },
+      opts: { stats: true }
     })
 
-    let outputTexts = []
-    await response
-      .onUpdate(output => {
-        t.ok(Array.isArray(output), 'output should be an array')
-        outputTexts = output.map(o => o[1])
+    await ocrGgml.load()
+    t.pass('loaded with backendDevice: opencl')
+
+    const backendInfo = ocrGgml.getBackendInfo()
+    t.ok(backendInfo, 'getBackendInfo() returns backend info after load')
+    t.is(backendInfo.requested, 'opencl', 'requested device recorded as opencl')
+    t.is(typeof backendInfo.deviceIndex, 'number', 'deviceIndex is a number')
+    t.is(typeof backendInfo.backendDescription, 'string', 'backendDescription is a string')
+    t.comment('Resolved backend info: ' + JSON.stringify(backendInfo))
+
+    const openclSelected =
+      backendInfo.backendDevice === 'GPU' || backendInfo.backendDevice === 'IGPU'
+
+    if (openclSelected) {
+      t.is(backendInfo.fallbackReason, '', 'no fallback reason when OpenCL is selected')
+      t.ok(/opencl/i.test(backendInfo.backendName), 'selected backend name mentions OpenCL')
+      // A selected GPU device reports its ggml device index (>= 0).
+      t.ok(backendInfo.deviceIndex >= 0, 'selected GPU reports a non-negative ggml deviceIndex')
+    } else {
+      // No OpenCL device available: the fallback to CPU MUST be reported.
+      t.is(backendInfo.backendDevice, 'CPU', 'fell back to the CPU device')
+      t.ok(backendInfo.fallbackReason.length > 0, 'explicit CPU fallback reason reported')
+      t.is(backendInfo.deviceIndex, -1, 'CPU fallback reports deviceIndex -1')
+      t.comment('CPU fallback reason: ' + backendInfo.fallbackReason)
+    }
+
+    try {
+      const response = await ocrGgml.run({
+        path: imagePath,
+        options: { paragraph: false }
       })
-      .onError(error => {
-        t.fail('unexpected error: ' + JSON.stringify(error))
-      })
-      .await()
 
-    const stats = response.stats || {}
-    t.comment('Native addon stats: ' + JSON.stringify(stats))
+      let outputTexts = []
+      await response
+        .onUpdate((output) => {
+          t.ok(Array.isArray(output), 'output should be an array')
+          outputTexts = output.map((o) => o[1])
+        })
+        .onError((error) => {
+          t.fail('unexpected error: ' + JSON.stringify(error))
+        })
+        .await()
 
-    // The numeric `backendIsGpu` stat must agree with the resolved device.
-    t.is(
-      stats.backendIsGpu,
-      openclSelected ? 1 : 0,
-      'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
-    )
+      const stats = response.stats || {}
+      t.comment('Native addon stats: ' + JSON.stringify(stats))
 
-    // Inference must succeed regardless of which backend was used.
-    t.ok(outputTexts.length > 0, 'inference produced text regions')
-    t.ok(outputTexts.includes('normal'), 'recognized expected text "normal"')
+      // The numeric `backendIsGpu` stat must agree with the resolved device.
+      t.is(
+        stats.backendIsGpu,
+        openclSelected ? 1 : 0,
+        'backendIsGpu stat matches the resolved backend (' + backendInfo.backendDevice + ')'
+      )
 
-    t.pass('backendDevice opencl path exercised (' + backendInfo.backendDevice + ')')
-  } finally {
-    await safeUnload(ocrGgml)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+      // Inference must succeed regardless of which backend was used.
+      t.ok(outputTexts.length > 0, 'inference produced text regions')
+      t.ok(outputTexts.includes('normal'), 'recognized expected text "normal"')
+
+      t.pass('backendDevice opencl path exercised (' + backendInfo.backendDevice + ')')
+    } finally {
+      await safeUnload(ocrGgml)
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
   }
-})
+)

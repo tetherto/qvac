@@ -197,8 +197,10 @@ public:
   void onSequenceEnd(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void onGenerationFinished(
-      const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] bool onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback,
+      GenerationStopReason terminalReason =
+          GenerationStopReason::None) override;
 
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
@@ -284,6 +286,9 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
+  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool rollbackCurrentRequest(
+      const std::function<void(const std::string&)>& outputCallback);
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
@@ -339,6 +344,7 @@ private:
   llama_pos preRequestFirstMsgTokens_ = 0;
   bool pendingBatchFirstMsg_ = false;
   bool generationStarted_ = false;
+  GenerationStopReason generationStopReason_ = GenerationStopReason::None;
   std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;

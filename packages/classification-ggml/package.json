@@ -12,10 +12,11 @@
     "mobile:copy-prebuilds": "node ./scripts/copy-mobile-test-assets.js",
     "lint": "npm run lint:js && npm run lint:ts",
     "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",
-    "lint:js": "standard --ignore \"addon/**\"",
-    "lint:js:fix": "standard --ignore \"addon/**\" --fix",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:js:fix": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run test:types && npm run test:integration",
@@ -31,17 +32,6 @@
     "test:dts": "npm run test:types",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
-  },
-  "standard": {
-    "ignore": [
-      "index.js",
-      "addon.js",
-      "addon/**",
-      "third-party/**",
-      "prebuilds/**",
-      "build/**",
-      "test/mobile/integration.auto.cjs"
-    ]
   },
   "files": [
     "binding.js",
@@ -76,7 +66,9 @@
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
-    "standard": "^17.0.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.63.0"
   },
