@@ -23,9 +23,11 @@ inline unsigned parseUnsignedInRange(
   const char* first = raw.data();
   const char* last = raw.data() + raw.size();
   auto [ptr, ec] = std::from_chars(first, last, value);
-  if (ec != std::errc{} || ptr != last) return fail();
-  if (value < min || value > max) return fail();
+  if (ec != std::errc{} || ptr != last)
+    return fail();
+  if (value < min || value > max)
+    return fail();
   return value;
 }
 
-}  // namespace qvac_lib_inference_addon_llama
+} // namespace qvac_lib_inference_addon_llama

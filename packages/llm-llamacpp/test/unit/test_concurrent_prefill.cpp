@@ -73,8 +73,8 @@ protected:
   /// ~330 tokens fits the 512-token per-seq window (ctx 2048 / parallel 4)
   /// while the 256-token batch capacity forces at least two steps per
   /// prefill, so two jobs launched together reliably overlap.
-  static LlamaModel::Prompt makeLongPrefillPrompt(
-      const std::string& cacheKey, const std::string& topic) {
+  static LlamaModel::Prompt
+  makeLongPrefillPrompt(const std::string& cacheKey, const std::string& topic) {
     std::string text = "Remember every detail of this " + topic + " brief. ";
     for (int i = 0; i < 30; ++i) {
       text += "Fact " + std::to_string(i) + " about the " + topic +
@@ -87,8 +87,8 @@ protected:
     return prompt;
   }
 
-  static std::string runJob(
-      LlamaModel& model, const LlamaModel::Prompt& prompt, JobId id) {
+  static std::string
+  runJob(LlamaModel& model, const LlamaModel::Prompt& prompt, JobId id) {
     std::any out = model.process(std::any(prompt), id);
     return std::any_cast<std::string>(out);
   }
@@ -141,8 +141,7 @@ TEST_F(ConcurrentPrefillTest, RejectsLiveOnlyPrefillJobOnParallelModel) {
 
   auto liveOnly = makePrompt("Warm the context with this text.");
   liveOnly.prefill = true;
-  EXPECT_THROW(
-      runJob(*model, liveOnly, JobId{11}), qvac_errors::StatusError);
+  EXPECT_THROW(runJob(*model, liveOnly, JobId{11}), qvac_errors::StatusError);
 
   auto keylessSave = makePrompt("Warm the context with this text too.");
   keylessSave.prefill = true;
@@ -161,12 +160,10 @@ TEST_F(ConcurrentPrefillTest, RejectsDuplicateInFlightCacheKey) {
   const auto promptA = makeLongPrefillPrompt(cachePath.string(), "storm");
   const auto promptB = makeLongPrefillPrompt(cachePath.string(), "harbor");
 
-  auto futureA = std::async(std::launch::async, [&] {
-    return runJob(*model, promptA, JobId{21});
-  });
-  auto futureB = std::async(std::launch::async, [&] {
-    return runJob(*model, promptB, JobId{22});
-  });
+  auto futureA = std::async(
+      std::launch::async, [&] { return runJob(*model, promptA, JobId{21}); });
+  auto futureB = std::async(
+      std::launch::async, [&] { return runJob(*model, promptB, JobId{22}); });
 
   int rejected = 0;
   for (auto* future : {&futureA, &futureB}) {
@@ -214,12 +211,10 @@ TEST_F(ConcurrentPrefillTest, TwoAsyncPrefillJobsOverlapOnScheduler) {
   const auto promptA = makeLongPrefillPrompt(cachePathA.string(), "glacier");
   const auto promptB = makeLongPrefillPrompt(cachePathB.string(), "volcano");
 
-  auto futureA = std::async(std::launch::async, [&] {
-    return runJob(*model, promptA, JobId{41});
-  });
-  auto futureB = std::async(std::launch::async, [&] {
-    return runJob(*model, promptB, JobId{42});
-  });
+  auto futureA = std::async(
+      std::launch::async, [&] { return runJob(*model, promptA, JobId{41}); });
+  auto futureB = std::async(
+      std::launch::async, [&] { return runJob(*model, promptB, JobId{42}); });
   EXPECT_TRUE(futureA.get().empty());
   EXPECT_TRUE(futureB.get().empty());
   EXPECT_TRUE(fs::exists(cachePathA));

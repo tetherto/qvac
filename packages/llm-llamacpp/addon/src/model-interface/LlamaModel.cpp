@@ -1470,14 +1470,14 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     sr.streams.onAdmitted = notifySeq;
     sr.streams.onToken = [userCb = prompt.outputCallback,
                           notifySeq](uint32_t seqId, const std::string& piece) {
-      notifySeq(seqId, batching::kUnknownAdmissionId);
+      notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
       if (userCb) {
         userCb(piece);
       }
     };
     sr.streams.onDone =
         [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
-          notifySeq(seqId, batching::kUnknownAdmissionId);
+          notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
           if (onSeqDone) {
             onSeqDone(requestIndex, seqId);
           }

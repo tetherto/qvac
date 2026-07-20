@@ -269,9 +269,8 @@ void ContinuousBatchScheduler::workerLoop() {
   std::unique_lock lock(mutex_);
   while (true) {
     workCv_.wait(lock, [this] {
-      return stopping_ || cancelRequested_.load() ||
-             hasPendingSlotCancels() || clearRequested_ ||
-             pending_.size_approx() > 0 || hasWorkLocked();
+      return stopping_ || cancelRequested_.load() || hasPendingSlotCancels() ||
+             clearRequested_ || pending_.size_approx() > 0 || hasWorkLocked();
     });
     if (stopping_) {
       break;

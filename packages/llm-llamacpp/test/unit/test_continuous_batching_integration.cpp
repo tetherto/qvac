@@ -1417,7 +1417,8 @@ TEST_F(
 /// product that survives the slot teardown: the lane's KV is wiped and no
 /// cache file is written. The same policy that rejects it on the single
 /// tagged path must reject it per batch item, before anything is scheduled.
-TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -1798,18 +1799,16 @@ TEST_F(
   const auto waitForFirstPiece = [](const std::atomic<size_t>& pieces) {
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(120);
-    while (pieces.load() == 0 &&
-           std::chrono::steady_clock::now() < deadline) {
+    while (pieces.load() == 0 && std::chrono::steady_clock::now() < deadline) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     return pieces.load() > 0;
   };
   const auto runAlone = [&model](LlamaModel::Prompt&& prompt) {
-    return std::async(
-        std::launch::async, [&model, prompt = std::move(prompt)] {
-          std::vector<LlamaModel::Prompt> prompts{prompt};
-          return model->processPromptBatch(prompts);
-        });
+    return std::async(std::launch::async, [&model, prompt = std::move(prompt)] {
+      std::vector<LlamaModel::Prompt> prompts{prompt};
+      return model->processPromptBatch(prompts);
+    });
   };
 
   // Job A: admitted alone, so it owns seqId 0. The canceller captures A's

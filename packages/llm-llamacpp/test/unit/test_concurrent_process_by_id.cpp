@@ -263,8 +263,7 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
     EXPECT_TRUE(present) << "terminal snapshot lost model-level key: " << key;
   }
 
-  const llama_perf_context_data after =
-      llama_perf_context(model->getContext());
+  const llama_perf_context_data after = llama_perf_context(model->getContext());
   EXPECT_EQ(after.n_eval, before.n_eval)
       << "consumeJobStats reset the live llama perf counters; with a peer "
          "mid-decode on the shared context that reset is an unsynchronized "
