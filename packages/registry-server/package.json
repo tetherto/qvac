@@ -49,6 +49,8 @@
     "test:integration": "brittle-node tests/integration/*.test.js",
     "test:gguf": "node scripts/test-gguf-extraction.js",
     "test": "npm run test:unit && npm run test:integration",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
     "lint": "standard",
     "lint:fix": "standard --fix"
   },
@@ -85,6 +87,8 @@
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
     "hyperdb": "^6.7.0",
+    "prettier": "^3.9.6",
+    "prettier-config-holepunch": "^2.0.0",
     "standard": "^17.1.0"
   }
 }
