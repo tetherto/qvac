@@ -4,6 +4,7 @@
 #include <optional>
 #include <vector>
 
+#include <llama-cpp.h>
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 
@@ -14,6 +15,7 @@
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
+#include "common/speculative.h"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Positional span paired with the KV-cell count it occupies. The two diverge
@@ -295,6 +297,59 @@ private:
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
+  // Hooks for the shared MTP loop in `LlmContext`.
+  void specBeginGeneration(
+      const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] llama_pos specPos() const override { return current_.pos; }
+  void specSetPos(llama_pos pos) override {
+    // Media never reaches the speculative path, so one KV cell per position.
+    current_.pos = pos;
+    current_.cacheTokens = pos;
+  }
+  [[nodiscard]] llama_pos specCtxCeiling() const override {
+    return ctxCeiling();
+  }
+  void specApplyContextDiscard() override { applyContextDiscard(); }
+  llama_token specSampleFirstToken(bool& sampled) override {
+    sampled = true;
+    return specSampleAndAccept(-1);
+  }
+  llama_token specSampleAndAccept(int logitIdx) override {
+    const llama_token tok =
+        common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    common_sampler_accept(smpl_.get(), tok, true);
+    return tok;
+  }
+  SequenceStepResult specProcessToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch) override;
+  bool specShouldRecoverReasoning(llama_token tok) override {
+    return llama_vocab_is_eog(modelCtx_.vocab, tok) &&
+           isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&
+           reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL;
+  }
+  void specRecoverReasoning(
+      llama_token tok, LlamaBatch& batch,
+      const std::function<void(const std::string&)>& outputCallback) override;
+  GenerateResponseResult specFinish(
+      const std::function<void(const std::string&)>& outputCallback,
+      bool ok) override {
+    if (generationStopReason_ == GenerationStopReason::None && ok) {
+      generationStopReason_ = GenerationStopReason::PredictionLimit;
+    }
+    const bool rollbackOk =
+        onGenerationFinished(outputCallback, generationStopReason_);
+    return {.ok = ok, .rollbackOk = rollbackOk};
+  }
+  GenerateResponseResult specCancel(
+      const std::function<void(const std::string&)>& outputCallback) override {
+    return {
+        .ok = true,
+        .cancelled = true,
+        .rollbackOk = cancelGenerationCleanup(outputCallback)};
+  }
+
   // Reasoning-block KV-cache compaction helpers. Single-block policy:
   // at most one `<think>...</think>` block is tracked per inference.
   // `setOpenThinkSpan` is a no-op once a span has been captured.
@@ -433,6 +488,4 @@ private:
   // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
   // Reset at the start of each inference and on `resetState`.
   std::optional<llama_perf_context_data> userVisiblePerf_;
-
-  std::atomic<bool> stopGeneration_ = false;
 };
