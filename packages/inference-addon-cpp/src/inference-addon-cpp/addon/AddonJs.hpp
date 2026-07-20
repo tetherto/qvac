@@ -26,6 +26,13 @@ class AddonJs {
     if (!id.has_value()) {
       return js::Boolean::create(env_, false);
     }
+    if (*id == kNoJobId) {
+      // Untagged single-job path: the sentinel is useless to JS (events
+      // carry no correlatable id, cancel is the no-arg form) and Number 0
+      // is falsy, which would read as a rejection to every consumer gating
+      // on `if (!accepted)`. Keep the legacy truthy contract instead.
+      return js::Boolean::create(env_, true);
+    }
     return js::Number::create(env_, *id);
   }
 
@@ -45,16 +52,19 @@ public:
 
   ~AddonJs() = default;
 
-  /// @returns JS number: the job id the scheduler assigned (0 on the untagged
-  /// single-job path). JS Boolean false when the job was rejected, e.g.
-  /// because a job is already set or being processed.
+  /// @returns JS number >= 1: the job id the scheduler assigned (tagged,
+  /// multi-job path). JS Boolean true when the job was accepted on the
+  /// untagged single-job path (its events carry no correlatable id). JS
+  /// Boolean false when the job was rejected, e.g. because a job is already
+  /// set or being processed. Never falsy on success.
   js_value_t* runJob(std::any input) {
     return admissionToJs(addonCpp->runJob(std::move(input)));
   }
 
-  /// @returns JS number (the assigned job id), or JS Boolean false when the
-  /// exclusive job (e.g. finetune) is refused because inference jobs are
-  /// queued or in flight.
+  /// @returns JS number >= 1 (the assigned job id) or JS Boolean true on the
+  /// untagged single-job path, or JS Boolean false when the exclusive job
+  /// (e.g. finetune) is refused because inference jobs are queued or in
+  /// flight.
   js_value_t* runExclusiveJob(std::any input) {
     return admissionToJs(addonCpp->runExclusiveJob(std::move(input)));
   }
