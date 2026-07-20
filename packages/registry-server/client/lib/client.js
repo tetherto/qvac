@@ -412,8 +412,7 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      // Free the partially-downloaded blocks so a cancelled/failed download does
-      // not leak them into the corestore (success paths already clear them).
+      // Stop replication before clearing to prevent blocks from being refetched.
       if (rangeDownload) rangeDownload.destroy()
       if (core && blockStart != null) {
         await this._clearBlobBlocks(core, blockStart, blockEnd)
@@ -556,8 +555,7 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      // Free the partially-downloaded blocks so a cancelled/failed download does
-      // not leak them into the corestore (success paths already clear them).
+      // Stop replication before clearing to prevent blocks from being refetched.
       if (rangeDownload) rangeDownload.destroy()
       if (core && blockStart != null) {
         await this._clearBlobBlocks(core, blockStart, blockEnd)
