@@ -7,9 +7,12 @@ const { QvacErrorRAG, ERR_CODES } = require('../../errors')
  * Provides a common interface for different LLM types (QVAC-based, HTTP-based, etc.).
  */
 class BaseLlmAdapter {
-  constructor () {
+  constructor() {
     if (new.target === BaseLlmAdapter) {
-      throw new QvacErrorRAG({ code: ERR_CODES.ABSTRACT_CLASS, adds: 'BaseLlmAdapter cannot be instantiated directly' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.ABSTRACT_CLASS,
+        adds: 'BaseLlmAdapter cannot be instantiated directly'
+      })
     }
   }
 
@@ -20,8 +23,12 @@ class BaseLlmAdapter {
    * @param {InferOpts} [opts] - Additional options for the inference
    * @returns {Promise<any>} The generated response (format depends on LLM adapter implementation)
    */
-  async run (query, searchResults, opts = {}) {
-    throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED, adds: 'run method must be implemented by concrete adapter classes' })
+  // lunte-disable-next-line no-unused-vars,require-await
+  async run(query, searchResults, opts = {}) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.NOT_IMPLEMENTED,
+      adds: 'run method must be implemented by concrete adapter classes'
+    })
   }
 }
 

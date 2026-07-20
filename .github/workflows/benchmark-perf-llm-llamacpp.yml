@@ -166,6 +166,8 @@ jobs:
       pull-requests: write
       id-token: write
     uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+    # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
+    # release environment + label-gate keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -313,6 +315,8 @@ jobs:
           - cache: pq4_0
             groups: '[{"name":"BenchmarkPerf08bQ40Pq40","grep":"runBenchmarkPerf08bQ40Pq40Test"},{"name":"BenchmarkPerf08bQ41Pq40","grep":"runBenchmarkPerf08bQ41Pq40Test"},{"name":"BenchmarkPerf08bQ4KMPq40","grep":"runBenchmarkPerf08bQ4KMPq40Test"},{"name":"BenchmarkPerf08bQ6KPq40","grep":"runBenchmarkPerf08bQ6KPq40Test"},{"name":"BenchmarkPerf08bQ80Pq40","grep":"runBenchmarkPerf08bQ80Pq40Test"},{"name":"BenchmarkPerf2bQ40Pq40","grep":"runBenchmarkPerf2bQ40Pq40Test"},{"name":"BenchmarkPerf2bQ41Pq40","grep":"runBenchmarkPerf2bQ41Pq40Test"},{"name":"BenchmarkPerf2bQ4KMPq40","grep":"runBenchmarkPerf2bQ4KMPq40Test"},{"name":"BenchmarkPerf2bQ6KPq40","grep":"runBenchmarkPerf2bQ6KPq40Test"},{"name":"BenchmarkPerf2bQ80Pq40","grep":"runBenchmarkPerf2bQ80Pq40Test"}]'
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
+    # the release environment + label-gate keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}

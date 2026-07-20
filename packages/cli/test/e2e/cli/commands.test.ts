@@ -6,7 +6,8 @@ import type { TestContext } from 'node:test'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
-async function tmpProject (t: TestContext): Promise<string> {
+// lunte-disable-next-line require-await
+async function tmpProject(t: TestContext): Promise<string> {
   return tempDir(t, 'qvac-cli-cmd-')
 }
 
@@ -20,13 +21,17 @@ describe('cli: version & help', () => {
   it('--help lists commands', async () => {
     const r = await runCli(['--help'])
     assert.equal(r.code, 0)
-    for (const cmd of ['bundle', 'verify', 'serve']) assert.ok(r.output.includes(cmd), `missing ${cmd}`)
+    for (const cmd of ['bundle', 'verify', 'serve']) {
+      assert.ok(r.output.includes(cmd), `missing ${cmd}`)
+    }
   })
 
   it('serve openai --help shows options', async () => {
     const r = await runCli(['serve', 'openai', '--help'])
     assert.equal(r.code, 0)
-    for (const s of ['--port', '--api-key', '--cors', 'OpenAI-compatible']) assert.ok(r.output.includes(s), `missing ${s}`)
+    for (const s of ['--port', '--api-key', '--cors', 'OpenAI-compatible']) {
+      assert.ok(r.output.includes(s), `missing ${s}`)
+    }
   })
 
   it('bundle sdk --help shows options', async () => {
@@ -40,7 +45,9 @@ describe('cli: verify deps', () => {
   it('--help shows options', async () => {
     const r = await runCli(['verify', 'deps', '--help'])
     assert.equal(r.code, 0)
-    for (const s of ['--base', '--head', '--lockfile']) assert.ok(r.output.includes(s), `missing ${s}`)
+    for (const s of ['--base', '--head', '--lockfile']) {
+      assert.ok(r.output.includes(s), `missing ${s}`)
+    }
   })
 
   it('requires base and head', async () => {
@@ -50,7 +57,16 @@ describe('cli: verify deps', () => {
   })
 
   it('rejects unsupported lockfiles', async () => {
-    const r = await runCli(['verify', 'deps', '--base', 'HEAD', '--head', 'HEAD', '--lockfile', 'bun.lock'])
+    const r = await runCli([
+      'verify',
+      'deps',
+      '--base',
+      'HEAD',
+      '--head',
+      'HEAD',
+      '--lockfile',
+      'bun.lock'
+    ])
     assert.equal(r.code, 2)
     assert.ok(r.output.includes('Unsupported lockfile') && r.output.includes('package-lock.json'))
   })
@@ -60,7 +76,9 @@ describe('cli: verify bundle', () => {
   it('--help shows options', async () => {
     const r = await runCli(['verify', 'bundle', '--help'])
     assert.equal(r.code, 0)
-    for (const s of ['--addons-source', '--host', '--bare-runtime-version', '--config']) assert.ok(r.output.includes(s), `missing ${s}`)
+    for (const s of ['--addons-source', '--host', '--bare-runtime-version', '--config']) {
+      assert.ok(r.output.includes(s), `missing ${s}`)
+    }
   })
 
   it('requires --addons-source', async () => {
@@ -70,7 +88,14 @@ describe('cli: verify bundle', () => {
   })
 
   it('rejects missing --addons-source path', async () => {
-    const r = await runCli(['verify', 'bundle', '--addons-source', '/nonexistent/path', '--host', 'android-arm64'])
+    const r = await runCli([
+      'verify',
+      'bundle',
+      '--addons-source',
+      '/nonexistent/path',
+      '--host',
+      'android-arm64'
+    ])
     assert.equal(r.code, 1)
     assert.ok(r.output.includes('not a readable file or directory'))
   })
@@ -86,7 +111,14 @@ describe('cli: verify bundle', () => {
   it('passes on empty node_modules', async (t) => {
     const dir = await tmpProject(t)
     await mkdir(join(dir, 'node_modules'))
-    const r = await runCli(['verify', 'bundle', '--addons-source', join(dir, 'node_modules'), '--host', 'darwin-arm64'])
+    const r = await runCli([
+      'verify',
+      'bundle',
+      '--addons-source',
+      join(dir, 'node_modules'),
+      '--host',
+      'darwin-arm64'
+    ])
     assert.equal(r.code, 0)
     assert.ok(r.output.includes('verification passed'))
   })
@@ -94,16 +126,36 @@ describe('cli: verify bundle', () => {
   it('rejects malformed --bare-runtime-version', async (t) => {
     const dir = await tmpProject(t)
     await mkdir(join(dir, 'node_modules'))
-    const r = await runCli(['verify', 'bundle', '--addons-source', join(dir, 'node_modules'), '--host', 'darwin-arm64', '--bare-runtime-version', 'not-a-version'])
+    const r = await runCli([
+      'verify',
+      'bundle',
+      '--addons-source',
+      join(dir, 'node_modules'),
+      '--host',
+      'darwin-arm64',
+      '--bare-runtime-version',
+      'not-a-version'
+    ])
     assert.equal(r.code, 1)
-    assert.ok(r.output.includes('Invalid Bare runtime version') && r.output.includes('not-a-version'))
+    assert.ok(
+      r.output.includes('Invalid Bare runtime version') && r.output.includes('not-a-version')
+    )
   })
 
   it('rejects malformed bareRuntimeVersion in qvac.config.json', async (t) => {
     const dir = await tmpProject(t)
     await mkdir(join(dir, 'node_modules'))
     await writeFile(join(dir, 'qvac.config.json'), '{"bareRuntimeVersion": "garbage"}')
-    const r = await runCli(['verify', 'bundle', '--addons-source', join(dir, 'node_modules'), '--host', 'darwin-arm64', '--project-root', dir])
+    const r = await runCli([
+      'verify',
+      'bundle',
+      '--addons-source',
+      join(dir, 'node_modules'),
+      '--host',
+      'darwin-arm64',
+      '--project-root',
+      dir
+    ])
     assert.equal(r.code, 1)
     assert.ok(r.output.includes('Invalid Bare runtime version') && r.output.includes('garbage'))
   })
@@ -119,7 +171,7 @@ describe('cli: doctor', () => {
   it('--json emits valid JSON with ok boolean', async () => {
     const r = await runCli(['doctor', '--json'])
     assert.ok(r.code === 0 || r.code === 1, `unexpected exit ${r.code}`)
-    const doc = JSON.parse(r.stdout) as { ok: unknown, sections: unknown[] }
+    const doc = JSON.parse(r.stdout) as { ok: unknown; sections: unknown[] }
     assert.equal(typeof doc.ok, 'boolean')
     assert.ok(Array.isArray(doc.sections) && doc.sections.length >= 1)
   })

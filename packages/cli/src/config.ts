@@ -12,7 +12,7 @@ export const CONFIG_CANDIDATES = [
   'qvac.config.ts'
 ]
 
-export function findConfigFile (projectRoot: string, explicitPath?: string): string | null {
+export function findConfigFile(projectRoot: string, explicitPath?: string): string | null {
   if (explicitPath) {
     const absPath = path.resolve(projectRoot, explicitPath)
     if (fs.existsSync(absPath)) return absPath
@@ -27,7 +27,7 @@ export function findConfigFile (projectRoot: string, explicitPath?: string): str
   return null
 }
 
-export async function loadConfig (configPath: string): Promise<unknown> {
+export async function loadConfig(configPath: string): Promise<unknown> {
   if (!configPath) {
     throw new ConfigNotFoundError(null, CONFIG_CANDIDATES)
   }
@@ -42,20 +42,20 @@ export async function loadConfig (configPath: string): Promise<unknown> {
 
     if (ext === '.js' || ext === '.mjs') {
       const fileUrl = `file://${configPath}`
-      const mod = await import(fileUrl) as { default?: unknown }
+      const mod = (await import(fileUrl)) as { default?: unknown }
       return mod.default ?? mod
     }
 
     if (ext === '.ts') {
       const tsxApiPath = require.resolve('tsx/esm/api')
-      const { tsImport } = await import(tsxApiPath) as { tsImport: (path: string, base: string) => Promise<{ default?: unknown }> }
+      const { tsImport } = (await import(tsxApiPath)) as {
+        tsImport: (path: string, base: string) => Promise<{ default?: unknown }>
+      }
       const mod = await tsImport(configPath, import.meta.url)
       return mod.default ?? mod
     }
 
-    throw new Error(
-      `Unsupported config format: ${ext}. Use .json, .js, .mjs, or .ts`
-    )
+    throw new Error(`Unsupported config format: ${ext}. Use .json, .js, .mjs, or .ts`)
   } catch (error) {
     if (error instanceof ConfigNotFoundError) throw error
     throw new ConfigLoadError(configPath, error)

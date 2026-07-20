@@ -62,6 +62,21 @@ inputs:
     description: |
       Override per-test Mocha timeout (minutes) in the generated Android
       app.test.js. Leave empty to keep the framework default (20 min).
+      Android-only (kept for backward compatibility). For a platform-neutral
+      override that also covers iOS, use `per-test-timeout-minutes` below.
+    required: false
+    default: ""
+
+  # Platform-neutral counterpart of android-per-test-timeout-minutes: applies
+  # the same per-test ceiling rewrite to BOTH Android and iOS (the generated
+  # app.test.js is identical across platforms). When set, it takes precedence
+  # over android-per-test-timeout-minutes. Empty = no-op (existing callers and
+  # platforms are unaffected). Added for the VLM benchmark, whose full-preset
+  # iOS leg legitimately needs >20 min.
+  per-test-timeout-minutes:
+    description: |
+      Override per-test Mocha timeout (minutes) in the generated
+      app.test.js on ALL platforms (Android + iOS). Empty = no-op.
     required: false
     default: ""
 
@@ -158,16 +173,18 @@ runs:
         echo "Test app built successfully"
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
-    # per-test Mocha ceiling. Runs ONLY on Android with the input set;
-    # no-op otherwise. Must sit between "Build test app with addon"
-    # (which generates the file) and `upload-to-devicefarm` (which
-    # packs it into the Device Farm test bundle).
-    - name: Extend Android per-test mocha timeout
-      if: inputs.platform == 'Android' && inputs.android-per-test-timeout-minutes != ''
+    # per-test Mocha ceiling. Two ways to opt in:
+    #   * per-test-timeout-minutes      → applies on ALL platforms (Android + iOS)
+    #   * android-per-test-timeout-minutes → Android-only (legacy; ignored on iOS)
+    # per-test-timeout-minutes wins when both are set. No-op when neither applies.
+    # Must sit between "Build test app with addon" (which generates the file)
+    # and `upload-to-devicefarm` (which packs it into the Device Farm bundle).
+    - name: Extend per-test mocha timeout
+      if: inputs.per-test-timeout-minutes != '' || (inputs.platform == 'Android' && inputs.android-per-test-timeout-minutes != '')
       shell: bash
       working-directory: ./test-framework
       env:
-        TIMEOUT_MIN: ${{ inputs.android-per-test-timeout-minutes }}
+        TIMEOUT_MIN: ${{ inputs.per-test-timeout-minutes != '' && inputs.per-test-timeout-minutes || inputs.android-per-test-timeout-minutes }}
       run: |
         node <<'NODE'
         const fs = require('fs')
@@ -175,7 +192,7 @@ runs:
 
         const minutes = Number(process.env.TIMEOUT_MIN)
         if (!Number.isFinite(minutes) || minutes <= 0) {
-          throw new Error(`android-per-test-timeout-minutes must be a positive number, got "${process.env.TIMEOUT_MIN}"`)
+          throw new Error(`per-test timeout minutes must be a positive number, got "${process.env.TIMEOUT_MIN}"`)
         }
         const newMs = minutes * 60 * 1000
 
@@ -189,11 +206,11 @@ runs:
           .replaceAll('did not complete within 20 minutes', `did not complete within ${minutes} minutes`)
 
         if (after === before) {
-          throw new Error('No generated Android test timeout blocks matched expected format (timeout: 1200000 / "20 minutes")')
+          throw new Error('No generated per-test timeout blocks matched expected format (timeout: 1200000 / "20 minutes")')
         }
 
         fs.writeFileSync(testFile, after)
-        console.log(`Extended generated Android per-test timeout to ${minutes} minutes (${newMs} ms)`)
+        console.log(`Extended generated per-test timeout to ${minutes} minutes (${newMs} ms)`)
         NODE
 
     - name: Display build summary

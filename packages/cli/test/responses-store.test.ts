@@ -68,7 +68,9 @@ describe('createResponsesStore', () => {
     const store = createResponsesStore({
       maxEntries: 10,
       ttlMs: 1000,
-      now: (): number => { return t }
+      now: (): number => {
+        return t
+      }
     })
     t = 0
     store.put({

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
-import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingMessage,
+  type ServerResponse
+} from 'node:http'
 import { test } from 'node:test'
 
 import type { HostLogger } from '../src/host-logger.ts'
@@ -21,7 +26,7 @@ interface TestResponse {
   readonly body: string
 }
 
-function readBody (req: IncomingMessage): Promise<Buffer> {
+function readBody(req: IncomingMessage): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
@@ -30,7 +35,9 @@ function readBody (req: IncomingMessage): Promise<Buffer> {
   })
 }
 
-function startServer (handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<StartedServer> {
+function startServer(
+  handler: (req: IncomingMessage, res: ServerResponse) => void
+): Promise<StartedServer> {
   const server = createServer(handler)
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
@@ -38,18 +45,19 @@ function startServer (handler: (req: IncomingMessage, res: ServerResponse) => vo
       assert.ok(typeof addr === 'object' && addr !== null)
       resolve({
         port: addr.port,
-        close: () => new Promise<void>((res, rej) => {
-          server.close((err) => {
-            if (err === undefined) res()
-            else rej(err)
+        close: () =>
+          new Promise<void>((res, rej) => {
+            server.close((err) => {
+              if (err === undefined) res()
+              else rej(err)
+            })
           })
-        })
       })
     })
   })
 }
 
-function postJson (port: number, path: string, body: unknown): Promise<TestResponse> {
+function postJson(port: number, path: string, body: unknown): Promise<TestResponse> {
   const raw = JSON.stringify(body)
   return new Promise((resolve, reject) => {
     const req = httpRequest(
@@ -66,7 +74,9 @@ function postJson (port: number, path: string, body: unknown): Promise<TestRespo
       (res) => {
         const chunks: Buffer[] = []
         res.on('data', (chunk: Buffer) => chunks.push(chunk))
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('end', () =>
+          resolve({ statusCode: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') })
+        )
         res.on('error', reject)
       }
     )
@@ -76,7 +86,7 @@ function postJson (port: number, path: string, body: unknown): Promise<TestRespo
   })
 }
 
-function postRaw (port: number, path: string, body: string): Promise<TestResponse> {
+function postRaw(port: number, path: string, body: string): Promise<TestResponse> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
       {
@@ -92,7 +102,9 @@ function postRaw (port: number, path: string, body: string): Promise<TestRespons
       (res) => {
         const chunks: Buffer[] = []
         res.on('data', (chunk: Buffer) => chunks.push(chunk))
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }))
+        res.on('end', () =>
+          resolve({ statusCode: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') })
+        )
         res.on('error', reject)
       }
     )
@@ -155,7 +167,8 @@ test('proxy passes through non-SSE upstream responses', async () => {
 })
 
 test('proxy passes SSE through unchanged when compatibility transforms are disabled', async () => {
-  const payload = 'data: {"choices":[{"delta":{"content":"<think>why</think>answer"}}]}\n\ndata: [DONE]\n\n'
+  const payload =
+    'data: {"choices":[{"delta":{"content":"<think>why</think>answer"}}]}\n\ndata: [DONE]\n\n'
   const upstreamServer = await startServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     res.end(payload)
@@ -180,7 +193,9 @@ test('proxy passes SSE through unchanged when compatibility transforms are disab
 test('proxy splits reasoning from SSE content when compatibility transforms are enabled', async () => {
   const upstreamServer = await startServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
-    res.end('data: {"choices":[{"delta":{"content":"<think>why</think>answer"}}]}\n\ndata: [DONE]\n\n')
+    res.end(
+      'data: {"choices":[{"delta":{"content":"<think>why</think>answer"}}]}\n\ndata: [DONE]\n\n'
+    )
   })
   const proxy = await startOpenAICompatibleProxy({
     getUpstream: () => ({ hostname: '127.0.0.1', port: String(upstreamServer.port) }),

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.3.2",
+  "version": "0.5.0",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -12,6 +12,7 @@
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
+    "example:chatterbox-adjust-speed": "bare examples/chatterbox-adjust-speed.js",
     "example:chatterbox-mtl-sweep": "bare examples/chatterbox-mtl-sweep-tts.js",
     "example:chatterbox-sentence-stream": "bare examples/chatterbox-sentence-stream-tts.js",
     "example:chatterbox-chunk-stream": "bare examples/chatterbox-chunk-stream-tts.js",
@@ -19,8 +20,8 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
-    "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
-    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "lint": "prettier --check \"test/**/*.js\" \"*.js\" \"lib/*.js\" && lunte \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/**/*.test.js",
@@ -83,11 +84,11 @@
     "directory": "packages/tts-ggml"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/registry-client": "^0.4.0",
-    "@qvac/transcription-whispercpp": "^0.10.0",
+    "@qvac/transcription-whispercpp": "^0.10.1",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.1",
     "brittle": "^3.17.0",
@@ -95,7 +96,9 @@
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
     "husky": "^9.1.7",
-    "standard": "^17.0.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {

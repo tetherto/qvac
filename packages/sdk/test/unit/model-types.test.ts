@@ -1,4 +1,4 @@
-import test from "brittle";
+import test from 'brittle'
 import {
   ModelType,
   ModelTypeAliases,
@@ -6,162 +6,144 @@ import {
   modelTypeInputSchema,
   modelTypeSchema,
   normalizeModelType,
-  isModelTypeAlias,
-} from "@/schemas/model-types";
+  isModelTypeAlias
+} from '@/schemas/model-types'
 
-test("ModelType contains all canonical values", (t) => {
-  t.is(ModelType.llamacppCompletion, "llamacpp-completion");
-  t.is(ModelType.whispercppTranscription, "whispercpp-transcription");
-  t.is(ModelType.llamacppEmbedding, "llamacpp-embedding");
-  t.is(ModelType.nmtcppTranslation, "nmtcpp-translation");
-  t.is(ModelType.parakeetTranscription, "parakeet-transcription");
-  t.is(ModelType.onnxTts, "onnx-tts");
-  t.is(ModelType.ttsGgml, "tts-ggml");
-  t.is(ModelType.onnxOcr, "onnx-ocr");
-});
+test('ModelType contains all canonical values', (t) => {
+  t.is(ModelType.llamacppCompletion, 'llamacpp-completion')
+  t.is(ModelType.whispercppTranscription, 'whispercpp-transcription')
+  t.is(ModelType.llamacppEmbedding, 'llamacpp-embedding')
+  t.is(ModelType.nmtcppTranslation, 'nmtcpp-translation')
+  t.is(ModelType.parakeetTranscription, 'parakeet-transcription')
+  t.is(ModelType.onnxTts, 'onnx-tts')
+  t.is(ModelType.ttsGgml, 'tts-ggml')
+  t.is(ModelType.ggmlOcr, 'ggml-ocr')
+})
 
-test("ModelTypeAliases maps to correct canonical values", (t) => {
-  t.is(ModelTypeAliases.llm, ModelType.llamacppCompletion);
-  t.is(ModelTypeAliases.whisper, ModelType.whispercppTranscription);
-  t.is(ModelTypeAliases.embeddings, ModelType.llamacppEmbedding);
-  t.is(ModelTypeAliases.nmt, ModelType.nmtcppTranslation);
-  t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription);
-  t.is(ModelTypeAliases.tts, ModelType.ttsGgml);
-  t.is(ModelTypeAliases.ocr, ModelType.onnxOcr);
-});
+test('ModelTypeAliases maps to correct canonical values', (t) => {
+  t.is(ModelTypeAliases.llm, ModelType.llamacppCompletion)
+  t.is(ModelTypeAliases.whisper, ModelType.whispercppTranscription)
+  t.is(ModelTypeAliases.embeddings, ModelType.llamacppEmbedding)
+  t.is(ModelTypeAliases.nmt, ModelType.nmtcppTranslation)
+  t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription)
+  t.is(ModelTypeAliases.tts, ModelType.ttsGgml)
+  t.is(ModelTypeAliases.ocr, ModelType.ggmlOcr)
+})
 
-test("PUBLIC_MODEL_TYPES contains both canonical and alias keys", (t) => {
+test('PUBLIC_MODEL_TYPES contains both canonical and alias keys', (t) => {
   // Canonical keys
-  t.is(PUBLIC_MODEL_TYPES.llamacppCompletion, "llamacpp-completion");
-  t.is(PUBLIC_MODEL_TYPES.whispercppTranscription, "whispercpp-transcription");
-  t.is(PUBLIC_MODEL_TYPES.llamacppEmbedding, "llamacpp-embedding");
-  t.is(PUBLIC_MODEL_TYPES.nmtcppTranslation, "nmtcpp-translation");
-  t.is(PUBLIC_MODEL_TYPES.parakeetTranscription, "parakeet-transcription");
-  t.is(PUBLIC_MODEL_TYPES.onnxTts, "onnx-tts");
-  t.is(PUBLIC_MODEL_TYPES.ttsGgml, "tts-ggml");
-  t.is(PUBLIC_MODEL_TYPES.onnxOcr, "onnx-ocr");
+  t.is(PUBLIC_MODEL_TYPES.llamacppCompletion, 'llamacpp-completion')
+  t.is(PUBLIC_MODEL_TYPES.whispercppTranscription, 'whispercpp-transcription')
+  t.is(PUBLIC_MODEL_TYPES.llamacppEmbedding, 'llamacpp-embedding')
+  t.is(PUBLIC_MODEL_TYPES.nmtcppTranslation, 'nmtcpp-translation')
+  t.is(PUBLIC_MODEL_TYPES.parakeetTranscription, 'parakeet-transcription')
+  t.is(PUBLIC_MODEL_TYPES.onnxTts, 'onnx-tts')
+  t.is(PUBLIC_MODEL_TYPES.ttsGgml, 'tts-ggml')
+  t.is(PUBLIC_MODEL_TYPES.ggmlOcr, 'ggml-ocr')
 
   // Alias keys
-  t.is(PUBLIC_MODEL_TYPES.llm, "llamacpp-completion");
-  t.is(PUBLIC_MODEL_TYPES.whisper, "whispercpp-transcription");
-  t.is(PUBLIC_MODEL_TYPES.embeddings, "llamacpp-embedding");
-  t.is(PUBLIC_MODEL_TYPES.nmt, "nmtcpp-translation");
-  t.is(PUBLIC_MODEL_TYPES.parakeet, "parakeet-transcription");
-  t.is(PUBLIC_MODEL_TYPES.tts, "tts-ggml");
-  t.is(PUBLIC_MODEL_TYPES.ocr, "onnx-ocr");
-});
+  t.is(PUBLIC_MODEL_TYPES.llm, 'llamacpp-completion')
+  t.is(PUBLIC_MODEL_TYPES.whisper, 'whispercpp-transcription')
+  t.is(PUBLIC_MODEL_TYPES.embeddings, 'llamacpp-embedding')
+  t.is(PUBLIC_MODEL_TYPES.nmt, 'nmtcpp-translation')
+  t.is(PUBLIC_MODEL_TYPES.parakeet, 'parakeet-transcription')
+  t.is(PUBLIC_MODEL_TYPES.tts, 'tts-ggml')
+  t.is(PUBLIC_MODEL_TYPES.ocr, 'ggml-ocr')
+})
 
-test("normalizeModelType converts aliases to canonical", (t) => {
+test('normalizeModelType converts aliases to canonical', (t) => {
   // Aliases should normalize to canonical
-  t.is(normalizeModelType("llm"), "llamacpp-completion");
-  t.is(normalizeModelType("whisper"), "whispercpp-transcription");
-  t.is(normalizeModelType("embeddings"), "llamacpp-embedding");
-  t.is(normalizeModelType("nmt"), "nmtcpp-translation");
-  t.is(normalizeModelType("parakeet"), "parakeet-transcription");
-  t.is(normalizeModelType("tts"), "tts-ggml");
-  t.is(normalizeModelType("ocr"), "onnx-ocr");
-});
+  t.is(normalizeModelType('llm'), 'llamacpp-completion')
+  t.is(normalizeModelType('whisper'), 'whispercpp-transcription')
+  t.is(normalizeModelType('embeddings'), 'llamacpp-embedding')
+  t.is(normalizeModelType('nmt'), 'nmtcpp-translation')
+  t.is(normalizeModelType('parakeet'), 'parakeet-transcription')
+  t.is(normalizeModelType('tts'), 'tts-ggml')
+  t.is(normalizeModelType('ocr'), 'ggml-ocr')
+})
 
-test("normalizeModelType passes through canonical values unchanged", (t) => {
-  t.is(normalizeModelType("llamacpp-completion"), "llamacpp-completion");
-  t.is(
-    normalizeModelType("whispercpp-transcription"),
-    "whispercpp-transcription",
-  );
-  t.is(normalizeModelType("llamacpp-embedding"), "llamacpp-embedding");
-  t.is(normalizeModelType("nmtcpp-translation"), "nmtcpp-translation");
-  t.is(normalizeModelType("parakeet-transcription"), "parakeet-transcription");
-  t.is(normalizeModelType("onnx-tts"), "onnx-tts");
-  t.is(normalizeModelType("tts-ggml"), "tts-ggml");
-  t.is(normalizeModelType("onnx-ocr"), "onnx-ocr");
-});
+test('normalizeModelType passes through canonical values unchanged', (t) => {
+  t.is(normalizeModelType('llamacpp-completion'), 'llamacpp-completion')
+  t.is(normalizeModelType('whispercpp-transcription'), 'whispercpp-transcription')
+  t.is(normalizeModelType('llamacpp-embedding'), 'llamacpp-embedding')
+  t.is(normalizeModelType('nmtcpp-translation'), 'nmtcpp-translation')
+  t.is(normalizeModelType('parakeet-transcription'), 'parakeet-transcription')
+  t.is(normalizeModelType('onnx-tts'), 'onnx-tts')
+  t.is(normalizeModelType('tts-ggml'), 'tts-ggml')
+  t.is(normalizeModelType('ggml-ocr'), 'ggml-ocr')
+})
 
-test("isModelTypeAlias correctly identifies aliases", (t) => {
+test('isModelTypeAlias correctly identifies aliases', (t) => {
   // Aliases
-  t.is(isModelTypeAlias("llm"), true);
-  t.is(isModelTypeAlias("whisper"), true);
-  t.is(isModelTypeAlias("embeddings"), true);
-  t.is(isModelTypeAlias("nmt"), true);
-  t.is(isModelTypeAlias("parakeet"), true);
-  t.is(isModelTypeAlias("tts"), true);
-  t.is(isModelTypeAlias("ocr"), true);
+  t.is(isModelTypeAlias('llm'), true)
+  t.is(isModelTypeAlias('whisper'), true)
+  t.is(isModelTypeAlias('embeddings'), true)
+  t.is(isModelTypeAlias('nmt'), true)
+  t.is(isModelTypeAlias('parakeet'), true)
+  t.is(isModelTypeAlias('tts'), true)
+  t.is(isModelTypeAlias('ocr'), true)
 
   // Canonical values are not aliases
-  t.is(isModelTypeAlias("llamacpp-completion"), false);
-  t.is(isModelTypeAlias("whispercpp-transcription"), false);
-  t.is(isModelTypeAlias("llamacpp-embedding"), false);
-  t.is(isModelTypeAlias("nmtcpp-translation"), false);
-  t.is(isModelTypeAlias("parakeet-transcription"), false);
-  t.is(isModelTypeAlias("onnx-tts"), false);
-  t.is(isModelTypeAlias("tts-ggml"), false);
-  t.is(isModelTypeAlias("onnx-ocr"), false);
-});
+  t.is(isModelTypeAlias('llamacpp-completion'), false)
+  t.is(isModelTypeAlias('whispercpp-transcription'), false)
+  t.is(isModelTypeAlias('llamacpp-embedding'), false)
+  t.is(isModelTypeAlias('nmtcpp-translation'), false)
+  t.is(isModelTypeAlias('parakeet-transcription'), false)
+  t.is(isModelTypeAlias('onnx-tts'), false)
+  t.is(isModelTypeAlias('tts-ggml'), false)
+  t.is(isModelTypeAlias('ggml-ocr'), false)
+})
 
-test("modelTypeInputSchema accepts aliases", (t) => {
-  t.is(modelTypeInputSchema.parse("llm"), "llm");
-  t.is(modelTypeInputSchema.parse("whisper"), "whisper");
-  t.is(modelTypeInputSchema.parse("embeddings"), "embeddings");
-  t.is(modelTypeInputSchema.parse("nmt"), "nmt");
-  t.is(modelTypeInputSchema.parse("parakeet"), "parakeet");
-  t.is(modelTypeInputSchema.parse("tts"), "tts");
-  t.is(modelTypeInputSchema.parse("ocr"), "ocr");
-});
+test('modelTypeInputSchema accepts aliases', (t) => {
+  t.is(modelTypeInputSchema.parse('llm'), 'llm')
+  t.is(modelTypeInputSchema.parse('whisper'), 'whisper')
+  t.is(modelTypeInputSchema.parse('embeddings'), 'embeddings')
+  t.is(modelTypeInputSchema.parse('nmt'), 'nmt')
+  t.is(modelTypeInputSchema.parse('parakeet'), 'parakeet')
+  t.is(modelTypeInputSchema.parse('tts'), 'tts')
+  t.is(modelTypeInputSchema.parse('ocr'), 'ocr')
+})
 
-test("modelTypeInputSchema accepts canonical values", (t) => {
-  t.is(
-    modelTypeInputSchema.parse("llamacpp-completion"),
-    "llamacpp-completion",
-  );
-  t.is(
-    modelTypeInputSchema.parse("whispercpp-transcription"),
-    "whispercpp-transcription",
-  );
-  t.is(modelTypeInputSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
-  t.is(modelTypeInputSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
-  t.is(
-    modelTypeInputSchema.parse("parakeet-transcription"),
-    "parakeet-transcription",
-  );
-  t.is(modelTypeInputSchema.parse("onnx-tts"), "onnx-tts");
-  t.is(modelTypeInputSchema.parse("tts-ggml"), "tts-ggml");
-  t.is(modelTypeInputSchema.parse("onnx-ocr"), "onnx-ocr");
-});
+test('modelTypeInputSchema accepts canonical values', (t) => {
+  t.is(modelTypeInputSchema.parse('llamacpp-completion'), 'llamacpp-completion')
+  t.is(modelTypeInputSchema.parse('whispercpp-transcription'), 'whispercpp-transcription')
+  t.is(modelTypeInputSchema.parse('llamacpp-embedding'), 'llamacpp-embedding')
+  t.is(modelTypeInputSchema.parse('nmtcpp-translation'), 'nmtcpp-translation')
+  t.is(modelTypeInputSchema.parse('parakeet-transcription'), 'parakeet-transcription')
+  t.is(modelTypeInputSchema.parse('onnx-tts'), 'onnx-tts')
+  t.is(modelTypeInputSchema.parse('tts-ggml'), 'tts-ggml')
+  t.is(modelTypeInputSchema.parse('ggml-ocr'), 'ggml-ocr')
+})
 
-test("modelTypeInputSchema rejects invalid values", (t) => {
-  t.exception(() => modelTypeInputSchema.parse("invalid"));
-  t.exception(() => modelTypeInputSchema.parse(""));
-  t.exception(() => modelTypeInputSchema.parse("LLM")); // case sensitive
-  t.exception(() => modelTypeInputSchema.parse("completion")); // partial match
-});
+test('modelTypeInputSchema rejects invalid values', (t) => {
+  t.exception(() => modelTypeInputSchema.parse('invalid'))
+  t.exception(() => modelTypeInputSchema.parse(''))
+  t.exception(() => modelTypeInputSchema.parse('LLM')) // case sensitive
+  t.exception(() => modelTypeInputSchema.parse('completion')) // partial match
+})
 
-test("modelTypeSchema transforms aliases to canonical", (t) => {
-  t.is(modelTypeSchema.parse("llm"), "llamacpp-completion");
-  t.is(modelTypeSchema.parse("whisper"), "whispercpp-transcription");
-  t.is(modelTypeSchema.parse("embeddings"), "llamacpp-embedding");
-  t.is(modelTypeSchema.parse("nmt"), "nmtcpp-translation");
-  t.is(modelTypeSchema.parse("parakeet"), "parakeet-transcription");
-  t.is(modelTypeSchema.parse("tts"), "tts-ggml");
-  t.is(modelTypeSchema.parse("ocr"), "onnx-ocr");
-});
+test('modelTypeSchema transforms aliases to canonical', (t) => {
+  t.is(modelTypeSchema.parse('llm'), 'llamacpp-completion')
+  t.is(modelTypeSchema.parse('whisper'), 'whispercpp-transcription')
+  t.is(modelTypeSchema.parse('embeddings'), 'llamacpp-embedding')
+  t.is(modelTypeSchema.parse('nmt'), 'nmtcpp-translation')
+  t.is(modelTypeSchema.parse('parakeet'), 'parakeet-transcription')
+  t.is(modelTypeSchema.parse('tts'), 'tts-ggml')
+  t.is(modelTypeSchema.parse('ocr'), 'ggml-ocr')
+})
 
-test("modelTypeSchema passes through canonical values", (t) => {
-  t.is(modelTypeSchema.parse("llamacpp-completion"), "llamacpp-completion");
-  t.is(
-    modelTypeSchema.parse("whispercpp-transcription"),
-    "whispercpp-transcription",
-  );
-  t.is(modelTypeSchema.parse("llamacpp-embedding"), "llamacpp-embedding");
-  t.is(modelTypeSchema.parse("nmtcpp-translation"), "nmtcpp-translation");
-  t.is(
-    modelTypeSchema.parse("parakeet-transcription"),
-    "parakeet-transcription",
-  );
-  t.is(modelTypeSchema.parse("onnx-tts"), "onnx-tts");
-  t.is(modelTypeSchema.parse("tts-ggml"), "tts-ggml");
-  t.is(modelTypeSchema.parse("onnx-ocr"), "onnx-ocr");
-});
+test('modelTypeSchema passes through canonical values', (t) => {
+  t.is(modelTypeSchema.parse('llamacpp-completion'), 'llamacpp-completion')
+  t.is(modelTypeSchema.parse('whispercpp-transcription'), 'whispercpp-transcription')
+  t.is(modelTypeSchema.parse('llamacpp-embedding'), 'llamacpp-embedding')
+  t.is(modelTypeSchema.parse('nmtcpp-translation'), 'nmtcpp-translation')
+  t.is(modelTypeSchema.parse('parakeet-transcription'), 'parakeet-transcription')
+  t.is(modelTypeSchema.parse('onnx-tts'), 'onnx-tts')
+  t.is(modelTypeSchema.parse('tts-ggml'), 'tts-ggml')
+  t.is(modelTypeSchema.parse('ggml-ocr'), 'ggml-ocr')
+})
 
-test("modelTypeSchema rejects invalid values", (t) => {
-  t.exception(() => modelTypeSchema.parse("invalid"));
-  t.exception(() => modelTypeSchema.parse(""));
-});
+test('modelTypeSchema rejects invalid values', (t) => {
+  t.exception(() => modelTypeSchema.parse('invalid'))
+  t.exception(() => modelTypeSchema.parse(''))
+})

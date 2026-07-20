@@ -1,13 +1,13 @@
-import type { QvacConfig } from "@/schemas";
+import type { QvacConfig } from '@/schemas'
 
-export const DEFAULT_REGISTRY_STREAM_TIMEOUT_MS = 60_000;
+export const DEFAULT_REGISTRY_STREAM_TIMEOUT_MS = 60_000
 
 export interface RegistryClientDownloadOptions {
-  timeout: number;
-  outputFile: string;
-  maxRetries?: number;
-  onProgress?: (progress: { downloaded: number; total: number }) => void;
-  signal?: globalThis.AbortSignal;
+  timeout: number
+  outputFile: string
+  maxRetries?: number
+  onProgress?: (progress: { downloaded: number; total: number }) => void
+  signal?: globalThis.AbortSignal
 }
 
 /**
@@ -16,21 +16,20 @@ export interface RegistryClientDownloadOptions {
  * unit-tested without standing up a real registry client.
  */
 export function buildRegistryClientOptions(params: {
-  sdkConfig: Pick<QvacConfig, "registryStreamTimeoutMs" | "registryDownloadMaxRetries">;
-  outputFile: string;
-  onProgress?: ((progress: { downloaded: number; total: number }) => void) | undefined;
-  signal?: globalThis.AbortSignal | undefined;
+  sdkConfig: Pick<QvacConfig, 'registryStreamTimeoutMs' | 'registryDownloadMaxRetries'>
+  outputFile: string
+  onProgress?: ((progress: { downloaded: number; total: number }) => void) | undefined
+  signal?: globalThis.AbortSignal | undefined
 }): RegistryClientDownloadOptions {
-  const { sdkConfig, outputFile, onProgress, signal } = params;
-  const timeout = sdkConfig.registryStreamTimeoutMs
-    ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS;
-  const maxRetries = sdkConfig.registryDownloadMaxRetries;
+  const { sdkConfig, outputFile, onProgress, signal } = params
+  const timeout = sdkConfig.registryStreamTimeoutMs ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS
+  const maxRetries = sdkConfig.registryDownloadMaxRetries
 
   return {
     timeout,
     outputFile,
     ...(maxRetries !== undefined && { maxRetries }),
     ...(onProgress && { onProgress }),
-    ...(signal && { signal: signal }),
-  };
+    ...(signal && { signal: signal })
+  }
 }

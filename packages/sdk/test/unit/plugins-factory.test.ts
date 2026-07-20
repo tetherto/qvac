@@ -1,10 +1,10 @@
-import test from "brittle";
-import { z } from "zod";
-import { plugins } from "@/client/plugins-factory";
-import { clearPlugins, getAllPlugins, hasPlugin } from "@/server/plugins";
-import { ModelType } from "@/schemas";
-import { PluginDefinitionInvalidError } from "@/utils/errors-server";
-import type { QvacPlugin } from "@/schemas/plugin";
+import test from 'brittle'
+import { z } from 'zod'
+import { plugins } from '@/client/plugins-factory'
+import { clearPlugins, getAllPlugins, hasPlugin } from '@/server/plugins'
+import { ModelType } from '@/schemas'
+import { PluginDefinitionInvalidError } from '@/utils/errors-server'
+import type { QvacPlugin } from '@/schemas/plugin'
 
 function makeValidPlugin(modelType: string): QvacPlugin {
   return {
@@ -13,7 +13,7 @@ function makeValidPlugin(modelType: string): QvacPlugin {
     addonPackage: `@qvac/test-${modelType}`,
     loadConfigSchema: z.object({}),
     createModel() {
-      return { model: { load: async function () {} } };
+      return { model: { load: async function () {} } }
     },
     handlers: {
       ping: {
@@ -21,76 +21,76 @@ function makeValidPlugin(modelType: string): QvacPlugin {
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
         handler: async function () {
-          return { ok: true };
-        },
-      },
-    },
-  };
+          return { ok: true }
+        }
+      }
+    }
+  }
 }
 
-test("plugins([]) returns host API namespace without registering anything", function (t) {
-  clearPlugins();
+test('plugins([]) returns host API namespace without registering anything', function (t) {
+  clearPlugins()
   try {
-    const sdk = plugins([]);
-    t.is(getAllPlugins().length, 0, "no plugins registered");
-    t.is(typeof sdk.translate, "function", "host API exposes translate");
-    t.is(typeof sdk.completion, "function", "host API exposes completion");
-    t.is(typeof sdk.loadModel, "function", "host API exposes loadModel");
+    const sdk = plugins([])
+    t.is(getAllPlugins().length, 0, 'no plugins registered')
+    t.is(typeof sdk.translate, 'function', 'host API exposes translate')
+    t.is(typeof sdk.completion, 'function', 'host API exposes completion')
+    t.is(typeof sdk.loadModel, 'function', 'host API exposes loadModel')
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})
 
-test("plugins([one]) registers the plugin and returns host API", function (t) {
-  clearPlugins();
+test('plugins([one]) registers the plugin and returns host API', function (t) {
+  clearPlugins()
   try {
-    const p = makeValidPlugin(ModelType.nmtcppTranslation);
-    const sdk = plugins([p]);
-    t.ok(hasPlugin(ModelType.nmtcppTranslation), "plugin registered");
-    t.is(getAllPlugins().length, 1);
-    t.is(typeof sdk.translate, "function");
+    const p = makeValidPlugin(ModelType.nmtcppTranslation)
+    const sdk = plugins([p])
+    t.ok(hasPlugin(ModelType.nmtcppTranslation), 'plugin registered')
+    t.is(getAllPlugins().length, 1)
+    t.is(typeof sdk.translate, 'function')
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})
 
-test("plugins([many]) registers all provided plugins", function (t) {
-  clearPlugins();
+test('plugins([many]) registers all provided plugins', function (t) {
+  clearPlugins()
   try {
     plugins([
       makeValidPlugin(ModelType.nmtcppTranslation),
       makeValidPlugin(ModelType.llamacppCompletion),
-      makeValidPlugin(ModelType.llamacppEmbedding),
-    ]);
-    t.is(getAllPlugins().length, 3, "all three registered");
-    t.ok(hasPlugin(ModelType.nmtcppTranslation));
-    t.ok(hasPlugin(ModelType.llamacppCompletion));
-    t.ok(hasPlugin(ModelType.llamacppEmbedding));
+      makeValidPlugin(ModelType.llamacppEmbedding)
+    ])
+    t.is(getAllPlugins().length, 3, 'all three registered')
+    t.ok(hasPlugin(ModelType.nmtcppTranslation))
+    t.ok(hasPlugin(ModelType.llamacppCompletion))
+    t.ok(hasPlugin(ModelType.llamacppEmbedding))
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})
 
-test("plugins([invalid]) throws validation error (fail-fast)", function (t) {
-  clearPlugins();
+test('plugins([invalid]) throws validation error (fail-fast)', function (t) {
+  clearPlugins()
   try {
     const invalid = {
-      modelType: "broken",
-      displayName: "",
-      addonPackage: "@qvac/test-broken",
+      modelType: 'broken',
+      displayName: '',
+      addonPackage: '@qvac/test-broken',
       createModel() {
-        return { model: { load: async function () {} } };
+        return { model: { load: async function () {} } }
       },
-      handlers: {},
-    } as unknown as QvacPlugin;
+      handlers: {}
+    } as unknown as QvacPlugin
 
     try {
-      plugins([invalid]);
-      t.fail("Expected plugins() to throw");
+      plugins([invalid])
+      t.fail('Expected plugins() to throw')
     } catch (err) {
-      t.ok(err instanceof PluginDefinitionInvalidError, "throws PluginDefinitionInvalidError");
+      t.ok(err instanceof PluginDefinitionInvalidError, 'throws PluginDefinitionInvalidError')
     }
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})

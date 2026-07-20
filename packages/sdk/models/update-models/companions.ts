@@ -1,10 +1,6 @@
-import { createHash } from "crypto";
-import type {
-  ProcessedModel,
-  CompanionSetMetadata,
-  CompanionSetMetadataEntry,
-} from "./types";
-import { BERGAMOT_MODEL_RE } from "@/schemas";
+import { createHash } from 'crypto'
+import type { ProcessedModel, CompanionSetMetadata, CompanionSetMetadataEntry } from './types'
+import { BERGAMOT_MODEL_RE } from '@/schemas'
 
 /**
  * Detects companion file relationships among processed models and
@@ -27,55 +23,53 @@ import { BERGAMOT_MODEL_RE } from "@/schemas";
  *     The addon resolves the embedder by exact filename next to the model
  *     (`dirname(model)/bci-embedder.bin`), so the two files must be
  *     physically co-located — which the companion-set cache layout guarantees.
+ *
+ *   Chatterbox MeCab/IPAdic sets (directory-based):
+ *     Primary: `char.bin`
+ *     Companions in same directory: dicrc, matrix.bin, mecabrc, sys.dic, unk.dic
+ *     The TTS addon receives the containing directory for Japanese tokenization.
  */
-export function groupCompanionSets(
-  models: ProcessedModel[],
-): ProcessedModel[] {
-  const bySourcePath = new Map<string, ProcessedModel>();
+export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
+  const bySourcePath = new Map<string, ProcessedModel>()
   for (const model of models) {
-    bySourcePath.set(sourceKey(model.registrySource, model.registryPath), model);
+    bySourcePath.set(sourceKey(model.registrySource, model.registryPath), model)
   }
 
-  const companionKeys = new Set<string>();
+  const companionKeys = new Set<string>()
 
-  groupOnnxCompanions(models, bySourcePath, companionKeys);
-  groupBergamotCompanions(models, bySourcePath, companionKeys);
-  groupBciCompanions(models, bySourcePath, companionKeys);
+  groupOnnxCompanions(models, bySourcePath, companionKeys)
+  groupBergamotCompanions(models, bySourcePath, companionKeys)
+  groupBciCompanions(models, bySourcePath, companionKeys)
+  groupMecabCompanions(models, bySourcePath, companionKeys)
 
   return models.map((model) => {
-    const key = sourceKey(model.registrySource, model.registryPath);
+    const key = sourceKey(model.registrySource, model.registryPath)
     if (companionKeys.has(key)) {
-      return { ...model, isCompanionOnly: true };
+      return { ...model, isCompanionOnly: true }
     }
-    return model;
-  });
+    return model
+  })
 }
 
 function groupOnnxCompanions(
   models: ProcessedModel[],
   bySourcePath: Map<string, ProcessedModel>,
-  companionKeys: Set<string>,
+  companionKeys: Set<string>
 ): void {
   for (const model of models) {
-    if (!model.registryPath.endsWith(".onnx")) continue;
+    if (!model.registryPath.endsWith('.onnx')) continue
 
-    const dataKey = findOnnxCompanionKey(
-      model.registrySource,
-      model.registryPath,
-      bySourcePath,
-    );
-    if (!dataKey) continue;
+    const dataKey = findOnnxCompanionKey(model.registrySource, model.registryPath, bySourcePath)
+    if (!dataKey) continue
 
-    const companion = bySourcePath.get(dataKey)!;
-    const primaryFilename = model.registryPath.split("/").pop() || model.registryPath;
-    const dataFilename = companion.registryPath.split("/").pop() || companion.registryPath;
+    const companion = bySourcePath.get(dataKey)!
+    const primaryFilename = model.registryPath.split('/').pop() || model.registryPath
+    const dataFilename = companion.registryPath.split('/').pop() || companion.registryPath
 
-    const setKey = shortHash(
-      `${model.registrySource}:${model.registryPath}`,
-    );
+    const setKey = shortHash(`${model.registrySource}:${model.registryPath}`)
 
     const primaryEntry: CompanionSetMetadataEntry = {
-      key: "modelPath",
+      key: 'modelPath',
       registryPath: model.registryPath,
       registrySource: model.registrySource,
       targetName: primaryFilename,
@@ -85,11 +79,11 @@ function groupOnnxCompanions(
       blobBlockOffset: model.blobBlockOffset,
       blobBlockLength: model.blobBlockLength,
       blobByteOffset: model.blobByteOffset,
-      primary: true,
-    };
+      primary: true
+    }
 
     const dataEntry: CompanionSetMetadataEntry = {
-      key: "dataPath",
+      key: 'dataPath',
       registryPath: companion.registryPath,
       registrySource: companion.registrySource,
       targetName: dataFilename,
@@ -98,46 +92,41 @@ function groupOnnxCompanions(
       blobCoreKey: companion.blobCoreKey,
       blobBlockOffset: companion.blobBlockOffset,
       blobBlockLength: companion.blobBlockLength,
-      blobByteOffset: companion.blobByteOffset,
-    };
+      blobByteOffset: companion.blobByteOffset
+    }
 
     const companionSetMetadata: CompanionSetMetadata = {
       setKey,
-      primaryKey: "modelPath",
-      files: [primaryEntry, dataEntry],
-    };
+      primaryKey: 'modelPath',
+      files: [primaryEntry, dataEntry]
+    }
 
-    model.companionSet = companionSetMetadata;
-    companionKeys.add(dataKey);
+    model.companionSet = companionSetMetadata
+    companionKeys.add(dataKey)
   }
 }
 
 function groupBergamotCompanions(
   models: ProcessedModel[],
   bySourcePath: Map<string, ProcessedModel>,
-  companionKeys: Set<string>,
+  companionKeys: Set<string>
 ): void {
   for (const model of models) {
-    const match = model.registryPath.match(BERGAMOT_MODEL_RE);
-    if (!match?.[1] || !match[2]) continue;
+    const match = model.registryPath.match(BERGAMOT_MODEL_RE)
+    if (!match?.[1] || !match[2]) continue
 
-    const dirPrefix = match[1];
-    const langPair = match[2];
-    const source = model.registrySource;
+    const dirPrefix = match[1]
+    const langPair = match[2]
+    const source = model.registrySource
 
-    const companions = findBergamotCompanions(
-      source,
-      dirPrefix,
-      langPair,
-      bySourcePath,
-    );
-    if (companions.length === 0) continue;
+    const companions = findBergamotCompanions(source, dirPrefix, langPair, bySourcePath)
+    if (companions.length === 0) continue
 
-    const primaryFilename = model.registryPath.split("/").pop()!;
-    const setKey = shortHash(`${source}:${model.registryPath}`);
+    const primaryFilename = model.registryPath.split('/').pop()!
+    const setKey = shortHash(`${source}:${model.registryPath}`)
 
     const primaryEntry: CompanionSetMetadataEntry = {
-      key: "modelPath",
+      key: 'modelPath',
       registryPath: model.registryPath,
       registrySource: source,
       targetName: primaryFilename,
@@ -147,12 +136,12 @@ function groupBergamotCompanions(
       blobBlockOffset: model.blobBlockOffset,
       blobBlockLength: model.blobBlockLength,
       blobByteOffset: model.blobByteOffset,
-      primary: true,
-    };
+      primary: true
+    }
 
-    const companionEntries: CompanionSetMetadataEntry[] = [];
+    const companionEntries: CompanionSetMetadataEntry[] = []
     for (const { key: entryKey, model: comp } of companions) {
-      const filename = comp.registryPath.split("/").pop()!;
+      const filename = comp.registryPath.split('/').pop()!
       companionEntries.push({
         key: entryKey,
         registryPath: comp.registryPath,
@@ -163,44 +152,43 @@ function groupBergamotCompanions(
         blobCoreKey: comp.blobCoreKey,
         blobBlockOffset: comp.blobBlockOffset,
         blobBlockLength: comp.blobBlockLength,
-        blobByteOffset: comp.blobByteOffset,
-      });
-      companionKeys.add(sourceKey(comp.registrySource, comp.registryPath));
+        blobByteOffset: comp.blobByteOffset
+      })
+      companionKeys.add(sourceKey(comp.registrySource, comp.registryPath))
     }
 
     model.companionSet = {
       setKey,
-      primaryKey: "modelPath",
-      files: [primaryEntry, ...companionEntries],
-    };
+      primaryKey: 'modelPath',
+      files: [primaryEntry, ...companionEntries]
+    }
   }
 }
 
-const BCI_PRIMARY_FILENAME = "ggml-bci-windowed.bin";
-const BCI_EMBEDDER_FILENAME = "bci-embedder.bin";
+const BCI_PRIMARY_FILENAME = 'ggml-bci-windowed.bin'
+const BCI_EMBEDDER_FILENAME = 'bci-embedder.bin'
 
 function groupBciCompanions(
   models: ProcessedModel[],
   bySourcePath: Map<string, ProcessedModel>,
-  companionKeys: Set<string>,
+  companionKeys: Set<string>
 ): void {
   for (const model of models) {
-    const filename = model.registryPath.split("/").pop();
-    if (filename !== BCI_PRIMARY_FILENAME) continue;
+    const filename = model.registryPath.split('/').pop()
+    if (filename !== BCI_PRIMARY_FILENAME) continue
 
-    const lastSep = model.registryPath.lastIndexOf("/");
-    const dirPrefix =
-      lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : "";
-    const source = model.registrySource;
+    const lastSep = model.registryPath.lastIndexOf('/')
+    const dirPrefix = lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : ''
+    const source = model.registrySource
 
-    const embedderPath = `${dirPrefix}${BCI_EMBEDDER_FILENAME}`;
-    const embedder = bySourcePath.get(sourceKey(source, embedderPath));
-    if (!embedder) continue;
+    const embedderPath = `${dirPrefix}${BCI_EMBEDDER_FILENAME}`
+    const embedder = bySourcePath.get(sourceKey(source, embedderPath))
+    if (!embedder) continue
 
-    const setKey = shortHash(`${source}:${model.registryPath}`);
+    const setKey = shortHash(`${source}:${model.registryPath}`)
 
     const primaryEntry: CompanionSetMetadataEntry = {
-      key: "modelPath",
+      key: 'modelPath',
       registryPath: model.registryPath,
       registrySource: source,
       targetName: BCI_PRIMARY_FILENAME,
@@ -210,11 +198,11 @@ function groupBciCompanions(
       blobBlockOffset: model.blobBlockOffset,
       blobBlockLength: model.blobBlockLength,
       blobByteOffset: model.blobByteOffset,
-      primary: true,
-    };
+      primary: true
+    }
 
     const embedderEntry: CompanionSetMetadataEntry = {
-      key: "embedderPath",
+      key: 'embedderPath',
       registryPath: embedder.registryPath,
       registrySource: embedder.registrySource,
       targetName: BCI_EMBEDDER_FILENAME,
@@ -223,15 +211,75 @@ function groupBciCompanions(
       blobCoreKey: embedder.blobCoreKey,
       blobBlockOffset: embedder.blobBlockOffset,
       blobBlockLength: embedder.blobBlockLength,
-      blobByteOffset: embedder.blobByteOffset,
-    };
+      blobByteOffset: embedder.blobByteOffset
+    }
 
     model.companionSet = {
       setKey,
-      primaryKey: "modelPath",
-      files: [primaryEntry, embedderEntry],
-    };
-    companionKeys.add(sourceKey(embedder.registrySource, embedder.registryPath));
+      primaryKey: 'modelPath',
+      files: [primaryEntry, embedderEntry]
+    }
+    companionKeys.add(sourceKey(embedder.registrySource, embedder.registryPath))
+  }
+}
+
+const MECAB_PRIMARY_FILENAME = 'char.bin'
+const MECAB_REQUIRED_FILENAMES = ['dicrc', 'matrix.bin', 'mecabrc', 'sys.dic', 'unk.dic'] as const
+const MECAB_IPADIC_DIR_SUFFIX = '/mecab-ipadic/'
+
+function groupMecabCompanions(
+  models: ProcessedModel[],
+  bySourcePath: Map<string, ProcessedModel>,
+  companionKeys: Set<string>
+): void {
+  for (const model of models) {
+    if (!model.registryPath.includes(MECAB_IPADIC_DIR_SUFFIX)) continue
+
+    const lastSep = model.registryPath.lastIndexOf('/')
+    const filename = lastSep >= 0 ? model.registryPath.slice(lastSep + 1) : model.registryPath
+    if (filename !== MECAB_PRIMARY_FILENAME) continue
+
+    const dirPrefix = lastSep >= 0 ? model.registryPath.slice(0, lastSep + 1) : ''
+    const source = model.registrySource
+    const companions = findMecabCompanions(source, dirPrefix, bySourcePath)
+    if (companions.length !== MECAB_REQUIRED_FILENAMES.length) continue
+
+    const setKey = shortHash(`${source}:${dirPrefix}`)
+    const primaryEntry: CompanionSetMetadataEntry = {
+      key: 'mecabDictPath',
+      registryPath: model.registryPath,
+      registrySource: source,
+      targetName: MECAB_PRIMARY_FILENAME,
+      expectedSize: model.expectedSize,
+      sha256Checksum: model.sha256Checksum,
+      blobCoreKey: model.blobCoreKey,
+      blobBlockOffset: model.blobBlockOffset,
+      blobBlockLength: model.blobBlockLength,
+      blobByteOffset: model.blobByteOffset,
+      primary: true
+    }
+
+    const companionEntries = companions.map(({ filename, model: comp }) => {
+      companionKeys.add(sourceKey(comp.registrySource, comp.registryPath))
+      return {
+        key: `mecab:${filename}`,
+        registryPath: comp.registryPath,
+        registrySource: comp.registrySource,
+        targetName: filename,
+        expectedSize: comp.expectedSize,
+        sha256Checksum: comp.sha256Checksum,
+        blobCoreKey: comp.blobCoreKey,
+        blobBlockOffset: comp.blobBlockOffset,
+        blobBlockLength: comp.blobBlockLength,
+        blobByteOffset: comp.blobByteOffset
+      }
+    })
+
+    model.companionSet = {
+      setKey,
+      primaryKey: 'mecabDictPath',
+      files: [primaryEntry, ...companionEntries]
+    }
   }
 }
 
@@ -239,62 +287,75 @@ function findBergamotCompanions(
   source: string,
   dirPrefix: string,
   langPair: string,
-  bySourcePath: Map<string, ProcessedModel>,
+  bySourcePath: Map<string, ProcessedModel>
 ): { key: string; model: ProcessedModel }[] {
-  const found: { key: string; model: ProcessedModel }[] = [];
+  const found: { key: string; model: ProcessedModel }[] = []
 
-  const lexPath = `${dirPrefix}lex.50.50.${langPair}.s2t.bin`;
-  const lexModel = bySourcePath.get(sourceKey(source, lexPath));
+  const lexPath = `${dirPrefix}lex.50.50.${langPair}.s2t.bin`
+  const lexModel = bySourcePath.get(sourceKey(source, lexPath))
   if (lexModel) {
-    found.push({ key: "lexPath", model: lexModel });
+    found.push({ key: 'lexPath', model: lexModel })
   }
 
-  const sharedVocabPath = `${dirPrefix}vocab.${langPair}.spm`;
-  const sharedVocab = bySourcePath.get(sourceKey(source, sharedVocabPath));
+  const sharedVocabPath = `${dirPrefix}vocab.${langPair}.spm`
+  const sharedVocab = bySourcePath.get(sourceKey(source, sharedVocabPath))
   if (sharedVocab) {
-    found.push({ key: "sharedVocabPath", model: sharedVocab });
+    found.push({ key: 'sharedVocabPath', model: sharedVocab })
   } else {
-    const srcVocabPath = `${dirPrefix}srcvocab.${langPair}.spm`;
-    const trgVocabPath = `${dirPrefix}trgvocab.${langPair}.spm`;
-    const srcVocab = bySourcePath.get(sourceKey(source, srcVocabPath));
-    const trgVocab = bySourcePath.get(sourceKey(source, trgVocabPath));
+    const srcVocabPath = `${dirPrefix}srcvocab.${langPair}.spm`
+    const trgVocabPath = `${dirPrefix}trgvocab.${langPair}.spm`
+    const srcVocab = bySourcePath.get(sourceKey(source, srcVocabPath))
+    const trgVocab = bySourcePath.get(sourceKey(source, trgVocabPath))
     if (srcVocab && trgVocab) {
-      found.push({ key: "srcVocabPath", model: srcVocab });
-      found.push({ key: "dstVocabPath", model: trgVocab });
+      found.push({ key: 'srcVocabPath', model: srcVocab })
+      found.push({ key: 'dstVocabPath', model: trgVocab })
     }
   }
 
-  const metadataPath = `${dirPrefix}metadata.json`;
-  const metadata = bySourcePath.get(sourceKey(source, metadataPath));
+  const metadataPath = `${dirPrefix}metadata.json`
+  const metadata = bySourcePath.get(sourceKey(source, metadataPath))
   if (metadata) {
-    found.push({ key: "metadataPath", model: metadata });
+    found.push({ key: 'metadataPath', model: metadata })
   }
 
-  return found;
+  return found
+}
+
+function findMecabCompanions(
+  source: string,
+  dirPrefix: string,
+  bySourcePath: Map<string, ProcessedModel>
+): { filename: string; model: ProcessedModel }[] {
+  const found: { filename: string; model: ProcessedModel }[] = []
+
+  for (const filename of MECAB_REQUIRED_FILENAMES) {
+    const model = bySourcePath.get(sourceKey(source, `${dirPrefix}${filename}`))
+    if (!model) return []
+    found.push({ filename, model })
+  }
+
+  return found
 }
 
 function sourceKey(source: string, path: string): string {
-  return `${source}:${path}`;
+  return `${source}:${path}`
 }
 
 function findOnnxCompanionKey(
   source: string,
   primaryPath: string,
-  bySourcePath: Map<string, ProcessedModel>,
+  bySourcePath: Map<string, ProcessedModel>
 ): string | undefined {
-  const candidates = [
-    `${primaryPath}_data`,
-    `${primaryPath}.data`,
-  ];
+  const candidates = [`${primaryPath}_data`, `${primaryPath}.data`]
 
   for (const candidate of candidates) {
-    const key = sourceKey(source, candidate);
-    if (bySourcePath.has(key)) return key;
+    const key = sourceKey(source, candidate)
+    if (bySourcePath.has(key)) return key
   }
 
-  return undefined;
+  return undefined
 }
 
 function shortHash(input: string): string {
-  return createHash("sha256").update(input).digest("hex").substring(0, 16);
+  return createHash('sha256').update(input).digest('hex').substring(0, 16)
 }

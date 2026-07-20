@@ -2,23 +2,23 @@ import {
   videoStreamResponseSchema,
   type VideoStreamRequest,
   type VideoClientParams,
-  type VideoStats,
-} from "@/schemas";
-import { stream as streamRpc } from "@/client/rpc/rpc-client";
-import { generateClientRequestId } from "@/client/api/client-request-id";
-import { decodeBase64, encodeBase64 } from "@/utils/encoding";
+  type VideoStats
+} from '@/schemas'
+import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface VideoProgressTick {
-  step: number;
-  totalSteps: number;
-  elapsedMs: number;
+  step: number
+  totalSteps: number
+  elapsedMs: number
 }
 
 export interface VideoResult {
-  requestId: string;
-  progressStream: AsyncGenerator<VideoProgressTick>;
-  outputs: Promise<Uint8Array[]>;
-  stats: Promise<VideoStats | undefined>;
+  requestId: string
+  progressStream: AsyncGenerator<VideoProgressTick>
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<VideoStats | undefined>
 }
 
 /**
@@ -27,10 +27,13 @@ export interface VideoResult {
  * @param params - Video request parameters (model, prompt, dimensions, frame count, fps, sampler, seed, etc.).
  * @returns A result object exposing `requestId` (stable identifier for this in-flight generation), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated video buffers, typically a single AVI file), and `stats` (promise of generation statistics).
  *
- * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video). For `img2vid`,
- * load the Wan pipeline with `modelConfig.clipVisionModelSrc` set to
- * `clip_vision_h.safetensors`. On React Native, prefer a `modelId` loaded with a
- * `delegate` since the bundled video diffusion models are too large for typical mobile devices.
+ * Supports `txt2vid` (text-to-video) and `img2vid` (image-to-video) for both the
+ * Wan and LTX-2 layouts. For Wan `img2vid`, load the pipeline with
+ * `modelConfig.clipVisionModelSrc` set to `clip_vision_h.safetensors`; LTX-2
+ * `img2vid` conditions on the first frame through its video VAE and needs no
+ * CLIP vision weights (the same LTX-2 model loaded for txt2vid also does
+ * img2vid). On React Native, prefer a `modelId` loaded with a `delegate` since
+ * the bundled video diffusion models are too large for typical mobile devices.
  *
  * @example Basic txt2vid generation
  * ```typescript
@@ -92,108 +95,110 @@ export interface VideoResult {
  * ```
  */
 export function video(params: VideoClientParams): VideoResult {
-  const requestId = generateClientRequestId();
+  const requestId = generateClientRequestId()
 
-  const { control_frames, init_image, ...rest } = params;
+  const { control_frames, init_image, ...rest } = params
   const request: VideoStreamRequest = {
     ...rest,
     ...(control_frames !== undefined && {
-      control_frames: control_frames.map(encodeBase64),
+      control_frames: control_frames.map(encodeBase64)
     }),
     ...(init_image !== undefined && {
-      init_image: encodeBase64(init_image),
+      init_image: encodeBase64(init_image)
     }),
-    type: "videoStream",
-    requestId,
-  };
+    type: 'videoStream',
+    requestId
+  }
 
-  let statsResolver: (value: VideoStats | undefined) => void = () => {};
-  let statsRejecter: (error: unknown) => void = () => {};
+  let statsResolver: (value: VideoStats | undefined) => void = () => {}
+  let statsRejecter: (error: unknown) => void = () => {}
   const statsPromise = new Promise<VideoStats | undefined>((resolve, reject) => {
-    statsResolver = resolve;
-    statsRejecter = reject;
-  });
-  statsPromise.catch(() => {});
+    statsResolver = resolve
+    statsRejecter = reject
+  })
+  statsPromise.catch(() => {})
 
-  const progressQueue: VideoProgressTick[] = [];
-  const collectedBuffers: Uint8Array[] = [];
-  let progressDone = false;
-  let progressResolve: (() => void) | null = null;
-  let streamError: Error | null = null;
+  const progressQueue: VideoProgressTick[] = []
+  const collectedBuffers: Uint8Array[] = []
+  let progressDone = false
+  let progressResolve: (() => void) | null = null
+  let streamError: Error | null = null
 
-  let outputsResolver: (value: Uint8Array[]) => void = () => {};
-  let outputsRejecter: (error: unknown) => void = () => {};
+  let outputsResolver: (value: Uint8Array[]) => void = () => {}
+  let outputsRejecter: (error: unknown) => void = () => {}
   const outputsPromise = new Promise<Uint8Array[]>((resolve, reject) => {
-    outputsResolver = resolve;
-    outputsRejecter = reject;
-  });
-  outputsPromise.catch(() => {});
+    outputsResolver = resolve
+    outputsRejecter = reject
+  })
+  outputsPromise.catch(() => {})
 
   async function processResponses() {
     try {
       for await (const response of streamRpc(request)) {
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "videoStream"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'videoStream'
         ) {
-          const parsed = videoStreamResponseSchema.parse(response);
+          const parsed = videoStreamResponseSchema.parse(response)
 
           if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
             progressQueue.push({
               step: parsed.step,
               totalSteps: parsed.totalSteps,
-              elapsedMs: parsed.elapsedMs,
-            });
+              elapsedMs: parsed.elapsedMs
+            })
             if (progressResolve) {
-              progressResolve();
-              progressResolve = null;
+              progressResolve()
+              progressResolve = null
             }
           }
 
           if (parsed.data) {
-            collectedBuffers.push(decodeBase64(parsed.data));
+            collectedBuffers.push(decodeBase64(parsed.data))
           }
 
           if (parsed.done) {
-            statsResolver(parsed.stats);
-            outputsResolver(collectedBuffers);
+            statsResolver(parsed.stats)
+            outputsResolver(collectedBuffers)
           }
         }
       }
     } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error));
-      statsRejecter(streamError);
-      outputsRejecter(streamError);
+      streamError = error instanceof Error ? error : new Error(String(error))
+      statsRejecter(streamError)
+      outputsRejecter(streamError)
     }
 
-    progressDone = true;
+    progressDone = true
     if (progressResolve) {
-      progressResolve();
-      progressResolve = null;
+      progressResolve()
+      progressResolve = null
     }
   }
 
-  void processResponses();
+  void processResponses()
 
   const progressStream = (async function* (): AsyncGenerator<VideoProgressTick> {
     while (true) {
       if (progressQueue.length > 0) {
-        yield progressQueue.shift()!;
+        yield progressQueue.shift()!
       } else if (progressDone) {
-        if (streamError) throw streamError as Error;
-        return;
+        if (streamError) throw streamError as Error
+        return
       } else {
-        await new Promise<void>((resolve) => { progressResolve = resolve; });
+        await new Promise<void>((resolve) => {
+          progressResolve = resolve
+        })
       }
     }
-  })();
+  })()
 
   return {
     requestId,
     progressStream,
     outputs: outputsPromise,
-    stats: statsPromise,
-  };
+    stats: statsPromise
+  }
 }

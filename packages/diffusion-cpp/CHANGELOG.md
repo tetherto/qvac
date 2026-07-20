@@ -1,5 +1,176 @@
 # Changelog
 
+## [0.15.1] - 2026-07-17
+
+### Fixed
+
+- Bumped the `stable-diffusion-cpp` vcpkg dependency to `2026-07-03#5`: the
+  Wan VAE temporal upsample now matches the reference first-chunk "Rep"
+  semantics (`time_conv` runs with causal zero padding on the first latent
+  chunk, the first doubled frame is trimmed, and the temporal feat cache is
+  seeded). This restores Wan2.2 VAE decode parity with the PyTorch reference
+  (cosine 1.000000 / 79 dB PSNR, previously 0.9959 / 27 dB — visually
+  near-identical but numerically wrong on the first frames). Encode and
+  TAEHV paths are unaffected.
+
+## [0.15.0] - 2026-07-16
+
+This release adds an exhaustive per-phase timing breakdown to image and video
+generation runtime statistics.
+
+### Features
+
+- `RuntimeStats` and `VideoRuntimeStats` now report `conditionerMs`,
+  `denoiseMs`, `vaeMs`, `postProcessMs`, and `stepsPerSecond`.
+- The phase timings account for the full generation duration:
+  `conditionerMs + denoiseMs + vaeMs + postProcessMs == generationMs`.
+- Timing boundaries distinguish the text-conditioning, denoising, VAE decode,
+  and post-processing work for image and video jobs. Single-step runs report
+  `denoiseMs` and `stepsPerSecond` as `0`.
+
+## [0.14.1] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.14.0] - 2026-07-13
+
+This release adds Ideogram 4 text-to-image support with split unconditional (CFG) diffusion weights, Qwen3-VL text encoding, and structured caption conditioning. It also includes critical review fixes: explicit CFG enforcement, correct FP8 weight_scale ordering for Ideogram linear layers, and registry-first build resolution that removes local port overlays.
+
+### Features
+
+#### Ideogram 4 text-to-image generation
+
+The diffusion addon now supports Ideogram 4 end-to-end, wiring the split unconditional (CFG) diffusion model through a new `uncondDiffusionModelPath` field in both the JavaScript API and native C++ config. Structured JSON caption conditioning with explicit bounding boxes is required for reliable image quality; plain-text prompts yield degenerate outputs and model placeholder ("Image blocked by safety filter") fallbacks.
+
+`ImgStableDiffusion` accepts a new `uncondModel` file key, `index.d.ts` documents the Qwen3-VL text encoder for Ideogram, and the `examples/generate-ideogram-coffee.js` and `examples/generate-ideogram-tcg.js` scripts demonstrate photoreal and card-game art styles with structured captions.
+
+#### Ideogram CFG enforcement and correctness
+
+- **CFG model requirement**: Ideogram generation now explicitly fails (returns `null` instead of silently falling back to conditional weights) if classifier-free guidance is requested but the unconditional diffusion model was not successfully loaded.
+- **Weight-scale ordering fix**: Ideogram's FP8 `weight_scale` tensors are now applied with the correct computation order: `(x @ W) * weight_scale + b` instead of `(x @ W + b) * weight_scale`. This is critical for official FP8-with-scale checkpoints.
+
+### Changed
+
+- The diffusion-cpp addon now resolves `stable-diffusion-cpp@2026-07-03#4` directly from the qvac-registry-vcpkg instead of a package-local overlay port (PR qvac-registry-vcpkg#242).
+- Parameter lifecycle management restored for reusable contexts: `free_params_immediately`, `offload_params_to_cpu`, `keep_clip_on_cpu`, and `keep_vae_on_cpu` are now properly mapped to `sd_ctx_params_t`, fixing crashes during model cancel/reuse sequences.
+- Video loading now passes the required `uncondDiffusionModelPath` parameter to prevent addon validation errors (related to Ideogram support).
+
+### Fixed
+
+- Mobile integration tests now include explicit model download URL fallbacks, ensuring tests can fetch models when the test manifest is not bundled into the Device Farm app.
+- Mobile Device Farm test parameters (image sizes, generation steps) optimized to fit within 15-minute execution budget without sacrificing desktop test fidelity.
+- `vae_decode_only` config flag added to explicitly disable VAE decoder-only mode, allowing img2img/fusion/hires image-to-image workflows that require the VAE encoder.
+- Upstream `sd_ctx_params_t` API refactoring ported: dropped removed fields (`vae_decode_only`, `free_params_immediately`, `keep_clip_on_cpu`, `keep_vae_on_cpu`) and added `params_backend` for explicit parameter placement intent.
+
+### Pull Requests
+
+- [#3147](https://github.com/tetherto/qvac/pull/3147) - feat(diffusion-cpp): add Ideogram 4 support
+- [qvac-ext-stable-diffusion.cpp#19](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/19) - Ideogram 4 wiring + uncondDiffusionModelPath field
+- [qvac-ext-stable-diffusion.cpp#20](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/20) - Ideogram review fixes (weight_scale ordering, CFG enforcement, parameter staging)
+- [qvac-registry-vcpkg#242](https://github.com/tetherto/qvac-registry-vcpkg/pull/242) - stable-diffusion-cpp 2026-07-03#4 publish
+
+## [0.13.3] - 2026-07-06
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.13.2] - 2026-07-06
+
+This release exposes a `main-gpu` config for image generation, giving callers the same GPU-pinning control the LLM path already has. On multi-GPU hosts, diffusion previously fell back to whatever device the backend picked.
+
+### Features
+
+#### Pin the GPU for image generation via `main-gpu`
+
+`SdConfig` now accepts a `main-gpu` key (`number | 'integrated' | 'dedicated'`) that selects which GPU to use when `device` is `'gpu'`. Pass a device index, `'integrated'`, or `'dedicated'` (the discrete GPU with the most VRAM); omit it to let the backend choose the first enumerated device.
+
+The value is resolved against the addon's own ggml device enumeration, so the selected device cannot desync from the list the backend actually uses. Resolution is pinned deterministically through the stable-diffusion `sd_ctx_params_t.backend` C API rather than any process-wide environment mutation.
+
+### Changed
+
+- When an explicit `main-gpu` request cannot be satisfied (e.g. `'integrated'` on a host with no integrated GPU, `'dedicated'` with no discrete GPU, or an out-of-range index), the addon now falls back to CPU instead of silently substituting a different GPU. An unset `main-gpu` is unchanged and keeps the backend default (first enumerated device).
+- `main-gpu` is ignored when `device` is `'cpu'`, and rejected with an `InvalidArgument` error on mobile (Android/iOS), which are single-GPU devices.
+
+## Pull Requests
+
+- [#2936](https://github.com/tetherto/qvac/pull/2936) - QVAC-20811 fix[api]: expose main-gpu config for image generation
+
+## [0.13.1] - 2026-07-05
+
+This release restores the diffusion-cpp npm publish path after the LTX dependency update made the native prebuild package too large. The addon now consumes slimmed `stable-diffusion-cpp` and `ggml` registry ports that remove unused tokenizer and Vulkan shader payloads while preserving the supported LTX, FLUX, SD3, and Wan model paths.
+
+### Changed
+
+- `stable-diffusion-cpp` now resolves to `2026-07-03#2`, which depends on the matching slim `ggml` port revision.
+- The diffusion-cpp vcpkg registry baseline is restored to the pre-LTX value while the package explicitly opts into the bumped `stable-diffusion-cpp` port revision.
+
+### Fixed
+
+#### Keep LTX prebuilds under the npm package size limit
+
+The native dependency stack no longer embeds unused Gemma2/GPT-OSS tokenizer vocab assets, desktop Adreno/TBQ/PQ/TQ1/TQ2/MXFP4/NVFP4 Vulkan shader payloads, or Vulkan training/backward/loss shader payloads into every diffusion-cpp prebuild. This reduces the packaged native binary footprint and should allow the `@qvac/diffusion-cpp` package to publish successfully again.
+
+#### Reduce LTX smoke-test memory pressure
+
+The LTX integration smoke test now uses a smaller text-encoder configuration so CI can exercise the slim dependency stack without exceeding Metal memory on M4 runners.
+
+## Pull Requests
+
+- [#3058](https://github.com/tetherto/qvac/pull/3058) - chore(diffusion-cpp): reduce package size
+
+## [0.13.0] - 2026-07-03
+
+This release adds LTX-2 text-to-video support alongside the existing Wan video path. LTX-2 jobs can now generate synchronized video and audio through the diffusion addon, with model-aware validation and documentation for the additional runtime files required by the LTX engine.
+
+### Features
+
+#### LTX-2 video and audio generation
+
+`VideoStableDiffusion` now accepts the LTX-2 companion files needed for text-to-video with audio: a Gemma text encoder through `files.llm`, an audio VAE through `files.audioVae`, and embedding connector weights through `files.embeddingsConnectors`. When the native engine returns audio, the addon muxes the generated PCM stream into the output AVI and reports `hasAudio` and `audioSampleRate` in video runtime stats.
+
+#### Model-aware video validation
+
+The JavaScript and native validation layers now distinguish Wan from LTX-2 video jobs. Wan keeps its existing 16-aligned dimension and `4*k+1` frame-count rules, while LTX-2 requires 32-aligned dimensions and `8*k+1` frame counts, up to 257 frames. The new `temporal_tiling` option is forwarded to the LTX-2 video VAE decode path to reduce peak memory pressure.
+
+#### LTX examples and integration coverage
+
+The package now includes `examples/generate-video-ltx.js`, `scripts/download-model-ltx.sh`, the `npm run generate:ltx` and `npm run test:ltx` scripts, and an LTX-2 integration smoke test that can download or reuse local model weights.
+
+### Changed
+
+- The diffusion addon now consumes LTX-capable `ggml` and `stable-diffusion-cpp` vcpkg registry ports rather than package-local overlay ports.
+- `video.d.ts` documents the LTX-only file inputs, validation rules, audio stats, and progress behavior.
+
+## Pull Requests
+
+- [#2518](https://github.com/tetherto/qvac/pull/2518) - QVAC-19914 feat(diffusion-cpp): LTX-2 video + audio support in the addon
+
+## [0.12.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.12.0] - 2026-06-22
+
+Windows prebuilds now ship without a dependency on the MSVC redistributable.
+Addons link the static Visual C++ runtime (`/MT`) via shared
+`vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`, and CMake no longer links
+`msvcrt.lib`, which had forced dynamic CRT imports. Per-package vcpkg overlays
+were consolidated into the monorepo `vcpkg-overlays/` tree. No public API change.
+
+### Changed
+
+- Windows `.bare` prebuilds no longer import `vcruntime140.dll`, `msvcp140.dll`,
+  or UCRT DLLs; CI verifies this with `dumpbin` on every Windows prebuild.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
 ## [0.11.2] - 2026-06-05
 
 This release restores caller control over where the diffusion text-conditioning path runs on macOS. It removes an Apple-specific override that forced the CLIP/text encoder path onto CPU.

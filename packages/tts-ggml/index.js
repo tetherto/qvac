@@ -12,10 +12,15 @@ const {
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTSGgml, ERR_CODES } = require('./lib/error')
 const { splitTtsText } = require('./lib/textChunker')
-const { accumulateTextStream } = require('./lib/textStreamAccumulator')
+const { accumulateTextStream, DEFAULT_FLUSH_AFTER_MS } = require('./lib/textStreamAccumulator')
 
 const ENGINE_CHATTERBOX = 'chatterbox'
 const ENGINE_SUPERTONIC = 'supertonic'
+
+// Accepted output sample-rate window (Hz): below 8 kHz speech is unintelligible;
+// above 192 kHz is past any audio DAC and only wastes memory/CPU on resampling.
+const MIN_OUTPUT_SAMPLE_RATE = 8000
+const MAX_OUTPUT_SAMPLE_RATE = 192000
 
 const CHATTERBOX_T3_TURBO = 'chatterbox-t3-turbo.gguf'
 const CHATTERBOX_T3_MTL = 'chatterbox-t3-mtl.gguf'
@@ -36,7 +41,7 @@ const SUPERTONIC_V3_RE = /^supertonic3(-[a-z0-9_]+)?\.gguf$/i
 // Preference when several v3 tiers share a modelDir: highest precision first.
 const SUPERTONIC_V3_QUANT_ORDER = ['f16', 'f32', 'q8_0', 'q4_0']
 
-function firstNonEmpty (...candidates) {
+function firstNonEmpty(...candidates) {
   for (let i = 0; i < candidates.length; i++) {
     const v = candidates[i]
     if (v != null && v !== '') return v
@@ -44,7 +49,7 @@ function firstNonEmpty (...candidates) {
   return undefined
 }
 
-function fileExistsSafe (p) {
+function fileExistsSafe(p) {
   if (!p) return false
   try {
     return fs.existsSync(p)
@@ -64,7 +69,7 @@ function fileExistsSafe (p) {
  * @param {string|undefined} modelDir
  * @returns {string|undefined}
  */
-function findSupertonicV3InDir (modelDir) {
+function findSupertonicV3InDir(modelDir) {
   if (!modelDir) return undefined
   let entries
   try {
@@ -96,7 +101,7 @@ function findSupertonicV3InDir (modelDir) {
  *
  * @param {Record<string, unknown>} files
  */
-function normalizeGgmlFiles (files) {
+function normalizeGgmlFiles(files) {
   if (files == null || typeof files !== 'object') {
     return {}
   }
@@ -105,12 +110,19 @@ function normalizeGgmlFiles (files) {
     modelDir: firstNonEmpty(f.modelDir),
     t3Model: firstNonEmpty(f.t3Model, f.t3ModelPath, f.t3),
     s3genModel: firstNonEmpty(f.s3genModel, f.s3genModelPath, f.s3gen),
-    supertonicModel: firstNonEmpty(
-      f.supertonicModel,
-      f.supertonicModelPath,
-      f.supertonic
-    ),
+    supertonicModel: firstNonEmpty(f.supertonicModel, f.supertonicModelPath, f.supertonic),
     voicesDir: firstNonEmpty(f.voicesDir),
+    // LavaSR enhancer GGUF: single-file Vocos bandwidth extension, produced by
+    // tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. One canonical key
+    // (the alternative is enhancer.enhancerPath on the options object).
+    lavasrEnhancer: firstNonEmpty(f.lavasrEnhancer),
+    // LavaSR denoiser GGUF: UL-UNAS speech denoiser that runs BEFORE the
+    // enhancer (rate-preserving), produced by
+    // tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. One canonical key
+    // (the alternative is denoiser.denoiserPath on the options object).
+    // The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+    // PR #78; a provided path activates once the pinned tts-cpp includes it.
+    lavasrDenoiser: firstNonEmpty(f.lavasrDenoiser),
     // Directory of the compiled MeCab/IPAdic dictionary (Japanese) and
     // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
     // from the QVAC model registry) and passes the local paths; the
@@ -128,14 +140,13 @@ function normalizeGgmlFiles (files) {
  *   4. Default → Chatterbox (turbo or MTL is decided later inside the
  *      Chatterbox path resolver based on which T3 file is present).
  */
-function detectEngineType (engine, normalizedFiles) {
+function detectEngineType(engine, normalizedFiles) {
   if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
     return engine
   }
   if (engine != null && engine !== '') {
     throw new Error(
-      "tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " +
-        "(got '" + engine + "')"
+      "tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " + "(got '" + engine + "')"
     )
   }
   if (normalizedFiles.t3Model || normalizedFiles.s3genModel) return ENGINE_CHATTERBOX
@@ -147,8 +158,8 @@ function detectEngineType (engine, normalizedFiles) {
     const supertonicMtl = path.join(normalizedFiles.modelDir, SUPERTONIC_MTL)
     const supertonicV3 = findSupertonicV3InDir(normalizedFiles.modelDir)
     const hasChatterbox = fileExistsSafe(turboT3) || fileExistsSafe(mtlT3)
-    const hasSupertonic = fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl) ||
-      !!supertonicV3
+    const hasSupertonic =
+      fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl) || !!supertonicV3
     if (hasChatterbox) return ENGINE_CHATTERBOX
     if (hasSupertonic) return ENGINE_SUPERTONIC
   }
@@ -162,7 +173,7 @@ function detectEngineType (engine, normalizedFiles) {
  * build when English isn't on disk.  Callers that explicitly want the
  * multilingual variant should pass `files.supertonicModel` directly.
  */
-function resolveSupertonicModelDirPath (modelDir) {
+function resolveSupertonicModelDirPath(modelDir) {
   const supertonicEn = path.join(modelDir, SUPERTONIC_DEFAULT)
   const supertonicMtl = path.join(modelDir, SUPERTONIC_MTL)
   const supertonicV3 = findSupertonicV3InDir(modelDir)
@@ -178,7 +189,7 @@ function resolveSupertonicModelDirPath (modelDir) {
  * the only state where mtl beats turbo at the file-detection layer).
  * Otherwise fall back to the turbo English layout.
  */
-function resolveChatterboxModelDirPaths (modelDir) {
+function resolveChatterboxModelDirPaths(modelDir) {
   const turboT3 = path.join(modelDir, CHATTERBOX_T3_TURBO)
   const mtlT3 = path.join(modelDir, CHATTERBOX_T3_MTL)
   const defaultS3 = path.join(modelDir, CHATTERBOX_S3GEN_DEFAULT)
@@ -201,7 +212,7 @@ function resolveChatterboxModelDirPaths (modelDir) {
  * @param {unknown} textStream
  * @returns {boolean}
  */
-function defaultAccumulateSentencesForStreamInput (textStream) {
+function defaultAccumulateSentencesForStreamInput(textStream) {
   if (textStream == null) return false
   if (typeof textStream === 'string') return false
   if (Array.isArray(textStream)) return false
@@ -209,7 +220,7 @@ function defaultAccumulateSentencesForStreamInput (textStream) {
   return false
 }
 
-function ttsOutputDebugString (data) {
+function ttsOutputDebugString(data) {
   if (!data) return ''
   if (typeof data !== 'object') return data.toString()
   // Skip the heavy fields (outputArray = Int16Array of 24 kHz PCM
@@ -228,6 +239,86 @@ function ttsOutputDebugString (data) {
   return JSON.stringify(summary)
 }
 
+function resolveDefaultLazySessionLoading(lazySessionLoading) {
+  if (lazySessionLoading != null) return lazySessionLoading
+  return platform() === 'ios' || platform() === 'android'
+}
+
+function validateOutputSampleRate(outputSampleRate) {
+  if (outputSampleRate == null) return null
+  if (outputSampleRate < MIN_OUTPUT_SAMPLE_RATE || outputSampleRate > MAX_OUTPUT_SAMPLE_RATE) {
+    throw new Error(
+      'outputSampleRate must be between ' +
+        MIN_OUTPUT_SAMPLE_RATE +
+        ' and ' +
+        MAX_OUTPUT_SAMPLE_RATE +
+        ', got ' +
+        outputSampleRate
+    )
+  }
+  return outputSampleRate
+}
+
+// LavaSR enhancer (opt-in): enhancement is ON iff a GGUF path is provided (via
+// files.lavasrEnhancer or enhancer.enhancerPath), so there is no separate
+// on/off flag to keep in sync. A provided `enhancer` block must use the
+// supported type so a typo can't silently disable it.
+function resolveEnhancerGgufPath(normalizedFiles, enhancer) {
+  if (enhancer != null && enhancer.type !== 'lavasr') {
+    throw new Error(`tts-ggml: unknown enhancer.type '${enhancer.type}', expected 'lavasr'.`)
+  }
+  return firstNonEmpty(normalizedFiles.lavasrEnhancer, enhancer ? enhancer.enhancerPath : undefined)
+}
+
+// LavaSR denoiser (opt-in, mirrors the enhancer): runs BEFORE the enhancer and
+// is rate-preserving, enabled purely by supplying a GGUF path. A provided
+// `denoiser` block must use the supported type so a typo can't silently disable
+// it.
+function resolveDenoiserGgufPath(normalizedFiles, denoiser) {
+  if (denoiser != null && denoiser.type !== 'lavasr') {
+    throw new Error(`tts-ggml: unknown denoiser.type '${denoiser.type}', expected 'lavasr'.`)
+  }
+  return firstNonEmpty(normalizedFiles.lavasrDenoiser, denoiser ? denoiser.denoiserPath : undefined)
+}
+
+// `layers != 0` (not > 0) so a future llama.cpp-style nGpuLayers:-1 ("offload
+// all layers") reads as "wants GPU" rather than falsely passing as "wants CPU".
+function assertGpuIntentConsistent(useGPU, nGpuLayers) {
+  if (typeof useGPU !== 'boolean' || nGpuLayers == null) return
+  const layersWantGpu = nGpuLayers !== 0
+  if (useGPU === layersWantGpu) return
+  throw new Error(
+    'tts-ggml: useGPU=' +
+      useGPU +
+      ' conflicts with nGpuLayers=' +
+      nGpuLayers +
+      '. ' +
+      'Either drop one of the two, or make them agree ' +
+      '(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).'
+  )
+}
+
+function isAudioOutputEvent(data) {
+  return data != null && typeof data === 'object' && !!data.outputArray
+}
+
+function isStatsEvent(data) {
+  return (
+    data != null &&
+    typeof data === 'object' &&
+    ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
+  )
+}
+
+function computeSentenceStreamStats(chunks, acc) {
+  const totalChars = chunks.join('').length
+  return {
+    ...acc,
+    tokensPerSecond: acc.totalTime > 0 ? totalChars / acc.totalTime : 0,
+    realTimeFactor: acc.audioDurationMs > 0 ? (acc.totalTime * 1000.0) / acc.audioDurationMs : 0
+  }
+}
+
 /**
  * GGML-backed Chatterbox TTS (via the `tts-cpp` / qvac-tts.cpp library).
  *
@@ -240,41 +331,33 @@ function ttsOutputDebugString (data) {
  * PCM per chunk as it's produced).  See README.md for usage.
  */
 class TTSGgml {
-  constructor (options = {}) {
-    const {
-      files: filesInput = {},
-      config = {},
-      logger,
-      lazySessionLoading,
-      engine,
-      referenceAudio,
-      voiceDir,
-      seed,
-      nGpuLayers,
-      nCtx,
-      kvCacheType,
-      threads,
-      streamChunkTokens,
-      streamFirstChunkTokens,
-      cfmSteps,
-      voice,
-      voiceName,
-      steps,
-      numInferenceSteps,
-      speed,
-      noiseNpyPath,
-      backendsDir,
-      openclCacheDir,
-      mecabDictDir,
-      mecabDictPath,
-      cangjieTsvPath,
-      opts,
-      exclusiveRun
-    } = options
+  constructor(options = {}) {
+    this._initInferenceState(options)
 
-    this.opts = opts || {}
-    this.exclusiveRun = !!exclusiveRun
-    this.logger = new QvacLogger(logger)
+    const normalizedFiles = normalizeGgmlFiles(options.files || {})
+    this._config = { ...(options.config || {}) }
+    this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading)
+    this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate)
+
+    this._resolveEngineAndModelPaths(options.engine, normalizedFiles)
+    this._resolveDictionaryPaths(options, normalizedFiles)
+    this._assignSynthesisOptions(options)
+    this._enhancerGgufPath = resolveEnhancerGgufPath(normalizedFiles, options.enhancer)
+    this._denoiserGgufPath = resolveDenoiserGgufPath(normalizedFiles, options.denoiser)
+    this._resolveBackendPaths(options)
+
+    // Run the conflict check before any engine-specific GPU policy so a caller
+    // passing { useGPU:false, nGpuLayers:99 } gets the precise conflict message
+    // instead of, e.g., the Supertonic branch firing first and confusing them.
+    assertGpuIntentConsistent(this._config.useGPU, this._nGpuLayers)
+    this._assertEngineStreamingSupport()
+    this._applyDefaultGpuIntent()
+  }
+
+  _initInferenceState(options) {
+    this.opts = options.opts || {}
+    this.exclusiveRun = !!options.exclusiveRun
+    this.logger = new QvacLogger(options.logger)
     this.state = {
       configLoaded: false,
       weightsLoaded: false,
@@ -282,7 +365,8 @@ class TTSGgml {
     }
     this.addon = null
     this._sentenceStreamCtx = null
-    /** Serializes `run({ streamOutput: true })`, `runStream`, and `runStreaming` until each response settles (Whisper-style). */
+    // Serializes run({ streamOutput: true }), runStream, and runStreaming until
+    // each response settles (Whisper-style).
     this._ttsInferenceQueueWaiter = Promise.resolve()
     this._job = createJobHandler({
       cancel: () => {
@@ -292,26 +376,14 @@ class TTSGgml {
     })
     this._runExclusive = this.exclusiveRun
       ? exclusiveRunQueue()
-      : async function runNow (fn) {
-        return fn()
-      }
+      : async function runNow(fn) {
+          return fn()
+        }
+  }
 
-    const normalizedFiles = normalizeGgmlFiles(filesInput)
-    this._config = { ...config }
-
-    this._lazySessionLoading = lazySessionLoading != null
-      ? lazySessionLoading
-      : (platform() === 'ios' || platform() === 'android')
-
-    const outputSampleRate = this._config.outputSampleRate
-    if (outputSampleRate != null && (outputSampleRate < 8000 || outputSampleRate > 192000)) {
-      throw new Error('outputSampleRate must be between 8000 and 192000, got ' + outputSampleRate)
-    }
-    this._outputSampleRate = outputSampleRate || null
-
+  _resolveEngineAndModelPaths(engine, normalizedFiles) {
     this._engineType = detectEngineType(engine, normalizedFiles)
     this._voicesDir = normalizedFiles.voicesDir
-
     if (this._engineType === ENGINE_SUPERTONIC) {
       const root = normalizedFiles.modelDir
       this._supertonicModelPath = firstNonEmpty(
@@ -320,128 +392,118 @@ class TTSGgml {
       )
       this._t3ModelPath = undefined
       this._s3genModelPath = undefined
-    } else {
-      const root = normalizedFiles.modelDir
-      if (root) {
-        const resolved = resolveChatterboxModelDirPaths(root)
-        this._t3ModelPath = firstNonEmpty(
-          normalizedFiles.t3Model,
-          resolved.t3
-        )
-        this._s3genModelPath = firstNonEmpty(
-          normalizedFiles.s3genModel,
-          resolved.s3
-        )
-      } else {
-        this._t3ModelPath = normalizedFiles.t3Model
-        this._s3genModelPath = normalizedFiles.s3genModel
-      }
-      this._supertonicModelPath = undefined
+      return
     }
+    const root = normalizedFiles.modelDir
+    if (root) {
+      const resolved = resolveChatterboxModelDirPaths(root)
+      this._t3ModelPath = firstNonEmpty(normalizedFiles.t3Model, resolved.t3)
+      this._s3genModelPath = firstNonEmpty(normalizedFiles.s3genModel, resolved.s3)
+    } else {
+      this._t3ModelPath = normalizedFiles.t3Model
+      this._s3genModelPath = normalizedFiles.s3genModel
+    }
+    this._supertonicModelPath = undefined
+  }
 
-    // Multilingual preprocessing dictionaries (Chatterbox MTL only).
-    // Accept either a top-level option or a `files.*` entry; the host
-    // resolves/stages them (e.g. from the QVAC model registry) and the
-    // addon forwards the local paths to tts-cpp.
+  // Multilingual preprocessing dictionaries (Chatterbox MTL only): accept a
+  // top-level option or a files.* entry; the host resolves/stages them and the
+  // addon forwards the local paths to tts-cpp.
+  _resolveDictionaryPaths(options, normalizedFiles) {
     this._mecabDictPath = firstNonEmpty(
-      mecabDictPath,
-      mecabDictDir,
+      options.mecabDictPath,
+      options.mecabDictDir,
       normalizedFiles.mecabDictDir
     )
-    this._cangjieTsvPath = firstNonEmpty(
-      cangjieTsvPath,
-      normalizedFiles.cangjieTsvPath
-    )
+    this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath)
+  }
 
-    this._referenceAudio = referenceAudio
-    this._voiceDir = voiceDir
-    this._seed = seed
-    this._nGpuLayers = nGpuLayers
-    this._nCtx = nCtx
-    this._kvCacheType = kvCacheType
-    this._threads = threads
-    this._streamChunkTokens = streamChunkTokens
-    this._streamFirstChunkTokens = streamFirstChunkTokens
-    this._cfmSteps = cfmSteps
-    this._voice = firstNonEmpty(voice, voiceName)
-    this._steps = firstNonEmpty(steps, numInferenceSteps)
-    this._speed = speed
-    this._noiseNpyPath = noiseNpyPath
+  _assignSynthesisOptions(options) {
+    this._referenceAudio = options.referenceAudio
+    this._voiceDir = options.voiceDir
+    this._seed = options.seed
+    this._nGpuLayers = options.nGpuLayers
+    this._nCtx = options.nCtx
+    this._kvCacheType = options.kvCacheType
+    this._threads = options.threads
+    this._streamChunkTokens = options.streamChunkTokens
+    this._streamFirstChunkTokens = options.streamFirstChunkTokens
+    this._cfmSteps = options.cfmSteps
+    this._cfgRate = options.cfgRate
+    this._voice = firstNonEmpty(options.voice, options.voiceName)
+    this._steps = firstNonEmpty(options.steps, options.numInferenceSteps)
+    this._speed = options.speed
+    this._noiseNpyPath = options.noiseNpyPath
+  }
 
-    // Per-platform fallback for `backendsDir` when the host didn't
-    // pass one. Mirrors the qvac/packages/llm-llamacpp +
-    // transcription-parakeet resolution shape
+  // Per-platform fallback for backendsDir when the host didn't pass one; mirrors
+  // the llm-llamacpp + transcription-parakeet resolution shape. The Vulkan cache
+  // dir is forwarded so the backend's first-dispatch pipeline-compile cost is
+  // paid once per install instead of once per process (empty -> no cache).
+  _resolveBackendPaths(options) {
     this._backendsDir = firstNonEmpty(
-      backendsDir,
+      options.backendsDir,
       this._config?.backendsDir,
       path.join(__dirname, 'prebuilds')
     )
-    this._openclCacheDir = firstNonEmpty(
-      openclCacheDir,
-      this._config?.openclCacheDir
-    )
+    this._openclCacheDir = firstNonEmpty(options.openclCacheDir, this._config?.openclCacheDir)
+    this._vulkanCacheDir = firstNonEmpty(options.vulkanCacheDir, this._config?.vulkanCacheDir)
+  }
 
-    // Run the conflict check before any engine-specific GPU policy so a
-    // caller passing { useGPU:false, nGpuLayers:99 } gets the precise
-    // conflict message instead of, e.g., the Supertonic "GPU not
-    // supported" branch firing on `nGpuLayers > 0` and confusing them.
-    // `layers != 0` (rather than `layers > 0`) so a future llama.cpp-
-    // style `nGpuLayers: -1` ("offload all layers") doesn't falsely
-    // pass through as "wants CPU" against an explicit useGPU:true.
+  _assertEngineStreamingSupport() {
     if (
-      typeof this._config.useGPU === 'boolean' &&
-      this._nGpuLayers != null
+      this._engineType === ENGINE_SUPERTONIC &&
+      (this._streamChunkTokens != null || this._streamFirstChunkTokens != null)
     ) {
-      const layersWantGpu = this._nGpuLayers !== 0
-      if (this._config.useGPU !== layersWantGpu) {
-        throw new Error(
-          'tts-ggml: useGPU=' + this._config.useGPU +
-          ' conflicts with nGpuLayers=' + this._nGpuLayers + '. ' +
-          'Either drop one of the two, or make them agree ' +
-          '(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).'
-        )
-      }
-    }
-
-    if (this._engineType === ENGINE_SUPERTONIC) {
-      if (this._streamChunkTokens != null || this._streamFirstChunkTokens != null) {
-        throw new Error(
-          'tts-ggml: streamChunkTokens / streamFirstChunkTokens are Chatterbox-only ' +
+      throw new Error(
+        'tts-ggml: streamChunkTokens / streamFirstChunkTokens are Chatterbox-only ' +
           'options (sub-sentence native streaming via the chatterbox::Engine ' +
           'streaming chunked S3Gen+HiFT loop). Supertonic does not support sub-' +
           'sentence native streaming; use sentence-level streaming via the engine-' +
           'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
-        )
-      }
+      )
     }
-    // Default GPU off only when neither knob is set, for every engine. A
-    // caller passing nGpuLayers alone keeps it (no silent conflict with the
-    // JS-side default). Supertonic GPU intent now flows through to tts-cpp on
-    // GPU-capable hosts (Metal / Vulkan / CUDA); on Android it is forced back
-    // to CPU at the native engine boundary (SupertonicModel::loadLocked) until
-    // the Adreno OpenCL/Vulkan path stabilizes.
+    // LavaSR denoise + native chunk streaming is NOT supported yet: tts-cpp only
+    // exposes a one-shot denoise() today, so reject the combo up front rather
+    // than silently dropping denoising on the streaming path. Batch synthesis
+    // applies the denoiser normally.
+    if (
+      this._denoiserGgufPath &&
+      (this._streamChunkTokens != null || this._streamFirstChunkTokens != null)
+    ) {
+      throw new Error(
+        'tts-ggml: the LavaSR denoiser is not yet supported with Chatterbox ' +
+          'native chunk streaming (streamChunkTokens / streamFirstChunkTokens). ' +
+          'Use batch synthesis, or drop the denoiser for streaming. Streaming ' +
+          'denoise is a planned follow-up (needs a stateful streaming denoiser).'
+      )
+    }
+  }
+
+  // Default GPU off only when neither knob is set (every engine). A caller
+  // passing nGpuLayers alone keeps it; Supertonic GPU intent flows through to
+  // tts-cpp on GPU-capable hosts (Metal / Vulkan / CUDA, including Android).
+  _applyDefaultGpuIntent() {
     if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = false
     }
   }
 
-  getEngineType () {
+  getEngineType() {
     return this._engineType
   }
 
-  getApiDefinition () {
+  getApiDefinition() {
     const api = inferGetApiDefinition()
-    this.logger.debug(
-      `Using API definition: ${api} for platform: ${platform()}`
-    )
+    this.logger.debug(`Using API definition: ${api} for platform: ${platform()}`)
     return api
   }
 
-  getState () {
+  getState() {
     return this.state
   }
 
-  async load (..._args) {
+  async load(..._args) {
     if (this.state.destroyed) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_LOAD,
@@ -467,8 +529,15 @@ class TTSGgml {
    * @param {boolean} [input.streamOutput=false] - Chunked streaming output
    * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
    * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
+   * @param {AbortSignal} [input.signal] - Cancels a **non-streaming** `run()`: when
+   *   the signal aborts, `response.await()` rejects with the abort reason.  An
+   *   already-aborted signal rejects deterministically without dispatching the
+   *   engine (no native interrupt), so cancellation is race-free on fast hardware.
+   *   **Ignored when `streamOutput: true`** (and on `runStream` / `runStreaming`):
+   *   the streaming path does not thread the signal, so passing it there is a
+   *   silent no-op — neither cancels nor errors.
    */
-  async run (input) {
+  async run(input) {
     if (input && typeof input === 'object' && input.streamOutput === true) {
       if (typeof input.input !== 'string' || input.input.trim().length === 0) {
         throw new QvacErrorAddonTTSGgml({
@@ -493,10 +562,10 @@ class TTSGgml {
   /**
    * Serialize streaming runs until the returned {@link QvacResponse} settles.
    */
-  async _enqueueExclusiveTtsResponse (runFn) {
+  async _enqueueExclusiveTtsResponse(runFn) {
     const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
     let releaseSlot
-    this._ttsInferenceQueueWaiter = new Promise(resolve => {
+    this._ttsInferenceQueueWaiter = new Promise((resolve) => {
       releaseSlot = resolve
     })
     await prev
@@ -507,7 +576,12 @@ class TTSGgml {
       releaseSlot()
       throw err
     }
-    response.await().finally(() => { releaseSlot() }).catch(() => {})
+    response
+      .await()
+      .finally(() => {
+        releaseSlot()
+      })
+      .catch(() => {})
     return response
   }
 
@@ -519,7 +593,7 @@ class TTSGgml {
    * @param {string} text
    * @param {{ locale?: string, maxChunkScalars?: number }} [options]
    */
-  async runStream (text, options = {}) {
+  async runStream(text, options = {}) {
     const opts = options == null || typeof options !== 'object' ? {} : options
     return this.run({
       input: text,
@@ -548,7 +622,7 @@ class TTSGgml {
    * @param {number} [options.maxBufferScalars] - Max graphemes before hard flush (default by language).
    * @param {number} [options.flushAfterMs] - Idle flush after last fragment (default 500).
    */
-  async runStreaming (textStream, options = {}) {
+  async runStreaming(textStream, options = {}) {
     const streamOpts = this._resolveRunStreamingOptions(textStream, options)
     let normalized = this._normalizeTextStream(textStream)
     if (streamOpts.accumulateSentences) {
@@ -568,7 +642,7 @@ class TTSGgml {
     return this._runTextStreamOrchestrator(normalized)
   }
 
-  _resolveRunStreamingOptions (textStream, options) {
+  _resolveRunStreamingOptions(textStream, options) {
     const o = options == null || typeof options !== 'object' ? {} : options
     let accumulateSentences = o.accumulateSentences
     if (accumulateSentences === undefined) {
@@ -580,7 +654,7 @@ class TTSGgml {
         ? rawPreset
         : 'multilingual'
     const maxBufferScalars = o.maxBufferScalars
-    const flushAfterMs = o.flushAfterMs != null ? o.flushAfterMs : 500
+    const flushAfterMs = o.flushAfterMs != null ? o.flushAfterMs : DEFAULT_FLUSH_AFTER_MS
     const sentenceDelimiter =
       o.sentenceDelimiter instanceof RegExp ? o.sentenceDelimiter : undefined
     return {
@@ -592,7 +666,7 @@ class TTSGgml {
     }
   }
 
-  _normalizeTextStream (textStream) {
+  _normalizeTextStream(textStream) {
     if (textStream == null) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_APPEND,
@@ -600,7 +674,7 @@ class TTSGgml {
       })
     }
     if (typeof textStream === 'string') {
-      async function * oneString () {
+      async function* oneString() {
         yield textStream
       }
       return oneString()
@@ -609,7 +683,7 @@ class TTSGgml {
       return textStream
     }
     if (Array.isArray(textStream)) {
-      async function * fromArray () {
+      async function* fromArray() {
         for (let i = 0; i < textStream.length; i++) {
           yield textStream[i]
         }
@@ -617,7 +691,7 @@ class TTSGgml {
       return fromArray()
     }
     if (typeof textStream[Symbol.iterator] === 'function') {
-      async function * fromIterable () {
+      async function* fromIterable() {
         for (const x of textStream) {
           yield x
         }
@@ -630,7 +704,7 @@ class TTSGgml {
     })
   }
 
-  _runTextStreamOrchestrator (asyncTextSource) {
+  _runTextStreamOrchestrator(asyncTextSource) {
     const response = this._job.start()
     this._sentenceStreamCtx = {
       textStreamMode: true,
@@ -646,11 +720,7 @@ class TTSGgml {
     }
 
     this._sentenceStreamTextIterableDrive().catch((err) => {
-      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-        const rej = this._sentenceStreamCtx.chunkResolver.reject
-        this._sentenceStreamCtx.chunkResolver = null
-        rej(err)
-      }
+      this._rejectActiveChunk(err)
       this._sentenceStreamCtx = null
       this._job.fail(err)
     })
@@ -658,7 +728,7 @@ class TTSGgml {
     return response
   }
 
-  async _sentenceStreamTextIterableDrive () {
+  async _sentenceStreamTextIterableDrive() {
     const ctx = this._sentenceStreamCtx
     if (!ctx || !ctx.textStreamMode) return
     try {
@@ -677,11 +747,7 @@ class TTSGgml {
         await donePromise
       }
     } catch (err) {
-      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-        const rej = this._sentenceStreamCtx.chunkResolver.reject
-        this._sentenceStreamCtx.chunkResolver = null
-        rej(err)
-      }
+      this._rejectActiveChunk(err)
       this._sentenceStreamCtx = null
       this._job.fail(err)
       return
@@ -694,33 +760,20 @@ class TTSGgml {
     this._sentenceStreamCtx = null
 
     if (chunks.length === 0) {
-      if (this.opts?.stats) {
-        this._job.end({
-          totalTime: 0,
-          tokensPerSecond: 0,
-          realTimeFactor: 0,
-          audioDurationMs: 0,
-          totalSamples: 0
-        })
-      } else {
-        this._job.end()
-      }
+      this._endJobWithStats({
+        totalTime: 0,
+        tokensPerSecond: 0,
+        realTimeFactor: 0,
+        audioDurationMs: 0,
+        totalSamples: 0
+      })
       return
     }
 
-    const totalChars = chunks.join('').length
-    const merged = { ...acc }
-    merged.tokensPerSecond = acc.totalTime > 0 ? totalChars / acc.totalTime : 0
-    merged.realTimeFactor =
-      acc.audioDurationMs > 0 ? (acc.totalTime * 1000.0) / acc.audioDurationMs : 0
-    if (this.opts?.stats) {
-      this._job.end(merged)
-    } else {
-      this._job.end()
-    }
+    this._endJobWithStats(computeSentenceStreamStats(chunks, acc))
   }
 
-  _runStreamOrchestrator (text, options) {
+  _runStreamOrchestrator(text, options) {
     const chunks = splitTtsText(String(text), {
       language: this._config?.language,
       locale: options.locale,
@@ -746,11 +799,7 @@ class TTSGgml {
     }
 
     this._sentenceStreamDriveBody().catch((err) => {
-      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-        const rej = this._sentenceStreamCtx.chunkResolver.reject
-        this._sentenceStreamCtx.chunkResolver = null
-        rej(err)
-      }
+      this._rejectActiveChunk(err)
       this._sentenceStreamCtx = null
       this._job.fail(err)
     })
@@ -758,7 +807,7 @@ class TTSGgml {
     return response
   }
 
-  async _sentenceStreamDriveBody () {
+  async _sentenceStreamDriveBody() {
     const ctx = this._sentenceStreamCtx
     if (!ctx || ctx.textStreamMode) return
     for (let i = 0; i < ctx.chunks.length; i++) {
@@ -775,23 +824,32 @@ class TTSGgml {
     this._sentenceStreamCtx = null
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('[TTSGgml] Language:', this._config?.language || 'en')
 
     const ttsParams = this._buildTtsParams()
 
-    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-    await this.addon.activate()
+    const addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
+    this.addon = addon
+    try {
+      await addon.activate()
+    } catch (err) {
+      try {
+        await addon.destroyInstance()
+      } catch (_e) {}
+      if (this.addon === addon) this.addon = null
+      throw err
+    }
   }
 
-  _buildTtsParams () {
+  _buildTtsParams() {
     if (this._engineType === ENGINE_SUPERTONIC) {
       return this._buildSupertonicParams()
     }
     return this._buildChatterboxParams()
   }
 
-  _buildChatterboxParams () {
+  _buildChatterboxParams() {
     const params = {
       engineType: ENGINE_CHATTERBOX,
       t3ModelPath: this._t3ModelPath || '',
@@ -814,6 +872,20 @@ class TTSGgml {
       params.streamFirstChunkTokens = this._streamFirstChunkTokens | 0
     }
     if (this._cfmSteps != null) params.cfmSteps = this._cfmSteps | 0
+    // S3Gen classifier-free-guidance rate (float): 0 disables CFG (cond-only,
+    // ~2x faster S3Gen), > 0 overrides the model's baked rate; omit to keep it.
+    if (this._cfgRate != null) params.cfgRate = Number(this._cfgRate)
+    if (this._enhancerGgufPath) {
+      params.lavasrEnhancerPath = this._enhancerGgufPath
+    }
+    if (this._denoiserGgufPath) {
+      params.lavasrDenoiserPath = this._denoiserGgufPath
+    }
+    // Speaking-rate multiplier (1.0 = unchanged, < 1 slower, > 1 faster).
+    // Chatterbox has no native rate control, so the addon applies a
+    // pitch-preserving WSOLA time-stretch post-synthesis; see
+    // ChatterboxConfig::speed. Mirrors how _buildSupertonicParams plumbs it.
+    if (this._speed != null) params.speed = Number(this._speed)
     if (this._outputSampleRate != null) {
       params.outputSampleRate = this._outputSampleRate | 0
     }
@@ -827,7 +899,7 @@ class TTSGgml {
     return params
   }
 
-  _buildSupertonicParams () {
+  _buildSupertonicParams() {
     const params = {
       engineType: ENGINE_SUPERTONIC,
       supertonicModelPath: this._supertonicModelPath || '',
@@ -846,8 +918,15 @@ class TTSGgml {
       params.useGPU = !!this._config.useGPU
     }
     if (this._noiseNpyPath) params.noiseNpyPath = this._noiseNpyPath
+    if (this._enhancerGgufPath) {
+      params.lavasrEnhancerPath = this._enhancerGgufPath
+    }
+    if (this._denoiserGgufPath) {
+      params.lavasrDenoiserPath = this._denoiserGgufPath
+    }
     if (this._backendsDir) params.backendsDir = this._backendsDir
     if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
+    if (this._vulkanCacheDir) params.vulkanCacheDir = this._vulkanCacheDir
     return params
   }
 
@@ -857,12 +936,12 @@ class TTSGgml {
    * @param {Function} outputCb
    * @returns {TTSInterface}
    */
-  _createAddon (configurationParams, outputCb) {
+  _createAddon(configurationParams, outputCb) {
     const binding = require('./binding')
     return new TTSInterface(binding, configurationParams, outputCb)
   }
 
-  async unload () {
+  async unload() {
     await this.cancel()
     this._failAndClearActiveResponse('Model was unloaded')
     if (this.addon) {
@@ -872,13 +951,24 @@ class TTSGgml {
     this.state.weightsLoaded = false
   }
 
-  async destroy () {
+  async destroy() {
     await this.unload()
     this.state.destroyed = true
   }
 
-  async _runInternal (input) {
-    const response = this._job.start()
+  async _runInternal(input) {
+    const signal = input && input.signal
+    const response = this._job.start({ signal })
+
+    // An already-aborted signal settles `response` synchronously via
+    // QvacResponse._markAbortPending, so there is nothing to synthesize.  Skip
+    // dispatch entirely: we neither run the engine for a doomed request nor
+    // leave a mid-flight native job that a later cancel()/unload() would have to
+    // interrupt — that native interrupt is what wedges macOS teardown.
+    if (signal && signal.aborted) {
+      return response
+    }
+
     try {
       // Per-request overrides (e.g. input.outputSampleRate) are not
       // honoured by the native engine today — all synthesis knobs are
@@ -898,7 +988,7 @@ class TTSGgml {
     return response
   }
 
-  _mergeSentenceStreamStats (acc, data) {
+  _mergeSentenceStreamStats(acc, data) {
     const t = typeof data.totalTime === 'number' ? data.totalTime : 0
     const a = typeof data.audioDurationMs === 'number' ? data.audioDurationMs : 0
     const s = typeof data.totalSamples === 'number' ? data.totalSamples : 0
@@ -907,106 +997,111 @@ class TTSGgml {
     acc.totalSamples += s
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _rejectActiveChunk(error) {
+    const ctx = this._sentenceStreamCtx
+    if (!ctx || !ctx.chunkResolver) return
+    const reject = ctx.chunkResolver.reject
+    ctx.chunkResolver = null
+    reject(error)
+  }
+
+  _endJobWithStats(stats) {
+    if (this.opts?.stats) {
+      this._job.end(stats)
+    } else {
+      this._job.end()
+    }
+  }
+
+  _addonOutputCallback(addon, event, data, error) {
     if (typeof error === 'string' && error.length > 0) {
-      this.logger.error(`TTS job failed with error: ${error}`)
-      if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-        const rej = this._sentenceStreamCtx.chunkResolver.reject
-        this._sentenceStreamCtx.chunkResolver = null
-        rej(new Error(error))
-      }
-      this._job.fail(error)
+      this._handleAddonError(error)
       return
     }
-
-    if (data && typeof data === 'object' && data.outputArray) {
-      try {
-        this.logger.debug(`TTS job produced output: ${ttsOutputDebugString(data)}`)
-      } catch (err) {
-        if (err instanceof RangeError) {
-          this.logger.debug('TTS job produced output: [data too large]')
-        } else {
-          throw err
-        }
-      }
-      if (this._sentenceStreamCtx) {
-        const ctx = this._sentenceStreamCtx
-        const idx = ctx.chunkIdx
-        const sentenceChunk = ctx.chunks[idx] || ''
-        const enriched = {
-          outputArray: data.outputArray,
-          chunkIndex: idx,
-          sentenceChunk
-        }
-        if (data.sampleRate != null) enriched.sampleRate = data.sampleRate
-        if (!ctx.textStreamMode) {
-          enriched.isLast = idx >= ctx.chunks.length - 1
-        }
-        this._job.output(enriched)
-      } else {
-        this._job.output(data)
-      }
+    if (isAudioOutputEvent(data)) {
+      this._handleAddonOutput(data)
       return
     }
-
-    if (
-      data &&
-      typeof data === 'object' &&
-      ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
-    ) {
-      this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
-      if (this._sentenceStreamCtx) {
-        const ctx = this._sentenceStreamCtx
-        this._mergeSentenceStreamStats(ctx.acc, data)
-        if (ctx.chunkResolver) {
-          ctx.chunkResolver.resolve()
-          ctx.chunkResolver = null
-        }
-        if (ctx.textStreamMode) {
-          return
-        }
-        const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
-        if (isLast) {
-          const totalChars = ctx.chunks.join('').length
-          const merged = { ...ctx.acc }
-          merged.tokensPerSecond =
-            ctx.acc.totalTime > 0 ? totalChars / ctx.acc.totalTime : 0
-          merged.realTimeFactor =
-            ctx.acc.audioDurationMs > 0
-              ? (ctx.acc.totalTime * 1000.0) / ctx.acc.audioDurationMs
-              : 0
-          if (this.opts?.stats) {
-            this._job.end(merged)
-          } else {
-            this._job.end()
-          }
-        }
-        return
-      }
-      if (this.opts?.stats) {
-        this._job.end(data)
-      } else {
-        this._job.end()
-      }
+    if (isStatsEvent(data)) {
+      this._handleAddonStats(data)
       return
     }
-
     this.logger.debug(`Received TTS event: ${event}`)
   }
 
-  async cancel () {
+  _handleAddonError(error) {
+    this.logger.error(`TTS job failed with error: ${error}`)
+    this._rejectActiveChunk(new Error(error))
+    this._job.fail(error)
+  }
+
+  _handleAddonOutput(data) {
+    this._logOutputSafely(data)
+    if (this._sentenceStreamCtx) {
+      this._job.output(this._enrichStreamChunk(data))
+    } else {
+      this._job.output(data)
+    }
+  }
+
+  _logOutputSafely(data) {
+    try {
+      this.logger.debug(`TTS job produced output: ${ttsOutputDebugString(data)}`)
+    } catch (err) {
+      if (err instanceof RangeError) {
+        this.logger.debug('TTS job produced output: [data too large]')
+      } else {
+        throw err
+      }
+    }
+  }
+
+  _enrichStreamChunk(data) {
+    const ctx = this._sentenceStreamCtx
+    const idx = ctx.chunkIdx
+    const enriched = {
+      outputArray: data.outputArray,
+      chunkIndex: idx,
+      sentenceChunk: ctx.chunks[idx] || ''
+    }
+    if (data.sampleRate != null) enriched.sampleRate = data.sampleRate
+    if (!ctx.textStreamMode) {
+      enriched.isLast = idx >= ctx.chunks.length - 1
+    }
+    return enriched
+  }
+
+  _handleAddonStats(data) {
+    this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
+    if (this._sentenceStreamCtx) {
+      this._finalizeSentenceStreamChunkStats(data)
+    } else {
+      this._endJobWithStats(data)
+    }
+  }
+
+  _finalizeSentenceStreamChunkStats(data) {
+    const ctx = this._sentenceStreamCtx
+    this._mergeSentenceStreamStats(ctx.acc, data)
+    if (ctx.chunkResolver) {
+      ctx.chunkResolver.resolve()
+      ctx.chunkResolver = null
+    }
+    if (ctx.textStreamMode) return
+    const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
+    if (isLast) {
+      this._endJobWithStats(computeSentenceStreamStats(ctx.chunks, ctx.acc))
+    }
+  }
+
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
   }
 
-  _failAndClearActiveResponse (reason) {
-    if (this._sentenceStreamCtx && this._sentenceStreamCtx.chunkResolver) {
-      this._sentenceStreamCtx.chunkResolver.reject(
-        reason instanceof Error ? reason : new Error(String(reason))
-      )
-      this._sentenceStreamCtx.chunkResolver = null
-    }
+  _failAndClearActiveResponse(reason) {
+    this._rejectActiveChunk(reason instanceof Error ? reason : new Error(String(reason)))
     this._sentenceStreamCtx = null
     this._job.fail(reason)
   }
@@ -1018,12 +1113,13 @@ class TTSGgml {
    * @param {boolean} [newConfig.useGPU]
    * @param {number} [newConfig.outputSampleRate]
    */
-  async reload (newConfig = {}) {
+  async reload(newConfig = {}) {
     this.logger.debug('Reloading addon with new configuration', newConfig)
 
     if (newConfig.language !== undefined) this._config.language = newConfig.language
     if (newConfig.useGPU !== undefined) this._config.useGPU = newConfig.useGPU
-    if (newConfig.outputSampleRate !== undefined) this._outputSampleRate = newConfig.outputSampleRate
+    if (newConfig.outputSampleRate !== undefined)
+      this._outputSampleRate = newConfig.outputSampleRate
 
     const ttsParams = this._buildTtsParams()
 
@@ -1041,7 +1137,7 @@ class TTSGgml {
     noAdditionalDownload: true
   }
 
-  static getModelKey (params) {
+  static getModelKey(params) {
     return 'tts-ggml'
   }
 

@@ -16,14 +16,14 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
  * @param {string[]} files - ordered array of absolute paths
  * @returns {string}
  */
-function pickPrimaryGgufPath (files) {
+function pickPrimaryGgufPath(files) {
   const SHARD_REGEX = /-\d+-of-\d+\.gguf$/
   return files.find((p) => SHARD_REGEX.test(p)) || files[0]
 }
 
 /** BERT client wrapping the native BertInterface for embedding generation. */
 class GGMLBert {
-  constructor ({ files, config = {}, logger = null, opts = {} }) {
+  constructor({ files, config = {}, logger = null, opts = {} }) {
     if (!files || !Array.isArray(files.model) || files.model.length === 0) {
       throw new TypeError('files.model must be a non-empty array of absolute paths')
     }
@@ -47,7 +47,7 @@ class GGMLBert {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -55,7 +55,7 @@ class GGMLBert {
     })
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('Starting model load')
     const primaryGgufPath = pickPrimaryGgufPath(this._files)
     const configurationParams = {
@@ -75,14 +75,16 @@ class GGMLBert {
     } catch (loadError) {
       // Best-effort cleanup of the partially-initialized addon so a subsequent
       // load() does not leak a zombie native instance.
-      try { await this.addon?.unload?.() } catch (_) {}
+      try {
+        await this.addon?.unload?.()
+      } catch (_) {}
       this.addon = null
       throw loadError
     }
     this.logger.info('Model load completed successfully')
   }
 
-  async _streamShards () {
+  async _streamShards() {
     for (const filePath of this._files) {
       const filename = path.basename(filePath)
       const stream = fs.createReadStream(filePath)
@@ -94,11 +96,11 @@ class GGMLBert {
     }
   }
 
-  async run (input) {
+  async run(input) {
     return this._run(() => this._runInternal(input))
   }
 
-  async _runInternal (text) {
+  async _runInternal(text) {
     if (!this.addon) {
       throw new Error('Addon not initialized. Call load() first.')
     }
@@ -129,7 +131,9 @@ class GGMLBert {
     }
 
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
     finalized.catch((err) => {
       this.logger?.warn?.('Inference response rejected:', err?.message || err)
     })
@@ -137,7 +141,7 @@ class GGMLBert {
     return response
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const mapped = mapAddonEvent(event, data, error)
     if (mapped === null) {
       // Reaching here means the native layer added an event shape the JS
@@ -169,24 +173,17 @@ class GGMLBert {
    * @param {Object} configurationParams.config - Bert-specific settings
    * @returns {Addon} The instantiated addon interface
    */
-  _createAddon (configurationParams) {
-    this.logger.info(
-      'Creating Bert interface with configuration:',
-      configurationParams
-    )
+  _createAddon(configurationParams) {
+    this.logger.info('Creating Bert interface with configuration:', configurationParams)
     const binding = require('./binding')
-    return new BertInterface(
-      binding,
-      configurationParams,
-      this._addonOutputCallback.bind(this)
-    )
+    return new BertInterface(binding, configurationParams, this._addonOutputCallback.bind(this))
   }
 
   /**
    * Unload the model and clear resources. Ensures any in-flight job is resolved as failed.
    * @returns {Promise<void>}
    */
-  async unload () {
+  async unload() {
     return this._run(async () => {
       await this.cancel()
       if (this._job.active) {
@@ -206,13 +203,15 @@ class GGMLBert {
   /**
    * Cancel the current task.
    */
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
 }
 
 module.exports = GGMLBert

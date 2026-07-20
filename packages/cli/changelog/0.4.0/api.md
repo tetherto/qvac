@@ -26,50 +26,50 @@ qvac verify deps --base origin/main --head HEAD --quiet
 PR: [#1974](https://github.com/tetherto/qvac/pull/1974)
 
 ```ts
-import { loadModel, completion } from "@qvac/sdk";
+import { loadModel, completion } from '@qvac/sdk'
 
 const modelId = await loadModel({
-  modelSrc: "/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf",
-  modelType: "llm",
-  modelConfig: { ctx_size: 4096, tools: true },
-});
+  modelSrc: '/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf',
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true }
+})
 
 const run = completion({
   modelId,
-  history: [{ role: "user", content: "What's the weather in Paris?" }],
-  tools: [weatherTool],
+  history: [{ role: 'user', content: "What's the weather in Paris?" }],
+  tools: [weatherTool]
   // toolDialect: "qwen35" — auto-detected; override only if needed
-});
+})
 ```
 
 ```ts
 const modelId = await loadModel({
-  modelSrc: "/models/gemma-4-9b-it-Q4_K_M.gguf",
-  modelType: "llm",
-  modelConfig: { ctx_size: 4096, tools: true },
-});
+  modelSrc: '/models/gemma-4-9b-it-Q4_K_M.gguf',
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true }
+})
 
 const run = completion({
   modelId,
-  history: [{ role: "user", content: "What's the weather in Paris?" }],
-  tools: [weatherTool],
+  history: [{ role: 'user', content: "What's the weather in Paris?" }],
+  tools: [weatherTool]
   // toolDialect: "gemma4" — auto-detected; override only if needed
-});
+})
 ```
 
 ```ts
 // -1 = unrestricted thinking, 0 = disabled
 const modelId = await loadModel({
-  modelSrc: "/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf",
-  modelType: "llm",
-  modelConfig: { ctx_size: 4096, reasoning_budget: -1 },
-});
+  modelSrc: '/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf',
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, reasoning_budget: -1 }
+})
 
 const run = completion({
   modelId,
-  history: [{ role: "user", content: "Think step by step." }],
-  generationParams: { reasoning_budget: 0 }, // override per-request
-});
+  history: [{ role: 'user', content: 'Think step by step.' }],
+  generationParams: { reasoning_budget: 0 } // override per-request
+})
 ```
 
 ---
@@ -110,9 +110,7 @@ PR: [#2008](https://github.com/tetherto/qvac/pull/2008)
   "created": 1718000000,
   "output_format": "png",
   "size": "1024x1024",
-  "data": [
-    { "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }
-  ]
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
 }
 ```
 
@@ -508,4 +506,3 @@ fi
 ```
 
 ---
-

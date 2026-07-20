@@ -82,6 +82,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.diffusionModelPath = args.getMapEntry(1, "diffusionModelPath");
   config.highNoiseDiffusionModelPath =
       args.getMapEntry(1, "highNoiseDiffusionModelPath");
+  config.uncondDiffusionModelPath =
+      args.getMapEntry(1, "uncondDiffusionModelPath");
   config.clipLPath = args.getMapEntry(1, "clipLPath");
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
@@ -89,6 +91,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.vaePath = args.getMapEntry(1, "vaePath");
   config.clipVisionPath = args.getMapEntry(1, "clipVisionPath");
   config.esrganPath = args.getMapEntry(1, "esrganPath");
+  // LTX-2 (LTXAV) extras: audio VAE + text-embedding connectors. Empty for
+  // every non-LTX model (getMapEntry returns "" for absent keys).
+  config.audioVaePath = args.getMapEntry(1, "audioVaePath");
+  config.embeddingsConnectorsPath =
+      args.getMapEntry(1, "embeddingsConnectorsPath");
 
   // -- Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object -------------
   // configMap holds the flat key/value pairs from the second constructor arg
@@ -318,7 +325,7 @@ JSCATCH
 
 /**
  * Query expected ESRGAN RuntimeStats.backendDevice for a config.device value,
- * using the same Adreno/OpenCL policy as native load. Args: [device] or
+ * using the same backend policy as native load. Args: [device] or
  * [device, backendsDir].
  */
 inline js_value_t*

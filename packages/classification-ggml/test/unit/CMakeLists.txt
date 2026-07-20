@@ -69,11 +69,6 @@ endif()
 if(NOT WIN32)
   target_link_libraries(addon-test PRIVATE -fsanitize=address)
 endif()
-
-if(WIN32)
-  target_link_libraries(addon-test PRIVATE msvcrt.lib)
-endif()
-
 add_test(NAME ClassificationModelTests COMMAND addon-test)
 set_tests_properties(ClassificationModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

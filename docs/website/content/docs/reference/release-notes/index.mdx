@@ -1,254 +1,153 @@
 ---
-title: SDK Release Notes — v0.13.x (latest)
-description: Lists all releases from v0.13.0 to v0.13.3.
+title: SDK Release Notes — v0.15.x (latest)
+description: Release notes for QVAC SDK v0.15.0.
 ---
 
-## v0.13.0
+## v0.15.0
 
 ### @qvac/sdk
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.0
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.15.0
 
-QVAC SDK 0.13.0 broadens the SDK across video, neural-signal transcription, robot-action models, and desktop packaging while tightening runtime behavior for local-first applications. This release also improves error reporting, completion metadata, transcription backend stats, mobile compatibility, and dependency shape for consumers that install only the integrations they need.
+QVAC SDK 0.15.0 introduces single-job batch completion for running many prompts through one loaded model, adds LavaSR speech enhancement and denoising to the TTS pipeline, and extends Chatterbox TTS to Japanese and Chinese. It also gives multimodal models explicit GPU/CPU control over the vision encoder and ships stability fixes for Android worklets, worker RPC teardown, registry caching, and symlinked installs.
 
-#### Video Generation Adds Image-to-Video
+#### New APIs
 
-The video API now supports image-to-video generation for Wan image-to-video pipelines. Consumers can provide an initial frame through `init_image` and control denoising with `strength`, making it possible to animate a source image instead of generating entirely from text.
+##### Single-Job Batch Completion
+
+`batchCompletion` runs many prompts through a single loaded model in one job, streaming per-prompt deltas and returning ordered results. Each prompt can carry its own history, generation parameters, and optional per-prompt tools or MCP-sourced tools.
 
 ```typescript
-import fs from "node:fs";
-import { video } from "@qvac/sdk";
+import {
+  batchCompletion,
+  loadModel,
+  LLAMA_3_2_1B_INST_Q4_0,
+} from "@qvac/sdk";
 
-const firstFrame = fs.readFileSync("portrait.png");
-const { outputs } = video({
-  modelId,
-  mode: "img2vid",
-  prompt: "the subject slowly turns and smiles, cinematic lighting",
-  init_image: firstFrame,
-  strength: 0.85,
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  modelType: "llm",
+  modelConfig: { ctx_size: 4096, parallel: 4 },
 });
 
-const buffers = await outputs;
-fs.writeFileSync("output.avi", buffers[0]);
-```
-
-This change also moves video dimension validation to the SDK schema boundary. Width and height now need to be multiples of 16, so invalid dimensions fail before they reach the native addon.
-
-**Before:**
-
-```typescript
-video({ modelId, mode: "txt2vid", prompt: "...", width: 520, height: 264 });
-```
-
-**After:**
-
-```typescript
-video({ modelId, mode: "txt2vid", prompt: "...", width: 528, height: 272 });
-```
-
-#### Worker Failures Are Now Typed SDK Errors
-
-Bare worker crashes and SDK shutdown now surface as structured RPC errors instead of ambiguous failures. Applications can distinguish an unexpected worker death from an in-flight request that was cancelled because the SDK is closing.
-
-```typescript
-import { WorkerCrashedError, WorkerShutdownError } from "@qvac/sdk";
-
-try {
-  await sdk.embed({ modelId, text: "hi" });
-} catch (err) {
-  if (err instanceof WorkerCrashedError) {
-    console.error(err.exitCode, err.exitSignal);
-  } else if (err instanceof WorkerShutdownError) {
-    console.error("The SDK closed while this request was in flight.");
-  }
-}
-```
-
-#### Electron Apps Can Tree-Shake Native Addons
-
-The new Electron Forge plugin helps packaged desktop apps include only the native addon trees needed by their QVAC configuration. This reduces accidental bundling of unused prebuilds and keeps app packages closer to the target platform set.
-
-```typescript
-const QvacForgePlugin = require("@qvac/sdk/electron-forge");
-
-module.exports = {
-  packagerConfig: { name: "MyApp" },
-  plugins: [
-    new QvacForgePlugin({
-      configPath: "./qvac.config.json",
-      hosts: ["darwin-arm64", "darwin-x64"],
-      logLevel: "info",
-    }),
+const run = batchCompletion({
+  modelId,
+  prompts: [
+    {
+      id: "a",
+      history: [{ role: "user", content: "Reply with only APPLE." }],
+      generationParams: { temp: 0, predict: 16 },
+    },
+    {
+      id: "b",
+      history: [{ role: "user", content: "What's the weather in Paris?" }],
+      tools: [getWeatherTool], // optional per-prompt tools
+      generationParams: { temp: 0, predict: 64 },
+    },
   ],
-};
-```
+});
 
-#### Completion and Transcription Metadata Are More Precise
-
-Completion final results now report `stopReason: "length"` when generation stops because the token budget was exhausted, and `stopReason: "cancelled"` when a request is cancelled. Natural end-of-sequence completions remain backwards-compatible by leaving `stopReason` unset.
-
-Whisper transcription metadata now exposes backend and GPU stats in the final stats frame. Applications that surface performance diagnostics can show whether work ran on CPU or GPU and, where supported, report GPU memory information.
-
-```typescript
-for await (const ev of sdk.transcribe({ modelId, audioChunk, metadata: true })) {
-  if (ev.done && ev.stats) {
-    console.log(ev.stats.backendDevice);
-    console.log(ev.stats.backendId);
-    console.log(ev.stats.gpuMemTotalMb);
-    console.log(ev.stats.gpuMemFreeMb);
-  }
+for await (const { id, event } of run.events) {
+  if (event.type === "contentDelta") process.stdout.write(`[${id}] ${event.text}`);
 }
+
+const results = await run.results; // ordered, all-or-nothing on stream-level failure
+const stats = await run.stats; // batch-level CompletionStats | undefined
 ```
 
-#### Neural-Signal and Robot-Action APIs Are Available
+##### GPU Placement for Multimodal Vision Encoders
 
-The SDK now includes BCI transcription backed by whisper.cpp. It supports both batch transcription from a `.bin` path or `Uint8Array`, and streaming duplex sessions over neural-signal chunks.
-
-```typescript
-import { loadModel, bciTranscribe, bciTranscribeStream, BCI_WINDOWED } from "@qvac/sdk";
-
-const modelId = await loadModel({ modelSrc: BCI_WINDOWED });
-const text = await bciTranscribe({ modelId, neuralData: "./signal.bin" });
-
-const session = await bciTranscribeStream({ modelId, emit: "delta" });
-session.write(chunk);
-session.end();
-
-for await (const token of session) {
-  process.stdout.write(token);
-}
-```
-
-This release also integrates the pi05 VLA model path for robot-action inference. The VLA API can inspect model hparams, preprocess camera frames, and run action generation with the required image, token, mask, and noise inputs.
+Multimodal LLMs can now force the vision encoder (mmproj) onto the GPU or CPU explicitly via the `mmproj-use-gpu` config key. Omit it to keep the previous per-device-class auto-selection.
 
 ```typescript
-import { loadModel, vla, vlaHparams, vlaPreprocessImage, PI05_BASE_Q_AGGRESSIVE } from "@qvac/sdk";
-
-const modelId = await loadModel({ modelSrc: PI05_BASE_Q_AGGRESSIVE, modelType: "ggml-vla" });
-const { hparams } = await vlaHparams({ modelId });
-const size = hparams.visionImageSize;
-const images = [cam0, cam1, cam2].map((px) => vlaPreprocessImage(px, w, h, { size }));
-
-const { actions } = await vla({
-  modelId,
-  images,
-  imgWidth: size,
-  imgHeight: size,
-  state: new Float32Array(0),
-  tokens,
-  mask,
-  noise,
+await loadModel({
+  modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  modelConfig: {
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+    "mmproj-use-gpu": true, // true = GPU, false = CPU; omit to auto-select
+  },
 });
 ```
 
-#### Runtime Fixes and Dependency Cleanup
+#### Features
 
-Same-model requests are now serialized through a per-model FIFO queue, which prevents concurrent requests for the same model kind and ID from stepping on each other. Delegated inference also waits for a cold DHT before connecting and categorizes connect failures more clearly, making peer connection failures easier to diagnose.
+##### LavaSR Speech Enhancement and Denoising for TTS
 
-Several compatibility fixes landed across mobile and bundler environments. The SDK strips multi-GPU config on mobile, avoids exiting in-process Bare hosts when closing the bare client, prevents Android Parakeet GPU backend discovery, fixes Bare config loading through `require()`, and keeps the models subpath compatible with Metro. Dependency metadata was also cleaned up so optional integrations are modeled as optional peer dependencies rather than always-installed optional dependencies.
+Supertonic TTS gains optional LavaSR post-processing: an enhancer and a denoiser that clean up generated audio. Both are opt-in via new load-time config keys, and Supertonic output can be resampled to a chosen rate.
 
-#### Model Registry Updates
+```typescript
+await sdk.loadModel({
+  ttsEngine: "supertonic",
+  modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0.src,
+  // LavaSR post-processing (both optional)
+  lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16.src,
+  lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16.src,
+  // Supertonic-only output sample rate (8000-192000 Hz)
+  outputSampleRate: 48000,
+});
+```
 
-This release adds new first-class constants for BCI, image-to-video, multimodal LLMs, Parakeet, Chatterbox TTS, and pi05 VLA usage. The full list is included below so consumers can update imports directly.
+##### Japanese and Chinese Chatterbox TTS
+
+Chatterbox TTS now supports Japanese and Chinese. Japanese uses a MeCab IPADIC dictionary asset and Chinese uses a new Cangjie TSV asset, both passed at load time alongside the shared T3 and S3Gen models.
+
+```typescript
+import {
+  loadModel,
+  TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0,
+  TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0,
+  TTS_MECAB_IPADIC_CHATTERBOX,
+  TTS_CANGJIE_ZH_CHATTERBOX,
+} from "@qvac/sdk";
+
+// Japanese
+await loadModel({
+  modelSrc: TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0,
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "ja",
+    s3genModelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0,
+    mecabDictSrc: TTS_MECAB_IPADIC_CHATTERBOX,
+  },
+});
+
+// Chinese
+await loadModel({
+  modelSrc: TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0,
+  modelConfig: {
+    ttsEngine: "chatterbox",
+    language: "zh",
+    s3genModelSrc: TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0,
+    cangjieTsvSrc: TTS_CANGJIE_ZH_CHATTERBOX,
+  },
+});
+```
+
+#### Bug Fixes
+
+Android inference now always terminates the Bare worklet on teardown, preventing the worklet leak and out-of-memory growth seen under repeated model loads. When the bare-rpc channel closes, pending worker calls now surface as proper `WorkerCrashedError` / `WorkerShutdownError` instead of a generic RPC error, and the dead connection is torn down eagerly so the next call respawns cleanly. The registry descriptor cache honors its cache metadata, avoiding stale or unnecessary re-fetches, and bundled SDK installs correctly resolve the SDK's hoisted `bare-*` dependencies for symlinked (workspace) setups.
+
+#### Model Changes
+
+This release adds the LavaSR enhancer and denoiser assets, several Parakeet transcription models, and a Cangjie Chinese asset for Chatterbox, and refreshes the quantized multilingual Supertonic 3 model.
 
 ##### Added Models
 
 ```text
-BCI_EMBEDDER
-BCI_WINDOWED
-CLIP_VISION_H
-MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0
-MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0
-PARAKEET_EOU_120M_V1_Q4_0
-PARAKEET_SORTFORMER_4SPK_V1_Q4_0
-PARAKEET_TDT_0_6B_V3_Q4_0
-PI05_BASE_Q_AGGRESSIVE
-QWEN3_5_0_8B_MULTIMODAL_Q6_K
-SMOLLM2_360M_INST_Q8
-TTS_S3GEN_EN_CHATTERBOX_Q4_0
-TTS_S3GEN_EN_CHATTERBOX_Q5_0
-TTS_S3GEN_EN_CHATTERBOX_Q8_0
-TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0
-TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0
-TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0
-TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0
-TTS_T3_TURBO_EN_CHATTERBOX_Q5_0
-WAN2_1_I2V_14B_Q4_K_M
-WAN2_1_I2V_14B_Q4_K_M_1
+PARAKEET_CTC_0_6B_F16
+PARAKEET_CTC_0_6B_Q4_0
+PARAKEET_EOU_120M_V1_F16
+PARAKEET_SORTFORMER_4SPK_V1_F16
+PARAKEET_TDT_0_6B_V3_F16
+TTS_CANGJIE_ZH_CHATTERBOX
+TTS_DENOISER_LAVASR_FP16
+TTS_DENOISER_LAVASR_FP32
+TTS_ENHANCER_LAVASR_FP16
+TTS_ENHANCER_LAVASR_FP32
 ```
 
-## v0.13.1
+##### Updated Models
 
-### @qvac/sdk
-
-### Changelog v0.13.1 (LLM)
-
-Dependency-maintenance patch. No public API changes.
-
-- `bare-fetch` → `^3.0.1` (transitive-only major; fetch API unchanged; only 3.0.1 header validation, all SDK headers are RFC-valid).
-- dev `bare-subprocess` → `^6.1.0` (not shipped to consumers).
-- `@qvac/decoder-audio` → `^0.4.0`: removes the deprecated `@qvac/response` package (folded into `@qvac/infer-base`) from the dependency tree, eliminating its exact `bare-events 2.4.2` pin. `decoder-audio@0.4.0`'s `run()` returns `QvacResponse` synchronously; `server/utils/audio/decoder.ts` updated to not `await` it.
-- `@qvac/sdk` + `@qvac/bare-sdk` bumped in lockstep.
-- Validated by a clean install: no `@qvac/response`, no `bare-events@2.4.2`, no `bare-fetch@2.x`, no `decoder-audio@0.3.x` resolve in the tree.
-
-## v0.13.2
-
-### @qvac/sdk
-
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.2
-
-A small patch release: TTS language validation is now engine-aware, the Bare
-build of the SDK drops two Node-only install dependencies, and the bundled
-`@qvac/rag` is updated.
-
-#### New APIs
-
-TTS language validation is now specific to each engine instead of sharing a
-single four-language list. Chatterbox accepts all 18 of its multilingual
-languages, and Supertonic is restricted to the five it actually supports at
-runtime (`en`, `es`, `fr`, `pt`, `ko`). Two new constants and their types are
-exported so you can reference each engine's language set directly.
-
-```typescript
-import {
-  TTS_CHATTERBOX_LANGUAGES, // en, es, fr, de, it, pt, nl, pl, tr, sv, da, fi, no, el, ms, sw, ar, ko
-  TTS_SUPERTONIC_LANGUAGES, // en, es, fr, pt, ko
-  type TtsChatterboxLanguage,
-  type TtsSupertonicLanguage,
-} from "@qvac/sdk";
-
-// Chatterbox now accepts all 18 multilingual languages
-await loadModel({
-  modelSrc: ...,
-  modelConfig: { ttsEngine: "chatterbox", language: "tr" },
-});
+```text
+TTS_MULTILINGUAL_SUPERTONIC3_Q4_0
 ```
-
-Supertonic configs no longer accept `de` or `it`. The native engine never
-produced valid audio for those languages, so this tightens validation to match
-real runtime support rather than removing a working capability.
-
-#### Dependency and Packaging Changes
-
-The Bare build (`@qvac/bare-sdk`) no longer declares `bare-runtime` and
-`bare-pack` as dependencies. Neither is reachable on Bare — Bare apps already
-ship the runtime — and dropping `bare-runtime` avoids pulling roughly 80MB of
-per-platform prebuilds at install time. Both packages remain available in
-`@qvac/sdk` for the Node host path.
-
-The bundled `@qvac/rag` dependency is updated to `^0.6.4`.
-
-## v0.13.3
-
-### @qvac/sdk
-
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.13.3
-
-A maintenance patch release that updates the bundled `@qvac/decoder-audio`
-dependency to `^0.5.0`.
-
-#### Dependency Changes
-
-The bundled `@qvac/decoder-audio` audio decoder is updated to `^0.5.0`. The same
-update is mirrored into the Bare build (`@qvac/bare-sdk`), which ships in lockstep
-with `@qvac/sdk`.

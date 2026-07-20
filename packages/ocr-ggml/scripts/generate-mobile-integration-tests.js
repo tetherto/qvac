@@ -15,24 +15,25 @@ const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 const groupsFile = path.join(mobileDir, 'test-groups.json')
 
-function getIntegrationFiles () {
+function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(entry => entry.endsWith('.test.js'))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((entry) => entry.endsWith('.test.js'))
     .sort()
 }
 
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
-function buildFileContents (files) {
+function buildFileContents(files) {
   const lines = []
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
@@ -45,15 +46,21 @@ function buildFileContents (files) {
   lines.push('')
   lines.push('/* global __shouldRunTest */')
   lines.push('')
-  lines.push("const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }")
+  lines.push(
+    "const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }"
+  )
   lines.push('')
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const fnName = toFunctionName(file)
     const relativePath = `../integration/${file}`
-    lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup`)
-    lines.push(`  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`)
+    lines.push(
+      `async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars -- called dynamically by the mobile test runner via string lookup`
+    )
+    lines.push(
+      `  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`
+    )
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
     lines.push('}')
     if (i < files.length - 1) {
@@ -68,7 +75,7 @@ function buildFileContents (files) {
 // in test-groups.json and that all group entries resolve to real functions.
 // Supports nested format: { android: { group: [...] }, ios: { group: [...] }, perf_report_filter: "..." }
 // Also supports legacy flat format: { perf: [...], regularA: [...], perf_report_filter: "..." }
-function validateGroups (functionNames) {
+function validateGroups(functionNames) {
   if (!fs.existsSync(groupsFile)) {
     console.warn('[warn] test-groups.json not found — skipping split validation')
     return
@@ -94,25 +101,27 @@ function validateGroups (functionNames) {
     }
   }
 
-  const missing = functionNames.filter(n => !covered.has(n))
-  const extra = [...covered].filter(n => !nameSet.has(n))
+  const missing = functionNames.filter((n) => !covered.has(n))
+  const extra = [...covered].filter((n) => !nameSet.has(n))
 
   if (missing.length) {
     throw new Error(
       'Tests not assigned to any group in test-groups.json:\n  ' +
-      missing.join('\n  ') + '\nAdd them to a group in test/mobile/test-groups.json.'
+        missing.join('\n  ') +
+        '\nAdd them to a group in test/mobile/test-groups.json.'
     )
   }
   if (extra.length) {
     throw new Error(
       'test-groups.json references non-existent tests:\n  ' +
-      extra.join('\n  ') + '\nRemove them or check for typos.'
+        extra.join('\n  ') +
+        '\nRemove them or check for typos.'
     )
   }
   console.log('Group coverage validated — all tests assigned.')
 }
 
-function main () {
+function main() {
   if (!fs.existsSync(mobileDir)) {
     fs.mkdirSync(mobileDir, { recursive: true })
   }

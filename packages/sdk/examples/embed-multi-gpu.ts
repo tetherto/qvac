@@ -1,9 +1,4 @@
-import {
-  loadModel,
-  embed,
-  unloadModel,
-  EMBEDDINGGEMMA_300M_Q8_0,
-} from "@qvac/sdk";
+import { loadModel, embed, unloadModel, EMBEDDINGGEMMA_300M_Q8_0 } from '@qvac/sdk'
 
 // Multi-GPU embedding distributes model layers across multiple GPUs using
 // llama.cpp's built-in split modes. Two strategies are available:
@@ -23,33 +18,31 @@ try {
   const modelId = await loadModel({
     modelSrc: EMBEDDINGGEMMA_300M_Q8_0,
     modelConfig: {
-      splitMode: "layer",
-      tensorSplit: "1,1",
+      splitMode: 'layer',
+      tensorSplit: '1,1',
       mainGpu: 0,
       gpuLayers: 99,
-      verbosity: 0,
-    },
-  });
+      verbosity: 0
+    }
+  })
 
   const texts = [
-    "Multi-GPU embedding distributes layer computation across GPUs.",
-    "Each GPU handles a subset of layers, improving throughput for large models.",
-    "The tensor-split ratio controls how much work each GPU receives.",
-  ];
+    'Multi-GPU embedding distributes layer computation across GPUs.',
+    'Each GPU handles a subset of layers, improving throughput for large models.',
+    'The tensor-split ratio controls how much work each GPU receives.'
+  ]
 
   for (const text of texts) {
-    const { embedding, stats } = await embed({ modelId, text });
-    console.log(`${embedding.length} dims  ${text.slice(0, 50)}...`);
+    const { embedding, stats } = await embed({ modelId, text })
+    console.log(`${embedding.length} dims  ${text.slice(0, 50)}...`)
     if (stats) {
-      console.log(
-        `▸ ${stats.backendDevice}  ${stats.tokensPerSecond?.toFixed(1)} tok/s`,
-      );
+      console.log(`▸ ${stats.backendDevice}  ${stats.tokensPerSecond?.toFixed(1)} tok/s`)
     }
   }
 
-  await unloadModel({ modelId, clearStorage: false });
-  process.exit(0);
+  await unloadModel({ modelId, clearStorage: false })
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

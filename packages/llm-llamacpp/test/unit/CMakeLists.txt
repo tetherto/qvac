@@ -20,6 +20,7 @@ add_executable(
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
   test_tune_config_map.cpp
+  test_generation_params_apply.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
@@ -30,7 +31,8 @@ add_executable(
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
-  test_qwen3_reasoning_utils.cpp
+  test_reasoning_utils.cpp
+  test_recurrent_state_snapshot.cpp
   test_qwen_template.cpp
   test_qwen3_tools_dynamic_template.cpp
   test_logging_macros.cpp
@@ -38,10 +40,17 @@ add_executable(
   test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp
   test_continuous_batch_finalize.cpp
+  test_batch_entry_guard.cpp
+  test_slide_capable_capability.cpp
+  test_media_load_order.cpp
+  test_generation_budget_admission.cpp
   test_multi_request_batcher.cpp
   test_continuous_batching_integration.cpp
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
+  test_reasoning_budget.cpp
+  test_cancel_rollback.cpp
+  test_reasoning_block_compactor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
@@ -49,16 +58,21 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
 )
@@ -120,7 +134,7 @@ target_link_libraries(
   addon-test
   PRIVATE
     llama::llama
-    llama::common
+    llama::llama-common
     llama::mtmd
     nlohmann_json::nlohmann_json
     GTest::gtest
@@ -135,15 +149,6 @@ if(NOT WIN32)
       -fsanitize=address
   )
 endif()
-
-if(WIN32)
-  target_link_libraries(
-    addon-test
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 # Copy ggml backend libraries next to the test executable
 if((ANDROID OR UNIX) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})

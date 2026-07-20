@@ -887,3 +887,297 @@ TEST_F(MultiRequestBatcherTest, MarkAllFinishedWithDecodeError) {
   EXPECT_EQ(finished[0].stopReason, StopReason::DecodeError);
   EXPECT_EQ(finished[1].stopReason, StopReason::DecodeError);
 }
+
+TEST(MediaBarrierRequestTest, BarrierGatesFeedingAndCountsPositions) {
+  constexpr unsigned kMaxTokens = 100;
+  constexpr llama_pos kMediaPos = 4;
+  PrefillPlan plan{
+      .tokens = {10, 20, 30},
+      .mediaBarriers = {
+          {.afterTextTokens = 1, .mediaIndex = 7, .nPos = kMediaPos}}};
+  Request req(0, std::move(plan), kMaxTokens);
+
+  EXPECT_EQ(req.prefillTokenCount, 3u + static_cast<size_t>(kMediaPos));
+  EXPECT_FALSE(req.isAwaitingMedia());
+  EXPECT_TRUE(req.hasTokensToFeed());
+  EXPECT_EQ(req.remainingToFeed(), 1u);
+
+  req.prefillFedCount = 1;
+  req.currentPos = 1;
+  EXPECT_TRUE(req.isAwaitingMedia());
+  EXPECT_FALSE(req.hasTokensToFeed());
+  EXPECT_EQ(req.remainingToFeed(), 0u);
+  EXPECT_FALSE(req.isPrefillComplete());
+
+  // Pre-barrier chunk must never carry logits even though it drains
+  // remainingToFeed.
+  req.prefillFedCount = 0;
+  EXPECT_FALSE(req.chunkConsumesAllUnfed(1));
+}
+
+TEST(MediaBarrierRequestTest, AddRequestAtValidatesPlan) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 10;
+  constexpr size_t kBatchSize = 1;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+
+  PrefillPlan unsorted{
+      .tokens = {1, 2, 3},
+      .mediaBarriers = {
+          {.afterTextTokens = 2, .mediaIndex = 0, .nPos = 2},
+          {.afterTextTokens = 1, .mediaIndex = 1, .nPos = 2}}};
+  EXPECT_EQ(
+      batcher.addRequestAt(0, std::move(unsorted)),
+      MultiRequestBatcher::AddStatus::ErrInvalidPlan);
+
+  PrefillPlan anchorPastEnd{
+      .tokens = {1, 2},
+      .mediaBarriers = {{.afterTextTokens = 3, .mediaIndex = 0, .nPos = 2}}};
+  EXPECT_EQ(
+      batcher.addRequestAt(0, std::move(anchorPastEnd)),
+      MultiRequestBatcher::AddStatus::ErrInvalidPlan);
+
+  // Media positions count against the per-sequence cap: 6 text + 5 media
+  // > 10.
+  PrefillPlan oversized{
+      .tokens = {1, 2, 3, 4, 5, 6},
+      .mediaBarriers = {{.afterTextTokens = 1, .mediaIndex = 0, .nPos = 5}}};
+  EXPECT_EQ(
+      batcher.addRequestAt(0, std::move(oversized)),
+      MultiRequestBatcher::AddStatus::ErrTokensTooLarge);
+
+  PrefillPlan fits{
+      .tokens = {1, 2, 3, 4, 5},
+      .mediaBarriers = {{.afterTextTokens = 1, .mediaIndex = 0, .nPos = 5}}};
+  EXPECT_EQ(
+      batcher.addRequestAt(0, std::move(fits)),
+      MultiRequestBatcher::AddStatus::Ok);
+}
+
+/// M-RoPE media occupies fewer positions than KV cells. A plan whose
+/// position span fits the per-sequence cap can still overrun the KV cache,
+/// so admission must reject when the KV-cell total exceeds the cap even
+/// though the position total does not.
+TEST(MediaBarrierRequestTest, AddRequestAtRejectsKvCellOverflow) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 10;
+  constexpr size_t kBatchSize = 1;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+
+  // 3 text + 2 media positions = 5 <= 10, but 3 text + 9 media KV cells =
+  // 12 > 10. Positions-only admission would wrongly accept this.
+  PrefillPlan kvOverflow{
+      .tokens = {1, 2, 3},
+      .mediaBarriers = {
+          {.afterTextTokens = 1, .mediaIndex = 0, .nPos = 2, .nKvTokens = 9}}};
+  EXPECT_EQ(kvOverflow.totalPositions(), 5);
+  EXPECT_EQ(kvOverflow.totalKvTokens(), 12);
+  EXPECT_EQ(
+      batcher.addRequestAt(0, std::move(kvOverflow)),
+      MultiRequestBatcher::AddStatus::ErrTokensTooLarge);
+}
+
+/// A cache-loaded M-RoPE sequence restores more physical KV cells
+/// (`cacheTokens`) than logical positions (`nPast`). Admission must size the
+/// KV-cap check from the cell count, not the position count: a sequence whose
+/// loaded cells sit near the cap can still be wrongly admitted if the check
+/// measures from `initialPos` (comment-3437045337).
+TEST(MediaBarrierRequestTest, AddRequestAtUsesKvCellsNotPositionsForCap) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 10;
+  constexpr size_t kBatchSize = 1;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+
+  // Restored cache: nPast (positions) = 2 but cacheTokens (cells) = 8.
+  // Appending 3 text tokens keeps positions at 2 + 3 = 5 <= 10, but the
+  // physical cells reach 8 + 3 = 11 > 10 and overrun the slot's KV cache.
+  PrefillPlan plan{.tokens = {1, 2, 3}};
+  EXPECT_EQ(plan.totalPositions(), 3);
+  EXPECT_EQ(plan.totalKvTokens(), 3);
+  EXPECT_EQ(
+      batcher.addRequestAt(
+          0,
+          std::move(plan),
+          /*initialPos=*/2,
+          /*slideCapable=*/false,
+          /*initialKvCells=*/8),
+      MultiRequestBatcher::AddStatus::ErrTokensTooLarge)
+      << "KV-CELL CAP HOLE: 8 loaded KV cells + 3 prompt tokens = 11 > "
+      << kMaxTokensPerSeq
+      << ", but admission sized the KV-cap check from the 2 logical positions "
+         "(2 + 3 = 5) and admitted the request";
+}
+
+/// Full prefill flow with a mid-prompt media barrier:
+/// feed text up to the barrier → slot blocks → completeMediaBarrier
+/// resumes at the helper-provided position → trailing text carries the
+/// prompt's only logits and fires onPrefillComplete.
+TEST(MediaBarrierFlowTest, BarrierBlocksThenResumesAtNewPosition) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  constexpr size_t kBatchSize = 1;
+  constexpr llama_pos kMediaPos = 4;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize, 0, kBatchSize);
+
+  PrefillPlan plan{
+      .tokens = {10, 20, 30},
+      .mediaBarriers = {
+          {.afterTextTokens = 1, .mediaIndex = 7, .nPos = kMediaPos}}};
+  ASSERT_EQ(
+      batcher.addRequestAt(0, std::move(plan)),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  EXPECT_FALSE(batcher.nextAwaitingMedia().has_value());
+
+  auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 1u);
+  EXPECT_EQ(result.numActiveSequences, 1u);
+  EXPECT_EQ((*batch).token[0], 10);
+  EXPECT_EQ((*batch).logits[0], 0) << "pre-barrier token must not get logits";
+  batcher.advance(result.chunkSize);
+
+  const auto awaiting = batcher.nextAwaitingMedia();
+  ASSERT_TRUE(awaiting.has_value());
+  EXPECT_EQ(awaiting->seqId, 0u);
+  EXPECT_EQ(awaiting->mediaIndex, 7u);
+  EXPECT_EQ(awaiting->currentPos, 1);
+
+  // While awaiting media the slot must not feed.
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 0u);
+
+  bool prefillCompleted = false;
+  EXPECT_TRUE(batcher.completeMediaBarrier(
+      0, awaiting->currentPos + kMediaPos, [&](uint32_t, llama_pos, size_t) {
+        prefillCompleted = true;
+      }));
+  EXPECT_FALSE(prefillCompleted);
+  EXPECT_FALSE(batcher.nextAwaitingMedia().has_value());
+
+  llama_pos completedPos = -1;
+  size_t completedCount = 0;
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 2u);
+  EXPECT_EQ((*batch).token[0], 20);
+  EXPECT_EQ((*batch).token[1], 30);
+  EXPECT_EQ((*batch).pos[0], 1 + kMediaPos);
+  EXPECT_EQ((*batch).logits[1], 1) << "prompt end must carry logits";
+  batcher.advance(result.chunkSize, [&](uint32_t, llama_pos pos, size_t count) {
+    completedPos = pos;
+    completedCount = count;
+  });
+  EXPECT_EQ(completedPos, 1 + kMediaPos + 2);
+  EXPECT_EQ(completedCount, 3u + static_cast<size_t>(kMediaPos));
+}
+
+/// A media-blocked slot must not stall other slots: the text slot keeps
+/// feeding while the media slot waits for its barrier.
+TEST(MediaBarrierFlowTest, AwaitingMediaSlotDoesNotStallTextSlot) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  constexpr size_t kBatchSize = 2;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  // Media-first prompt: the barrier anchors at token 0, so the slot is
+  // blocked from the start.
+  PrefillPlan mediaFirst{
+      .tokens = {50, 60},
+      .mediaBarriers = {{.afterTextTokens = 0, .mediaIndex = 0, .nPos = 3}}};
+  ASSERT_EQ(
+      batcher.addRequestAt(0, std::move(mediaFirst)),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequestAt(1, {100, 200, 300}),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.numActiveSequences, 1u)
+      << "media-blocked slot must be excluded from the fill";
+  EXPECT_EQ(result.chunkSize, 3u);
+  EXPECT_EQ((*batch).seq_id[0][0], 1);
+
+  const auto awaiting = batcher.nextAwaitingMedia();
+  ASSERT_TRUE(awaiting.has_value());
+  EXPECT_EQ(awaiting->seqId, 0u);
+  EXPECT_EQ(awaiting->currentPos, 0);
+
+  batcher.advance(result.chunkSize);
+  EXPECT_TRUE(batcher.completeMediaBarrier(0, 3));
+
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.numActiveSequences, 1u);
+  EXPECT_EQ(result.chunkSize, 2u);
+  EXPECT_EQ((*batch).seq_id[0][0], 0);
+  EXPECT_EQ((*batch).pos[0], 3);
+}
+
+/// A prefill that ends on a media barrier (prefill-only requests) must
+/// complete through completeMediaBarrier, not advance().
+TEST(MediaBarrierFlowTest, TrailingBarrierCompletesPrefill) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  constexpr size_t kBatchSize = 1;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize, 0, kBatchSize);
+
+  PrefillPlan plan{
+      .tokens = {10},
+      .mediaBarriers = {{.afterTextTokens = 1, .mediaIndex = 0, .nPos = 2}}};
+  ASSERT_EQ(
+      batcher.addRequestAt(0, std::move(plan)),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 1u);
+  batcher.advance(result.chunkSize);
+
+  bool prefillCompleted = false;
+  ASSERT_TRUE(batcher.nextAwaitingMedia().has_value());
+  EXPECT_TRUE(batcher.completeMediaBarrier(
+      0, 3, [&](uint32_t, llama_pos pos, size_t count) {
+        prefillCompleted = true;
+        EXPECT_EQ(pos, 3);
+        EXPECT_EQ(count, 3u);
+      }));
+  EXPECT_TRUE(prefillCompleted);
+
+  const Request* req = batcher.requestAt(0);
+  ASSERT_NE(req, nullptr);
+  EXPECT_TRUE(req->isPrefillComplete());
+}
+
+/// Consecutive media items (two barriers at the same anchor) are
+/// serviced one at a time, in plan order.
+TEST(MediaBarrierFlowTest, ConsecutiveBarriersServicedInOrder) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  constexpr size_t kBatchSize = 1;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+
+  PrefillPlan plan{
+      .tokens = {10},
+      .mediaBarriers = {
+          {.afterTextTokens = 0, .mediaIndex = 0, .nPos = 2},
+          {.afterTextTokens = 0, .mediaIndex = 1, .nPos = 3}}};
+  ASSERT_EQ(
+      batcher.addRequestAt(0, std::move(plan)),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto awaiting = batcher.nextAwaitingMedia();
+  ASSERT_TRUE(awaiting.has_value());
+  EXPECT_EQ(awaiting->mediaIndex, 0u);
+  EXPECT_TRUE(batcher.completeMediaBarrier(0, 2));
+
+  awaiting = batcher.nextAwaitingMedia();
+  ASSERT_TRUE(awaiting.has_value());
+  EXPECT_EQ(awaiting->mediaIndex, 1u);
+  EXPECT_EQ(awaiting->currentPos, 2);
+  EXPECT_TRUE(batcher.completeMediaBarrier(0, 5));
+
+  EXPECT_FALSE(batcher.nextAwaitingMedia().has_value());
+  const Request* req = batcher.requestAt(0);
+  ASSERT_NE(req, nullptr);
+  EXPECT_EQ(req->remainingToFeed(), 1u);
+}

@@ -11,34 +11,34 @@ import {
   type BciTranscribeStreamSession,
   type BciTranscribeStreamMetadataSession,
   type RPCOptions,
-  type TranscribeSegment,
-} from "@/schemas";
-import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
-import { getClientLogger } from "@/logging";
-import { TranscriptionFailedError } from "@/utils/errors-client";
-import { decoratePromise } from "@/utils/decorate-promise";
-import { parseClientInput } from "@/client/parse-input";
-import { generateClientRequestId } from "@/client/api/client-request-id";
+  type TranscribeSegment
+} from '@/schemas'
+import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
+import { getClientLogger } from '@/logging'
+import { TranscriptionFailedError } from '@/utils/errors-client'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { parseClientInput } from '@/client/parse-input'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
 function buildBciTranscribeRequest(
   params: BciTranscribeClientParamsParsed,
-  requestId: string,
+  requestId: string
 ): BciTranscribeRequest {
   return {
-    type: "bciTranscribe",
+    type: 'bciTranscribe',
     modelId: params.modelId,
     neuralData:
-      typeof params.neuralData === "string"
-        ? { type: "filePath", value: params.neuralData }
+      typeof params.neuralData === 'string'
+        ? { type: 'filePath', value: params.neuralData }
         : {
-            type: "base64",
-            value: Buffer.from(params.neuralData).toString("base64"),
+            type: 'base64',
+            value: Buffer.from(params.neuralData).toString('base64')
           },
     ...(params.metadata === true && { metadata: true }),
-    requestId,
-  };
+    requestId
+  }
 }
 
 /**
@@ -61,85 +61,85 @@ function buildBciTranscribeRequest(
  */
 export function bciTranscribe(
   params: BciTranscribeClientParams & { metadata: true },
-  options?: RPCOptions,
-): Promise<TranscribeSegment[]> & { requestId: string };
+  options?: RPCOptions
+): Promise<TranscribeSegment[]> & { requestId: string }
 export function bciTranscribe(
   params: BciTranscribeClientParams,
-  options?: RPCOptions,
-): Promise<string> & { requestId: string };
+  options?: RPCOptions
+): Promise<string> & { requestId: string }
 export function bciTranscribe(
   params: BciTranscribeClientParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> & { requestId: string } {
-  const parsed = parseClientInput(bciTranscribeClientParamsSchema, params);
-  const requestId = generateClientRequestId();
-  const inner = runBciTranscribe(parsed, requestId, options);
-  return decoratePromise(inner, { requestId });
+  const parsed = parseClientInput(bciTranscribeClientParamsSchema, params)
+  const requestId = generateClientRequestId()
+  const inner = runBciTranscribe(parsed, requestId, options)
+  return decoratePromise(inner, { requestId })
 }
 
 async function runBciTranscribe(
   params: BciTranscribeClientParamsParsed,
   requestId: string,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<string | TranscribeSegment[]> {
-  const request = buildBciTranscribeRequest(params, requestId);
+  const request = buildBciTranscribeRequest(params, requestId)
 
   if (params.metadata === true) {
-    const segments: TranscribeSegment[] = [];
+    const segments: TranscribeSegment[] = []
     for await (const response of stream(request, options)) {
-      if (response.type === "bciTranscribe") {
-        const parsed = bciTranscribeResponseSchema.parse(response);
+      if (response.type === 'bciTranscribe') {
+        const parsed = bciTranscribeResponseSchema.parse(response)
 
         if (parsed.segment) {
-          segments.push(parsed.segment);
+          segments.push(parsed.segment)
         }
 
         if (parsed.done) {
-          break;
+          break
         }
       }
     }
-    return segments;
+    return segments
   }
 
-  let fullText = "";
+  let fullText = ''
   for await (const response of stream(request, options)) {
-    if (response.type === "bciTranscribe") {
-      const parsed = bciTranscribeResponseSchema.parse(response);
+    if (response.type === 'bciTranscribe') {
+      const parsed = bciTranscribeResponseSchema.parse(response)
 
       if (parsed.text) {
-        fullText += parsed.text;
+        fullText += parsed.text
       }
 
       if (parsed.done) {
-        break;
+        break
       }
     }
   }
-  return fullText;
+  return fullText
 }
 
 function buildBciTranscribeStreamRequest(
   params: BciTranscribeStreamClientParams,
-  requestId: string,
+  requestId: string
 ): BciTranscribeStreamRequest {
   const streamOpts = {
     ...(params.windowTimesteps !== undefined && {
-      windowTimesteps: params.windowTimesteps,
+      windowTimesteps: params.windowTimesteps
     }),
     ...(params.hopTimesteps !== undefined && {
-      hopTimesteps: params.hopTimesteps,
+      hopTimesteps: params.hopTimesteps
     }),
-    ...(params.emit !== undefined && { emit: params.emit }),
-  };
+    ...(params.emit !== undefined && { emit: params.emit })
+  }
 
   return {
-    type: "bciTranscribeStream",
+    type: 'bciTranscribeStream',
     modelId: params.modelId,
     ...(params.metadata === true && { metadata: true }),
     ...(Object.keys(streamOpts).length > 0 && { streamOpts }),
-    requestId,
-  };
+    requestId
+  }
 }
 
 /**
@@ -169,74 +169,67 @@ function buildBciTranscribeStreamRequest(
  */
 export function bciTranscribeStream(
   params: BciTranscribeStreamClientParams & { metadata: true },
-  options?: RPCOptions,
-): Promise<BciTranscribeStreamMetadataSession>;
+  options?: RPCOptions
+): Promise<BciTranscribeStreamMetadataSession>
 export function bciTranscribeStream(
   params: BciTranscribeStreamClientParams,
-  options?: RPCOptions,
-): Promise<BciTranscribeStreamSession>;
+  options?: RPCOptions
+): Promise<BciTranscribeStreamSession>
 export function bciTranscribeStream(
   params: BciTranscribeStreamClientParams,
-  options?: RPCOptions,
+  options?: RPCOptions
 ): Promise<BciTranscribeStreamSession | BciTranscribeStreamMetadataSession> {
   if (params.metadata === true) {
     return createBciStreamSession(
       params,
       options,
       processLineMetadata,
-      "BciTranscribeStreamMetadataSession",
-    );
+      'BciTranscribeStreamMetadataSession'
+    )
   }
-  return createBciStreamSession(
-    params,
-    options,
-    processLine,
-    "BciTranscribeStreamSession",
-  );
+  return createBciStreamSession(params, options, processLine, 'BciTranscribeStreamSession')
 }
 
 async function createBciStreamSession<T>(
   params: BciTranscribeStreamClientParams,
   options: RPCOptions | undefined,
   process: (line: string) => T | undefined | null,
-  sessionName: string,
+  sessionName: string
 ): Promise<{
-  requestId: string;
-  write(neuralChunk: Uint8Array): void;
-  end(): void;
-  destroy(): void;
-  [Symbol.asyncIterator](): AsyncIterator<T>;
+  requestId: string
+  write(neuralChunk: Uint8Array): void
+  end(): void
+  destroy(): void
+  [Symbol.asyncIterator](): AsyncIterator<T>
 }> {
-  const requestId = generateClientRequestId();
-  const request = buildBciTranscribeStreamRequest(params, requestId);
+  const requestId = generateClientRequestId()
+  const request = buildBciTranscribeStreamRequest(params, requestId)
 
-  const { requestStream, responseStream } = await duplex(request, options);
+  const { requestStream, responseStream } = await duplex(request, options)
 
-  const responses = parseLines(responseStream, process);
-  let consumed = false;
+  const responses = parseLines(responseStream, process)
+  let consumed = false
 
   return {
     requestId,
     write(neuralChunk: Uint8Array) {
-      requestStream.write(neuralChunk);
+      requestStream.write(neuralChunk)
     },
     end() {
-      requestStream.end();
+      requestStream.end()
     },
     destroy() {
-      requestStream.destroy();
-      responseStream.destroy();
+      requestStream.destroy()
+      responseStream.destroy()
     },
     [Symbol.asyncIterator]() {
       if (consumed) {
-        throw new TranscriptionFailedError(
-          `${sessionName} can only be iterated once`,
-        );
+        throw new TranscriptionFailedError(`${sessionName} can only be iterated once`)
       }
-      consumed = true;
-      return responses;
-    },
-  };
+      consumed = true
+      return responses
+    }
+  }
 }
 
 /**
@@ -246,47 +239,45 @@ async function createBciStreamSession<T>(
  */
 async function* parseLines<T>(
   responseStream: DuplexReadable,
-  process: (line: string) => T | undefined | null,
+  process: (line: string) => T | undefined | null
 ): AsyncGenerator<T> {
-  let buf = "";
+  let buf = ''
 
   for await (const chunk of responseStream) {
-    buf += chunk.toString();
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
+    buf += chunk.toString()
+    const lines = buf.split('\n')
+    buf = lines.pop() || ''
 
     for (const line of lines) {
-      const result = process(line);
-      if (result === null) return;
-      if (result !== undefined) yield result;
+      const result = process(line)
+      if (result === null) return
+      if (result !== undefined) yield result
     }
   }
 
   if (buf.trim()) {
-    const result = process(buf);
-    if (result !== null && result !== undefined) yield result;
+    const result = process(buf)
+    if (result !== null && result !== undefined) yield result
   }
 }
 
 function parseResponseLine(line: string): BciTranscribeStreamResponse | null {
-  if (!line.trim()) return null;
+  if (!line.trim()) return null
 
-  let parsed: unknown;
+  let parsed: unknown
   try {
-    parsed = JSON.parse(line);
+    parsed = JSON.parse(line)
   } catch {
-    logger.warn("bciTranscribeStream: malformed JSON from server:", line);
-    return null;
+    logger.warn('bciTranscribeStream: malformed JSON from server:', line)
+    return null
   }
 
-  const obj = parsed as Record<string, unknown>;
-  if (obj["type"] === "error") {
-    throw new TranscriptionFailedError(
-      (obj["message"] as string) ?? "Unknown server error",
-    );
+  const obj = parsed as Record<string, unknown>
+  if (obj['type'] === 'error') {
+    throw new TranscriptionFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
-  return bciTranscribeStreamResponseSchema.parse(parsed);
+  return bciTranscribeStreamResponseSchema.parse(parsed)
 }
 
 /**
@@ -296,23 +287,19 @@ function parseResponseLine(line: string): BciTranscribeStreamResponse | null {
  */
 function processWith<T>(
   line: string,
-  extract: (response: BciTranscribeStreamResponse) => T | undefined,
+  extract: (response: BciTranscribeStreamResponse) => T | undefined
 ): T | undefined | null {
-  const response = parseResponseLine(line);
-  if (response === null) return undefined;
-  if (response.error) throw new TranscriptionFailedError(response.error);
-  if (response.done) return null;
-  return extract(response);
+  const response = parseResponseLine(line)
+  if (response === null) return undefined
+  if (response.error) throw new TranscriptionFailedError(response.error)
+  if (response.done) return null
+  return extract(response)
 }
 
 function processLine(line: string): string | undefined | null {
-  return processWith(line, (response) =>
-    response.text?.trim() ? response.text : undefined,
-  );
+  return processWith(line, (response) => (response.text?.trim() ? response.text : undefined))
 }
 
-function processLineMetadata(
-  line: string,
-): TranscribeSegment | undefined | null {
-  return processWith(line, (response) => response.segment);
+function processLineMetadata(line: string): TranscribeSegment | undefined | null {
+  return processWith(line, (response) => response.segment)
 }

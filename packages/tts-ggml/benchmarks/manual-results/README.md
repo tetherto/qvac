@@ -1,14 +1,15 @@
 # Manual Performance Results (GGML TTS)
 
 Drop GGML TTS RTF benchmark JSON files in this directory when you need to
-include supported backends or devices that are **not available on CI** — CUDA
-desktops, Adreno OpenCL phones, hosted-macOS Metal (which crashes ggml's
-encoder under CI), or numbers from a local engineer box.
+include supported backends or devices that are **not available on CI** —
+Adreno OpenCL phones, discrete-GPU Vulkan boxes outside the self-hosted runner
+pool, hosted-macOS Metal (which crashes ggml's encoder under CI), or numbers
+from a local engineer box.
 
 Files are read by the RTF aggregator via its `--manual-dir` argument:
 
 - `scripts/perf-report/aggregate-tts-ggml-rtf.js`
-- the `summarize` job in `.github/workflows/benchmark-rtf-tts-ggml.yml`
+- the `summarize` job in `.github/workflows/benchmark-performance-tts-ggml.yml`
 
 Any `.json` file in this directory is picked up. Files ending in `.json.example`
 are **skipped** — rename to `.json` to activate. Records the aggregator does not
@@ -34,7 +35,7 @@ The canonical shape includes:
 | `engine`                      | string   | yes      | `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl`. |
 | `model.variant`               | string   | no       | Label: `q4` / `q8` / `f16` / `mixed` (default `q4`). |
 | `model.sizeBytes`             | number   | no       | Sum of the engine's GGUF files on disk. Shown as `Model (MB)`. |
-| `labels.backend`              | string   | yes      | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. |
+| `labels.backend`              | string   | yes      | `cpu` / `metal` / `vulkan` / `opencl`. |
 | `labels.device`               | string   | yes      | Human-readable device identifier (goes into the `Device` column). |
 | `labels.label`                | string   | no       | Free-form tag. |
 | `requested.useGPU`            | boolean  | yes      | `true` → `GPU` row; `false` → `CPU` row. |
@@ -45,9 +46,18 @@ The canonical shape includes:
 | `summary.tokensPerSecond.{mean,...}` | object | no    | Available on engines that report `tokensPerSecond`. |
 | `summary.coldRtf`             | number?  | no       | RTF of the first warmup run (captures cold path). |
 | `summary.modelLoadMs`         | number?  | no       | `load()` wall time. |
-| `summary.peakRssBytes`        | number?  | no       | Max RSS observed across warmup + measured runs. |
+| `summary.peakRssBytes`        | number?  | no       | Legacy flat peak RSS. Still read as a fallback for `Peak RSS (MB)` when `summary.memory` is absent. |
+| `summary.memory.avgRssMb`     | number?  | no       | Average process RSS sampled during inference. Shown as `Avg RSS (MB)`. |
+| `summary.memory.peakRssMb`    | number?  | no       | Peak RSS across all runs (never below the post-load footprint). Shown as `Peak RSS (MB)`; preferred over `summary.peakRssBytes`. |
+| `summary.memory.reclaimedMb`  | number?  | no       | Memory returned to the OS after the model is unloaded (`rssAfterLoadMb - rssAfterUnloadMb`, clamped at 0). Shown as `Reclaimed (MB)`. |
 | `summary.modelSizeBytes`      | number?  | no       | Same value as `model.sizeBytes`; either field is acceptable. |
 | `summary.noisy`               | boolean? | no       | When `true`, aggregator prints `⚠`. If absent, derived from `stddev/mean > 0.15`. |
+
+The optional `summary.memory` block captures process resident-set-size (RSS)
+usage for the engine/platform/variant under test. On mobile the same three
+figures arrive as `avg_rss_mb` / `peak_rss_mb` / `reclaimed_mb` metrics in the
+canonical `[PERF_REPORT_START]` payload. Rows without any memory data render as
+`n/a` in those columns, so older artifacts remain valid.
 
 Absolute minimum to get a row rendered: `platform`, `engine`, `labels.backend`,
 `labels.device`, `requested.useGPU`, `summary.rtf.{mean,p50,p95}`.
@@ -65,8 +75,7 @@ column readable.
 
 ## Typical use cases
 
-- **CUDA** desktops (not in the default tts-cpp backend cascade — needs an
-  explicit `cuda` backend hint and a CUDA-enabled prebuild).
+- **Discrete-GPU Vulkan** desktops outside the self-hosted runner pool.
 - **Adreno OpenCL** Android phones not in the AWS Device Farm pool.
 - **Apple Silicon Metal** numbers from a local Mac (hosted macOS runners force
   `NO_GPU=true` because the Paravirtual Metal device crashes ggml's encoder).
@@ -77,8 +86,8 @@ column readable.
 ```bash
 # 1. Capture locally
 QVAC_TTS_GGML_BENCHMARK_USE_GPU=true \
-QVAC_TTS_GGML_BENCHMARK_BACKEND=cuda \
-QVAC_TTS_GGML_BENCHMARK_DEVICE=my-cuda-box \
+QVAC_TTS_GGML_BENCHMARK_BACKEND=vulkan \
+QVAC_TTS_GGML_BENCHMARK_DEVICE=my-vulkan-box \
 QVAC_TTS_GGML_BENCHMARK_RUNNER=manual-zbig \
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 

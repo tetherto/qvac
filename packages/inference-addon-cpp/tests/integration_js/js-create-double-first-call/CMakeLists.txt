@@ -36,10 +36,4 @@ if(WIN32)
   )
 
   target_compile_options(${test_js_create_double_first_call} PRIVATE "/utf-8")
-
-  target_link_libraries(
-    ${test_js_create_double_first_call}
-    PRIVATE
-    msvcrt.lib
-  )
 endif()

@@ -6,8 +6,8 @@ Original Model: [Whisper-Tiny](https://huggingface.co/openai/whisper-tiny)
 
 | Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
 |---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
-| clean | whispercpp | 3.1.1 | @tetherto/transcription-whispercpp | - | 71.72 | 69.27 | Librispeech | Performed on GPU |
-| clean | whispercpp | 3.1.1 | @tetherto/transcription-whispercpp | ✓ | 62.30 | 57.87 | Librispeech | Performed on GPU |
+| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | - | 71.72 | 69.27 | Librispeech | Performed on GPU |
+| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | ✓ | 62.30 | 57.87 | Librispeech | Performed on GPU |
 
 ## Reference
 

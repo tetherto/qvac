@@ -8,89 +8,82 @@
  *
  * Usage: bun run examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>
  */
-import {
-  loadModel,
-  unloadModel,
-  bciTranscribeStream,
-  BCI_WINDOWED,
-} from "@qvac/sdk";
-import { readFileSync } from "fs";
+import { loadModel, unloadModel, bciTranscribeStream, BCI_WINDOWED } from '@qvac/sdk'
+import { readFileSync } from 'fs'
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error(
-    "Usage: bun run examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>",
-  );
-  process.exit(1);
+  console.error('Usage: bun run examples/bci/bci-filesystem-streaming.ts <neural-bin-file-path>')
+  process.exit(1)
 }
 
-const neuralFilePath = args[0];
+const neuralFilePath = args[0]
 
 // Feed the neural buffer in fixed-size chunks to simulate a live stream.
-const CHUNK_SIZE = 64 * 1024;
+const CHUNK_SIZE = 64 * 1024
 
 try {
-  console.log("▸ BCI transcribeStream file test");
-  console.log(`▸ File: ${neuralFilePath}`);
-  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes`);
+  console.log('▸ BCI transcribeStream file test')
+  console.log(`▸ File: ${neuralFilePath}`)
+  console.log(`▸ Chunk size: ${CHUNK_SIZE} bytes`)
 
-  console.log("▸ Loading model...");
+  console.log('▸ Loading model...')
   const modelId = await loadModel({
     modelSrc: BCI_WINDOWED,
     modelConfig: {
       whisperConfig: {
-        language: "en",
+        language: 'en',
         n_threads: 4,
-        temperature: 0.0,
+        temperature: 0.0
       },
       // Session day index selects the day-specific projection matrices.
       // Set this to match the recording session your neural file came from.
       bciConfig: {
-        day_idx: 1,
-      },
-    },
-  });
-  console.log(`▸ Model loaded: ${modelId}`);
-  console.log("▸ Opening live session...");
-  const session = await bciTranscribeStream({ modelId, emit: "delta" });
-  console.log("▸ Session open. Streaming neural signal...");
+        day_idx: 1
+      }
+    }
+  })
+  console.log(`▸ Model loaded: ${modelId}`)
+  console.log('▸ Opening live session...')
+  const session = await bciTranscribeStream({ modelId, emit: 'delta' })
+  console.log('▸ Session open. Streaming neural signal...')
 
   // Drain the session concurrently with writing so the sliding-window
   // decode can make progress as chunks arrive instead of stalling.
   const consume = (async () => {
-    let transcript = "";
+    let transcript = ''
     for await (const text of session) {
-      transcript += text;
-      process.stdout.write(text);
+      transcript += text
+      process.stdout.write(text)
     }
-    return transcript;
-  })();
+    return transcript
+  })()
 
-  const data = readFileSync(neuralFilePath);
+  const data = readFileSync(neuralFilePath)
 
-  let totalBytes = 0;
+  let totalBytes = 0
   for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
-    const chunk = data.subarray(offset, offset + CHUNK_SIZE);
-    session.write(chunk);
-    totalBytes += chunk.length;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    const chunk = data.subarray(offset, offset + CHUNK_SIZE)
+    session.write(chunk)
+    totalBytes += chunk.length
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
 
-  console.log(`\n\n▸ Neural signal streamed: ${totalBytes} bytes`);
-  console.log("▸ Waiting for transcription to finish...");
-  session.end();
+  console.log(`\n\n▸ Neural signal streamed: ${totalBytes} bytes`)
+  console.log('▸ Waiting for transcription to finish...')
+  session.end()
 
-  const transcript = await consume;
+  const transcript = await consume
 
-  console.log("\n▸ Results");
-  console.log(transcript.trim() || "(no text received)");
+  console.log('\n▸ Results')
+  console.log(transcript.trim() || '(no text received)')
 
-  console.log("▸ Unloading model...");
-  await unloadModel({ modelId });
-  console.log("▸ Done.");
-  process.exit(0);
+  console.log('▸ Unloading model...')
+  await unloadModel({ modelId })
+  console.log('▸ Done.')
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

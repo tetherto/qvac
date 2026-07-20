@@ -9,6 +9,7 @@
 #include <llama.h>
 
 #include "LlmContext.hpp"
+#include "SequenceDriver.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -23,6 +24,10 @@ enum class StopReason : uint8_t {
 struct Request {
   uint32_t seqId;
   std::vector<llama_token> pendingPrefillTokens;
+  /// Media barriers not yet evaluated, ordered by `afterTextTokens`.
+  /// The slot stops feeding text once `prefillFedCount` reaches the head
+  /// barrier's anchor and waits for `completeMediaBarrier`.
+  std::vector<MediaBarrier> pendingMediaBarriers;
   size_t prefillTokenCount = 0;
   size_t prefillFedCount = 0;
   std::vector<llama_token> generatedTokens;
@@ -37,6 +42,9 @@ struct Request {
   unsigned maxTokensPerSequence;
 
   Request(
+      uint32_t rid, PrefillPlan&& plan, unsigned maxTokens,
+      llama_pos initialPos = 0, bool canSlide = false);
+  Request(
       uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
       llama_pos initialPos = 0, bool canSlide = false);
 
@@ -47,6 +55,11 @@ struct Request {
   static bool isOptActive(const std::optional<Request>& slot);
   [[nodiscard]] bool isPrefillPending() const;
   static bool isOptPrefillPending(const std::optional<Request>& slot);
+  /// True when the slot's prefill is blocked on its head media barrier:
+  /// every text token before the barrier has been fed and the scheduler
+  /// must run `SequenceDriver::evalMediaSegment` before more can flow.
+  [[nodiscard]] bool isAwaitingMedia() const;
+  static bool isOptAwaitingMedia(const std::optional<Request>& slot);
   [[nodiscard]] bool isGenerationIdle() const;
   static bool isOptGenerationIdle(const std::optional<Request>& slot);
   [[nodiscard]] bool isGenerationPending() const;
@@ -83,13 +96,28 @@ public:
     ErrNoFreeSlot,
     ErrTokensTooLarge,
     ErrEmptyTokens,
+    ErrInvalidPlan,
   };
 
   [[nodiscard]] AddStatus
   addRequest(std::vector<llama_token>&& tokens, uint32_t& seqId);
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, std::vector<llama_token>&& tokens,
-      llama_pos initialPos = 0, bool slideCapable = false);
+      llama_pos initialPos = 0, bool slideCapable = false,
+      llama_pos initialKvCells = -1);
+  /// Plan-aware admission: text tokens plus interleaved media barriers.
+  /// Barriers must be sorted by `afterTextTokens` and anchored within
+  /// `plan.tokens` (`ErrInvalidPlan` otherwise). Sizing uses
+  /// `plan.totalPositions()` so media spans count against the cap.
+  ///
+  /// `initialKvCells` is the physical KV-cell count already committed for this
+  /// sequence (e.g. a restored cache). It defaults (negative) to `initialPos`,
+  /// which is correct for text where cells and positions coincide; for a
+  /// cache-loaded M-RoPE sequence the cells exceed the positions, so the
+  /// KV-cap check must use this value rather than `initialPos`.
+  [[nodiscard]] AddStatus addRequestAt(
+      uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos = 0,
+      bool slideCapable = false, llama_pos initialKvCells = -1);
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
@@ -142,6 +170,29 @@ public:
   void
   advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
 
+  /// A slot blocked on its head media barrier, ready for the scheduler
+  /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.
+  struct AwaitingMedia {
+    uint32_t seqId;
+    size_t mediaIndex;
+    llama_pos currentPos;
+  };
+
+  /// First slot (lowest seqId) whose prefill is blocked on a media
+  /// barrier, or nullopt. Lowest-seqId order keeps servicing
+  /// deterministic; a slot is serviced one barrier per call so text
+  /// slots interleave between media evaluations.
+  [[nodiscard]] std::optional<AwaitingMedia> nextAwaitingMedia() const;
+
+  /// Consume the head media barrier of `seqId` after the scheduler
+  /// evaluated it. `newPos` is the position returned by
+  /// `evalMediaSegment`. Fires `onPrefillComplete` if the barrier was
+  /// the final pending prefill work. Returns false when the slot is
+  /// missing or has no pending barrier.
+  bool completeMediaBarrier(
+      uint32_t seqId, llama_pos newPos,
+      const PrefillCompleteFn& onPrefillComplete = {});
+
   /// Extract finished requests and free their slots. Callers are responsible
   /// for clearing the freed seqIds' KV-cache entries before reusing the slots.
   std::vector<Request> extractFinished();
@@ -155,9 +206,9 @@ public:
   /// previously occupied slot, in seqId order.
   void clear(const KvClearFn& kvClear = {});
 
-  [[nodiscard]] bool isValid(uint32_t seqId) const;
+  [[nodiscard]] bool isValid(uint32_t seqId) const noexcept;
 
-  [[nodiscard]] const Request* requestAt(uint32_t seqId) const;
+  [[nodiscard]] const Request* requestAt(uint32_t seqId) const noexcept;
 
 private:
   unsigned maxChunkSize_, maxTokensPerSequence_;

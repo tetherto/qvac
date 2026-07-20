@@ -193,8 +193,8 @@ new RAG({
   embeddingFunction: EmbeddingFunction, // Required: embedding function
   dbAdapter: BaseDBAdapter, // Required: Database adapter
   chunker: BaseChunkAdapter, // Optional: Custom chunker
-  chunkOpts: ChunkOpts, // Optional: Chunking configuration
-});
+  chunkOpts: ChunkOpts // Optional: Chunking configuration
+})
 ```
 
 #### Setting up HyperDBAdapter
@@ -202,21 +202,21 @@ new RAG({
 The default database adapter requires a Corestore instance for persistent storage:
 
 ```javascript
-const Corestore = require("corestore");
-const { HyperDBAdapter } = require("@qvac/rag");
+const Corestore = require('corestore')
+const { HyperDBAdapter } = require('@qvac/rag')
 
 // Create a Corestore instance with persistent storage
-const store = new Corestore("./my-rag-data");
+const store = new Corestore('./my-rag-data')
 
 // Create database adapter with store
-const dbAdapter = new HyperDBAdapter({ store });
+const dbAdapter = new HyperDBAdapter({ store })
 
 // Alternative: Use external HyperDB instance
-const HyperDB = require("hyperdb");
-const dbSpec = require("./path/to/your/db-spec");
-const hypercore = store.get({ name: "my-db" });
-const db = HyperDB.bee(hypercore, dbSpec);
-const dbAdapter = new HyperDBAdapter({ db });
+const HyperDB = require('hyperdb')
+const dbSpec = require('./path/to/your/db-spec')
+const hypercore = store.get({ name: 'my-db' })
+const db = HyperDB.bee(hypercore, dbSpec)
+const dbAdapter = new HyperDBAdapter({ db })
 ```
 
 **Configuration Options:**
@@ -397,21 +397,21 @@ Use model-specific tokenizers for accurate chunk sizing:
 
 ```javascript
 // Install: npm install tiktoken
-const tiktoken = require("tiktoken");
+const tiktoken = require('tiktoken')
 
 // Create tiktoken-based splitter
-const encoding = tiktoken.encoding_for_model("text-embedding-ada-002");
+const encoding = tiktoken.encoding_for_model('text-embedding-ada-002')
 
 const chunker = new LLMChunkAdapter({
   splitter: (text) => {
-    const tokens = encoding.encode(text);
-    return tokens.map((t) => new TextDecoder().decode(encoding.decode([t])));
+    const tokens = encoding.encode(text)
+    return tokens.map((t) => new TextDecoder().decode(encoding.decode([t])))
   },
-  chunkSize: 256,
-});
+  chunkSize: 256
+})
 
 // Don't forget to clean up
-encoding.free();
+encoding.free()
 ```
 
 **Note**: Custom splitters must preserve original text (no lowercasing/transformations).

@@ -1,103 +1,61 @@
-import { QvacErrorBase } from "@qvac/error";
-import { SDK_CLIENT_ERROR_CODES } from "@/schemas/sdk-errors-client";
-import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
-import { createErrorOptions } from "./errors-base";
+import { QvacErrorBase } from '@qvac/error'
+import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
+import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
+import { createErrorOptions } from './errors-base'
 
 // ============== Response Validation Errors ==============
 
 export class InvalidResponseError extends QvacErrorBase {
   constructor(expected: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_RESPONSE_TYPE,
-        [expected],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_RESPONSE_TYPE, [expected], cause))
   }
 }
 
 export class InvalidOperationError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_OPERATION_IN_RESPONSE,
-        undefined,
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_OPERATION_IN_RESPONSE, undefined, cause)
+    )
   }
 }
 
 export class StreamEndedError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.STREAM_ENDED_WITHOUT_RESPONSE,
-        undefined,
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.STREAM_ENDED_WITHOUT_RESPONSE, undefined, cause)
+    )
   }
 }
 
 export class InvalidAudioChunkError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE, undefined, cause))
   }
 }
 
 export class InvalidToolsArrayError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_TOOLS_ARRAY,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_TOOLS_ARRAY, undefined, cause))
   }
 }
 
 export class InvalidToolSchemaError extends QvacErrorBase {
   constructor(details: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_TOOL_SCHEMA,
-        [details],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_TOOL_SCHEMA, [details], cause))
   }
 }
 
 export class OCRFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.OCR_FAILED,
-        details ? [details] : undefined,
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.OCR_FAILED, details ? [details] : undefined, cause)
+    )
   }
 }
 
 export class ModelTypeRequiredError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED, undefined, cause))
   }
 }
 
@@ -107,9 +65,9 @@ export class ModelSrcTypeMismatchError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH,
         [inferred, resolved],
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -117,94 +75,56 @@ export class ModelSrcTypeMismatchError extends QvacErrorBase {
 
 export class RPCNoHandlerError extends QvacErrorBase {
   constructor(requestType: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.RPC_NO_HANDLER,
-        [requestType],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_NO_HANDLER, [requestType], cause))
   }
 }
 
 export class RPCRequestNotSentError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.RPC_REQUEST_NOT_SENT,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_REQUEST_NOT_SENT, undefined, cause))
   }
 }
 
 export class RPCResponseStreamNotCreatedError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.RPC_RESPONSE_STREAM_NOT_CREATED,
-        undefined,
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_RESPONSE_STREAM_NOT_CREATED, undefined, cause)
+    )
   }
 }
 
 export class RPCConnectionFailedError extends QvacErrorBase {
   constructor(details: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED,
-        [details],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED, [details], cause))
   }
 }
 
 export class RPCInitTimeoutError extends QvacErrorBase {
   constructor(timeoutMs: number, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT,
-        [timeoutMs],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT, [timeoutMs], cause))
   }
 }
 
 export class WorkerCrashedError extends QvacErrorBase {
-  public readonly exitCode: number | null;
-  public readonly exitSignal: NodeJS.Signals | null;
+  public readonly exitCode: number | null
+  public readonly exitSignal: NodeJS.Signals | null
 
-  constructor(
-    exitCode: number | null,
-    exitSignal: NodeJS.Signals | null,
-    cause?: unknown,
-  ) {
+  constructor(exitCode: number | null, exitSignal: NodeJS.Signals | null, cause?: unknown) {
     super(
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.WORKER_CRASHED,
         [String(exitCode), String(exitSignal)],
-        cause,
-      ),
-    );
-    this.exitCode = exitCode;
-    this.exitSignal = exitSignal;
+        cause
+      )
+    )
+    this.exitCode = exitCode
+    this.exitSignal = exitSignal
   }
 }
 
 export class WorkerShutdownError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN, undefined, cause))
   }
 }
 
@@ -216,9 +136,9 @@ export class ProviderStartFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.PROVIDER_START_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -228,45 +148,27 @@ export class ProviderStopFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.PROVIDER_STOP_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
 export class DelegateNoFinalResponseError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE, undefined, cause))
   }
 }
 
 export class DelegateProviderError extends QvacErrorBase {
   constructor(details: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.DELEGATE_PROVIDER_ERROR,
-        [details],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_PROVIDER_ERROR, [details], cause))
   }
 }
 
 export class DelegateConnectionFailedError extends QvacErrorBase {
   constructor(details: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.DELEGATE_CONNECTION_FAILED,
-        [details],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.DELEGATE_CONNECTION_FAILED, [details], cause))
   }
 }
 
@@ -275,114 +177,67 @@ export class DelegateConnectionFailedError extends QvacErrorBase {
 export class SDKNotFoundInNodeModulesError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.SDK_NOT_FOUND_IN_NODE_MODULES,
-        undefined,
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.SDK_NOT_FOUND_IN_NODE_MODULES, undefined, cause)
+    )
   }
 }
 
 export class MultipleSDKInstallationsError extends QvacErrorBase {
   constructor(packages: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS,
-        [packages],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.MULTIPLE_SDK_INSTALLATIONS, [packages], cause))
   }
 }
 
 export class WorkerFileNotFoundError extends QvacErrorBase {
   constructor(workerPath: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND,
-        [workerPath],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_FILE_NOT_FOUND, [workerPath], cause))
   }
 }
 
 export class PearWorkerEntryRequiredError extends QvacErrorBase {
   constructor(workerEntry: string, cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED,
-        [workerEntry],
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.PEAR_WORKER_ENTRY_REQUIRED, [workerEntry], cause)
+    )
   }
 }
 
 export class WorkerPluginsNotRegisteredError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED,
-        [],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED, [], cause))
   }
 }
 
 export class BundleVerificationFailedError extends QvacErrorBase {
   constructor(bundlePath: string, cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED,
-        [bundlePath],
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED, [bundlePath], cause)
+    )
   }
 }
 
 export class BarePackNotInstalledError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.BARE_PACK_NOT_INSTALLED, undefined, cause))
   }
 }
 
 export class BarePackError extends QvacErrorBase {
-  constructor(
-    exitCode: number,
-    entryPath: string,
-    outputPath: string,
-    cause?: unknown,
-  ) {
+  constructor(exitCode: number, entryPath: string, outputPath: string, cause?: unknown) {
     super(
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_PACK_ERROR,
         [exitCode, entryPath, outputPath],
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
 export class InvalidPluginSpecifierError extends QvacErrorBase {
   constructor(specifiers: string[], cause?: unknown) {
-    const list = specifiers.map((s) => `  - ${s}`).join("\n");
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER,
-        [list],
-        cause,
-      ),
-    );
+    const list = specifiers.map((s) => `  - ${s}`).join('\n')
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.INVALID_PLUGIN_SPECIFIER, [list], cause))
   }
 }
 
@@ -392,9 +247,9 @@ export class BareImportsMapNotFoundError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_IMPORTS_MAP_NOT_FOUND,
         [sdkName, expectedPath],
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -404,69 +259,41 @@ export class BareRuntimeBinaryNotFoundError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.BARE_RUNTIME_BINARY_NOT_FOUND,
         [platform, arch],
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.CONFIG_FILE_NOT_FOUND,
-        [searchPaths],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.CONFIG_FILE_NOT_FOUND, [searchPaths], cause))
   }
 }
 
 export class ConfigFileInvalidError extends QvacErrorBase {
   constructor(filePath: string, reason: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.CONFIG_FILE_INVALID,
-        [filePath, reason],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.CONFIG_FILE_INVALID, [filePath, reason], cause))
   }
 }
 
 export class ConfigFileParseFailedError extends QvacErrorBase {
   constructor(filePath: string, error: string, cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.CONFIG_FILE_PARSE_FAILED,
-        [filePath, error],
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.CONFIG_FILE_PARSE_FAILED, [filePath, error], cause)
+    )
   }
 }
 
 export class ConfigValidationFailedError extends QvacErrorBase {
   constructor(errors: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED,
-        [errors],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.CONFIG_VALIDATION_FAILED, [errors], cause))
   }
 }
 
 export class RequestValidationFailedError extends QvacErrorBase {
   constructor(errors: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED,
-        [errors],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED, [errors], cause))
   }
 }
 
@@ -480,9 +307,9 @@ export class ModelUnloadFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED,
         modelId ? [modelId] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -492,9 +319,9 @@ export class EmbedFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.EMBED_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -504,9 +331,9 @@ export class TranscriptionFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TRANSCRIPTION_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -516,9 +343,9 @@ export class TextToSpeechStreamFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -528,9 +355,9 @@ export class TranslationFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TRANSLATION_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -540,9 +367,9 @@ export class CancelFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.CANCEL_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -552,9 +379,9 @@ export class RAGChunkFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_CHUNK_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -564,9 +391,9 @@ export class RAGSaveFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -576,9 +403,9 @@ export class RAGSearchFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_SEARCH_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -588,9 +415,9 @@ export class RAGDeleteFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_DELETE_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -600,9 +427,9 @@ export class RAGCloseWorkspaceFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_WORKSPACE_CLOSE_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -612,9 +439,9 @@ export class RAGListWorkspacesFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.RAG_LIST_WORKSPACES_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -624,45 +451,27 @@ export class DownloadAssetFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.DOWNLOAD_ASSET_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
 export class DownloadCancelledError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.DOWNLOAD_CANCELLED,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.DOWNLOAD_CANCELLED, undefined, cause))
   }
 }
 
 export class ChecksumValidationFailedError extends QvacErrorBase {
   constructor(fileName: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.CHECKSUM_VALIDATION_FAILED,
-        [fileName],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.CHECKSUM_VALIDATION_FAILED, [fileName], cause))
   }
 }
 
 export class HTTPError extends QvacErrorBase {
   constructor(status: number, statusText: string, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.HTTP_ERROR,
-        [status, statusText],
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.HTTP_ERROR, [status, statusText], cause))
   }
 }
 
@@ -672,9 +481,9 @@ export class ModelLoadFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -684,21 +493,15 @@ export class DeleteCacheFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.DELETE_CACHE_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
 export class InvalidDeleteCacheParamsError extends QvacErrorBase {
   constructor(cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.INVALID_DELETE_CACHE_PARAMS,
-        undefined,
-        cause,
-      ),
-    );
+    super(createErrorOptions(SDK_SERVER_ERROR_CODES.INVALID_DELETE_CACHE_PARAMS, undefined, cause))
   }
 }
 
@@ -708,9 +511,9 @@ export class SetConfigFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.SET_CONFIG_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -724,9 +527,9 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_QUERY_FAILED,
         details ? [details] : undefined,
-        cause,
-      ),
-    );
+        cause
+      )
+    )
   }
 }
 
@@ -735,11 +538,7 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
 export class ProfilerInvalidCapacityError extends QvacErrorBase {
   constructor(minCapacity: number, cause?: unknown) {
     super(
-      createErrorOptions(
-        SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY,
-        [minCapacity],
-        cause,
-      ),
-    );
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY, [minCapacity], cause)
+    )
   }
 }

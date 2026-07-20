@@ -87,9 +87,9 @@ node quickstart.js
 * **Completion:** LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
 * **Text embeddings:** vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
 * **Translation:** text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
-* **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
-* **Text-to-Speech:** speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
-* **OCR:** optical character recognition (OCR) for extracting text from images via ONNX runtime.
+* **Transcription:** automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), plus speaker diarization via NVIDIA Sortformer.
+* **Text-to-Speech:** speech synthesis for text-to-speech (TTS) using the Chatterbox and Supertonic neural TTS models.
+* **OCR:** optical character recognition (OCR) for extracting text from images, via the ONNX Runtime or GGML backends.
 * **Image generation:** text-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
 * **Fine-tuning:** adapting LLMs to domain-specific tasks via LoRA.
 * **Multimodal:** LLM inference over text, images, and other media within a single conversation context.
@@ -129,30 +129,39 @@ Legend:
 | Package | Description | Category |
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
-| lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
-| lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings via `qvac-fabric-llm.cpp` | Addon |
-| lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
-| diffusion-cpp | Native C++ addon for text-to-image generation via `qvac-ext-stable-diffusion.cpp` | Addon |
-| lib-infer-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
-| lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
-| lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
-| lib-infer-parakeet | High-performance speech-to-text inference addon using via NVIDIA/Parakeet | Addon |
-| transcription-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
-| inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
-| langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
-| langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
+| bare-sdk | Bare-targeted slim assembly of the SDK; consumers install only the addons they need and register plugins explicitly | SDK |
+| ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
+| bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
+| classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
+| decoder-audio | Audio decoder library leveraging FFmpeg as a preprocessing step for other addons | Addon |
+| diffusion-cpp | Native C++ addon for image/video generation via `qvac-ext-stable-diffusion.cpp` | Addon |
+| embed-llamacpp | Native C++ addon for text embedding generation via `qvac-fabric-llm.cpp` | Addon |
+| langdetect-text | Language detection library providing an interface for detecting the language of given text | Addon |
+| langdetect-text-cld2 | Language detection using CLD2 with the same API as `@qvac/langdetect-text` | Addon |
+| llm-llamacpp | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
+| ocr-ggml | Optical Character Recognition (OCR) addon (EasyOCR pipeline) on the GGML backend | Addon |
 | ocr-onnx | Optical Character Recognition (OCR) addon using ONNX Runtime | Addon |
+| onnx | Bare addon for ONNX Runtime session management | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
-| dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
-| dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
-| dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
-| error | Standardized error handling capabilities for all QVAC libraries | Core |
-| infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
-| logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
+| transcription-parakeet | Speech-to-text (ASR) and Sortformer speaker-diarization addon using NVIDIA Parakeet models | Addon |
+| transcription-whispercpp | Whisper-based audio transcription addon via `qvac-ext-lib-whisper.cpp` | Addon |
+| translation-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
+| tts-ggml | Text-to-Speech (TTS) addon wrapping the Chatterbox and Supertonic engines on the GGML backend | Addon |
+| vla-ggml | Vision-Language-Action (VLA) inference addon on the GGML backend | Addon |
+| dl-base | Base class for QVAC dataloader libraries providing a common interface for loading data from various sources | Core |
+| dl-filesystem | Data loading library for model weights and resources from the local filesystem | Core |
+| dl-hyperdrive | Data loading library for model weights and resources from the Hyperdrive distributed file system | Core |
+| error | Standardized error-handling capabilities for all QVAC libraries | Core |
+| fabric | Shared Bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons | Core |
+| infer-base | Base class for inference addon clients defining the common lifecycle and generic model-interaction methods | Core |
+| inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building inference addons | Core |
+| logging | Logger wrapper that normalizes the logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
 | diagnostics | Diagnostic report generation library for QVAC | Tool |
-| lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
+| ggml-coload-smoke | Multi-addon co-load smoke harness that loads several GGML addons into one Bare process to catch cross-addon symbol/dlopen clashes | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
+| qvac-ci | CI utilities for the QVAC monorepo | Tool |
+| registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
 
 ### Development
 

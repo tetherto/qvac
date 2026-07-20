@@ -1,5 +1,5 @@
-import test from "brittle";
-import { createDisposableScope } from "@/server/bare/runtime/disposable-scope";
+import test from 'brittle'
+import { createDisposableScope } from '@/server/bare/runtime/disposable-scope'
 
 // -----------------------------------------------------------------------------
 // DisposableScope unit tests.
@@ -15,138 +15,137 @@ import { createDisposableScope } from "@/server/bare/runtime/disposable-scope";
 //      cleanup eagerly so resources don't leak silently.
 // -----------------------------------------------------------------------------
 
-
-test("disposable-scope: host runtime exposes Symbol.asyncDispose", (t) => {
+test('disposable-scope: host runtime exposes Symbol.asyncDispose', (t) => {
   // Tripwire for the module-load guard in disposable-scope.ts. If a future
   // runtime upgrade strips Symbol.asyncDispose (older Bare/Expo, missing
   // polyfill), the guard throws at SDK import time and this test fails first.
   // The guard converts a silent registry-leak bug into a loud startup error.
   t.is(
     typeof Symbol.asyncDispose,
-    "symbol",
-    "Symbol.asyncDispose must be a symbol; the SDK request-lifecycle stack depends on it",
-  );
-});
+    'symbol',
+    'Symbol.asyncDispose must be a symbol; the SDK request-lifecycle stack depends on it'
+  )
+})
 
-test("disposable-scope: cleanups run in LIFO order", async (t) => {
-  const order: string[] = [];
-  const scope = createDisposableScope();
+test('disposable-scope: cleanups run in LIFO order', async (t) => {
+  const order: string[] = []
+  const scope = createDisposableScope()
   scope.defer(() => {
-    order.push("first-registered");
-  });
+    order.push('first-registered')
+  })
   scope.defer(() => {
-    order.push("second-registered");
-  });
+    order.push('second-registered')
+  })
   scope.defer(async () => {
-    await Promise.resolve();
-    order.push("third-registered");
-  });
+    await Promise.resolve()
+    order.push('third-registered')
+  })
 
-  await scope[Symbol.asyncDispose]();
-  t.alike(order, ["third-registered", "second-registered", "first-registered"]);
-  t.is(scope.disposed, true);
-});
+  await scope[Symbol.asyncDispose]()
+  t.alike(order, ['third-registered', 'second-registered', 'first-registered'])
+  t.is(scope.disposed, true)
+})
 
-test("disposable-scope: dispose is idempotent", async (t) => {
-  let runs = 0;
-  const scope = createDisposableScope();
+test('disposable-scope: dispose is idempotent', async (t) => {
+  let runs = 0
+  const scope = createDisposableScope()
   scope.defer(() => {
-    runs++;
-  });
-  await scope[Symbol.asyncDispose]();
-  await scope[Symbol.asyncDispose]();
-  await scope[Symbol.asyncDispose]();
-  t.is(runs, 1, "deferred cleanup runs exactly once");
-  t.is(scope.disposed, true);
-});
+    runs++
+  })
+  await scope[Symbol.asyncDispose]()
+  await scope[Symbol.asyncDispose]()
+  await scope[Symbol.asyncDispose]()
+  t.is(runs, 1, 'deferred cleanup runs exactly once')
+  t.is(scope.disposed, true)
+})
 
-test("disposable-scope: a single failing cleanup rethrows verbatim", async (t) => {
-  const scope = createDisposableScope();
-  const boom = new Error("boom");
+test('disposable-scope: a single failing cleanup rethrows verbatim', async (t) => {
+  const scope = createDisposableScope()
+  const boom = new Error('boom')
   scope.defer(() => {
-    throw boom;
-  });
+    throw boom
+  })
   await t.exception(async () => {
-    await scope[Symbol.asyncDispose]();
-  });
-});
+    await scope[Symbol.asyncDispose]()
+  })
+})
 
-test("disposable-scope: multiple failures are collected into AggregateError", async (t) => {
-  const scope = createDisposableScope();
-  let third = 0;
+test('disposable-scope: multiple failures are collected into AggregateError', async (t) => {
+  const scope = createDisposableScope()
+  let third = 0
   scope.defer(() => {
-    throw new Error("first");
-  });
+    throw new Error('first')
+  })
   scope.defer(() => {
-    third++;
-  });
+    third++
+  })
   scope.defer(async () => {
-    await Promise.resolve();
-    throw new Error("second");
-  });
+    await Promise.resolve()
+    throw new Error('second')
+  })
 
-  let captured: unknown = null;
+  let captured: unknown = null
   try {
-    await scope[Symbol.asyncDispose]();
+    await scope[Symbol.asyncDispose]()
   } catch (err) {
-    captured = err;
+    captured = err
   }
 
-  t.ok(captured instanceof AggregateError, "throws AggregateError");
-  const agg = captured as AggregateError;
-  t.is(agg.errors.length, 2, "two underlying errors");
-  t.is(third, 1, "non-throwing cleanup still runs");
-});
+  t.ok(captured instanceof AggregateError, 'throws AggregateError')
+  const agg = captured as AggregateError
+  t.is(agg.errors.length, 2, 'two underlying errors')
+  t.is(third, 1, 'non-throwing cleanup still runs')
+})
 
-test("disposable-scope: every cleanup runs even when one throws midway", async (t) => {
-  const scope = createDisposableScope();
-  let aRan = 0;
-  let cRan = 0;
+test('disposable-scope: every cleanup runs even when one throws midway', async (t) => {
+  const scope = createDisposableScope()
+  let aRan = 0
+  let cRan = 0
   scope.defer(() => {
-    aRan++;
-  });
+    aRan++
+  })
   scope.defer(() => {
-    throw new Error("middle");
-  });
+    throw new Error('middle')
+  })
   scope.defer(() => {
-    cRan++;
-  });
+    cRan++
+  })
   try {
-    await scope[Symbol.asyncDispose]();
+    await scope[Symbol.asyncDispose]()
   } catch {
     // expected
   }
-  t.is(aRan, 1, "earlier-registered cleanup ran despite later throw");
-  t.is(cRan, 1, "later-registered cleanup ran first (LIFO) and unaffected");
-});
+  t.is(aRan, 1, 'earlier-registered cleanup ran despite later throw')
+  t.is(cRan, 1, 'later-registered cleanup ran first (LIFO) and unaffected')
+})
 
-test("disposable-scope: late defer runs the cleanup eagerly", async (t) => {
-  const scope = createDisposableScope();
-  await scope[Symbol.asyncDispose]();
-  t.is(scope.disposed, true);
+test('disposable-scope: late defer runs the cleanup eagerly', async (t) => {
+  const scope = createDisposableScope()
+  await scope[Symbol.asyncDispose]()
+  t.is(scope.disposed, true)
 
-  let lateRan = 0;
+  let lateRan = 0
   scope.defer(() => {
-    lateRan++;
-  });
+    lateRan++
+  })
   // Eager run is synchronous-or-microtask; yielding once is enough.
-  await Promise.resolve();
-  await Promise.resolve();
-  t.is(lateRan, 1, "late-registered cleanup ran without leaking");
-});
+  await Promise.resolve()
+  await Promise.resolve()
+  t.is(lateRan, 1, 'late-registered cleanup ran without leaking')
+})
 
-test("disposable-scope: works with `await using` syntax", async (t) => {
-  const seen: string[] = [];
+test('disposable-scope: works with `await using` syntax', async (t) => {
+  const seen: string[] = []
   async function run() {
-    await using scope = createDisposableScope();
+    await using scope = createDisposableScope()
     scope.defer(() => {
-      seen.push("a");
-    });
+      seen.push('a')
+    })
     scope.defer(() => {
-      seen.push("b");
-    });
-    seen.push("body");
+      seen.push('b')
+    })
+    seen.push('body')
   }
-  await run();
-  t.alike(seen, ["body", "b", "a"], "await using disposes in LIFO order");
-});
+  await run()
+  t.alike(seen, ['body', 'b', 'a'], 'await using disposes in LIFO order')
+})

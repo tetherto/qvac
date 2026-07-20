@@ -1,14 +1,14 @@
 {
   "name": "@qvac/transcription-whispercpp",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "description": "transcription addon for qvac",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "scripts": {
-    "lint": "standard \"examples/**/*.js\" \"test/**/*.js\" \"*.js\"",
-    "lint:fix": "standard --fix \"examples/**/*.js\" \"test/**/*.js\" \"**/*.js\"",
+    "lint": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"*.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"*.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"*.js\"",
     "build": "bare-make generate && bare-make build && bare-make install",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test:integration": "brittle-bare test/integration/addon.test.js",
@@ -65,7 +65,7 @@
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp#readme",
+  "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/decoder-audio": "^0.5.0",
     "@types/node": "^22",
@@ -77,7 +77,9 @@
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "husky": "^9.1.7",
-    "standard": "^17.1.2"
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",

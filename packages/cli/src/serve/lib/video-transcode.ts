@@ -1,4 +1,9 @@
-import { runFfmpeg, FfmpegFailedError, FfmpegTimeoutError, type FfmpegRunOptions } from './ffmpeg.js'
+import {
+  runFfmpeg,
+  FfmpegFailedError,
+  FfmpegTimeoutError,
+  type FfmpegRunOptions
+} from './ffmpeg.js'
 
 export type TranscodeOptions = FfmpegRunOptions
 export { FfmpegFailedError as TranscodeFailedError, FfmpegTimeoutError as TranscodeTimeoutError }
@@ -15,17 +20,32 @@ export { FfmpegFailedError as TranscodeFailedError, FfmpegTimeoutError as Transc
 //     across the head and per-fragment moof boxes). The legacy `+faststart`
 //     flag requires a seekable output and fails with `pipe:1`.
 const TRANSCODE_ARGS: readonly string[] = [
-  '-hide_banner', '-nostdin', '-loglevel', 'error',
-  '-i', 'pipe:0',
-  '-vf', 'scale=in_range=full:out_range=tv,format=yuv420p',
-  '-c:v', 'libx264', '-preset', 'fast',
-  '-color_range', 'tv',
-  '-movflags', '+frag_keyframe+empty_moov',
-  '-f', 'mp4', 'pipe:1'
+  '-hide_banner',
+  '-nostdin',
+  '-loglevel',
+  'error',
+  '-i',
+  'pipe:0',
+  '-vf',
+  'scale=in_range=full:out_range=tv,format=yuv420p',
+  '-c:v',
+  'libx264',
+  '-preset',
+  'fast',
+  '-color_range',
+  'tv',
+  '-movflags',
+  '+frag_keyframe+empty_moov',
+  '-f',
+  'mp4',
+  'pipe:1'
 ]
 
 /** Transcode the SDK's native MJPG-AVI bytes into a streamable H.264 MP4. */
-export async function transcodeAviToMp4 (input: Buffer, opts: TranscodeOptions = {}): Promise<Buffer> {
+export async function transcodeAviToMp4(
+  input: Buffer,
+  opts: TranscodeOptions = {}
+): Promise<Buffer> {
   return await runFfmpeg([...TRANSCODE_ARGS], input, opts)
 }
 

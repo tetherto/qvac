@@ -12,10 +12,15 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   check-approvals:
     name: Check Approvals
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     if: >-
       (
@@ -32,7 +37,7 @@ jobs:
       )
     steps:
       - name: Install @qvac/ci
-        run: npm install -g @qvac/ci@0.1.0
+        run: npm install -g @qvac/ci@0.2.0
 
       - name: Check Approvals
         continue-on-error: true

@@ -1,30 +1,23 @@
 'use strict'
 
 const encoder = {
-  encode (str) {
+  encode(str) {
     const out = []
     for (let i = 0; i < str.length; i++) {
       const code = str.codePointAt(i)
-      if (code > 0xFFFF) i++
-      if (code <= 0x7F) {
+      if (code > 0xffff) i++
+      if (code <= 0x7f) {
         out.push(code)
-      } else if (code <= 0x7FF) {
-        out.push(
-          0xC0 | (code >> 6),
-          0x80 | (code & 0x3F)
-        )
-      } else if (code <= 0xFFFF) {
-        out.push(
-          0xE0 | (code >> 12),
-          0x80 | ((code >> 6) & 0x3F),
-          0x80 | (code & 0x3F)
-        )
+      } else if (code <= 0x7ff) {
+        out.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f))
+      } else if (code <= 0xffff) {
+        out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f))
       } else {
         out.push(
-          0xF0 | (code >> 18),
-          0x80 | ((code >> 12) & 0x3F),
-          0x80 | ((code >> 6) & 0x3F),
-          0x80 | (code & 0x3F)
+          0xf0 | (code >> 18),
+          0x80 | ((code >> 12) & 0x3f),
+          0x80 | ((code >> 6) & 0x3f),
+          0x80 | (code & 0x3f)
         )
       }
     }
@@ -37,7 +30,7 @@ const analyzeUtf8 = (s) => {
   const bytes = encoder.encode(s)
   let hasNonAscii = false
   for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] > 0x7F) {
+    if (bytes[i] > 0x7f) {
       hasNonAscii = true
     }
   }
@@ -56,19 +49,22 @@ const SUPPORTS_UNICODE_PROPS = (() => {
 
 // Use the original pattern but with better weight tuning
 const PRETOKEN_RE = SUPPORTS_UNICODE_PROPS
-  // eslint-disable-next-line prefer-regex-literals
-  ? new RegExp('\'s|\'t|\'re|\'ve|\'m|\'ll|\'d| ?[\\p{L}]+| ?[\\p{N}]+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+', 'gu')
+  ? // eslint-disable-next-line prefer-regex-literals
+    new RegExp(
+      "'s|'t|'re|'ve|'m|'ll|'d| ?[\\p{L}]+| ?[\\p{N}]+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+",
+      'gu'
+    )
   : /'s|'t|'re|'ve|'m|'ll|'d| ?[A-Za-z]+| ?[0-9]+| ?[^\sA-Za-z0-9]+|\s+(?!\S)|\s+/g
 
 // Cached regex patterns
 const WHITESPACE_RE = /^\s+$/
 const LETTERS_RE = SUPPORTS_UNICODE_PROPS
-  // eslint-disable-next-line prefer-regex-literals
-  ? new RegExp('^[\\p{L}]+$', 'u')
+  ? // eslint-disable-next-line prefer-regex-literals
+    new RegExp('^[\\p{L}]+$', 'u')
   : /^[A-Za-z]+$/
 const NUMBERS_RE = SUPPORTS_UNICODE_PROPS
-  // eslint-disable-next-line prefer-regex-literals
-  ? new RegExp('^[\\p{N}]+$', 'u')
+  ? // eslint-disable-next-line prefer-regex-literals
+    new RegExp('^[\\p{N}]+$', 'u')
   : /^[0-9]+$/
 
 const isWhitespace = (s) => WHITESPACE_RE.test(s)
@@ -103,7 +99,7 @@ const DEFAULT_WEIGHTS = {
   globalBias: 0.88 // Global adjustment factor
 }
 
-function estimateTokenCount (text, weights) {
+function estimateTokenCount(text, weights) {
   const w = { ...DEFAULT_WEIGHTS, ...weights }
   let tokens = 0
 
@@ -142,7 +138,7 @@ function estimateTokenCount (text, weights) {
   return Math.round(tokens * w.globalBias)
 }
 
-function tokenizeText (text, weights) {
+function tokenizeText(text, weights) {
   const w = { ...DEFAULT_WEIGHTS, ...weights }
   const tokens = []
   let total = 0

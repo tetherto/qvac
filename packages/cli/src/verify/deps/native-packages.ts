@@ -31,7 +31,7 @@ export interface CollectNativePackagesResult {
   unclassifiedPackages: UnclassifiedPackage[]
 }
 
-function withVersion<T extends { version?: string }> (
+function withVersion<T extends { version?: string }>(
   target: Omit<T, 'version'>,
   version: string | undefined
 ): T {
@@ -40,7 +40,7 @@ function withVersion<T extends { version?: string }> (
   return next
 }
 
-async function readPackageJson (packageJsonPath: string): Promise<PackageJson> {
+async function readPackageJson(packageJsonPath: string): Promise<PackageJson> {
   const raw = await fsp.readFile(packageJsonPath, 'utf8')
   const parsed = JSON.parse(raw) as unknown
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -49,44 +49,48 @@ async function readPackageJson (packageJsonPath: string): Promise<PackageJson> {
   return parsed as PackageJson
 }
 
-function packageJsonPathForLockPath (
-  projectRoot: string,
-  lockPath: string
-): string {
+function packageJsonPathForLockPath(projectRoot: string, lockPath: string): string {
   return path.join(projectRoot, lockPath, 'package.json')
 }
 
-export async function collectNativePackages (
+export async function collectNativePackages(
   options: CollectNativePackagesOptions
 ): Promise<CollectNativePackagesResult> {
   const nativePackages: NativePackage[] = []
   const unclassifiedPackages: UnclassifiedPackage[] = []
 
   for (const pkg of options.packages) {
-    const packageJsonPath = packageJsonPathForLockPath(
-      options.projectRoot,
-      pkg.lockPath
-    )
+    const packageJsonPath = packageJsonPathForLockPath(options.projectRoot, pkg.lockPath)
 
     let packageJson: PackageJson
     try {
       packageJson = await readPackageJson(packageJsonPath)
     } catch (error) {
-      unclassifiedPackages.push(withVersion<UnclassifiedPackage>({
-        lockPath: pkg.lockPath,
-        name: pkg.name,
-        packageJsonPath,
-        reason: error instanceof Error ? error.message : String(error)
-      }, pkg.version))
+      unclassifiedPackages.push(
+        withVersion<UnclassifiedPackage>(
+          {
+            lockPath: pkg.lockPath,
+            name: pkg.name,
+            packageJsonPath,
+            reason: error instanceof Error ? error.message : String(error)
+          },
+          pkg.version
+        )
+      )
       continue
     }
 
     if (packageJson.addon === true) {
-      nativePackages.push(withVersion<NativePackage>({
-        lockPath: pkg.lockPath,
-        name: pkg.name,
-        packageJsonPath
-      }, pkg.version))
+      nativePackages.push(
+        withVersion<NativePackage>(
+          {
+            lockPath: pkg.lockPath,
+            name: pkg.name,
+            packageJsonPath
+          },
+          pkg.version
+        )
+      )
     }
   }
 

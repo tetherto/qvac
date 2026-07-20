@@ -2,15 +2,15 @@ import {
   upscaleStreamResponseSchema,
   type UpscaleClientParams,
   type UpscaleStats,
-  type UpscaleStreamRequest,
-} from "@/schemas/sdcpp-config";
-import { stream as streamRpc } from "@/client/rpc/rpc-client";
-import { decodeBase64, encodeBase64 } from "@/utils/encoding";
-import { StreamEndedError } from "@/utils/errors-client";
+  type UpscaleStreamRequest
+} from '@/schemas/sdcpp-config'
+import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { decodeBase64, encodeBase64 } from '@/utils/encoding'
+import { StreamEndedError } from '@/utils/errors-client'
 
 interface UpscaleResult {
-  outputs: Promise<Uint8Array[]>;
-  stats: Promise<UpscaleStats | undefined>;
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<UpscaleStats | undefined>
 }
 
 /**
@@ -55,68 +55,66 @@ export function upscale(params: UpscaleClientParams): UpscaleResult {
     modelId: params.modelId,
     image: encodeBase64(params.image),
     ...(params.repeats !== undefined && { repeats: params.repeats }),
-    type: "upscaleStream",
-  };
+    type: 'upscaleStream'
+  }
 
-  let statsResolver: (value: UpscaleStats | undefined) => void = () => {};
-  let statsRejecter: (error: unknown) => void = () => {};
-  const statsPromise = new Promise<UpscaleStats | undefined>(
-    (resolve, reject) => {
-      statsResolver = resolve;
-      statsRejecter = reject;
-    },
-  );
-  statsPromise.catch(() => {});
+  let statsResolver: (value: UpscaleStats | undefined) => void = () => {}
+  let statsRejecter: (error: unknown) => void = () => {}
+  const statsPromise = new Promise<UpscaleStats | undefined>((resolve, reject) => {
+    statsResolver = resolve
+    statsRejecter = reject
+  })
+  statsPromise.catch(() => {})
 
-  let outputsResolver: (value: Uint8Array[]) => void = () => {};
-  let outputsRejecter: (error: unknown) => void = () => {};
+  let outputsResolver: (value: Uint8Array[]) => void = () => {}
+  let outputsRejecter: (error: unknown) => void = () => {}
   const outputsPromise = new Promise<Uint8Array[]>((resolve, reject) => {
-    outputsResolver = resolve;
-    outputsRejecter = reject;
-  });
-  outputsPromise.catch(() => {});
+    outputsResolver = resolve
+    outputsRejecter = reject
+  })
+  outputsPromise.catch(() => {})
 
-  const collectedBuffers: Uint8Array[] = [];
+  const collectedBuffers: Uint8Array[] = []
 
   async function processResponses() {
-    let sawDone = false;
+    let sawDone = false
     try {
       for await (const response of streamRpc(request)) {
         if (
           response &&
-          typeof response === "object" &&
-          "type" in response &&
-          response.type === "upscaleStream"
+          typeof response === 'object' &&
+          'type' in response &&
+          response.type === 'upscaleStream'
         ) {
-          const parsed = upscaleStreamResponseSchema.parse(response);
+          const parsed = upscaleStreamResponseSchema.parse(response)
 
           if (parsed.data) {
-            collectedBuffers.push(decodeBase64(parsed.data));
+            collectedBuffers.push(decodeBase64(parsed.data))
           }
 
           if (parsed.done) {
-            sawDone = true;
-            statsResolver(parsed.stats);
-            outputsResolver(collectedBuffers);
+            sawDone = true
+            statsResolver(parsed.stats)
+            outputsResolver(collectedBuffers)
           }
         }
       }
 
       if (!sawDone) {
-        const error = new StreamEndedError();
-        statsRejecter(error);
-        outputsRejecter(error);
+        const error = new StreamEndedError()
+        statsRejecter(error)
+        outputsRejecter(error)
       }
     } catch (error) {
-      statsRejecter(error);
-      outputsRejecter(error);
+      statsRejecter(error)
+      outputsRejecter(error)
     }
   }
 
-  void processResponses();
+  void processResponses()
 
   return {
     outputs: outputsPromise,
-    stats: statsPromise,
-  };
+    stats: statsPromise
+  }
 }

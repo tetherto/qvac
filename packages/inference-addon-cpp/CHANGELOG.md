@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.2.4] - 2026-07-13
+
+### Fixed
+- `JsLogger` singleton ownership is now hardened for processes with multiple ephemeral JS envs (worklets / bare-thread workers). QVAC-21544 (1.2.3) fixed crashes on sequential teardown/reload, but left a documented gap: a second **concurrently live** env calling `setLogger` could silently hijack the singleton — leaking the first env's callback ref and leaving `logger_async_` on the wrong loop; `releaseLogger` from a non-owner env could tear down another env's logger (including a cross-thread `uv_close`); and C++ producer threads could race `uv_async_send` against handle close during teardown. This release serializes install, release, and teardown under `admin_mutex_`, rejects concurrent install from a different live env (`InvalidArgument`: "Logger already installed by another env; call releaseLogger first"), makes non-owner `releaseLogger` a no-op, scopes `onEnvTeardown` to the owning env, clears undrained log entries on release/teardown, holds `admin_mutex_` around the armed check and `uv_async_send` in `log()`, and gates enqueue on a live owner so C++ logs emitted after `releaseLogger`/teardown are dropped instead of bleeding into the next owner's callback.
+
+### Added
+- JS integration test suite `tests/integration_js/logger/reject.test.js` covering concurrent-env `setLogger` rejection, sequential cross-env handoff, non-owner `releaseLogger` no-op, and teardown-without-release reload.
+- Regression test in `tests/integration_js/logger/test.js` for orphaned log entries between `releaseLogger()` and the next `setLogger()`.
+- Regression test for same-env callback replacement via `setLogger` without an intervening `releaseLogger`.
+
+## [1.2.3] - 2026-07-02
+
+### Fixed
+- `JsLogger` no longer crashes during Bare runtime/worklet teardown or on a subsequent `setLogger()` after a soft reload (QVAC-21544). Two related lifecycle bugs are addressed: (1) a `js_add_teardown_callback` now disarms the logger (nulls the shared state and `uv_close`s the async handle) while the env is being destroyed, so the teardown's final `uv_run` can no longer dispatch `asyncCallback` against a disposing JS context (`SIGABRT`); and (2) `setLogger()` / `releaseLogger()` now only delete the previously stored callback ref when it belongs to the current live env (`oldState->env == env`) — a soft reload leaves a stale ref owned by an already-disposed env whose V8 global handles are gone, so deleting it crashed in `GlobalHandles::Release`. Verified on-device (Pixel, Android 16) with the translation addon: reload followed by re-translate no longer aborts.
+
+### Added
+- JS integration test `tests/integration_js/logger/teardown.test.js` reproducing the forced worker-runtime teardown race that surfaces the crash above.
+
+## [1.2.2] - 2026-06-30
+
+### Fixed
+- Self-pin the addon's shared library (`pinAddon()` in `Pin.hpp`, hooked once in `JsInterface::createInstance`) so that bare's `dlclose()` on `worklet.terminate()` can never unmap addon code that still has `thread_local` / `pthread_key_t` destructors registered (ggml, OpenMP, …). On Android (bionic) `dlclose()` unmaps that code, so a later thread exit jumped into now-unmapped memory and aborted (SIGSEGV); the SDK worked around this by never terminating worklets, leaking ~150 MB per load/unload cycle. Each addon now takes an `RTLD_NOLOAD | RTLD_NODELETE` reference to its own library (`GET_MODULE_HANDLE_EX_FLAG_PIN` on Windows) on first instance creation — only the small, fixed code mapping stays resident; the isolate + thread are still fully torn down. Idempotent and thread-safe (single atomic guard). Matches the existing `bare-crypto` / `bare-tls` approach. Validated on-device (Pixel 10 Pro XL, bionic): the destructor-after-`dlclose` case crashes without the pin and survives with it.
+
 ## [1.2.1] - 2026-05-20
 
 ### Fixed

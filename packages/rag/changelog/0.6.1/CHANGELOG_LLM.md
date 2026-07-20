@@ -21,7 +21,7 @@ RAG adapters now load hard dependencies (`hyperdb`, `hyperschema`, `llm-splitter
 Consumers can now import RAG error codes and the error class from a dedicated subpath that does not transitively load `HyperDBAdapter` or other heavy runtime deps:
 
 ```typescript
-import { ERR_CODES, QvacErrorRAG } from "@qvac/rag/errors";
+import { ERR_CODES, QvacErrorRAG } from '@qvac/rag/errors'
 
 if (err instanceof QvacErrorRAG && err.code === ERR_CODES.OPERATION_CANCELLED) {
   // handle cancellation

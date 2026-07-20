@@ -11,23 +11,21 @@
  *   ipc-disconnect — harness sends SIGKILL; bare worker detects broken IPC
  */
 
-import { modelRegistryList, close } from "@qvac/sdk";
+import { modelRegistryList, close } from '@qvac/sdk'
 
-type Mode = "sigterm" | "close" | "ipc-disconnect";
+type Mode = 'sigterm' | 'close' | 'ipc-disconnect'
 
-const VALID_MODES: Mode[] = ["sigterm", "close", "ipc-disconnect"];
-const REGISTRY_INIT_TIMEOUT_MS = 30_000;
+const VALID_MODES: Mode[] = ['sigterm', 'close', 'ipc-disconnect']
+const REGISTRY_INIT_TIMEOUT_MS = 30_000
 
-const mode = process.argv[2] as Mode | undefined;
+const mode = process.argv[2] as Mode | undefined
 if (!mode || !VALID_MODES.includes(mode)) {
-  process.stderr.write(
-    `Usage: no-lingering-bare-consumer.js <${VALID_MODES.join("|")}>\n`,
-  );
-  process.exit(1);
+  process.stderr.write(`Usage: no-lingering-bare-consumer.js <${VALID_MODES.join('|')}>\n`)
+  process.exit(1)
 }
 
 function log(message: string) {
-  process.stderr.write(`[consumer] ${message}\n`);
+  process.stderr.write(`[consumer] ${message}\n`)
 }
 
 async function triggerRegistryClient(): Promise<void> {
@@ -38,62 +36,60 @@ async function triggerRegistryClient(): Promise<void> {
       modelRegistryList(),
       new Promise<never>((_, reject) => {
         const t: unknown = setTimeout(
-          () => reject(new Error("modelRegistryList timeout")),
-          REGISTRY_INIT_TIMEOUT_MS,
-        );
+          () => reject(new Error('modelRegistryList timeout')),
+          REGISTRY_INIT_TIMEOUT_MS
+        )
         // Don't let the timeout keep the process alive (Bare returns object, not number)
-        if (t && typeof t === "object" && "unref" in t) (t as { unref: () => void }).unref();
-      }),
-    ]);
-    log("modelRegistryList resolved");
+        if (t && typeof t === 'object' && 'unref' in t) (t as { unref: () => void }).unref()
+      })
+    ])
+    log('modelRegistryList resolved')
   } catch (error) {
     log(
       `modelRegistryList settled with error (expected offline): ${
         error instanceof Error ? error.message : String(error)
-      }`,
-    );
+      }`
+    )
   }
 }
 
 async function main(): Promise<void> {
-  log(`starting (pid=${process.pid}, mode=${mode})`);
+  log(`starting (pid=${process.pid}, mode=${mode})`)
 
-  await triggerRegistryClient();
+  await triggerRegistryClient()
 
-  if (mode === "close") {
-    let closeTriggered = false;
-    process.stdin.setEncoding("utf-8");
-    process.stdin.on("data", (chunk: string) => {
-      if (closeTriggered || chunk.trim() !== "CLOSE") return;
-      closeTriggered = true;
-      log("received CLOSE, calling close()");
+  if (mode === 'close') {
+    let closeTriggered = false
+    process.stdin.setEncoding('utf-8')
+    process.stdin.on('data', (chunk: string) => {
+      if (closeTriggered || chunk.trim() !== 'CLOSE') return
+      closeTriggered = true
+      log('received CLOSE, calling close()')
       close()
         .then(() => {
-          log("close() returned, letting event loop drain");
-          process.stdin.destroy();
+          log('close() returned, letting event loop drain')
+          process.stdin.destroy()
         })
         .catch((err: unknown) => {
-          log(`close() failed: ${err instanceof Error ? err.message : String(err)}`);
-          process.exit(2);
-        });
-    });
+          log(`close() failed: ${err instanceof Error ? err.message : String(err)}`)
+          process.exit(2)
+        })
+    })
   }
 
-  process.stdout.write(`READY ${process.pid}\n`);
-  log("READY, waiting for harness signal");
+  process.stdout.write(`READY ${process.pid}\n`)
+  log('READY, waiting for harness signal')
 
   // Keep the event loop alive until the harness triggers shutdown.
-  process.stdin.resume();
+  process.stdin.resume()
 }
 
 main().catch(async (error) => {
-  log(
-    `fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
-  );
+  log(`fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
   try {
-    await close();
+    await close()
   } catch {
     // best-effort
   }
-  process.exit(2);
-});
+  process.exit(2)
+})

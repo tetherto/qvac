@@ -18,7 +18,7 @@ export interface CreateServerOptions {
   model?: string[]
 }
 
-function serverOptions (projectRoot: string, opts: CreateServerOptions): StartServerOptions {
+function serverOptions(projectRoot: string, opts: CreateServerOptions): StartServerOptions {
   return {
     projectRoot,
     port: 0,
@@ -34,17 +34,22 @@ function serverOptions (projectRoot: string, opts: CreateServerOptions): StartSe
 
 // Build an in-process server (no listen) against a temp projectRoot. Returns
 // the Fastify app; call app.inject(...) to drive it. Closes on test teardown.
-export async function createServer (t: TestContext, opts: CreateServerOptions = {}): Promise<FastifyInstance> {
+export async function createServer(
+  t: TestContext,
+  opts: CreateServerOptions = {}
+): Promise<FastifyInstance> {
   const projectRoot = await writeConfigDir(t, opts.config ?? MODELLESS_CONFIG)
   const app = await buildServer(serverOptions(projectRoot, opts))
-  t.after(async () => { await app.close() })
+  t.after(async () => {
+    await app.close()
+  })
   return app
 }
 
 // Build one shared server per describe block (one server per config variant).
 // Wires before/after on the enclosing suite and returns a getter for use inside
 // `it` bodies.
-export function useServer (opts: CreateServerOptions = {}): () => FastifyInstance {
+export function useServer(opts: CreateServerOptions = {}): () => FastifyInstance {
   let app: FastifyInstance | undefined
   let dir: string | undefined
   before(async () => {
@@ -67,7 +72,7 @@ export function useServer (opts: CreateServerOptions = {}): () => FastifyInstanc
 // would interfere with the test runner.
 // One shared server per file, since model loads are expensive and node:test
 // isolates files into separate processes.
-export function useModelServer (config: unknown): () => FastifyInstance {
+export function useModelServer(config: unknown): () => FastifyInstance {
   let app: FastifyInstance | undefined
   let dir: string | undefined
   before(async () => {
@@ -82,7 +87,9 @@ export function useModelServer (config: unknown): () => FastifyInstance {
       if (!entry.preload) continue
       const e = app.qvac.registry.getEntry(alias)
       if (e?.state !== app.qvac.registry.STATES.READY) {
-        throw new Error(`preload failed for "${alias}": state=${e?.state ?? 'missing'} error=${e?.error ?? 'none'}`)
+        throw new Error(
+          `preload failed for "${alias}": state=${e?.state ?? 'missing'} error=${e?.error ?? 'none'}`
+        )
       }
     }
   })
@@ -91,7 +98,9 @@ export function useModelServer (config: unknown): () => FastifyInstance {
     if (dir !== undefined) await rm(dir, { recursive: true, force: true })
   })
   return () => {
-    if (app === undefined) throw new Error('useModelServer: server not started (called outside a test?)')
+    if (app === undefined) {
+      throw new Error('useModelServer: server not started (called outside a test?)')
+    }
     return app
   }
 }

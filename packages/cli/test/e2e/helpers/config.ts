@@ -20,7 +20,7 @@ export const MODELLESS_CONFIG = {
 
 // Write a qvac.config.json into a throwaway dir and return its path as a
 // projectRoot. Cleanup is registered on the test context.
-export async function writeConfigDir (t: TestContext, config: unknown): Promise<string> {
+export async function writeConfigDir(t: TestContext, config: unknown): Promise<string> {
   const dir = await tempDir(t)
   await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
   return dir
@@ -42,7 +42,11 @@ export const MODEL_CONFIG = {
       'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } },
       'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true },
       'test-whisper': { model: 'WHISPER_EN_TINY_Q8_0', preload: true },
-      'test-whisper-translate': { model: 'WHISPER_EN_TINY_Q8_0', type: 'whispercpp-audio-translation', preload: true },
+      'test-whisper-translate': {
+        model: 'WHISPER_EN_TINY_Q8_0',
+        type: 'whispercpp-audio-translation',
+        preload: true
+      },
       'test-video': { src: 'placeholder', type: 'sdcpp-video', preload: false }
     }
   }

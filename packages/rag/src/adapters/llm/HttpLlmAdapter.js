@@ -10,30 +10,42 @@ const resolveFetch = require('../../shims/resolve-fetch')
  */
 class HttpLlmAdapter extends BaseLlmAdapter {
   /**
- * @param {Object} httpConfig - Configuration for the LLM API
- * @param {string} httpConfig.apiUrl - The API endpoint URL
- * @param {string} [httpConfig.method='POST'] - HTTP method to use
- * @param {Object} [httpConfig.headers={}] - HTTP headers to send
- * @param {Function} requestBodyFormatter - Function that takes input(query & searchResults) and returns the request body
- * @param {Function} responseBodyFormatter - Function that takes API response and returns the final result
- */
-  constructor (httpConfig, requestBodyFormatter, responseBodyFormatter) {
+   * @param {Object} httpConfig - Configuration for the LLM API
+   * @param {string} httpConfig.apiUrl - The API endpoint URL
+   * @param {string} [httpConfig.method='POST'] - HTTP method to use
+   * @param {Object} [httpConfig.headers={}] - HTTP headers to send
+   * @param {Function} requestBodyFormatter - Function that takes input(query & searchResults) and returns the request body
+   * @param {Function} responseBodyFormatter - Function that takes API response and returns the final result
+   */
+  constructor(httpConfig, requestBodyFormatter, responseBodyFormatter) {
     super()
 
     if (!httpConfig || typeof httpConfig !== 'object') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'HTTP configuration is required' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'HTTP configuration is required'
+      })
     }
 
     if (!httpConfig.apiUrl || typeof httpConfig.apiUrl !== 'string') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'API URL is required and must be a string' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'API URL is required and must be a string'
+      })
     }
 
     if (!requestBodyFormatter || typeof requestBodyFormatter !== 'function') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Request body formatter function is required' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Request body formatter function is required'
+      })
     }
 
     if (!responseBodyFormatter || typeof responseBodyFormatter !== 'function') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Response body formatter function is required' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Response body formatter function is required'
+      })
     }
 
     this.httpConfig = {
@@ -55,11 +67,14 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * @param {InferOpts} [opts] - Additional options for the inference
    * @returns {Promise<any>} The generated response (formatted by responseBodyFormatter)
    */
-  async run (query, searchResults, opts = {}) {
+  async run(query, searchResults, opts = {}) {
     try {
       const requestBody = this.requestBodyFormatter(query, searchResults, opts)
       if (!requestBody || typeof requestBody !== 'object') {
-        throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Request body formatter must return an object' })
+        throw new QvacErrorRAG({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: 'Request body formatter must return an object'
+        })
       }
       const response = await this._makeHttpRequest(requestBody)
       const result = this.responseBodyFormatter(response)
@@ -68,7 +83,11 @@ class HttpLlmAdapter extends BaseLlmAdapter {
       if (error instanceof QvacErrorRAG) {
         throw error
       }
-      throw new QvacErrorRAG({ code: ERR_CODES.GENERATION_FAILED, adds: `HTTP LLM request failed: ${error.message}`, cause: error })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.GENERATION_FAILED,
+        adds: `HTTP LLM request failed: ${error.message}`,
+        cause: error
+      })
     }
   }
 
@@ -78,7 +97,7 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * @returns {Promise<Object>} The parsed response object
    * @private
    */
-  async _makeHttpRequest (requestBody) {
+  async _makeHttpRequest(requestBody) {
     const fetch = resolveFetch()
 
     const response = await fetch(this.httpConfig.apiUrl, {
@@ -99,7 +118,7 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * Update the HTTP configuration.
    * @param {Object} newHttpConfig - New HTTP configuration to merge
    */
-  updateHttpConfig (newHttpConfig) {
+  updateHttpConfig(newHttpConfig) {
     this.httpConfig = { ...this.httpConfig, ...newHttpConfig }
   }
 
@@ -107,9 +126,12 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * Update the request body formatter function.
    * @param {Function} newFormatter - New formatter function
    */
-  updateRequestBodyFormatter (newFormatter) {
+  updateRequestBodyFormatter(newFormatter) {
     if (typeof newFormatter !== 'function') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Request body formatter must be a function' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Request body formatter must be a function'
+      })
     }
     this.requestBodyFormatter = newFormatter
   }
@@ -118,9 +140,12 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    * Update the response body formatter function.
    * @param {Function} newFormatter - New formatter function
    */
-  updateResponseBodyFormatter (newFormatter) {
+  updateResponseBodyFormatter(newFormatter) {
     if (typeof newFormatter !== 'function') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: 'Response body formatter must be a function' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'Response body formatter must be a function'
+      })
     }
     this.responseBodyFormatter = newFormatter
   }

@@ -4,22 +4,19 @@ import type {
   CompletionFinal,
   CompletionStats,
   StopReason,
-  ToolCall,
-} from "@/schemas";
-import { normalizeAssistantCacheContent } from "@/utils/cache-normalize";
-import {
-  attachHandlersToToolCalls,
-  type ToolHandlerMap,
-} from "@/utils/tool-helpers";
+  ToolCall
+} from '@/schemas'
+import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
+import { attachHandlersToToolCalls, type ToolHandlerMap } from '@/utils/tool-helpers'
 
 export type AggregatedEvents = {
-  contentText: string;
-  thinkingText: string;
-  stats: CompletionStats | undefined;
-  toolCalls: ToolCall[];
-  rawFullText: string | undefined;
-  error: CompletionError | undefined;
-  stopReason: StopReason | undefined;
+  contentText: string
+  thinkingText: string
+  stats: CompletionStats | undefined
+  toolCalls: ToolCall[]
+  rawFullText: string | undefined
+  error: CompletionError | undefined
+  stopReason: StopReason | undefined
   /**
    * True when the terminal `completionDone` carried
    * `stopReason: "cancelled"`. The client wrapper rejects the
@@ -27,43 +24,43 @@ export type AggregatedEvents = {
    * `InferenceCancelledError` carrying the partial state when this is
    * set; the `events` stream itself still ends normally.
    */
-  cancelled: boolean;
-};
+  cancelled: boolean
+}
 
 export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
-  let contentText = "";
-  let thinkingText = "";
-  let stats: CompletionStats | undefined;
-  let rawFullText: string | undefined;
-  let error: CompletionError | undefined;
-  let stopReason: StopReason | undefined;
-  let cancelled = false;
-  const toolCalls: ToolCall[] = [];
+  let contentText = ''
+  let thinkingText = ''
+  let stats: CompletionStats | undefined
+  let rawFullText: string | undefined
+  let error: CompletionError | undefined
+  let stopReason: StopReason | undefined
+  let cancelled = false
+  const toolCalls: ToolCall[] = []
 
   for (const event of events) {
-    if (event.type === "contentDelta") {
-      contentText += event.text;
-    } else if (event.type === "thinkingDelta") {
-      thinkingText += event.text;
-    } else if (event.type === "completionStats") {
-      stats = event.stats;
-    } else if (event.type === "toolCall") {
-      toolCalls.push(event.call);
-    } else if (event.type === "completionDone") {
-      if ("raw" in event && event.raw) {
-        rawFullText = event.raw.fullText;
+    if (event.type === 'contentDelta') {
+      contentText += event.text
+    } else if (event.type === 'thinkingDelta') {
+      thinkingText += event.text
+    } else if (event.type === 'completionStats') {
+      stats = event.stats
+    } else if (event.type === 'toolCall') {
+      toolCalls.push(event.call)
+    } else if (event.type === 'completionDone') {
+      if ('raw' in event && event.raw) {
+        rawFullText = event.raw.fullText
       }
       // Error wins over cancelled if a wire event ever carries both
       // signals: a mid-stream addon failure makes the partial state
       // unsafe to expose, regardless of why the loop exited.
-      if (event.stopReason === "error" && "error" in event) {
-        error = event.error;
+      if (event.stopReason === 'error' && 'error' in event) {
+        error = event.error
       } else {
         if (event.stopReason !== undefined) {
-          stopReason = event.stopReason;
+          stopReason = event.stopReason
         }
-        if (event.stopReason === "cancelled") {
-          cancelled = true;
+        if (event.stopReason === 'cancelled') {
+          cancelled = true
         }
       }
     }
@@ -77,35 +74,25 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
     rawFullText,
     error,
     stopReason,
-    cancelled,
-  };
+    cancelled
+  }
 }
 
 export function buildFinalFromEvents(
   events: CompletionEvent[],
-  handlers: ToolHandlerMap,
+  handlers: ToolHandlerMap
 ): {
-  final: CompletionFinal;
-  error: CompletionError | undefined;
-  cancelled: boolean;
+  final: CompletionFinal
+  error: CompletionError | undefined
+  cancelled: boolean
 } {
-  const {
-    contentText,
-    thinkingText,
-    stats,
-    toolCalls,
-    rawFullText,
-    error,
-    stopReason,
-    cancelled,
-  } = aggregateEvents(events);
+  const { contentText, thinkingText, stats, toolCalls, rawFullText, error, stopReason, cancelled } =
+    aggregateEvents(events)
 
-  const attachedToolCalls = attachHandlersToToolCalls(toolCalls, handlers);
-  const fullText = rawFullText ?? contentText;
+  const attachedToolCalls = attachHandlersToToolCalls(toolCalls, handlers)
+  const fullText = rawFullText ?? contentText
   const cacheableAssistantContent =
-    attachedToolCalls.length === 0
-      ? normalizeAssistantCacheContent(fullText)
-      : undefined;
+    attachedToolCalls.length === 0 ? normalizeAssistantCacheContent(fullText) : undefined
 
   const final: CompletionFinal = {
     contentText,
@@ -114,10 +101,10 @@ export function buildFinalFromEvents(
     ...(stats && { stats }),
     raw: { fullText },
     ...(cacheableAssistantContent !== undefined && {
-      cacheableAssistantContent,
+      cacheableAssistantContent
     }),
-    ...(stopReason !== undefined && { stopReason }),
-  };
+    ...(stopReason !== undefined && { stopReason })
+  }
 
-  return { final, error, cancelled };
+  return { final, error, cancelled }
 }

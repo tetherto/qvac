@@ -1,10 +1,4 @@
-import {
-  completion,
-  loadModel,
-  unloadModel,
-  VERBOSITY,
-  LLAMA_3_2_1B_INST_Q4_0,
-} from "@qvac/sdk";
+import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
 
 // Multi-GPU inference distributes a model across multiple GPUs using llama.cpp's
 // built-in split modes. Two strategies are available:
@@ -20,53 +14,52 @@ import {
 //   bun run bare:example dist/examples/llamacpp-multi-gpu.js
 //   bun run bare:example dist/examples/llamacpp-multi-gpu.js '<model-url>'
 
-const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0;
+const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0
 
 try {
   const modelId = await loadModel({
     modelSrc,
-    modelType: "llamacpp-completion",
+    modelType: 'llamacpp-completion',
     modelConfig: {
-      "split-mode": "layer",
-      "tensor-split": "1,1",
-      "main-gpu": 0,
+      'split-mode': 'layer',
+      'tensor-split': '1,1',
+      'main-gpu': 0,
       ctx_size: 4096,
       gpu_layers: 99,
-      verbosity: VERBOSITY.ERROR,
+      verbosity: VERBOSITY.ERROR
     },
     onProgress: (progress) => {
       if (progress.shardInfo) {
-        const { shardInfo } = progress;
+        const { shardInfo } = progress
         console.log(
           `▸ Downloading ${shardInfo.shardName} (${shardInfo.currentShard}/${shardInfo.totalShards}) ` +
-            `— overall: ${shardInfo.overallPercentage.toFixed(1)}%`,
-        );
+            `— overall: ${shardInfo.overallPercentage.toFixed(1)}%`
+        )
       } else {
-        console.log(`▸ Downloading: ${progress.percentage.toFixed(1)}%`);
+        console.log(`▸ Downloading: ${progress.percentage.toFixed(1)}%`)
       }
-    },
-  });
+    }
+  })
 
   const history = [
     {
-      role: "user",
-      content:
-        "Explain the difference between pipeline and tensor parallelism in one paragraph.",
-    },
-  ];
+      role: 'user',
+      content: 'Explain the difference between pipeline and tensor parallelism in one paragraph.'
+    }
+  ]
 
-  const result = completion({ modelId, history, stream: true });
+  const result = completion({ modelId, history, stream: true })
 
   for await (const token of result.tokenStream) {
-    process.stdout.write(token);
+    process.stdout.write(token)
   }
 
-  const stats = await result.stats;
-  console.log("\n\n▸ Stats:", stats);
+  const stats = await result.stats
+  console.log('\n\n▸ Stats:', stats)
 
-  await unloadModel({ modelId, clearStorage: false });
-  process.exit(0);
+  await unloadModel({ modelId, clearStorage: false })
+  process.exit(0)
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

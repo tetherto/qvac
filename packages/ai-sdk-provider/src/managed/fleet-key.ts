@@ -21,7 +21,7 @@ import type { SynthesizedServeConfig } from './config-synthesizer.js'
 //
 // Deliberately NOT part of the key: an auto-allocated port, apiKey/headers
 // (client-side only), and the ephemeral config path (per-spawn temp dir).
-export function computeFleetKey (
+export function computeFleetKey(
   config: SynthesizedServeConfig,
   host: string,
   serveBinPath?: string,
@@ -45,7 +45,7 @@ export function computeFleetKey (
 
 // JSON.stringify with object keys sorted recursively, so key order never
 // perturbs the hash.
-function stableStringify (value: unknown): string {
+function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
   const obj = value as Record<string, unknown>

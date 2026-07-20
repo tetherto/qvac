@@ -5,10 +5,10 @@ const fs = require('fs')
 const path = require('path')
 
 // GGML (parakeet.cpp) GPU backend cascade: Vulkan (linux/win32/android),
-// Metal (darwin/ios), OpenCL (Adreno android). CUDA is ingestible via an
-// explicit hint / manual drop. Previously this was the ONNX EP set
-// (coreml/directml/nnapi/rocm), which never matched the GGML runtime.
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
+// Metal (darwin/ios), OpenCL (Adreno android). CUDA is not supported on any
+// platform. Previously this was the ONNX EP set (coreml/directml/nnapi/rocm),
+// which never matched the GGML runtime.
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 function parseArgs (argv) {
   const args = {
@@ -94,6 +94,16 @@ function stddev (values) {
   return Math.sqrt(variance)
 }
 
+function maxFinite (values) {
+  const nums = values.filter(value => Number.isFinite(value))
+  if (nums.length === 0) return NaN
+  return nums.reduce((current, value) => (value > current ? value : current), nums[0])
+}
+
+function numberOrNaN (value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : NaN
+}
+
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
   if (hint && hint !== 'mobile-accelerated' && hint !== 'gpu') return hint
@@ -118,10 +128,11 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`).
+// Quantisation token from a GGUF file name (e.g. `q8_0`, `q4_0`, `f16`,
+// `f32`).
 // Used as a fallback when a record predates the explicit `model.quant` field.
 function quantFromName (name) {
-  const match = String(name || '').match(/\.(q8_0|q4_0|f16)\.gguf$/i)
+  const match = String(name || '').match(/(?:\.|-)(q8_0|q4_0|f16|f32)(?:\.gguf|[-.]|$)/i)
   return match ? match[1].toLowerCase() : ''
 }
 
@@ -138,6 +149,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
+  const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(
     report.requested && report.requested.useGPU !== undefined
@@ -148,7 +160,10 @@ function normalizeDesktopRecord (report, sourceFile) {
   const label = report.labels && (report.labels.device || report.labels.runner || report.labels.label)
 
   const quant = (report.model && report.model.quant) ||
-    quantFromName(report.model && report.model.dirName) || ''
+    quantFromName(report.model && report.model.dirName) ||
+    quantFromName(report.model && report.model.path) ||
+    quantFromName(sourceFile) ||
+    ''
 
   return {
     source: 'desktop-ci',
@@ -159,13 +174,21 @@ function normalizeDesktopRecord (report, sourceFile) {
     quant,
     gpu: useGPU ? 'gpu' : 'cpu',
     backend,
-    gpuModel: (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null,
+    // CPU-only rows never ran on the GPU, so don't attribute the host's GPU
+    // to them — the probe stamps the GPU name onto every report regardless of
+    // whether that run used it (QVAC-21618).
+    gpuModel: useGPU
+      ? ((report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null)
+      : null,
     version: report.addonVersion || '',
     meanRtf: Number(rtf.mean),
     stddev: Number(rtf.stddev),
     p50: Number(rtf.p50),
     p95: Number(rtf.p95),
     wallMs: Number(wallMs.mean),
+    avgRssMb: numberOrNaN(memory.avgRssMb),
+    peakRssMb: numberOrNaN(memory.peakRssMb),
+    reclaimedMb: numberOrNaN(memory.reclaimedMb),
     notes: sourceFile ? path.basename(sourceFile) : ''
   }
 }
@@ -187,13 +210,16 @@ function normalizeManualRecord (record, sourceFile) {
     quant: record.quant || quantFromName(record.dirName) || '',
     gpu: useGPU ? 'gpu' : 'cpu',
     backend: normalizeBackend(platformFamily, useGPU, record.backend),
-    gpuModel: record.gpuModel || record.gpu_model || null,
+    gpuModel: useGPU ? (record.gpuModel || record.gpu_model || null) : null,
     version: record.version || '',
     meanRtf: Number(record.meanRtf),
     stddev: Number(record.stddev),
     p50: Number(record.p50),
     p95: Number(record.p95),
     wallMs: Number(record.wallMs),
+    avgRssMb: numberOrNaN(record.avgRssMb),
+    peakRssMb: numberOrNaN(record.peakRssMb),
+    reclaimedMb: numberOrNaN(record.reclaimedMb),
     notes: record.notes || ''
   }
 }
@@ -230,17 +256,19 @@ function mobileExecutionProvider (result) {
 
 function mobileModelType (result) {
   const testName = String(result.test || '').toLowerCase()
-  const match = testName.match(/\[(tdt|ctc|eou|sortformer)\]/)
+  // `sortformer-streaming` (v2.1) must precede `sortformer` (v1) so the more
+  // specific token wins the alternation.
+  const match = testName.match(/\[(tdt|ctc|eou|sortformer-streaming|sortformer)\]/)
   return match ? match[1] : 'tdt'
 }
 
 // Quantisation token from the mobile test label (e.g. `[q4_0]`), stamped by
-// mobile-perf-runner.js. Falls back to '' when the label predates the quant
-// tag (older artifacts) so dedupe/sort still produce a single mobile row.
+// mobile-perf-runner.js. Older mobile artifacts predate that tag; those runs
+// only staged q4_0 models, so default them to q4_0 instead of rendering "-".
 function mobileQuant (result) {
   const testName = String(result.test || '').toLowerCase()
-  const match = testName.match(/\[(q8_0|q4_0|f16)\]/)
-  return match ? match[1] : ''
+  const match = testName.match(/\[(q8_0|q4_0|f16|f32)\]/)
+  return match ? match[1] : 'q4_0'
 }
 
 function normalizeMobileRecords (report, sourceFile) {
@@ -261,12 +289,31 @@ function normalizeMobileRecords (report, sourceFile) {
         quant,
         provider,
         rtf: [],
-        wallMs: []
+        wallMs: [],
+        avgRss: [],
+        peakRss: [],
+        afterLoadRss: [],
+        reclaimed: []
       })
     }
     const group = byModelAndProvider.get(key)
-    if (typeof metrics.real_time_factor === 'number') group.rtf.push(metrics.real_time_factor)
+    // Mobile runs report real_time_factor as null (the mobile inference stats
+    // don't carry it), so the RTF/P50/P95 columns rendered empty and the
+    // Android/iOS rows looked unpopulated. Derive RTF from the wall time over
+    // the audio duration when the explicit value is missing (QVAC-21618).
+    const rtf = typeof metrics.real_time_factor === 'number'
+      ? metrics.real_time_factor
+      : (typeof metrics.wall_time_ms === 'number' &&
+         typeof metrics.audio_duration_ms === 'number' &&
+         metrics.audio_duration_ms > 0
+          ? metrics.wall_time_ms / metrics.audio_duration_ms
+          : null)
+    if (typeof rtf === 'number' && Number.isFinite(rtf)) group.rtf.push(rtf)
     if (typeof metrics.wall_time_ms === 'number') group.wallMs.push(metrics.wall_time_ms)
+    if (typeof metrics.avg_rss_mb === 'number') group.avgRss.push(metrics.avg_rss_mb)
+    if (typeof metrics.peak_rss_mb === 'number') group.peakRss.push(metrics.peak_rss_mb)
+    if (typeof metrics.rss_after_load_mb === 'number') group.afterLoadRss.push(metrics.rss_after_load_mb)
+    if (typeof metrics.reclaimed_mb === 'number') group.reclaimed.push(metrics.reclaimed_mb)
   }
 
   const records = []
@@ -281,13 +328,20 @@ function normalizeMobileRecords (report, sourceFile) {
       quant: values.quant || '',
       gpu: values.provider,
       backend: normalizeBackend(platformFamily, useGPU),
-      gpuModel: device.gpu || null,
+      gpuModel: useGPU ? (device.gpu || null) : null,
       version: report.addonVersion || '',
       meanRtf: mean(values.rtf),
       stddev: stddev(values.rtf),
       p50: percentile(values.rtf, 50),
       p95: percentile(values.rtf, 95),
       wallMs: mean(values.wallMs),
+      avgRssMb: mean(values.avgRss),
+      // Floor the mobile peak at the recorded post-activation footprint so it is
+      // computed on the same basis as the desktop peak (which buildMemorySummary
+      // clamps to rssAfterLoad); a run whose sampler missed the true peak can't
+      // then report below the load footprint.
+      peakRssMb: maxFinite(values.peakRss.concat(values.afterLoadRss)),
+      reclaimedMb: maxFinite(values.reclaimed),
       notes
     })
   }
@@ -367,6 +421,9 @@ function scoreRecord (record) {
   if (Number.isFinite(record.p50)) score += 4
   if (Number.isFinite(record.p95)) score += 4
   if (Number.isFinite(record.wallMs)) score += 2
+  if (Number.isFinite(record.avgRssMb)) score += 2
+  if (Number.isFinite(record.peakRssMb)) score += 2
+  if (Number.isFinite(record.reclaimedMb)) score += 1
   if (record.device && record.device !== 'unknown') score += 1
   if (record.notes) score += 1
   return score
@@ -436,12 +493,12 @@ function renderMarkdown (records) {
 
   lines.push('## Parakeet Performance Findings')
   lines.push('')
-  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Notes |')
-  lines.push('|--------|--------|----------|-------|-------|-----|---------|-----------|----------|----------|-----|-----|----------------|-------|')
+  lines.push('| Source | Device | Platform | Model | Quant | GPU | Backend | GPU Model | Mean RTF | ± Stddev | P50 | P95 | Mean Wall (ms) | Avg RSS (MB) | Peak RSS (MB) | Reclaimed (MB) | Notes |')
+  lines.push('|--------|--------|----------|-------|-------|-----|---------|-----------|----------|----------|-----|-----|----------------|--------------|---------------|----------------|-------|')
 
   for (const record of records) {
     lines.push(
-      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${record.notes || ''} |`
+      `| ${record.source} | ${record.device} | ${record.platform} | ${record.model} | ${record.quant || '-'} | ${record.gpu} | ${record.backend} | ${record.gpuModel || '-'} | ${formatNumber(record.meanRtf)} | ${formatNumber(record.stddev)} | ${formatNumber(record.p50)} | ${formatNumber(record.p95)} | ${formatMaybeInteger(record.wallMs)} | ${formatMaybeInteger(record.avgRssMb)} | ${formatMaybeInteger(record.peakRssMb)} | ${formatMaybeInteger(record.reclaimedMb)} | ${record.notes || ''} |`
     )
   }
 
@@ -486,6 +543,9 @@ function renderHtml (records) {
       formatNumber(record.p50),
       formatNumber(record.p95),
       formatMaybeInteger(record.wallMs),
+      formatMaybeInteger(record.avgRssMb),
+      formatMaybeInteger(record.peakRssMb),
+      formatMaybeInteger(record.reclaimedMb),
       record.notes || ''
     ].map(value => `<td>${escapeHtml(value)}</td>`).join('')
   }).map(cells => `<tr>${cells}</tr>`).join('\n')
@@ -539,6 +599,9 @@ function renderHtml (records) {
     '        <th>P50</th>',
     '        <th>P95</th>',
     '        <th>Mean Wall (ms)</th>',
+    '        <th>Avg RSS (MB)</th>',
+    '        <th>Peak RSS (MB)</th>',
+    '        <th>Reclaimed (MB)</th>',
     '        <th>Notes</th>',
     '      </tr>',
     '    </thead>',
@@ -618,4 +681,15 @@ function main () {
   process.stdout.write(markdown)
 }
 
-main()
+if (require.main === module) {
+  main()
+}
+
+module.exports = {
+  normalizeDesktopRecord,
+  normalizeManualRecord,
+  normalizeMobileRecords,
+  renderMarkdown,
+  renderHtml,
+  buildCoverage
+}

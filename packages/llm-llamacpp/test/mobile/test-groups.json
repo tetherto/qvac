@@ -5,13 +5,17 @@
     "reasoning": ["runReasoningTest"],
     "slidingContext": ["runSlidingContextTest"],
     "imageFruitPlate": ["runImageFruitPlateTest"],
+    "imageMmprojGpu": ["runImageMmprojGpuTest"],
+    "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
     "gemma": ["runGemma4Test"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
+    "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
+      "runKvCacheTypeDefaultsTest",
       "runToolsCompactTest"
     ],
     "lightB": [
@@ -27,6 +31,7 @@
     ]
   },
   "android": {
+    "continuousBatching": ["runContinuousBatchingTest"],
     "funcShardA": [
       "runFinetuningPauseResumeTest",
       "runConfigParametersTest",
@@ -35,7 +40,8 @@
     ],
     "funcShardB": [
       "runToolsCompactTest",
-      "runSlidingContextTest"
+      "runSlidingContextTest",
+      "runKvCacheTypeDefaultsTest"
     ],
     "funcShardC": [
       "runToolCallingTest",
@@ -53,6 +59,8 @@
       "runQwen35Test",
       "runModelLoadingTest",
       "runImageFruitPlateTest",
+      "runImageMmprojGpuTest",
+      "runQwen35ImageTileModeTokensTest",
       "runGrammarTest",
       "runTurboquantTest",
       "runBitnetTest",
@@ -76,7 +84,8 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   },
   "iosWeekly": {
@@ -96,7 +105,8 @@
     "vlmPerfQwen35": [
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
-      "runQwen35ImageHighResAuroraPerfTest"
+      "runQwen35ImageHighResAuroraPerfTest",
+      "runQwen35MultimodalCacheStressTest"
     ]
   }
 }

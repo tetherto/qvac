@@ -40,7 +40,7 @@ const SILENCE_SENTINELS = new Set([
   '[Model not ready]'
 ])
 
-function isSilenceText (text) {
+function isSilenceText(text) {
   return text.length === 0 || SILENCE_SENTINELS.has(text)
 }
 
@@ -54,7 +54,7 @@ function isSilenceText (text) {
 // Returns { text, firstStartsWord }: `firstStartsWord` mirrors the
 // flag of the first emitted segment so the cross-update accumulator
 // knows whether to prepend a space.
-function buildSegmentText (items) {
+function buildSegmentText(items) {
   let text = ''
   let firstStartsWord = true
   let isFirst = true
@@ -72,7 +72,7 @@ function buildSegmentText (items) {
   return { text: text.replace(/\s+/g, ' '), firstStartsWord }
 }
 
-function parseArgs () {
+function parseArgs() {
   const args = {
     model: null,
     accumulate: false,
@@ -93,10 +93,12 @@ function parseArgs () {
   return args
 }
 
-async function main () {
+async function main() {
   const args = parseArgs()
   if (!args.model) {
-    console.error('Usage: bare examples/live-mic.js --model <gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]')
+    console.error(
+      'Usage: bare examples/live-mic.js --model <gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]'
+    )
     process.exit(1)
   }
 
@@ -128,12 +130,13 @@ async function main () {
   const [captureBin, ...captureArgs] = captureCmd.split(' ')
   let child
   try {
-    child = subprocess.spawn(captureBin, captureArgs,
-      { stdio: ['ignore', 'pipe', 'pipe'] })
+    child = subprocess.spawn(captureBin, captureArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
   } catch (err) {
     if (err && err.code === 'ENOENT') {
       console.error(`\n'${captureBin}' not found on PATH.`)
-      console.error('Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).')
+      console.error(
+        'Install sox (brew install sox / apt install sox / choco install sox / winget install ChrisBagwell.SoX).'
+      )
     } else {
       console.error(`\nFailed to spawn capture command: ${err.message}`)
     }
@@ -153,13 +156,13 @@ async function main () {
   })
 
   let lineOpen = false
-  function flushLine () {
+  function flushLine() {
     if (lineOpen) {
       process.stdout.write('\n')
       lineOpen = false
     }
   }
-  function emitTranscript (text, firstStartsWord) {
+  function emitTranscript(text, firstStartsWord) {
     if (isSilenceText(text)) {
       if (args.accumulate) flushLine()
       return
@@ -189,7 +192,7 @@ async function main () {
   const runPromise = (async () => {
     const response = await model.runStreaming(audioStream, streamingConfig)
     await response
-      .onUpdate(out => {
+      .onUpdate((out) => {
         const items = Array.isArray(out) ? out : [out]
         const { text, firstStartsWord } = buildSegmentText(items)
         emitTranscript(text.trim(), firstStartsWord)
@@ -197,15 +200,27 @@ async function main () {
       .await()
   })()
 
-  async function shutdown () {
+  async function shutdown() {
     if (stopping) return
     stopping = true
     console.log('\nStopping...')
-    try { child.kill('SIGTERM') } catch (e) { /* ignore */ }
+    try {
+      child.kill('SIGTERM')
+    } catch (e) {
+      /* ignore */
+    }
     audioStream.end()
-    try { await runPromise } catch (e) { /* swallow */ }
+    try {
+      await runPromise
+    } catch (e) {
+      /* swallow */
+    }
     flushLine()
-    try { await model.unload() } catch (e) { /* ignore */ }
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
     addonLogging.releaseLogger()
     process.exit(0)
   }
@@ -214,7 +229,9 @@ async function main () {
   process.once('SIGTERM', shutdown)
   child.on('exit', (code, signal) => {
     if (!firstAudioSeen && !stopping) {
-      console.error(`\nCapture command exited before producing audio (code=${code}, signal=${signal}).`)
+      console.error(
+        `\nCapture command exited before producing audio (code=${code}, signal=${signal}).`
+      )
       const tail = stderrBuf.trim()
       if (tail) {
         console.error('--- sox stderr ---')
@@ -222,15 +239,21 @@ async function main () {
         console.error('------------------')
       }
       console.error('Hints:')
-      console.error('  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"')
-      console.error('  - Verify a default recording device exists (Settings -> System -> Sound -> Input).')
-      console.error('  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head')
+      console.error(
+        '  - On Windows, try: --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"'
+      )
+      console.error(
+        '  - Verify a default recording device exists (Settings -> System -> Sound -> Input).'
+      )
+      console.error(
+        '  - Confirm SoX can list audio devices: sox -V6 -d -t raw -r 16000 -c 1 -e signed-integer -b 16 -L - 2>&1 | head'
+      )
     }
     shutdown()
   })
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error:', err)
   addonLogging.releaseLogger()
   process.exit(1)

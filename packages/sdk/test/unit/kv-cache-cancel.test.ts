@@ -1,8 +1,8 @@
-import test from "brittle";
+import test from 'brittle'
 import {
   decideCachedHistorySlice,
-  type HistoryMessage,
-} from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
+  type HistoryMessage
+} from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state'
 
 // -----------------------------------------------------------------------------
 // Unit-level regression coverage for `decideCachedHistorySlice` — the pure
@@ -30,123 +30,90 @@ import {
 // state.
 // -----------------------------------------------------------------------------
 
-
-test("decideCachedHistorySlice: baseline slice when savedCount is valid", (t) => {
+test('decideCachedHistorySlice: baseline slice when savedCount is valid', (t) => {
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "hi" },
-    { role: "assistant", content: "hello" },
-    { role: "user", content: "again" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    2,
-    true,
-    history,
-  );
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'hi' },
+    { role: 'assistant', content: 'hello' },
+    { role: 'user', content: 'again' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, history)
   t.alike(messages, [
-    { role: "assistant", content: "hello" },
-    { role: "user", content: "again" },
-  ]);
-  t.is(clearStaleCount, false);
-});
+    { role: 'assistant', content: 'hello' },
+    { role: 'user', content: 'again' }
+  ])
+  t.is(clearStaleCount, false)
+})
 
-test("decideCachedHistorySlice: stale count (slice would be empty) falls back and flags clear", (t) => {
+test('decideCachedHistorySlice: stale count (slice would be empty) falls back and flags clear', (t) => {
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    3,
-    true,
-    history,
-  );
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(3, true, history)
   t.alike(messages, [
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ]);
-  t.is(
-    clearStaleCount,
-    true,
-    "caller must be told to clear the stale savedCount",
-  );
-});
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ])
+  t.is(clearStaleCount, true, 'caller must be told to clear the stale savedCount')
+})
 
-test("decideCachedHistorySlice: savedCount > history.length falls back and flags clear", (t) => {
+test('decideCachedHistorySlice: savedCount > history.length falls back and flags clear', (t) => {
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    10,
-    true,
-    history,
-  );
-  t.alike(messages, [{ role: "user", content: "u1" }]);
-  t.is(clearStaleCount, true);
-});
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(10, true, history)
+  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  t.is(clearStaleCount, true)
+})
 
-test("decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear", (t) => {
+test('decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear', (t) => {
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    0,
-    true,
-    history,
-  );
-  t.alike(messages, [{ role: "user", content: "u1" }]);
-  t.is(clearStaleCount, false);
-});
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(0, true, history)
+  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  t.is(clearStaleCount, false)
+})
 
-test("decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount", (t) => {
+test('decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount', (t) => {
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    2,
-    false,
-    history,
-  );
-  t.alike(messages, [{ role: "user", content: "u1" }]);
-  t.is(
-    clearStaleCount,
-    false,
-    "no-cache path does not touch cachedMessageCounts",
-  );
-});
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(2, false, history)
+  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  t.is(clearStaleCount, false, 'no-cache path does not touch cachedMessageCounts')
+})
 
-test("decideCachedHistorySlice: empty history returns empty, no clear", (t) => {
-  const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, []);
-  t.alike(messages, []);
-  t.is(clearStaleCount, false);
-});
+test('decideCachedHistorySlice: empty history returns empty, no clear', (t) => {
+  const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, [])
+  t.alike(messages, [])
+  t.is(clearStaleCount, false)
+})
 
-test("decideCachedHistorySlice: savedCount = history.length slices to [] and flags clear", (t) => {
+test('decideCachedHistorySlice: savedCount = history.length slices to [] and flags clear', (t) => {
   // Exact shape of the reported QVAC-17780 bug: a cancelled turn records
   // `history.length + 1` for a 2-message history; the user's next turn
   // has 3 messages and a savedCount of 3 — slicing yields []. The
   // fallback must fire.
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    history.length,
-    true,
-    history,
-  );
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(history.length, true, history)
   t.alike(messages, [
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ]);
-  t.is(clearStaleCount, true);
-});
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ])
+  t.is(clearStaleCount, true)
+})
 
-test("regression: an externally-seeded stale savedCount still triggers the fallback", (t) => {
+test('regression: an externally-seeded stale savedCount still triggers the fallback', (t) => {
   // Belt-and-suspenders test: simulate an externally-poisoned savedCount
   // (e.g. from a pre-upgrade SDK instance still running in memory) and
   // confirm that `decideCachedHistorySlice` refuses to emit an empty
@@ -155,21 +122,17 @@ test("regression: an externally-seeded stale savedCount still triggers the fallb
   // The `cachedMessageCounts` map is private to `kv-cache-session.ts`,
   // so this regression is exercised by feeding the poisoned count into
   // the pure helper directly — the same surface the session calls.
-  const savedCount = 3;
+  const savedCount = 3
   const history: HistoryMessage[] = [
-    { role: "system", content: "sys" },
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ];
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    savedCount,
-    true,
-    history,
-  );
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ]
+  const { messages, clearStaleCount } = decideCachedHistorySlice(savedCount, true, history)
 
   t.alike(messages, [
-    { role: "user", content: "u1" },
-    { role: "user", content: "u2" },
-  ]);
-  t.is(clearStaleCount, true, "must prompt caller to clean up the stale count");
-});
+    { role: 'user', content: 'u1' },
+    { role: 'user', content: 'u2' }
+  ])
+  t.is(clearStaleCount, true, 'must prompt caller to clean up the stale count')
+})

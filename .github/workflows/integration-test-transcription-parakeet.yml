@@ -22,9 +22,18 @@ on:
         required: false
         type: boolean
         default: false
+      pin_model_manifest:
+        description: "Stage models once and upload a manifest with pinned bytes/sha256"
+        required: false
+        type: boolean
+        default: false
 
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
+        type: string
+        required: false
       ref:
         description: 'ref'
         type: string
@@ -40,10 +49,79 @@ on:
         type: boolean
         required: false
         default: false
+      pin_model_manifest:
+        description: "Stage models once and upload a manifest with pinned bytes/sha256"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
+  pin-model-manifest:
+    if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
+    timeout-minutes: 120
+    runs-on: ${{ 'qvac-ubuntu2404-x64' }}
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Restore Parakeet GGUF model cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: transcription-parakeet
+          paths: packages/transcription-parakeet/models
+          warm: 'false'
+          enable-cross-os: 'false'
+
+      - name: Stage and verify complete model set
+        shell: bash
+        working-directory: packages/transcription-parakeet
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-integration-models.mjs
+
+      - name: Generate and check integrity pins
+        shell: bash
+        working-directory: packages/transcription-parakeet
+        run: |
+          node scripts/generate-model-manifest.mjs
+          node scripts/generate-model-manifest.mjs --check
+
+      - name: Upload pinned model manifest
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: transcription-parakeet-model-manifest
+          path: packages/transcription-parakeet/test/integration/models.manifest.json
+          if-no-files-found: error
+
   run-integration-tests:
-    timeout-minutes: 60
+    if: ${{ !inputs.pin_model_manifest }}
+    # Longer than the default budget: the RTF benchmark leg now sweeps three
+    # quants (f16 + q8_0 + q4_0) across four model types, and GPU runners run
+    # both CPU and Vulkan legs (24 benchmark entries), each with warmup + runs.
+    timeout-minutes: 120
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -80,10 +158,10 @@ jobs:
             platform: linux
             arch: arm64
             no_gpu: 'true'
-          - os: macos-14-xlarge
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
-            no_gpu: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -91,8 +169,7 @@ jobs:
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
-            no_gpu: 'true'
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Setup Node.js
@@ -161,12 +238,24 @@ jobs:
         name: Set Vulkan SDK Path on Windows Server 2025
         run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
+      # Runner enumerates the Intel iGPU at index 0 and the NVIDIA card at
+      # index 1; pin ggml to the NVIDIA device (re-check if the image changes).
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Pin ggml Vulkan to the NVIDIA GPU on Windows
+        run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      # Cache key is derived from test/integration/models.manifest.json (the
+      # single source of truth for the staged set), NOT this workflow file — so
+      # unrelated edits here (timeouts, the RTF benchmark matrix, comments) no
+      # longer churn the multi-GB model cache. `warm: false` because parakeet
+      # models come from S3 (staged below), not from HuggingFace URLs, so the
+      # cache-models HTTP warm downloader does not apply.
       - name: Cache Parakeet GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -174,28 +263,24 @@ jobs:
         with:
           package: transcription-parakeet
           paths: packages/transcription-parakeet/models
-          hash-files-glob: .github/workflows/integration-test-transcription-parakeet.yml
+          warm: 'false'
           enable-cross-os: 'false'
 
-      # Stage both quantisations the RTF benchmark matrix sweeps:
-      #   q8_0 (2026-05-11 prefix) — desktop default, best WER per byte.
-      #   q4_0 (2026-05-27 prefix) — the mobile-shippable quant, benchmarked
-      #     on desktop too so the perf report can compare quants side by side.
-      # The recursive --include grabs whichever q4_0 builds the registry
-      # publishes (tdt / eou / sortformer today); a model type without a
-      # published q4_0 is simply absent and its matrix entry no-ops.
-      - name: Download Parakeet GGUFs from QVAC registry (q8_0 + q4_0)
+      # Stage every desktop quantisation the RTF benchmark matrix sweeps
+      # (f16 + q8_0 + q4_0). The staged set + its S3 paths are declared once in
+      # test/integration/models.manifest.json (also the cache-key source); the
+      # script copies each object from s3://$MODEL_S3_BUCKET/<s3Path>. Keeping
+      # the download list in the manifest guarantees the cache key and the fetch
+      # can never drift. Mobile q4_0 / q8_0 coverage is handled by Device Farm.
+      - name: Stage Parakeet GGUFs from QVAC registry (manifest-driven)
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           set -euo pipefail
-          mkdir -p models
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-11/ models/ \
-            --recursive --exclude "*" --include "*.q8_0.gguf"
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-27/ models/ \
-            --recursive --exclude "*" --include "*.q4_0.gguf"
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf models/
+          node scripts/stage-integration-models.mjs
           ls -lh models/
 
       - name: Run integration test
@@ -234,24 +319,42 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
         run: |
           set -euo pipefail
-          # Quant sweep: q8_0 for all four model types; q4_0 for the three
-          # types the registry publishes a q4_0 build for (tdt / eou /
-          # sortformer — there is no ctc q4_0). CPU-only runners run the CPU
-          # legs; GPU runners additionally run the Vulkan GPU legs.
-          if [ "${{ matrix.no_gpu || 'false' }}" = "true" ]; then
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false}]'
+          # Desktop quant sweep: f16 + q8_0 + q4_0 for all five model types.
+          # CPU-only runners run CPU legs; GPU runners additionally run the
+          # Vulkan GPU legs. The matrix is generated programmatically so the
+          # quant x model-type x backend product stays readable and consistent.
+          # Only the q8_0 sortformer-streaming (v2.1) GGUF is pre-staged (see
+          # test/integration/models.manifest.json); its f16 / q4_0 legs resolve
+          # from the QVAC registry at runtime via ensureGgufForType, and the
+          # matrix runner tolerates any single entry that can't be fetched.
+          MODEL_TYPES="tdt ctc eou sortformer sortformer-streaming"
+          QUANTS="f16 q8_0 q4_0"
+          # macOS GPU legs use the Metal backend; other platforms use Vulkan.
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            GPU_BACKEND="metal"
           else
-            export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON='[{"modelType":"tdt","quant":"q8_0","useGPU":false},{"modelType":"ctc","quant":"q8_0","useGPU":false},{"modelType":"eou","quant":"q8_0","useGPU":false},{"modelType":"sortformer","quant":"q8_0","useGPU":false},{"modelType":"tdt","quant":"q4_0","useGPU":false},{"modelType":"eou","quant":"q4_0","useGPU":false},{"modelType":"sortformer","quant":"q4_0","useGPU":false},{"modelType":"tdt","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"ctc","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q8_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"tdt","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"eou","quant":"q4_0","useGPU":true,"backendHint":"vulkan"},{"modelType":"sortformer","quant":"q4_0","useGPU":true,"backendHint":"vulkan"}]'
+            GPU_BACKEND="vulkan"
           fi
+          entries=""
+          for t in $MODEL_TYPES; do
+            for q in $QUANTS; do
+              entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":false},"
+              if [ "${{ matrix.no_gpu || 'false' }}" != "true" ]; then
+                entries="${entries}{\"modelType\":\"${t}\",\"quant\":\"${q}\",\"useGPU\":true,\"backendHint\":\"${GPU_BACKEND}\"},"
+              fi
+            done
+          done
+          export QVAC_PARAKEET_BENCHMARK_MATRIX_JSON="[${entries%,}]"
+          echo "Benchmark matrix: $QVAC_PARAKEET_BENCHMARK_MATRIX_JSON"
           node scripts/run-rtf-benchmark-matrix.js
 
       # The matrix runner deliberately process.exit(0)s on PARTIAL failure (one
       # model-type/backend shouldn't sink the whole leg). But a run that produced
       # ZERO artifacts means every entry failed and must still fail loudly —
-      # mirrors the "Verify benchmark output exists" gate in
-      # benchmark-rtf-tts-ggml.yml.
+      # mirrors the "Verify benchmark output exists" gate in the TTS GGML
+      # performance benchmark path.
       - name: Verify RTF benchmark output exists
-        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         shell: bash
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: |
@@ -274,7 +377,7 @@ jobs:
           fi
 
       - name: Upload RTF benchmark results
-        if: ${{ always() && inputs.run_rtf_benchmarks }}
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: rtf-results-parakeet-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}

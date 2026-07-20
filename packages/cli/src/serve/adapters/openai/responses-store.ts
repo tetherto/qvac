@@ -24,7 +24,10 @@ export interface ResponsesStore {
   put: (record: StoredResponse) => void
   get: (id: string) => StoredResponse | undefined
   delete: (id: string) => boolean
-  listInputItems: (id: string, opts?: ListInputItemsOptions) => {
+  listInputItems: (
+    id: string,
+    opts?: ListInputItemsOptions
+  ) => {
     object: string
     data: unknown[]
     first_id: string | null
@@ -40,27 +43,27 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000
 
 export const RESPONSES_DEFAULT_TTL_SEC = Math.floor(DEFAULT_TTL_MS / 1000)
 
-export function createResponsesStore (options: ResponsesStoreOptions = {}): ResponsesStore {
+export function createResponsesStore(options: ResponsesStoreOptions = {}): ResponsesStore {
   const maxEntries = options.maxEntries ?? DEFAULT_MAX
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
   const nowMs = options.now ?? ((): number => Date.now())
 
   const map = new Map<string, StoredResponse>()
 
-  function pruneExpired (): void {
+  function pruneExpired(): void {
     const t = nowMs() / 1000
     for (const [k, v] of map) {
       if (v.expiresAtSec <= t) map.delete(k)
     }
   }
 
-  function bump (id: string, rec: StoredResponse): void {
+  function bump(id: string, rec: StoredResponse): void {
     map.delete(id)
     map.set(id, rec)
   }
 
   return {
-    put (record: StoredResponse): void {
+    put(record: StoredResponse): void {
       pruneExpired()
       bump(record.id, record)
       while (map.size > maxEntries) {
@@ -70,7 +73,7 @@ export function createResponsesStore (options: ResponsesStoreOptions = {}): Resp
       }
     },
 
-    get (id: string): StoredResponse | undefined {
+    get(id: string): StoredResponse | undefined {
       pruneExpired()
       const rec = map.get(id)
       if (!rec) return undefined
@@ -82,11 +85,14 @@ export function createResponsesStore (options: ResponsesStoreOptions = {}): Resp
       return rec
     },
 
-    delete (id: string): boolean {
+    delete(id: string): boolean {
       return map.delete(id)
     },
 
-    listInputItems (id: string, opts?: ListInputItemsOptions): {
+    listInputItems(
+      id: string,
+      opts?: ListInputItemsOptions
+    ): {
       object: string
       data: unknown[]
       first_id: string | null
@@ -100,7 +106,8 @@ export function createResponsesStore (options: ResponsesStoreOptions = {}): Resp
         map.delete(id)
         return null
       }
-      const limit = typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 100) : 20
+      const limit =
+        typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 100) : 20
       const items = rec.inputItems as Array<{ id?: string }>
       let start = 0
       if (opts?.after) {
@@ -113,13 +120,17 @@ export function createResponsesStore (options: ResponsesStoreOptions = {}): Resp
       }
       const slice = items.slice(start, start + limit)
       const hasMore = start + slice.length < items.length
-      const firstId = slice[0] && typeof slice[0] === 'object' && typeof (slice[0] as { id?: string }).id === 'string'
-        ? (slice[0] as { id: string }).id
-        : null
+      const firstId =
+        slice[0] &&
+        typeof slice[0] === 'object' &&
+        typeof (slice[0] as { id?: string }).id === 'string'
+          ? (slice[0] as { id: string }).id
+          : null
       const last = slice[slice.length - 1]
-      const lastId = last && typeof last === 'object' && typeof (last as { id?: string }).id === 'string'
-        ? (last as { id: string }).id
-        : null
+      const lastId =
+        last && typeof last === 'object' && typeof (last as { id?: string }).id === 'string'
+          ? (last as { id: string }).id
+          : null
       return {
         object: 'list',
         data: slice,
@@ -129,12 +140,12 @@ export function createResponsesStore (options: ResponsesStoreOptions = {}): Resp
       }
     },
 
-    size (): number {
+    size(): number {
       pruneExpired()
       return map.size
     },
 
-    bannerLine (): string {
+    bannerLine(): string {
       const ttlMin = Math.round(ttlMs / 60000)
       return `responses: in-memory only — IDs expire on restart, max ${maxEntries} entries, ${ttlMin}m TTL`
     }

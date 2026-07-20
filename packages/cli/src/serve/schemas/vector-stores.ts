@@ -2,31 +2,39 @@ import { z } from 'zod'
 
 export const vectorStoreIdParams = z.object({ id: z.string().min(1) })
 
-export const vectorStoreCreateBody = z.object({
-  name: z.string().nullable().optional(),
-  expires_after: z.unknown().optional(),
-  metadata: z.unknown().optional(),
-  file_ids: z.array(z.string()).optional(),
-  chunking_strategy: z.unknown().optional()
-}).passthrough()
+export const vectorStoreCreateBody = z
+  .object({
+    name: z.string().nullable().optional(),
+    expires_after: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    file_ids: z.array(z.string()).optional(),
+    chunking_strategy: z.unknown().optional()
+  })
+  .passthrough()
 
-export const vectorStoreUpdateBody = z.object({
-  name: z.string().nullable().optional(),
-  expires_after: z.unknown().optional(),
-  metadata: z.unknown().optional()
-}).passthrough()
+export const vectorStoreUpdateBody = z
+  .object({
+    name: z.string().nullable().optional(),
+    expires_after: z.unknown().optional(),
+    metadata: z.unknown().optional()
+  })
+  .passthrough()
 
-export const vectorStoreSearchBody = z.object({
-  query: z.string().min(1),
-  max_num_results: z.number().int().positive().optional(),
-  filters: z.unknown().optional(),
-  ranking_options: z.unknown().optional(),
-  rewrite_query: z.unknown().optional()
-}).passthrough()
+export const vectorStoreSearchBody = z
+  .object({
+    query: z.string().min(1),
+    max_num_results: z.number().int().positive().optional(),
+    filters: z.unknown().optional(),
+    ranking_options: z.unknown().optional(),
+    rewrite_query: z.unknown().optional()
+  })
+  .passthrough()
 
-export const vectorStoreAttachBody = z.object({
-  file_id: z.string().min(1)
-}).passthrough()
+export const vectorStoreAttachBody = z
+  .object({
+    file_id: z.string().min(1)
+  })
+  .passthrough()
 
 // ─── Parsed shapes (source of truth; the store imports these) ─────────
 
@@ -36,13 +44,13 @@ export interface VectorStoreExpiresAfter {
 }
 
 export class InvalidExpiresAfterError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidExpiresAfterError'
   }
 }
 
-export function parseExpiresAfter (raw: unknown): VectorStoreExpiresAfter | null | undefined {
+export function parseExpiresAfter(raw: unknown): VectorStoreExpiresAfter | null | undefined {
   if (raw === undefined) return undefined
   if (raw === null) return null
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -61,7 +69,7 @@ export function parseExpiresAfter (raw: unknown): VectorStoreExpiresAfter | null
 }
 
 export class InvalidMetadataError extends Error {
-  constructor (message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'InvalidMetadataError'
   }
@@ -71,7 +79,7 @@ const MAX_METADATA_KEYS = 16
 const MAX_METADATA_KEY_LENGTH = 64
 const MAX_METADATA_VALUE_LENGTH = 512
 
-export function parseMetadata (raw: unknown): Record<string, string> | null | undefined {
+export function parseMetadata(raw: unknown): Record<string, string> | null | undefined {
   if (raw === undefined) return undefined
   if (raw === null) return null
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -85,14 +93,18 @@ export function parseMetadata (raw: unknown): Record<string, string> | null | un
   const out: Record<string, string> = {}
   for (const key of keys) {
     if (key.length > MAX_METADATA_KEY_LENGTH) {
-      throw new InvalidMetadataError(`"metadata" key "${key}" exceeds ${MAX_METADATA_KEY_LENGTH} characters.`)
+      throw new InvalidMetadataError(
+        `"metadata" key "${key}" exceeds ${MAX_METADATA_KEY_LENGTH} characters.`
+      )
     }
     const value = obj[key]
     if (typeof value !== 'string') {
       throw new InvalidMetadataError(`"metadata.${key}" must be a string.`)
     }
     if (value.length > MAX_METADATA_VALUE_LENGTH) {
-      throw new InvalidMetadataError(`"metadata.${key}" exceeds ${MAX_METADATA_VALUE_LENGTH} characters.`)
+      throw new InvalidMetadataError(
+        `"metadata.${key}" exceeds ${MAX_METADATA_VALUE_LENGTH} characters.`
+      )
     }
     out[key] = value
   }

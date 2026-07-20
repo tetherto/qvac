@@ -9,7 +9,7 @@ const { ensureModels } = require('./utils')
 
 const store = new Corestore('./local-store')
 
-async function main () {
+async function main() {
   // Fetch the embedder model from the QVAC registry (cached on disk after first run).
   const models = await ensureModels(['embedder'])
 
@@ -31,7 +31,8 @@ async function main () {
 
   const logger = new QvacLogger(console)
 
-  const sampleText = 'Artificial intelligence is transforming industries. Machine learning algorithms process vast amounts of data efficiently. Deep learning uses neural networks with multiple layers. Natural language processing enables computers to understand human text.'
+  const sampleText =
+    'Artificial intelligence is transforming industries. Machine learning algorithms process vast amounts of data efficiently. Deep learning uses neural networks with multiple layers. Natural language processing enables computers to understand human text.'
 
   console.log('Original text:')
   console.log(`"${sampleText}"`)
@@ -45,11 +46,11 @@ async function main () {
     chunkSize: 15,
     chunkOverlap: 3
   })
-  console.log('Chunking Options: splitStrategy: \'word\', chunkSize: 15, chunkOverlap: 3')
+  console.log("Chunking Options: splitStrategy: 'word', chunkSize: 15, chunkOverlap: 3")
   console.log(`Created ${wordResult.length} chunks:`)
   wordResult.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)
-    console.log(`  Word Count: ${chunk.content.split(' ').filter(w => w).length}`)
+    console.log(`  Word Count: ${chunk.content.split(' ').filter((w) => w).length}`)
   })
 
   console.log('\n=== 2. Character Splitting ===')
@@ -58,7 +59,7 @@ async function main () {
     chunkSize: 50,
     chunkOverlap: 10
   })
-  console.log('Chunking Options: splitStrategy: \'character\', chunkSize: 50, chunkOverlap: 10')
+  console.log("Chunking Options: splitStrategy: 'character', chunkSize: 50, chunkOverlap: 10")
   console.log(`Created ${charResult.length} chunks:`)
   charResult.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)
@@ -71,20 +72,21 @@ async function main () {
     chunkSize: 2,
     chunkOverlap: 1
   })
-  console.log('Chunking Options: splitStrategy: \'sentence\', chunkSize: 2, chunkOverlap: 1')
+  console.log("Chunking Options: splitStrategy: 'sentence', chunkSize: 2, chunkOverlap: 1")
   console.log(`Created ${sentenceResult.length} chunks:`)
   sentenceResult.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content.trim()}"`)
   })
 
   console.log('\n=== 4. Line Splitting ===')
-  const multilineText = 'Line one: AI is transforming\nLine two: Machine learning processes data\nLine three: Deep learning uses networks\nLine four: NLP enables understanding'
+  const multilineText =
+    'Line one: AI is transforming\nLine two: Machine learning processes data\nLine three: Deep learning uses networks\nLine four: NLP enables understanding'
   const lineResult = await rag.chunk(multilineText, {
     splitStrategy: 'line',
     chunkSize: 2,
     chunkOverlap: 1
   })
-  console.log('Chunking Options: splitStrategy: \'line\', chunkSize: 2, chunkOverlap: 1')
+  console.log("Chunking Options: splitStrategy: 'line', chunkSize: 2, chunkOverlap: 1")
   console.log(`Created ${lineResult.length} chunks:`)
   lineResult.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)
@@ -107,7 +109,7 @@ async function main () {
 
   console.log('\n=== 6. Custom Whitespace-Aware Splitter ===')
   const whitespaceSplitter = (text) => {
-    return text.split(/\s+/).filter(word => word.length > 0)
+    return text.split(/\s+/).filter((word) => word.length > 0)
   }
 
   const whitespaceResult = await rag.chunk(sampleText, {
@@ -115,7 +117,9 @@ async function main () {
     chunkSize: 10,
     chunkOverlap: 2
   })
-  console.log('Chunking Options: splitter: custom (whitespace-aware word split), chunkSize: 10, chunkOverlap: 2')
+  console.log(
+    'Chunking Options: splitter: custom (whitespace-aware word split), chunkSize: 10, chunkOverlap: 2'
+  )
   console.log(`Created ${whitespaceResult.length} chunks:`)
   whitespaceResult.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)
@@ -130,7 +134,7 @@ async function main () {
     chunkSize: 5,
     chunkOverlap: 1
   })
-  console.log('With chunkStrategy: \'paragraph\':')
+  console.log("With chunkStrategy: 'paragraph':")
   console.log(`Created ${paragraphStrategy.length} chunks:`)
   paragraphStrategy.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)
@@ -142,7 +146,7 @@ async function main () {
     chunkSize: 5,
     chunkOverlap: 1
   })
-  console.log('\nWith chunkStrategy: \'character\':')
+  console.log("\nWith chunkStrategy: 'character':")
   console.log(`Created ${characterStrategy.length} chunks:`)
   characterStrategy.forEach((chunk, i) => {
     console.log(`  Chunk ${i + 1}: "${chunk.content}"`)

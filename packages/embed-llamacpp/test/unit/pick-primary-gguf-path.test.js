@@ -19,10 +19,7 @@ test('sharded model with tensors.txt first returns first shard, not tensors.txt'
 })
 
 test('sharded model without tensors.txt returns first shard', function (t) {
-  const files = [
-    '/models/gte-large-00001-of-00002.gguf',
-    '/models/gte-large-00002-of-00002.gguf'
-  ]
+  const files = ['/models/gte-large-00001-of-00002.gguf', '/models/gte-large-00002-of-00002.gguf']
   t.is(pickPrimaryGgufPath(files), '/models/gte-large-00001-of-00002.gguf')
 })
 

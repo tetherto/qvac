@@ -24,7 +24,7 @@ let llm, embedder, embeddingFunction, llmAdapter, dbAdapter, rag
 let setupComplete = false
 
 // Helper function to ensure models are loaded
-async function ensureSetup () {
+async function ensureSetup() {
   if (setupComplete) return
 
   console.log('Setting up RAG environment...')
@@ -47,7 +47,7 @@ async function ensureSetup () {
 
     if (Array.isArray(text)) {
       // Batch: return array of arrays
-      return embeddings[0].map(embedding => Array.from(embedding))
+      return embeddings[0].map((embedding) => Array.from(embedding))
     } else {
       // Single: return single array
       return Array.from(embeddings[0][0])
@@ -76,7 +76,7 @@ async function ensureSetup () {
 }
 
 // Helper function to clean up
-async function cleanup () {
+async function cleanup() {
   if (!setupComplete) return
 
   console.log('Cleaning up RAG environment...')
@@ -88,7 +88,7 @@ async function cleanup () {
   console.log('RAG environment cleaned up')
 }
 
-test('RAG Integration: Constructor validation', { timeout: 360000 }, async t => {
+test('RAG Integration: Constructor validation', { timeout: 360000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing RAG constructor')
 
@@ -124,17 +124,21 @@ test('RAG Integration: Constructor validation', { timeout: 360000 }, async t => 
     t.fail('Should throw when embeddingFunction is missing')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.EMBEDDING_FUNCTION_REQUIRED, 'Should throw EMBEDDING_FUNCTION_REQUIRED error')
+    t.is(
+      err.code,
+      ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
+      'Should throw EMBEDDING_FUNCTION_REQUIRED error'
+    )
   }
 })
 
-test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, async t => {
+test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing document ingestion with chunking and embedding generation')
 
   // Test ingest with chunking (default behavior)
   const testDocs = [
-    'This is a test document about Darwin\'s observations on species variation.',
+    "This is a test document about Darwin's observations on species variation.",
     'Another document discussing the theory of natural selection and evolution.',
     'A third document about domestic breeding and artificial selection.'
   ]
@@ -177,7 +181,7 @@ test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, a
   t.alike(mixedResult.droppedIndices, [1, 3, 4], 'Should track correct dropped indices')
 })
 
-test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, async t => {
+test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing embedding generation for single text and multiple documents')
 
@@ -187,7 +191,10 @@ test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, 
 
   t.ok(Array.isArray(singleEmbedding), 'Single embedding should be an array')
   t.ok(singleEmbedding.length > 0, 'Embedding should have dimensions')
-  t.ok(singleEmbedding.every(val => typeof val === 'number'), 'All embedding values should be numbers')
+  t.ok(
+    singleEmbedding.every((val) => typeof val === 'number'),
+    'All embedding values should be numbers'
+  )
 
   // Test multiple document embeddings
   const multiDocs = [
@@ -201,14 +208,17 @@ test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, 
   t.ok(typeof multiEmbeddings === 'object', 'Multi-doc embeddings should return an object')
   t.is(Object.keys(multiEmbeddings).length, 3, 'Should generate embeddings for all documents')
 
-  Object.values(multiEmbeddings).forEach(embedding => {
+  Object.values(multiEmbeddings).forEach((embedding) => {
     t.ok(Array.isArray(embedding), 'Each embedding should be an array')
     t.ok(embedding.length > 0, 'Each embedding should have dimensions')
-    t.ok(embedding.every(val => typeof val === 'number'), 'All embedding values should be numbers')
+    t.ok(
+      embedding.every((val) => typeof val === 'number'),
+      'All embedding values should be numbers'
+    )
   })
 })
 
-test('RAG Integration: Search and retrieval functionality', { timeout: 30000 }, async t => {
+test('RAG Integration: Search and retrieval functionality', { timeout: 30000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing document search and retrieval with real embeddings')
 
@@ -241,11 +251,14 @@ test('RAG Integration: Search and retrieval functionality', { timeout: 30000 }, 
 
   // Results should be sorted by relevance (highest score first)
   for (let i = 1; i < searchResults.length; i++) {
-    t.ok(searchResults[i - 1].score >= searchResults[i].score, 'Results should be sorted by score descending')
+    t.ok(
+      searchResults[i - 1].score >= searchResults[i].score,
+      'Results should be sorted by score descending'
+    )
   }
 })
 
-test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, async t => {
+test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing end-to-end inference with context retrieval')
 
@@ -267,7 +280,7 @@ test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, as
   if (response && typeof response.onUpdate === 'function') {
     const responseContent = []
     await response
-      .onUpdate(update => {
+      .onUpdate((update) => {
         responseContent.push(update)
       })
       .await()
@@ -294,7 +307,7 @@ test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, as
   }
 })
 
-test('RAG Integration: Document deletion and cleanup', { timeout: 30000 }, async t => {
+test('RAG Integration: Document deletion and cleanup', { timeout: 30000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing document deletion functionality')
 
@@ -334,7 +347,7 @@ test('RAG Integration: Document deletion and cleanup', { timeout: 30000 }, async
   }
 })
 
-test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async t => {
+test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing error handling across RAG operations')
 
@@ -361,7 +374,11 @@ test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async
   ]
 
   const emptyResult = await rag.ingest(emptyContentDocs, modelName, { chunk: false })
-  t.is(emptyResult.processed.length, 0, 'Should drop all empty and whitespace-only content documents')
+  t.is(
+    emptyResult.processed.length,
+    0,
+    'Should drop all empty and whitespace-only content documents'
+  )
   t.is(emptyResult.droppedIndices.length, 4, 'Should track all dropped documents')
 
   // Test very large content handling
@@ -373,7 +390,7 @@ test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async
   t.is(largeResult.processed[0].status, 'fulfilled', 'Should successfully process large document')
 })
 
-test('RAG Integration: Chunking behavior and options', { timeout: 30000 }, async t => {
+test('RAG Integration: Chunking behavior and options', { timeout: 30000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing different chunking strategies and options')
 
@@ -406,17 +423,19 @@ test('RAG Integration: Chunking behavior and options', { timeout: 30000 }, async
       chunkOverlap: 2
     }
   })
-  t.ok(customChunkResult.processed.length >= chunkedResult.processed.length,
-    'Smaller chunk size should create more chunks')
+  t.ok(
+    customChunkResult.processed.length >= chunkedResult.processed.length,
+    'Smaller chunk size should create more chunks'
+  )
 
   // All chunks should have valid structure
-  customChunkResult.processed.forEach(chunk => {
+  customChunkResult.processed.forEach((chunk) => {
     t.ok(chunk.id, 'Each chunk should have an ID')
     t.is(chunk.status, 'fulfilled', 'Each chunk should have fulfilled status')
   })
 })
 
-test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }, async t => {
+test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }, async (t) => {
   await ensureSetup()
   t.comment('Testing complete RAG workflow with sample text file, this may take a while...')
 
@@ -438,13 +457,16 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   t.ok(saveResult.processed.length > 0, 'Should process sample text into chunks')
 
   // Verify progress reporting worked
-  const stages = [...new Set(progressCalls.map(p => p.stage))]
+  const stages = [...new Set(progressCalls.map((p) => p.stage))]
   t.comment(`Progress stages received: ${stages.join(', ')}`)
   t.ok(stages.includes('chunking'), 'Should report chunking stage')
   t.ok(stages.includes('embedding'), 'Should report embedding stage')
-  t.ok(stages.some(s => s.startsWith('saving:')), 'Should report saving sub-stages')
+  t.ok(
+    stages.some((s) => s.startsWith('saving:')),
+    'Should report saving sub-stages'
+  )
 
-  const processedIds = saveResult.processed.map(doc => doc.id)
+  const processedIds = saveResult.processed.map((doc) => doc.id)
   t.comment(`Created ${processedIds.length} chunks from sample text`)
 
   t.comment('Step 2: Search for relevant context')
@@ -460,7 +482,7 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   if (response && typeof response.onUpdate === 'function') {
     const responseOutputs = []
     await response
-      .onUpdate(update => {
+      .onUpdate((update) => {
         responseOutputs.push(update)
       })
       .await()
@@ -481,11 +503,13 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
     }
   })
 
-  t.comment(`Reindex result: reindexed=${reindexResult.reindexed}, details=${JSON.stringify(reindexResult.details)}`)
+  t.comment(
+    `Reindex result: reindexed=${reindexResult.reindexed}, details=${JSON.stringify(reindexResult.details)}`
+  )
   t.ok(reindexResult.reindexed, 'Should reindex database')
   t.ok(reindexResult.details?.documentCount >= 100, 'Should have significant document count')
 
-  const reindexStages = [...new Set(reindexProgressCalls.map(p => p.stage))]
+  const reindexStages = [...new Set(reindexProgressCalls.map((p) => p.stage))]
   t.comment(`Reindex stages: ${reindexStages.join(', ')}`)
   t.ok(reindexStages.includes('collecting'), 'Should report collecting stage')
   t.ok(reindexStages.includes('reassigning'), 'Should report reassigning stage')
@@ -502,117 +526,140 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   t.comment('Full workflow completed successfully')
 })
 
-test('RAG Integration: External HyperDB instance with default spec', { timeout: 360000 }, async t => {
-  await ensureSetup()
-  t.comment('Testing HyperDBAdapter with externally provided HyperDB instance')
+test(
+  'RAG Integration: External HyperDB instance with default spec',
+  { timeout: 360000 },
+  async (t) => {
+    await ensureSetup()
+    t.comment('Testing HyperDBAdapter with externally provided HyperDB instance')
 
-  // Create a separate store for this test
-  const testStore = new Corestore('./test-external-hyperdb-store')
-  let externalHypercore = null
-  let externalHyperDB = null
-  let externalAdapter = null
-  let testRag = null
+    // Create a separate store for this test
+    const testStore = new Corestore('./test-external-hyperdb-store')
+    let externalHypercore = null
+    let externalHyperDB = null
+    let externalAdapter = null
+    let testRag = null
 
-  try {
-    t.comment('Step 1: Create external HyperDB instance with default spec')
-    externalHypercore = testStore.get({ name: 'external-rag-test' })
-    const dbSpecModule = await import('../../src/adapters/database/hyperspec/hyperdb/index.js')
-    const dbSpec = await (dbSpecModule.default || dbSpecModule)
-    externalHyperDB = HyperDB.bee(externalHypercore, dbSpec, { autoUpdate: true })
-    await externalHyperDB.ready()
-    t.pass('External HyperDB instance created successfully')
+    try {
+      t.comment('Step 1: Create external HyperDB instance with default spec')
+      externalHypercore = testStore.get({ name: 'external-rag-test' })
+      const dbSpecModule = await import('../../src/adapters/database/hyperspec/hyperdb/index.js')
+      const dbSpec = await (dbSpecModule.default || dbSpecModule)
+      externalHyperDB = HyperDB.bee(externalHypercore, dbSpec, { autoUpdate: true })
+      await externalHyperDB.ready()
+      t.pass('External HyperDB instance created successfully')
 
-    t.comment('Step 2: Create HyperDBAdapter with external HyperDB (using default table names for compatibility)')
-    externalAdapter = new HyperDBAdapter({
-      db: externalHyperDB,
-      NUM_CENTROIDS: 8,
-      BATCH_SIZE: 50,
-      CACHE_SIZE: 500
-      // Note: Using default table names since they match the default HyperDB spec
-      // Custom table names would require a matching custom HyperDB spec
-    })
+      t.comment(
+        'Step 2: Create HyperDBAdapter with external HyperDB (using default table names for compatibility)'
+      )
+      externalAdapter = new HyperDBAdapter({
+        db: externalHyperDB,
+        NUM_CENTROIDS: 8,
+        BATCH_SIZE: 50,
+        CACHE_SIZE: 500
+        // Note: Using default table names since they match the default HyperDB spec
+        // Custom table names would require a matching custom HyperDB spec
+      })
 
-    t.comment('Step 3: Create RAG instance with external adapter')
-    testRag = new RAG({
-      embeddingFunction,
-      dbAdapter: externalAdapter,
-      llm: llmAdapter
-    })
-    await testRag.ready()
-    t.pass('RAG instance initialized with external HyperDB adapter')
+      t.comment('Step 3: Create RAG instance with external adapter')
+      testRag = new RAG({
+        embeddingFunction,
+        dbAdapter: externalAdapter,
+        llm: llmAdapter
+      })
+      await testRag.ready()
+      t.pass('RAG instance initialized with external HyperDB adapter')
 
-    t.comment('Step 4: Verify hypercore and table names are properly set')
-    t.ok(externalAdapter.core, 'Adapter should have hypercore reference')
-    t.ok(externalAdapter.core === externalHypercore, 'Adapter hypercore should match external hypercore')
+      t.comment('Step 4: Verify hypercore and table names are properly set')
+      t.ok(externalAdapter.core, 'Adapter should have hypercore reference')
+      t.ok(
+        externalAdapter.core === externalHypercore,
+        'Adapter hypercore should match external hypercore'
+      )
 
-    // Verify default table names are set correctly
-    t.ok(externalAdapter.documentsTable === '@rag/documents', 'Documents table name should be default')
-    t.ok(externalAdapter.vectorsTable === '@rag/vectors', 'Vectors table name should be default')
-    t.ok(externalAdapter.centroidsTable === '@rag/centroids', 'Centroids table name should be default')
-    t.ok(externalAdapter.invertedIndexTable === '@rag/ivfBuckets', 'Inverted index table name should be default')
-    t.comment('Table names configuration feature is available for use with custom HyperDB specs')
+      // Verify default table names are set correctly
+      t.ok(
+        externalAdapter.documentsTable === '@rag/documents',
+        'Documents table name should be default'
+      )
+      t.ok(externalAdapter.vectorsTable === '@rag/vectors', 'Vectors table name should be default')
+      t.ok(
+        externalAdapter.centroidsTable === '@rag/centroids',
+        'Centroids table name should be default'
+      )
+      t.ok(
+        externalAdapter.invertedIndexTable === '@rag/ivfBuckets',
+        'Inverted index table name should be default'
+      )
+      t.comment('Table names configuration feature is available for use with custom HyperDB specs')
 
-    t.comment('Step 5: Test basic RAG operations')
-    const testDocs = [
-      'External HyperDB test document about quantum physics and string theory.',
-      'Another test document discussing machine learning and neural networks.',
-      'Final test document covering database indexing and vector search.'
-    ]
+      t.comment('Step 5: Test basic RAG operations')
+      const testDocs = [
+        'External HyperDB test document about quantum physics and string theory.',
+        'Another test document discussing machine learning and neural networks.',
+        'Final test document covering database indexing and vector search.'
+      ]
 
-    // Generate and save embeddings
-    const saveResults = await testRag.ingest(testDocs, modelName)
-    t.ok(saveResults.processed.length === 3, 'Should process all test documents')
-    t.ok(saveResults.processed.every(r => r.status === 'fulfilled'), 'All documents should be processed successfully')
+      // Generate and save embeddings
+      const saveResults = await testRag.ingest(testDocs, modelName)
+      t.ok(saveResults.processed.length === 3, 'Should process all test documents')
+      t.ok(
+        saveResults.processed.every((r) => r.status === 'fulfilled'),
+        'All documents should be processed successfully'
+      )
 
-    const docIds = saveResults.processed.map(r => r.id)
-    t.comment(`Created documents with IDs: ${docIds.join(', ')}`)
+      const docIds = saveResults.processed.map((r) => r.id)
+      t.comment(`Created documents with IDs: ${docIds.join(', ')}`)
 
-    // Test search functionality
-    const searchResults = await testRag.search('quantum physics', { topK: 2 })
-    t.ok(searchResults.length > 0, 'Should find relevant documents')
-    t.ok(searchResults[0].score > 0, 'Results should have positive similarity scores')
-    t.comment(`Found ${searchResults.length} results, top score: ${searchResults[0].score.toFixed(3)}`)
+      // Test search functionality
+      const searchResults = await testRag.search('quantum physics', { topK: 2 })
+      t.ok(searchResults.length > 0, 'Should find relevant documents')
+      t.ok(searchResults[0].score > 0, 'Results should have positive similarity scores')
+      t.comment(
+        `Found ${searchResults.length} results, top score: ${searchResults[0].score.toFixed(3)}`
+      )
 
-    // Test inference if LLM is available
-    if (llmAdapter) {
-      const response = await testRag.infer('What is quantum physics?', { topK: 1 })
-      t.ok(response, 'Should generate inference response')
-      t.comment('Inference completed successfully with external HyperDB')
-    }
-
-    // Clean up test data
-    const deleteResult = await testRag.deleteEmbeddings(docIds)
-    t.ok(deleteResult, 'Should successfully delete test documents')
-
-    t.comment('Step 6: Verify adapter state after operations')
-    t.ok(externalAdapter.isInitialized, 'Adapter should remain initialized')
-    t.ok(externalAdapter.centroids.length > 0, 'Centroids should be properly initialized')
-
-    t.pass('External HyperDB integration test completed successfully')
-  } catch (error) {
-    t.fail(`External HyperDB test failed: ${error.message}`)
-  } finally {
-    // Clean up resources
-    if (testRag) {
-      try {
-        await testRag.close()
-        t.comment('Test RAG instance closed')
-      } catch (closeError) {
-        t.comment(`RAG close error (non-critical): ${closeError.message}`)
+      // Test inference if LLM is available
+      if (llmAdapter) {
+        const response = await testRag.infer('What is quantum physics?', { topK: 1 })
+        t.ok(response, 'Should generate inference response')
+        t.comment('Inference completed successfully with external HyperDB')
       }
-    }
-    if (testStore) {
-      try {
-        await testStore.close()
-        t.comment('Test store closed')
-      } catch (storeError) {
-        t.comment(`Store close error (non-critical): ${storeError.message}`)
+
+      // Clean up test data
+      const deleteResult = await testRag.deleteEmbeddings(docIds)
+      t.ok(deleteResult, 'Should successfully delete test documents')
+
+      t.comment('Step 6: Verify adapter state after operations')
+      t.ok(externalAdapter.isInitialized, 'Adapter should remain initialized')
+      t.ok(externalAdapter.centroids.length > 0, 'Centroids should be properly initialized')
+
+      t.pass('External HyperDB integration test completed successfully')
+    } catch (error) {
+      t.fail(`External HyperDB test failed: ${error.message}`)
+    } finally {
+      // Clean up resources
+      if (testRag) {
+        try {
+          await testRag.close()
+          t.comment('Test RAG instance closed')
+        } catch (closeError) {
+          t.comment(`RAG close error (non-critical): ${closeError.message}`)
+        }
+      }
+      if (testStore) {
+        try {
+          await testStore.close()
+          t.comment('Test store closed')
+        } catch (storeError) {
+          t.comment(`Store close error (non-critical): ${storeError.message}`)
+        }
       }
     }
   }
-})
+)
 
-test('RAG Integration: Cleanup test environment', { timeout: 30000 }, async t => {
+test('RAG Integration: Cleanup test environment', { timeout: 30000 }, async (t) => {
   t.comment('Cleaning up QVAC environment after all tests')
   await cleanup()
   t.pass('Environment cleanup completed')

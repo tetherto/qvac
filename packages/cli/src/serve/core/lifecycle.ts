@@ -1,8 +1,16 @@
-import { loadModel as sdkLoadModel, unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
+import {
+  loadModel as sdkLoadModel,
+  unloadModel as sdkUnloadModel,
+  close as sdkClose
+} from '@qvac/sdk'
 import type { ModelRegistry, ServeConfig } from './model-registry.js'
 import type { Logger } from '../../logger.js'
 
-export async function preloadModels (serveConfig: ServeConfig, registry: ModelRegistry, logger: Logger): Promise<void> {
+export async function preloadModels(
+  serveConfig: ServeConfig,
+  registry: ModelRegistry,
+  logger: Logger
+): Promise<void> {
   const toPreload: string[] = []
 
   for (const [alias, entry] of serveConfig.models) {
@@ -29,7 +37,11 @@ export async function preloadModels (serveConfig: ServeConfig, registry: ModelRe
   }
 }
 
-export async function loadModel (alias: string, registry: ModelRegistry, logger: Logger): Promise<void> {
+export async function loadModel(
+  alias: string,
+  registry: ModelRegistry,
+  logger: Logger
+): Promise<void> {
   const entry = registry.getEntry(alias)
   if (!entry) throw new Error(`Model "${alias}" not registered`)
 
@@ -61,7 +73,11 @@ export async function loadModel (alias: string, registry: ModelRegistry, logger:
   }
 }
 
-export async function unloadModel (alias: string, registry: ModelRegistry, logger: Logger): Promise<void> {
+export async function unloadModel(
+  alias: string,
+  registry: ModelRegistry,
+  logger: Logger
+): Promise<void> {
   const entry = registry.getEntry(alias)
   if (!entry) throw new Error(`Model "${alias}" not found`)
 
@@ -80,7 +96,7 @@ export async function unloadModel (alias: string, registry: ModelRegistry, logge
   logger.info(`Unloaded model "${alias}".`)
 }
 
-export async function shutdownSDK (logger: Logger): Promise<void> {
+export async function shutdownSDK(logger: Logger): Promise<void> {
   try {
     await sdkClose()
     logger.info('SDK connection closed.')

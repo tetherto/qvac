@@ -13,6 +13,9 @@
     "baseUrl": ".",
     "paths": {
       "@qvac/sdk": ["./index.ts"],
+      "@qvac/sdk/llamacpp-completion/plugin": [
+        "./server/bare/plugins/llamacpp-completion/plugin.ts"
+      ],
       "@/*": ["./*"]
     },
     "outDir": "./dist",

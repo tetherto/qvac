@@ -1,44 +1,41 @@
-import { readFileSync, readdirSync } from "fs";
-import { join, dirname } from "path";
-import { spawnSync } from "child_process";
-import { fileURLToPath } from "url";
+import { readFileSync, readdirSync } from 'fs'
+import { join, dirname } from 'path'
+import { spawnSync } from 'child_process'
+import { fileURLToPath } from 'url'
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const testDir = join(__dirname, "..", "test", "unit");
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const testDir = join(__dirname, '..', 'test', 'unit')
 
 function collectTestFiles(dir: string): string[] {
-  const files: string[] = [];
+  const files: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = join(dir, entry.name);
+    const fullPath = join(dir, entry.name)
     if (entry.isDirectory()) {
-      files.push(...collectTestFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith(".test.ts")) {
-      files.push(fullPath);
+      files.push(...collectTestFiles(fullPath))
+    } else if (entry.isFile() && entry.name.endsWith('.test.ts')) {
+      files.push(fullPath)
     }
   }
-  return files;
+  return files
 }
 
-const testFiles = collectTestFiles(testDir);
+const testFiles = collectTestFiles(testDir)
 
-let hasFailure = false;
+let hasFailure = false
 
 function usesNodeTestRunner(filePath: string): boolean {
-  const source = readFileSync(filePath, "utf8");
-  return (
-    source.includes("from 'node:test'") ||
-    source.includes('from "node:test"')
-  );
+  const source = readFileSync(filePath, 'utf8')
+  return source.includes("from 'node:test'") || source.includes('from "node:test"')
 }
 
 for (const file of testFiles) {
-  const args = usesNodeTestRunner(file) ? ["test", file] : ["run", file];
-  const result = spawnSync("bun", args, {
-    stdio: "inherit",
-  });
+  const args = usesNodeTestRunner(file) ? ['test', file] : ['run', file]
+  const result = spawnSync('bun', args, {
+    stdio: 'inherit'
+  })
   if (result.status !== 0) {
-    hasFailure = true;
+    hasFailure = true
   }
 }
 
-process.exit(hasFailure ? 1 : 0);
+process.exit(hasFailure ? 1 : 0)

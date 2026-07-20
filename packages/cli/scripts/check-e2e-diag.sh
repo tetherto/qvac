@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Exercises the failure-diagnostic block from test/e2e.bats setup_file under
-# three scenarios that don't require real model loading. Confirms the block
-# runs cleanly, hits the right output markers, and stays inside its curl
-# bounds when the server is non-responsive.
+# Exercises the spawned-server failure-diagnostic block under three scenarios
+# that don't require real model loading. Confirms the block runs cleanly, hits
+# the right output markers, and stays inside its curl bounds when the server is
+# non-responsive.
 #
 # Usage: bash packages/cli/scripts/check-e2e-diag.sh
 
 set -uo pipefail
 
-# ── The diagnostic block under test (kept in sync with test/e2e.bats) ──
-# This is a direct copy of the body of the `if [[ "${elapsed}" -ge ... ]]`
-# branch in setup_file(), wrapped as a function. The "FATAL" line and the
-# `return 1` are dropped; this helper returns 0 so we can run the block
-# multiple times and assert externally.
+# ── The diagnostic block under test ────────────────────────────────────
+# This is the diagnostic body wrapped as a function. The "FATAL" line and the
+# `return 1` are dropped; this helper returns 0 so we can run the block multiple
+# times and assert externally.
 run_diag_block() {
   local FILE_TMPDIR="$1"
   local BASE="$2"
@@ -144,9 +143,9 @@ wait "${SRV_PID}" 2>/dev/null
 rm -rf "${TMP}"
 
 # ── Scenario 4: real `qvac serve openai` + diag block ────────────────
-# Mirrors test/e2e.bats setup_file: same 4-model config, same start
-# command. We deliberately fire the diag while the server is still
-# warming so the block runs against a realistic partial state.
+# Mirrors the real-model e2e config and spawned serve command. We deliberately
+# fire the diag while the server is still warming so the block runs against a
+# realistic partial state.
 SCENARIO="4: live qvac serve + diag block"
 echo "── ${SCENARIO} ─────────────────────────────────────" >&2
 

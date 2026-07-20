@@ -1,4 +1,5 @@
-# Self-test for the prebuild symbol gate (scripts/verify-prebuild-symbols.mjs).
+# Self-test for the prebuild symbol gate
+# (.github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs).
 #
 # Proves -- straight off the published artifacts, no device or rebuild -- that
 # the gate CATCHES the @qvac/tts-ggml@0.2.1 Android dlopen regression (the build
@@ -11,7 +12,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - "scripts/verify-prebuild-symbols.mjs"
+      - ".github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs"
+      - ".github/actions/verify-prebuild-symbols/action.yml"
       - ".github/workflows/gate-selftest.yml"
 
 permissions:
@@ -36,7 +38,7 @@ jobs:
           rm -rf /tmp/bad && mkdir -p /tmp/bad
           npm pack @qvac/tts-ggml@0.2.1 --pack-destination /tmp/bad
           tar -xf /tmp/bad/*.tgz -C /tmp/bad package/prebuilds/android-arm64
-          if node scripts/verify-prebuild-symbols.mjs --dir /tmp/bad/package/prebuilds/android-arm64 --platform android; then
+          if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/bad/package/prebuilds/android-arm64 --platform android; then
             echo "::error::Gate PASSED on the known-broken 0.2.1 prebuild -- the gate would NOT catch the regression."
             exit 1
           fi
@@ -49,7 +51,7 @@ jobs:
           rm -rf /tmp/good && mkdir -p /tmp/good
           npm pack @qvac/tts-ggml@0.2.0 --pack-destination /tmp/good
           tar -xf /tmp/good/*.tgz -C /tmp/good package/prebuilds/android-arm64
-          node scripts/verify-prebuild-symbols.mjs --dir /tmp/good/package/prebuilds/android-arm64 --platform android
+          node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir /tmp/good/package/prebuilds/android-arm64 --platform android
           echo "OK: gate correctly passed on 0.2.0."
 
   fleet-dryrun:
@@ -106,7 +108,7 @@ jobs:
             fi
             echo "== @qvac/$a@$ver =="
             checked=$((checked + 1))
-            if node scripts/verify-prebuild-symbols.mjs --dir "$d/package/prebuilds/android-arm64" --platform android; then
+            if node .github/actions/verify-prebuild-symbols/verify-prebuild-symbols.mjs --dir "$d/package/prebuilds/android-arm64" --platform android; then
               echo "OK: @qvac/$a@$ver passes the UND gate on android-arm64"
               echo "| \`@qvac/$a\` | $ver | PASS |" >> "$GITHUB_STEP_SUMMARY"
             else

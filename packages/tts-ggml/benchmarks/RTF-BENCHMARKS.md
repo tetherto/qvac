@@ -2,14 +2,12 @@
 
 This document covers the **cross-platform RTF and streaming latency** benchmark
 system for the GGML (tts-cpp) TTS backend — the one wired into the
-`Benchmark RTF (TTS GGML)` GitHub Actions workflow, with ingestion paths for
+`Benchmark Performance (TTS GGML)` GitHub Actions workflow, with ingestion paths for
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
 drops.
 
-It mirrors the ONNX TTS benchmark suite
-([`packages/tts-onnx/benchmarks/RTF-BENCHMARKS.md`](../../tts-onnx/benchmarks/RTF-BENCHMARKS.md))
-so the two TTS backends share tooling and the consolidated findings tables line
-up column-for-column.
+It follows the same RTF and streaming benchmark methodology used across QVAC's
+TTS backends so the consolidated findings tables line up column-for-column.
 
 Two benchmark tracks:
 
@@ -35,8 +33,11 @@ logs when the filesystem isn't accessible.
   the `variant` field is a **label** (default `q4`) used for the artifact name
   and report column.
 - **Engines** are `chatterbox`, `chatterbox-mtl`, `supertonic`,
-  `supertonic-mtl` (the ONNX `chatterbox-en` / `chatterbox-multi` split maps to
-  `chatterbox` / `chatterbox-mtl`).
+  `supertonic-mtl`, `supertonic3` (the ONNX `chatterbox-en` / `chatterbox-multi`
+  split maps to `chatterbox` / `chatterbox-mtl`). `supertonic3` loads the
+  `supertonic3-<quant>.gguf` tier via the same `ENGINE_SUPERTONIC` code path;
+  the benchmark `variant` label picks the tier (`q4`→`q4_0`, `q8`→`q8_0`,
+  `f16`→`f16`).
 - **GPU backends** are Vulkan (linux / win32 / android), Metal (darwin / ios),
   and CUDA / OpenCL only when explicitly hinted. The active backend is reported
   by the addon as `stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
@@ -66,7 +67,8 @@ npm --prefix packages/tts-ggml run test:benchmark:rtf
 QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON='[
   {"engine":"chatterbox","useGPU":false,"backendHint":"cpu"},
   {"engine":"chatterbox-mtl","useGPU":false,"backendHint":"cpu"},
-  {"engine":"supertonic","useGPU":false,"backendHint":"cpu"}
+  {"engine":"supertonic","useGPU":false,"backendHint":"cpu"},
+  {"engine":"supertonic-mtl","useGPU":false,"backendHint":"cpu"}
 ]' npm --prefix packages/tts-ggml run test:benchmark:rtf:matrix
 
 # Streaming latency (TTFA + inter-chunk gap)
@@ -87,7 +89,7 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_ENGINE` | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl`. |
+| `QVAC_TTS_GGML_BENCHMARK_ENGINE` | `chatterbox` | One of `chatterbox` / `chatterbox-mtl` / `supertonic` / `supertonic-mtl` / `supertonic3`. |
 | `QVAC_TTS_GGML_BENCHMARK_VARIANT` | `q4` | Label only — one of `q4` / `q8` / `f16` / `mixed`. The GGUF on the registry determines the real quant. |
 | `QVAC_TTS_GGML_BENCHMARK_USE_GPU` | `0` | `1` / `true` to request GPU. Backend auto-derives from platform (Vulkan / Metal). |
 | `QVAC_TTS_GGML_BENCHMARK_BACKEND` | (derived) | `cpu` / `metal` / `vulkan` / `cuda` / `opencl`. Used in reports and to differentiate rows. |
@@ -115,7 +117,7 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (3-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
+| `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (4-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
 | `QVAC_TTS_GGML_BENCHMARK_ENTRY_TIMEOUT_MS` | `600000` | Per-entry watchdog — a hung engine is SIGTERM'd so the matrix continues. |
 
 ### Mobile (Device Farm)
@@ -134,35 +136,37 @@ every report links back to the CI run that produced it.
 ## How the CI pipeline fits together
 
 ```
-workflow_dispatch / cron schedule
-  └── benchmark-rtf-tts-ggml.yml  (orchestrator)
+workflow_dispatch
+  └── benchmark-performance-tts-ggml.yml  (orchestrator)
          ├── prebuilds-tts-ggml.yml          (build native addon)
-         ├── benchmarks-self-hosted matrix    (qvac-*-gpu runners: CPU + Vulkan)
-         ├── mobile-benchmarks                (include_mobile=true → Device Farm CPU)
+         ├── desktop-benchmarks              (desktop matrix: CPU everywhere, Vulkan on GPU runners)
+         ├── mobile-benchmarks               (run_mobile=true → Device Farm CPU + GPU, engine sweep)
          └── summarize job
                ├── downloads rtf-results-tts-ggml-* (desktop) + perf-report-tts-ggml-* (mobile)
                ├── runs aggregate-tts-ggml-rtf.js --manual-dir benchmarks/manual-results
                └── writes combined markdown + JSON to $GITHUB_STEP_SUMMARY + artifact
 ```
 
-The orchestrator runs on `workflow_dispatch` and on `cron: '30 6 * * 1'`
-(Monday 06:30 UTC — offset from the ONNX benchmark's 06:00 so the two weekly
-runs don't contend at the same minute). Desktop is on by default; the mobile leg is opt-in via the
-`include_mobile=true` dispatch input so the weekly cron never burns AWS Device
-Farm capacity. On-PR workflows do NOT run the benchmarks.
+The orchestrator runs on `workflow_dispatch`. Desktop and mobile are both on by
+default and can be disabled with the `run_desktop=false` / `run_mobile=false`
+dispatch inputs. On-PR workflows do NOT run the benchmarks.
 
 ## CI runner coverage
 
-The desktop matrix runs on the same `qvac-*` self-hosted runners as the
-integration suite, because that is where the registry models, the Vulkan ICDs,
-and the prebuilds plumbing already live.
+The desktop matrix reuses the integration-test runner matrix. CPU benchmark
+entries run across the desktop matrix; Vulkan entries run only on GPU-capable
+`qvac-*-gpu` runners where the Vulkan ICD and baseline hardware are stable.
 
 | Platform / Arch | Backend | CI source |
 |---|---|---|
-| linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` (self-hosted) |
-| win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` (self-hosted) |
-| Android | cpu | **include_mobile** — AWS Device Farm (GPU disabled at the engine boundary today) |
-| iOS | cpu | **include_mobile** — AWS Device Farm |
+| linux / x64 | cpu + vulkan | `qvac-ubuntu2204-x64-gpu`, `qvac-ubuntu2404-x64-gpu` |
+| linux / arm64 | cpu | `ubuntu-24.04-arm` |
+| darwin / arm64 | cpu | `macos-14-xlarge` |
+| darwin / x64 | cpu | `macos-15-large` |
+| win32 / x64 | cpu | `qvac-win25-x64` |
+| win32 / x64 | cpu + vulkan | `qvac-win25-x64-gpu` |
+| Android | cpu + vulkan | `run_mobile=true` — AWS Device Farm. Benchmark matrix sweeps `chatterbox` (CPU q4/q8 + GPU q4), `supertonic` (CPU + GPU q4), `supertonic3` (CPU + GPU q4). `use_gpu:true` → Vulkan. |
+| iOS | cpu + metal | `run_mobile=true` — AWS Device Farm. Same engine sweep as Android (q4). `use_gpu:true` → Metal. |
 | darwin / arm64 | metal | **Manual** — hosted macOS Metal crashes ggml's encoder; drop JSON under `manual-results/` |
 | linux / x64 | cuda | **Manual** — not in the default tts-cpp backend cascade; drop JSON under `manual-results/` |
 | android | opencl | **Manual** — Adreno-only; drop JSON under `manual-results/` |
@@ -189,9 +193,10 @@ total wall time.
 
 ## Adding a new platform
 
-1. Add the matrix row to the `benchmarks-self-hosted` job in
-   `.github/workflows/benchmark-rtf-tts-ggml.yml`, including a
-   `benchmark_matrix_json` with the `(engine, useGPU, backendHint)` combos.
+1. Add the matrix row to the `desktop-benchmarks` path in
+   `.github/workflows/integration-test-tts-ggml.yml`, or dispatch
+   `.github/workflows/benchmark-performance-tts-ggml.yml` with
+   `benchmark_matrix_json` containing the `(engine, useGPU, backendHint)` combos.
 2. Add the platform's GPU backend, if any, to
    `scripts/perf-report/aggregate-tts-ggml-rtf.js`'s `SUPPORTED_GPU_BACKENDS`.
 3. For unavailable backends (CUDA, OpenCL, hosted-macOS Metal), drop fixtures
@@ -202,9 +207,10 @@ total wall time.
 The RTF benchmark supports `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND`. We
 deliberately **don't** set a bound in CI yet — without accumulated baselines,
 any bound would either trip on noise or fail to catch real regressions.
-Recommended follow-up once the weekly cron has a few runs banked:
+Recommended follow-up once the manually dispatched benchmark has a few runs
+banked:
 
-1. Read the P95 of the last 4 weekly runs per `(platform, engine, gpu)` from the
+1. Read the P95 of the last 4 benchmark runs per `(platform, engine, gpu)` from the
    summarize JSON artifact.
 2. Set `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND = P95 * 1.5` per matrix row.
 3. Re-generate the matrix JSON with those bounds embedded as `rtfUpperBound`.

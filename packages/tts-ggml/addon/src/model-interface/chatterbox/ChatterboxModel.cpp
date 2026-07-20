@@ -6,16 +6,24 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <tts-cpp/chatterbox/engine.h>
+#include <tts-cpp/lavasr/denoiser.h>
+#include <tts-cpp/lavasr/enhancer.h>
 
 #include "addon/TTSErrors.hpp"
-#include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
-#include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/BackendUtils.hpp"
+#include "model-interface/EnhancerLoader.hpp"
+#include "model-interface/OutputResampler.hpp"
+#include "model-interface/PcmConversion.hpp"
+#include "model-interface/StreamingEnhancer.hpp"
+#include "model-interface/chatterbox/TimeStretch.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -25,31 +33,38 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
-namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 // Default T3 context cap (EngineOptions::n_ctx) when the host doesn't pass
 // `nCtx`.  tts-cpp's library default (0 = uncapped) takes the GGUF's own
 // n_ctx, and the Turbo GGUF ships n_ctx=8196 — the F32 KV cache allocated
 // up-front at that length is n_embd(1024) x n_layer(24) x n_ctx x 4 B x 2
 // (K+V) ~= 1.6 GB, which is what pushed the iOS QVAC SDK test process to a
-// ~3.1 GB peak footprint and into jetsam (QVAC-19557).  With the q8_0
+// ~3.1 GB peak footprint and into jetsam. With the f16
 // default KV dtype below, 4096 tokens (~160 s of generated audio per
-// synthesize() call; T3 speech tokens run at 25 Hz) cost ~210 MB of KV —
-// less memory than f32@2048 AND double the context.  Hosts that need
-// longer single-call synthesis can raise the cap, or pass nCtx=0 to
-// restore the uncapped behaviour.
-constexpr int kDefaultNCtx = 4096;
+// synthesize() call; T3 speech tokens run at 25 Hz) cost ~390 MB of KV —
+// still well under f32@4096 (~780 MB) AND double the context.  (The prior
+// q8_0 default was ~210 MB but aborts the multilingual Metal CONT path —
+// see DEFAULT_KV_CACHE_TYPE below — so it is now opt-in; passing
+// kvCacheType:"q8_0" restores the smaller footprint on backends that
+// implement the op.)  Hosts that need longer single-call synthesis can
+// raise the cap, or pass nCtx=0 to restore the uncapped behaviour.
+constexpr int DEFAULT_N_CTX = 4096;
 
-// Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  q8_0 stores
-// the cache at ~27% of f32.  Upstream validation on real GGUFs
+// Default T3 KV-cache dtype (EngineOptions::kv_cache_type).  f16 stores
+// the cache at ~50% of f32 and is the safe cross-backend default: the
+// multilingual model's Metal step graph issues a CONT on the KV cache,
+// and the ggml-speech Metal backend only supports a q8_0-source CONT to
+// f32/f16 (not q8_0->q8_0), so a q8_0 KV cache hard-aborts that path with
+// GGML_ABORT("unsupported op 'CONT'").  q8_0 had been the default since
+// 0.3.2 (iOS peak-memory) — it stores the cache at ~27% of
+// f32 and decodes 20-30% faster on Metal — but it only works where the
+// backend implements the q8_0 CONT (CPU, CUDA), so it is now opt-in via
+// kvCacheType:"q8_0".  Upstream validation on real GGUFs
 // (qvac-ext-lib-whisper.cpp#43): Turbo greedy token sequences are
-// byte-identical across f32/f16/q8_0 on CPU and Metal; the multilingual
-// variant's CFG mixing can flip a near-tie argmax (same class of
-// variation as a seed change — whisper transcribes the q8_0 output to
-// the exact input text); Metal decode is 20-30% faster from the
-// bandwidth saving.  Pass kvCacheType:"f32" for bit-exact parity with
-// the pre-quantisation behaviour.
-constexpr const char * kDefaultKvCacheType = "q8_0";
+// byte-identical across f32/f16/q8_0 on CPU and Metal.  Pass
+// kvCacheType:"f32" for bit-exact parity with the pre-quantisation
+// behaviour.
+constexpr const char* DEFAULT_KV_CACHE_TYPE = "f16";
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -60,20 +75,25 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
-  opts.n_ctx = cfg.nCtx.value_or(kDefaultNCtx);
+  opts.n_ctx = cfg.nCtx.value_or(DEFAULT_N_CTX);
   opts.kv_cache_type =
-      cfg.kvCacheType.empty() ? kDefaultKvCacheType : cfg.kvCacheType;
+      cfg.kvCacheType.empty() ? DEFAULT_KV_CACHE_TYPE : cfg.kvCacheType;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
   } else if (cfg.useGpu.has_value()) {
     // Explicit useGpu must produce an explicit n_gpu_layers so we don't
     // depend on the tts-cpp library default flipping out from under us
     // (see also: gpu-smoke.test.js asserts backendDevice from this).
-    opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
+    opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
   if (cfg.streamChunkTokens.has_value())      opts.stream_chunk_tokens       = *cfg.streamChunkTokens;
   if (cfg.streamFirstChunkTokens.has_value()) opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
   if (cfg.streamCfmSteps.has_value())         opts.stream_cfm_steps          = *cfg.streamCfmSteps;
+  // S3Gen classifier-free-guidance rate. tts-cpp uses -1 as the "keep the
+  // model's baked rate" sentinel, which the addon expresses by leaving the
+  // option unset; a supplied value (0 = disable CFG, > 0 = override) is passed
+  // straight through.
+  if (cfg.cfgRate.has_value())                opts.s3gen_cfg_rate            = *cfg.cfgRate;
 
   // Compose the actual backends-scan directory from the host-provided
   // prebuilds root plus the cmake-bare per-target subdir
@@ -108,21 +128,180 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   // so tts-cpp keeps its character-level fallback.
   if (!cfg.mecabDictPath.empty())  opts.mecab_dict_path  = cfg.mecabDictPath;
   if (!cfg.cangjieTsvPath.empty()) opts.cangjie_tsv_path = cfg.cangjieTsvPath;
+
+  // Output-frequency selection. Forward to the engine (output_sample_rate;
+  // 0 = native), which resamples (batch once / streaming per-chunk, seam-free).
+  // When the LavaSR enhancer is active the engine emits its native rate and the
+  // addon resamples after enhancement instead — both on the batch path
+  // (synthesize()) and the native-streaming path (StreamingEnhancer, which also
+  // applies any requested output rate) — so pass 0 here.
+  {
+    const bool enhancerActive = !cfg.enhancerGgufPath.empty();
+    opts.output_sample_rate =
+        enhancerActive ? 0 : cfg.outputSampleRate.value_or(0);
+  }
   return opts;
 }
 
-std::vector<int16_t> pcmFloatToInt16(const float* pcm, size_t samples) {
-  std::vector<int16_t> out;
-  out.resize(samples);
-  for (size_t i = 0; i < samples; ++i) {
-    float s = std::clamp(pcm[i], -1.0f, 1.0f);
-    out[i] = static_cast<int16_t>(std::lround(s * 32767.0f));
-  }
-  return out;
+// A speed of 1.0 (or close enough that the WSOLA hop rounds to identity) is
+// a no-op — skip the time-stretch entirely so the default path is untouched.
+bool speedActive(float speed) {
+  return std::isfinite(speed) && std::abs(speed - 1.0f) > 1e-3f;
 }
 
-std::vector<int16_t> pcmFloatToInt16(const std::vector<float>& pcm) {
-  return pcmFloatToInt16(pcm.data(), pcm.size());
+constexpr float MIN_SPEED = 0.25f;
+constexpr float MAX_SPEED = 4.0f;
+
+// Sample rates involved once the LavaSR enhancer is active: the engine emits
+// its native rate, the enhancer upsamples to `workRate` (48 kHz), and the
+// streaming path finally emits at `streamFinalRate` (a caller-requested rate,
+// else the work rate). All zero when no enhancer is loaded.
+struct EnhancerRates {
+  int workRate = 0;
+  int streamFinalRate = 0;
+};
+
+EnhancerRates resolveEnhancerRates(
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer,
+    const std::optional<int>& outputSampleRate) {
+  if (!enhancer) return {};
+  const int workRate = enhancer->output_sample_rate();
+  const bool hasRequestedRate =
+      outputSampleRate.has_value() && *outputSampleRate > 0;
+  return {workRate, hasRequestedRate ? *outputSampleRate : workRate};
+}
+
+// Wraps the one-shot enhancer as a streaming stage: enhance at the engine's
+// native rate, then resample to the streaming final rate when they differ.
+std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer,
+    const EnhancerRates& rates) {
+  if (!enhancer) return nullptr;
+  const int workRate = rates.workRate;
+  const int finalRate = rates.streamFinalRate;
+  return std::make_shared<StreamingEnhancer>(
+      [enhancer, workRate, finalRate](const std::vector<float>& raw) {
+        std::vector<float> enhanced =
+            enhancer->enhance(raw, kChatterboxNativeSampleRate);
+        if (finalRate != workRate) {
+          enhanced = OutputResampler::resample(enhanced, workRate, finalRate);
+        }
+        return enhanced;
+      },
+      kChatterboxNativeSampleRate, finalRate);
+}
+
+// Per-chunk post-processing for the native streaming path: an optional
+// seam-free LavaSR enhancement stage followed by an optional pitch-preserving
+// WSOLA stretch stage, emitting int16 PCM through the caller's callback. Kept
+// as a functor so the engine can call it per chunk while each DSP stage stays
+// individually readable and testable.
+struct StreamChunkPostProcessor {
+  const ChatterboxModel::ChunkCallback& emit;
+  std::shared_ptr<StreamingEnhancer> streamEnhancer;
+  std::shared_ptr<WsolaTimeStretch> stretcher;
+  std::size_t& emittedSamples;
+
+  bool isPassthrough() const { return !streamEnhancer && !stretcher; }
+
+  std::vector<float> enhanceStage(const float* pcm, std::size_t samples,
+                                  bool isLast) const {
+    if (!streamEnhancer) return std::vector<float>(pcm, pcm + samples);
+    std::vector<float> audio = streamEnhancer->feed(pcm, samples);
+    if (isLast) {
+      const std::vector<float> tail = streamEnhancer->flush();
+      audio.insert(audio.end(), tail.begin(), tail.end());
+    }
+    return audio;
+  }
+
+  std::vector<float> stretchStage(std::vector<float> audio, bool isLast) const {
+    if (!stretcher) return audio;
+    std::vector<float> stretched = stretcher->feed(audio.data(), audio.size());
+    if (isLast) {
+      const std::vector<float> tail = stretcher->flush();
+      stretched.insert(stretched.end(), tail.begin(), tail.end());
+    }
+    return stretched;
+  }
+
+  void operator()(const float* pcm, std::size_t samples, int chunkIndex,
+                  bool isLast) {
+    if (isPassthrough()) {
+      emittedSamples += samples;
+      emit(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+      return;
+    }
+    std::vector<float> audio =
+        stretchStage(enhanceStage(pcm, samples, isLast), isLast);
+    emittedSamples += audio.size();
+    emit(pcmFloatToInt16(audio), chunkIndex, isLast);
+  }
+};
+
+tts_cpp::chatterbox::SynthesisResult runStreamingSynthesis(
+    tts_cpp::chatterbox::Engine& engine, const std::string& text,
+    const ChatterboxModel::ChunkCallback& chunkCallback,
+    const std::shared_ptr<tts_cpp::lavasr::Enhancer>& enhancer, float speed,
+    const EnhancerRates& rates, std::size_t& emittedSamples) {
+  try {
+    auto stretcher = speedActive(speed)
+                         ? std::make_shared<WsolaTimeStretch>(speed)
+                         : nullptr;
+    StreamChunkPostProcessor postProcessor{chunkCallback,
+                                           makeStreamingEnhancer(enhancer, rates),
+                                           stretcher, emittedSamples};
+    return engine.synthesize(text, std::move(postProcessor));
+  } catch (const std::exception& e) {
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         std::string("engine.synthesize: ") + e.what());
+  }
+}
+
+tts_cpp::chatterbox::SynthesisResult runBatchSynthesis(
+    tts_cpp::chatterbox::Engine& engine, const std::string& text) {
+  try {
+    return engine.synthesize(text);
+  } catch (const std::exception& e) {
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         std::string("engine.synthesize: ") + e.what());
+  }
+}
+
+// LavaSR neural denoiser (batch path). Runs BEFORE the enhancer and preserves
+// the sample rate. Streaming + denoiser is rejected in validateConfig (a
+// stateful streaming denoiser is the follow-up), so this only applies here.
+void applyBatchDenoiser(tts_cpp::chatterbox::SynthesisResult& result,
+                        tts_cpp::lavasr::Denoiser& denoiser) {
+  try {
+    result.pcm = denoiser.denoise(result.pcm, result.sample_rate);
+  } catch (const std::exception& e) {
+    throw createTTSError(
+        TTSErrorCode::SynthesisFailed,
+        std::string("chatterbox.lavasr-denoiser: ") + e.what());
+  }
+}
+
+// LavaSR neural bandwidth extension (batch path). Enhances the whole utterance
+// at once (the streaming path enhances per chunk instead), updating
+// result.sample_rate to the enhancer's 48 kHz output, then honours a requested
+// outputSampleRate that the engine bypassed while enhancing.
+void applyBatchEnhancer(tts_cpp::chatterbox::SynthesisResult& result,
+                        tts_cpp::lavasr::Enhancer& enhancer,
+                        const std::optional<int>& outputSampleRate) {
+  try {
+    result.pcm = enhancer.enhance(result.pcm, result.sample_rate);
+    result.sample_rate = enhancer.output_sample_rate();
+  } catch (const std::exception& e) {
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         std::string("chatterbox.lavasr: ") + e.what());
+  }
+  if (outputSampleRate.has_value() && *outputSampleRate > 0 &&
+      *outputSampleRate != result.sample_rate) {
+    result.pcm = OutputResampler::resample(result.pcm, result.sample_rate,
+                                           *outputSampleRate);
+    result.sample_rate = *outputSampleRate;
+  }
 }
 
 } // namespace
@@ -145,6 +324,31 @@ ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
 ChatterboxModel::~ChatterboxModel() noexcept = default;
 
 void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
+  if (!cfg.enhancerGgufPath.empty() &&
+      !std::filesystem::exists(cfg.enhancerGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr enhancer GGUF not found: " + cfg.enhancerGgufPath);
+  }
+  if (!cfg.denoiserGgufPath.empty() &&
+      !std::filesystem::exists(cfg.denoiserGgufPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "lavasr denoiser GGUF not found: " + cfg.denoiserGgufPath);
+  }
+  // LavaSR denoiser + native chunk streaming is not supported yet: the UL-UNAS
+  // denoiser is causal but tts-cpp only exposes a one-shot denoise(), so a
+  // stateful streaming denoiser (à la StreamingEnhancer) is the follow-up.
+  // Reject the combo up front rather than silently dropping denoising on the
+  // streaming path. Defense-in-depth: index.js rejects it before we get here.
+  if (!cfg.denoiserGgufPath.empty() && cfg.streamChunkTokens.value_or(0) > 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ChatterboxModel: the LavaSR denoiser is not yet supported with native "
+        "chunk streaming (streamChunkTokens > 0). Use batch synthesis, or drop "
+        "the denoiser for streaming (streaming denoise is a planned "
+        "follow-up).");
+  }
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpu = *cfg.useGpu;
     const int  layers   = *cfg.nGpuLayers;
@@ -168,6 +372,35 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
         "ChatterboxModel: nCtx must be >= 0 (0 = use the GGUF's full "
         "context, > 0 = cap the T3 context / KV-cache length), got " +
             std::to_string(*cfg.nCtx));
+  }
+  // speed is a post-synthesis time-stretch factor (1.0 = unchanged, < 1
+  // slower, > 1 faster).  Bound it to a sane TTS range so a fat-fingered
+  // value can't request an absurd stretch (and reject <= 0 / NaN, which the
+  // WSOLA hop math can't represent).
+  if (cfg.speed.has_value()) {
+    const float s = *cfg.speed;
+    if (!std::isfinite(s) || s < MIN_SPEED || s > MAX_SPEED) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "ChatterboxModel: speed must be in [0.25, 4.0] (1.0 = unchanged, "
+          "< 1 slower, > 1 faster), got " +
+              std::to_string(s));
+    }
+  }
+  // cfgRate is the S3Gen classifier-free-guidance rate. tts-cpp uses -1 as the
+  // "keep the model's baked rate" sentinel, which the addon expresses by
+  // omitting the option, so a user-supplied negative value (or NaN/inf) is
+  // rejected here (0 = disable CFG, > 0 = override the model rate).
+  if (cfg.cfgRate.has_value()) {
+    const float r = *cfg.cfgRate;
+    if (!std::isfinite(r) || r < 0.0f) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "ChatterboxModel: cfgRate must be >= 0 (0 = disable CFG, > 0 = "
+          "override the model's S3Gen CFG rate; omit it to keep the model's "
+          "baked rate), got " +
+              std::to_string(r));
+    }
   }
   // Reject unknown KV dtypes at construction instead of inheriting
   // tts-cpp's warn-and-fall-back-to-f32, which would silently change
@@ -234,24 +467,6 @@ void ChatterboxModel::reload() {
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
 
-  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
-  // stabilize for the Chatterbox graph.
-#ifdef __ANDROID__
-  {
-    const bool wantsGpu =
-        cfg_.useGpu.value_or(false) ||
-        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
-    if (wantsGpu) {
-      QLOG(logger::Priority::WARNING,
-           "Chatterbox: useGPU=true is currently ignored on Android "
-           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
-           "and OpenCL/Adreno driver fixes); falling back to CPU.");
-    }
-    cfg_.useGpu     = false;
-    cfg_.nGpuLayers = 0;
-  }
-#endif
-
   try {
     engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
@@ -264,10 +479,55 @@ void ChatterboxModel::loadLocked() {
   backendName_   = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_     = backendIdFromName(backendName_);
+
+  // tts-cpp now admits Chatterbox onto ARM Mali/Immortalis Vulkan
+  // (allow_arm_mali=true). gpuUnsupported_ stays as defensive observability: it
+  // flags a "GPU present but unused" case if any engine falls back to CPU,
+  // OR-ed (not replacing) the engine flag.
+  const bool wantsGpu = cfg_.nGpuLayers.has_value()
+                            ? (*cfg_.nGpuLayers != 0)
+                            : cfg_.useGpu.value_or(false);
+  gpuUnsupported_ =
+      engine_->gpu_unsupported() ||
+      (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
+
+  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
+  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
+  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
+  // Pass the engine's *resolved* device, not the requested switch: if the
+  // engine fell back to CPU (gpu_unsupported / off-allowlist), keep the
+  // enhancer on CPU too instead of forcing it onto the GPU. Shared with
+  // Supertonic via loadEnhancer so the two loaders can't drift.
+  LoadedEnhancer loaded = loadEnhancer(
+      cfg_.enhancerGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "ChatterboxModel::load: lavasr enhancer: ");
+  enhancer_ = std::move(loaded.enhancer);
+  enhancerBackendDevice_ = loaded.backendDevice;
+  enhancerBackendId_ = loaded.backendId;
+
+  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
+  // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
+  // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
+  // clean InitializationFailed error.
+  if (!cfg_.denoiserGgufPath.empty()) {
+    try {
+      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
+    } catch (const std::exception& e) {
+      denoiser_.reset();
+      throw createTTSError(
+          TTSErrorCode::InitializationFailed,
+          std::string("ChatterboxModel::load: lavasr denoiser: ") + e.what());
+    }
+  } else {
+    denoiser_.reset();
+  }
 }
 
 void ChatterboxModel::unloadLocked() {
   engine_.reset();
+  enhancer_.reset();
+  denoiser_.reset();
 }
 
 void ChatterboxModel::cancel() const {
@@ -286,14 +546,17 @@ void ChatterboxModel::cancel() const {
 
 ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
     const std::string& text, const ChunkCallback& chunkCallback) {
-  // Capture the engine under the lock; keep it alive for the duration
-  // of synthesize() via the local `engine` shared_ptr even if reload()
-  // concurrently swaps a new one in.  Reload's new engine takes effect
-  // on the NEXT synthesize call.
+  // Capture the engine (and enhancer/denoiser) under the lock and keep them
+  // alive via these locals for the whole call, even if reload() swaps new ones
+  // in concurrently -- the replacements take effect on the NEXT synthesize.
   std::shared_ptr<tts_cpp::chatterbox::Engine> engine;
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
   {
     std::lock_guard lk(engineMu_);
     engine = engine_;
+    enhancer = enhancer_;
+    denoiser = denoiser_;
   }
   if (!engine) {
     throw createTTSError(TTSErrorCode::ModelNotLoaded,
@@ -304,54 +567,76 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
                          "synthesis cancelled before it started");
   }
 
-  // Snapshot the streaming decision against the engine we're actually
-  // about to call, BEFORE process() needs it.  Reading engine_ /
-  // engine->options() outside the lock from process() would race with
-  // reload() swapping a new engine in; pinning the decision here keeps
-  // the read tied to the local `engine` shared_ptr for the call's
-  // lifetime.
+  // Pin the streaming decision to the engine we actually call; reading
+  // engine->options() later (e.g. from process()) would race with reload()
+  // swapping a new engine in behind our back.
   const bool wasStreaming =
       static_cast<bool>(chunkCallback) &&
       engine->options().stream_chunk_tokens > 0;
 
+  // Speaking-rate control is a post-synthesis pitch-preserving WSOLA stretch
+  // (Chatterbox has no native rate knob; see TimeStretch.hpp). Unset -> 1.0
+  // leaves the raw model output untouched for backward compatibility.
+  const float speed = cfg_.speed.value_or(1.0f);
+  const bool stretch = speedActive(speed);
+  const EnhancerRates rates =
+      resolveEnhancerRates(enhancer, cfg_.outputSampleRate);
+
   const auto tStart = std::chrono::steady_clock::now();
 
-  tts_cpp::chatterbox::SynthesisResult result;
-  try {
-    if (wasStreaming) {
-      result = engine->synthesize(
-          text,
-          [&chunkCallback](const float* pcm, std::size_t samples,
-                           int chunkIndex, bool isLast) {
-            chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
-          });
-    } else {
-      result = engine->synthesize(text);
-    }
-  } catch (const std::exception& e) {
-    throw createTTSError(TTSErrorCode::SynthesisFailed,
-                         std::string("engine.synthesize: ") + e.what());
+  // The streaming callback runs synchronously on this thread, so this plain
+  // counter safely tallies the emitted sample count for the stats below.
+  std::size_t streamedSamples = 0;
+  tts_cpp::chatterbox::SynthesisResult result =
+      wasStreaming ? runStreamingSynthesis(*engine, text, chunkCallback,
+                                           enhancer, speed, rates,
+                                           streamedSamples)
+                   : runBatchSynthesis(*engine, text);
+
+  if (!wasStreaming && denoiser) applyBatchDenoiser(result, *denoiser);
+  if (!wasStreaming && enhancer) {
+    applyBatchEnhancer(result, *enhancer, cfg_.outputSampleRate);
   }
 
-  std::vector<int16_t> pcm = pcmFloatToInt16(result.pcm);
+  // Streaming already published (and counted) its chunks; batch converts the
+  // whole utterance here, stretching it in place first when a speed is active.
+  std::vector<int16_t> pcm;
+  std::size_t outSamples;
+  if (wasStreaming) {
+    outSamples = streamedSamples;
+  } else {
+    pcm = stretch ? pcmFloatToInt16(WsolaTimeStretch::apply(result.pcm, speed))
+                  : pcmFloatToInt16(result.pcm);
+    outSamples = pcm.size();
+  }
 
   const auto tEnd = std::chrono::steady_clock::now();
   const double elapsedSec =
       std::chrono::duration<double>(tEnd - tStart).count();
-
-  totalTime_ = elapsedSec;
-  totalSamples_ = static_cast<int64_t>(pcm.size());
-  audioDurationMs_ = result.sample_rate > 0
-      ? (static_cast<double>(pcm.size()) * 1000.0 /
-         static_cast<double>(result.sample_rate))
-      : 0.0;
-  realTimeFactor_ =
-      audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
-  textLength_ = text.size();
-  tokensPerSecond_ =
-      elapsedSec > 0 ? static_cast<double>(textLength_) / elapsedSec : 0.0;
+  // On the streaming+enhancer path chunks are emitted at streamFinalRate while
+  // result.sample_rate stays native; elsewhere result.sample_rate is already
+  // the emitted rate (batch enhance/resample updates it in place).
+  const int emittedRate =
+      (wasStreaming && enhancer) ? rates.streamFinalRate : result.sample_rate;
+  recordSynthesisStats(outSamples, elapsedSec, emittedRate, text.size());
 
   return {std::move(pcm), wasStreaming};
+}
+
+void ChatterboxModel::recordSynthesisStats(std::size_t outSamples,
+                                           double elapsedSec, int emittedRate,
+                                           std::size_t textLength) {
+  totalTime_ = elapsedSec;
+  totalSamples_ = static_cast<int64_t>(outSamples);
+  audioDurationMs_ = emittedRate > 0
+                         ? (static_cast<double>(outSamples) * 1000.0 /
+                            static_cast<double>(emittedRate))
+                         : 0.0;
+  realTimeFactor_ =
+      audioDurationMs_ > 0 ? (elapsedSec * 1000.0) / audioDurationMs_ : 0.0;
+  textLength_ = textLength;
+  tokensPerSecond_ =
+      elapsedSec > 0 ? static_cast<double>(textLength) / elapsedSec : 0.0;
 }
 
 std::any ChatterboxModel::process(const std::any& input) {
@@ -410,6 +695,11 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("totalSamples", totalSamples_);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
+  stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
+  stats.emplace_back(
+      "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
   return stats;
 }
 

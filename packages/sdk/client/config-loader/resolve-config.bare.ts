@@ -2,68 +2,63 @@
  * Config loader for Bare runtime
  * Uses bare-fs and bare-path modules
  */
-import fs from "bare-fs";
-import path from "bare-path";
-import os from "bare-os";
-import env from "bare-env";
-import { validateConfig, type QvacConfig } from "./config-utils";
-import {
-  ConfigFileInvalidError,
-  ConfigFileParseFailedError,
-} from "@/utils/errors-client";
-import { getClientLogger } from "@/logging";
+import fs from 'bare-fs'
+import path from 'bare-path'
+import os from 'bare-os'
+import env from 'bare-env'
+import { validateConfig, type QvacConfig } from './config-utils'
+import { ConfigFileInvalidError, ConfigFileParseFailedError } from '@/utils/errors-client'
+import { getClientLogger } from '@/logging'
 
-declare function require(modulePath: string): { default?: unknown };
+declare function require(modulePath: string): { default?: unknown }
 
-const SUPPORTED_CONFIG_FILE_EXTS = [".js", ".json"];
+const SUPPORTED_CONFIG_FILE_EXTS = ['.js', '.json']
 
-const logger = getClientLogger();
+const logger = getClientLogger()
 
 function findProjectRoot(): string {
-  return os.cwd();
+  return os.cwd()
 }
 
 function fileExists(filePath: string): boolean {
-  return fs.existsSync(filePath);
+  return fs.existsSync(filePath)
 }
 
 function assertBareConfigExtension(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase();
+  const ext = path.extname(filePath).toLowerCase()
   if (!SUPPORTED_CONFIG_FILE_EXTS.includes(ext)) {
     throw new ConfigFileInvalidError(
       filePath,
-      "Given config file format unsupported on this platform. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.",
-    );
+      'Given config file format unsupported on this platform. Use qvac.config.js or qvac.config.json in the project root, or set QVAC_CONFIG_PATH to a .js or .json file.'
+    )
   }
 }
 
 function loadConfigFromPath(filePath: string): QvacConfig {
-  assertBareConfigExtension(filePath);
+  assertBareConfigExtension(filePath)
   try {
-    const configModule: { default?: unknown } = require(filePath);
-    return validateConfig(configModule.default || configModule);
+    const configModule: { default?: unknown } = require(filePath)
+    return validateConfig(configModule.default || configModule)
   } catch (error) {
     throw new ConfigFileParseFailedError(
       filePath,
       error instanceof Error ? error.message : String(error),
-      error,
-    );
+      error
+    )
   }
 }
 
 function findConfigFile(searchDir: string): string | undefined {
-  const configFiles = SUPPORTED_CONFIG_FILE_EXTS.map(
-    (ext) => `qvac.config${ext}`,
-  );
+  const configFiles = SUPPORTED_CONFIG_FILE_EXTS.map((ext) => `qvac.config${ext}`)
 
   for (const name of configFiles) {
-    const filePath = path.resolve(searchDir, name);
+    const filePath = path.resolve(searchDir, name)
     if (fileExists(filePath)) {
-      return filePath;
+      return filePath
     }
   }
 
-  return undefined;
+  return undefined
 }
 
 /**
@@ -74,30 +69,30 @@ function findConfigFile(searchDir: string): string | undefined {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- matches Node/Expo resolver signature
 export async function resolveConfig(): Promise<QvacConfig | undefined> {
-  const configPath = env["QVAC_CONFIG_PATH"];
+  const configPath = env['QVAC_CONFIG_PATH']
 
   if (configPath) {
-    const normalizedPath = path.resolve(configPath);
+    const normalizedPath = path.resolve(configPath)
 
     if (fileExists(normalizedPath)) {
-      const config = loadConfigFromPath(normalizedPath);
+      const config = loadConfigFromPath(normalizedPath)
 
-      logger.info(`✅ Loaded config from: ${normalizedPath}`);
-      return config;
+      logger.info(`✅ Loaded config from: ${normalizedPath}`)
+      return config
     }
   }
 
-  const projectRoot = findProjectRoot();
+  const projectRoot = findProjectRoot()
   if (projectRoot) {
-    const configFilePath = findConfigFile(projectRoot);
+    const configFilePath = findConfigFile(projectRoot)
     if (configFilePath) {
-      const config = loadConfigFromPath(configFilePath);
+      const config = loadConfigFromPath(configFilePath)
 
-      logger.info(`✅ Loaded config from: ${configFilePath}`);
-      return config;
+      logger.info(`✅ Loaded config from: ${configFilePath}`)
+      return config
     }
   }
 
-  logger.info("ℹ️ No config file found, using SDK defaults");
-  return undefined;
+  logger.info('ℹ️ No config file found, using SDK defaults')
+  return undefined
 }

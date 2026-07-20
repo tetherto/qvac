@@ -1,134 +1,125 @@
-import type { ZodSchema } from "zod";
+import type { ZodSchema } from 'zod'
 import {
   ModelType,
   type CanonicalModelType,
   type DevicePattern,
   type DeviceMatch,
-  type RuntimeContext,
-} from "@/schemas";
-import { llmConfigSchema, embedConfigSchema } from "@/schemas/llamacpp-config";
-import {
-  whisperConfigSchema,
-  parakeetRuntimeConfigSchema,
-} from "@/schemas/transcription-config";
-import { bciConfigSchema } from "@/schemas/bci-config";
-import { ocrConfigSchema } from "@/schemas/ocr";
-import { sdcppConfigSchema } from "@/schemas/sdcpp-config";
-import { vlaConfigSchema } from "@/schemas/vla";
-import { classificationConfigSchema } from "@/schemas/classification";
+  type RuntimeContext
+} from '@/schemas'
+import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
+import { whisperConfigSchema, parakeetRuntimeConfigSchema } from '@/schemas/transcription-config'
+import { bciConfigSchema } from '@/schemas/bci-config'
+import { ocrConfigSchema } from '@/schemas/ocr'
+import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
+import { vlaConfigSchema } from '@/schemas/vla'
+import { classificationConfigSchema } from '@/schemas/classification'
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
-  [ModelType.llamacppCompletion]: "llm",
-  [ModelType.llamacppEmbedding]: "embeddings",
-  [ModelType.whispercppTranscription]: "whisper",
-  [ModelType.bciWhispercppTranscription]: "bci",
-  [ModelType.parakeetTranscription]: "parakeet",
-  [ModelType.nmtcppTranslation]: "nmt",
-  [ModelType.onnxTts]: "tts",
-  [ModelType.ttsGgml]: "tts",
-  [ModelType.onnxOcr]: "ocr",
-  [ModelType.sdcppGeneration]: "diffusion",
-  [ModelType.ggmlVla]: "vla",
-  [ModelType.ggmlClassification]: "classification",
-};
+  [ModelType.llamacppCompletion]: 'llm',
+  [ModelType.llamacppEmbedding]: 'embeddings',
+  [ModelType.whispercppTranscription]: 'whisper',
+  [ModelType.bciWhispercppTranscription]: 'bci',
+  [ModelType.parakeetTranscription]: 'parakeet',
+  [ModelType.nmtcppTranslation]: 'nmt',
+  [ModelType.onnxTts]: 'tts',
+  [ModelType.ttsGgml]: 'tts',
+  [ModelType.ggmlOcr]: 'ocr',
+  [ModelType.sdcppGeneration]: 'diffusion',
+  [ModelType.ggmlVla]: 'vla',
+  [ModelType.ggmlClassification]: 'classification'
+}
 
-export const MODEL_CONFIG_SCHEMAS: Partial<
-  Record<CanonicalModelType, ZodSchema>
-> = {
+export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>> = {
   [ModelType.llamacppCompletion]: llmConfigSchema,
   [ModelType.llamacppEmbedding]: embedConfigSchema,
   [ModelType.whispercppTranscription]: whisperConfigSchema,
   [ModelType.bciWhispercppTranscription]: bciConfigSchema,
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
-  [ModelType.onnxOcr]: ocrConfigSchema,
+  [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
   [ModelType.ggmlVla]: vlaConfigSchema,
-  [ModelType.ggmlClassification]: classificationConfigSchema,
-};
+  [ModelType.ggmlClassification]: classificationConfigSchema
+}
 
 // Ordered general → specific (later patterns override earlier)
 export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
   {
-    name: "Android devices (SDK default)",
+    name: 'Android devices (SDK default)',
     match: {
-      platform: "android",
+      platform: 'android'
     },
     defaults: {
-      [ModelType.llamacppEmbedding]: { flashAttention: "off" },
-    },
+      [ModelType.llamacppEmbedding]: { flashAttention: 'off' }
+    }
   },
   {
-    name: "Pixel devices (SDK default)",
+    name: 'Pixel devices (SDK default)',
     match: {
-      platform: "android",
-      deviceBrand: "google",
-      deviceModelPrefix: "Pixel",
+      platform: 'android',
+      deviceBrand: 'google',
+      deviceModelPrefix: 'Pixel'
     },
     defaults: {
-      [ModelType.llamacppCompletion]: { device: "cpu" },
-      [ModelType.llamacppEmbedding]: { device: "cpu" },
-    },
-  },
-];
+      [ModelType.llamacppCompletion]: { device: 'cpu' },
+      [ModelType.llamacppEmbedding]: { device: 'cpu' }
+    }
+  }
+]
 
-export function matchesPattern(
-  ctx: RuntimeContext,
-  match: DeviceMatch,
-): boolean {
+export function matchesPattern(ctx: RuntimeContext, match: DeviceMatch): boolean {
   if (match.platform !== undefined && ctx.platform !== match.platform) {
-    return false;
+    return false
   }
   if (
     match.deviceBrand !== undefined &&
     ctx.deviceBrand?.toLowerCase() !== match.deviceBrand.toLowerCase()
   ) {
-    return false;
+    return false
   }
   if (
     match.deviceModelPrefix !== undefined &&
     !(ctx.deviceModel?.startsWith(match.deviceModelPrefix) ?? false)
   ) {
-    return false;
+    return false
   }
   if (
     match.deviceModelContains !== undefined &&
     !(ctx.deviceModel?.includes(match.deviceModelContains) ?? false)
   ) {
-    return false;
+    return false
   }
-  return true;
+  return true
 }
 
 export function findAllMatchingPatterns(
   ctx: RuntimeContext,
-  patterns: DevicePattern[],
+  patterns: DevicePattern[]
 ): DevicePattern[] {
-  return patterns.filter((pattern) => matchesPattern(ctx, pattern.match));
+  return patterns.filter((pattern) => matchesPattern(ctx, pattern.match))
 }
 
 export function getDefaultsFromPattern(
   modelType: CanonicalModelType,
-  pattern: DevicePattern,
+  pattern: DevicePattern
 ): Record<string, unknown> | undefined {
-  let defaults = pattern.defaults[
-    modelType as keyof typeof pattern.defaults
-  ] as Record<string, unknown> | undefined;
+  let defaults = pattern.defaults[modelType as keyof typeof pattern.defaults] as
+    Record<string, unknown> | undefined
 
   if (!defaults) {
-    const aliasKey = CANONICAL_TO_ALIAS[modelType];
+    const aliasKey = CANONICAL_TO_ALIAS[modelType]
     if (aliasKey && aliasKey in pattern.defaults) {
-      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults];
+      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults]
     }
   }
 
-  return defaults;
+  return defaults
 }
 
 export type ConfigResolutionLog = {
-  appliedPatterns: string[];
-  mergedDefaults: Record<string, unknown>;
-  finalConfig: Record<string, unknown>;
-};
+  appliedPatterns: string[]
+  mergedDefaults: Record<string, unknown>
+  finalConfig: Record<string, unknown>
+}
 
 export function resolveModelConfigWithContext<T>(
   modelType: CanonicalModelType,
@@ -136,48 +127,48 @@ export function resolveModelConfigWithContext<T>(
   ctx: RuntimeContext,
   userPatterns: DevicePattern[],
   builtinPatterns: DevicePattern[] = BUILTIN_DEVICE_PATTERNS,
-  onLog?: (log: ConfigResolutionLog) => void,
+  onLog?: (log: ConfigResolutionLog) => void
 ): T {
   // Find ALL matching patterns (general → specific order preserved)
-  const matchingBuiltin = findAllMatchingPatterns(ctx, builtinPatterns);
-  const matchingUser = findAllMatchingPatterns(ctx, userPatterns);
+  const matchingBuiltin = findAllMatchingPatterns(ctx, builtinPatterns)
+  const matchingUser = findAllMatchingPatterns(ctx, userPatterns)
 
   // Merge in order: builtin patterns → user patterns → user input
   // Later values override earlier (more specific wins)
-  const appliedPatterns: string[] = [];
-  let mergedDefaults: Record<string, unknown> = {};
+  const appliedPatterns: string[] = []
+  let mergedDefaults: Record<string, unknown> = {}
 
   for (const pattern of matchingBuiltin) {
-    const defaults = getDefaultsFromPattern(modelType, pattern);
+    const defaults = getDefaultsFromPattern(modelType, pattern)
     if (defaults) {
-      appliedPatterns.push(pattern.name);
-      mergedDefaults = { ...mergedDefaults, ...defaults };
+      appliedPatterns.push(pattern.name)
+      mergedDefaults = { ...mergedDefaults, ...defaults }
     }
   }
 
   for (const pattern of matchingUser) {
-    const defaults = getDefaultsFromPattern(modelType, pattern);
+    const defaults = getDefaultsFromPattern(modelType, pattern)
     if (defaults) {
-      appliedPatterns.push(pattern.name);
-      mergedDefaults = { ...mergedDefaults, ...defaults };
+      appliedPatterns.push(pattern.name)
+      mergedDefaults = { ...mergedDefaults, ...defaults }
     }
   }
 
   const merged = {
     ...mergedDefaults,
-    ...userInput,
-  };
+    ...userInput
+  }
 
-  const schema = MODEL_CONFIG_SCHEMAS[modelType];
-  const finalConfig = schema ? schema.parse(merged) : merged;
+  const schema = MODEL_CONFIG_SCHEMAS[modelType]
+  const finalConfig = schema ? schema.parse(merged) : merged
 
   if (onLog) {
     onLog({
       appliedPatterns,
       mergedDefaults,
-      finalConfig: finalConfig as Record<string, unknown>,
-    });
+      finalConfig: finalConfig as Record<string, unknown>
+    })
   }
 
-  return finalConfig as T;
+  return finalConfig as T
 }

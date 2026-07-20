@@ -26,6 +26,24 @@ declare interface TTSGgmlFiles {
   supertonicModel?: string
   supertonicModelPath?: string
   supertonic?: string
+  /**
+   * LavaSR enhancer GGUF: single-file Vocos bandwidth extension produced by
+   * tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. When supplied, output
+   * is neurally upsampled to 48 kHz (the canonical way to enable enhancement;
+   * `enhancer.enhancerPath` is the only alternative).
+   */
+  lavasrEnhancer?: string
+  /**
+   * LavaSR denoiser GGUF: UL-UNAS speech denoiser produced by
+   * tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. Runs BEFORE the
+   * enhancer and is rate-preserving (the canonical way to enable denoising;
+   * `denoiser.denoiserPath` is the only alternative).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (scalar CPU port, validated bit-close to the ONNX reference); it
+   * activates at runtime once the pinned tts-cpp version includes #78.
+   */
+  lavasrDenoiser?: string
   /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
   /**
@@ -49,10 +67,45 @@ declare interface TTSGgmlFiles {
 declare interface TTSGgmlRuntimeConfig {
   /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored for Supertonic on desktop (Vulkan/CUDA) and Apple (Metal); forced to CPU on Android (Adreno) at the native engine boundary. */
+  /** Route inference through a GPU backend (Metal / Vulkan / OpenCL) if available.  Defaults to `false` for both engines (opt-in via `useGPU: true` on GPU-capable hosts).  Honored on Apple (Metal), desktop (Vulkan), and Android (Vulkan/OpenCL), where tts-cpp selects the backend per its per-vendor allowlist (Chatterbox falls back to CPU on Mali). */
   useGPU?: boolean
-  /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
+  /**
+   * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
+   * native rate. Resamples the native output (24 kHz Chatterbox, 44.1 kHz
+   * Supertonic) — or, when the LavaSR enhancer is active, the 48 kHz enhanced
+   * signal — to this rate before emitting. `TTSOutputChunk.sampleRate` reports
+   * the resulting rate.
+   */
   outputSampleRate?: number
+}
+
+/**
+ * LavaSR enhancer config. The discriminated `type` leaves room for future
+ * enhancer kinds; v1 ships `lavasr`. Enhancement is enabled by providing a
+ * GGUF path (here as `enhancerPath`, or via `files.lavasrEnhancer`) — there is
+ * no separate on/off flag.
+ */
+declare interface LavaSREnhancerOptions {
+  type: 'lavasr'
+  /** Enhancer GGUF path (alternative to `files.lavasrEnhancer`). */
+  enhancerPath?: string
+}
+
+/**
+ * LavaSR denoiser config. The discriminated `type` mirrors the enhancer; v1
+ * ships `lavasr` (the UL-UNAS denoiser). Denoising is enabled by providing a
+ * GGUF path (here as `denoiserPath`, or via `files.lavasrDenoiser`) — there is
+ * no separate on/off flag. The denoiser runs BEFORE the enhancer and preserves
+ * the sample rate.
+ *
+ * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78
+ * (activates once the pinned tts-cpp includes it). Not supported with Chatterbox
+ * native chunk streaming (a stateful streaming denoiser is the follow-up).
+ */
+declare interface LavaSRDenoiserOptions {
+  type: 'lavasr'
+  /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
+  denoiserPath?: string
 }
 
 declare interface TTSGgmlOptions {
@@ -68,11 +121,11 @@ declare interface TTSGgmlOptions {
   voiceDir?: string
   /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (forced to CPU on Android). */
+  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: pass 99 to offload on GPU-capable hosts (including Android, per tts-cpp's per-vendor allowlist). */
   nGpuLayers?: number
-  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "q8_0") cost ~210 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
+  /** Chatterbox-only: cap on the T3 context length (prompt + generated speech tokens, 25 tokens ~= 1 s of audio).  The KV cache is allocated up-front at this length, so the cap directly bounds memory: the Turbo GGUF's native n_ctx=8196 costs ~1.6 GB of f32 KV, while the defaults (nCtx=4096 + kvCacheType "f16") cost ~390 MB for ~160 s of audio per synthesis call.  Pass 0 to use the GGUF's full context; negative values are rejected. */
   nCtx?: number
-  /** Chatterbox-only: T3 KV-cache storage dtype: 'f32' | 'f16' | 'q8_0' (default 'q8_0', ~27% of f32's memory; upstream-validated byte-identical greedy decoding on Turbo, and 20-30% faster decode on Metal).  Pass 'f32' for bit-exact parity with the pre-quantisation behaviour. */
+  /** Chatterbox-only: T3 KV-cache storage dtype: 'f32' | 'f16' | 'q8_0' (default 'f16', ~50% of f32's memory; the safe cross-backend default).  'q8_0' is ~27% of f32 and decodes 20-30% faster on Metal, but only works on backends that implement the q8_0 CONT op (CPU, CUDA) — it hard-aborts the multilingual model on Metal, so it is opt-in.  Pass 'f32' for bit-exact parity with the pre-quantisation behaviour. */
   kvCacheType?: 'f32' | 'f16' | 'q8_0'
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number
@@ -82,6 +135,15 @@ declare interface TTSGgmlOptions {
   streamFirstChunkTokens?: number
   /** Chatterbox-only: CFM Euler step count (1 halves cost; 2 matches Python meanflow). */
   cfmSteps?: number
+  /**
+   * Chatterbox-only: S3Gen classifier-free-guidance (CFG) rate. The S3Gen CFM
+   * diffusion loop normally runs a batched cond+uncond pass combined by this
+   * rate; `0` makes it run cond-only (skips the uncond pass, ~2x faster S3Gen
+   * at some quality cost), and a positive value overrides the model's
+   * GGUF-baked rate. Omit to keep the model's baked rate; negative values are
+   * rejected. Maps to `tts-cpp` `EngineOptions::s3gen_cfg_rate`.
+   */
+  cfgRate?: number
   /** Supertonic: voice id baked into the GGUF (e.g. 'F1', 'F2', 'M1', 'M2'). */
   voice?: string
   /** Alias for `voice` (cross-compat with `@qvac/tts-onnx`). */
@@ -90,14 +152,45 @@ declare interface TTSGgmlOptions {
   steps?: number
   /** Alias for `steps` (cross-compat with `@qvac/tts-onnx`). */
   numInferenceSteps?: number
-  /** Supertonic: speech-rate factor.  0 -> GGUF default. */
+  /**
+   * Speech-rate / duration multiplier (1.0 = unchanged, &lt; 1 slower, &gt; 1 faster).
+   * Supertonic: scales the engine's native duration predictor (0 -> GGUF default).
+   * Chatterbox: the engine has no native rate control, so this is applied as a
+   * pitch-preserving WSOLA time-stretch post-synthesis (functionally equivalent to
+   * ffmpeg `atempo`); bounded to [0.25, 4.0].  When omitted (or 1.0), the raw
+   * model output is left unchanged (no default slowdown); pass an explicit value
+   * to opt in.
+   */
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string
+  /**
+   * LavaSR neural speech enhancement. Opt-in CPU/GGML bandwidth extension to
+   * 48 kHz applied after synthesis; enabled by providing a GGUF path (here via
+   * `enhancerPath` or through `files.lavasrEnhancer`). Works for Supertonic and
+   * Chatterbox, including Chatterbox native chunk streaming
+   * (`streamChunkTokens`), where it enhances each chunk seam-free at the cost
+   * of ~0.34 s of look-ahead latency.
+   */
+  enhancer?: LavaSREnhancerOptions
+  /**
+   * LavaSR neural speech denoiser (UL-UNAS). Opt-in CPU/GGML pre-processing
+   * that runs BEFORE the enhancer and preserves the sample rate; enabled by
+   * providing a GGUF path (here via `denoiserPath` or through
+   * `files.lavasrDenoiser`).
+   *
+   * The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+   * PR #78 (validated bit-close to the ONNX reference); it activates at runtime
+   * once the pinned tts-cpp version includes #78. It is rejected with Chatterbox
+   * native chunk streaming (a stateful streaming denoiser is the follow-up).
+   */
+  denoiser?: LavaSRDenoiserOptions
   /** Directory the addon scans for dynamically-loaded ggml backends */
   backendsDir?: string
   /** Directory where ggml-opencl persists its compiled program-binary */
   openclCacheDir?: string
+  /** Supertonic + `useGPU: true` only: directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Setting it to a writable path moves the one-time first-dispatch pipeline-compile cost off the first `run()` (paid once per install instead of once per process) and enables a load-time pre-warm.  Unset -> no cross-process cache and no pre-warm (behaviour unchanged). */
+  vulkanCacheDir?: string
   /** Chatterbox MTL only: MeCab/IPAdic dictionary dir for Japanese ("ja"). Alias of `files.mecabDictDir`. */
   mecabDictPath?: string
   /** Chatterbox MTL only: Cangjie TSV for Chinese ("zh"). Alias of `files.cangjieTsvPath`. */
@@ -176,11 +269,17 @@ declare namespace TTSGgml {
     backendDevice?: number
     /** Stable numeric code for the active backend.  0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other-GPU. */
     backendId?: number
+    /** 1 when a GPU was present but the engine routed to CPU by policy (e.g. Chatterbox on ARM Mali, `allow_arm_mali=false`); 0 otherwise.  A CPU `backendDevice` with `gpuUnsupported === 1` is expected, not a regression. */
+    gpuUnsupported?: number
   }
 
   export interface TTSOutputChunk {
     outputArray: ArrayBuffer
-    /** Native engine sample rate (24000 for Chatterbox, 44100 for Supertonic). */
+    /**
+     * Output sample rate. The native engine rate (24000 for Chatterbox,
+     * 44100 for Supertonic) — or 48000 when the LavaSR enhancer is active,
+     * which neurally upsamples the output regardless of engine.
+     */
     sampleRate?: number
   }
 
@@ -220,12 +319,16 @@ declare namespace TTSGgml {
     locale?: string
     maxChunkScalars?: number
     outputSampleRate?: number
+    /** Cancels a non-streaming `run()`: when the signal aborts, `response.await()` rejects with the abort reason. An already-aborted signal rejects without dispatching the engine. Ignored when `streamOutput: true` (and on `runStream` / `runStreaming`) — passing it on the streaming path is a silent no-op (neither cancels nor errors). */
+    signal?: AbortSignal
   }
 
   export {
     TTSGgml as default,
     TTSGgmlFiles,
     TTSGgmlOptions,
+    LavaSREnhancerOptions,
+    LavaSRDenoiserOptions,
     TTSGgmlRuntimeConfig,
     RuntimeStats,
     SentenceStreamChunkMeta,

@@ -1586,6 +1586,66 @@
     "link": "https://www.jaided.ai/easyocr/modelhub/"
   },
   {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/craft_mlt_25k.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRAFT text detector (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "craft"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/latin_g2.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "Text recognizer - Latin gen-2 (GGUF, EasyOCR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "latin"
+    ],
+    "notes": "",
+    "link": "https://www.jaided.ai/easyocr/modelhub/"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/db_mobilenet_v3_large.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "DBNet text detector - MobileNetV3-Large (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "detector",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/crnn_mobilenet_v3_small.gguf",
+    "engine": "@qvac/ocr-ggml",
+    "description": "CRNN text recognizer - MobileNetV3-Small (GGUF, docTR pipeline)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "ocr",
+      "recognizer",
+      "doctr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mindee/doctr"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/whisper-french/2026-03-05/fr-tiny-ggml-model-f16.bin",
     "engine": "@qvac/transcription-whispercpp",
     "link": "https://huggingface.co/JaepaX/whisper-tiny-fr",
@@ -3408,945 +3468,6 @@
     "link": "https://github.com/felixdittrich92/OnnxTR"
   },
   {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/tokenizer.json",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox tokenizer",
-    "quantization": "",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "tokenizer",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (fp16, graph)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (fp16, weights)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (fp16, graph)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (fp16, weights)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (fp16, graph)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (fp16, weights)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (fp16, graph)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (fp16, weights)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (q4, graph)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (q4, weights)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (q4, graph)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (q4, weights)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (q4, graph)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (q4, weights)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (q4, graph)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (q4, weights)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (quantized, graph)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (quantized, weights)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (quantized, graph)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (quantized, weights)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (quantized, graph)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (quantized, weights)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (quantized, graph)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (quantized, weights)",
-    "quantization": "quantized",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (q4f16, graph)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox speech encoder (q4f16, weights)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "speech-encoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (q4f16, graph)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox token embeddings (q4f16, weights)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "embed-tokens",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (q4f16, graph)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox conditional decoder (q4f16, weights)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "conditional-decoder",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (q4f16, graph)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox language model (q4f16, weights)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "language-model",
-      "en"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual conditional decoder (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "conditional-decoder",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual conditional decoder (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "conditional-decoder",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual token embeddings (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "embed-tokens",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/embed_tokens.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual token embeddings (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "embed-tokens",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual speech encoder (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "speech-encoder",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/speech_encoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual speech encoder (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "speech-encoder",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (fp32, graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (fp32, weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (fp16, graph)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_fp16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (fp16, weights)",
-    "quantization": "fp16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (q4, graph)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (q4, weights)",
-    "quantization": "q4",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (q4f16, graph)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/language_model_q4f16.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual language model (q4f16, weights)",
-    "quantization": "q4f16",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/tokenizer.json",
-    "engine": "@qvac/tts",
-    "description": "Chatterbox multilingual tokenizer",
-    "quantization": "",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "chatterbox",
-      "multilingual",
-      "language-model",
-      "en",
-      "es",
-      "it",
-      "pt"
-    ],
-    "notes": ""
-  },
-  {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
     "engine": "@qvac/tts-ggml",
     "link": "https://huggingface.co/ResembleAI/chatterbox",
@@ -4881,7 +4002,7 @@
     "link": "https://huggingface.co/supertone/supertonic-3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-06-24/supertonic3-q4_0.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic 3 TTS (GGUF, multilingual)",
     "quantization": "q4_0",
@@ -4897,1028 +4018,68 @@
     "link": "https://huggingface.co/supertone/supertonic-3"
   },
   {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
-    "engine": "@qvac/tts",
-    "description": "Supertonic tokenizer",
-    "quantization": "",
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech enhancer (GGUF)",
+    "quantization": "fp16",
     "params": "",
-    "licenseId": "openrail",
+    "licenseId": "MIT",
     "tags": [
       "tts",
-      "supertonic",
-      "tokenizer"
+      "lavasr",
+      "enhancer",
+      "gguf"
     ],
     "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR "
   },
   {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertonic text encoder (graph)",
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-06-26/lavasr-enhancer-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech enhancer (GGUF)",
     "quantization": "fp32",
     "params": "",
-    "licenseId": "openrail",
+    "licenseId": "MIT",
     "tags": [
       "tts",
-      "supertonic",
-      "text-encoder"
+      "lavasr",
+      "enhancer",
+      "gguf"
     ],
     "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR "
   },
   {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Supertonic text encoder (weights)",
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "lavasr",
+      "denoiser",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "LavaSR speech denoiser (GGUF)",
     "quantization": "fp32",
     "params": "",
-    "licenseId": "openrail",
+    "licenseId": "MIT",
     "tags": [
       "tts",
-      "supertonic",
-      "text-encoder"
+      "lavasr",
+      "denoiser",
+      "gguf"
     ],
     "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertonic latent denoiser (graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "latent-denoiser"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Supertonic latent denoiser (weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "latent-denoiser"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice decoder (graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-decoder"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice decoder (weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-decoder"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style F1 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style F2 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style F3 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style F4 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style F5 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style M1 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style M2 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style M3 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style M4 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin",
-    "engine": "@qvac/tts",
-    "description": "Supertonic voice style M5 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertonic",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/tts.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic tts.json (model layout / sample rate)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "tts-config"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/unicode_indexer.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic unicode indexer",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "unicode-indexer"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/text_encoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic text encoder (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "text-encoder",
-      "fp32"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/duration_predictor.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic duration predictor (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "duration-predictor",
-      "fp32"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vector_estimator.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic vector estimator (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "vector-estimator",
-      "fp32"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vocoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic vocoder (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "vocoder",
-      "fp32"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F1.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style F1 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F2.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style F2 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F3.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style F3 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F4.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style F4 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F5.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style F5 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M1.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style M1 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M2.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style M2 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M3.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style M3 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M4.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style M4 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M5.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic voice style M5 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic-official",
-      "voice-style"
-    ],
-    "notes": "",
-    "link": "https://huggingface.co/Supertone/supertonic/"
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/tts.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 tts.json (model layout / sample rate)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "tts-config"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/duration_predictor.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 duration predictor (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "duration-predictor",
-      "fp32"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/text_encoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 text encoder (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "text-encoder",
-      "fp32"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vector_estimator.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 vector estimator (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "vector-estimator",
-      "fp32"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/vocoder.onnx",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 vocoder (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "vocoder",
-      "fp32"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/unicode_indexer.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 unicode indexer (fp32)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "unicode-indexer",
-      "fp32"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F1.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style F1 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F2.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style F2 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F3.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style F3 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F4.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style F4 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/F5.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style F5 (female)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M1.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style M1 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M2.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style M2 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M3.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style M3 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M4.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style M4 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/voice_styles/M5.json",
-    "engine": "@qvac/tts",
-    "description": "Supertone Supertonic 2 voice style M5 (male)",
-    "quantization": "",
-    "params": "",
-    "licenseId": "openrail",
-    "tags": [
-      "tts",
-      "supertone",
-      "supertonic2-official",
-      "voice-style"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet TDT 0.6B v3 encoder (graph)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "encoder",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/encoder-model.onnx.data",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet TDT 0.6B v3 encoder (weights)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "encoder",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/decoder_joint-model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet TDT 0.6B v3 decoder-joint",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "decoder",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/vocab.txt",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 vocabulary",
-    "quantization": "",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "vocab",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/abd2878d52a678ce380088ef9d9b1d9664404565/nemo128.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "description": "Parakeet TDT 0.6B v3 preprocessor",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "preprocessor",
-      "en"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/encoder-model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 encoder INT8 (weights embedded)",
-    "quantization": "int8",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "encoder",
-      "en"
-    ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/decoder_joint-model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 decoder-joint INT8",
-    "quantization": "int8",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "decoder",
-      "en"
-    ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/vocab.txt",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 vocabulary",
-    "quantization": "",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "vocab",
-      "en"
-    ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-tdt-0.6b-v3-onnx-int8/2026-03-05/preprocessor.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
-    "description": "Parakeet TDT 0.6B v3 preprocessor INT8",
-    "quantization": "int8",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "preprocessor",
-      "en"
-    ],
-    "notes": "Full INT8 quantization of https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
-    "description": "Parakeet CTC 0.6B onnx-community (graph)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": "onnx-community export, uses model.onnx_data naming"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/onnx/model.onnx_data",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
-    "description": "Parakeet CTC 0.6B onnx-community (weights)",
-    "quantization": "fp32",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": "onnx-community export, external data for model.onnx"
-  },
-  {
-    "source": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/7df2cab7aed886b8b7f80d68a8214007e4847601/tokenizer.json",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX",
-    "description": "Parakeet CTC 0.6B tokenizer",
-    "quantization": "",
-    "params": "0.6B",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "ctc",
-      "tokenizer",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/decoder_joint.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/altunenes/parakeet-rs",
-    "description": "Parakeet EOU 120M Decoder",
-    "quantization": "fp32",
-    "params": "120M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "decoder",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/encoder.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/altunenes/parakeet-rs",
-    "description": "Parakeet EOU 120M Encoder",
-    "quantization": "fp32",
-    "params": "120M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "encoder",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/altunenes/parakeet-rs/resolve/0bd721ca2837b3aef5f98d1de5726d6796a80da4/realtime_eou_120m-v1-onnx/tokenizer.json",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/altunenes/parakeet-rs",
-    "description": "Parakeet EOU 120M Tokenizer",
-    "quantization": "",
-    "params": "120M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "tokenizer",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/altunenes/parakeet-rs",
-    "description": "Parakeet Sortformer 4SPK v2",
-    "quantization": "fp32",
-    "params": "123M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "sortformer",
-      "4spk",
-      "en"
-    ],
-    "deprecated": false,
-    "notes": ""
+    "link": "https://huggingface.co/spaces/YatharthS/LavaSR"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf",
@@ -6101,6 +4262,92 @@
       "en"
     ],
     "notes": "Q4_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-ctc-0.6b.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+    "description": "Parakeet EOU 120M v1 GGUF",
+    "quantization": "f16",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet TDT 0.6B v3 GGUF",
+    "quantization": "f16",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "tdt",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "description": "Parakeet Sortformer 4SPK v1 GGUF",
+    "quantization": "f16",
+    "params": "123M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
@@ -6498,80 +4745,6 @@
       "shard"
     ],
     "notes": "tensors config"
-  },
-  {
-    "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx",
-    "engine": "@qvac/tts",
-    "description": "LavaSR speech enhancer backbone (graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "lavasr",
-      "enhancer",
-      "backbone"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data",
-    "engine": "@qvac/tts",
-    "description": "LavaSR speech enhancer backbone (weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "lavasr",
-      "enhancer",
-      "backbone"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx",
-    "engine": "@qvac/tts",
-    "description": "LavaSR speech enhancer spectrogram head (graph)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "lavasr",
-      "enhancer",
-      "spec-head"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data",
-    "engine": "@qvac/tts",
-    "description": "LavaSR speech enhancer spectrogram head (weights)",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "lavasr",
-      "enhancer",
-      "spec-head"
-    ],
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx",
-    "engine": "@qvac/tts",
-    "description": "LavaSR speech denoiser",
-    "quantization": "fp32",
-    "params": "",
-    "licenseId": "MIT",
-    "tags": [
-      "tts",
-      "lavasr",
-      "denoiser"
-    ],
-    "notes": ""
   },
   {
     "source": "s3:///qvac_models_compiled/bergamot/bergamot-azen/2025-12-18/lex.50.50.azen.s2t.bin",
@@ -12172,6 +10345,22 @@
     "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
   },
   {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E2B instruct multimodal model",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
     "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Vision projector (mmproj) for Gemma 4 E2B",
@@ -12476,6 +10665,22 @@
     "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
   },
   {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Vision projector (mmproj) for Qwen 3.5 2B",
@@ -12506,6 +10711,22 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF/resolve/33cc6944e40cb93e38332cd46b2a6e3c6acf081e/Qwen3.5-2B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B",
+    "quantization": "q8_0",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-2B repo ships only F16/BF16 mmproj). Same base Qwen3.5-2B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-2B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
@@ -12570,6 +10791,22 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF/resolve/1a5df2c0cba51dae8ac5888420360d8703707171/Qwen3.5-4B.mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "Q8_0 vision projector from mradermacher (the registry's unsloth Qwen3.5-4B repo ships only F16/BF16 mmproj). Same base Qwen3.5-4B model; validated compatible with the registry main, no quality regression.",
+    "link": "https://huggingface.co/mradermacher/Qwen3.5-4B-GGUF"
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
@@ -13096,5 +11333,21 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/qvac/MedPsy-4B-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-07-03/Cangjie5_TC.tsv",
+    "engine": "@qvac/tts-ggml",
+    "description": "Cangjie5 traditional Chinese input table (hanzi -> Cangjie codes) used for Chatterbox multilingual Chinese (zh) tokenization",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "cangjie",
+      "zh"
+    ],
+    "notes": "",
+    "link": "https://github.com/Jackchows/Cangjie5"
   }
 ]

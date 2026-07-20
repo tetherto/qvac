@@ -16,7 +16,11 @@ on:
         options:
           - all
           - desktop
+          - electron
           - mobile
+          - electron + desktop
+          - desktop + mobile
+          - electron + mobile
           - android
           - ios
         default: all
@@ -38,7 +42,7 @@ on:
         description: "Test filter (comma-separated categories/prefixes, empty = all tests)"
         type: string
       desktop-consumer-timeout:
-        description: "Desktop consumer timeout (seconds)"
+        description: "Desktop/Electron consumer timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
@@ -49,10 +53,26 @@ on:
         description: "Device Farm session timeout (minutes)"
         type: number
         default: 90
+      device-farm-start-timeout:
+        description: "Minutes to wait for a device before failing. Kept short so a busy Device Farm fails fast instead of burning CI minutes."
+        type: number
+        default: 15
+      android-device-pool:
+        description: "Android device pool name to run on (empty = random AWS-available pool from SDK_ANDROID_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
+      ios-device-pool:
+        description: "iOS device pool name to run on (empty = random AWS-available pool from SDK_IOS_DEVICE_FARM_POOLS)."
+        type: string
+        default: ""
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        description: "JSON array of runner labels for electron tests"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       test-version:
         description: "Git ref to checkout for the tested project (branch, tag, or SHA). Defaults to current branch HEAD."
         type: string
@@ -85,9 +105,21 @@ on:
       device-farm-timeout:
         type: number
         default: 90
+      device-farm-start-timeout:
+        type: number
+        default: 15
+      android-device-pool:
+        type: string
+        default: ""
+      ios-device-pool:
+        type: string
+        default: ""
       desktop-platforms:
         type: string
-        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]'
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+      electron-platforms:
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       test-version:
         type: string
       cache-models:
@@ -121,12 +153,32 @@ jobs:
 
   desktop-tests:
     needs: resolve
-    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
-    uses: ./.github/workflows/test-desktop-sdk.yml
+    if: inputs.targets == 'all' || inputs.targets == 'desktop' || inputs.targets == 'electron + desktop' || inputs.targets == 'desktop + mobile'
+    uses: ./.github/workflows/test-node-sdk.yml
     with:
+      consumer: desktop
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"]' }}
+      platforms: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      test-version: ${{ inputs.test-version || '' }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  electron-tests:
+    needs: resolve
+    # Electron CI is manual-only for now. `workflow_call` callers such as
+    # on-pr-test-sdk.yml keep their existing desktop + mobile behavior.
+    if: github.event_name == 'workflow_dispatch' && (inputs.targets == 'all' || inputs.targets == 'electron' || inputs.targets == 'electron + desktop' || inputs.targets == 'electron + mobile')
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: electron
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
@@ -143,7 +195,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'android' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -153,8 +205,10 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
-      device-pools: ${{ vars.SDK_DEVICE_FARM_POOLS }}
+      device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.android-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit
 
@@ -166,7 +220,7 @@ jobs:
       contents: read
       pull-requests: write
       packages: read
-    if: inputs.targets != 'desktop' && inputs.targets != 'android'
+    if: inputs.targets == 'all' || inputs.targets == 'mobile' || inputs.targets == 'ios' || inputs.targets == 'desktop + mobile' || inputs.targets == 'electron + mobile'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -176,7 +230,9 @@ jobs:
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
       device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
+      device-pool-name: ${{ inputs.ios-device-pool }}
       test-version: ${{ inputs.test-version || '' }}
     secrets: inherit

@@ -1,41 +1,43 @@
-import { handleCompletionStream } from "./completion-stream";
-import { handleDownloadAsset } from "./download-asset";
-import { handleLoadModel } from "./load-model";
-import { handleUnloadModel } from "./unload-model";
-import { handleEmbed } from "./embed";
-import { handleTranscribe } from "./transcribe";
-import { handleTranscribeStream } from "./transcribe-stream";
-import { handleBciTranscribe } from "./bci-transcribe";
-import { handleBciTranscribeStream } from "./bci-transcribe-stream";
-import { provideHandler } from "./provideHandler";
-import { stopProvideHandler } from "./stopProvideHandler";
-import { handleTranslate } from "./translate";
-import { handleLoggingStream } from "./logging-stream";
-import { handleRag } from "./rag";
-import { cancelHandler } from "./cancelHandler";
-import { handleDeleteCache } from "./delete-cache";
-import { handleTextToSpeech } from "./text-to-speech";
-import { handleTextToSpeechStream } from "./text-to-speech-stream";
-import { handleGetModelInfo } from "./get-model-info";
-import { handleGetLoadedModelInfo } from "./get-loaded-model-info";
-import { handleFinetune } from "./finetune";
-import { handleOCRStream } from "./ocr-stream";
-import { handleHeartbeat } from "./heartbeat";
-import { handleDiffusionStream } from "./diffusion-stream";
-import { handleVideoStream } from "./video-stream";
-import { handleUpscaleStream } from "./upscale-stream";
-import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
+import { handleBatchCompletionStream } from './batch-completion-stream'
+import { handleCompletionStream } from './completion-stream'
+import { handleDownloadAsset } from './download-asset'
+import { handleLoadModel } from './load-model'
+import { handleUnloadModel } from './unload-model'
+import { handleEmbed } from './embed'
+import { handleTranscribe } from './transcribe'
+import { handleTranscribeStream } from './transcribe-stream'
+import { handleBciTranscribe } from './bci-transcribe'
+import { handleBciTranscribeStream } from './bci-transcribe-stream'
+import { provideHandler } from './provideHandler'
+import { stopProvideHandler } from './stopProvideHandler'
+import { handleTranslate } from './translate'
+import { handleLoggingStream } from './logging-stream'
+import { handleRag } from './rag'
+import { cancelHandler } from './cancelHandler'
+import { handleDeleteCache } from './delete-cache'
+import { handleTextToSpeech } from './text-to-speech'
+import { handleTextToSpeechStream } from './text-to-speech-stream'
+import { handleGetModelInfo } from './get-model-info'
+import { handleGetLoadedModelInfo } from './get-loaded-model-info'
+import { handleFinetune } from './finetune'
+import { handleOCRStream } from './ocr-stream'
+import { handleHeartbeat } from './heartbeat'
+import { handleDiffusionStream } from './diffusion-stream'
+import { handleVideoStream } from './video-stream'
+import { handleUpscaleStream } from './upscale-stream'
+import { handlePluginInvoke, handlePluginInvokeStream } from './plugin-invoke'
 import {
   handleModelRegistryList,
   handleModelRegistrySearch,
-  handleModelRegistryGetModel,
-} from "./registry";
-import { handleSuspend } from "./suspend";
-import { handleResume } from "./resume";
-import { handleState } from "./state";
+  handleModelRegistryGetModel
+} from './registry'
+import { handleSuspend } from './suspend'
+import { handleResume } from './resume'
+import { handleState } from './state'
 
 export const handlers = {
   heartbeat: handleHeartbeat,
+  batchCompletionStream: handleBatchCompletionStream,
   completionStream: handleCompletionStream,
   downloadAsset: handleDownloadAsset,
   deleteCache: handleDeleteCache,
@@ -68,5 +70,5 @@ export const handlers = {
   modelRegistryGetModel: handleModelRegistryGetModel,
   suspend: handleSuspend,
   resume: handleResume,
-  state: handleState,
-};
+  state: handleState
+}

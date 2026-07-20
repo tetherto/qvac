@@ -1,0 +1,27 @@
+@qvac/fabric
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/fabric itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+C++ Dependencies
+=========================================================================
+
+--- apache-2.0 (Apache License 2.0) ---
+
+  opencl
+    https://github.com/KhronosGroup/OpenCL-ICD-Loader
+  qvac-lint-cpp
+
+--- apache-2.0-with-llvm-exception ---
+
+  libc++ (LLVM C++ Standard Library)
+    https://github.com/llvm/llvm-project
+
+--- mit (MIT License) ---
+
+  qvac-fabric (forked llama.cpp + ggml)
+    https://github.com/tetherto/qvac-fabric-llm.cpp

@@ -16,7 +16,7 @@ import type { CompanionSetMetadata, CompanionSetMetadataEntry, ProcessedModel } 
  *     Primary: `model.<langPair>.intgemm.alphas.bin`
  *     Companions in same directory: lex, vocab/srcvocab+trgvocab, metadata
  */
-export function groupCompanionSets (models: ProcessedModel[]): ProcessedModel[] {
+export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
   for (const model of models) {
     bySourcePath.set(sourceKey(model.registrySource, model.registryPath), model)
@@ -36,7 +36,7 @@ export function groupCompanionSets (models: ProcessedModel[]): ProcessedModel[] 
   })
 }
 
-function groupOnnxCompanions (
+function groupOnnxCompanions(
   models: ProcessedModel[],
   bySourcePath: Map<string, ProcessedModel>,
   companionKeys: Set<string>
@@ -91,7 +91,7 @@ function groupOnnxCompanions (
   }
 }
 
-function groupBergamotCompanions (
+function groupBergamotCompanions(
   models: ProcessedModel[],
   bySourcePath: Map<string, ProcessedModel>,
   companionKeys: Set<string>
@@ -150,7 +150,7 @@ function groupBergamotCompanions (
   }
 }
 
-function findBergamotCompanions (
+function findBergamotCompanions(
   source: string,
   dirPrefix: string,
   langPair: string,
@@ -188,11 +188,11 @@ function findBergamotCompanions (
   return found
 }
 
-function sourceKey (source: string, path: string): string {
+function sourceKey(source: string, path: string): string {
   return `${source}:${path}`
 }
 
-function findOnnxCompanionKey (
+function findOnnxCompanionKey(
   source: string,
   primaryPath: string,
   bySourcePath: Map<string, ProcessedModel>
@@ -207,6 +207,6 @@ function findOnnxCompanionKey (
   return undefined
 }
 
-function shortHash (input: string): string {
+function shortHash(input: string): string {
   return createHash('sha256').update(input).digest('hex').substring(0, 16)
 }

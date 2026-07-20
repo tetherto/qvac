@@ -5,7 +5,7 @@ import { Sanitizer } from './sanitizer.js'
  * Base class for all actions-ci subcommands.
  *
  * Subclasses must implement:
- *   toCommand() — builds and returns the paparam command() instance
+ *   toCommand() — builds and returns the CLI command() instance
  *   _run(flags) — contains the actual domain logic
  *
  * Subclasses MUST NOT override run() — it is a template method that

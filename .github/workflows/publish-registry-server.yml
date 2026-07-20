@@ -306,11 +306,18 @@ jobs:
           echo "@tetherto:registry=https://npm.pkg.github.com" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
 
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ env.PKG_DIR }}/shared
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ inputs.npm_tag }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.PKG_DIR }}/shared
 
   publish-schema:
@@ -492,11 +499,18 @@ jobs:
           echo "@qvac:registry=https://registry.npmjs.org" >> ~/.npmrc
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
 
+      - name: Determine dist-tag
+        id: dist-tag-2
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        with:
+          workdir: ${{ env.PKG_DIR }}/client
+          tag: ${{ inputs.npm_tag }}
+
       - name: Publish to NPM Package Registry
         id: publish
-        uses: ./.github/actions/publish-library-to-npm
+        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
         with:
-          tag: ${{ inputs.npm_tag }}
+          tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.PKG_DIR }}/client
 
   # Tag the published version (no GitHub Release; SDK-only releases policy)

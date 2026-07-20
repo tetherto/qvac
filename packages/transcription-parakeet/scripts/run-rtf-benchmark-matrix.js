@@ -29,7 +29,8 @@ function parseMatrixConfig () {
       { modelType: 'tdt', useGPU: false },
       { modelType: 'ctc', useGPU: false },
       { modelType: 'eou', useGPU: false },
-      { modelType: 'sortformer', useGPU: false }
+      { modelType: 'sortformer', useGPU: false },
+      { modelType: 'sortformer-streaming', useGPU: false }
     ]
   }
 

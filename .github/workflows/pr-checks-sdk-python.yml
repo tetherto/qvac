@@ -1,0 +1,66 @@
+name: PR Checks (SDK Python)
+
+on:
+  pull_request:
+    paths:
+      - 'packages/sdk-python/**'
+      - 'packages/sdk/contract/**'
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: packages/sdk-python
+
+jobs:
+  check:
+    name: Generate + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+
+      - name: Install
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -e ".[gen,dev]"
+
+      # Regenerates from packages/sdk/contract/{schema,manifest}.json and
+      # fails if the committed src/qvac/_generated tree doesn't match —
+      # mirrors the SDK pod's own `contract:check` step.
+      - name: Contract check (generated client up to date)
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      - name: Format check
+        run: .venv/bin/python3 -m black --check src/qvac scripts/ tests/
+
+      - name: Lint (ruff)
+        run: .venv/bin/python3 -m ruff check src/qvac scripts/ tests/
+
+      - name: Typecheck (mypy)
+        run: |
+          .venv/bin/python3 -m mypy -p qvac
+          .venv/bin/python3 -m mypy scripts
+          .venv/bin/python3 -m mypy tests
+
+      # test_poc_smoke.py/test_poc_progress.py need a real Bare worker + a
+      # downloaded model; they skip themselves unless a built worker exists
+      # at WORKER (QVAC_POC_SDK_DIR override or its monorepo-relative
+      # default), which none does here.
+      - name: Test
+        run: .venv/bin/python3 -m pytest tests/ -v

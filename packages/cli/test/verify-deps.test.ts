@@ -27,10 +27,8 @@ import {
   verifyDeps
 } from '../src/verify/deps/index.js'
 
-async function withTempDir (fn: (dir: string) => Promise<void> | void): Promise<void> {
-  const dir = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-deps-'))
-  )
+async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-deps-')))
   try {
     await fn(dir)
   } finally {
@@ -38,19 +36,19 @@ async function withTempDir (fn: (dir: string) => Promise<void> | void): Promise<
   }
 }
 
-function writeJson (filePath: string, value: unknown): void {
+function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2))
 }
 
-function runGit (cwd: string, args: string[]): string {
+function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf8'
   }).trim()
 }
 
-function nativePackage (name: string, version: string): NativePackage {
+function nativePackage(name: string, version: string): NativePackage {
   return {
     lockPath: `node_modules/${name}`,
     name,
@@ -59,7 +57,7 @@ function nativePackage (name: string, version: string): NativePackage {
   }
 }
 
-function unclassifiedPackage (name: string, version: string): UnclassifiedPackage {
+function unclassifiedPackage(name: string, version: string): UnclassifiedPackage {
   return {
     lockPath: `node_modules/${name}`,
     name,
@@ -97,15 +95,17 @@ describe('packageNameFromNpmLockPath', () => {
 
 describe('collectPackagesFromNpmLock', () => {
   it('collects package names and versions from npm lockfile packages', () => {
-    const lock = parseNpmPackageLock(JSON.stringify({
-      lockfileVersion: 3,
-      packages: {
-        '': { name: 'app', version: '1.0.0' },
-        'node_modules/bare-os': { version: '3.9.0' },
-        'node_modules/@qvac/sdk/node_modules/bare-tcp': { version: '2.2.12' },
-        'packages/sdk': { version: '0.10.1' }
-      }
-    }))
+    const lock = parseNpmPackageLock(
+      JSON.stringify({
+        lockfileVersion: 3,
+        packages: {
+          '': { name: 'app', version: '1.0.0' },
+          'node_modules/bare-os': { version: '3.9.0' },
+          'node_modules/@qvac/sdk/node_modules/bare-tcp': { version: '2.2.12' },
+          'packages/sdk': { version: '0.10.1' }
+        }
+      })
+    )
 
     assert.deepEqual(collectPackagesFromNpmLock(lock), [
       { lockPath: 'node_modules/bare-os', name: 'bare-os', version: '3.9.0' },
@@ -125,10 +125,7 @@ describe('assertSupportedNpmLockfile', () => {
   })
 
   it('rejects unsupported lockfiles explicitly', () => {
-    assert.throws(
-      () => assertSupportedNpmLockfile('bun.lock'),
-      UnsupportedLockfileError
-    )
+    assert.throws(() => assertSupportedNpmLockfile('bun.lock'), UnsupportedLockfileError)
     assert.throws(
       () => assertSupportedNpmLockfile('yarn.lock'),
       /currently supports npm package-lock\.json/
@@ -157,9 +154,7 @@ describe('collectNativePackages', () => {
         ]
       })
 
-      assert.deepEqual(result.nativePackages.map(formatNativePackage), [
-        'bare-os@3.9.0'
-      ])
+      assert.deepEqual(result.nativePackages.map(formatNativePackage), ['bare-os@3.9.0'])
       assert.equal(result.unclassifiedPackages.length, 0)
     })
   })
@@ -183,10 +178,7 @@ describe('collectNativePackages', () => {
 describe('diffNativePackages', () => {
   it('diffs native package name and version pairs', () => {
     const result = diffNativePackages(
-      [
-        nativePackage('bare-os', '3.8.0'),
-        nativePackage('bare-crypto', '1.13.5')
-      ],
+      [nativePackage('bare-os', '3.8.0'), nativePackage('bare-crypto', '1.13.5')],
       [
         nativePackage('bare-os', '3.9.0'),
         nativePackage('bare-crypto', '1.13.5'),
@@ -194,16 +186,9 @@ describe('diffNativePackages', () => {
       ]
     )
 
-    assert.deepEqual(result.added.map(formatNativePackage), [
-      'bare-os@3.9.0',
-      'bare-tcp@2.2.12'
-    ])
-    assert.deepEqual(result.removed.map(formatNativePackage), [
-      'bare-os@3.8.0'
-    ])
-    assert.deepEqual(result.unchanged.map(formatNativePackage), [
-      'bare-crypto@1.13.5'
-    ])
+    assert.deepEqual(result.added.map(formatNativePackage), ['bare-os@3.9.0', 'bare-tcp@2.2.12'])
+    assert.deepEqual(result.removed.map(formatNativePackage), ['bare-os@3.8.0'])
+    assert.deepEqual(result.unchanged.map(formatNativePackage), ['bare-crypto@1.13.5'])
     assert.deepEqual(result.unknownRemoved, [])
   })
 })
@@ -211,28 +196,18 @@ describe('diffNativePackages', () => {
 describe('diffUnknownRemovedPackages', () => {
   it('reports removed packages when native status cannot be classified', () => {
     const result = diffUnknownRemovedPackages(
-      [
-        unclassifiedPackage('bare-old', '1.0.0'),
-        unclassifiedPackage('left-pad', '1.3.0')
-      ],
-      [
-        { lockPath: 'node_modules/left-pad', name: 'left-pad', version: '1.3.0' }
-      ]
+      [unclassifiedPackage('bare-old', '1.0.0'), unclassifiedPackage('left-pad', '1.3.0')],
+      [{ lockPath: 'node_modules/left-pad', name: 'left-pad', version: '1.3.0' }]
     )
 
-    assert.deepEqual(result.map(formatNativePackage), [
-      'bare-old@1.0.0'
-    ])
+    assert.deepEqual(result.map(formatNativePackage), ['bare-old@1.0.0'])
   })
 })
 
 describe('resolveLockfilePackageRoot', () => {
   it('uses the current project root for a root package-lock', () => {
     const projectRoot = path.join('/repo', 'app')
-    assert.equal(
-      resolveLockfilePackageRoot(projectRoot, 'package-lock.json'),
-      projectRoot
-    )
+    assert.equal(resolveLockfilePackageRoot(projectRoot, 'package-lock.json'), projectRoot)
   })
 
   it('uses the lockfile directory for nested package-lock paths', () => {
@@ -276,9 +251,7 @@ describe('verifyDeps', () => {
       const output = formatVerifyDepsResult(result)
 
       assert.equal(hasNativeChanges(result), true)
-      assert.deepEqual(result.diff.unknownRemoved.map(formatNativePackage), [
-        'bare-old@1.0.0'
-      ])
+      assert.deepEqual(result.diff.unknownRemoved.map(formatNativePackage), ['bare-old@1.0.0'])
       assert.match(output, /Removed \(unknown native status\)/)
     })
   })
@@ -299,18 +272,21 @@ describe('formatVerifyDepsResult', () => {
       unclassifiedHead: []
     })
 
-    assert.equal(hasNativeChanges({
-      base: 'upstream/main',
-      head: 'HEAD',
-      diff: {
-        added: [nativePackage('bare-tcp', '2.2.12')],
-        removed: [],
-        unchanged: [],
-        unknownRemoved: []
-      },
-      unclassifiedBase: [],
-      unclassifiedHead: []
-    }), true)
+    assert.equal(
+      hasNativeChanges({
+        base: 'upstream/main',
+        head: 'HEAD',
+        diff: {
+          added: [nativePackage('bare-tcp', '2.2.12')],
+          removed: [],
+          unchanged: [],
+          unknownRemoved: []
+        },
+        unclassifiedBase: [],
+        unclassifiedHead: []
+      }),
+      true
+    )
     assert.match(output, /Native addon changes between upstream\/main\.\.HEAD/)
     assert.match(output, /\+ bare-tcp@2\.2\.12/)
     assert.match(output, /- bare-os@3\.8\.0/)
@@ -357,13 +333,15 @@ describe('formatVerifyDepsResult', () => {
       head: 'HEAD',
       diff: { added: [], removed: [], unchanged: [], unknownRemoved: [] },
       unclassifiedBase: [],
-      unclassifiedHead: [{
-        lockPath: 'node_modules/missing-native',
-        name: 'missing-native',
-        version: '1.0.0',
-        packageJsonPath: '/repo/node_modules/missing-native/package.json',
-        reason: 'ENOENT'
-      }]
+      unclassifiedHead: [
+        {
+          lockPath: 'node_modules/missing-native',
+          name: 'missing-native',
+          version: '1.0.0',
+          packageJsonPath: '/repo/node_modules/missing-native/package.json',
+          reason: 'ENOENT'
+        }
+      ]
     })
 
     const resultHasUnclassified = hasUnclassifiedPackages({
@@ -371,13 +349,15 @@ describe('formatVerifyDepsResult', () => {
       head: 'HEAD',
       diff: { added: [], removed: [], unchanged: [], unknownRemoved: [] },
       unclassifiedBase: [],
-      unclassifiedHead: [{
-        lockPath: 'node_modules/missing-native',
-        name: 'missing-native',
-        version: '1.0.0',
-        packageJsonPath: '/repo/node_modules/missing-native/package.json',
-        reason: 'ENOENT'
-      }]
+      unclassifiedHead: [
+        {
+          lockPath: 'node_modules/missing-native',
+          name: 'missing-native',
+          version: '1.0.0',
+          packageJsonPath: '/repo/node_modules/missing-native/package.json',
+          reason: 'ENOENT'
+        }
+      ]
     })
     assert.equal(resultHasUnclassified, true)
     assert.equal(output, 'No native addon changes between origin/main..HEAD.')
@@ -394,13 +374,15 @@ describe('formatVerifyDepsResult', () => {
         unknownRemoved: []
       },
       unclassifiedBase: [],
-      unclassifiedHead: [{
-        lockPath: 'node_modules/missing-native',
-        name: 'missing-native',
-        version: '1.0.0',
-        packageJsonPath: '/repo/node_modules/missing-native/package.json',
-        reason: 'ENOENT'
-      }]
+      unclassifiedHead: [
+        {
+          lockPath: 'node_modules/missing-native',
+          name: 'missing-native',
+          version: '1.0.0',
+          packageJsonPath: '/repo/node_modules/missing-native/package.json',
+          reason: 'ENOENT'
+        }
+      ]
     })
 
     assert.match(output, /\+ bare-tcp@2\.2\.12/)

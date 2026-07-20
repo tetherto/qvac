@@ -16,6 +16,12 @@ const fs = require('#fs')
 const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
 const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
 
+// While the app is backgrounded the swarm is suspended; a retry must wait for
+// resume rather than burn its (small) retry budget timing out against a dead
+// swarm. Bounded so a never-resumed runtime still fails instead of hanging.
+const RESUME_WAIT_MAX_MS = 5 * 60 * 1000
+const RESUME_WAIT_POLL_MS = 200
+
 class QVACRegistryClient extends ReadyResource {
   constructor (opts = {}) {
     super()
@@ -209,6 +215,81 @@ class QVACRegistryClient extends ReadyResource {
     return { core, blobs }
   }
 
+  /**
+   * Blocks while the swarm is suspended (app backgrounded), so a retry does not
+   * fire against a swarm that cannot connect yet and exhaust the retry budget.
+   * Bounded by RESUME_WAIT_MAX_MS; returns (and lets the retry proceed/fail) if
+   * the runtime never resumes.
+   */
+  async _waitForSwarmResumed (signal) {
+    if (!this.hyperswarm || !this.hyperswarm.suspended) return
+
+    const start = Date.now()
+    while (this.hyperswarm.suspended) {
+      if (signal && signal.aborted) throw new Error('Download cancelled')
+      if (Date.now() - start > RESUME_WAIT_MAX_MS) {
+        this.logger.warn('Swarm still suspended after resume wait; retrying anyway')
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, RESUME_WAIT_POLL_MS))
+    }
+  }
+
+  /**
+   * Blocks until at least one peer is replicating the core, so a retry after a
+   * network drop waits for the network to actually return instead of firing
+   * (and timing out) against zero peers and burning the retry budget. Bounded
+   * by RESUME_WAIT_MAX_MS. No-op when peer info is unavailable.
+   */
+  async _waitForPeers (core, signal) {
+    if (!core || !Array.isArray(core.peers)) return
+    if (core.peers.length > 0) return
+
+    const start = Date.now()
+    while (core.peers.length === 0) {
+      if (signal && signal.aborted) throw new Error('Download cancelled')
+      if (Date.now() - start > RESUME_WAIT_MAX_MS) {
+        this.logger.warn('No peers after reconnect wait; retrying anyway')
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, RESUME_WAIT_POLL_MS))
+    }
+  }
+
+  /**
+   * Re-establish peers for a blobs core before retrying a download. After the
+   * app backgrounds (or the network drops) the swarm connection for this core
+   * is gone; this waits for the swarm to resume and for a peer to be replicating
+   * the core, then re-runs the join + findingPeers + update sequence and awaits
+   * it. Resume itself is cheap: the next attempt reuses the blocks already
+   * cached in the core (the output file is re-streamed from those blocks, not
+   * appended to).
+   *
+   * Honours `signal`: a foreground cancel during the (bounded but up to
+   * RESUME_WAIT_MAX_MS) swarm/peer waits aborts promptly instead of blocking
+   * until peers return or the cap elapses.
+   */
+  async _reconnectCore (core, signal) {
+    if (!core || !this.hyperswarm) return
+    if (signal && signal.aborted) throw new Error('Download cancelled')
+
+    await this._waitForSwarmResumed(signal)
+
+    this.logger.debug('Re-establishing peers before download retry', {
+      discoveryKey: IdEnc.normalize(core.discoveryKey)
+    })
+
+    const done = core.findingPeers()
+    this.hyperswarm.join(core.discoveryKey, { client: true, server: false })
+    try {
+      await this.hyperswarm.flush()
+    } finally {
+      done()
+    }
+    await this._waitForPeers(core, signal)
+    await core.update()
+  }
+
   async downloadModel (path, source, options = {}) {
     this._validateString(path, 'path')
     this._validateString(source, 'source')
@@ -266,7 +347,11 @@ class QVACRegistryClient extends ReadyResource {
           {
             maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for the swarm to resume + reconnect peers before retrying,
+            // so the retry doesn't immediately time out again against a dead
+            // swarm (e.g. after the app backgrounded). The core's cached blocks
+            // are not cleared until success, so the retry re-streams cheaply.
+            beforeRetry: () => this._reconnectCore(core, options.signal),
             logger: this.logger
           }
         )
@@ -398,7 +483,9 @@ class QVACRegistryClient extends ReadyResource {
           {
             maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
-            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            // Wait for swarm resume + peer reconnect before retrying (see
+            // downloadModel). Cached blocks are reused; the file is re-streamed.
+            beforeRetry: () => this._reconnectCore(core, options.signal),
             logger: this.logger
           }
         )

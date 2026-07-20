@@ -1,4 +1,4 @@
-import type { ResponseFormat } from "@/schemas";
+import type { ResponseFormat } from '@/schemas'
 
 // Translates the request-level `responseFormat` into the JSON Schema string
 // that the llama.cpp addon's per-request `generationParams.json_schema`
@@ -10,15 +10,13 @@ import type { ResponseFormat } from "@/schemas";
 // safe to use under concurrent completions on the same model. (Tool calling
 // still goes through `setupToolGrammar` / `modelConfig.grammar`; see the
 // mutual-exclusion check in `completionClientParamsSchema`.)
-export function getResponseFormatJsonSchema(
-  responseFormat: ResponseFormat,
-): string | undefined {
+export function getResponseFormatJsonSchema(responseFormat: ResponseFormat): string | undefined {
   switch (responseFormat.type) {
-    case "text":
-      return undefined;
-    case "json_object":
-      return JSON.stringify({ type: "object" });
-    case "json_schema":
-      return JSON.stringify(responseFormat.json_schema.schema);
+    case 'text':
+      return undefined
+    case 'json_object':
+      return JSON.stringify({ type: 'object' })
+    case 'json_schema':
+      return JSON.stringify(responseFormat.json_schema.schema)
   }
 }

@@ -1,39 +1,36 @@
-import { getModelEntry } from "@/server/bare/registry/model-registry";
+import { getModelEntry } from '@/server/bare/registry/model-registry'
 import {
   translateServerParamsSchema,
   normalizeModelType,
   ModelType,
   type TranslateParams,
   type TranslationStats,
-  AFRICAN_LANGUAGES_MAP,
-} from "@/schemas";
-import type TranslationNmtcpp from "@qvac/translation-nmtcpp";
-import type { GenerationParams, RunOptions } from "@qvac/llm-llamacpp";
-import { getLangName } from "@qvac/langdetect-text";
-import { nowMs } from "@/profiling";
-import { buildStreamResult } from "@/profiling/model-execution";
-import type { NmtResponse, LlmResponse } from "@/server/bare/types/addon-responses";
+  AFRICAN_LANGUAGES_MAP
+} from '@/schemas'
+import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
+import type { GenerationParams, RunOptions } from '@qvac/llm-llamacpp'
+import { getLangName } from '@qvac/langdetect-text'
+import { nowMs } from '@/profiling'
+import { buildStreamResult } from '@/profiling/model-execution'
+import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
-  ModelTypeMismatchError,
-} from "@/utils/errors-server";
-import {
-  getRequestRegistry,
-  withRequestContext,
-} from "@/server/bare/runtime";
-import { generateServerRequestId } from "@/server/bare/runtime/request-id";
-import { getServerLogger } from "@/logging";
+  ModelTypeMismatchError
+} from '@/utils/errors-server'
+import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
+import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+import { getServerLogger } from '@/logging'
 
 export function getLanguage(code: string | undefined): string {
-  if (!code) return "";
-  if (AFRICAN_LANGUAGES_MAP.has(code)) return AFRICAN_LANGUAGES_MAP.get(code)!;
-  const fullName = getLangName(code);
-  return fullName ?? code.toUpperCase();
+  if (!code) return ''
+  if (AFRICAN_LANGUAGES_MAP.has(code)) return AFRICAN_LANGUAGES_MAP.get(code)!
+  const fullName = getLangName(code)
+  return fullName ?? code.toUpperCase()
 }
 
 export function isAfrican(code: string | undefined) {
-  return !!code && AFRICAN_LANGUAGES_MAP.has(code);
+  return !!code && AFRICAN_LANGUAGES_MAP.has(code)
 }
 
 // Per-call sampling overrides applied to LLM translate. Greedy + fixed seed
@@ -47,11 +44,8 @@ export function isAfrican(code: string | undefined) {
 // to be penalised, defeats the stop, and lets the model run to `predict`.
 // AfriqueGemma callers must set decoding via `modelConfig` at load time.
 type LlmTranslateGenerationParams = Required<
-  Pick<
-    GenerationParams,
-    "temp" | "top_k" | "top_p" | "repeat_penalty" | "seed" | "predict"
-  >
->;
+  Pick<GenerationParams, 'temp' | 'top_k' | 'top_p' | 'repeat_penalty' | 'seed' | 'predict'>
+>
 
 const LLM_TRANSLATE_GENERATION_PARAMS: LlmTranslateGenerationParams = {
   temp: 0,
@@ -59,45 +53,45 @@ const LLM_TRANSLATE_GENERATION_PARAMS: LlmTranslateGenerationParams = {
   top_p: 1,
   repeat_penalty: 1.3,
   seed: 42,
-  predict: 256,
-};
+  predict: 256
+}
 
 function shouldSkipPerCallSampling(modelName: string | undefined): boolean {
-  return !!modelName && modelName.startsWith("AFRICAN_");
+  return !!modelName && modelName.startsWith('AFRICAN_')
 }
 
 export async function* translate(
   params: TranslateParams,
-  requestId?: string,
+  requestId?: string
 ): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
-  const { modelId, text, modelType: inputModelType } = params;
+  const { modelId, text, modelType: inputModelType } = params
 
-  const entry = getModelEntry(modelId);
+  const entry = getModelEntry(modelId)
   if (!entry) {
-    throw new ModelNotFoundError(modelId);
+    throw new ModelNotFoundError(modelId)
   }
   if (entry.isDelegated) {
-    throw new ModelIsDelegatedError(modelId);
+    throw new ModelIsDelegatedError(modelId)
   }
-  const canonicalModelType = entry.local.modelType;
-  const model = entry.local.model;
+  const canonicalModelType = entry.local.modelType
+  const model = entry.local.model
 
   if (inputModelType !== undefined) {
-    const requestedCanonical = normalizeModelType(inputModelType);
+    const requestedCanonical = normalizeModelType(inputModelType)
     if (requestedCanonical !== canonicalModelType) {
-      throw new ModelTypeMismatchError(canonicalModelType, requestedCanonical);
+      throw new ModelTypeMismatchError(canonicalModelType, requestedCanonical)
     }
   }
 
-  const isLlm = canonicalModelType === ModelType.llamacppCompletion;
-  const from = isLlm ? (params as { from?: string }).from : undefined;
-  const to = isLlm ? (params as { to: string }).to : undefined;
-  const context = isLlm ? (params as { context?: string }).context : undefined;
-  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to));
-  translateServerParamsSchema.parse(params);
+  const isLlm = canonicalModelType === ModelType.llamacppCompletion
+  const from = isLlm ? (params as { from?: string }).from : undefined
+  const to = isLlm ? (params as { to: string }).to : undefined
+  const context = isLlm ? (params as { context?: string }).context : undefined
+  const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to))
+  translateServerParamsSchema.parse(params)
 
-  const fromLanguage = getLanguage(from);
-  const toLanguage = getLanguage(to);
+  const fromLanguage = getLanguage(from)
+  const toLanguage = getLanguage(to)
 
   // Open a request-scoped lifecycle for both engine branches. LLM-
   // translate inherits llamacpp-completion's `{ scope: "model",
@@ -109,63 +103,58 @@ export async function* translate(
   // is dropped either way.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
-    kind: "translate",
-    modelId,
-  });
-  const requestLogger = withRequestContext(getServerLogger(), ctx);
+    kind: 'translate',
+    modelId
+  })
+  const requestLogger = withRequestContext(getServerLogger(), ctx)
 
   if (isLlm) {
     const onAbort = () => {
-      const addon = model.addon;
+      const addon = model.addon
       if (addon?.cancel) {
         addon.cancel.call(addon).catch((err: unknown) => {
           requestLogger.warn(
-            `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        });
+            `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+          )
+        })
       }
-    };
-    ctx.signal.addEventListener("abort", onAbort, { once: true });
-    if (ctx.signal.aborted) onAbort();
+    }
+    ctx.signal.addEventListener('abort', onAbort, { once: true })
+    if (ctx.signal.aborted) onAbort()
     ctx.scope.defer(() => {
-      ctx.signal.removeEventListener("abort", onAbort);
-    });
+      ctx.signal.removeEventListener('abort', onAbort)
+    })
   }
 
   // Check if input is an array and model type is NMT
-  if (
-    Array.isArray(text) &&
-    canonicalModelType === ModelType.nmtcppTranslation
-  ) {
+  if (Array.isArray(text) && canonicalModelType === ModelType.nmtcppTranslation) {
     // Use runBatch for batch processing
-    const modelStart = nowMs();
-    const translations = await (model as unknown as TranslationNmtcpp).runBatch(
-      text,
-    );
-    const modelExecutionMs = nowMs() - modelStart;
+    const modelStart = nowMs()
+    const translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
+    const modelExecutionMs = nowMs() - modelStart
 
     // Soft-cancel boundary: if `cancel({ requestId })` landed while
     // the addon was running the batch, bail before yielding anything.
     // The addon may have completed its work; the result is dropped.
     if (ctx.signal.aborted) {
-      return { modelExecutionMs };
+      return { modelExecutionMs }
     }
 
     // Yield each translation with a newline separator
     for (let i = 0; i < translations.length; i++) {
-      if (ctx.signal.aborted) break;
-      const translation = translations[i]!;
-      yield translation;
+      if (ctx.signal.aborted) break
+      const translation = translations[i]!
+      yield translation
       if (i < translations.length - 1) {
-        yield "\n";
+        yield '\n'
       }
     }
 
-    return { modelExecutionMs };
+    return { modelExecutionMs }
   }
 
   // Single text processing (for NMT or LLM)
-  const singleText = Array.isArray(text) ? text[0] : text;
+  const singleText = Array.isArray(text) ? text[0] : text
 
   // Prepare input based on model type
   const input =
@@ -173,15 +162,15 @@ export async function* translate(
       ? singleText
       : [
           {
-            role: afriquePrompt ? "user" : "system",
+            role: afriquePrompt ? 'user' : 'system',
             content: afriquePrompt
               ? `Translate ${fromLanguage} to ${toLanguage}.\n${fromLanguage}: ${singleText}\n${toLanguage}:`
-              : `${context ? `${context}. ` : ""}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`,
-          },
-        ];
+              : `${context ? `${context}. ` : ''}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`
+          }
+        ]
 
-  const modelStart = nowMs();
-  let response;
+  const modelStart = nowMs()
+  let response
   if (
     canonicalModelType === ModelType.llamacppCompletion &&
     !shouldSkipPerCallSampling(entry.local.name)
@@ -191,52 +180,62 @@ export async function* translate(
     // shape so we get the same typing as @qvac/llm-llamacpp.run().
     const llmRun = model.run.bind(model) as (
       prompt: typeof input,
-      opts: RunOptions,
-    ) => ReturnType<typeof model.run>;
+      opts: RunOptions
+    ) => ReturnType<typeof model.run>
     response = await llmRun(input, {
-      generationParams: LLM_TRANSLATE_GENERATION_PARAMS,
-    });
+      generationParams: LLM_TRANSLATE_GENERATION_PARAMS
+    })
   } else {
-    response = await model.run(input);
+    response = await model.run(input)
   }
 
   // Check if the response has an iterate method (like LLM models)
   if (
     canonicalModelType === ModelType.llamacppCompletion &&
-    typeof response.iterate === "function"
+    typeof response.iterate === 'function'
   ) {
-    const llmResponse = response as unknown as LlmResponse;
+    const llmResponse = response as unknown as LlmResponse
     for await (const token of llmResponse.iterate()) {
-      if (ctx.signal.aborted) break;
-      yield token;
+      if (ctx.signal.aborted) break
+      yield token
     }
-    const modelExecutionMs = nowMs() - modelStart;
+    const modelExecutionMs = nowMs() - modelStart
 
     const stats: TranslationStats = {
       ...(llmResponse.stats?.TPS !== undefined && { tokensPerSecond: llmResponse.stats.TPS }),
       ...(llmResponse.stats?.TTFT !== undefined && { timeToFirstToken: llmResponse.stats.TTFT }),
-      ...(llmResponse.stats?.CacheTokens !== undefined && { cacheTokens: llmResponse.stats.CacheTokens }),
-      ...(llmResponse.stats?.generatedTokens !== undefined && { totalTokens: llmResponse.stats.generatedTokens }),
-    };
+      ...(llmResponse.stats?.CacheTokens !== undefined && {
+        cacheTokens: llmResponse.stats.CacheTokens
+      }),
+      ...(llmResponse.stats?.generatedTokens !== undefined && {
+        totalTokens: llmResponse.stats.generatedTokens
+      })
+    }
 
-    return buildStreamResult(modelExecutionMs, stats);
+    return buildStreamResult(modelExecutionMs, stats)
   }
 
-  const nmtResponse = response as unknown as NmtResponse;
+  const nmtResponse = response as unknown as NmtResponse
   for await (const token of nmtResponse.iterate()) {
-    if (ctx.signal.aborted) break;
-    yield token;
+    if (ctx.signal.aborted) break
+    yield token
   }
-  const modelExecutionMs = nowMs() - modelStart;
+  const modelExecutionMs = nowMs() - modelStart
 
   const stats: TranslationStats = {
     ...(nmtResponse.stats?.totalTime !== undefined && { totalTime: nmtResponse.stats.totalTime }),
-    ...(nmtResponse.stats?.totalTokens !== undefined && { totalTokens: nmtResponse.stats.totalTokens }),
-    ...(nmtResponse.stats?.decodeTime !== undefined && { decodeTime: nmtResponse.stats.decodeTime }),
-    ...(nmtResponse.stats?.encodeTime !== undefined && { encodeTime: nmtResponse.stats.encodeTime }),
+    ...(nmtResponse.stats?.totalTokens !== undefined && {
+      totalTokens: nmtResponse.stats.totalTokens
+    }),
+    ...(nmtResponse.stats?.decodeTime !== undefined && {
+      decodeTime: nmtResponse.stats.decodeTime
+    }),
+    ...(nmtResponse.stats?.encodeTime !== undefined && {
+      encodeTime: nmtResponse.stats.encodeTime
+    }),
     ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
-    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT }),
-  };
+    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT })
+  }
 
-  return buildStreamResult(modelExecutionMs, stats);
+  return buildStreamResult(modelExecutionMs, stats)
 }

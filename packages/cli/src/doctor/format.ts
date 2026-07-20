@@ -8,19 +8,17 @@ const STATUS_ICON: Record<CheckStatus, string> = {
   info: 'ℹ️ '
 }
 
-function formatCheckLine (check: CheckResult): string {
+function formatCheckLine(check: CheckResult): string {
   const icon = STATUS_ICON[check.status]
   const value = check.value ? ` — ${check.value}` : ''
   return `  ${icon} ${check.label}${value}`
 }
 
-export function formatReport (report: DoctorReport): string {
+export function formatReport(report: DoctorReport): string {
   const lines: string[] = []
   lines.push('🩺 QVAC doctor')
   lines.push('')
-  lines.push(
-    `  Host: ${report.platform}-${report.arch}, Node ${report.nodeVersion}`
-  )
+  lines.push(`  Host: ${report.platform}-${report.arch}, Node ${report.nodeVersion}`)
   lines.push('')
 
   for (const section of report.sections) {
@@ -43,6 +41,6 @@ export function formatReport (report: DoctorReport): string {
   return lines.join('\n')
 }
 
-export function formatJsonReport (report: DoctorReport): string {
+export function formatJsonReport(report: DoctorReport): string {
   return JSON.stringify(report, null, 2)
 }

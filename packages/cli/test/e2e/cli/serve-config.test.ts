@@ -12,12 +12,19 @@ describe('serve flags: --api-key', () => {
 
     const noAuth = await fetch(`${srv.baseUrl}/v1/models`)
     assert.equal(noAuth.status, 401)
-    assert.equal(((await noAuth.json()) as { error?: { code?: string } }).error?.code, 'invalid_api_key')
+    assert.equal(
+      ((await noAuth.json()) as { error?: { code?: string } }).error?.code,
+      'invalid_api_key'
+    )
 
-    const wrong = await fetch(`${srv.baseUrl}/v1/models`, { headers: { authorization: 'Bearer nope' } })
+    const wrong = await fetch(`${srv.baseUrl}/v1/models`, {
+      headers: { authorization: 'Bearer nope' }
+    })
     assert.equal(wrong.status, 401)
 
-    const ok = await fetch(`${srv.baseUrl}/v1/models`, { headers: { authorization: 'Bearer secret-key-123' } })
+    const ok = await fetch(`${srv.baseUrl}/v1/models`, {
+      headers: { authorization: 'Bearer secret-key-123' }
+    })
     assert.equal(ok.status, 200)
     assert.equal(((await ok.json()) as { object: string }).object, 'list')
   })
@@ -36,7 +43,11 @@ describe('serve flags: --cors', () => {
 
     const off = await configuredServer(t, MODELLESS_CONFIG, [])
     const resOff = await fetch(`${off.baseUrl}/v1/models`)
-    assert.equal(resOff.headers.get('access-control-allow-origin'), null, 'expected no CORS header by default')
+    assert.equal(
+      resOff.headers.get('access-control-allow-origin'),
+      null,
+      'expected no CORS header by default'
+    )
   })
 })
 

@@ -1,42 +1,39 @@
-import test from "brittle";
-import { z } from "zod";
-import { clearPlugins, registerPlugin } from "@/server/plugins";
+import test from 'brittle'
+import { z } from 'zod'
+import { clearPlugins, registerPlugin } from '@/server/plugins'
 import {
   registerModel,
   unregisterModel,
-  type AnyModel,
-} from "@/server/bare/registry/model-registry";
-import {
-  handlePluginInvoke,
-  handlePluginInvokeStream,
-} from "@/server/rpc/handlers/plugin-invoke";
+  type AnyModel
+} from '@/server/bare/registry/model-registry'
+import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
 import {
   ModelIsDelegatedError,
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
-  PluginResponseValidationFailedError,
-} from "@/utils/errors-server";
-import { SDK_SERVER_ERROR_CODES, ModelType, type QvacPlugin } from "@/schemas";
-import { getPlugin, hasPlugin } from "@/server/plugins";
+  PluginResponseValidationFailedError
+} from '@/utils/errors-server'
+import { SDK_SERVER_ERROR_CODES, ModelType, type QvacPlugin } from '@/schemas'
+import { getPlugin, hasPlugin } from '@/server/plugins'
 
-let idCounter = 0;
+let idCounter = 0
 function makeId(prefix: string) {
-  idCounter++;
-  return `${prefix}-${idCounter}`;
+  idCounter++
+  return `${prefix}-${idCounter}`
 }
 
-test("registerPlugin: rejects invalid plugin definitions (fail-fast)", function (t) {
-  clearPlugins();
+test('registerPlugin: rejects invalid plugin definitions (fail-fast)', function (t) {
+  clearPlugins()
 
   const invalidPlugin = {
-    modelType: "test-plugin",
-    displayName: "",
-    addonPackage: "@qvac/test-addon",
+    modelType: 'test-plugin',
+    displayName: '',
+    addonPackage: '@qvac/test-addon',
     createModel: function () {
       return {
-        model: { load: async function () {} },
-      };
+        model: { load: async function () {} }
+      }
     },
     handlers: {
       ping: {
@@ -44,40 +41,40 @@ test("registerPlugin: rejects invalid plugin definitions (fail-fast)", function 
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
         handler: async function () {
-          return { ok: true };
-        },
-      },
-    },
-  };
+          return { ok: true }
+        }
+      }
+    }
+  }
 
   try {
-    registerPlugin(invalidPlugin as unknown as QvacPlugin<Record<string, unknown>, string>);
-    t.fail("Expected registerPlugin to throw");
+    registerPlugin(invalidPlugin as unknown as QvacPlugin<Record<string, unknown>, string>)
+    t.fail('Expected registerPlugin to throw')
   } catch (error) {
-    t.ok(error instanceof PluginDefinitionInvalidError);
-    t.is((error as PluginDefinitionInvalidError).code, 53857);
+    t.ok(error instanceof PluginDefinitionInvalidError)
+    t.is((error as PluginDefinitionInvalidError).code, 53857)
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})
 
-test("pluginInvokeStream: validates streamed chunks against responseSchema", async function (t) {
-  clearPlugins();
+test('pluginInvokeStream: validates streamed chunks against responseSchema', async function (t) {
+  clearPlugins()
 
-  const modelId = makeId("model");
+  const modelId = makeId('model')
 
-  const requestSchema = z.object({ value: z.string() });
-  const responseSchema = z.object({ token: z.string() });
+  const requestSchema = z.object({ value: z.string() })
+  const responseSchema = z.object({ token: z.string() })
 
   registerPlugin({
     modelType: ModelType.llamacppCompletion,
-    displayName: "Test Plugin",
-    addonPackage: "@qvac/test-addon",
+    displayName: 'Test Plugin',
+    addonPackage: '@qvac/test-addon',
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
-        model: { load: async function () {} },
-      };
+        model: { load: async function () {} }
+      }
     },
     handlers: {
       testStream: {
@@ -85,81 +82,78 @@ test("pluginInvokeStream: validates streamed chunks against responseSchema", asy
         responseSchema: responseSchema as z.ZodType,
         streaming: true,
         handler: async function* () {
-          yield { token: 123 };
-        },
-      },
-    },
-  });
+          yield { token: 123 }
+        }
+      }
+    }
+  })
 
   try {
     registerModel(modelId, {
       model: {} as unknown as AnyModel,
-      path: "/tmp/model.bin",
+      path: '/tmp/model.bin',
       config: {},
-      modelType: ModelType.llamacppCompletion,
-    });
+      modelType: ModelType.llamacppCompletion
+    })
 
     const stream = handlePluginInvokeStream({
-      type: "pluginInvokeStream",
+      type: 'pluginInvokeStream',
       modelId,
-      handler: "testStream",
-      params: { value: "hello" },
-    });
+      handler: 'testStream',
+      params: { value: 'hello' }
+    })
 
     try {
-      await stream.next();
-      t.fail("Expected stream.next() to throw");
+      await stream.next()
+      t.fail('Expected stream.next() to throw')
     } catch (error) {
-      t.ok(error instanceof PluginResponseValidationFailedError);
+      t.ok(error instanceof PluginResponseValidationFailedError)
       t.is(
         (error as PluginResponseValidationFailedError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED,
-      );
+        SDK_SERVER_ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+      )
     }
   } finally {
-    unregisterModel(modelId);
-    clearPlugins();
+    unregisterModel(modelId)
+    clearPlugins()
   }
-});
+})
 
-test("pluginInvoke: delegated models throw ModelIsDelegatedError", async function (t) {
-  const modelId = makeId("delegated-model");
+test('pluginInvoke: delegated models throw ModelIsDelegatedError', async function (t) {
+  const modelId = makeId('delegated-model')
 
   registerModel(modelId, {
-    providerPublicKey: "test-provider-public-key",
-  });
+    providerPublicKey: 'test-provider-public-key'
+  })
 
   try {
     await handlePluginInvoke({
-      type: "pluginInvoke",
+      type: 'pluginInvoke',
       modelId,
-      handler: "anything",
-      params: {},
-    });
-    t.fail("Expected handlePluginInvoke to throw");
+      handler: 'anything',
+      params: {}
+    })
+    t.fail('Expected handlePluginInvoke to throw')
   } catch (error) {
-    t.ok(error instanceof ModelIsDelegatedError);
-    t.is(
-      (error as ModelIsDelegatedError).code,
-      SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED,
-    );
+    t.ok(error instanceof ModelIsDelegatedError)
+    t.is((error as ModelIsDelegatedError).code, SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED)
   } finally {
-    unregisterModel(modelId);
+    unregisterModel(modelId)
   }
-});
+})
 
-test("registerPlugin: accepts valid plugin and retrieves it", function (t) {
-  clearPlugins();
+test('registerPlugin: accepts valid plugin and retrieves it', function (t) {
+  clearPlugins()
 
   const validPlugin = {
-    modelType: "test-valid-plugin",
-    displayName: "Valid Test Plugin",
-    addonPackage: "@qvac/test-addon",
+    modelType: 'test-valid-plugin',
+    displayName: 'Valid Test Plugin',
+    addonPackage: '@qvac/test-addon',
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
-        model: { load: async function () {} },
-      };
+        model: { load: async function () {} }
+      }
     },
     handlers: {
       ping: {
@@ -167,99 +161,95 @@ test("registerPlugin: accepts valid plugin and retrieves it", function (t) {
         responseSchema: z.object({ ok: z.boolean() }),
         streaming: false,
         handler: async function () {
-          return { ok: true };
-        },
-      },
-    },
-  };
+          return { ok: true }
+        }
+      }
+    }
+  }
 
   try {
-    registerPlugin(validPlugin);
+    registerPlugin(validPlugin)
 
-    t.ok(hasPlugin("test-valid-plugin"), "hasPlugin returns true");
+    t.ok(hasPlugin('test-valid-plugin'), 'hasPlugin returns true')
 
-    const retrieved = getPlugin("test-valid-plugin");
-    t.ok(retrieved, "getPlugin returns the plugin");
-    t.is(retrieved?.modelType, "test-valid-plugin");
-    t.is(retrieved?.displayName, "Valid Test Plugin");
+    const retrieved = getPlugin('test-valid-plugin')
+    t.ok(retrieved, 'getPlugin returns the plugin')
+    t.is(retrieved?.modelType, 'test-valid-plugin')
+    t.is(retrieved?.displayName, 'Valid Test Plugin')
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})
 
-test("registerPlugin: rejects duplicate modelType registration", function (t) {
-  clearPlugins();
+test('registerPlugin: rejects duplicate modelType registration', function (t) {
+  clearPlugins()
 
   const plugin = {
-    modelType: "test-duplicate-plugin",
-    displayName: "First Plugin",
-    addonPackage: "@qvac/test-addon",
+    modelType: 'test-duplicate-plugin',
+    displayName: 'First Plugin',
+    addonPackage: '@qvac/test-addon',
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
-        model: { load: async function () {} },
-      };
+        model: { load: async function () {} }
+      }
     },
-    handlers: {},
-  };
+    handlers: {}
+  }
 
   try {
-    registerPlugin(plugin);
-    t.ok(hasPlugin("test-duplicate-plugin"), "first registration succeeds");
+    registerPlugin(plugin)
+    t.ok(hasPlugin('test-duplicate-plugin'), 'first registration succeeds')
 
     const duplicatePlugin = {
       ...plugin,
-      displayName: "Duplicate Plugin",
-    };
-
-    try {
-      registerPlugin(duplicatePlugin);
-      t.fail("Expected registerPlugin to throw on duplicate");
-    } catch (error) {
-      t.ok(error instanceof PluginAlreadyRegisteredError);
-      t.is(
-        (error as PluginAlreadyRegisteredError).code,
-        SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED,
-      );
+      displayName: 'Duplicate Plugin'
     }
 
-    const retrieved = getPlugin("test-duplicate-plugin");
-    t.is(
-      retrieved?.displayName,
-      "First Plugin",
-      "original plugin is unchanged",
-    );
-  } finally {
-    clearPlugins();
-  }
-});
+    try {
+      registerPlugin(duplicatePlugin)
+      t.fail('Expected registerPlugin to throw on duplicate')
+    } catch (error) {
+      t.ok(error instanceof PluginAlreadyRegisteredError)
+      t.is(
+        (error as PluginAlreadyRegisteredError).code,
+        SDK_SERVER_ERROR_CODES.PLUGIN_ALREADY_REGISTERED
+      )
+    }
 
-test("registerPlugin: rejects alias as modelType", function (t) {
-  clearPlugins();
+    const retrieved = getPlugin('test-duplicate-plugin')
+    t.is(retrieved?.displayName, 'First Plugin', 'original plugin is unchanged')
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin: rejects alias as modelType', function (t) {
+  clearPlugins()
 
   const plugin = {
-    modelType: "llm",
-    displayName: "Custom LLM Plugin",
-    addonPackage: "@custom/llm",
+    modelType: 'llm',
+    displayName: 'Custom LLM Plugin',
+    addonPackage: '@custom/llm',
     loadConfigSchema: z.object({}),
     createModel: function () {
       return {
-        model: { load: async function () {} },
-      };
+        model: { load: async function () {} }
+      }
     },
-    handlers: {},
-  };
+    handlers: {}
+  }
 
   try {
-    registerPlugin(plugin);
-    t.fail("Expected registerPlugin to throw for alias modelType");
+    registerPlugin(plugin)
+    t.fail('Expected registerPlugin to throw for alias modelType')
   } catch (error) {
-    t.ok(error instanceof PluginModelTypeReservedError);
+    t.ok(error instanceof PluginModelTypeReservedError)
     t.is(
       (error as PluginModelTypeReservedError).code,
-      SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED,
-    );
+      SDK_SERVER_ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED
+    )
   } finally {
-    clearPlugins();
+    clearPlugins()
   }
-});
+})

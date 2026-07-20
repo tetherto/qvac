@@ -37,11 +37,13 @@ await loadModel({
 });
 ```
 
-Omitting `ttsEngine` defaults to Chatterbox (same as the former ONNX plugin).
+<Callout type="info">
+Omitting `ttsEngine` defaults to Chatterbox.
+</Callout>
 
 ### Supertonic
 
-Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language` — not a separate runtime flag.
+Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`.
 
 ```ts
 await loadModel({
@@ -57,11 +59,30 @@ await loadModel({
 
 For model constants, see [SDK — Models](/introduction#models).
 
-<Callout type="info">
-**Migrating from `@qvac/tts-onnx` (multi-file ONNX):** the legacy `modelConfig` shape (`ttsSpeechEncoderSrc`, `ttsEmbedTokensSrc`, `ttsConditionalDecoderSrc`, `ttsLanguageModelSrc`, `ttsTokenizerSrc`, Supertonic `ttsTextEncoderSrc` / `ttsDurationPredictorSrc` / …, and `ttsSupertonicMultilingual`) is no longer supported. Passing any of those fields raises a structured `LegacyTtsModelDeprecatedError` with a migration message. Plugin import path: `@qvac/sdk/tts-ggml/plugin` (a temporary `@qvac/sdk/onnx-tts/plugin` alias exists for older CLI bundles). Legacy ONNX model constants remain exported for one minor cycle for codemod migrations only.
-</Callout>
+### LavaSR
 
-## Example
+With either Chatterbox or Supertonic, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
+
+- `lavasrDenoiserModelSrc` — a denoiser GGUF that cleans the speech (noise reduction). It runs **first** and is rate-preserving. Constants: `TTS_DENOISER_LAVASR_FP16`, `TTS_DENOISER_LAVASR_FP32`.
+- `lavasrEnhancerModelSrc` — an enhancer GGUF that neurally bandwidth-extends the output to **48 kHz**. It runs **after** the denoiser. Constants: `TTS_ENHANCER_LAVASR_FP16`, `TTS_ENHANCER_LAVASR_FP32`.
+
+```ts
+await loadModel({
+  modelSrc: TTS_MULTILINGUAL_SUPERTONIC3_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "supertonic",
+    language: "en",
+    voice: "F1",
+    // Denoiser runs first (rate-preserving)…
+    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16.src,
+    // …then the enhancer bandwidth-extends to 48 kHz.
+    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16.src,
+  },
+});
+```
+
+## Examples
 
 ### Chatterbox
 
@@ -107,9 +128,53 @@ The following script shows an example of Supertonic TTS for general-purpose spee
 </Tab>
 </Tabs>
 
+### Chatterbox with LavaSR enhancer
+
+The following script shows Chatterbox TTS with the LavaSR enhancer, which neurally bandwidth-extends the output to 48 kHz. Use it with [`utils.js` / `utils.ts`](#utils):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/chatterbox-enhanced.js title="tts-chatterbox-enhanced.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/chatterbox-enhanced.ts title="tts-chatterbox-enhanced.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Supertonic with LavaSR denoiser + enhancer
+
+The following script shows Supertonic TTS with the full LavaSR pipeline: the denoiser cleans the signal first, then the enhancer bandwidth-extends it to 48 kHz. Use it with [`utils.js` / `utils.ts`](#utils):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/supertonic-enhanced.js title="tts-supertonic-enhanced.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/supertonic-enhanced.ts title="tts-supertonic-enhanced.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ### Utils
 
-The following helper script is used by both examples above to convert the raw PCM samples returned by `textToSpeech()` into a WAV file and play it back:
+The following helper script is used by the examples above to convert the raw PCM samples returned by `textToSpeech()` into a WAV file and play it back:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

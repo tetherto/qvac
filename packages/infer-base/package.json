@@ -4,8 +4,8 @@
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --target es2018 --moduleResolution node",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:dts"
@@ -23,7 +23,9 @@
   },
   "devDependencies": {
     "brittle": "^3.15.0",
-    "standard": "^17.1.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "repository": {
@@ -32,7 +34,7 @@
     "directory": "packages/infer-base"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/infer-base#readme",
+  "homepage": "https://qvac.tether.io",
   "files": [
     "src",
     "index.d.ts",

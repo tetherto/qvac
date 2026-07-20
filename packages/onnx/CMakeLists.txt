@@ -15,9 +15,9 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-if(APPLE OR UNIX)
-  SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-endif()
+# Package-local override triplets (apple/unix/android) take precedence; the
+# shared monorepo triplets supply the static-CRT windows triplets.
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-override-triplets/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
@@ -298,7 +298,6 @@ endif()
 if(WIN32)
   target_compile_options(${qvac-onnx} PRIVATE "/utf-8")
   target_compile_definitions(${qvac-onnx} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
-  target_link_libraries(${qvac-onnx} PRIVATE msvcrt.lib)
 endif()
 
 if(BUILD_TESTING)

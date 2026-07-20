@@ -6,7 +6,7 @@
 
 #include "inference-addon-cpp/Logger.hpp"
 
-// whisper.cpp / ggml native-log forwarding (QVAC-19783).
+// whisper.cpp / ggml native-log forwarding.
 //
 // Kept JS-free (only <ggml.h> + the addon Logger) so it can be unit-tested
 // without the JS runtime; AddonJs.hpp installs forwardGgmlLog() via

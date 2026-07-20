@@ -5,13 +5,7 @@ const path = require('bare-path')
 const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
-const {
-  ensureModel,
-  detectPlatform,
-  setupJsLogger,
-  isPng,
-  safeTest
-} = require('./utils')
+const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
 const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
@@ -25,129 +19,139 @@ const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
 
 const DEFAULT_MODEL = {
-  name: 'sd3_medium_incl_clips.safetensors',
-  url: 'https://huggingface.co/adamo1139/stable-diffusion-3-medium-ungated/resolve/main/sd3_medium_incl_clips.safetensors'
+  name: 'sd3_medium_incl_clips.safetensors'
 }
 
-safeTest('SD3 Medium txt2img — generates a valid PNG image', { timeout: 900000, skip }, async (t) => {
-  setupJsLogger(binding)
+safeTest(
+  'SD3 Medium txt2img — generates a valid PNG image',
+  { timeout: 900000, skip },
+  async (t) => {
+    setupJsLogger(binding)
 
-  let model = null
-  try {
-    const [downloadedModelName, modelDir] = await ensureModel({
-      modelName: DEFAULT_MODEL.name,
-      downloadUrl: DEFAULT_MODEL.url
-    })
-
-    console.log('\n' + '='.repeat(60))
-    console.log('STABLE DIFFUSION 3 MEDIUM — INTEGRATION TEST')
-    console.log('='.repeat(60))
-    console.log(` Platform  : ${platform}`)
-    console.log(` Model     : ${downloadedModelName}`)
-    console.log(` Models dir: ${modelDir}`)
-
-    const modelPath = path.join(modelDir, downloadedModelName)
-    t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
-
-    model = new ImgStableDiffusion({
-      files: {
-        model: path.join(modelDir, downloadedModelName)
-      },
-      config: {
-        threads: 4,
-        device: useCpu ? 'cpu' : 'gpu',
-        diffusion_fa: true,
-        prediction: 'flow',
-        flow_shift: '3.0',
-        verbosity: 2
-      },
-      logger: console,
-      opts: { stats: true }
-    })
-
-    const images = []
-    const progressTicks = []
-
-    // ── Load ─────────────────────────────────────────────────────────────────
-    console.log('\n=== Loading model ===')
-    const tLoad = Date.now()
-    await model.load()
-    const loadMs = Date.now() - tLoad
-    console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
-    t.ok(loadMs < 120000, `Model loaded within 120s (took ${(loadMs / 1000).toFixed(1)}s)`)
-
-    // ── Generate (perf loop) ───────────────────────────────────────────────────
-    const totalIterations = WARMUP_RUNS + PERF_RUNS
-    for (let iteration = 0; iteration < totalIterations; iteration++) {
-      const isWarmup = iteration < WARMUP_RUNS
-      const runLabel = isWarmup ? `warmup ${iteration + 1}` : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
-      console.log(`\n=== Generating image (${runLabel}) ===`)
-      const tGen = Date.now()
-      let ttfbMs = null
-
-      images.length = 0
-      progressTicks.length = 0
-
-      const response = await model.run({
-        prompt: 'a red fox in a snowy forest, photorealistic',
-        negative_prompt: 'blurry, low quality, watermark',
-        steps: 10,
-        width: 512,
-        height: 512,
-        cfg_scale: 5.0,
-        sampling_method: 'euler',
-        seed: 42 + iteration
+    let model = null
+    try {
+      const [downloadedModelName, modelDir] = await ensureModel({
+        modelName: DEFAULT_MODEL.name
       })
 
-      await response
-        .onUpdate((data) => {
-          if (ttfbMs === null) ttfbMs = Date.now() - tGen
-          if (data instanceof Uint8Array) {
-            images.push(data)
-          } else if (typeof data === 'string') {
-            try {
-              const tick = JSON.parse(data)
-              if ('step' in tick && 'total' in tick) {
-                progressTicks.push(tick)
-              }
-            } catch (_) {}
-          }
+      console.log('\n' + '='.repeat(60))
+      console.log('STABLE DIFFUSION 3 MEDIUM — INTEGRATION TEST')
+      console.log('='.repeat(60))
+      console.log(` Platform  : ${platform}`)
+      console.log(` Model     : ${downloadedModelName}`)
+      console.log(` Models dir: ${modelDir}`)
+
+      const modelPath = path.join(modelDir, downloadedModelName)
+      t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
+
+      model = new ImgStableDiffusion({
+        files: {
+          model: path.join(modelDir, downloadedModelName)
+        },
+        config: {
+          threads: 4,
+          device: useCpu ? 'cpu' : 'gpu',
+          diffusion_fa: true,
+          prediction: 'flow',
+          flow_shift: '3.0',
+          verbosity: 2
+        },
+        logger: console,
+        opts: { stats: true }
+      })
+
+      const images = []
+      const progressTicks = []
+
+      // ── Load ─────────────────────────────────────────────────────────────────
+      console.log('\n=== Loading model ===')
+      const tLoad = Date.now()
+      await model.load()
+      const loadMs = Date.now() - tLoad
+      console.log(`Loaded in ${(loadMs / 1000).toFixed(1)}s`)
+      t.ok(loadMs < 120000, `Model loaded within 120s (took ${(loadMs / 1000).toFixed(1)}s)`)
+
+      // ── Generate (perf loop) ───────────────────────────────────────────────────
+      const totalIterations = WARMUP_RUNS + PERF_RUNS
+      for (let iteration = 0; iteration < totalIterations; iteration++) {
+        const isWarmup = iteration < WARMUP_RUNS
+        const runLabel = isWarmup
+          ? `warmup ${iteration + 1}`
+          : `run ${iteration - WARMUP_RUNS + 1}/${PERF_RUNS}`
+        console.log(`\n=== Generating image (${runLabel}) ===`)
+        const tGen = Date.now()
+        let ttfbMs = null
+
+        images.length = 0
+        progressTicks.length = 0
+
+        const response = await model.run({
+          prompt: 'a red fox in a snowy forest, photorealistic',
+          negative_prompt: 'blurry, low quality, watermark',
+          steps: 10,
+          width: 512,
+          height: 512,
+          cfg_scale: 5.0,
+          sampling_method: 'euler',
+          seed: 42 + iteration
         })
-        .await()
 
-      const genMs = Date.now() - tGen
-      console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+        await response
+          .onUpdate((data) => {
+            if (ttfbMs === null) ttfbMs = Date.now() - tGen
+            if (data instanceof Uint8Array) {
+              images.push(data)
+            } else if (typeof data === 'string') {
+              try {
+                const tick = JSON.parse(data)
+                if ('step' in tick && 'total' in tick) {
+                  progressTicks.push(tick)
+                }
+              } catch (_) {}
+            }
+          })
+          .await()
 
-      if (!isWarmup) {
-        t.comment(recordPerformance('[SD3 txt2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
-          scenario: 'txt2img',
-          model: 'sd3_medium_incl_clips',
-          execution_provider: useCpu ? 'cpu' : 'gpu',
-          ttfbMs
-        }))
+        const genMs = Date.now() - tGen
+        console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
+
+        if (!isWarmup) {
+          t.comment(
+            recordPerformance('[SD3 txt2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
+              scenario: 'txt2img',
+              model: 'sd3_medium_incl_clips',
+              execution_provider: useCpu ? 'cpu' : 'gpu',
+              ttfbMs
+            })
+          )
+        }
       }
+
+      // ── Assertions (on last iteration) ──────────────────────────────────────
+      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      t.is(
+        progressTicks[progressTicks.length - 1].total,
+        10,
+        'Final progress tick reports 10 total steps'
+      )
+
+      t.is(images.length, 1, 'Received exactly 1 image')
+
+      const img = images[0]
+      t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
+      t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
+      t.ok(isPng(img), 'Image has valid PNG magic bytes')
+
+      const outPath = path.join(modelDir, 'generate-image--sd3-txt2img-seed42.png')
+      fs.writeFileSync(outPath, img)
+      console.log(`\nSaved → ${outPath}`)
+    } finally {
+      console.log('\n=== Cleanup ===')
+      if (model) await model.unload().catch(() => {})
+      try {
+        binding.releaseLogger()
+      } catch (_) {}
+      console.log('Done.')
     }
-
-    // ── Assertions (on last iteration) ──────────────────────────────────────
-    t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
-    t.is(progressTicks[progressTicks.length - 1].total, 10, 'Final progress tick reports 10 total steps')
-
-    t.is(images.length, 1, 'Received exactly 1 image')
-
-    const img = images[0]
-    t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
-    t.ok(img.length > 0, `Image is non-empty (${img.length} bytes)`)
-    t.ok(isPng(img), 'Image has valid PNG magic bytes')
-
-    const outPath = path.join(modelDir, 'generate-image--sd3-txt2img-seed42.png')
-    fs.writeFileSync(outPath, img)
-    console.log(`\nSaved → ${outPath}`)
-  } finally {
-    console.log('\n=== Cleanup ===')
-    if (model) await model.unload().catch(() => {})
-    try {
-      binding.releaseLogger()
-    } catch (_) {}
-    console.log('Done.')
   }
-})
+)

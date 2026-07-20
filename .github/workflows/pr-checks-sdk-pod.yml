@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 # Package config lives in .github/sdk-pod-checks.json
-# Scripts (lint, build, test:unit) are auto-detected from each package's package.json
+# Scripts (format, lint, typecheck, build, test:unit) are auto-detected from each package's package.json
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -302,7 +302,9 @@ jobs:
               # Per-source setup (no-op if the script is absent).
               run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
 
+              run "format $src" npm run --if-present format
               run "lint $src" npm run --if-present lint
+              run "typecheck $src" npm run --if-present typecheck
               run "build:types $src" npm run --if-present build:types
               run "build $src" npm run --if-present build
               run "test:unit $src" npm run --if-present test:unit
@@ -321,6 +323,12 @@ jobs:
               if [ "$SDK_PKGJSON_CHANGED" = "true" ]; then
                 run "bare-sdk deps parity" node "$WS/packages/bare-sdk/scripts/check-deps-vs-sdk.mjs"
               fi
+              # Assert the committed Python-client contract (contract/schema.json,
+              # contract/manifest.json) matches a fresh export. A dedicated named
+              # check so a schema/registry change without regenerating fails with
+              # a clear "contract:check failed" instead of being buried inside the
+              # test:unit run above.
+              run "contract:check" npm run --if-present contract:check
               if consumer_install_check; then
                 echo "  ok  [$PKG] consumer install"
               else

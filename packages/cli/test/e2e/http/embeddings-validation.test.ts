@@ -7,28 +7,37 @@ describe('serve: embeddings validation', () => {
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/embeddings', headers: JSON_HEADERS, payload: '{{bad'
+      method: 'POST',
+      url: '/v1/embeddings',
+      headers: JSON_HEADERS,
+      payload: '{{bad'
     })
     assertStatusAndError(res, 400, 'invalid_json')
   })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/embeddings', payload: { input: 'hello' }
+      method: 'POST',
+      url: '/v1/embeddings',
+      payload: { input: 'hello' }
     })
     assertStatusAndError(res, 400, 'missing_model')
   })
 
   it('missing input returns 400', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/embeddings', payload: { model: 'test' }
+      method: 'POST',
+      url: '/v1/embeddings',
+      payload: { model: 'test' }
     })
     assertStatusAndError(res, 400, 'missing_input')
   })
 
   it('unknown model returns 404', async () => {
     const res = await server().inject({
-      method: 'POST', url: '/v1/embeddings', payload: { model: 'nonexistent', input: 'hello' }
+      method: 'POST',
+      url: '/v1/embeddings',
+      payload: { model: 'nonexistent', input: 'hello' }
     })
     assertStatusAndError(res, 404, 'model_not_found')
   })

@@ -1,25 +1,25 @@
-import type { SourceType } from "@/schemas";
-import type { AbortSignal } from "bare-abort-controller";
-import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
+import type { SourceType } from '@/schemas'
+import type { AbortSignal } from 'bare-abort-controller'
+import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
 
 export interface DownloadStats {
-  downloadTimeMs?: number;
-  totalBytesDownloaded?: number;
-  downloadSpeedBps?: number;
-  checksumValidationTimeMs?: number;
-  cacheHit?: boolean;
-  sharedTransfer?: boolean;
+  downloadTimeMs?: number
+  totalBytesDownloaded?: number
+  downloadSpeedBps?: number
+  checksumValidationTimeMs?: number
+  cacheHit?: boolean
+  sharedTransfer?: boolean
 }
 
 export interface ResolveResult {
-  path: string;
-  sourceType: SourceType;
-  downloadStats?: DownloadStats;
+  path: string
+  sourceType: SourceType
+  downloadStats?: DownloadStats
 }
 
 export interface DownloadResult {
-  path: string;
-  stats?: DownloadStats;
+  path: string
+  stats?: DownloadStats
 }
 
 /**
@@ -33,65 +33,64 @@ export interface DownloadResult {
  * into the transfer directly.
  */
 export interface DownloadRequestBinding {
-  signal: AbortSignal;
-  scope: DisposableScope;
-  requestId: string;
+  signal: AbortSignal
+  scope: DisposableScope
+  requestId: string
 }
 
 export interface DownloadHooks {
-  onDownloadKey?: (key: string) => void;
-  markCacheHit?: () => void;
-  markCacheMiss?: () => void;
-  markSharedTransfer?: () => void;
-  addChecksumValidationTimeMs?: (durationMs: number) => void;
+  onDownloadKey?: (key: string) => void
+  markCacheHit?: () => void
+  markCacheMiss?: () => void
+  markSharedTransfer?: () => void
+  addChecksumValidationTimeMs?: (durationMs: number) => void
   /**
    * When set, `startOrJoinDownload` attaches a per-subscriber cancel
    * listener bound to this request. `registry.cancel({ requestId })`
    * aborts only this subscriber; the transfer keeps running for siblings
    * joined on the same `downloadKey` until the last subscriber leaves.
    */
-  requestBinding?: DownloadRequestBinding;
+  requestBinding?: DownloadRequestBinding
 }
 
 export interface LoadModelProfilingMeta {
-  sourceType?: string;
-  downloadStats?: DownloadStats;
-  modelInitializationTimeMs?: number;
-  totalLoadTimeMs?: number;
+  sourceType?: string
+  downloadStats?: DownloadStats
+  modelInitializationTimeMs?: number
+  totalLoadTimeMs?: number
 }
 
 export function buildDownloadProfilingFields(
   downloadStats: DownloadStats | undefined,
-  sourceType?: string,
+  sourceType?: string
 ): { gauges: Record<string, number>; tags: Record<string, string> } {
-  const gauges: Record<string, number> = {};
-  const tags: Record<string, string> = {};
+  const gauges: Record<string, number> = {}
+  const tags: Record<string, string> = {}
 
   if (downloadStats) {
     if (downloadStats.downloadTimeMs !== undefined) {
-      gauges["downloadTime"] = downloadStats.downloadTimeMs;
+      gauges['downloadTime'] = downloadStats.downloadTimeMs
     }
     if (downloadStats.totalBytesDownloaded !== undefined) {
-      gauges["totalBytesDownloaded"] = downloadStats.totalBytesDownloaded;
+      gauges['totalBytesDownloaded'] = downloadStats.totalBytesDownloaded
     }
     if (downloadStats.downloadSpeedBps !== undefined) {
-      gauges["downloadSpeedBps"] = downloadStats.downloadSpeedBps;
+      gauges['downloadSpeedBps'] = downloadStats.downloadSpeedBps
     }
     if (downloadStats.checksumValidationTimeMs !== undefined) {
-      gauges["checksumValidationTime"] = downloadStats.checksumValidationTimeMs;
+      gauges['checksumValidationTime'] = downloadStats.checksumValidationTimeMs
     }
     if (downloadStats.cacheHit !== undefined) {
-      tags["cacheHit"] = downloadStats.cacheHit ? "true" : "false";
+      tags['cacheHit'] = downloadStats.cacheHit ? 'true' : 'false'
     }
     if (downloadStats.sharedTransfer) {
-      tags["sharedTransfer"] = "true";
+      tags['sharedTransfer'] = 'true'
     }
   }
 
   if (sourceType) {
-    tags["sourceType"] = sourceType;
+    tags['sourceType'] = sourceType
   }
 
-  return { gauges, tags };
+  return { gauges, tags }
 }
-

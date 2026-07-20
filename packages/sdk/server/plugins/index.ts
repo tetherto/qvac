@@ -6,5 +6,5 @@ export {
   hasPlugin,
   getAllPlugins,
   clearPlugins,
-  unregisterPlugin,
-} from "./registry";
+  unregisterPlugin
+} from './registry'

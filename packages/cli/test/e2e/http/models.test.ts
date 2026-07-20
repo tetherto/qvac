@@ -9,7 +9,7 @@ describe('serve: models endpoint', () => {
   it('GET /v1/models returns empty list', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/models' })
     assert.equal(res.statusCode, 200)
-    const body = res.json() as { object: string, data: unknown[] }
+    const body = res.json() as { object: string; data: unknown[] }
     assert.equal(body.object, 'list')
     assert.equal(body.data.length, 0)
   })

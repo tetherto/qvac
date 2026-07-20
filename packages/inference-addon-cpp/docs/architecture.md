@@ -104,7 +104,7 @@ graph TB
         LLAMA[@qvac/llm-llamacpp]
         WHISPER[@qvac/transcription-whispercpp]
         NMT[@qvac/translation-nmtcpp]
-        TTS[@qvac/tts-onnx]
+        TTS[@qvac/tts-ggml]
         EMBED[@qvac/embed-llamacpp]
         OCR["@qvac/ocr-onnx"]
     end
@@ -147,7 +147,7 @@ graph TB
 | Addons | @qvac/llm-llamacpp | LLM inference using llama.cpp |
 | Addons | @qvac/transcription-whispercpp | Speech-to-text using Whisper |
 | Addons | @qvac/translation-nmtcpp | Neural machine translation |
-| Addons | @qvac/tts-onnx | Text-to-speech using ONNX |
+| Addons | @qvac/tts-ggml | Text-to-speech using GGML |
 | Addons | @qvac/embed-llamacpp | Text embeddings using llama.cpp |
 | Addons | @qvac/ocr-onnx | OCR using ONNX |
 | Backend | CPU/GPU Inference Backends | Native ML computation |
@@ -162,7 +162,7 @@ Production addons built on this library:
 - **@qvac/llm-llamacpp** - LLM inference using llama.cpp
 - **@qvac/transcription-whispercpp** - Speech-to-text using Whisper
 - **@qvac/translation-nmtcpp** - Neural machine translation
-- **@qvac/tts-onnx** - Text-to-speech using ONNX
+- **@qvac/tts-ggml** - Text-to-speech using GGML
 - **@qvac/embed-llamacpp** - Text embeddings using llama.cpp
 - **@qvac/ocr-onnx** - OCR using ONNX and OpenCV
 

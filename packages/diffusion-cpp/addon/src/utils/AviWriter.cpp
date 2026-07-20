@@ -72,7 +72,8 @@ extern "C" void jpegSinkWriteCb(void* context, void* data, int size) {
 // ---------------------------------------------------------------------------
 
 std::vector<uint8_t> encodeFramesToAvi(
-    const sd_image_t* frames, int numFrames, int fps, int jpegQuality) {
+    const sd_image_t* frames, int numFrames, int fps, int jpegQuality,
+    const sd_audio_t* audio) {
   // -- Input validation ------------------------------------------------------
   if (!frames) {
     throw StatusError(
@@ -110,6 +111,61 @@ std::vector<uint8_t> encodeFramesToAvi(
         general_error::InvalidArgument,
         "encodeFramesToAvi: unsupported channel count " +
             std::to_string(channels) + " (only RGB=3 / RGBA=4 supported)");
+  }
+
+  // -- Optional audio: validate + de-planarize -------------------------------
+  // The engine returns PLANAR channel-major float (all of channel 0's samples,
+  // then channel 1's, ...). AVI PCM needs interleaved frames (s0c0, s0c1, ...),
+  // so we repack into `audioInterleaved` here. We emit IEEE float (32-bit) so
+  // there is no quantization; VLC plays WAVE_FORMAT_IEEE_FLOAT AVI directly.
+  const bool hasAudio = audio != nullptr && audio->data != nullptr &&
+                        audio->sample_count > 0 && audio->channels > 0 &&
+                        audio->sample_rate > 0;
+  std::vector<float> audioInterleaved;
+  uint32_t audioChannels = 0;
+  uint32_t audioSampleRate = 0;
+  uint64_t audioSampleCount = 0; // samples per channel
+  uint32_t audioByteSize = 0;    // total interleaved bytes
+  if (hasAudio) {
+    audioChannels = audio->channels;
+    audioSampleRate = audio->sample_rate;
+    audioSampleCount = audio->sample_count;
+    // AVI WAVEFORMATEX stores channel count as uint16 and nBlockAlign as
+    // uint16; bound both. 32-bit float => 4 bytes/sample.
+    if (audioChannels > 0xFFFFu ||
+        static_cast<uint64_t>(audioChannels) * 4u > 0xFFFFu) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "encodeFramesToAvi: audio channel count " +
+              std::to_string(audioChannels) +
+              " is too large for the AVI WAVEFORMATEX header");
+    }
+    // total samples = sampleCount * channels; bound the byte size against the
+    // AVI 1.0 uint32 chunk-size field (4 bytes per float sample).
+    if (audioSampleCount > UINT64_MAX / audioChannels) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "encodeFramesToAvi: audio sample buffer overflows");
+    }
+    const uint64_t totalSamples = audioSampleCount * audioChannels;
+    if (totalSamples > static_cast<uint64_t>(UINT32_MAX) / 4u) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "encodeFramesToAvi: audio (" + std::to_string(totalSamples) +
+              " samples) exceeds the AVI 1.0 uint32 chunk size limit");
+    }
+    audioByteSize = static_cast<uint32_t>(totalSamples * 4u);
+
+    audioInterleaved.resize(static_cast<size_t>(totalSamples));
+    const float* src = audio->data;
+    const size_t sc = static_cast<size_t>(audioSampleCount);
+    const size_t ch = static_cast<size_t>(audioChannels);
+    for (size_t s = 0; s < sc; ++s) {
+      for (size_t c = 0; c < ch; ++c) {
+        // planar src[c*sc + s] -> interleaved dst[s*ch + c]
+        audioInterleaved[s * ch + c] = src[c * sc + s];
+      }
+    }
   }
 
   // -- Build AVI in a single growable buffer ---------------------------------
@@ -156,7 +212,15 @@ std::vector<uint8_t> encodeFramesToAvi(
             " would overflow buffer size");
   }
 
-  const size_t estimated = kHeaderBytes + framesSz * perFrameWithOverhead;
+  // Audio adds one strl (+102 bytes of header) and a single 01wb data chunk
+  // plus its idx1 entry. Fold it into the estimate so the 4 GB pre-check and
+  // the reserve both account for it.
+  const size_t audioOverhead = hasAudio
+                                   ? (static_cast<size_t>(audioByteSize) + 102 +
+                                      kChunkOverhead + 16 /*idx1 entry*/)
+                                   : 0;
+  const size_t estimated =
+      kHeaderBytes + framesSz * perFrameWithOverhead + audioOverhead;
   // AVI 1.0 stores RIFF/LIST sizes as uint32 -- anything past 4 GB cannot
   // be represented in the header even if we had the RAM.
   if (estimated > static_cast<size_t>(UINT32_MAX)) {
@@ -175,10 +239,11 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, 0); // placeholder - patched after all frames written
   appendFourCC(out, "AVI ");
 
-  // LIST hdrl (size == 4 + (8 + 56) + (8 + 4 + (8 + 56) + (8 + 40)))
-  //           == 4 + 8 + 56 + 8 + 4 + 8 + 56 + 8 + 40 = 192
+  // LIST hdrl -- size is patched after all stream headers are written, since
+  // it grows by one strl (102 bytes) when an audio stream is present.
   appendFourCC(out, "LIST");
-  appendU32LE(out, 4 + 8 + 56 + 8 + 4 + 8 + 56 + 8 + 40);
+  const size_t hdrlSizePos = out.size();
+  appendU32LE(out, 0); // placeholder
   appendFourCC(out, "hdrl");
 
   // avih (AVI main header, 56 bytes)
@@ -186,11 +251,15 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, 56);
   appendU32LE(out, 1000000u / static_cast<uint32_t>(fps)); // us per frame
   appendU32LE(out, 0);                                     // max bytes/sec
-  appendU32LE(out, 0);     // padding granularity
-  appendU32LE(out, 0x110); // flags: HASINDEX | ISINTERLEAVED
+  appendU32LE(out, 0); // padding granularity
+  // HASINDEX (0x10) always. ISINTERLEAVED (0x100) only for video-only files:
+  // the audio path appends a single trailing 01wb chunk rather than
+  // interleaving audio per-frame, so advertising ISINTERLEAVED would
+  // misdescribe the layout when an audio stream is present.
+  appendU32LE(out, hasAudio ? 0x10u : 0x110u);        // flags
   appendU32LE(out, static_cast<uint32_t>(numFrames)); // total frames
   appendU32LE(out, 0);                                // initial frames
-  appendU32LE(out, 1);                                // number of streams
+  appendU32LE(out, hasAudio ? 2u : 1u);               // number of streams
   appendU32LE(out, suggestedBufferSize);              // suggested buffer size
   appendU32LE(out, width);
   appendU32LE(out, height);
@@ -239,6 +308,54 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, 0);                   // YPelsPerMeter
   appendU32LE(out, 0);                   // colors used
   appendU32LE(out, 0);                   // colors important
+
+  // -- Audio stream descriptor (LIST strl: strh 'auds' + strf WAVEFORMATEX) --
+  if (hasAudio) {
+    const uint32_t blockAlign = audioChannels * 4u; // bytes per frame
+    const uint32_t avgBytesPerSec = audioSampleRate * blockAlign;
+
+    // LIST strl (size = 4 "strl" + (8+56) strh + (8+18) strf = 94)
+    appendFourCC(out, "LIST");
+    appendU32LE(out, 4 + 8 + 56 + 8 + 18);
+    appendFourCC(out, "strl");
+
+    // strh (stream header, 56 bytes) -- same field layout as the video strh
+    appendFourCC(out, "strh");
+    appendU32LE(out, 56);
+    appendFourCC(out, "auds");         // stream type: audio
+    appendU32LE(out, 0);               // fccHandler (0 for PCM)
+    appendU32LE(out, 0);               // flags
+    appendU16LE(out, 0);               // priority
+    appendU16LE(out, 0);               // language
+    appendU32LE(out, 0);               // initial frames
+    appendU32LE(out, 1);               // scale
+    appendU32LE(out, audioSampleRate); // rate (rate/scale = Hz)
+    appendU32LE(out, 0);               // start
+    appendU32LE(
+        out, static_cast<uint32_t>(audioSampleCount)); // length (sample frames)
+    appendU32LE(out, audioByteSize);                   // suggested buffer size
+    appendU32LE(out, 0xFFFFFFFFu);                     // quality (-1 default)
+    appendU32LE(out, blockAlign); // sample size (block align)
+    appendU16LE(out, 0);          // rcFrame.left
+    appendU16LE(out, 0);          // rcFrame.top
+    appendU16LE(out, 0);          // rcFrame.right
+    appendU16LE(out, 0);          // rcFrame.bottom
+
+    // strf (WAVEFORMATEX, 18 bytes) -- IEEE float, cbSize = 0
+    appendFourCC(out, "strf");
+    appendU32LE(out, 18);
+    appendU16LE(out, 0x0003); // WAVE_FORMAT_IEEE_FLOAT
+    appendU16LE(out, static_cast<uint16_t>(audioChannels));
+    appendU32LE(out, audioSampleRate);                   // nSamplesPerSec
+    appendU32LE(out, avgBytesPerSec);                    // nAvgBytesPerSec
+    appendU16LE(out, static_cast<uint16_t>(blockAlign)); // nBlockAlign
+    appendU16LE(out, 32);                                // wBitsPerSample
+    appendU16LE(out, 0);                                 // cbSize
+  }
+
+  // Finalize hdrl size (everything written after the size field, incl "hdrl").
+  patchU32LEAt(
+      out, hdrlSizePos, static_cast<uint32_t>(out.size() - hdrlSizePos - 4));
 
   // LIST movi
   appendFourCC(out, "LIST");
@@ -304,6 +421,20 @@ std::vector<uint8_t> encodeFramesToAvi(
     }
   }
 
+  // -- Append the audio waveform as a single "01wb" chunk (stream 1) --------
+  // Non-interleaved (one trailing chunk) -- VLC handles this layout. The
+  // float payload is even-sized (4 bytes/sample) so no RIFF pad is needed.
+  AviIndexEntry audioEntry{};
+  if (hasAudio) {
+    appendFourCC(out, "01wb");
+    appendU32LE(out, audioByteSize);
+    audioEntry.offset = static_cast<uint32_t>(out.size() - 8 - moviSizePos - 4);
+    audioEntry.size = audioByteSize;
+    const auto* bytes =
+        reinterpret_cast<const uint8_t*>(audioInterleaved.data());
+    out.insert(out.end(), bytes, bytes + audioByteSize);
+  }
+
   // Finalize movi size (total bytes in LIST payload, not counting the LIST
   // chunk header and the 4-byte size field itself)
   {
@@ -314,12 +445,19 @@ std::vector<uint8_t> encodeFramesToAvi(
 
   // -- Write idx1 index ------------------------------------------------------
   appendFourCC(out, "idx1");
-  appendU32LE(out, static_cast<uint32_t>(numFrames) * 16);
+  appendU32LE(
+      out, (static_cast<uint32_t>(numFrames) + (hasAudio ? 1u : 0u)) * 16);
   for (const auto& entry : index) {
     appendFourCC(out, "00dc");
     appendU32LE(out, 0x10); // AVIIF_KEYFRAME
     appendU32LE(out, entry.offset);
     appendU32LE(out, entry.size);
+  }
+  if (hasAudio) {
+    appendFourCC(out, "01wb");
+    appendU32LE(out, 0x10); // AVIIF_KEYFRAME
+    appendU32LE(out, audioEntry.offset);
+    appendU32LE(out, audioEntry.size);
   }
 
   // Finalize RIFF size (total file size minus 8 bytes of "RIFF<size>").

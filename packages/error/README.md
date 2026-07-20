@@ -60,8 +60,8 @@ try {
   throw new QvacErrorCustom(ERR_CODES.VALIDATION_ERROR, 'username')
 } catch (error) {
   console.error(error.message) // "Validation failed for field: username"
-  console.error(error.code)    // 1000
-  console.error(error.name)    // "VALIDATION_ERROR"
+  console.error(error.code) // 1000
+  console.error(error.name) // "VALIDATION_ERROR"
 }
 ```
 

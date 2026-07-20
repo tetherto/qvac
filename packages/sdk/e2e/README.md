@@ -1,8 +1,8 @@
 # SDK Tests
 
 SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
-A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node) or mobile
-(Bare + React Native).
+A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
+(packaged Electron main process), or mobile (Bare + React Native).
 
 ## Running locally
 
@@ -12,33 +12,38 @@ npm run install:build                # installs deps + builds tests
 cp .env.example .env                 # only needed if you want to point at a remote broker
 
 npx qvac-test run:local:desktop
+npx qvac-test run:local:electron --filter completion-
 npx qvac-test run:local:android
 npx qvac-test run:local:ios
 ```
 
 **MQTT broker.** `run:local:*` requires a broker serving WebSockets on port 8080 and MQTT/TCP on 1883.
 If nothing is detected on localhost, the command prompts to install `aedes` + `websocket-stream` globally and
-runs an embedded broker for the duration of the test run. Bring your own broker if you prefer — just expose
+keeps an embedded broker alive while tests are running. Bring your own broker if you prefer — just expose
 `ws://...:8080` and `mqtt://...:1883`.
 
 **Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
-Mobile adds `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the full list.
+Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
+full list.
 
 **Platform prerequisites.**
 
 - iOS: Xcode + connected device trusted in Xcode. Team ID auto-detected; override with `QVAC_IOS_TEAM_ID`.
 - Android: `adb` + USB-debuggable device.
 - Desktop: Node 22+.
+- Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
+  apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
+  `--platform` / `--arch` are supplied.
 
 ### Rebuilding after changes
 
 Which rebuild command you run depends on what changed.
 
-| You changed                              | Command                         | Rebuild mobile app?                       |
-| ---------------------------------------- | ------------------------------- | ----------------------------------------- |
-| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full`    | Yes — `--skip-build` will miss the change |
-| Test code or assets in `e2e/`            | `npm run install:build`         | Yes when running on mobile                |
-| Only the producer side (filter, suite)   | none                            | No — use `--skip-build`                   |
+| You changed                              | Command                      | Rebuild packaged apps?                    |
+| ---------------------------------------- | ---------------------------- | ----------------------------------------- |
+| SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
+| Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
+| Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
 - `install:build:full` = `prepare:sdk` (bun install + bun run build in `packages/sdk/`) + `install:build`.
@@ -46,9 +51,70 @@ Which rebuild command you run depends on what changed.
   `install:build` is enough.
 - **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
   contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
+- **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
+  changes. Omit `--skip-build` to rebuild.
 - **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
+
+### Electron local smoke
+
+Electron e2e packages this directory as an Electron Forge app (`forge.config.cjs`), starts the configured
+consumer entry from the Electron main process, and uses `@qvac/sdk/electron-forge` to bundle the SDK plugins
+declared in `fixtures/qvac.config.electron.json`.
+
+```bash
+npm run install:build:full
+npx qvac-test run:local:electron --filter completion-
+```
+
+The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
+`embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
+
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `delegated-`, `no-lingering-bare-`, and
+`vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
+the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
+the worker during long-running operations, delegated inference depends on peer/provider startup semantics, and
+no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
+packaged worker lock.
+
+`classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
+weights; no registry model pre-download is required.
+
+### Custom plugin bundling
+
+[`fixtures/echo-plugin/`](./fixtures/echo-plugin) is a pure-JS custom plugin (no native addon) used to exercise
+the SDK plugin system end-to-end: `qvac.config.*` → `bundleSdk` → worker registration → `invokePlugin` /
+`invokePluginStream`. It's declared as a `custom-echo-plugin` dependency (`file:./fixtures/echo-plugin`) and
+listed in the `plugins` array of both `fixtures/qvac.config.e2e.json` and `fixtures/qvac.config.electron.json`,
+the same way a real app would add a third-party or in-repo custom plugin. `PluginExecutor`
+([`tests/shared/executors/plugin-executor.ts`](./tests/shared/executors/plugin-executor.ts)) calls the plugin's
+own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
+use a custom plugin rather than calling `invokePlugin` directly.
+
+Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-echo-plugin/plugin`: an empty
+or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
+plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
+would silently drop LLM/whisper/OCR/etc. plugin registration from the workers. The Electron config intentionally
+omits `sdcpp-generation` and `ggml-vla` (these addons are skipped when running on Electron).
+
+Each platform bundles the worker with the plugin included through its normal build path:
+
+- **Desktop** — `npm run bundle:sdk` (folded into `install:build:full`) calls `bundleSdk` programmatically
+  (equivalent to `npx qvac bundle sdk`, without requiring `@qvac/cli` as a dependency) and writes
+  `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
+- **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
+  `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
+  `electron-forge package`.
+- **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.json`.
+  `qvac-test build:consumer:mobile` copies that file into the generated Expo project root as `qvac.config.json`
+  before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
+  set as desktop.
+
+**Local sequencing:** desktop and Electron share `qvac/worker.entry.mjs` (and `qvac.config.json`) at the project
+root. `forge.config.cjs` snapshots whatever's there before Electron overwrites it and restores it in
+`postPackage`, so `run:local:desktop` and `run:local:electron` can run in any order without clobbering each
+other's bundle.
 
 ## Running in CI
 
@@ -69,8 +135,8 @@ and submit the form.
 Non-obvious inputs:
 
 - **"Use workflow from" (GitHub's own selector) vs `test-version`** — these are independent. The selector
-  picks the branch that supplies the *workflow YAML*; `test-version` is the git ref that gets checked out for
-  the *code under test* (and the e2e package). Leave `test-version` blank to test the same branch the
+  picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
+  the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms` — JSON array of runner labels; defaults to all three GPU runners. Narrow to one during
@@ -88,14 +154,15 @@ the form.
   - [`tests/shared/executors/`](./tests/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
     no RN APIs. Runs on both desktop and mobile. Example:
     [`completion-executor.ts`](./tests/shared/executors/completion-executor.ts).
-  - [`tests/desktop/executors/`](./tests/desktop/executors) — needs `node:fs`, `node:path`, `process.cwd()`,
-    or other Node-only APIs. Example: [`rag-executor.ts`](./tests/desktop/executors/rag-executor.ts) reads
+  - [`tests/shared/executors/node/`](./tests/shared/executors/node) — needs `node:fs`, `node:path`, `process.cwd()`,
+    or other Node-only APIs. Example: [`rag-executor.ts`](./tests/shared/executors/node/rag-executor.ts) reads
     documents from disk.
   - [`tests/mobile/executors/`](./tests/mobile/executors) — needs React Native-specific asset loading
     (`Platform`, bundled assets). Example:
     [`mobile/executors/ocr-executor.ts`](./tests/mobile/executors/ocr-executor.ts).
-- Register new executors in [`tests/desktop/consumer.ts`](./tests/desktop/consumer.ts) and
-  [`tests/mobile/consumer.ts`](./tests/mobile/consumer.ts) as applicable. Mobile platform skips go through
+- Register new executors in [`tests/desktop/consumer.ts`](./tests/desktop/consumer.ts),
+  [`tests/mobile/consumer.ts`](./tests/mobile/consumer.ts), and/or reuse those executors from
+  [`tests/electron/consumer.ts`](./tests/electron/consumer.ts) as applicable. Mobile platform skips go through
   `SkipExecutor` at the top of the mobile consumer (first match wins).
 - **Smoke suite policy.** If a new feature introduces core functionality that has no existing smoke coverage,
   tag **1-2** tests with `suites: ["smoke"]` — preferring the most representative, fastest, least-flaky test.
@@ -110,6 +177,8 @@ the form.
 
 - **No device detected** — `adb devices` (Android) or `xcrun devicectl list devices` (iOS). USB
   trust/debugging must be enabled.
+- **Electron packaged app missing** — rerun without `--skip-build`, or pass the exact host target:
+  `npx qvac-test run:local:electron --platform macos --arch arm64 --filter completion-`.
 - **iOS signing errors** — open [`build/consumers/ios/ios/QVACTestConsumer.xcworkspace`](./) in Xcode once and
   set the Team under Signing & Capabilities, or export `QVAC_IOS_TEAM_ID`. If Xcode keeps failing, change
   `QVAC_IOS_BUNDLE_ID` to a suffix unique to your Apple account.
@@ -118,14 +187,14 @@ the form.
 - **Manual iOS build fallback** — when the automated flow fails, build from the generated Xcode workspace
   manually:
 
-    ```bash
-    npx qvac-test build:consumer:ios --runId <run-id> --config .
-    cd build/consumers/ios/ios
-    xcodebuild \
-      -workspace QVACTestConsumer.xcworkspace \
-      -scheme QVACTestConsumer \
-      -configuration Release \
-      -destination 'id=<device-udid>'
-    ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
-    npx qvac-test run:producer --runId <run-id> --config .
-    ```
+  ```bash
+  npx qvac-test build:consumer:ios --runId <run-id> --config .
+  cd build/consumers/ios/ios
+  xcodebuild \
+    -workspace QVACTestConsumer.xcworkspace \
+    -scheme QVACTestConsumer \
+    -configuration Release \
+    -destination 'id=<device-udid>'
+  ios-deploy --bundle ~/Library/Developer/Xcode/DerivedData/<derived-data-dir>/Build/Products/Release-iphoneos/QVACTestConsumer.app
+  npx qvac-test run:producer --runId <run-id> --config .
+  ```

@@ -54,6 +54,12 @@ const EXCLUDED_PRS = {
       "Monorepo-wide path simplification across 26+ packages; only " +
       "incidentally touched packages/sdk via a test executor and a " +
       "historical changelog doc. Devops chore, not an SDK release item.",
+    2639:
+      "Shipped in 0.13.5 but reverted in 0.14.0 by #2908 (Android worklet " +
+      "leak / OOM); net change across the 0.13.0→0.14.0 minor span is zero, " +
+      "so it must not appear as a shipped fix. The revert PR #2908 is itself " +
+      "invisible to the path-scoped PR scan because the squash subject leads " +
+      "with the reverted '(#2639)' reference.",
   },
 };
 
@@ -919,7 +925,7 @@ function rebuildRootChangelog(packageName) {
     let content = fs.readFileSync(versionFile, "utf8").trim();
     // Transform version headers to "## [X.Y.Z]" for aggregated file
     content = content.replace(/^# Changelog v(\d+\.\d+\.\d+)/, "## [$1]");
-    content = content.replace(/^# QVAC SDK v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
+    content = content.replace(/^# QVAC .+? v(\d+\.\d+\.\d+) Release Notes/, "## [$1]");
     // Rewrite relative links: ./file.md -> ./changelog/VERSION/file.md
     content = content.replace(
       /\(\.\/([^)]+\.md)\)/g,

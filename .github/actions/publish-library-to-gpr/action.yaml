@@ -167,6 +167,17 @@ runs:
           SHOULD_PUBLISH=true
         fi
 
+        # feature/tmp dev streams publish to GPR (see ci-validation.md)
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == feature-* ]]; then
+          echo "✅ Publishing: push to feature branch"
+          SHOULD_PUBLISH=true
+        fi
+
+        if [[ "$EVENT_NAME" == "push" && "$BRANCH_NAME" == tmp-* ]]; then
+          echo "✅ Publishing: push to tmp branch"
+          SHOULD_PUBLISH=true
+        fi
+
         # manual dispatch
         if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
           echo "✅ Publishing: manual workflow_dispatch"
@@ -195,7 +206,6 @@ runs:
           transcription-whispercpp
           onnx-vad
           embed-llamacpp
-          tts-onnx
           ocr-onnx
         )
 
@@ -235,8 +245,33 @@ runs:
           echo "🧪 Applying suffix, new name: $PACKAGE_NAME"
         fi
 
+        ORIGINAL_NAME=$(node -p "require('./package.json').name")
         tmpfile=$(mktemp)
         jq --arg new_name "$PACKAGE_NAME" '.name = $new_name' package.json > "$tmpfile" && mv "$tmpfile" package.json
+
+        # cmake-bare derives the prebuild filename from package.json name
+        # (@scope/pkg -> scope__pkg.bare). When we rename @qvac/foo to
+        # @tetherto/foo-mono the on-disk bare modules keep their build-time
+        # names (e.g. qvac__fabric.bare); add symlinks so consumers resolve.
+        old_bare="$(
+          node -e "const n=process.argv[1]; console.log(n.replace(/^@/,'').replace('/','__') + '.bare')" "${ORIGINAL_NAME}"
+        )"
+        new_bare="$(
+          node -e "const n=process.argv[1]; console.log(n.replace(/^@/,'').replace('/','__') + '.bare')" "${PACKAGE_NAME}"
+        )"
+        if [ "${old_bare}" != "${new_bare}" ] && [ -d prebuilds ]; then
+          old_exports="${old_bare%.bare}.bare.exports"
+          new_exports="${new_bare%.bare}.bare.exports"
+          echo "Linking prebuild aliases: ${old_bare} -> ${new_bare}"
+          shopt -s nullglob
+          for platform_dir in prebuilds/*/; do
+            [ -f "${platform_dir}${old_bare}" ] || continue
+            ln -sf "${old_bare}" "${platform_dir}${new_bare}"
+            if [ -f "${platform_dir}${old_exports}" ]; then
+              ln -sf "${old_exports}" "${platform_dir}${new_exports}"
+            fi
+          done
+        fi
 
         echo "✅ Final publish name: $(node -p "require('./package.json').name")"
         echo "published_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"

@@ -3,13 +3,19 @@ name: Mobile Integration Tests (TTS GGML)
 # Migrated to .github/actions/run-mobile-integration-tests in
 # QVAC-18168 follow-up: rollout to remaining 9 mobile addons.
 #
-# As of PR #2168 (Android dynamic ggml backends), TTS-GGML tests
-# download models at runtime via the registry, so the CI no longer
-# pre-converts or bundles GGUFs into the test app.
+# As of PR #2168 (Android dynamic ggml backends), baseline TTS-GGML tests
+# download models at runtime via the registry. Benchmark runs additionally
+# pre-stage the requested quant files on Android Device Farm hosts (Parakeet
+# pattern) to avoid runtime network variance.
 
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/tts-ggml@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref to checkout"
         type: string
@@ -61,7 +67,7 @@ jobs:
   # merge today.  Tighten once the Device Farm provisioning + signing
   # + runner pool is stable.
   build-and-test:
-    name: Build ${{ matrix.platform }} and Run E2E Tests
+    name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -73,14 +79,13 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: Android
-            os: ubuntu-24.04
-            runner: qvac-ubuntu2404-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+      # Benchmark matrix (run_rtf_benchmarks=true) sweeps engine x backend on
+      # Android + iOS: chatterbox (CPU q4/q8 + GPU q4), supertonic (CPU + GPU
+      # q4) and supertonic3 (CPU + GPU q4). `use_gpu:true` selects Vulkan on
+      # Android / Metal on iOS via the benchmark's resolveBackend(). New rows are
+      # q4-only to keep the Device Farm run count bounded; chatterbox keeps its
+      # q4+q8 CPU coverage. The default (non-benchmark) matrix is unchanged.
+      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -111,6 +116,27 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+
+      - name: Configure AWS credentials via OIDC
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Benchmark runs pre-sign q4/q8 model URLs and store a local manifest
+      # consumed by generate-prestage-block.js below.
+      - name: Generate TTS-GGML mobile model manifest
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          node scripts/generate-mobile-model-manifest.js
+          ls -lh test/mobile/testAssets/
 
       # Benchmark opt-in (run_rtf_benchmarks=true): patch the addon's
       # test/mobile/integration-runtime.cjs to stub `bare-os.getEnv` so the
@@ -125,6 +151,10 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         env:
           PLATFORM: ${{ matrix.platform }}
+          VARIANT: ${{ matrix.variant }}
+          ENGINE: ${{ matrix.engine || 'chatterbox' }}
+          USE_GPU: ${{ matrix.use_gpu && '1' || '0' }}
+          GPU_TAG: ${{ matrix.use_gpu && 'gpu' || 'cpu' }}
         run: |
           echo "Injecting QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE=1 into mobile runtime"
           cat > test/mobile/inject-env.cjs <<NODE
@@ -134,12 +164,32 @@ jobs:
             if (key === 'QVAC_TTS_GGML_RUN_BENCHMARK_ON_MOBILE') return '1'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_DEVICE') return '$PLATFORM-device-farm'
             if (key === 'QVAC_TTS_GGML_BENCHMARK_RUNNER') return 'aws-device-farm-$PLATFORM'
-            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-q4'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_LABEL') return '$PLATFORM-$ENGINE-$VARIANT-$GPU_TAG'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_VARIANT') return '$VARIANT'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_ENGINE') return '$ENGINE'
+            if (key === 'QVAC_TTS_GGML_BENCHMARK_USE_GPU') return '$USE_GPU'
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined
           }
           NODE
           cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
           mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
+
+      # Android mirrors Parakeet's pre-stage flow: choose q4/q8 URLs from the
+      # generated manifest and emit Device Farm host commands that download each
+      # model then adb-push it to /data/local/tmp/qvac-tts-ggml/models.
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        env:
+          TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
+        run: |
+          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build mobile app
         id: build
@@ -154,6 +204,26 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Benchmark runs (run_rtf_benchmarks=true): the benchmark runners are
+      # intentionally NOT in test-groups.json, so they never run on normal PRs.
+      # For a benchmark run, build the device-farm test-groups from the addon's
+      # perf-tests.json so ONLY the benchmarks execute. To add a benchmark, add
+      # its function name to perf-tests.json — no workflow changes needed. On a
+      # normal run this step is skipped, the output is empty, and the action
+      # falls back to auto-detecting test-groups.json (the functional tests).
+      - name: Resolve benchmark test-groups from perf-tests.json
+        id: perf_groups
+        if: ${{ inputs.run_rtf_benchmarks }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        run: |
+          GREP=$(jq -r 'join("|")' test/mobile/perf-tests.json)
+          if [ -z "$GREP" ]; then
+            echo "::error::perf-tests.json is empty — no benchmarks to run"
+            exit 1
+          fi
+          echo "Benchmark grep: $GREP"
+          printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$GREP" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -165,9 +235,13 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+          # Empty on normal runs => action auto-detects test-groups.json
+          # (functional tests). Set on benchmark runs => only the benchmarks.
+          test-groups: ${{ steps.perf_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           mocha-timeout-ms: '2700000'
           wdio-waitfor-timeout-ms: '600000'
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
@@ -208,7 +282,7 @@ jobs:
       # Benchmark runs (run_rtf_benchmarks=true) print one [PERF_REPORT_START]
       # block per suite (RTF + streaming) into bare_console.log. Scrape every
       # block with --merge (no last-write-wins) and union them per device. The
-      # artifact name is what benchmark-rtf-tts-ggml.yml's summarize job
+      # artifact name is what benchmark-performance-tts-ggml.yml's summarize job
       # downloads (pattern perf-report-tts-ggml-*). Skipped on normal PR runs.
       - name: Extract and report TTS-GGML performance
         if: always() && !cancelled() && inputs.run_rtf_benchmarks && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
@@ -218,8 +292,8 @@ jobs:
           filter: ''
           merge: 'true'
           unzip-customer-artifacts: 'true'
-          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }})'
-          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ github.run_number }}
+          step-summary-title: 'Mobile Performance: tts-ggml (${{ matrix.platform }}, ${{ matrix.engine || ''chatterbox'' }} ${{ matrix.variant }} ${{ matrix.use_gpu && ''gpu'' || ''cpu'' }})'
+          artifact-name: perf-report-tts-ggml-${{ matrix.platform }}-${{ matrix.engine || 'chatterbox' }}-${{ matrix.variant }}-${{ matrix.use_gpu && 'gpu' || 'cpu' }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always() && !cancelled()

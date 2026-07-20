@@ -54,6 +54,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
 | [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
+| [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Update and verify the SDK -> CLI -> AI SDK provider -> OpenCode plugin release chain. | Syncing CLI to a newer SDK, agent-stack compatibility, OpenCode/provider release prep. **Auto** |
 
 ---
 
@@ -123,6 +124,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | SDK release changelog | `qv-sdk-changelog` |
 | Addon release changelog | `qv-addon-changelog` |
 | Backmerge after SDK release | `qv-sdk-backmerge` |
+| Sync CLI/provider/OpenCode to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
 | Holepunch stack help | `qv-holepunch-dev` |

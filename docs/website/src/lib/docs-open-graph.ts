@@ -33,10 +33,14 @@ const VERSION_SLUG_RE = /^v\d+\.\d+\.\d+$/;
  * - **Release notes** (`RELEASE_NOTES_SECTION`) — NOT hidden. Each archive
  *   is a uniquely-valuable historical document describing what changed in
  *   a specific release. There is no duplicate-content problem (every page
- *   has distinct text), and excluding them from search/LLMs makes
+ *   has distinct text), and excluding them from search makes
  *   "what changed in v0.8.0?" undiscoverable. Each archived release-note
- *   page stays its own canonical and is included everywhere the latest
- *   release-note is.
+ *   page stays its own canonical and is indexed everywhere the latest
+ *   release-note is (sitemap, `llms.txt`, per-page `.md`). The lone
+ *   exception is `llms-full.txt`, which drops the whole release-notes
+ *   section via `isReleaseNotesPage` to shrink the dump's token footprint
+ *   (QVAC-21379) — a scope filter for that one artefact, not an indexing
+ *   decision.
  */
 const SECTIONS_HIDDEN_FROM_INDEXING: VersionedSection[] = [API_SECTION];
 
@@ -109,7 +113,9 @@ export interface ArchivePageRef {
  *
  * Returns `false` for archived snapshots of sections that we intentionally
  * keep indexed (e.g. release-notes back-versions): those pages are visible
- * to crawlers and listed in the sitemap / llms.txt / llms-full.txt.
+ * to crawlers and listed in the sitemap and llms.txt. (They are still kept
+ * out of the `llms-full.txt` bulk dump — but by the separate
+ * `isReleaseNotesPage` filter, not by this function; see QVAC-21379.)
  *
  * Also returns `true` for legacy bundle-style URLs (`/vX.Y.Z/...` with the
  * version slug as the first segment), as a defensive fallback against any
@@ -118,6 +124,27 @@ export interface ArchivePageRef {
 export function isArchivedPage(page: ArchivePageRef): boolean {
   if (HIDDEN_ARCHIVED_PAGE_TO_SECTION.has(page.url)) return true;
   return isLegacyBundleSlug(page.slugs);
+}
+
+/**
+ * True when the page belongs to the release-notes section — its latest
+ * (`/reference/release-notes`) or any archived series
+ * (`/reference/release-notes/vX.Y.x`).
+ *
+ * Used exclusively by `llms-full.txt` to keep release notes out of the
+ * full-documentation dump (QVAC-21379): each release note is a historical
+ * changelog whose bulk text bloats the agent's token budget and dilutes its
+ * reasoning without adding context it needs for day-to-day SDK usage. Release
+ * notes stay indexed and discoverable everywhere else (sitemap, `llms.txt`,
+ * per-page `.md`); an agent that specifically needs "what changed in vX.Y?"
+ * can still fetch the individual page on demand.
+ *
+ * Deliberately separate from `isArchivedPage`: this is a scope-reduction
+ * filter for one artefact, not the "hidden near-duplicate archive" policy.
+ */
+export function isReleaseNotesPage(page: ArchivePageRef): boolean {
+  const base = RELEASE_NOTES_SECTION.basePath;
+  return page.url === base || page.url.startsWith(base + '/');
 }
 
 function isLegacyBundleSlug(slugs: string[] | undefined): boolean {

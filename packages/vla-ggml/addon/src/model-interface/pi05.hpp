@@ -317,33 +317,57 @@ struct Pi05ExpertBlockWeights {
 
 // Build one expert block on top of `x_exp` (ne=[expert_hidden, n_act]).
 //
-// `cached_k` / `cached_v` are the VLM's per-layer K/V cache slices
-// for the matching layer — ne=[head_dim, prefix_len, n_kv_heads].
-// `cond` is (cond_dim,) from M3.7. `act_positions` is the I32 RoPE
-// position vector for the action tokens, typically
-// `[prefix_offset, prefix_offset+1, ..., prefix_offset+n_act-1]`.
+// `kBuf` / `vBuf` are this layer's ONE persistent unified F16 KV buffer
+// each — ne=[head_dim, prefix_len + n_act, n_kv_heads] (llama.cpp-style).
+// The caller must have written the VLM prefix into the [0:prefix_len]
+// head slice (F16) before compute; this block writes the step's fresh
+// action K/V into the [prefix_len:] tail in-graph and flash-attends over
+// the WHOLE buffer (MQA, n_kv_heads==1, so the prefix is contiguous at 0).
+//
+// `modPreAttn` / `modPreFfw` are PRECOMPUTED F32 adaRMSNorm modulation
+// vectors, ne[0] == 3*expert_hidden, laid out `[scalePlus1 | shift | gate]`
+// (each expert_hidden wide) — i.e. `Linear(cond, ada_w, ada_b)` with the
+// adaRMSNorm `+1` already folded into the scale third. The block slices
+// them via `pi05AdaViewsFromMod` and applies `rms_norm(x)*scalePlus1+shift`.
+// `act_positions` is the I32 RoPE position vector for the action tokens,
+// typically `[prefix_offset, prefix_offset+1, ..., prefix_offset+n_act-1]`.
+//
+// `kvWrites` is an out-param: the in-graph action-K/V copy nodes are pushed
+// onto it. The caller MUST `ggml_build_forward_expand` every entry BEFORE
+// expanding the final output, so each tail write is ordered before the FA
+// read that consumes it (there is no DAG edge enforcing this — see the
+// invariant comment at the push site in pi05.cpp).
 //
 // Returns nullptr on missing weights. Shape of the returned tensor
 // is ne=[expert_hidden, n_act] — feedable straight into the next
 // expert block (M3.10) or `action_out_proj` (M3.10).
 struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx, struct ggml_tensor* xExp,
-    struct ggml_tensor* actPositions, struct ggml_tensor* cachedK,
-    struct ggml_tensor* cachedV, struct ggml_tensor* cond,
+    struct ggml_tensor* actPositions, struct ggml_tensor* kBuf,
+    struct ggml_tensor* vBuf, struct ggml_tensor* modPreAttn,
+    struct ggml_tensor* modPreFfw,
+    std::vector<struct ggml_tensor*>& kvWrites,
     const Pi05ExpertBlockWeights& w, int expertHidden, int nHeads, int nKvHeads,
     int headDim, int prefixLen, int nAct, float rmsNormEps, float ropeFreqBase);
 
 // M3.10 — full expert pass for one ODE step.
 //
-// Chains N expert blocks (M3.9) over the cached prefix KV per layer,
-// applies the final adaRMSNorm (also modulated by `cond` — the
-// expert's `expert.final_norm.ada.{weight,bias}` plays the same role
-// as the per-block ada densities), then runs `action_out_proj` to
-// produce `v_t` — the flow-matching velocity prediction for the
-// current timestep.
+// Chains N expert blocks (M3.9) over the per-layer unified F16 KV buffers,
+// applies the final adaRMSNorm (driven by the precomputed `modFinal`
+// modulation — the expert's `expert.final_norm.ada.{weight,bias}` plays
+// the same role as the per-block ada densities), then runs
+// `action_out_proj` to produce `v_t` — the flow-matching velocity
+// prediction for the current timestep.
 //
-// `cached_k[i]` / `cached_v[i]` must have ne=[head_dim, prefix_len,
-// n_kv_heads] for each of the `blocks.size()` layers. `blocks.size()`
+// `kBufs[i]` / `vBufs[i]` are the per-layer persistent unified F16 KV
+// buffers, ne=[head_dim, prefix_len + n_act, n_kv_heads], with the VLM
+// prefix already written into the [0:prefix_len] slice (see M3.9).
+// `modsPreAttn[i]` / `modsPreFfw[i]` and `modFinal` are the precomputed
+// `[scalePlus1 | shift | gate]` modulation vectors (3*expert_hidden wide,
+// `+1` pre-folded into the scale third). All four vectors must have
+// `blocks.size()` entries. `kvWrites` collects the in-graph action-K/V
+// copy nodes across all layers; the caller must expand them before the
+// final output (same ordering invariant as M3.9). `blocks.size()`
 // determines depth (18 for pi05_base).
 struct Pi05ExpertODEStepOutputs {
   // ne=[expert_hidden, n_act] — post-final-norm hidden state.
@@ -371,13 +395,17 @@ struct ggml_tensor* pi05BuildEulerStepGraph(
 Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     struct ggml_context* ctx,
     struct ggml_tensor* xExp,                        // (expert_hidden, n_act)
-    struct ggml_tensor* actPositions,                // I32 (n_act,)
-    const std::vector<struct ggml_tensor*>& cachedK, // per-layer
-    const std::vector<struct ggml_tensor*>& cachedV,
-    struct ggml_tensor* cond, // (cond_dim,)
+    struct ggml_tensor* actPositions,              // I32 (n_act,)
+    const std::vector<struct ggml_tensor*>& kBufs, // per-layer unified F16 KV
+    const std::vector<struct ggml_tensor*>& vBufs, // [head_dim, prefix+act, kv]
+    // Per-layer precomputed adaRMSNorm modulations for this ODE step —
+    // each (3·hidden,). Computed once for all steps in a batched matmul.
+    const std::vector<struct ggml_tensor*>& modsPreAttn,
+    const std::vector<struct ggml_tensor*>& modsPreFfw,
+    struct ggml_tensor* modFinal, // (3·hidden,) — final-norm modulation
+    // Out: the in-graph action-K/V copy nodes; caller must expand them.
+    std::vector<struct ggml_tensor*>& kvWrites,
     const std::vector<Pi05ExpertBlockWeights>& blocks,
-    struct ggml_tensor* finalNormAdaW,  // (cond_dim, 3·hidden)
-    struct ggml_tensor* finalNormAdaB,  // (3·hidden,)
     struct ggml_tensor* actionOutProjW, // (expert_hidden, action_dim)
     struct ggml_tensor* actionOutProjB, // (action_dim,)
     int expertHidden, int nHeads, int nKvHeads, int headDim, int prefixLen,

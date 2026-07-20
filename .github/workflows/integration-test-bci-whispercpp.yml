@@ -7,6 +7,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
         required: false
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF/throughput benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -23,6 +37,20 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
         required: false
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF/throughput benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix"
+        required: false
+        type: string
       workdir:
         description: "Relative path to package directory in monorepo"
         required: false
@@ -35,10 +63,21 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
 
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # Per-runner GPU toggle (mirrors integration-test-tts-ggml.yml): GPU
+      # runners (qvac-*-gpu) leave no_gpu unset so the gpu-smoke runs and
+      # asserts the GPU backend; CPU-only runners set no_gpu:'true' to skip it.
+      # The arm64 macOS leg runs on the self-hosted qvac-macos26-arm64-gpu
+      # runner, which has a real Metal GPU and so exercises the Metal backend
+      # (hosted macs' Paravirtual Metal device crashed ggml's encoder, which is
+      # why macOS was previously CPU-only). bci ships a Vulkan desktop build
+      # (see vcpkg.json), so the Linux GPU runner exercises real desktop GPU.
+      # Mobile GPU coverage runs on Device Farm via
+      # test/mobile/integration-runtime.cjs (NO_GPU=false).
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
 
     permissions:
       contents: read
@@ -48,23 +87,58 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux x64 on a GPU runner: exercises the Vulkan desktop build
+          # (no_gpu unset -> NO_GPU=false -> gpu-smoke runs + asserts GPU).
+          # BCI ships a single registry model, so the benchmark sweeps
+          # platform × CPU/GPU backend (no quant dimension).
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
+            runner: qvac-ubuntu2204-x64-gpu
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
+          - os: ubuntu-26.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
-          - os: macos-14-xlarge
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
+          - os: macos-26
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"metal"}]
           - os: macos-15-large
             platform: darwin
             arch: x64
+            no_gpu: 'true'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"}]
+          # Use the GPU runner: the prebuilt Windows addon is a Vulkan build that
+          # links against the Vulkan loader (vulkan-1.dll), which only exists on
+          # qvac-win25-x64-gpu (Vulkan SDK preinstalled at C:\VulkanSDK). On the
+          # plain qvac-win25-x64 runner the addon fails to load with Win32 error
+          # 126 (ADDON_NOT_FOUND). Mirrors transcription-whispercpp / vla.
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64
+            runner: qvac-win25-x64-gpu
+            no_gpu: 'false'
+            benchmark_matrix_json: >-
+              [{"useGPU":false,"backendHint":"cpu"},{"useGPU":true,"backendHint":"vulkan"}]
 
     steps:
       - name: Setup Node.js
@@ -99,13 +173,28 @@ jobs:
           path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
 
-      - name: Move prebuilds from staging to workspace
-        if: ${{ !inputs.prebuild_package }}
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
         run: |
           mkdir -p ${{ inputs.workdir }}/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/
           echo "Prebuilds moved from staging area"
-        shell: bash
+          ls -la ${{ inputs.workdir }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the source
+      # path becomes invalid and the copy silently no-ops (leaving no prebuild
+      # -> ADDON_NOT_FOUND). Use PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ inputs.workdir }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -131,26 +220,87 @@ jobs:
           New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
           npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
           $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          # Extract from inside the temp dir with a RELATIVE archive name. The
+          # tar on PATH (Git's MSYS GNU tar) mangles absolute Windows paths — it
+          # reads the "C:" in an absolute -f/-C argument as a remote host and
+          # aborts, so the extract silently no-ops and the addon is never staged.
+          Push-Location "${{ runner.temp }}\tmp"
+          tar -xzf $tgz.Name
+          Pop-Location
           Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
           }
 
-      - name: macOS - install whisper dependencies
-        if: matrix.platform == 'darwin'
-        shell: bash
-        run: |
-          brew install --quiet openblas lapack fftw
-
+      # The prebuilt Windows addon is a Vulkan build that links against the
+      # Vulkan loader (vulkan-1.dll), which ships in C:\VulkanSDK\Bin on the
+      # qvac-win25-x64-gpu runner. We export VULKAN_SDK / add its Bin to PATH,
+      # but that alone is not enough for bci-whispercpp (see the "stage Vulkan
+      # loader next to addon" step below): the .bare statically imports
+      # vulkan-1.dll and bare's loader does not search PATH for it, so it fails
+      # with Win32 error 126 (ADDON_NOT_FOUND). Mirrors integration-test-vla.yml.
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025
-        working-directory: ${{ env.WORKDIR }}
-        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+        shell: powershell
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          echo "C:\VulkanSDK\Bin" >> $Env:GITHUB_PATH
+
+      # Diagnostic: dump the prebuilt addon's DLL import table so we can see
+      # exactly which dependency LoadLibrary is missing when the addon fails to
+      # load (Win32 error 126). `dumpbin` ships with the VS Build Tools that the
+      # qvac-win25-x64-gpu runner has installed. Mirrors integration-test-vla.yml.
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Windows - dump addon DLL imports (diagnostic)
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          $addon = Get-ChildItem -Path prebuilds/win32-x64 -Recurse -Filter 'qvac__bci-whispercpp*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $addon) { Write-Host "no win32-x64 .bare in prebuilds/"; exit 0 }
+          Write-Host "addon: $($addon.FullName)"
+          $dumpbin = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dumpbin) { Write-Host "dumpbin not found"; exit 0 }
+          & $dumpbin.FullName /dependents $addon.FullName
+
+      # Unlike vla-ggml (which builds ggml with dynamic backends, so ggml-vulkan
+      # and its vulkan-1.dll dependency are only loaded lazily when the GPU is
+      # used), bci-whispercpp statically links whisper/ggml with Vulkan, so the
+      # .bare has a HARD import on vulkan-1.dll that must resolve at load time.
+      # We copy the Vulkan loader next to the addon (Windows always searches the
+      # loaded module's own directory first) as a belt-and-suspenders fallback.
+      # The loader lives in System32 on the qvac-win25-x64-gpu runner (that is
+      # where the driver installs it and how the Vulkan device is found), not
+      # under C:\VulkanSDK, so search System32 / VULKAN_SDK\Bin first. Non-fatal:
+      # if it is not found, the default DLL search path (System32) still resolves
+      # the import, so a benchmark-only run must not be gated on the copy.
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Windows - stage Vulkan loader next to addon
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          $vk = @("$Env:WINDIR\System32\vulkan-1.dll", "$Env:VULKAN_SDK\Bin\vulkan-1.dll") |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $vk) {
+            $found = Get-ChildItem -Path "C:\VulkanSDK" -Filter vulkan-1.dll -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $vk = $found.FullName }
+          }
+          if (-not $vk) { Write-Host "vulkan-1.dll not found; relying on the default DLL search path (System32)"; exit 0 }
+          $dir = Get-ChildItem -Path prebuilds/win32-x64 -Recurse -Filter 'qvac__bci-whispercpp*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { $_.DirectoryName }
+          if (-not $dir) { Write-Host "no win32-x64 .bare dir in prebuilds/"; exit 0 }
+          Write-Host "copying $vk -> $dir"
+          Copy-Item -Path $vk -Destination $dir -Force
+
+      - name: Download models (registry)
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run download-models
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run integration test (Unix)
-        if: ${{ matrix.platform != 'win32' }}
+        if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: npm run test:integration
@@ -158,12 +308,51 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run integration test (Windows)
-        if: ${{ matrix.platform == 'win32' }}
+        if: ${{ matrix.platform == 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      # RTF/throughput benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-bci-whispercpp.yml). Runs the matrix runner once
+      # per (useGPU) combo with the single BCI model and writes per-config JSON
+      # under benchmarks/results/, uploaded as rtf-results-* for the
+      # orchestrator's summarize job. Skipped on normal integration runs.
+      - name: Run RTF benchmark (Unix)
+        if: ${{ always() && !cancelled() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Run RTF benchmark (Windows)
+        if: ${{ always() && !cancelled() && matrix.platform == 'win32' && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+
+      - name: Upload RTF benchmark results
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-${{ matrix.runner || matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ inputs.workdir }}/benchmarks/results/rtf-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Print run state (Unix)
         if: ${{ matrix.platform != 'win32' }}

@@ -14,4 +14,3 @@ Release Date: 2026-05-27
 ## 📦 Models
 
 - Model registry constants initialized: 0 → 729 (+729). See [model changes](./models.md) for the full list.
-

@@ -11,7 +11,7 @@ class TTSInterface {
    * @param {Object} configuration Optional initial configuration (engine-specific model paths, language, etc.)
    * @param {Function} outputCb - To be called on inference output events
    */
-  constructor (binding, configuration = {}, outputCb = null) {
+  constructor(binding, configuration = {}, outputCb = null) {
     this._binding = binding
     this._handle = this._binding.createInstance(this, configuration, outputCb)
   }
@@ -26,7 +26,7 @@ class TTSInterface {
    * event loop.  The native call therefore returns a JS promise; awaiting
    * it here is what blocks `model.load()` until the worker finishes.
    */
-  async activate () {
+  async activate() {
     try {
       await this._binding.activate(this._handle)
     } catch (err) {
@@ -44,7 +44,7 @@ class TTSInterface {
    * @param {String} data.type
    * @param {String} data.input
    */
-  async runJob (data) {
+  async runJob(data) {
     try {
       this._binding.runJob(this._handle, data)
     } catch (err) {
@@ -56,7 +56,7 @@ class TTSInterface {
     }
   }
 
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     try {
       this._binding.loadWeights(this._handle, weightsData)
     } catch (err) {
@@ -68,7 +68,7 @@ class TTSInterface {
     }
   }
 
-  async cancel () {
+  async cancel() {
     try {
       await this._binding.cancel(this._handle)
     } catch (err) {
@@ -83,7 +83,7 @@ class TTSInterface {
   /**
    * Stops addon process and clears resources (including memory).
    */
-  async destroyInstance () {
+  async destroyInstance() {
     // Already destroyed, nothing to do
     if (this._handle === null) {
       return
@@ -102,7 +102,7 @@ class TTSInterface {
     }
   }
 
-  async unload () {
+  async unload() {
     return this.destroyInstance()
   }
 }

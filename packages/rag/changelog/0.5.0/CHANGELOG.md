@@ -11,4 +11,3 @@ Release Date: 2026-05-08
 
 - Scope down DataLoader cleanup to packages/rag. (see PR [#1754](https://github.com/tetherto/qvac/pull/1754))
 - Move Holepunch libs to peerDependencies. (see PR [#1905](https://github.com/tetherto/qvac/pull/1905))
-

@@ -1,10 +1,10 @@
-import type { CancelRequest, CancelResponse } from "@/schemas/cancel";
-import { cancel as cancelByModelId } from "@/server/bare/ops/cancel";
-import { getRequestRegistry } from "@/server/bare/runtime";
-import { markClearCacheForRequest } from "@/server/rpc/handlers/load-model/download-manager";
-import { getServerLogger } from "@/logging";
+import type { CancelRequest, CancelResponse } from '@/schemas/cancel'
+import { cancel as cancelByModelId } from '@/server/bare/ops/cancel'
+import { getRequestRegistry } from '@/server/bare/runtime'
+import { markClearCacheForRequest } from '@/server/rpc/handlers/load-model/download-manager'
+import { getServerLogger } from '@/logging'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 /**
  * Cancel RPC entry point. The 5-arm `switch (request.operation)`
@@ -37,13 +37,13 @@ const logger = getServerLogger();
  */
 export function cancelHandler(request: CancelRequest): CancelResponse {
   try {
-    if (request.operation === "request") {
+    if (request.operation === 'request') {
       if (request.clearCache) {
-        markClearCacheForRequest(request.requestId);
+        markClearCacheForRequest(request.requestId)
       }
       const cancelled = getRequestRegistry().cancel({
-        requestId: request.requestId,
-      });
+        requestId: request.requestId
+      })
       if (cancelled === 0) {
         // info-level (not debug) because the decorated-promise pattern
         // makes "no in-flight match" a common and user-visible case:
@@ -53,25 +53,23 @@ export function cancelHandler(request: CancelRequest): CancelResponse {
         // matching begin in flight; this log just helps operators
         // debugging "my Stop button isn't working" without lowering
         // the log level.
-        logger.info(
-          `[cancel] no in-flight request matched requestId=${request.requestId}`,
-        );
+        logger.info(`[cancel] no in-flight request matched requestId=${request.requestId}`)
       }
-      return { type: "cancel", success: true, cancelled };
+      return { type: 'cancel', success: true, cancelled }
     }
 
     // operation === "broad"
     const cancelled = cancelByModelId(
       { modelId: request.modelId },
-      request.kind ? { kind: request.kind } : undefined,
-    );
-    return { type: "cancel", success: true, cancelled };
+      request.kind ? { kind: request.kind } : undefined
+    )
+    return { type: 'cancel', success: true, cancelled }
   } catch (error) {
-    logger.error("Error during cancellation:", error);
+    logger.error('Error during cancellation:', error)
     return {
-      type: "cancel",
+      type: 'cancel',
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }

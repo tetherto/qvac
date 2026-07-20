@@ -1,4 +1,4 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 /**
  * Collect ResourceManager dep keys declared in test `metadata`:
@@ -8,24 +8,24 @@ import type { TestDefinition } from "@tetherto/qvac-test-suite";
  * is dropped. Result is feed-ready for `downloadAllOnce({ allowedDeps })`.
  */
 export function collectTestDeps(tests: readonly TestDefinition[]): Set<string> {
-  const deps = new Set<string>();
+  const deps = new Set<string>()
   for (const test of tests) {
-    const meta = test.metadata as Record<string, unknown> | undefined;
-    if (!meta) continue;
+    const meta = test.metadata as Record<string, unknown> | undefined
+    if (!meta) continue
 
-    const single = meta["dependency"];
-    if (typeof single === "string" && single.length > 0 && single !== "none") {
-      deps.add(single);
+    const single = meta['dependency']
+    if (typeof single === 'string' && single.length > 0 && single !== 'none') {
+      deps.add(single)
     }
 
-    const multi = meta["dependencies"];
+    const multi = meta['dependencies']
     if (Array.isArray(multi)) {
       for (const dep of multi) {
-        if (typeof dep === "string" && dep.length > 0 && dep !== "none") {
-          deps.add(dep);
+        if (typeof dep === 'string' && dep.length > 0 && dep !== 'none') {
+          deps.add(dep)
         }
       }
     }
   }
-  return deps;
+  return deps
 }

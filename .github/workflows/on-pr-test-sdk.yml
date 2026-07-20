@@ -1,8 +1,8 @@
 # QVAC SDK E2E Tests - PR Trigger
 #
 # Triggers SDK e2e tests via test-sdk.yml when:
-#   - "test-e2e-smoke" label applied: runs smoke suite on all platforms
-#   - "test-e2e-full" label applied: runs full suite on all platforms
+#   - "test-e2e-smoke" label applied: runs smoke suite on desktop + mobile
+#   - "test-e2e-full" label applied: runs full suite on desktop + mobile
 #   - PR opened/updated targeting release-* branch with packages/sdk/ changes: runs full suite
 #
 # On success, applies "e2e-tested" label to the PR.
@@ -26,7 +26,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -105,7 +105,7 @@ jobs:
     if: needs.label-gate.outputs.authorised == 'true' && (needs.resolve-config.outputs.should-run == 'true')
     uses: ./.github/workflows/test-sdk.yml
     with:
-      targets: all
+      targets: desktop + mobile
       suite: ${{ needs.resolve-config.outputs.suite }}
     secrets: inherit
 

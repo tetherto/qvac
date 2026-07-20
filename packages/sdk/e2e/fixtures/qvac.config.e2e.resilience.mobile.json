@@ -1,0 +1,4 @@
+{
+  "registryStreamTimeoutMs": 8000,
+  "registryDownloadMaxRetries": 20
+}

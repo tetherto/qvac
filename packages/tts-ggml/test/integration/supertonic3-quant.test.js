@@ -12,8 +12,8 @@
 //     new language codes.
 //
 // All four tiers are pulled from the QVAC model registry (S3): fp16 / fp32 from
-// the 2026-06-10 build (QVAC-20568) and the q8_0 / q4_0 block-quants from the
-// 2026-06-15 build (QVAC-20686).  Every tier is published, so a fetch failure
+// the 2026-06-10 build and the q8_0 / q4_0 block-quants from the
+// 2026-06-15 build. Every tier is published, so a fetch failure
 // is a real error and the corresponding test FAILS (it no longer self-skips).
 // CI stages all four tiers via `download-models:registry`.
 
@@ -28,7 +28,7 @@ const { ensureSupertonic3Model } = require('../utils/downloadModel')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 
-function getBaseDir () {
+function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
@@ -54,7 +54,7 @@ const SENTENCES = [
   { lang: 'nl', text: 'De snelle bruine vos springt over de luie hond.', group: 'new' }
 ]
 
-async function loadSupertonic3TTS (params) {
+async function loadSupertonic3TTS(params) {
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
     files: { supertonicModel: params.supertonicModelPath },
@@ -67,45 +67,59 @@ async function loadSupertonic3TTS (params) {
 }
 
 for (const quant of QUANTS) {
-  test(`Supertonic 3 (${quant}): synthesizes across existing + new languages`, { timeout: 1800000 }, async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureSupertonic3Model({
-      targetDir: path.join(baseDir, 'models'),
-      quant
-    })
-    if (!download.success) {
-      t.fail(`supertonic3-${quant}.gguf could not be fetched from the registry. ` +
-        'All four tiers are published on the QVAC registry (S3); a fetch ' +
-        'failure is a real error (network / registry unavailable, or the ' +
-        '@qvac/registry-client devDependency is missing).')
-      return
-    }
-
-    const model = await loadSupertonic3TTS({
-      supertonicModelPath: download.path,
-      language: SENTENCES[0].lang
-    })
-    try {
-      for (let i = 0; i < SENTENCES.length; i++) {
-        const { lang, text, group } = SENTENCES[i]
-        console.log(`  [${quant}/${group}/${lang}] "${text.slice(0, 50)}..."`)
-        if (i > 0) {
-          await model.reload({ language: lang })
-        }
-        const result = await runSupertonicTTS(
-          model,
-          { text },
-          { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 }
+  test(
+    `Supertonic 3 (${quant}): synthesizes across existing + new languages`,
+    { timeout: 1800000 },
+    async (t) => {
+      const baseDir = getBaseDir()
+      const download = await ensureSupertonic3Model({
+        targetDir: path.join(baseDir, 'models'),
+        quant
+      })
+      if (!download.success) {
+        t.fail(
+          `supertonic3-${quant}.gguf could not be fetched from the registry. ` +
+            'All four tiers are published on the QVAC registry (S3); a fetch ' +
+            'failure is a real error (network / registry unavailable, or the ' +
+            '@qvac/registry-client devDependency is missing).'
         )
-        console.log('    ' + result.output)
-
-        t.ok(result.passed, `Supertonic 3 ${quant} ${lang} (${group}) run passes expectations`)
-        t.ok(result.data.sampleCount > 0, `Supertonic 3 ${quant} ${lang} (${group}) produced audio`)
-        t.is(result.data.reportedSampleRate || SAMPLE_RATE, SAMPLE_RATE,
-          `Supertonic 3 ${quant} ${lang} reports 44.1 kHz`)
+        return
       }
-    } finally {
-      try { await model.unload() } catch (_e) {}
+
+      const model = await loadSupertonic3TTS({
+        supertonicModelPath: download.path,
+        language: SENTENCES[0].lang
+      })
+      try {
+        for (let i = 0; i < SENTENCES.length; i++) {
+          const { lang, text, group } = SENTENCES[i]
+          console.log(`  [${quant}/${group}/${lang}] "${text.slice(0, 50)}..."`)
+          if (i > 0) {
+            await model.reload({ language: lang })
+          }
+          const result = await runSupertonicTTS(
+            model,
+            { text },
+            { minSamples: 5000, maxSamples: 5000000, minDurationMs: 200, maxDurationMs: 300000 }
+          )
+          console.log('    ' + result.output)
+
+          t.ok(result.passed, `Supertonic 3 ${quant} ${lang} (${group}) run passes expectations`)
+          t.ok(
+            result.data.sampleCount > 0,
+            `Supertonic 3 ${quant} ${lang} (${group}) produced audio`
+          )
+          t.is(
+            result.data.reportedSampleRate || SAMPLE_RATE,
+            SAMPLE_RATE,
+            `Supertonic 3 ${quant} ${lang} reports 44.1 kHz`
+          )
+        }
+      } finally {
+        try {
+          await model.unload()
+        } catch (_e) {}
+      }
     }
-  })
+  )
 }

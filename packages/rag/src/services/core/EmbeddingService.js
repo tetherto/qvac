@@ -15,9 +15,12 @@ class EmbeddingService {
    * @param {EmbeddingFunction} config.embeddingFunction - The embedding function
    * @param {Logger} [config.logger] - Optional logger instance
    */
-  constructor ({ embeddingFunction, logger }) {
+  constructor({ embeddingFunction, logger }) {
     if (!embeddingFunction || typeof embeddingFunction !== 'function') {
-      throw new QvacErrorRAG({ code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED, adds: 'embeddingFunction must be a function that takes text and returns an array of numbers' })
+      throw new QvacErrorRAG({
+        code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
+        adds: 'embeddingFunction must be a function that takes text and returns an array of numbers'
+      })
     }
     this.embeddingFunction = embeddingFunction
     this.logger = logger || new QvacLogger()
@@ -29,7 +32,7 @@ class EmbeddingService {
    * @param {string|Array<string>} text - The text or array of texts to generate embeddings for.
    * @returns {Promise<Array<number>|Array<Array<number>>>} The embeddings (single array for text, array of arrays for batch).
    */
-  async generateEmbeddings (text) {
+  async generateEmbeddings(text) {
     let validatedInput
     try {
       validatedInput = embeddingInputSchema.parse(text)
@@ -88,7 +91,7 @@ class EmbeddingService {
    * @param {EmbeddingOpts} [opts] - Options for embedding generation.
    * @returns {Promise<{[key: string]: Array<number>}>} Map of document IDs to embeddings.
    */
-  async generateEmbeddingsForDocs (docs, opts = {}) {
+  async generateEmbeddingsForDocs(docs, opts = {}) {
     let validatedDocs
     try {
       validatedDocs = docsArraySchema.parse(docs)
@@ -112,7 +115,7 @@ class EmbeddingService {
 
     this.logger.debug(`Generating embeddings for ${validatedDocs.length} document(s)`)
 
-    const allTexts = validatedDocs.map(doc => doc.content)
+    const allTexts = validatedDocs.map((doc) => doc.content)
 
     onProgress?.(0, validatedDocs.length)
 

@@ -1,10 +1,4 @@
-import {
-  BERGAMOT_ES_EN,
-  BERGAMOT_EN_IT,
-  loadModel,
-  translate,
-  unloadModel,
-} from "@qvac/sdk";
+import { BERGAMOT_ES_EN, BERGAMOT_EN_IT, loadModel, translate, unloadModel } from '@qvac/sdk'
 
 /**
  * Example: Pivot Translation with Bergamot
@@ -26,9 +20,9 @@ try {
   const modelId = await loadModel({
     modelSrc: BERGAMOT_ES_EN, // Primary model: Spanish → English
     modelConfig: {
-      engine: "Bergamot",
-      from: "es",
-      to: "it", // Final target language (SDK handles the pivot internally)
+      engine: 'Bergamot',
+      from: 'es',
+      to: 'it', // Final target language (SDK handles the pivot internally)
       beamsize: 4,
       normalize: 1,
       temperature: 0.3,
@@ -41,50 +35,50 @@ try {
         temperature: 0.3,
         topk: 100,
         normalize: 1,
-        lengthpenalty: 1.2,
-      },
+        lengthpenalty: 1.2
+      }
     },
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
 
-  console.log(`▸ Pivot translation model loaded: ${modelId}`);
-  console.log("▸ Primary: Spanish → English");
-  console.log("▸ Pivot: English → Italian");
+  console.log(`▸ Pivot translation model loaded: ${modelId}`)
+  console.log('▸ Primary: Spanish → English')
+  console.log('▸ Pivot: English → Italian')
 
   // Spanish text to translate
   const spanishText = `Era una mañana soleada cuando María decidió visitar el mercado local.
   Compró frutas frescas, verduras y flores para su casa.
-  El vendedor le recomendó las mejores manzanas de la temporada.`;
+  El vendedor le recomendó las mejores manzanas de la temporada.`
 
-  console.log("▸ Original Spanish text:");
-  console.log(spanishText);
+  console.log('▸ Original Spanish text:')
+  console.log(spanishText)
 
   // Translate Spanish → English → Italian
   const result = translate({
     modelId,
     text: spanishText,
-    modelType: "nmtcpp-translation",
-    stream: false,
-  });
+    modelType: 'nmtcpp-translation',
+    stream: false
+  })
 
-  const italianText = await result.text;
+  const italianText = await result.text
 
-  console.log("▸ Translated to Italian (via English):");
-  console.log(italianText);
+  console.log('▸ Translated to Italian (via English):')
+  console.log(italianText)
 
   // Expected output (approximate):
   // "Era una mattina di sole quando Maria decise di visitare il mercato locale.
   //  Ha comprato frutta fresca, verdura e fiori per la sua casa.
   //  Il venditore ha consigliato le migliori mele della stagione."
 
-  await unloadModel({ modelId });
-  console.log("▸ Model unloaded successfully");
+  await unloadModel({ modelId })
+  console.log('▸ Model unloaded successfully')
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

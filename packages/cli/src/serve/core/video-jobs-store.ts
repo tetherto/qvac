@@ -45,9 +45,12 @@ export interface VideoJob extends VideoResource {
 }
 
 /** Strip server-only fields and return the OpenAI-shaped resource view. */
-export function videoJobResource (job: VideoJob): VideoResource {
+export function videoJobResource(job: VideoJob): VideoResource {
   const { requestId, aviFileId, mp4FileId, controller, ...resource } = job
-  void requestId; void aviFileId; void mp4FileId; void controller
+  void requestId
+  void aviFileId
+  void mp4FileId
+  void controller
   return resource
 }
 
@@ -74,7 +77,10 @@ export interface VideoJobsStore {
     size: string
     seconds: string
   }) => VideoJob
-  update: (id: string, patch: Partial<Omit<VideoJob, 'id' | 'object' | 'controller'>>) => VideoJob | undefined
+  update: (
+    id: string,
+    patch: Partial<Omit<VideoJob, 'id' | 'object' | 'controller'>>
+  ) => VideoJob | undefined
   get: (id: string) => VideoJob | undefined
   delete: (id: string) => boolean
   list: (opts?: ListVideoJobsOptions) => {
@@ -95,7 +101,7 @@ const EXPIRES_AT_SENTINEL = 253402300799
 
 const DEFAULT_MAX_ENTRIES = 256
 
-export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): VideoJobsStore {
+export function createVideoJobsStore(options: VideoJobsStoreOptions = {}): VideoJobsStore {
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES
   const nowMs = options.now ?? ((): number => Date.now())
   const onEvict = options.onEvict
@@ -103,7 +109,7 @@ export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): Vide
   const jobs = new Map<string, VideoJob>()
 
   return {
-    create (input): VideoJob {
+    create(input): VideoJob {
       const id = `video_${randomBytes(12).toString('hex')}`
       const job: VideoJob = {
         id,
@@ -135,28 +141,29 @@ export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): Vide
       return job
     },
 
-    update (id, patch): VideoJob | undefined {
+    update(id, patch): VideoJob | undefined {
       const rec = jobs.get(id)
       if (!rec) return undefined
       Object.assign(rec, patch)
       return rec
     },
 
-    get (id): VideoJob | undefined {
+    get(id): VideoJob | undefined {
       return jobs.get(id)
     },
 
-    delete (id): boolean {
+    delete(id): boolean {
       return jobs.delete(id)
     },
 
-    list (opts): {
+    list(opts): {
       data: VideoJob[]
       first_id: string | null
       last_id: string | null
       has_more: boolean
     } {
-      const limit = typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 100) : 20
+      const limit =
+        typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 100) : 20
       const order = opts?.order === 'asc' ? 'asc' : 'desc'
       const all = Array.from(jobs.values()).sort((a, b) => {
         return order === 'asc' ? a.created_at - b.created_at : b.created_at - a.created_at
@@ -175,11 +182,11 @@ export function createVideoJobsStore (options: VideoJobsStoreOptions = {}): Vide
       }
     },
 
-    size (): number {
+    size(): number {
       return jobs.size
     },
 
-    bannerLine (): string {
+    bannerLine(): string {
       return `videos: in-memory only — job IDs and rendered bytes are lost on restart, max ${maxEntries} entries`
     }
   }

@@ -1,4 +1,323 @@
 # Changelog
+
+## [0.37.1] - 2026-07-18
+
+This patch release hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.
+
+### Fixed
+
+- Qwen3.5 text and multimodal requests now roll back the current request when `n_predict` is reached inside an open reasoning span, avoiding recurrent compaction failures when no close marker was captured.
+- Continuous batching now propagates scheduler-imposed per-sequence slot truncation as `SequenceLimit`, allowing the driver to use the same rollback path as prediction-limit truncation.
+- Batch stop-reason precedence now preserves `Eos` > `PredictionLimit` > `Antiprompt`, so `n_predict` truncation still triggers rollback when a stop string would also match on the same token.
+- Added focused C++ regression coverage for MTMD `n_predict` rollback, scheduler `LimitReached` propagation, Qwen3.5 continuous-batching sequence-limit rollback, and sibling request survival.
+
+### Pull Requests
+
+- [#3318](https://github.com/tetherto/qvac/pull/3318) - QVAC-22472 fix: handle Qwen3.5 n_predict cutoff inside reasoning
+
+## [0.37.0] - 2026-07-14
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+
+## [0.36.3] - 2026-07-09
+
+This patch release makes continuous-batch runtime stats wait for backend work to complete before reporting throughput. It also hardens cancellation and reset cleanup around asynchronous llama decode work so KV and recurrent state are not mutated while queued GPU work is still in flight.
+
+### Fixed
+
+- Continuous-batch `tokensPerSecond`, `ppTPS`, and TTFT timing now include the explicit `llama_synchronize()` boundary after `llama_decode()` and multimodal media evaluation, preventing GPU backends from reporting launch-time-only throughput.
+- Text and multimodal cancellation paths now synchronize before rolling back prefill or generation state when cancellation bypasses the usual sampler-side synchronization.
+- Reset and deferred teardown paths now synchronize before clearing llama memory, including decode/media error paths that can run while a deferred scheduler clear is pending.
+
+### Changed
+
+- Batch and cancellation regression tests were hardened to assert scheduler-owned timing invariants and prefill cancellation rollback without relying on fragile cross-run wall-clock comparisons.
+
+### Pull Requests
+
+- [#3159](https://github.com/tetherto/qvac/pull/3159) - fix: synchronize async llama decode completion
+
+
+## [0.36.2] - 2026-07-09
+
+### Changed
+
+- Android multimodal-projector (mmproj / vision encoder) auto-default narrowed: with `mmproj-use-gpu` unset the projector now defaults to the GPU **only** on positively-detected Adreno 800+ GPUs. All other Android GPU classes — Arm Mali, Adreno < 800, and any GPU whose Adreno tier can't be detected — default to CPU (the LLM layers still run on the GPU). Only Adreno 800+ was benchmarked (QVAC-21257) to encode the projector faster on the mobile GPU than on CPU, so defaulting to GPU on unbenchmarked/undetectable classes was optimistic. Desktop and iOS continue to default to GPU, and an explicit `mmproj-use-gpu` value still overrides the default in either direction.
+
+### Pull Requests
+
+- [#3168](https://github.com/tetherto/qvac/pull/3168) - fix: default Android mmproj projector to GPU only on Adreno 800+
+
+## [0.36.1] - 2026-07-09
+
+### Fixed
+
+- Continuous-batch KV-cache saves now match the single-prompt stale backing-store behavior: when a batch slot loaded a persisted cache and that backing file, empty file, or parent directory is externally removed before terminal save, the scheduler drops the stale backing-store state instead of failing the batch.
+- Batch cache save failures for unsaved or invalid cache paths remain observable as `UnableToSaveSessionFile`, including missing-parent save paths and cache paths replaced by directories.
+- Added focused C++ regression coverage for batch cache round-trips, deleted persisted backing directories, deleted persisted cache files, zero-byte persisted cache files, unsaved missing-parent paths, and directory replacement errors.
+
+### Pull Requests
+
+- [#3157](https://github.com/tetherto/qvac/pull/3157) - QVAC-21944 fix: preserve batch KV cache save failures for stale paths
+
+## [0.36.0] - 2026-07-08
+
+### Added
+
+- `mmproj-use-gpu` config key: run the multimodal projector (mmproj / vision encoder) on the GPU (`'true'`/`'on'`/`'1'`) or CPU (`'false'`/`'off'`/`'0'`, case-insensitive). Only honoured when a GPU backend is selected — ignored with a warning on the CPU/GPU-fallback backend. When unset the projector backend is auto-selected per device class (see below).
+- Per-device-class auto-default for the projector backend on Android: Mali GPUs and Adreno < 800 default to CPU (projector encode measured slower on the Mali GPU than CPU, and sub-800 Adreno tiers are not yet benchmarked), while Adreno 800+ and other non-Mali Android GPUs default to GPU. Desktop and iOS continue to default to GPU. `BackendSelection` now surfaces Mali detection alongside the Adreno version.
+
+### Pull Requests
+
+- [#3162](https://github.com/tetherto/qvac/pull/3162) - QVAC-21867 feat[api]: auto-default the Android multimodal projector backend by GPU class
+
+## [0.35.3] - 2026-07-08
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.5` → `9341.1.6` (QVAC-21914: clip flash-attention AUTO fallback on non-coopmat GPUs restores the budget-aware heuristic for huge vision encodes, and ggml-opencl submissions are now bounded — periodic work-budget `clFlush` + flash-attention q-row chunking. Fixes the Pixel 9 Pro (Mali) lmkd OOM and Galaxy S25 Ultra (Adreno 830) driver abort on monolithic 16k-patch tile-mode-disabled encodes; GPU output quality Δ0 and encode/decode within noise on the device farm; no API change for this package).
+
+## [0.35.2] - 2026-07-08
+
+### Fixed
+
+- KV-cache stale backing-store handling now only discards active cache state for caches that were actually persisted before. Unsaved RAM-only cache paths with missing parents, cache paths replaced by directories, or other save-path failures continue to surface `UnableToSaveSessionFile` through the existing throw-and-invalidate path.
+
+### Pull Requests
+
+- [#3121](https://github.com/tetherto/qvac/pull/3121) - QVAC-21302 fix: preserve KV cache save failures after stale-cache handling
+
+## [0.35.1] - 2026-07-08
+
+### Fixed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+
+## [0.35.0] - 2026-07-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.4` → `9341.1.5` (Mali/Vulkan GPU projector optimizations — vendor-aware flash-attention gate, Valhall warptile tuning, layernorm fusion, GPU mmproj-encode ~1.46× → ~1.28× of same-device CPU on Pixel 9 Pro — plus OpenCL bidirectional-encoder attention and Adreno vision-encoder fixes; no API change for this package).
+
+## [0.34.1] - 2026-07-08
+
+### Fixed
+
+- `test/mobile/integration.auto.cjs` was stale since `qwen3-5-image-tile-mode-tokens.test.js` was added (#2887, 2026-06-29) — the generated dispatch file was never regenerated, so `runQwen35ImageTileModeTokensTest` silently never ran on Android or iOS despite being listed in `test-groups.json`. Regenerated via `npm run test:mobile:generate`; desktop CI was unaffected (it regenerates its own runner list fresh every run).
+
+## [0.34.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.3` → `9341.1.4` (Qwen3-VL grid selection rewrite + CPU CLIP vision-encoder weight repacking into the i8mm/AVX2 buffer, ~1807ms → ~1114ms CPU vision-encode on Pixel 9 Pro; no API change for this package).
+
+
+## [0.33.0] - 2026-07-07
+
+This release extends reasoning-block KV compaction to hybrid and recurrent SSM models such as Qwen3.5. It also makes reasoning compaction the default behavior for reasoning-capable models, with stricter failure handling so callers do not accidentally continue from cache state that still contains internal thinking traces.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` now defaults to `true`. Callers that intentionally want later turns to attend to previous reasoning can still pass `false` per request.
+- Hybrid and recurrent SSM models are now supported when their reasoning close marker tokenizes to a single vocab token. The addon snapshots the sequence state at the end of prefill, restores it after generation, and replays the generated opener seed, canonical close marker, and visible answer tail so KV and recurrent state stay coherent.
+
+### Fixed
+
+- Reasoning compaction failures now surface as `StatusError` instead of silently preserving reasoning in cache. The affected sequence is rolled back or cleared before the error escapes, and batch cache saves are skipped on unsafe cancel or compaction-failure paths to preserve the last known-good on-disk cache.
+- Qwen3.5 multimodal cache metadata is verified against restored llama memory before a cache file is accepted, preventing stale or partial cache files from desynchronizing `nPast`, physical KV-cell counts, and live memory.
+- Context sliding during generation now invalidates tracked reasoning spans and recurrent boundary snapshots, so compaction hard-fails instead of using stale coordinates after the cache window shifts.
+
+### Changed
+
+- The reasoning compaction implementation was split into shared helpers for span tracking, context shifting, recurrent snapshots, rollback state, and snapshot policy. Text and multimodal generation now use the same compaction contract across single-prompt and continuous-batch paths.
+- Cache persistence for per-slot batch saves now writes through a temporary file and atomically promotes it into place, matching the single-prompt `CacheManager` behavior.
+- Runtime stats preserve user-visible prompt and generation counters across recurrent replay, so maintenance decode work does not inflate throughput or time-to-first-token measurements.
+
+### Pull Requests
+
+- [#2813](https://github.com/tetherto/qvac/pull/2813) - QVAC-21250 Support reasoning compaction on hybrid SSM models
+
+## [0.32.0] - 2026-07-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.0` → `9341.1.3` (Gemma-4 E2B vision-encoder Arm Mali/Vulkan attention speedup + encoder token-count fix; no API change for this package).
+
+### Pull Requests
+
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+
+## [0.31.2] - 2026-07-06
+
+### Added
+
+- KV-cache auto-default: when the caller does not set `cache-type-k`/`cache-type-v`, both now default to `q8_0` on Metal and Vulkan GPUs (with flash attention on) — quality-neutral vs `f16` and ~47% smaller KV cache. CPU and OpenCL (Adreno) keep the `f16` default (ARM CPU `q8_0` has a measured quality/throughput cost; quantized KV-cache shifts abort on Adreno). Skipped for finetuning, when flash attention is off, and on Adreno+Vulkan. An explicit user cache type is always respected on CPU/Vulkan/Metal.
+- Mixed/asymmetric K≠V warning: when `cache-type-k` and `cache-type-v` differ and at least one side is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty for no quality benefit) but proceeds.
+- Adreno 800+ Vulkan guard: quantized KV with flash attention on an Adreno Vulkan backend is rejected with a clean `StatusError` instead of a native abort (defensive — Adreno selects OpenCL by default).
+
+### Changed
+
+- OpenCL (Adreno) KV-cache rejection now carries an actionable message: only `f32`/`f16`/`bf16` are accepted, and any quantized type (`q8_0`, `q4_0`, …) throws a `StatusError` explaining that a quantized K or V cache aborts in `llama_kv_cache::update` on KV-cache shifts (ggml-opencl has no `F32→quantized` requantize kernel; CI-confirmed for both `q8_0` and `q4_0`).
+- The KV-cache guards read flash-attention state from both the `flash-attn` and `flash_attn` config keys, so the underscore variant arms the auto-default and the Adreno guard.
+- README documents the KV-cache type policy (`cache-type-k`/`cache-type-v` rows + the auto-default, OpenCL allowlist, and mixed-K/V warning).
+
+### Pull Requests
+
+- [#2921](https://github.com/tetherto/qvac/pull/2921) - QVAC-21318 feat: default KV-cache to q8_0 on GPU backends except OpenCL
+
+## [0.31.1] - 2026-07-01
+
+### Changed
+
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
+
+## [0.31.0] - 2026-06-30
+
+### Added
+
+- Multimodal (vision) model support in continuous batching: vision models now enter the batch scheduler via a new `DriverFactory` pattern that decouples the scheduler from concrete context types. Admits multiple prompts containing images and text.
+- `PrefillPlan` for sequencing media evaluation: prefill stream now carries text tokens plus `MediaBarrier` entries. The scheduler pauses slots at barriers and evaluates media between batch steps, allowing other slots to progress while vision processing is underway.
+- `SequenceDriver` abstraction: `MtmdLlmContext` and `TextLlmContext` now both implement a common interface, enabling the scheduler to work with any driver type without hardcoded multimodal checks.
+
+### Fixed
+
+- Isolated media-evaluation failures to the offending slot's request group, preventing cascade cancellations when vision processing fails mid-batch.
+- Improved KV-cell accounting for media slots in overlapping batch admissions.
+- Fixed Windows path serialization in JSON by using `generic_string()` instead of `string()` (forward slashes instead of backslashes).
+
+### Changed
+
+- `BatchPrompt.prompt` now accepts any `Message` type (previously text-only), enabling multimodal batches.
+- `ContinuousBatchScheduler` no longer imports or references concrete context types; driver selection fully delegated to the model layer.
+- Consolidated sequence KV cleanup into a single `clearSeqKv()` helper, eliminating six inline copies across slot-teardown paths.
+
+### Pull Requests
+
+- [#2543](https://github.com/tetherto/qvac/pull/2543) - QVAC-19983: Continuous Batching (Single-job MTMD)
+
+## [0.30.2] - 2026-06-29
+
+This patch release fixes `image_max_tokens` and `image_min_tokens` being silently dropped when loading a model via the SDK config string map, making the tiling speedup invisible to SDK users.
+
+### Fixed
+
+- `LlamaModel::commonParamsParse` now reads `image_max_tokens` and `image_min_tokens` from the config string map into `common_params`, following the same pattern as `image_tile_mode`. Without this fix, SDK users setting `image_max_tokens: 4096` had the value silently dropped and the 2048 Qwen-VL cap still applied regardless of tile mode.
+
+## Pull Requests
+
+- [#2887](https://github.com/tetherto/qvac/pull/2887) - fix[api]: parse image_max_tokens/image_min_tokens from SDK config
+
+## [0.30.1] - 2026-06-25
+
+This patch release hardens Qwen3.5-VL cache accounting for multi-turn multimodal chats. It keeps runtime cache-token statistics aligned with llama memory while covering cancellation, cache reload, context sliding, and image-heavy cache pressure paths.
+
+### Fixed
+
+- Qwen3.5-VL multimodal cache tracking now uses physical llama memory token counts for image-heavy prompts, so chat apps can rely on `CacheTokens` even when image KV cells exceed the logical position span.
+- Cancelled multimodal prefills now preserve reloadable cache metadata for hybrid/recurrent memory by syncing the saved position with llama memory when token rollback is not available.
+- Added focused C++ and JS coverage for Qwen3.5-VL memory token counts, cache-key generation, cached multi-turn multimodal recovery, context sliding, and physical image cache overflow.
+
+## Pull Requests
+
+- [#2808](https://github.com/tetherto/qvac/pull/2808) - fix: harden Qwen3.5 multimodal KV cache handling
+
+## [0.30.0] - 2026-06-24
+
+Adds Qwen3.5-VL multi-tile batching via the `--image-tile-mode` config key, backed by `qvac-fabric` 9341.1.0.
+
+### New APIs
+
+- `image-tile-mode` / `image_tile_mode` config key: `0`/`batched`, `1`/`sequential` (default), `2`/`disabled`. Controls how multi-tile Qwen3.5-VL images are encoded.
+- OOM fallback: if batched encoding fails, encoder retries in sequential mode.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.0.0` → `9341.1.0`.
+
+## Pull Requests
+
+- [#2836](https://github.com/tetherto/qvac/pull/2836) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (llm-llamacpp)
+
+## [0.29.3] - 2026-06-24
+
+This release fixes per-image token budgets for multimodal (vision) contexts, which were previously parsed but never forwarded to the vision encoder, and adds a sensible default cap for Qwen-VL encoders to bound encode cost on high-resolution images.
+
+### Fixed
+
+- `image_min_tokens` / `image_max_tokens` are now forwarded into the vision encoder. They were parsed into `common_params` but never copied into `mtmd_context_params`, so a caller-set cap had no effect and the encoder always used the model-metadata default (up to ~4M pixels → thousands of patches). For dynamic-resolution encoders (Qwen-VL, Pixtral, LFM2, …) callers can now bound the `O(n_patches^2)` encode cost; for fixed-grid encoders it is a no-op.
+
+### Changed
+
+- When no explicit cap is set, Qwen-VL encoders now default to `image_max_tokens = 2048`. Qwen-VL allows up to 4096 image tokens — far more than the ~1024 it needs for grounding — so an uncapped high-resolution image pays `O(n_patches^2)` attention for tokens the model cannot use (and can destabilize generation). The default stays well above the grounding floor while roughly halving worst-case encode + image prefill, and is fully overridable via `image_max_tokens`.
+- The default is gated on the mmproj projector type (read from `clip.projector_type`, falling back to `clip.vision.projector_type` for combined vision+audio mmprojs such as Qwen Omni), so smaller-budget dynamic encoders (LightOnOCR / Pixtral at 1024, LFM2 at 256) are never raised above their native limit and fixed-grid encoders (SigLIP / SmolVLM) are unaffected.
+- The default cap respects an explicit `image_min_tokens` floor: since mtmd throws when `max_pixels < min_pixels`, the default max is not injected when the caller-set min meets or exceeds it, leaving the budget to the caller / model default.
+
+## Pull Requests
+
+- [#2815](https://github.com/tetherto/qvac/pull/2815) - QVAC-21295 fix[api]: forward vision image-token limits and cap Qwen-VL by default
+
+## [0.29.2] - 2026-06-23
+
+This release adds opt-in KV-cache compaction of completed reasoning blocks, so callers can keep multi-turn context tight on models that emit a `<think>`-style channel. Detection is now driven by the active chat template's thinking tags, falling back to the hardcoded model-family table when the template does not expose them.
+
+### New APIs
+
+- `generationParams.remove_thinking_from_context` (boolean, default `false`). Opting in drops the model's reasoning block from the live KV cache at end of generation. Supported on text and multimodal contexts for models with a recognised reasoning channel. Throws `InvalidArgument` on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the post-shift hidden state would be contaminated.
+- `RuntimeStats.thinkingBlockDiscards`: integer count of reasoning blocks compacted out of the KV cache during the request. Aggregated across slots on the continuous-batching path.
+
+### Changed
+
+- Reasoning-channel detection and compaction now prefer the chat template's `thinking_start_tag` / `thinking_end_tag`, with the hardcoded Qwen3 / Gemma 4 tag table kept only as a fallback when the template does not expose tags. This keeps detection aligned with the active template and removes the need to add a new architecture entry for every reasoning model.
+- The forced-open span uses the exact template-emitted suffix when `thinking_forced_open` is set, replacing the previous hardcoded `<tag>\n` assumption.
+- The Qwen3-specific EOS-inside-reasoning recovery (close-marker substitution + trailing newlines) is now explicitly scoped to the Qwen3 reasoning family. Other families with a recognised channel keep detection / span tracking / compaction but do not inherit the Qwen3 recovery.
+
+## Pull Requests
+
+- [#2622](https://github.com/tetherto/qvac/pull/2622) - feat[api]: drop reasoning blocks from kv cache between turns
+
+## [0.29.1] - 2026-06-22
+
+### Changed
+
+- Windows prebuilds now link the static Visual C++ runtime (`/MT`) instead of
+  importing `vcruntime140.dll`, `msvcp140.dll`, or UCRT DLLs from the MSVC
+  redistributable. Shared monorepo `vcpkg-overlays/triplets/{x64,arm64}-windows.cmake`
+  build dependencies with a static CRT; addon CMake no longer links `msvcrt.lib`,
+  which had forced the dynamic runtime. Per-package vcpkg overlays were
+  consolidated into the shared `vcpkg-overlays/` tree. No public API change.
+
+## Pull Requests
+
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+
+## [0.29.0] - 2026-06-22
+
+This release makes reasoning-token budgets configurable per model load and per request, while improving how chat-template thinking markers are detected and streamed. It also tightens GPU backend validation so unsupported quantized KV-cache combinations fail early with clear errors instead of reaching backend-specific runtime failures.
+
+### Breaking Changes
+
+- TurboQuant and PolarQuant KV-cache types are now rejected during model configuration on OpenCL and Metal backends, where the required kernels are not available. Use CPU/Vulkan for TBQ/PQ KV-cache modes, or use standard KV-cache types such as `q4_0` and `q8_0` on OpenCL or Metal.
+
+### New APIs
+
+- `reasoning_budget` now accepts positive integer token caps in addition to the existing `-1` unrestricted and `0` disabled modes. Callers can set the cap at model load time or override it per request through generation params.
+
+### Changed
+
+- Reasoning-budget sampling now derives template-specific thinking start/end markers and generation prompts from the active chat template, so capped thinking output stays aligned with models that use custom `<think>`-style delimiters.
+- Flash attention now defaults on for supported non-BitNet, non-finetuning configurations, while preserving existing override behavior.
+
+### Fixed
+
+- Metal backend detection now recognizes runtime `mtl*` device names, so CPU-only Apple runs do not get treated as Metal while actual Metal devices still reject unsupported TBQ/PQ KV-cache modes.
+- Mobile and desktop LLM integration tests were adjusted for the new backend behavior and to reduce platform-specific flake in reasoning, cache, multimodal, and performance suites.
+
+## Pull Requests
+
+- [#2366](https://github.com/tetherto/qvac/pull/2366) - QVAC-20987 feat[api]: add llm reasoning budget caps
+
 ## [0.28.0] - 2026-06-22
 
 ### Changed

@@ -1,0 +1,29 @@
+{
+  "dependencies": [
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "qvac-fabric",
+      "version>=": "9341.1.5"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.5"
+    }
+  ],
+  "features": {
+    "vk-profiling": {
+      "description": "Force vk performance logging in qvac-fabric",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "features": [
+            "force-profiler"
+          ]
+        }
+      ]
+    }
+  }
+}

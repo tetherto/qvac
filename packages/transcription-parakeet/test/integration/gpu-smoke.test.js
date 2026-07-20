@@ -7,9 +7,9 @@
 // devices. This file flips the switch with `useGPU: true` so that on
 //   - macOS / iOS:    Metal is engaged
 //   - Linux / Windows: Vulkan is engaged
-//   - Android:         Vulkan is preferred, OpenCL is the fallback
-//                      (Adreno only; non-Adreno phones may silently
-//                      fall back to CPU at ggml_cl2_init)
+//   - Android:         OpenCL on Adreno 700+, Vulkan on Mali / Xclipse;
+//                      the engine routes any vendor/tier it can't drive
+//                      to CPU and flags it via stats.gpuUnsupported
 //
 // The strict gate uses `response.stats.backendDevice` (0 = CPU, 1 = GPU)
 // and `response.stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
@@ -35,9 +35,10 @@
 //   2. The "GPU is expected here" decision is platform-driven (see
 //      `expectsGpu()` below). All four supported platforms (darwin,
 //      ios, linux, win32, android) wire a GPU backend by default in
-//      transcription-parakeet/vcpkg.json, so any CPU result on those
-//      platforms is treated as a regression (modulo
-//      QVAC_PARAKEET_GPU_SMOKE_RELAX).
+//      transcription-parakeet/vcpkg.json, so a CPU result on those
+//      platforms is treated as a regression -- unless the engine flags
+//      stats.gpuUnsupported (a vendor/tier it declines by policy), or
+//      QVAC_PARAKEET_GPU_SMOKE_RELAX is set.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -65,15 +66,22 @@ const RELAX = process.env && process.env.QVAC_PARAKEET_GPU_SMOKE_RELAX === '1'
 // llm-llamacpp's integration tests.
 const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
-function backendIdToName (id) {
+function backendIdToName(id) {
   switch (id) {
-    case 0: return 'CPU'
-    case 1: return 'Metal'
-    case 2: return 'CUDA'
-    case 3: return 'Vulkan'
-    case 4: return 'OpenCL'
-    case 99: return 'other-GPU'
-    default: return `unknown(${id})`
+    case 0:
+      return 'CPU'
+    case 1:
+      return 'Metal'
+    case 2:
+      return 'CUDA'
+    case 3:
+      return 'Vulkan'
+    case 4:
+      return 'OpenCL'
+    case 99:
+      return 'other-GPU'
+    default:
+      return `unknown(${id})`
   }
 }
 
@@ -82,7 +90,7 @@ function backendIdToName (id) {
 //   - darwin / ios:        metal              (default)
 //   - linux / win32:       vulkan             (default)
 //   - android:             vulkan + opencl    (default; Adreno only)
-function expectsGpu () {
+function expectsGpu() {
   return (
     platform === 'darwin' ||
     platform === 'ios' ||
@@ -92,7 +100,7 @@ function expectsGpu () {
   )
 }
 
-function loadAudioSample () {
+function loadAudioSample() {
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
@@ -102,11 +110,11 @@ function loadAudioSample () {
   return audio
 }
 
-async function transcribe (model, audio) {
+async function transcribe(model, audio) {
   const segments = []
   const response = await model.run(audio)
   await response
-    .onUpdate(out => {
+    .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const seg of items) {
         if (seg && seg.text) segments.push(seg)
@@ -116,7 +124,7 @@ async function transcribe (model, audio) {
   return { segments, stats: response.stats || null }
 }
 
-function assertGpuBackend (t, modelType, stats) {
+function assertGpuBackend(t, modelType, stats) {
   if (!stats) {
     t.fail(`${modelType}/GPU: no response.stats returned (cannot verify backend)`)
     return
@@ -126,20 +134,36 @@ function assertGpuBackend (t, modelType, stats) {
   const name = backendIdToName(id)
   console.log(`[${modelType}/GPU] backendDevice=${dev} backendId=${id} (${name})`)
 
+  // A GPU the engine declines by policy -- an unsupported Adreno tier, or a
+  // vendor that fails parakeet-cpp's correctness gate -- legitimately runs on
+  // CPU and flags it via stats.gpuUnsupported. Treat that as the correct
+  // result, not a GPU regression. (Under parakeet-cpp 2026-06-18 the device-farm
+  // vendors Adreno/Mali run on the GPU; this only fires for declined devices.)
+  if (platform === 'android' && dev === 0 && stats.gpuUnsupported) {
+    t.pass(
+      `${modelType}/android: GPU present but declined by policy (gpuUnsupported); correctly using CPU`
+    )
+    return
+  }
+
   if (!expectsGpu()) {
     // Platforms with no GPU backend wired into the addon today must
     // resolve to CPU. This catches accidental GPU-on-Linux config drift.
-    t.is(dev, 0,
-      `${modelType}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`)
+    t.is(
+      dev,
+      0,
+      `${modelType}/${platform}: backendDevice must be 0 (CPU) on platforms with no GPU wired in`
+    )
     return
   }
 
   if (dev !== 1) {
-    const msg = `${modelType}/${platform}: expected GPU backend, got ${name} ` +
-                `(backendDevice=${dev}, backendId=${id}). ` +
-                'useGPU=true was requested but the engine fell back to CPU. ' +
-                'Inspect the addon\'s --native-logs output for the load-time ' +
-                'backend init message.'
+    const msg =
+      `${modelType}/${platform}: expected GPU backend, got ${name} ` +
+      `(backendDevice=${dev}, backendId=${id}). ` +
+      'useGPU=true was requested but the engine fell back to CPU. ' +
+      "Inspect the addon's --native-logs output for the load-time " +
+      'backend init message.'
     if (RELAX) {
       t.comment(`WARNING (relaxed): ${msg}`)
       t.pass(`${modelType}/GPU smoke completed (relaxed)`)
@@ -158,12 +182,14 @@ function assertGpuBackend (t, modelType, stats) {
   } else if (platform === 'linux' || platform === 'win32') {
     t.is(id, 3, `${modelType}/${platform}: expected Vulkan backendId=3, got ${name}`)
   } else if (platform === 'android') {
-    t.ok(id === 3 || id === 4,
-      `${modelType}/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`)
+    t.ok(
+      id === 3 || id === 4,
+      `${modelType}/${platform}: expected Vulkan(3) or OpenCL(4) backendId, got ${name}`
+    )
   }
 }
 
-async function runGpuModelTest (t, modelType, modelPath, audio, expectations) {
+async function runGpuModelTest(t, modelType, modelPath, audio, expectations) {
   const model = new TranscriptionParakeet({
     files: { model: modelPath },
     config: { parakeetConfig: { modelType, maxThreads: 4, useGPU: true } }
@@ -172,82 +198,131 @@ async function runGpuModelTest (t, modelType, modelPath, audio, expectations) {
     await model.load()
     const { segments, stats } = await transcribe(model, audio)
     const joiner = modelType === 'sortformer' ? '\n' : ' '
-    const fullText = segments.map(s => s.text).join(joiner).trim()
+    const fullText = segments
+      .map((s) => s.text)
+      .join(joiner)
+      .trim()
     console.log(`[${modelType}/GPU] segments=${segments.length} chars=${fullText.length}`)
-    console.log(`[${modelType}/GPU] result: "${fullText.substring(0, 120)}${fullText.length > 120 ? '...' : ''}"`)
+    console.log(
+      `[${modelType}/GPU] result: "${fullText.substring(0, 120)}${fullText.length > 120 ? '...' : ''}"`
+    )
 
     assertGpuBackend(t, modelType, stats)
 
-    t.ok(segments.length > 0,
-      `${modelType}/GPU produced ${segments.length} segments`)
+    t.ok(segments.length > 0, `${modelType}/GPU produced ${segments.length} segments`)
     if (expectations.containsSpeaker) {
-      t.ok(fullText.includes('Speaker'),
-        `${modelType}/GPU output contains speaker labels`)
+      t.ok(fullText.includes('Speaker'), `${modelType}/GPU output contains speaker labels`)
     } else {
-      t.ok(fullText.length >= expectations.minTextLength,
-        `${modelType}/GPU produced text (${fullText.length} chars)`)
+      t.ok(
+        fullText.length >= expectations.minTextLength,
+        `${modelType}/GPU produced text (${fullText.length} chars)`
+      )
     }
   } finally {
-    try { await model.unload() } catch (e) { /* ignore */ }
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
   }
 }
 
-test('CTC GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
-  const loggerBinding = setupJsLogger(binding)
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'ctc')
-    if (!modelPath) return
-    const audio = loadAudioSample()
-    if (!audio) { t.pass('sample.raw not found — skipping'); return }
-    await runGpuModelTest(t, 'ctc', modelPath, audio, { minTextLength: 10 })
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+test(
+  'CTC GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'ctc')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'ctc', modelPath, audio, { minTextLength: 10 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
   }
-})
+)
 
-test('TDT GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
-  const loggerBinding = setupJsLogger(binding)
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'tdt')
-    if (!modelPath) return
-    const audio = loadAudioSample()
-    if (!audio) { t.pass('sample.raw not found — skipping'); return }
-    await runGpuModelTest(t, 'tdt', modelPath, audio, { minTextLength: 10 })
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+test(
+  'TDT GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'tdt')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'tdt', modelPath, audio, { minTextLength: 10 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
   }
-})
+)
 
 // EOU on offline mode runs the joint-network ASR path; on a clip with
 // real speech that must produce non-empty text. minTextLength=1 catches
 // the zero-token regression triggered by ggml-metal's Q-variant
 // mul_mv + bias/residual fusion on the EOU q8_0 joint network.
-test('EOU GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
-  const loggerBinding = setupJsLogger(binding)
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'eou')
-    if (!modelPath) return
-    const audio = loadAudioSample()
-    if (!audio) { t.pass('sample.raw not found — skipping'); return }
-    await runGpuModelTest(t, 'eou', modelPath, audio, { minTextLength: 1 })
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+test(
+  'EOU GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'eou')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'eou', modelPath, audio, { minTextLength: 1 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
   }
-})
+)
 
-test('Sortformer GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
-  if (platform === 'android') { t.pass('Android: GPU disabled at engine boundary pending Vulkan/Mali + OpenCL/Adreno upstream fixes'); return }
-  const loggerBinding = setupJsLogger(binding)
-  try {
-    const modelPath = await loadGgufOrSkip(t, 'sortformer')
-    if (!modelPath) return
-    const audio = loadAudioSample()
-    if (!audio) { t.pass('sample.raw not found — skipping'); return }
-    await runGpuModelTest(t, 'sortformer', modelPath, audio, { containsSpeaker: true })
-  } finally {
-    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
+test(
+  'Sortformer GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'sortformer')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'sortformer', modelPath, audio, { containsSpeaker: true })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
   }
-})
+)

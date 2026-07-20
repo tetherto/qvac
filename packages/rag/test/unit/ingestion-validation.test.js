@@ -5,23 +5,27 @@ const IngestionService = require('../../src/services/IngestionService')
 const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
 
 // Mock dependencies for IngestionService
-function createMockDeps () {
+function createMockDeps() {
   return {
     dbAdapter: {
+      // lunte-disable-next-line require-await
       saveEmbeddings: async () => []
     },
     chunkingService: {
+      // lunte-disable-next-line require-await
       chunkText: async () => []
     },
     embeddingService: {
+      // lunte-disable-next-line require-await
       generateEmbeddings: async () => [0.1, 0.2, 0.3],
+      // lunte-disable-next-line require-await
       generateEmbeddingsForDocs: async () => ({})
     }
   }
 }
 
 // Helper to create valid embedded doc
-function createDoc (id, overrides = {}) {
+function createDoc(id, overrides = {}) {
   return {
     id,
     content: `Content for ${id}`,
@@ -31,22 +35,18 @@ function createDoc (id, overrides = {}) {
   }
 }
 
-test('IngestionService.saveEmbeddings: valid docs pass validation', async t => {
+test('IngestionService.saveEmbeddings: valid docs pass validation', async (t) => {
   const deps = createMockDeps()
   const service = new IngestionService(deps)
 
-  const docs = [
-    createDoc('doc-1'),
-    createDoc('doc-2'),
-    createDoc('doc-3')
-  ]
+  const docs = [createDoc('doc-1'), createDoc('doc-2'), createDoc('doc-3')]
 
   // Should not throw
   const result = await service.saveEmbeddings(docs)
   t.ok(Array.isArray(result), 'Should return result array')
 })
 
-test('IngestionService.saveEmbeddings: rejects empty array with QvacErrorRAG', async t => {
+test('IngestionService.saveEmbeddings: rejects empty array with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
   const service = new IngestionService(deps)
 
@@ -60,7 +60,7 @@ test('IngestionService.saveEmbeddings: rejects empty array with QvacErrorRAG', a
   }
 })
 
-test('IngestionService.saveEmbeddings: requires embeddingModelId with QvacErrorRAG', async t => {
+test('IngestionService.saveEmbeddings: requires embeddingModelId with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
   const service = new IngestionService(deps)
 
@@ -78,7 +78,7 @@ test('IngestionService.saveEmbeddings: requires embeddingModelId with QvacErrorR
   }
 })
 
-test('IngestionService.saveEmbeddings: rejects non-numeric embeddings with QvacErrorRAG', async t => {
+test('IngestionService.saveEmbeddings: rejects non-numeric embeddings with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
   const service = new IngestionService(deps)
 

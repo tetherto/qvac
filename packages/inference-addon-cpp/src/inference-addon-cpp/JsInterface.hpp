@@ -12,6 +12,7 @@
 #include "JsLogger.hpp"
 #include "JsUtils.hpp"
 #include "ModelInterfaces.hpp"
+#include "Pin.hpp"
 #include "addon/AddonJs.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
@@ -178,6 +179,13 @@ public:
 
   static auto createInstance(js_env_t* env, std::unique_ptr<AddonJs>&& addonJs)
       -> js_value_t* try {
+    // Pin this addon's shared library in memory the first time a model instance
+    // is created, so that bare's dlclose() on worklet.terminate() never unmaps
+    // code that still has thread-local / pthread_key_t destructors registered
+    // (ggml, OpenMP, ...). Without this, the next thread exit after teardown
+    // jumps into unmapped memory and aborts on Android. See Pin.hpp. Idempotent
+    // (runs once per loaded addon).
+    pinAddon();
     std::scoped_lock lock{instancesMtx_};
     auto& handle = instances_.emplace_back(std::move(addonJs));
     return js::External::create(env, handle.get());

@@ -9,7 +9,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
 project(transcription-whispercpp CXX C)
 
@@ -141,15 +141,6 @@ target_link_libraries(
 
 target_compile_definitions(${transcription-whispercpp} PUBLIC JS_LOGGER)
 target_compile_definitions(${transcription-whispercpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
-
-if(WIN32)
-  target_link_libraries(
-    ${transcription-whispercpp}
-    PRIVATE
-      msvcrt.lib
-  )
-endif()
-
 if(BUILD_TESTING)
   find_package(GTest REQUIRED)
 

@@ -1,5 +1,5 @@
 'use strict'
-// QVAC-19178: run the VLM matrix fixture through a native llama-mtmd-cli binary
+// Run the VLM matrix fixture through a native llama-mtmd-cli binary
 // (fabric-cli / upstream-cli) for several-sources mode. Emits the SAME markers as the
 // addon harness (harness.cjs) so the existing aggregate.js scores quality
 // (vqa/anls/relaxed/mc) and reads vision-encode the same way:
@@ -27,6 +27,23 @@ const BACKEND = arg('backend', 'cpu')
 const SAMPLES = parseInt(arg('samples', '3'), 10)
 const REPEATS = parseInt(arg('repeats', '3'), 10)
 const TASKS = (arg('tasks', '') || '').split(',').map(s => s.trim()).filter(Boolean)
+// Per-task sample caps (mirror the addon preset's taskSamples, e.g. {"ocr-page":1});
+// falls back to the global --samples. Keeps the CLI legs item-aligned with the addon.
+const TASK_SAMPLES = JSON.parse(arg('task-samples', '{}') || '{}')
+// Per-task decode budget — OCR transcriptions need far more tokens than VQA answers,
+// matching harness.cjs so CLI OCR output isn't truncated (which would wreck CER/WER).
+const TASK_NPREDICT = { 'ocr-page': 768, 'ocr-small': 96 }
+const DEFAULT_NPREDICT = 128
+// Cap on the number of DISTINCT tasks (mirror the addon preset's maxTasks, e.g. smoke=1);
+// 0 = no cap. Without this the CLI ran every --tasks entry while the addon honoured
+// maxTasks, so smoke produced mismatched rows ('—' for tasks the addon skipped).
+const MAX_TASKS = parseInt(arg('max-tasks', '0'), 10) || 0
+// Explicit item allowlist — mirrors the addon preset's `ids` (e.g. ocr1page=['ocr-page_0'],
+// ocr5pages=the 5 ocr-page docs). When set it WINS over tasks/max-tasks, exactly like
+// harness.cjs. Without it the CLI ran every task while the addon ran only the listed ids,
+// so an id-based preset (ocr1page/ocr5pages) had the addon doing OCR-only and the CLIs
+// doing everything → lopsided '—' columns.
+const IDS = (arg('ids', '') || '').split(',').map(s => s.trim()).filter(Boolean)
 const MAIN_ORIGIN = arg('main-origin', 'Qwen3.5-0.8B-Q8_0')
 const MMPROJ_ORIGIN = arg('mmproj-origin', 'Qwen3.5-0.8B mmproj-Q8_0')
 
@@ -34,15 +51,19 @@ if (!BINARY || !fs.existsSync(BINARY)) { console.error(`[cli-fixture] binary not
 if (!LLM || !MMPROJ) { console.error('[cli-fixture] --llm and --mmproj are required'); process.exit(2) }
 
 function selectedItems () {
+  // Id allowlist wins (same precedence as harness.cjs selectedItems).
+  if (IDS.length) { const want = new Set(IDS); return fixture.items.filter(it => want.has(it.id)) }
   const seen = {}
   return fixture.items.filter(it => {
     if (TASKS.length && !TASKS.includes(it.task)) return false
+    if (!(it.task in seen) && MAX_TASKS && Object.keys(seen).length >= MAX_TASKS) return false
     seen[it.task] = (seen[it.task] || 0) + 1
-    return seen[it.task] <= SAMPLES
+    const cap = (TASK_SAMPLES[it.task] != null) ? TASK_SAMPLES[it.task] : SAMPLES
+    return seen[it.task] <= cap
   })
 }
 
-const mediaPath = (image) => path.resolve(__dirname, 'images', image)
+const mediaPath = (image) => path.resolve(__dirname, 'fixture', image)
 
 function main () {
   // Same provenance shape the addon harness emits, keyed by the source label.
@@ -67,12 +88,11 @@ function main () {
       imagePath: mediaPath(item.image),
       prompt: item.prompt,
       ctxSize: 4096,
-      nPredict: 128,
+      nPredict: TASK_NPREDICT[item.task] || DEFAULT_NPREDICT,
       backend: BACKEND,
       temperature: 0,
       seed: 42,
       thinkingEnabled: false, // match the addon harness (reasoning-budget=0)
-      verbosePrompt: true, // print the rendered prompt for prompt-parity audits
       perRunTimeoutMs: 5 * 60 * 1000
     }
     for (let rep = 0; rep < REPEATS; rep++) {

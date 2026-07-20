@@ -9,9 +9,6 @@ const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 const groupsFile = path.join(mobileDir, 'test-groups.json')
-const mobileExcludedTests = new Set([
-  'continuous-batching.test.js'
-])
 
 // The benchmark-perf-*.test.js shards are generated, not committed (see
 // .gitignore), but the committed integration.auto.cjs references them. Enumerating
@@ -20,38 +17,38 @@ const mobileExcludedTests = new Set([
 // functions that no longer exist and schedule zero tests. Refuse to run unless every
 // shard is present. `npm run test:mobile:generate` writes them first; a bare
 // invocation must run `npm run generate:benchmark-shards` beforehand.
-function assertBenchmarkShardsPresent () {
+function assertBenchmarkShardsPresent() {
   const missing = matrix()
     .map(shardFileName)
-    .filter(name => !fs.existsSync(path.join(integrationDir, name)))
+    .filter((name) => !fs.existsSync(path.join(integrationDir, name)))
   if (missing.length) {
     throw new Error(
       `Refusing to regenerate mobile tests: ${missing.length} benchmark shard(s) absent ` +
-      `(e.g. ${missing[0]}). Run \`npm run generate:benchmark-shards\` first, or use ` +
-      '`npm run test:mobile:generate`, which does it for you.'
+        `(e.g. ${missing[0]}). Run \`npm run generate:benchmark-shards\` first, or use ` +
+        '`npm run test:mobile:generate`, which does it for you.'
     )
   }
 }
 
-function getIntegrationFiles () {
+function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(entry => entry.endsWith('.test.js'))
-    .filter(entry => !mobileExcludedTests.has(entry))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((entry) => entry.endsWith('.test.js'))
     .sort()
 }
 
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
-function buildFileContents (files) {
+function buildFileContents(files) {
   const lines = []
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
@@ -65,7 +62,9 @@ function buildFileContents (files) {
 
   lines.push('/* global __shouldRunTest */')
   lines.push('')
-  lines.push('const __FILTERED = { modulePath: \'filtered\', summary: { total: 0, passed: 0, failed: 0 } }')
+  lines.push(
+    "const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }"
+  )
   lines.push('')
 
   for (let i = 0; i < files.length; i++) {
@@ -73,7 +72,9 @@ function buildFileContents (files) {
     const fnName = toFunctionName(file)
     const relativePath = `../integration/${file}`
     lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars`)
-    lines.push(`  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`)
+    lines.push(
+      `  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('${fnName}')) return __FILTERED`
+    )
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
     lines.push('}')
     if (i < files.length - 1) {
@@ -88,11 +89,11 @@ function buildFileContents (files) {
 // `iosWeekly` belongs to the `ios` family. Coverage is validated per family
 // (the union of its regular + weekly splits), letting the weekend-only suite
 // hold a disjoint subset of tests rather than duplicating the daily ones.
-function platformFamily (platform) {
+function platformFamily(platform) {
   return platform.replace(/Weekly$/, '')
 }
 
-function validateGroups (functionNames) {
+function validateGroups(functionNames) {
   if (!fs.existsSync(groupsFile)) {
     console.warn('[warn] test-groups.json not found — skipping split validation')
     return
@@ -118,26 +119,31 @@ function validateGroups (functionNames) {
   }
 
   for (const [family, covered] of coveredByFamily) {
-    const missing = functionNames.filter(n => !covered.has(n) && !isOverrideOnly(n))
-    const extra = [...covered].filter(n => !nameSet.has(n))
+    const missing = functionNames.filter((n) => !covered.has(n) && !isOverrideOnly(n))
+    const extra = [...covered].filter((n) => !nameSet.has(n))
     if (missing.length) {
       throw new Error(
-        '[' + family + '] Tests not assigned to any group in test-groups.json:\n  ' +
-        missing.join('\n  ') +
-        `\nAdd them to a ${family} or ${family}Weekly group in test/mobile/test-groups.json.`
+        '[' +
+          family +
+          '] Tests not assigned to any group in test-groups.json:\n  ' +
+          missing.join('\n  ') +
+          `\nAdd them to a ${family} or ${family}Weekly group in test/mobile/test-groups.json.`
       )
     }
     if (extra.length) {
       throw new Error(
-        '[' + family + '] test-groups.json references non-existent tests:\n  ' +
-        extra.join('\n  ') + '\nRemove them or check for typos.'
+        '[' +
+          family +
+          '] test-groups.json references non-existent tests:\n  ' +
+          extra.join('\n  ') +
+          '\nRemove them or check for typos.'
       )
     }
   }
   console.log('Group coverage validated — all tests assigned for every OS family.')
 }
 
-function main () {
+function main() {
   assertBenchmarkShardsPresent()
   const files = getIntegrationFiles()
   if (files.length === 0) {

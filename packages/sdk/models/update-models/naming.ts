@@ -1,20 +1,20 @@
-import { getAddonFromEngine } from "../../schemas/engine-addon-map";
-import type { ModelRegistryEngine } from "../../schemas/registry";
-import { detectShardedModel } from "./shards";
-import type { ExportNameInput } from "./types";
+import { getAddonFromEngine } from '../../schemas/engine-addon-map'
+import type { ModelRegistryEngine } from '../../schemas/registry'
+import { detectShardedModel } from './shards'
+import type { ExportNameInput } from './types'
 
 // Normalizes a name part to a valid JS export name fragment.
 // Strips ggml/gguf prefixes, shortens "instruct" to "inst",
 // and uppercases with underscore separators.
 export function cleanPart(p: string): string {
-  if (!p) return "";
+  if (!p) return ''
   return p
-    .replace(/ggml-?/gi, "")
-    .replace(/gguf-?/gi, "")
-    .replace(/instruct/gi, "inst")
-    .replace(/^-+|-+$/g, "")
+    .replace(/ggml-?/gi, '')
+    .replace(/gguf-?/gi, '')
+    .replace(/instruct/gi, 'inst')
+    .replace(/^-+|-+$/g, '')
     .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_");
+    .replace(/[^A-Z0-9]+/g, '_')
 }
 
 // Generates a unique export constant name for a model based on its
@@ -26,32 +26,27 @@ export function generateExportName({
   quantization,
   params,
   tags,
-  usedNames,
+  usedNames
 }: ExportNameInput): string {
-  let addon = getAddonFromEngine(engine);
+  let addon = getAddonFromEngine(engine)
 
   // Override addon classification when tags clearly indicate a different type.
   // e.g. SmolVLM2 f16 uses translation-llamacpp engine (→nmt) but is actually a multimodal LLM.
-  if (
-    addon === "nmt" &&
-    tags.some((t) => t === "generation" || t === "multimodal")
-  ) {
-    addon = "llm";
+  if (addon === 'nmt' && tags.some((t) => t === 'generation' || t === 'multimodal')) {
+    addon = 'llm'
   }
 
-  let exportName = "";
+  let exportName = ''
 
-  const filename = decodeURIComponent(
-    registryPath.split("/").pop() || registryPath,
-  );
-  const lowerFilename = filename.toLowerCase();
-  const lowerPath = registryPath.toLowerCase();
+  const filename = decodeURIComponent(registryPath.split('/').pop() || registryPath)
+  const lowerFilename = filename.toLowerCase()
+  const lowerPath = registryPath.toLowerCase()
 
   // Extract structured info from tags array.
   // Tags typically contain: [function, type, modelName, langPair/other]
-  const tagType = tags[1] || "";
-  const tagName = tags[2] || "";
-  const tagExtra = tags[3] || "";
+  const tagType = tags[1] || ''
+  const tagName = tags[2] || ''
+  const tagExtra = tags[3] || ''
 
   exportName = generateBaseName({
     addon,
@@ -65,259 +60,235 @@ export function generateExportName({
     tagType,
     tagName,
     tagExtra,
-    tags,
-  });
+    tags
+  })
 
-  exportName = exportName.replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+  exportName = exportName.replace(/^_+|_+$/g, '').replace(/_+/g, '_')
 
   // Add suffix for metadata files (tensors.txt are shard metadata, not actual models)
-  if (lowerFilename.endsWith(".tensors.txt")) {
-    exportName = `${exportName}_TENSORS`;
+  if (lowerFilename.endsWith('.tensors.txt')) {
+    exportName = `${exportName}_TENSORS`
   }
 
   // Add SHARD suffix for sharded models
   if (detectShardedModel(filename).isSharded) {
-    exportName = `${exportName}_SHARD`;
+    exportName = `${exportName}_SHARD`
   }
 
-  return resolveCollision(exportName, quantization, usedNames);
+  return resolveCollision(exportName, quantization, usedNames)
 }
 
 // Resolves name collisions by appending quantization or a sequential counter.
 function resolveCollision(
   exportName: string,
   quantization: string,
-  usedNames: Set<string>,
+  usedNames: Set<string>
 ): string {
-  let finalName = exportName || "UNKNOWN_MODEL";
+  let finalName = exportName || 'UNKNOWN_MODEL'
 
   if (usedNames.has(finalName) && quantization) {
-    const cleanedQuant = cleanPart(quantization);
+    const cleanedQuant = cleanPart(quantization)
     // Only append quantization if it's not already at the end of the name
     if (cleanedQuant && !exportName.endsWith(cleanedQuant)) {
-      const withQuant = `${exportName}_${cleanedQuant}`;
+      const withQuant = `${exportName}_${cleanedQuant}`
       if (!usedNames.has(withQuant)) {
-        finalName = withQuant;
+        finalName = withQuant
       }
     }
   }
 
-  let counter = 1;
+  let counter = 1
   while (usedNames.has(finalName)) {
-    finalName = `${exportName}_${counter++}`;
+    finalName = `${exportName}_${counter++}`
   }
 
-  usedNames.add(finalName);
-  return finalName;
+  usedNames.add(finalName)
+  return finalName
 }
 
 // --- Per-addon naming strategies ---
 
 interface BaseNameInput {
-  addon: string;
-  engine: ModelRegistryEngine;
-  filename: string;
-  lowerFilename: string;
-  lowerPath: string;
-  modelName: string;
-  quantization: string;
-  params: string;
-  tagType: string;
-  tagName: string;
-  tagExtra: string;
-  tags: string[];
+  addon: string
+  engine: ModelRegistryEngine
+  filename: string
+  lowerFilename: string
+  lowerPath: string
+  modelName: string
+  quantization: string
+  params: string
+  tagType: string
+  tagName: string
+  tagExtra: string
+  tags: string[]
 }
 
 function generateBaseName(input: BaseNameInput): string {
-  const { addon, lowerFilename } = input;
+  const { addon, lowerFilename } = input
 
   // Detect VAD Silero before whisper (same engine, different model type)
-  if (lowerFilename.includes("silero")) {
-    return generateVadSileroName(input);
+  if (lowerFilename.includes('silero')) {
+    return generateVadSileroName(input)
   }
 
   switch (addon) {
-    case "whisper":
-      return generateWhisperName(input);
-    case "bci":
-      return generateBciName(input);
-    case "vad":
-      return generateVadName(input);
-    case "nmt":
-      return generateNmtName(input);
-    case "llm":
-      return generateLlmName(input);
-    case "embeddings":
-      return generateEmbeddingsName(input);
-    case "tts":
-      return generateTtsName(input);
-    case "ocr":
-      return generateOcrName(input);
-    case "parakeet":
-      return generateParakeetName(input);
-    case "diffusion":
-      return generateDiffusionName(input);
+    case 'whisper':
+      return generateWhisperName(input)
+    case 'bci':
+      return generateBciName(input)
+    case 'vad':
+      return generateVadName(input)
+    case 'nmt':
+      return generateNmtName(input)
+    case 'llm':
+      return generateLlmName(input)
+    case 'embeddings':
+      return generateEmbeddingsName(input)
+    case 'tts':
+      return generateTtsName(input)
+    case 'ocr':
+      return generateOcrName(input)
+    case 'parakeet':
+      return generateParakeetName(input)
+    case 'diffusion':
+      return generateDiffusionName(input)
     default:
-      return cleanPart(input.filename.replace(/\.\w+$/, ""));
+      return cleanPart(input.filename.replace(/\.\w+$/, ''))
   }
 }
 
 function generateVadSileroName({ filename }: BaseNameInput): string {
-  const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i);
-  const version = versionMatch ? versionMatch[1]! : "";
-  const nameParts = ["SILERO", version].filter((p) => p && p !== "");
-  return `VAD_${nameParts.map(cleanPart).join("_")}`;
+  const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i)
+  const version = versionMatch ? versionMatch[1]! : ''
+  const nameParts = ['SILERO', version].filter((p) => p && p !== '')
+  return `VAD_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateWhisperName({
-  filename,
-  lowerFilename,
-  quantization,
-}: BaseNameInput): string {
+function generateWhisperName({ filename, lowerFilename, quantization }: BaseNameInput): string {
   // Extract language from filename prefix (e.g. "de-tiny-ggml-model-f16.bin")
-  const langPrefixMatch = filename.match(/^([a-z]{2})-/i);
+  const langPrefixMatch = filename.match(/^([a-z]{2})-/i)
   // Detect English-only models from ".en" or ".en-" in filename
-  const isEnglishOnly =
-    /\.en[-.]/.test(lowerFilename) || lowerFilename.endsWith(".en.bin");
+  const isEnglishOnly = /\.en[-.]/.test(lowerFilename) || lowerFilename.endsWith('.en.bin')
 
   // Extract size from filename
-  const sizeMatch = filename.match(
-    /\b(tiny|base|small|medium|large(?:-v[0-9]+)?(?:-turbo)?)\b/i,
-  );
-  const modelSize = sizeMatch ? sizeMatch[1]! : "";
+  const sizeMatch = filename.match(/\b(tiny|base|small|medium|large(?:-v[0-9]+)?(?:-turbo)?)\b/i)
+  const modelSize = sizeMatch ? sizeMatch[1]! : ''
 
   // Extract quant from filename (f16, q8_0, etc.)
-  const quantMatch = filename.match(/[-_](f16|q[0-9]+[_][0-9]+|q8)\b/i);
-  const fileQuant = quantMatch ? quantMatch[1]! : quantization;
+  const quantMatch = filename.match(/[-_](f16|q[0-9]+[_][0-9]+|q8)\b/i)
+  const fileQuant = quantMatch ? quantMatch[1]! : quantization
 
-  const nameParts: string[] = [];
+  const nameParts: string[] = []
 
   if (langPrefixMatch) {
-    const langCode = langPrefixMatch[1]!.toLowerCase();
+    const langCode = langPrefixMatch[1]!.toLowerCase()
     const langMap: Record<string, string> = {
-      de: "GERMAN",
-      es: "SPANISH",
-      fr: "FRENCH",
-      it: "ITALIAN",
-      ja: "JAPANESE",
-      pt: "PORTUGUESE",
-      ru: "RUSSIAN",
-      nb: "NORWEGIAN",
-      en: "ENGLISH",
-    };
-    const langName = langMap[langCode] || langCode.toUpperCase();
-    nameParts.push(langName);
+      de: 'GERMAN',
+      es: 'SPANISH',
+      fr: 'FRENCH',
+      it: 'ITALIAN',
+      ja: 'JAPANESE',
+      pt: 'PORTUGUESE',
+      ru: 'RUSSIAN',
+      nb: 'NORWEGIAN',
+      en: 'ENGLISH'
+    }
+    const langName = langMap[langCode] || langCode.toUpperCase()
+    nameParts.push(langName)
   } else if (isEnglishOnly) {
-    nameParts.push("EN");
+    nameParts.push('EN')
   }
 
-  if (modelSize) nameParts.push(modelSize);
-  if (fileQuant) nameParts.push(fileQuant);
+  if (modelSize) nameParts.push(modelSize)
+  if (fileQuant) nameParts.push(fileQuant)
 
-  return `WHISPER_${nameParts.map(cleanPart).join("_")}`;
+  return `WHISPER_${nameParts.map(cleanPart).join('_')}`
 }
 
 function generateBciName({ filename, quantization }: BaseNameInput): string {
   // Strip the engine/format prefix and a leading "BCI" token so role names
   // like "bci-embedder.bin" / "ggml-bci-windowed.bin" become EMBEDDER /
   // WINDOWED before we re-prefix with BCI_.
-  const role = cleanPart(filename.replace(/\.\w+$/, "")).replace(/^BCI_?/, "");
-  const nameParts = [role, quantization].filter((p) => p && p !== "");
-  return `BCI_${nameParts.map(cleanPart).join("_")}`;
+  const role = cleanPart(filename.replace(/\.\w+$/, '')).replace(/^BCI_?/, '')
+  const nameParts = [role, quantization].filter((p) => p && p !== '')
+  return `BCI_${nameParts.map(cleanPart).join('_')}`
 }
 
-function generateVadName({
-  filename,
-  tagType,
-  tagName,
-}: BaseNameInput): string {
-  const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i);
-  const version = versionMatch ? versionMatch[1]! : "";
-  const typeName = tagType || tagName || "SILERO";
-  const nameParts = [typeName, version].filter((p) => p && p !== "");
-  return `VAD_${nameParts.map(cleanPart).join("_")}`;
+function generateVadName({ filename, tagType, tagName }: BaseNameInput): string {
+  const versionMatch = filename.match(/v(\d+\.\d+\.\d+)/i)
+  const version = versionMatch ? versionMatch[1]! : ''
+  const typeName = tagType || tagName || 'SILERO'
+  const nameParts = [typeName, version].filter((p) => p && p !== '')
+  return `VAD_${nameParts.map(cleanPart).join('_')}`
 }
 
 function generateNmtName(input: BaseNameInput): string {
-  const { lowerPath, lowerFilename } = input;
+  const { lowerPath, lowerFilename } = input
 
-  if (
-    lowerPath.includes("salamandra") ||
-    lowerFilename.includes("salamandra")
-  ) {
-    return generateNmtSalamandraName(input);
+  if (lowerPath.includes('salamandra') || lowerFilename.includes('salamandra')) {
+    return generateNmtSalamandraName(input)
   }
-  if (
-    lowerPath.includes("indictrans") ||
-    lowerFilename.includes("indictrans")
-  ) {
-    return generateNmtIndictransName(input);
+  if (lowerPath.includes('indictrans') || lowerFilename.includes('indictrans')) {
+    return generateNmtIndictransName(input)
   }
-  if (lowerPath.includes("bergamot") || lowerFilename.includes("bergamot")) {
-    return generateNmtBergamotName(input);
+  if (lowerPath.includes('bergamot') || lowerFilename.includes('bergamot')) {
+    return generateNmtBergamotName(input)
   }
 
-  const nameParts = [input.modelName, input.quantization].filter(
-    (p) => p && p !== "",
-  );
-  return `NMT_${nameParts.map(cleanPart).join("_")}`;
+  const nameParts = [input.modelName, input.quantization].filter((p) => p && p !== '')
+  return `NMT_${nameParts.map(cleanPart).join('_')}`
 }
 
 function generateNmtSalamandraName({ filename }: BaseNameInput): string {
-  const base = filename.replace(/\.\w+$/, "").replace(/-\d{5}-of-\d{5}/, "");
-  return cleanPart(base);
+  const base = filename.replace(/\.\w+$/, '').replace(/-\d{5}-of-\d{5}/, '')
+  return cleanPart(base)
 }
 
-function generateNmtIndictransName({
-  filename,
-  quantization,
-}: BaseNameInput): string {
-  const langMatch = filename.match(/(en-indic|indic-en|indic-indic)/i);
-  const langDir = langMatch ? langMatch[1]! : "";
+function generateNmtIndictransName({ filename, quantization }: BaseNameInput): string {
+  const langMatch = filename.match(/(en-indic|indic-en|indic-indic)/i)
+  const langDir = langMatch ? langMatch[1]! : ''
   const langMap: Record<string, string> = {
-    "en-indic": "EN_HI",
-    "indic-en": "HI_EN",
-    "indic-indic": "HI_HI",
-  };
-  const langPair = langMap[langDir.toLowerCase()] || cleanPart(langDir);
+    'en-indic': 'EN_HI',
+    'indic-en': 'HI_EN',
+    'indic-indic': 'HI_HI'
+  }
+  const langPair = langMap[langDir.toLowerCase()] || cleanPart(langDir)
 
-  const sizeMatch = filename.match(/(\d+[MB])/i);
-  const size = sizeMatch ? sizeMatch[1]! : "";
+  const sizeMatch = filename.match(/(\d+[MB])/i)
+  const size = sizeMatch ? sizeMatch[1]! : ''
 
-  const nameParts = [langPair, "INDIC", size, quantization].filter(
-    (p) => p && p !== "",
-  );
-  return `MARIAN_${nameParts.map(cleanPart).join("_")}`;
+  const nameParts = [langPair, 'INDIC', size, quantization].filter((p) => p && p !== '')
+  return `MARIAN_${nameParts.map(cleanPart).join('_')}`
 }
 
 function generateNmtBergamotName({ filename }: BaseNameInput): string {
-  const langMatch = filename.match(/[.]([a-z]{2,4})[.]/i);
-  let langPair = "";
+  const langMatch = filename.match(/[.]([a-z]{2,4})[.]/i)
+  let langPair = ''
   if (langMatch) {
-    const code = langMatch[1]!;
+    const code = langMatch[1]!
     if (code.length === 4) {
-      langPair = `${code.slice(0, 2).toUpperCase()}_${code.slice(2).toUpperCase()}`;
+      langPair = `${code.slice(0, 2).toUpperCase()}_${code.slice(2).toUpperCase()}`
     } else {
-      langPair = code.toUpperCase();
+      langPair = code.toUpperCase()
     }
   }
 
-  let suffix = "";
-  if (filename.startsWith("model.")) {
-    suffix = "";
+  let suffix = ''
+  if (filename.startsWith('model.')) {
+    suffix = ''
   } else if (filename.match(/^vocab\./)) {
-    suffix = "_VOCAB";
+    suffix = '_VOCAB'
   } else if (filename.match(/^srcvocab\./)) {
-    suffix = "_SRCVOCAB";
+    suffix = '_SRCVOCAB'
   } else if (filename.match(/^trgvocab\./)) {
-    suffix = "_TRGVOCAB";
-  } else if (filename.startsWith("lex.")) {
-    suffix = "_LEX";
-  } else if (filename === "metadata.json") {
-    suffix = "_METADATA";
+    suffix = '_TRGVOCAB'
+  } else if (filename.startsWith('lex.')) {
+    suffix = '_LEX'
+  } else if (filename === 'metadata.json') {
+    suffix = '_METADATA'
   }
 
-  return `BERGAMOT_${langPair}${suffix}`;
+  return `BERGAMOT_${langPair}${suffix}`
 }
 
 function generateLlmName({
@@ -326,62 +297,58 @@ function generateLlmName({
   tagName,
   modelName,
   quantization,
-  params,
+  params
 }: BaseNameInput): string {
-  const type = tagType || "";
-  const name = tagName || modelName || "";
-  const isMMProj = filename.includes("mmproj");
+  const type = tagType || ''
+  const name = tagName || modelName || ''
+  const isMMProj = filename.includes('mmproj')
 
   // Try to extract model family from filename to recover version info
   // that tags may omit (e.g., tag "qwen" but filename "Qwen3-1.7B-...")
-  let familyName = name;
+  let familyName = name
   if (params) {
     const parseFn = filename
-      .replace(/^mmproj[-_]/i, "")
-      .replace(/\.tensors\.txt$/, "")
-      .replace(/\.\w+$/, "")
-      .replace(/-\d{5}-of-\d{5}/, "");
-    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const familyMatch = parseFn.match(
-      new RegExp(`^(.+?)[-_]${paramsEsc}`, "i"),
-    );
+      .replace(/^mmproj[-_]/i, '')
+      .replace(/\.tensors\.txt$/, '')
+      .replace(/\.\w+$/, '')
+      .replace(/-\d{5}-of-\d{5}/, '')
+    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const familyMatch = parseFn.match(new RegExp(`^(.+?)[-_]${paramsEsc}`, 'i'))
     if (familyMatch?.[1]) {
-      const candidate = familyMatch[1];
+      const candidate = familyMatch[1]
       // Use filename family only if it extends the tag name
       // Strip common engine/format suffixes from tag before comparing
-      const tagCore = name.replace(/[-_](ggml|cpp|onnx|llamacpp|metal)$/i, "");
-      const cleanedCandidate = candidate.replace(/[-_.]/g, "").toLowerCase();
-      const cleanedTagCore = tagCore.replace(/[-_.]/g, "").toLowerCase();
+      const tagCore = name.replace(/[-_](ggml|cpp|onnx|llamacpp|metal)$/i, '')
+      const cleanedCandidate = candidate.replace(/[-_.]/g, '').toLowerCase()
+      const cleanedTagCore = tagCore.replace(/[-_.]/g, '').toLowerCase()
       if (
         cleanedCandidate.startsWith(cleanedTagCore) &&
         cleanedCandidate.length >= cleanedTagCore.length
       ) {
-        familyName = candidate;
+        familyName = candidate
       }
     }
   }
 
-  const nameParts = [familyName, params, type, quantization].filter(
-    (p) => p && p !== "",
-  );
-  let exportName = nameParts.map(cleanPart).join("_");
+  const nameParts = [familyName, params, type, quantization].filter((p) => p && p !== '')
+  let exportName = nameParts.map(cleanPart).join('_')
 
   if (isMMProj) {
-    exportName = "MMPROJ_" + exportName;
+    exportName = 'MMPROJ_' + exportName
   }
 
-  return exportName;
+  return exportName
 }
 
 function generateEmbeddingsName({
   tagName,
   modelName,
   params,
-  quantization,
+  quantization
 }: BaseNameInput): string {
-  const name = tagName || modelName || "";
-  const nameParts = [name, params, quantization].filter((p) => p && p !== "");
-  return nameParts.map(cleanPart).join("_");
+  const name = tagName || modelName || ''
+  const nameParts = [name, params, quantization].filter((p) => p && p !== '')
+  return nameParts.map(cleanPart).join('_')
 }
 
 function generateTtsName({
@@ -390,40 +357,33 @@ function generateTtsName({
   modelName,
   tagExtra,
   tagType,
-  quantization,
+  quantization
 }: BaseNameInput): string {
-  const name = tagName || modelName || "";
-  const language = tagExtra || "";
-  const type = tagType || "";
-  const nameParts = [name, language, type, quantization].filter(
-    (p) => p && p !== "",
-  );
-  let exportName = `TTS_${nameParts.map(cleanPart).join("_")}`;
-  if (filename.endsWith(".onnx.json") || filename.includes("config.json")) {
-    exportName = exportName + "_CONFIG";
+  const name = tagName || modelName || ''
+  const language = tagExtra || ''
+  const type = tagType || ''
+  const nameParts = [name, language, type, quantization].filter((p) => p && p !== '')
+  let exportName = `TTS_${nameParts.map(cleanPart).join('_')}`
+  if (filename.endsWith('.onnx.json') || filename.includes('config.json')) {
+    exportName = exportName + '_CONFIG'
   }
-  if (filename.endsWith(".onnx_data")) {
-    exportName = exportName + "_DATA";
+  if (filename.endsWith('.onnx_data')) {
+    exportName = exportName + '_DATA'
   }
-  return exportName;
+  return exportName
 }
 
-function generateOcrName({
-  filename,
-  tagName,
-  modelName,
-  tagExtra,
-}: BaseNameInput): string {
-  const name = tagName || modelName || "";
-  const language = tagExtra || "";
-  let fileType = "";
-  if (filename.includes("detector")) {
-    fileType = "DETECTOR";
-  } else if (filename.includes("recognizer")) {
-    fileType = "RECOGNIZER";
+function generateOcrName({ filename, tagName, modelName, tagExtra }: BaseNameInput): string {
+  const name = tagName || modelName || ''
+  const language = tagExtra || ''
+  let fileType = ''
+  if (filename.includes('detector')) {
+    fileType = 'DETECTOR'
+  } else if (filename.includes('recognizer')) {
+    fileType = 'RECOGNIZER'
   }
-  const nameParts = [name, language, fileType].filter((p) => p && p !== "");
-  return `OCR_${nameParts.map(cleanPart).join("_")}`;
+  const nameParts = [name, language, fileType].filter((p) => p && p !== '')
+  return `OCR_${nameParts.map(cleanPart).join('_')}`
 }
 
 function generateDiffusionName({
@@ -431,98 +391,88 @@ function generateDiffusionName({
   modelName,
   quantization,
   params,
-  tags,
+  tags
 }: BaseNameInput): string {
   // VAE / auxiliary models (tagged "vae" instead of "generation")
-  if (tags.includes("vae")) {
-    const name = modelName || "SD";
-    return `${cleanPart(name)}_VAE`;
+  if (tags.includes('vae')) {
+    const name = modelName || 'SD'
+    return `${cleanPart(name)}_VAE`
   }
 
   // Extract family name from filename
   let family = filename
-    .replace(/\.\w+$/, "")
-    .replace(/^stable-diffusion-xl/i, "SDXL")
-    .replace(/^stable-diffusion/i, "SD");
+    .replace(/\.\w+$/, '')
+    .replace(/^stable-diffusion-xl/i, 'SDXL')
+    .replace(/^stable-diffusion/i, 'SD')
 
   // Strip trailing params (e.g. "-4b") and quant (e.g. "-Q8_0") from family
   // to avoid duplication since they're appended separately
   if (params) {
-    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    family = family.replace(new RegExp(`[-_]${paramsEsc}[-_].*$`, "i"), "");
+    const paramsEsc = params.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    family = family.replace(new RegExp(`[-_]${paramsEsc}[-_].*$`, 'i'), '')
   }
   if (quantization) {
-    const quantEsc = quantization.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    family = family.replace(new RegExp(`[-_]${quantEsc}$`, "i"), "");
+    const quantEsc = quantization.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    family = family.replace(new RegExp(`[-_]${quantEsc}$`, 'i'), '')
   }
 
-  const nameParts = [family, params, quantization].filter((p) => p && p !== "");
-  return nameParts.map(cleanPart).join("_");
+  const nameParts = [family, params, quantization].filter((p) => p && p !== '')
+  return nameParts.map(cleanPart).join('_')
 }
 
-function generateParakeetName({
-  filename,
-  lowerPath,
-  quantization,
-}: BaseNameInput): string {
-  const lower = filename.toLowerCase();
+function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
+  const lower = filename.toLowerCase()
 
-  let variant = "";
-  if (lower.includes("sortformer") || lower.includes("diar_streaming")) {
-    variant = "SORTFORMER";
-  } else if (lower.includes("ctc") || lowerPath.includes("parakeet-ctc")) {
-    variant = "CTC";
-  } else if (lower.includes("eou") || lowerPath.includes("parakeet-rs")) {
-    variant = "EOU";
-  } else if (lower.includes("tdt") || lowerPath.includes("parakeet-tdt")) {
-    variant = "TDT";
+  let variant = ''
+  if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
+    variant = 'SORTFORMER'
+  } else if (lower.includes('ctc') || lowerPath.includes('parakeet-ctc')) {
+    variant = 'CTC'
+  } else if (lower.includes('eou') || lowerPath.includes('parakeet-rs')) {
+    variant = 'EOU'
+  } else if (lower.includes('tdt') || lowerPath.includes('parakeet-tdt')) {
+    variant = 'TDT'
   }
 
-  if (lower.endsWith(".gguf")) {
-    const paramsMatch = filename.match(
-      /(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i,
-    );
-    const versionMatch = filename.match(/[-_]v(\d+(?:\.\d+)?)/i);
-    const speakerMatch = filename.match(/(\d+spk)/i);
-    const paramsHint = paramsMatch ? paramsMatch[1]! : "";
-    const versionHint = versionMatch ? `V${versionMatch[1]!}` : "";
-    const speakerHint = speakerMatch ? speakerMatch[1]! : "";
+  if (lower.endsWith('.gguf')) {
+    const paramsMatch = filename.match(/(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i)
+    const versionMatch = filename.match(/[-_]v(\d+(?:\.\d+)?)/i)
+    const speakerMatch = filename.match(/(\d+spk)/i)
+    const paramsHint = paramsMatch ? paramsMatch[1]! : ''
+    const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
+    const speakerHint = speakerMatch ? speakerMatch[1]! : ''
 
-    const nameParts = [
-      variant,
-      paramsHint,
-      speakerHint,
-      versionHint,
-      quantization,
-    ].filter((p) => p && p !== "");
-    return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
+    const nameParts = [variant, paramsHint, speakerHint, versionHint, quantization].filter(
+      (p) => p && p !== ''
+    )
+    return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
   }
 
-  let fileRole = "";
-  if (lower.includes("encoder") && (lower.endsWith(".data") || lower.endsWith(".onnx.data"))) {
-    fileRole = "ENCODER_DATA";
-  } else if (lower.includes("encoder")) {
-    fileRole = "ENCODER";
-  } else if (lower.includes("decoder")) {
-    fileRole = "DECODER";
-  } else if (lower.includes("vocab")) {
-    fileRole = "VOCAB";
-  } else if (lower.includes("tokenizer")) {
-    fileRole = "TOKENIZER";
-  } else if (lower.includes("preprocessor") || lower.includes("nemo")) {
-    fileRole = "PREPROCESSOR";
-  } else if (lower === "config.json") {
-    fileRole = "CONFIG";
-  } else if (lower.endsWith(".onnx.data") || lower.endsWith(".onnx_data")) {
-    fileRole = "DATA";
-  } else if (lower.includes("sortformer")) {
-    fileRole = "";
-  } else if (lower.endsWith(".onnx") || lower.endsWith(".int8.onnx")) {
-    fileRole = "";
+  let fileRole = ''
+  if (lower.includes('encoder') && (lower.endsWith('.data') || lower.endsWith('.onnx.data'))) {
+    fileRole = 'ENCODER_DATA'
+  } else if (lower.includes('encoder')) {
+    fileRole = 'ENCODER'
+  } else if (lower.includes('decoder')) {
+    fileRole = 'DECODER'
+  } else if (lower.includes('vocab')) {
+    fileRole = 'VOCAB'
+  } else if (lower.includes('tokenizer')) {
+    fileRole = 'TOKENIZER'
+  } else if (lower.includes('preprocessor') || lower.includes('nemo')) {
+    fileRole = 'PREPROCESSOR'
+  } else if (lower === 'config.json') {
+    fileRole = 'CONFIG'
+  } else if (lower.endsWith('.onnx.data') || lower.endsWith('.onnx_data')) {
+    fileRole = 'DATA'
+  } else if (lower.includes('sortformer')) {
+    fileRole = ''
+  } else if (lower.endsWith('.onnx') || lower.endsWith('.int8.onnx')) {
+    fileRole = ''
   } else {
-    fileRole = cleanPart(filename.replace(/\.\w+$/, ""));
+    fileRole = cleanPart(filename.replace(/\.\w+$/, ''))
   }
 
-  const nameParts = [variant, fileRole, quantization].filter((p) => p && p !== "");
-  return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
+  const nameParts = [variant, fileRole, quantization].filter((p) => p && p !== '')
+  return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
 }

@@ -9,11 +9,16 @@ import { LLM_ONLY_CONFIG, E2E } from '../helpers/config.js'
 describe('http streaming over a real socket', () => {
   const baseUrl = useSpawnedServer(LLM_ONLY_CONFIG)
 
-  function streamChat (signal?: AbortSignal): Promise<Response> {
+  function streamChat(signal?: AbortSignal): Promise<Response> {
     return fetch(`${baseUrl()}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: E2E.llm, messages: [{ role: 'user', content: 'Say hi.' }], stream: true, max_tokens: 512 }),
+      body: JSON.stringify({
+        model: E2E.llm,
+        messages: [{ role: 'user', content: 'Say hi.' }],
+        stream: true,
+        max_tokens: 512
+      }),
       ...(signal !== undefined ? { signal } : {})
     })
   }
@@ -41,7 +46,10 @@ describe('http streaming over a real socket', () => {
     }
 
     assert.ok(dataFrames.includes('[DONE]'), 'expected [DONE] sentinel over the socket')
-    assert.ok(dataFrames.filter((d) => d !== '[DONE]').length > 1, 'expected multiple SSE data frames')
+    assert.ok(
+      dataFrames.filter((d) => d !== '[DONE]').length > 1,
+      'expected multiple SSE data frames'
+    )
   })
 
   it('survives a client hang-up mid-stream (cancel-bridge)', async () => {
@@ -51,7 +59,11 @@ describe('http streaming over a real socket', () => {
     const reader = res.body.getReader()
     await reader.read() // take one chunk, then hang up
     controller.abort()
-    try { await reader.read() } catch { /* aborted — expected */ }
+    try {
+      await reader.read()
+    } catch {
+      /* aborted — expected */
+    }
 
     // The server must stay healthy after a client disconnects mid-generation.
     const ping = await fetch(`${baseUrl()}/v1/models`)

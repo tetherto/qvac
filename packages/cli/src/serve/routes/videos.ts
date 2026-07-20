@@ -18,7 +18,11 @@ import {
 } from '../schemas/videos.js'
 import type { VideoJob } from '../core/video-jobs-store.js'
 import { videoJobResource } from '../core/video-jobs-store.js'
-import { transcodeAviToMp4, TranscodeFailedError, TranscodeTimeoutError } from '../lib/video-transcode.js'
+import {
+  transcodeAviToMp4,
+  TranscodeFailedError,
+  TranscodeTimeoutError
+} from '../lib/video-transcode.js'
 import type { QvacContext } from '../lib/types.js'
 
 const descriptions = {
@@ -62,7 +66,8 @@ no ffmpeg → \`503 transcode_unavailable\`. \`variant=thumbnail|spritesheet\`
 \`502 transcode_failed\` (retry with \`?format=avi\`).
 `.trim(),
   list: 'List video jobs, newest first by default. Cursor pagination via `limit` / `order` / `after`. In-memory only.',
-  delete: 'Delete a job and its rendered assets. If still `queued` / `in_progress`, generation is aborted first.'
+  delete:
+    'Delete a job and its rendered assets. If still `queued` / `in_progress`, generation is aborted first.'
 }
 
 const VIDEO_AVI_CONTENT_TYPE = 'video/avi' as const
@@ -81,9 +86,13 @@ const RETRY_AFTER_SECONDS = 2
  * thrown cancel-RPC failure would crash the surrounding hook. SDK cancel
  * failures are logged at DEBUG.
  */
-function tearDownJob (ctx: QvacContext, job: VideoJob): void {
+function tearDownJob(ctx: QvacContext, job: VideoJob): void {
   if (job.status === 'queued' || job.status === 'in_progress') {
-    try { job.controller.abort() } catch { /* noop */ }
+    try {
+      job.controller.abort()
+    } catch {
+      /* noop */
+    }
     if (job.requestId) {
       const cancelFn = ctx.cancelOverride ?? cancel
       cancelFn({ requestId: job.requestId }).catch((err: unknown) => {
@@ -102,15 +111,18 @@ const MAX_IMAGE_BYTES = 100 * 1024 * 1024
 const FETCH_TIMEOUT_MS = 30_000
 const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/
 
-export async function resolveInputReferenceImage (
+export async function resolveInputReferenceImage(
   ref: { image_url?: string | undefined; file_id?: string | undefined },
   ctx: QvacContext
 ): Promise<Uint8Array> {
   if (ref.file_id !== undefined) {
     const record = ctx.ephemeralFiles.get(ref.file_id)
     if (!record) {
-      throw new HttpError(400, 'invalid_input_reference',
-        `input_reference.file_id: file "${ref.file_id}" not found — upload the image via POST /v1/files first.`)
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        `input_reference.file_id: file "${ref.file_id}" not found — upload the image via POST /v1/files first.`
+      )
     }
     return new Uint8Array(record.data)
   }
@@ -119,23 +131,35 @@ export async function resolveInputReferenceImage (
   if (url.startsWith('data:')) {
     const commaIdx = url.indexOf(',')
     if (commaIdx === -1) {
-      throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url: data URI is missing the comma separator.')
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        'input_reference.image_url: data URI is missing the comma separator.'
+      )
     }
     const header = url.slice(5, commaIdx)
     if (!header.endsWith(';base64')) {
-      throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).')
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        'input_reference.image_url: only base64-encoded data URIs are supported (e.g. data:image/jpeg;base64,...).'
+      )
     }
     const b64Data = url.slice(commaIdx + 1)
     if (!BASE64_RE.test(b64Data)) {
-      throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url: data URI contains invalid base64 characters.')
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        'input_reference.image_url: data URI contains invalid base64 characters.'
+      )
     }
     const decoded = Buffer.from(b64Data, 'base64')
     if (decoded.length === 0) {
-      throw new HttpError(400, 'invalid_input_reference',
-        'input_reference.image_url: data URI decoded to empty bytes.')
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        'input_reference.image_url: data URI decoded to empty bytes.'
+      )
     }
     return new Uint8Array(decoded)
   }
@@ -144,18 +168,28 @@ export async function resolveInputReferenceImage (
     try {
       res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     } catch (err) {
-      const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
+      const isTimeout =
+        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
       if (isTimeout) {
-        throw new HttpError(400, 'invalid_input_reference',
-          `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`)
+        throw new HttpError(
+          400,
+          'invalid_input_reference',
+          `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
+        )
       }
       const message = err instanceof Error ? err.message : String(err)
-      throw new HttpError(400, 'invalid_input_reference',
-        `input_reference.image_url: failed to fetch image — ${message}`)
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        `input_reference.image_url: failed to fetch image — ${message}`
+      )
     }
     if (!res.ok) {
-      throw new HttpError(400, 'invalid_input_reference',
-        `input_reference.image_url: server returned HTTP ${res.status}.`)
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
+        `input_reference.image_url: server returned HTTP ${res.status}.`
+      )
     }
     const chunks: Uint8Array[] = []
     let totalBytes = 0
@@ -167,18 +201,25 @@ export async function resolveInputReferenceImage (
         totalBytes += value.length
         if (totalBytes > MAX_IMAGE_BYTES) {
           await reader.cancel()
-          throw new HttpError(400, 'invalid_input_reference',
-            `input_reference.image_url: image exceeds the ${MAX_IMAGE_BYTES / (1024 * 1024)} MB limit.`)
+          throw new HttpError(
+            400,
+            'invalid_input_reference',
+            `input_reference.image_url: image exceeds the ${MAX_IMAGE_BYTES / (1024 * 1024)} MB limit.`
+          )
         }
         chunks.push(value)
       }
     } catch (err) {
       if (err instanceof HttpError) throw err
-      const isTimeout = err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
-      throw new HttpError(400, 'invalid_input_reference',
+      const isTimeout =
+        err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError')
+      throw new HttpError(
+        400,
+        'invalid_input_reference',
         isTimeout
           ? `input_reference.image_url: timed out after ${FETCH_TIMEOUT_MS / 1000}s.`
-          : `input_reference.image_url: failed reading response body.`)
+          : `input_reference.image_url: failed reading response body.`
+      )
     } finally {
       reader.releaseLock()
     }
@@ -190,15 +231,25 @@ export async function resolveInputReferenceImage (
     }
     return result
   }
-  throw new HttpError(400, 'invalid_input_reference',
-    'input_reference.image_url must be a base64 data URI or an HTTP(S) URL.')
+  throw new HttpError(
+    400,
+    'invalid_input_reference',
+    'input_reference.image_url must be a base64 data URI or an HTTP(S) URL.'
+  )
 }
 
-async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClientParams, alias: string): Promise<void> {
+async function runVideoJob(
+  ctx: QvacContext,
+  jobId: string,
+  params: VideoClientParams,
+  alias: string
+): Promise<void> {
   const store = ctx.videoJobsStore
   const job = store.get(jobId)
   if (!job) return
-  ctx.logger.info(`  video_create job=${jobId} model=${alias} prompt_chars=${params.prompt.length} size=${job.size} seconds=${job.seconds}`)
+  ctx.logger.info(
+    `  video_create job=${jobId} model=${alias} prompt_chars=${params.prompt.length} size=${job.size} seconds=${job.seconds}`
+  )
 
   try {
     const videoFn = ctx.videoOverride ?? video
@@ -211,8 +262,12 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
     const stored = store.update(jobId, { requestId: result.requestId })
     if (!stored) {
       const cancelFn = ctx.cancelOverride ?? cancel
-      cancelFn({ requestId: result.requestId }).catch(() => { /* noop */ })
-      ctx.logger.info(`  video_create job=${jobId} torn down before run; cancelled requestId=${result.requestId}`)
+      cancelFn({ requestId: result.requestId }).catch(() => {
+        /* noop */
+      })
+      ctx.logger.info(
+        `  video_create job=${jobId} torn down before run; cancelled requestId=${result.requestId}`
+      )
       return
     }
 
@@ -234,7 +289,9 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
             maxProgress = clamped
             store.update(jobId, { progress: clamped })
           }
-          ctx.logger.debug(`    video_create job=${jobId} step=${tick.step}/${tick.totalSteps} elapsed=${tick.elapsedMs}ms`)
+          ctx.logger.debug(
+            `    video_create job=${jobId} step=${tick.step}/${tick.totalSteps} elapsed=${tick.elapsedMs}ms`
+          )
         }
       } catch {
         // outputs/stats below surface the real error
@@ -261,9 +318,12 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
     })
 
     // Caller didn't pin width/height → backfill `size` from stats.
-    const size = job.size.length > 0
-      ? job.size
-      : (stats?.width != null && stats?.height != null ? `${stats.width}x${stats.height}` : '')
+    const size =
+      job.size.length > 0
+        ? job.size
+        : stats !== undefined && stats.width !== undefined && stats.height !== undefined
+          ? `${stats.width}x${stats.height}`
+          : ''
 
     // The abort check above already handles DELETE / eviction on the normal
     // path. The store-update return is a second check: if the job is gone we
@@ -281,7 +341,9 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
       ctx.logger.info(`  video_create job=${jobId} bytes dropped (job torn down during generation)`)
       return
     }
-    ctx.logger.info(`  video_create job=${jobId} done frames=${stats?.videoFrames ?? '?'} bytes=${buffer.length} avi_file=${aviFileId}`)
+    ctx.logger.info(
+      `  video_create job=${jobId} done frames=${stats?.videoFrames ?? '?'} bytes=${buffer.length} avi_file=${aviFileId}`
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`  video_create job=${jobId} failed: ${message}`)
@@ -292,7 +354,7 @@ async function runVideoJob (ctx: QvacContext, jobId: string, params: VideoClient
   }
 }
 
-async function serveContent (
+async function serveContent(
   reply: FastifyReply,
   ctx: QvacContext,
   job: VideoJob,
@@ -300,19 +362,35 @@ async function serveContent (
 ): Promise<void> {
   if (job.status !== 'completed') {
     if (job.status === 'failed') {
-      throw new HttpError(409, 'video_failed', `Video generation failed: ${job.error?.message ?? 'unknown error'}`)
+      throw new HttpError(
+        409,
+        'video_failed',
+        `Video generation failed: ${job.error?.message ?? 'unknown error'}`
+      )
     }
     reply.header('Retry-After', String(RETRY_AFTER_SECONDS))
-    throw new HttpError(409, 'video_not_ready', `Video status is "${job.status}". Poll GET /v1/videos/${job.id} until completed.`)
+    throw new HttpError(
+      409,
+      'video_not_ready',
+      `Video status is "${job.status}". Poll GET /v1/videos/${job.id} until completed.`
+    )
   }
 
   if (!job.aviFileId) {
-    throw new HttpError(410, 'video_expired', `Video bytes for job ${job.id} are no longer available.`)
+    throw new HttpError(
+      410,
+      'video_expired',
+      `Video bytes for job ${job.id} are no longer available.`
+    )
   }
   const aviRecord = ctx.ephemeralFiles.get(job.aviFileId)
   if (!aviRecord) {
     ctx.videoJobsStore.update(job.id, { aviFileId: null, mp4FileId: null })
-    throw new HttpError(410, 'video_expired', `Video bytes for job ${job.id} are no longer available.`)
+    throw new HttpError(
+      410,
+      'video_expired',
+      `Video bytes for job ${job.id} are no longer available.`
+    )
   }
 
   const wantMp4 = formatOverride === 'mp4' || (formatOverride === undefined && ctx.ffmpegAvailable)
@@ -326,7 +404,11 @@ async function serveContent (
   }
 
   if (!ctx.ffmpegAvailable) {
-    throw new HttpError(503, 'transcode_unavailable', 'ffmpeg is not on PATH on this server; cannot transcode AVI → MP4. Omit ?format or use ?format=avi.')
+    throw new HttpError(
+      503,
+      'transcode_unavailable',
+      'ffmpeg is not on PATH on this server; cannot transcode AVI → MP4. Omit ?format or use ?format=avi.'
+    )
   }
 
   let mp4Buffer: Buffer | null = null
@@ -342,11 +424,17 @@ async function serveContent (
     } catch (err) {
       if (err instanceof TranscodeTimeoutError) {
         ctx.logger.error(`  video_content job=${job.id} transcode timed out: ${err.message}`)
-        throw new HttpError(502, 'transcode_failed', `${err.message}. Retry with ?format=avi to fetch the native container.`)
+        throw new HttpError(
+          502,
+          'transcode_failed',
+          `${err.message}. Retry with ?format=avi to fetch the native container.`
+        )
       }
       if (err instanceof TranscodeFailedError) {
         const stderrTail = err.stderr.trim().split('\n').slice(-5).join(' | ')
-        ctx.logger.error(`  video_content job=${job.id} ffmpeg exit=${err.exitCode ?? '?'} stderr: ${stderrTail || '(empty)'}`)
+        ctx.logger.error(
+          `  video_content job=${job.id} ffmpeg exit=${err.exitCode ?? '?'} stderr: ${stderrTail || '(empty)'}`
+        )
         throw new HttpError(
           502,
           'transcode_failed',
@@ -370,7 +458,9 @@ async function serveContent (
     const updated = ctx.videoJobsStore.update(job.id, { mp4FileId })
     if (!updated) {
       ctx.ephemeralFiles.remove(mp4FileId)
-      ctx.logger.debug(`  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`)
+      ctx.logger.debug(
+        `  video_content job=${job.id} mp4 cache dropped (job torn down during transcode)`
+      )
     }
   }
 
@@ -380,144 +470,173 @@ async function serveContent (
     .send(mp4Buffer)
 }
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
-  app.post('/v1/videos', {
-    schema: {
-      body: videosCreateBody,
-      tags: ['Videos'],
-      summary: 'Create a video generation job',
-      description: descriptions.create,
-      consumes: ['application/json', 'multipart/form-data'],
-      response: { 200: videoResource }
+  app.post(
+    '/v1/videos',
+    {
+      schema: {
+        body: videosCreateBody,
+        tags: ['Videos'],
+        summary: 'Create a video generation job',
+        description: descriptions.create,
+        consumes: ['application/json', 'multipart/form-data'],
+        response: { 200: videoResource }
+      },
+      preValidation: multipartToBodyOptional,
+      preHandler: requireModel('video')
     },
-    preValidation: multipartToBodyOptional,
-    preHandler: requireModel('video')
-  }, async (req, reply) => {
-    const ctx = app.qvac
-    const { alias, sdkModelId } = req.qvacModel!
-    const inputRef = req.body.input_reference
-    let initImage: Uint8Array | undefined
-    if (inputRef instanceof Buffer) {
-      initImage = new Uint8Array(inputRef)
-    } else if (inputRef !== undefined) {
-      initImage = await resolveInputReferenceImage(
-        inputRef as { image_url?: string | undefined; file_id?: string | undefined },
-        ctx
-      )
-    }
-    let params: VideoClientParams
-    try {
-      params = extractVideoCreateParams(req.body, initImage, sdkModelId)
-    } catch (err) {
-      if (err instanceof InvalidVideoStrengthError) throw new HttpError(400, 'invalid_strength', err.message)
-      throw err
-    }
+    async (req, reply) => {
+      const ctx = app.qvac
+      const { alias, sdkModelId } = req.qvacModel!
+      const inputRef = req.body.input_reference
+      let initImage: Uint8Array | undefined
+      if (inputRef instanceof Buffer) {
+        initImage = new Uint8Array(inputRef)
+      } else if (inputRef !== undefined) {
+        initImage = await resolveInputReferenceImage(
+          inputRef as { image_url?: string | undefined; file_id?: string | undefined },
+          ctx
+        )
+      }
+      let params: VideoClientParams
+      try {
+        params = extractVideoCreateParams(req.body, initImage, sdkModelId)
+      } catch (err) {
+        if (err instanceof InvalidVideoStrengthError) {
+          throw new HttpError(400, 'invalid_strength', err.message)
+        }
+        throw err
+      }
 
-    const job = ctx.videoJobsStore.create({
-      model: alias,
-      prompt: params.prompt,
-      size: params.width != null && params.height != null ? `${params.width}x${params.height}` : '',
-      seconds: req.body.seconds ?? ''
-    })
+      const job = ctx.videoJobsStore.create({
+        model: alias,
+        prompt: params.prompt,
+        size:
+          params.width !== undefined && params.height !== undefined
+            ? `${params.width}x${params.height}`
+            : '',
+        seconds: req.body.seconds ?? ''
+      })
 
-    // Detach: the route returns immediately; the background task drives the SDK.
-    void runVideoJob(ctx, job.id, params, alias)
+      // Detach: the route returns immediately; the background task drives the SDK.
+      void runVideoJob(ctx, job.id, params, alias)
 
-    reply.status(200).send(videoJobResource(job))
-  })
+      reply.status(200).send(videoJobResource(job))
+    }
+  )
 
-  app.get('/v1/videos', {
-    schema: {
-      querystring: videosListQuery,
-      tags: ['Videos'],
-      summary: 'List video generation jobs',
-      description: descriptions.list,
-      response: { 200: videoListResource }
+  app.get(
+    '/v1/videos',
+    {
+      schema: {
+        querystring: videosListQuery,
+        tags: ['Videos'],
+        summary: 'List video generation jobs',
+        description: descriptions.list,
+        response: { 200: videoListResource }
+      }
+    },
+    // lunte-disable-next-line require-await
+    async (req) => {
+      const q = req.query
+      const page = app.qvac.videoJobsStore.list({
+        ...(q.limit !== undefined ? { limit: q.limit } : {}),
+        ...(q.order !== undefined ? { order: q.order } : {}),
+        ...(q.after !== undefined ? { after: q.after } : {})
+      })
+      return {
+        object: 'list' as const,
+        data: page.data.map(videoJobResource),
+        first_id: page.first_id,
+        last_id: page.last_id,
+        has_more: page.has_more
+      }
     }
-  }, async (req) => {
-    const q = req.query
-    const page = app.qvac.videoJobsStore.list({
-      ...(q.limit !== undefined ? { limit: q.limit } : {}),
-      ...(q.order !== undefined ? { order: q.order } : {}),
-      ...(q.after !== undefined ? { after: q.after } : {})
-    })
-    return {
-      object: 'list' as const,
-      data: page.data.map(videoJobResource),
-      first_id: page.first_id,
-      last_id: page.last_id,
-      has_more: page.has_more
-    }
-  })
+  )
 
-  app.get('/v1/videos/:id', {
-    schema: {
-      params: videoIdParam,
-      tags: ['Videos'],
-      summary: 'Retrieve a video generation job',
-      description: descriptions.retrieve,
-      response: { 200: videoResource }
+  app.get(
+    '/v1/videos/:id',
+    {
+      schema: {
+        params: videoIdParam,
+        tags: ['Videos'],
+        summary: 'Retrieve a video generation job',
+        description: descriptions.retrieve,
+        response: { 200: videoResource }
+      }
+    },
+    // lunte-disable-next-line require-await
+    async (req) => {
+      const job = app.qvac.videoJobsStore.get(req.params.id)
+      if (!job) {
+        throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
+      }
+      return videoJobResource(job)
     }
-  }, async (req) => {
-    const job = app.qvac.videoJobsStore.get(req.params.id)
-    if (!job) {
-      throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
-    }
-    return videoJobResource(job)
-  })
+  )
 
-  app.get('/v1/videos/:id/content', {
-    schema: {
-      params: videoIdParam,
-      querystring: videoContentQuery,
-      tags: ['Videos'],
-      summary: 'Download a generated video',
-      description: descriptions.content
-    }
-  }, async (req, reply) => {
-    const ctx = app.qvac
-    const job = ctx.videoJobsStore.get(req.params.id)
-    if (!job) {
-      throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
-    }
+  app.get(
+    '/v1/videos/:id/content',
+    {
+      schema: {
+        params: videoIdParam,
+        querystring: videoContentQuery,
+        tags: ['Videos'],
+        summary: 'Download a generated video',
+        description: descriptions.content
+      }
+    },
+    async (req, reply) => {
+      const ctx = app.qvac
+      const job = ctx.videoJobsStore.get(req.params.id)
+      if (!job) {
+        throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
+      }
 
-    const variant = req.query.variant
-    if (variant !== undefined && variant !== 'video') {
-      throw new HttpError(
-        501,
-        'unsupported_variant',
-        `variant=${JSON.stringify(variant)} is not supported by this server. Only variant="video" is available.`
-      )
-    }
+      const variant = req.query.variant
+      if (variant !== undefined && variant !== 'video') {
+        throw new HttpError(
+          501,
+          'unsupported_variant',
+          `variant=${JSON.stringify(variant)} is not supported by this server. Only variant="video" is available.`
+        )
+      }
 
-    await serveContent(reply, ctx, job, req.query.format)
-  })
+      await serveContent(reply, ctx, job, req.query.format)
+    }
+  )
 
-  app.delete('/v1/videos/:id', {
-    schema: {
-      params: videoIdParam,
-      tags: ['Videos'],
-      summary: 'Delete a video generation job',
-      description: descriptions.delete,
-      response: { 200: deletedVideoResource }
+  app.delete(
+    '/v1/videos/:id',
+    {
+      schema: {
+        params: videoIdParam,
+        tags: ['Videos'],
+        summary: 'Delete a video generation job',
+        description: descriptions.delete,
+        response: { 200: deletedVideoResource }
+      }
+    },
+    // lunte-disable-next-line require-await
+    async (req) => {
+      const ctx = app.qvac
+      const job = ctx.videoJobsStore.get(req.params.id)
+      if (!job) {
+        throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
+      }
+      // Drop the store entry first so a racing runVideoJob (still mid-`video()`
+      // call) sees `store.update` return undefined and self-cancels with the
+      // freshly-acquired requestId.
+      ctx.videoJobsStore.delete(req.params.id)
+      tearDownJob(ctx, job)
+      return {
+        id: req.params.id,
+        object: 'video.deleted' as const,
+        deleted: true as const
+      }
     }
-  }, async (req) => {
-    const ctx = app.qvac
-    const job = ctx.videoJobsStore.get(req.params.id)
-    if (!job) {
-      throw new HttpError(404, 'video_not_found', `No video job with id "${req.params.id}".`)
-    }
-    // Drop the store entry first so a racing runVideoJob (still mid-`video()`
-    // call) sees `store.update` return undefined and self-cancels with the
-    // freshly-acquired requestId.
-    ctx.videoJobsStore.delete(req.params.id)
-    tearDownJob(ctx, job)
-    return {
-      id: req.params.id,
-      object: 'video.deleted' as const,
-      deleted: true as const
-    }
-  })
+  )
 }
 
 export default plugin

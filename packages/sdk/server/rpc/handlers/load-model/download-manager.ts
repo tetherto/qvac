@@ -1,15 +1,12 @@
-import type { ModelProgressUpdate } from "@/schemas";
-import { AbortController, type AbortSignal } from "bare-abort-controller";
-import {
-  DownloadCancelledError,
-  InferenceCancelledError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import { getRequestRegistry } from "@/server/bare/runtime";
-import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
-import type { DownloadHooks } from "@/server/rpc/handlers/load-model/types";
+import type { ModelProgressUpdate } from '@/schemas'
+import { AbortController, type AbortSignal } from 'bare-abort-controller'
+import { DownloadCancelledError, InferenceCancelledError } from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import { getRequestRegistry } from '@/server/bare/runtime'
+import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
+import type { DownloadHooks } from '@/server/rpc/handlers/load-model/types'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 /**
  * Per-subscriber binding to a registry-tracked request.
@@ -29,58 +26,58 @@ const logger = getServerLogger();
  * `downloadKey`.
  */
 export interface SubscriberRequestBinding {
-  signal: AbortSignal;
-  scope: DisposableScope;
-  requestId: string;
+  signal: AbortSignal
+  scope: DisposableScope
+  requestId: string
 }
 
 export interface Subscriber {
-  id: string;
-  onProgress?: ((progress: ModelProgressUpdate) => void) | undefined;
-  settled: boolean;
-  resolve: (path: string) => void;
-  reject: (error: unknown) => void;
-  promise: Promise<string>;
+  id: string
+  onProgress?: ((progress: ModelProgressUpdate) => void) | undefined
+  settled: boolean
+  resolve: (path: string) => void
+  reject: (error: unknown) => void
+  promise: Promise<string>
   /** Identity of the registry request this subscriber belongs to, if any. */
-  requestId?: string | undefined;
+  requestId?: string | undefined
 }
 
 export interface Transfer {
-  downloadKey: string;
-  abortController: AbortController;
-  subscribers: Map<string, Subscriber>;
-  lastProgress?: ModelProgressUpdate | undefined;
-  downloadPromise?: Promise<string> | undefined;
-  clearCache: boolean;
-  cacheHit?: boolean;
+  downloadKey: string
+  abortController: AbortController
+  subscribers: Map<string, Subscriber>
+  lastProgress?: ModelProgressUpdate | undefined
+  downloadPromise?: Promise<string> | undefined
+  clearCache: boolean
+  cacheHit?: boolean
 }
 
 export interface DownloadContext {
-  broadcastProgress: (progress: ModelProgressUpdate) => void;
-  signal: AbortSignal;
-  shouldClearCache: () => boolean;
-  setCacheHit: (cacheHit: boolean) => void;
+  broadcastProgress: (progress: ModelProgressUpdate) => void
+  signal: AbortSignal
+  shouldClearCache: () => boolean
+  setCacheHit: (cacheHit: boolean) => void
 }
 
 export interface StartOrJoinResult {
-  promise: Promise<string>;
-  joined: boolean;
-  getCacheHit: () => boolean | undefined;
+  promise: Promise<string>
+  joined: boolean
+  getCacheHit: () => boolean | undefined
 }
 
-const activeTransfers = new Map<string, Transfer>();
-let nextSubscriberId = 0;
+const activeTransfers = new Map<string, Transfer>()
+let nextSubscriberId = 0
 
 function createSubscriber(
   onProgress?: (progress: ModelProgressUpdate) => void,
-  requestId?: string,
+  requestId?: string
 ): Subscriber {
-  let resolve!: (path: string) => void;
-  let reject!: (error: unknown) => void;
+  let resolve!: (path: string) => void
+  let reject!: (error: unknown) => void
   const promise = new Promise<string>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
+    resolve = res
+    reject = rej
+  })
 
   return {
     id: String(nextSubscriberId++),
@@ -89,54 +86,48 @@ function createSubscriber(
     resolve,
     reject,
     promise,
-    requestId,
-  };
+    requestId
+  }
 }
 
-function settleSubscriber(
-  subscriber: Subscriber,
-  result: string | Error,
-): void {
-  if (subscriber.settled) return;
-  subscriber.settled = true;
+function settleSubscriber(subscriber: Subscriber, result: string | Error): void {
+  if (subscriber.settled) return
+  subscriber.settled = true
   if (result instanceof Error) {
-    subscriber.reject(result);
+    subscriber.reject(result)
   } else {
-    subscriber.resolve(result);
+    subscriber.resolve(result)
   }
 }
 
 function deliverProgress(
   transfer: Transfer,
   subscriber: Subscriber,
-  progress: ModelProgressUpdate,
+  progress: ModelProgressUpdate
 ): void {
-  if (subscriber.settled || !subscriber.onProgress) return;
+  if (subscriber.settled || !subscriber.onProgress) return
 
   try {
-    subscriber.onProgress(progress);
+    subscriber.onProgress(progress)
   } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
+    const error = err instanceof Error ? err : new Error(String(err))
 
-    logger.warn("Progress callback threw; detaching subscriber", {
+    logger.warn('Progress callback threw; detaching subscriber', {
       downloadKey: transfer.downloadKey,
       subscriberId: subscriber.id,
-      error,
-    });
+      error
+    })
 
-    settleSubscriber(subscriber, error);
-    removeSubscriber(transfer, subscriber.id);
+    settleSubscriber(subscriber, error)
+    removeSubscriber(transfer, subscriber.id)
   }
 }
 
-function broadcastTransferProgress(
-  transfer: Transfer,
-  progress: ModelProgressUpdate,
-): void {
-  transfer.lastProgress = progress;
+function broadcastTransferProgress(transfer: Transfer, progress: ModelProgressUpdate): void {
+  transfer.lastProgress = progress
 
   for (const sub of Array.from(transfer.subscribers.values())) {
-    deliverProgress(transfer, sub, progress);
+    deliverProgress(transfer, sub, progress)
   }
 }
 
@@ -157,9 +148,9 @@ function broadcastTransferProgress(
  * no-op the second time around.
  */
 function removeSubscriber(transfer: Transfer, subscriberId: string): void {
-  if (!transfer.subscribers.has(subscriberId)) return;
-  transfer.subscribers.delete(subscriberId);
-  maybeCancelTransfer(transfer);
+  if (!transfer.subscribers.has(subscriberId)) return
+  transfer.subscribers.delete(subscriberId)
+  maybeCancelTransfer(transfer)
 }
 
 /**
@@ -170,129 +161,122 @@ function removeSubscriber(transfer: Transfer, subscriberId: string): void {
  * semantics callers rely on.
  */
 function maybeCancelTransfer(transfer: Transfer): void {
-  if (transfer.subscribers.size > 0) return;
-  if (transfer.abortController.signal.aborted) return;
-  logger.debug(
-    `[download-manager] last subscriber left, aborting transfer ${transfer.downloadKey}`,
-  );
-  transfer.abortController.abort();
+  if (transfer.subscribers.size > 0) return
+  if (transfer.abortController.signal.aborted) return
+  logger.debug(`[download-manager] last subscriber left, aborting transfer ${transfer.downloadKey}`)
+  transfer.abortController.abort()
 }
 
 function attachRequestBinding(
   transfer: Transfer,
   subscriber: Subscriber,
-  request: SubscriberRequestBinding,
+  request: SubscriberRequestBinding
 ): void {
   const onAbort = () => {
     if (!subscriber.settled) {
-      settleSubscriber(
-        subscriber,
-        new InferenceCancelledError(request.requestId),
-      );
+      settleSubscriber(subscriber, new InferenceCancelledError(request.requestId))
     }
-    removeSubscriber(transfer, subscriber.id);
-  };
-
-  if (request.signal.aborted) {
-    onAbort();
-    return;
+    removeSubscriber(transfer, subscriber.id)
   }
 
-  request.signal.addEventListener("abort", onAbort, { once: true });
+  if (request.signal.aborted) {
+    onAbort()
+    return
+  }
+
+  request.signal.addEventListener('abort', onAbort, { once: true })
 
   // Safety net: scope unwind on any handler exit path triggers the same
   // cleanup. If the abort listener already ran it's a no-op. Cleaning
   // up the abort listener here keeps the parent signal from carrying a
   // dangling reference into the next request.
   request.scope.defer(() => {
-    request.signal.removeEventListener("abort", onAbort);
+    request.signal.removeEventListener('abort', onAbort)
     if (!subscriber.settled) {
-      settleSubscriber(
-        subscriber,
-        new InferenceCancelledError(request.requestId),
-      );
+      settleSubscriber(subscriber, new InferenceCancelledError(request.requestId))
     }
-    removeSubscriber(transfer, subscriber.id);
-  });
+    removeSubscriber(transfer, subscriber.id)
+  })
 }
 
 export function startOrJoinDownload(
   downloadKey: string,
   startDownload: (ctx: DownloadContext) => Promise<string>,
   onProgress?: (progress: ModelProgressUpdate) => void,
-  request?: SubscriberRequestBinding,
+  request?: SubscriberRequestBinding
 ): StartOrJoinResult {
-  const existing = activeTransfers.get(downloadKey);
+  const existing = activeTransfers.get(downloadKey)
   if (existing && !existing.abortController.signal.aborted) {
-    logger.info(`📥 Reusing existing download for: ${downloadKey}`);
-    const subscriber = createSubscriber(onProgress, request?.requestId);
-    existing.subscribers.set(subscriber.id, subscriber);
+    logger.info(`📥 Reusing existing download for: ${downloadKey}`)
+    const subscriber = createSubscriber(onProgress, request?.requestId)
+    existing.subscribers.set(subscriber.id, subscriber)
     if (request) {
-      attachRequestBinding(existing, subscriber, request);
+      attachRequestBinding(existing, subscriber, request)
     }
 
     if (existing.lastProgress) {
-      deliverProgress(existing, subscriber, existing.lastProgress);
+      deliverProgress(existing, subscriber, existing.lastProgress)
     }
 
     return {
       promise: subscriber.promise,
       joined: true,
-      getCacheHit: () => existing.cacheHit,
-    };
+      getCacheHit: () => existing.cacheHit
+    }
   }
 
-  const abortController = new AbortController();
+  const abortController = new AbortController()
   const transfer: Transfer = {
     downloadKey,
     abortController,
     subscribers: new Map(),
-    clearCache: false,
-  };
+    clearCache: false
+  }
 
-  const initialSubscriber = createSubscriber(onProgress, request?.requestId);
-  transfer.subscribers.set(initialSubscriber.id, initialSubscriber);
-  activeTransfers.set(downloadKey, transfer);
+  const initialSubscriber = createSubscriber(onProgress, request?.requestId)
+  transfer.subscribers.set(initialSubscriber.id, initialSubscriber)
+  activeTransfers.set(downloadKey, transfer)
   if (request) {
-    attachRequestBinding(transfer, initialSubscriber, request);
+    attachRequestBinding(transfer, initialSubscriber, request)
   }
 
   const downloadPromise = startDownload({
     broadcastProgress: (progress) => {
-      broadcastTransferProgress(transfer, progress);
+      broadcastTransferProgress(transfer, progress)
     },
     signal: abortController.signal,
     shouldClearCache: () => transfer.clearCache,
     setCacheHit: (cacheHit: boolean) => {
-      transfer.cacheHit = cacheHit;
-    },
-  });
-  transfer.downloadPromise = downloadPromise;
-
-  downloadPromise.then(
-    (path) => {
-      for (const sub of transfer.subscribers.values()) {
-        settleSubscriber(sub, path);
-      }
-    },
-    (error) => {
-      const rejection =
-        error instanceof Error ? error : new Error(String(error));
-      for (const sub of transfer.subscribers.values()) {
-        settleSubscriber(sub, rejection);
-      }
-    },
-  ).finally(() => {
-    if (activeTransfers.get(downloadKey) === transfer) {
-      activeTransfers.delete(downloadKey);
+      transfer.cacheHit = cacheHit
     }
-  });
+  })
+  transfer.downloadPromise = downloadPromise
+
+  downloadPromise
+    .then(
+      (path) => {
+        for (const sub of transfer.subscribers.values()) {
+          settleSubscriber(sub, path)
+        }
+      },
+      (error) => {
+        const rejection = error instanceof Error ? error : new Error(String(error))
+        for (const sub of transfer.subscribers.values()) {
+          settleSubscriber(sub, rejection)
+        }
+      }
+    )
+    .finally(() => {
+      if (activeTransfers.get(downloadKey) === transfer) {
+        activeTransfers.delete(downloadKey)
+      }
+    })
 
   return {
     promise: initialSubscriber.promise,
     joined: false,
-    getCacheHit: () => transfer.cacheHit,
-  };
+    getCacheHit: () => transfer.cacheHit
+  }
 }
 
 /**
@@ -331,38 +315,35 @@ export function markClearCacheForRequest(requestId: string): boolean {
   for (const transfer of activeTransfers.values()) {
     for (const sub of transfer.subscribers.values()) {
       if (sub.requestId === requestId) {
-        transfer.clearCache = true;
-        return true;
+        transfer.clearCache = true
+        return true
       }
     }
   }
-  return false;
+  return false
 }
 
-export function cancelTransfer(
-  downloadKey: string,
-  clearCache = false,
-): void {
-  const transfer = activeTransfers.get(downloadKey);
-  if (!transfer) return;
+export function cancelTransfer(downloadKey: string, clearCache = false): void {
+  const transfer = activeTransfers.get(downloadKey)
+  if (!transfer) return
 
-  transfer.clearCache = clearCache;
+  transfer.clearCache = clearCache
 
-  const registry = getRequestRegistry();
-  const orphanSubs: Subscriber[] = [];
+  const registry = getRequestRegistry()
+  const orphanSubs: Subscriber[] = []
   for (const sub of Array.from(transfer.subscribers.values())) {
     if (sub.requestId !== undefined) {
       registry.cancel({
         requestId: sub.requestId,
-        reason: "download-transfer-cancel",
-      });
+        reason: 'download-transfer-cancel'
+      })
     } else {
-      orphanSubs.push(sub);
+      orphanSubs.push(sub)
     }
   }
 
   if (orphanSubs.length === 0) {
-    return;
+    return
   }
 
   // Legacy subscribers (no registry binding): settle each with
@@ -371,76 +352,70 @@ export function cancelTransfer(
   // enforced in one place. Registry-bound subscribers are handled by
   // their `attachRequestBinding` listener triggered above.
   for (const sub of orphanSubs) {
-    settleSubscriber(sub, new DownloadCancelledError());
-    removeSubscriber(transfer, sub.id);
+    settleSubscriber(sub, new DownloadCancelledError())
+    removeSubscriber(transfer, sub.id)
   }
 }
 
-export function createHyperdriveDownloadKey(
-  hyperdriveKey: string,
-  modelFileName: string,
-): string {
-  return `${hyperdriveKey}:${modelFileName}`;
+export function createHyperdriveDownloadKey(hyperdriveKey: string, modelFileName: string): string {
+  return `${hyperdriveKey}:${modelFileName}`
 }
 
 export function createHttpDownloadKey(url: string): string {
-  return `http:${url}`;
+  return `http:${url}`
 }
 
-export function createRegistryDownloadKey(
-  registrySource: string,
-  registryPath: string,
-): string {
-  return `registry:${registrySource}:${registryPath}`;
+export function createRegistryDownloadKey(registrySource: string, registryPath: string): string {
+  return `registry:${registrySource}:${registryPath}`
 }
 
 export function applyJoinedDownloadStats(
   result: StartOrJoinResult,
-  hooks?: DownloadHooks,
+  hooks?: DownloadHooks
 ): Promise<string> {
-  if (!result.joined) return result.promise;
+  if (!result.joined) return result.promise
 
   return result.promise.then((path) => {
-    const cacheHit = result.getCacheHit();
+    const cacheHit = result.getCacheHit()
 
     if (cacheHit === true) {
-      hooks?.markCacheHit?.();
+      hooks?.markCacheHit?.()
     } else if (cacheHit === false) {
-      hooks?.markCacheMiss?.();
-      hooks?.markSharedTransfer?.();
+      hooks?.markCacheMiss?.()
+      hooks?.markSharedTransfer?.()
     } else {
-      hooks?.markSharedTransfer?.();
+      hooks?.markSharedTransfer?.()
     }
 
-    return path;
-  });
+    return path
+  })
 }
 
 export function cancelAllDownloads(): void {
-  logger.info(`🧹 Cancelling ${activeTransfers.size} active downloads`);
+  logger.info(`🧹 Cancelling ${activeTransfers.size} active downloads`)
 
   for (const key of Array.from(activeTransfers.keys())) {
-    cancelTransfer(key);
+    cancelTransfer(key)
   }
 }
 
-let isCleaningUp = false;
+let isCleaningUp = false
 
 export async function cleanupDownloads(): Promise<void> {
-  if (isCleaningUp) return;
-  isCleaningUp = true;
+  if (isCleaningUp) return
+  isCleaningUp = true
 
   try {
     const downloadPromises = Array.from(activeTransfers.values())
       .filter((t) => t.downloadPromise !== undefined)
-      .map((t) => t.downloadPromise!.catch(() => {}));
+      .map((t) => t.downloadPromise!.catch(() => {}))
 
-    cancelAllDownloads();
+    cancelAllDownloads()
 
     if (downloadPromises.length > 0) {
-      await Promise.allSettled(downloadPromises);
+      await Promise.allSettled(downloadPromises)
     }
   } catch (error) {
-    logger.error("❌ Error during download cleanup:", error);
+    logger.error('❌ Error during download cleanup:', error)
   }
 }

@@ -1,16 +1,16 @@
-import { send, stream } from "@/client/rpc/rpc-client";
+import { send, stream } from '@/client/rpc/rpc-client'
 import type {
   PluginInvokeRequest,
   PluginInvokeStreamRequest,
   PluginInvokeStreamResponse,
-  RPCOptions,
-} from "@/schemas";
-import { InvalidResponseError } from "@/utils/errors-client";
+  RPCOptions
+} from '@/schemas'
+import { InvalidResponseError } from '@/utils/errors-client'
 
 export interface InvokePluginOptions<TParams = unknown> {
-  modelId: string;
-  handler: string;
-  params: TParams;
+  modelId: string
+  handler: string
+  params: TParams
 }
 
 /**
@@ -26,22 +26,22 @@ export interface InvokePluginOptions<TParams = unknown> {
  */
 export async function invokePlugin<TResponse = unknown, TParams = unknown>(
   options: InvokePluginOptions<TParams>,
-  rpcOptions?: RPCOptions,
+  rpcOptions?: RPCOptions
 ): Promise<TResponse> {
   const request: PluginInvokeRequest = {
-    type: "pluginInvoke",
+    type: 'pluginInvoke',
     modelId: options.modelId,
     handler: options.handler,
-    params: options.params,
-  };
-
-  const response = await send(request, rpcOptions);
-
-  if (response.type !== "pluginInvoke") {
-    throw new InvalidResponseError("pluginInvoke");
+    params: options.params
   }
 
-  return response.result as TResponse;
+  const response = await send(request, rpcOptions)
+
+  if (response.type !== 'pluginInvoke') {
+    throw new InvalidResponseError('pluginInvoke')
+  }
+
+  return response.result as TResponse
 }
 
 /**
@@ -55,27 +55,24 @@ export async function invokePlugin<TResponse = unknown, TParams = unknown>(
  * @returns An async generator yielding chunk payloads (typed via the `TResponse` generic) until the stream completes.
  * @throws {QvacErrorBase} When an intermediate response has the wrong type (`InvalidResponseError`) or the RPC layer fails.
  */
-export async function* invokePluginStream<
-  TResponse = unknown,
-  TParams = unknown,
->(
+export async function* invokePluginStream<TResponse = unknown, TParams = unknown>(
   options: InvokePluginOptions<TParams>,
-  rpcOptions?: RPCOptions,
+  rpcOptions?: RPCOptions
 ): AsyncGenerator<TResponse> {
   const request: PluginInvokeStreamRequest = {
-    type: "pluginInvokeStream",
+    type: 'pluginInvokeStream',
     modelId: options.modelId,
     handler: options.handler,
-    params: options.params,
-  };
+    params: options.params
+  }
 
   for await (const chunk of stream(request, rpcOptions)) {
-    const response = chunk as PluginInvokeStreamResponse;
-    if (response.type !== "pluginInvokeStream") {
-      throw new InvalidResponseError("pluginInvokeStream");
+    const response = chunk as PluginInvokeStreamResponse
+    if (response.type !== 'pluginInvokeStream') {
+      throw new InvalidResponseError('pluginInvokeStream')
     }
     if (!response.done) {
-      yield response.result as TResponse;
+      yield response.result as TResponse
     }
   }
 }

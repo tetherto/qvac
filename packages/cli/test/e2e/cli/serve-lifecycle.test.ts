@@ -14,18 +14,24 @@ describe('serve: lifecycle (spawned binary)', () => {
 
     const res = await fetch(`${srv.baseUrl}/v1/models`)
     assert.equal(res.status, 200)
-    const body = await res.json() as { object: string, data: unknown[] }
+    const body = (await res.json()) as { object: string; data: unknown[] }
     assert.equal(body.object, 'list')
     // CORS header travels over the real transport (set by @fastify/cors).
-    assert.ok(res.headers.get('access-control-allow-origin'), 'expected CORS header over the socket')
+    assert.ok(
+      res.headers.get('access-control-allow-origin'),
+      'expected CORS header over the socket'
+    )
   })
 
   it('shuts down on SIGTERM', async (t) => {
     const srv = await configuredServer(t, MODELLESS_CONFIG, [])
 
     srv.proc.kill('SIGTERM')
-    const [code, signal] = await once(srv.proc, 'close') as [number | null, string | null]
-    assert.ok(code === 0 || signal === 'SIGTERM', `expected clean shutdown, got code=${code} signal=${signal}`)
+    const [code, signal] = (await once(srv.proc, 'close')) as [number | null, string | null]
+    assert.ok(
+      code === 0 || signal === 'SIGTERM',
+      `expected clean shutdown, got code=${code} signal=${signal}`
+    )
   })
 
   // The real server logs the volatile-store banner at startup (the in-process

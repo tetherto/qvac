@@ -12,8 +12,8 @@
     "test": "npm run test:unit && npm run test:integration",
     "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
     "coverage": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
-    "lint": "standard \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
-    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
+    "lint": "prettier --check \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\" && lunte \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
     "test:integration": "npm run test:integration:generate && brittle-bare test/integration/*.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
@@ -43,8 +43,10 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "brittle": "^3.13.1",
+    "lunte": "^1.8.0",
     "nyc": "^17.1.0",
-    "standard": "^17.1.2",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {
@@ -59,6 +61,6 @@
     "directory": "packages/decoder-audio"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/decoder-audio#readme",
+  "homepage": "https://qvac.tether.io",
   "types": "index.d.ts"
 }

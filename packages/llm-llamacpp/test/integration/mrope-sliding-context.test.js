@@ -4,7 +4,12 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { cleanupIntegrationCacheFiles, ensureModel, getMediaPath, safeTest } = require('./utils')
+const {
+  cleanupIntegrationCacheFiles,
+  ensureModel,
+  getMediaPath,
+  safeTest: integrationTest
+} = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -15,6 +20,10 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isDarwinX64 || isLinuxArm64
 const skipTbqPq = isDarwin || isIos || isAndroid
+
+function safeTest(name, opts, fn) {
+  integrationTest(name, { ...opts, skip: opts.skip || isDarwinX64 }, fn)
+}
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -53,7 +62,7 @@ const QWEN_MULTIMODAL_PREFILL_MAX_SLIDE_TURNS = 6
 const LLAMA_PREFILL_PRESSURE = ' blue'.repeat(96)
 const LLAMA_PREFILL_MAX_SLIDE_TURNS = 8
 
-function createLogger () {
+function createLogger() {
   return {
     info: (...args) => console.info(...args),
     warn: (...args) => console.warn(...args),
@@ -62,7 +71,7 @@ function createLogger () {
   }
 }
 
-function normalizeStats (rawStats = {}) {
+function normalizeStats(rawStats = {}) {
   return {
     CacheTokens: Number(rawStats.CacheTokens || rawStats.cacheTokens || 0),
     contextSlides: Number(rawStats.contextSlides || 0),
@@ -71,13 +80,17 @@ function normalizeStats (rawStats = {}) {
   }
 }
 
-async function runAndCollect (model, prompt, runOptions) {
+async function runAndCollect(model, prompt, runOptions) {
   const response = await model.run(prompt, runOptions)
   const chunks = []
   const ticker = setInterval(() => {}, 50)
 
   try {
-    await response.onUpdate(data => { chunks.push(data) }).await()
+    await response
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
+      .await()
   } finally {
     clearInterval(ticker)
   }
@@ -88,7 +101,7 @@ async function runAndCollect (model, prompt, runOptions) {
   }
 }
 
-async function runQwenTextSlidingCacheCase (t) {
+async function runQwenTextSlidingCacheCase(t) {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_5_MODEL.name,
     downloadUrl: QWEN3_5_MODEL.url
@@ -114,7 +127,9 @@ async function runQwenTextSlidingCacheCase (t) {
   await model.load()
 
   t.teardown(async () => {
-    try { fs.unlinkSync(cachePath) } catch (_) {}
+    try {
+      fs.unlinkSync(cachePath)
+    } catch (_) {}
     await model.unload().catch(() => {})
   })
 
@@ -124,16 +139,19 @@ async function runQwenTextSlidingCacheCase (t) {
   let lastStats = null
 
   for (let turn = 1; turn <= QWEN_TEXT_PREFILL_MAX_SLIDE_TURNS; turn++) {
-    const response = await model.run([
+    const response = await model.run(
+      [
+        {
+          role: 'user',
+          content: `Qwen text prefill pressure turn ${turn}. ${QWEN_TEXT_PREFILL_PRESSURE}`
+        }
+      ],
       {
-        role: 'user',
-        content: `Qwen text prefill pressure turn ${turn}. ${QWEN_TEXT_PREFILL_PRESSURE}`
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        prefill: true
       }
-    ], {
-      cacheKey: cachePath,
-      saveCacheToDisk: true,
-      prefill: true
-    })
+    )
     await response.await()
 
     const stats = normalizeStats(response.stats)
@@ -146,10 +164,13 @@ async function runQwenTextSlidingCacheCase (t) {
   }
 
   t.ok(totalSlides > 0, 'Qwen3.5 text exercises iM-RoPE prefill K-shift sliding')
-  t.ok(lastStats.CacheTokens < 512, `Qwen3.5 text cache stays within context (${lastStats.CacheTokens})`)
+  t.ok(
+    lastStats.CacheTokens < 512,
+    `Qwen3.5 text cache stays within context (${lastStats.CacheTokens})`
+  )
 }
 
-async function setupMultimodalPaths () {
+async function setupMultimodalPaths() {
   const [modelName, dirPath] = await ensureModel({
     modelName: QWEN3_5_MODEL.name,
     downloadUrl: QWEN3_5_MODEL.url
@@ -166,7 +187,7 @@ async function setupMultimodalPaths () {
   }
 }
 
-function createMultimodalModel (modelPath, projectionModelPath, extraConfig = {}) {
+function createMultimodalModel(modelPath, projectionModelPath, extraConfig = {}) {
   return new LlmLlamacpp({
     files: { model: [modelPath], projectionModel: projectionModelPath },
     config: {
@@ -185,7 +206,7 @@ function createMultimodalModel (modelPath, projectionModelPath, extraConfig = {}
   })
 }
 
-async function primeSystemCache (model, cachePath) {
+async function primeSystemCache(model, cachePath) {
   const response = await model.run([SYSTEM_MESSAGE], {
     cacheKey: cachePath,
     saveCacheToDisk: true,
@@ -194,7 +215,7 @@ async function primeSystemCache (model, cachePath) {
   await response.await()
 }
 
-async function runMultimodalSlidingCacheCase (t, options = {}) {
+async function runMultimodalSlidingCacheCase(t, options = {}) {
   const { dirPath, modelPath, projectionModelPath } = await setupMultimodalPaths()
   const cachePath = path.join(dirPath, options.cacheFileName)
   cleanupIntegrationCacheFiles(cachePath)
@@ -207,7 +228,9 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   let loaded = false
 
   t.teardown(async () => {
-    try { fs.unlinkSync(cachePath) } catch (_) {}
+    try {
+      fs.unlinkSync(cachePath)
+    } catch (_) {}
     if (loaded) {
       await model.unload().catch(() => {})
     }
@@ -234,9 +257,18 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
     }
   })
 
-  t.ok(imageRun.output.length > 0, `initial image turn produced output (${imageRun.output.length} chars)`)
-  t.ok(/elephant/i.test(imageRun.output), `initial image turn mentions elephant: "${imageRun.output.slice(0, 120)}"`)
-  t.ok(imageRun.stats.CacheTokens > 0, `image turn populated cache (${imageRun.stats.CacheTokens} tokens)`)
+  t.ok(
+    imageRun.output.length > 0,
+    `initial image turn produced output (${imageRun.output.length} chars)`
+  )
+  t.ok(
+    /elephant/i.test(imageRun.output),
+    `initial image turn mentions elephant: "${imageRun.output.slice(0, 120)}"`
+  )
+  t.ok(
+    imageRun.stats.CacheTokens > 0,
+    `image turn populated cache (${imageRun.stats.CacheTokens} tokens)`
+  )
   t.ok(fs.existsSync(cachePath), 'image turn wrote cache file')
   t.ok(fs.statSync(cachePath).size > 0, 'image cache file is non-empty')
 
@@ -268,7 +300,10 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   }
 
   t.ok(totalSlides > 0, `${options.label} session exercised prefill context sliding`)
-  t.ok(lastStats.CacheTokens < 1024, `shifted cache stays within context (${lastStats.CacheTokens})`)
+  t.ok(
+    lastStats.CacheTokens < 1024,
+    `shifted cache stays within context (${lastStats.CacheTokens})`
+  )
   t.ok(fs.statSync(cachePath).size > 0, 'shifted cache file remains non-empty')
 
   await model.unload()
@@ -278,26 +313,42 @@ async function runMultimodalSlidingCacheCase (t, options = {}) {
   await model.load()
   loaded = true
 
-  const reloadRun = await runAndCollect(model, [
-    { role: 'user', content: 'After loading the saved cache, what animal was in the image? Answer in one word.' }
-  ], {
-    cacheKey: cachePath,
-    saveCacheToDisk: true,
-    generationParams: {
-      reasoning_budget: 0,
-      predict: 24,
-      seed: 42,
-      temp: 0,
-      top_k: 1
+  const reloadRun = await runAndCollect(
+    model,
+    [
+      {
+        role: 'user',
+        content: 'After loading the saved cache, what animal was in the image? Answer in one word.'
+      }
+    ],
+    {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      generationParams: {
+        reasoning_budget: 0,
+        predict: 24,
+        seed: 42,
+        temp: 0,
+        top_k: 1
+      }
     }
-  })
+  )
 
-  t.ok(reloadRun.output.length > 0, `reload continuation produced output (${reloadRun.output.length} chars)`)
-  t.ok(/elephant/i.test(reloadRun.output), `reload continuation remembers elephant: "${reloadRun.output.slice(0, 120)}"`)
-  t.ok(reloadRun.stats.CacheTokens > 0, `reload used restored cache (${reloadRun.stats.CacheTokens} tokens)`)
+  t.ok(
+    reloadRun.output.length > 0,
+    `reload continuation produced output (${reloadRun.output.length} chars)`
+  )
+  t.ok(
+    /elephant/i.test(reloadRun.output),
+    `reload continuation remembers elephant: "${reloadRun.output.slice(0, 120)}"`
+  )
+  t.ok(
+    reloadRun.stats.CacheTokens > 0,
+    `reload used restored cache (${reloadRun.stats.CacheTokens} tokens)`
+  )
 }
 
-async function runLlamaSlidingCacheCase (t, options = {}) {
+async function runLlamaSlidingCacheCase(t, options = {}) {
   const modelInfo = options.modelInfo || LLAMA3_2_1B_MODEL
   const [modelName, dirPath] = await ensureModel({
     modelName: modelInfo.name,
@@ -325,7 +376,9 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   })
 
   t.teardown(async () => {
-    try { fs.unlinkSync(cachePath) } catch (_) {}
+    try {
+      fs.unlinkSync(cachePath)
+    } catch (_) {}
     await model.unload().catch(() => {})
   })
 
@@ -335,16 +388,19 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   let lastStats = null
 
   for (let turn = 1; turn <= LLAMA_PREFILL_MAX_SLIDE_TURNS; turn++) {
-    const prefillResponse = await model.run([
+    const prefillResponse = await model.run(
+      [
+        {
+          role: 'user',
+          content: `Prefill pressure turn ${turn}. ${LLAMA_PREFILL_PRESSURE}`
+        }
+      ],
       {
-        role: 'user',
-        content: `Prefill pressure turn ${turn}. ${LLAMA_PREFILL_PRESSURE}`
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        prefill: true
       }
-    ], {
-      cacheKey: cachePath,
-      saveCacheToDisk: true,
-      prefill: true
-    })
+    )
     await prefillResponse.await()
 
     const prefillStats = normalizeStats(prefillResponse.stats)
@@ -361,113 +417,152 @@ async function runLlamaSlidingCacheCase (t, options = {}) {
   }
 
   t.ok(totalSlides > 0, `${options.label} exercised prefill context sliding`)
-  t.ok(lastStats.CacheTokens < 512, `${options.label} cache stays within context (${lastStats.CacheTokens})`)
+  t.ok(
+    lastStats.CacheTokens < 512,
+    `${options.label} cache stays within context (${lastStats.CacheTokens})`
+  )
 }
 
-safeTest('[qwen3.5-imrope-sliding-context] text prefill-slides tokens', {
-  timeout: 900_000
-}, async t => {
-  await runQwenTextSlidingCacheCase(t)
-})
+safeTest(
+  '[qwen3.5-imrope-sliding-context] text prefill-slides tokens',
+  {
+    timeout: 900_000
+  },
+  async (t) => {
+    await runQwenTextSlidingCacheCase(t)
+  }
+)
 
-safeTest('[qwen3.5-imrope-sliding-context] multimodal cache survives sliding save/load', {
-  timeout: 1_800_000
-}, async t => {
-  await runMultimodalSlidingCacheCase(t, {
-    label: 'multimodal',
-    cacheFileName: 'qwen3-5-multimodal-sliding-cache.bin'
-  })
-})
+safeTest(
+  '[qwen3.5-imrope-sliding-context] multimodal cache survives sliding save/load',
+  {
+    timeout: 1_800_000
+  },
+  async (t) => {
+    await runMultimodalSlidingCacheCase(t, {
+      label: 'multimodal',
+      cacheFileName: 'qwen3-5-multimodal-sliding-cache.bin'
+    })
+  }
+)
 
-safeTest('[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens', {
-  timeout: 1_800_000,
-  skip: isAndroid
-}, async t => {
-  await runMultimodalSlidingCacheCase(t, {
-    label: 'q8 K-cache multimodal',
-    cacheFileName: 'qwen3-5-q8-kcache-multimodal-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'q8_0'
-    }
-  })
-})
+safeTest(
+  '[qwen3.5-imrope-sliding-context] q8 K-cache shifts multimodal and text tokens',
+  {
+    timeout: 1_800_000,
+    skip: isAndroid
+  },
+  async (t) => {
+    await runMultimodalSlidingCacheCase(t, {
+      label: 'q8 K-cache multimodal',
+      cacheFileName: 'qwen3-5-q8-kcache-multimodal-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'q8_0'
+      }
+    })
+  }
+)
 
-safeTest('[qwen3.5-imrope-sliding-context] tbq4 K-cache shifts multimodal and text tokens', {
-  timeout: 1_800_000,
-  skip: skipTbqPq
-}, async t => {
-  await runMultimodalSlidingCacheCase(t, {
-    label: 'tbq4 K-cache multimodal',
-    cacheFileName: 'qwen3-5-tbq4-kcache-multimodal-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'tbq4_0'
-    }
-  })
-})
+safeTest(
+  '[qwen3.5-imrope-sliding-context] tbq4 K-cache shifts multimodal and text tokens',
+  {
+    timeout: 1_800_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runMultimodalSlidingCacheCase(t, {
+      label: 'tbq4 K-cache multimodal',
+      cacheFileName: 'qwen3-5-tbq4-kcache-multimodal-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'tbq4_0'
+      }
+    })
+  }
+)
 
-safeTest('[qwen3.5-imrope-sliding-context] pq4 K-cache shifts multimodal and text tokens', {
-  timeout: 1_800_000,
-  skip: skipTbqPq
-}, async t => {
-  await runMultimodalSlidingCacheCase(t, {
-    label: 'pq4 K-cache multimodal',
-    cacheFileName: 'qwen3-5-pq4-kcache-multimodal-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'pq4_0'
-    }
-  })
-})
+safeTest(
+  '[qwen3.5-imrope-sliding-context] pq4 K-cache shifts multimodal and text tokens',
+  {
+    timeout: 1_800_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runMultimodalSlidingCacheCase(t, {
+      label: 'pq4 K-cache multimodal',
+      cacheFileName: 'qwen3-5-pq4-kcache-multimodal-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'pq4_0'
+      }
+    })
+  }
+)
 
-safeTest('[llama3.2-rope-sliding-context] 1B pq4 K-cache prefill-slides text tokens', {
-  timeout: 900_000,
-  skip: skipTbqPq
-}, async t => {
-  await runLlamaSlidingCacheCase(t, {
-    label: 'llama3.2 pq4 K-cache prefill',
-    cacheFileName: 'llama3-2-pq4-kcache-prefill-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'pq4_0'
-    }
-  })
-})
+safeTest(
+  '[llama3.2-rope-sliding-context] 1B pq4 K-cache prefill-slides text tokens',
+  {
+    timeout: 900_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runLlamaSlidingCacheCase(t, {
+      label: 'llama3.2 pq4 K-cache prefill',
+      cacheFileName: 'llama3-2-pq4-kcache-prefill-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'pq4_0'
+      }
+    })
+  }
+)
 
-safeTest('[llama3.2-rope-sliding-context] 1B tbq4 K-cache prefill-slides text tokens', {
-  timeout: 900_000,
-  skip: skipTbqPq
-}, async t => {
-  await runLlamaSlidingCacheCase(t, {
-    label: 'llama3.2 tbq4 K-cache prefill',
-    cacheFileName: 'llama3-2-tbq4-kcache-prefill-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'tbq4_0'
-    }
-  })
-})
+safeTest(
+  '[llama3.2-rope-sliding-context] 1B tbq4 K-cache prefill-slides text tokens',
+  {
+    timeout: 900_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runLlamaSlidingCacheCase(t, {
+      label: 'llama3.2 tbq4 K-cache prefill',
+      cacheFileName: 'llama3-2-tbq4-kcache-prefill-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'tbq4_0'
+      }
+    })
+  }
+)
 
-safeTest('[llama3.2-rope-sliding-context] 3B pq4 K-cache prefill-slides text tokens', {
-  timeout: 900_000,
-  skip: skipTbqPq
-}, async t => {
-  await runLlamaSlidingCacheCase(t, {
-    modelInfo: LLAMA3_2_3B_MODEL,
-    label: 'llama3.2 3B pq4 K-cache prefill',
-    cacheFileName: 'llama3-2-3b-pq4-kcache-prefill-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'pq4_0'
-    }
-  })
-})
+safeTest(
+  '[llama3.2-rope-sliding-context] 3B pq4 K-cache prefill-slides text tokens',
+  {
+    timeout: 900_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runLlamaSlidingCacheCase(t, {
+      modelInfo: LLAMA3_2_3B_MODEL,
+      label: 'llama3.2 3B pq4 K-cache prefill',
+      cacheFileName: 'llama3-2-3b-pq4-kcache-prefill-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'pq4_0'
+      }
+    })
+  }
+)
 
-safeTest('[llama3.2-rope-sliding-context] 3B tbq4 K-cache prefill-slides text tokens', {
-  timeout: 900_000,
-  skip: skipTbqPq
-}, async t => {
-  await runLlamaSlidingCacheCase(t, {
-    modelInfo: LLAMA3_2_3B_MODEL,
-    label: 'llama3.2 3B tbq4 K-cache prefill',
-    cacheFileName: 'llama3-2-3b-tbq4-kcache-prefill-sliding-cache.bin',
-    extraConfig: {
-      'cache-type-k': 'tbq4_0'
-    }
-  })
-})
+safeTest(
+  '[llama3.2-rope-sliding-context] 3B tbq4 K-cache prefill-slides text tokens',
+  {
+    timeout: 900_000,
+    skip: skipTbqPq
+  },
+  async (t) => {
+    await runLlamaSlidingCacheCase(t, {
+      modelInfo: LLAMA3_2_3B_MODEL,
+      label: 'llama3.2 3B tbq4 K-cache prefill',
+      cacheFileName: 'llama3-2-3b-tbq4-kcache-prefill-sliding-cache.bin',
+      extraConfig: {
+        'cache-type-k': 'tbq4_0'
+      }
+    })
+  }
+)

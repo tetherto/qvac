@@ -1,0 +1,46 @@
+{
+  "name": "@qvac/fabric",
+  "version": "0.1.0",
+  "description": "Shared bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy fabric prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy fabric prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy fabric prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:integration:install": "npm --prefix test/integration install",
+    "test:integration": "npm --prefix test/integration install && bare test/integration/shared-runtime.test.js"
+  },
+  "files": [
+    "binding.js",
+    "prebuilds/*/*.bare",
+    "prebuilds/*/*.bare.exports",
+    "prebuilds/*/qvac__fabric/**",
+    "prebuilds/include",
+    "prebuilds/share/qvac-fabric",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    ".": "./binding.js",
+    "./package": "./package.json"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/fabric"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/fabric#readme",
+  "devDependencies": {
+    "cmake-bare": "^1.7.5",
+    "cmake-vcpkg": "^1.1.0",
+    "standard": "^17.0.0"
+  }
+}

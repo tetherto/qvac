@@ -108,6 +108,9 @@ benchmarks/shared-data/
 benchmarks/results/*.wav
 benchmarks/results/*.raw
 
+# Local perf-report output written by test/utils/perf-helper.js during test runs
+test/results/
+
 benchmarks/client/poetry.lock
 benchmarks/client/venv
 benchmarks/client/__pycache__

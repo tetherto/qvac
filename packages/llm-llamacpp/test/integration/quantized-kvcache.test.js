@@ -28,31 +28,41 @@ const isIos = platform === 'ios'
 // Some Android GPUs (e.g. Galaxy S25 / Adreno 830 in CI) can time out even
 // on the first f16+f16 row, so these smoke tests are disabled on Android.
 const isAndroid = platform === 'android'
-const skipReason = isDarwin || isIos
-  ? 'Quantized KV cache smoke tests are skipped on Apple Metal/iOS targets'
-  : isAndroid
-    ? 'Quantized KV cache smoke tests are skipped on Android GPU CI'
-    : false
+const skipReason =
+  isDarwin || isIos
+    ? 'Quantized KV cache smoke tests are skipped on Apple Metal/iOS targets'
+    : isAndroid
+      ? 'Quantized KV cache smoke tests are skipped on Android GPU CI'
+      : false
 
 const MODEL_3B = {
   name: 'llama-3.2-3b-instruct-q4_0.gguf',
   url: 'https://huggingface.co/lahirum/Llama-3.2-3B-Instruct-Q4_0-GGUF/resolve/main/llama-3.2-3b-instruct-q4_0.gguf',
   headDim: 128
 }
+
 const MODEL_1B = {
   name: 'Llama-3.2-1B-Instruct-Q4_0.gguf',
   url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
   headDim: 64
 }
+
 const MODEL_QWEN35_08B = {
   name: 'Qwen3.5-0.8B-Q4_0.gguf',
   url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf?download=true',
-  headDim: 256
+  headDim: 256,
+  disableReasoning: true
 }
 
 const PROMPT = [
-  { role: 'system', content: 'You are a helpful, respectful and honest assistant.' },
-  { role: 'user', content: 'Explain what a neural network is in two sentences.' }
+  {
+    role: 'system',
+    content: 'You are a helpful, respectful and honest assistant.'
+  },
+  {
+    role: 'user',
+    content: 'Explain what a neural network is in two sentences.'
+  }
 ]
 
 // Ordered: f16 first so it is always the reference baseline, followed by
@@ -90,7 +100,7 @@ const MEM_EPSILON_MIB = 0.1
 //
 // Example line:
 //   llama_kv_cache: size =   12.91 MiB ( 512 cells, 28 layers, ...), K (tbq3_0): 7.44 MiB, V (pq3_0): 5.47 MiB
-function parseKvCacheMiB (logs, cfg) {
+function parseKvCacheMiB(logs, cfg) {
   const sizeRe = /llama_kv_cache:\s*size\s*=\s*([\d.]+)\s*MiB/
   const kTag = cfg && cfg.k ? `K (${cfg.k}` : null
   const vTag = cfg && cfg.v ? `V (${cfg.v}` : null
@@ -110,11 +120,11 @@ function parseKvCacheMiB (logs, cfg) {
   return fallback
 }
 
-function isTurboQuantUnsupported (err) {
+function isTurboQuantUnsupported(err) {
   return /TurboQuant.*not supported/i.test(err && err.message ? err.message : '')
 }
 
-async function runBenchmark (cfg, modelInfo) {
+async function runBenchmark(cfg, modelInfo) {
   const [modelName, dirPath] = await ensureModel({
     modelName: modelInfo.name,
     downloadUrl: modelInfo.url
@@ -143,9 +153,19 @@ async function runBenchmark (cfg, modelInfo) {
   try {
     await model.load()
 
-    const response = await model.run(PROMPT)
+    // Qwen3.5 can exhaust this short KV-cache smoke budget mid-<think>. These
+    // rows validate cache-type load/generation behavior, not reasoning, so keep
+    // that model out of the thinking path.
+    const runOptions = modelInfo.disableReasoning
+      ? { generationParams: { reasoning_budget: 0 } }
+      : undefined
+    const response = await model.run(PROMPT, runOptions)
     const chunks = []
-    await response.onUpdate(data => { chunks.push(data) }).await()
+    await response
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
+      .await()
     const output = chunks.join('').trim()
 
     const stats = response.stats || {}
@@ -157,16 +177,18 @@ async function runBenchmark (cfg, modelInfo) {
       generatedTokens: stats.generatedTokens || 0
     }
   } finally {
-    await model.unload().catch(() => { })
+    await model.unload().catch(() => {})
     specLogger.release()
   }
 }
 
-async function runHeadDimSmoke (t, modelInfo, label) {
+async function runHeadDimSmoke(t, modelInfo, label) {
   const results = []
 
   for (const cfg of CACHE_CONFIGS) {
-    console.log(`\n====== Running ${label} head_dim=${modelInfo.headDim} smoke: ${cfg.label} ======`)
+    console.log(
+      `\n====== Running ${label} head_dim=${modelInfo.headDim} smoke: ${cfg.label} ======`
+    )
     try {
       const result = await runBenchmark(cfg, modelInfo)
       results.push({ cfg, result })
@@ -181,8 +203,8 @@ async function runHeadDimSmoke (t, modelInfo, label) {
     }
   }
 
-  const f16 = results.find(r => r.cfg.label === 'f16+f16')?.result
-  const tbq3pq3 = results.find(r => r.cfg.label === 'tbq3_0+pq3_0')?.result
+  const f16 = results.find((r) => r.cfg.label === 'f16+f16')?.result
+  const tbq3pq3 = results.find((r) => r.cfg.label === 'tbq3_0+pq3_0')?.result
   t.ok(f16, `${label} head_dim=${modelInfo.headDim} f16 baseline completed`)
   t.ok(tbq3pq3, `${label} head_dim=${modelInfo.headDim} TBQ/PQ cache completed`)
 
@@ -195,14 +217,26 @@ async function runHeadDimSmoke (t, modelInfo, label) {
   }
 }
 
-test('Quantized KV cache head_dim=64 smoke: Llama 3.2 1B TBQ/PQ', { skip: skipReason, timeout: 900_000 }, async t => {
-  await runHeadDimSmoke(t, MODEL_1B, 'Llama 3.2 1B')
-})
+test(
+  'Quantized KV cache head_dim=64 smoke: Llama 3.2 1B TBQ/PQ',
+  { skip: skipReason, timeout: 900_000 },
+  async (t) => {
+    await runHeadDimSmoke(t, MODEL_1B, 'Llama 3.2 1B')
+  }
+)
 
-test('Quantized KV cache head_dim=128 smoke: Llama 3.2 3B TBQ/PQ', { skip: skipReason, timeout: 900_000 }, async t => {
-  await runHeadDimSmoke(t, MODEL_3B, 'Llama 3.2 3B')
-})
+test(
+  'Quantized KV cache head_dim=128 smoke: Llama 3.2 3B TBQ/PQ',
+  { skip: skipReason, timeout: 900_000 },
+  async (t) => {
+    await runHeadDimSmoke(t, MODEL_3B, 'Llama 3.2 3B')
+  }
+)
 
-test('Quantized KV cache head_dim=256 smoke: Qwen3.5 TBQ/PQ', { skip: skipReason, timeout: 900_000 }, async t => {
-  await runHeadDimSmoke(t, MODEL_QWEN35_08B, 'Qwen3.5')
-})
+test(
+  'Quantized KV cache head_dim=256 smoke: Qwen3.5 TBQ/PQ',
+  { skip: skipReason, timeout: 900_000 },
+  async (t) => {
+    await runHeadDimSmoke(t, MODEL_QWEN35_08B, 'Qwen3.5')
+  }
+)

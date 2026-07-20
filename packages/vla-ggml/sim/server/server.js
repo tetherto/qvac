@@ -23,7 +23,7 @@ console.log(`vla-server: loading ${MODEL_PATH}`)
 // `stats` field would be empty.
 const model = new VlaModel({ files: { model: [MODEL_PATH] }, opts: { stats: true } })
 
-function readBody (req) {
+function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
     let total = 0
@@ -41,19 +41,19 @@ function readBody (req) {
   })
 }
 
-function alignedFloat32 (buf, byteOffset, count) {
+function alignedFloat32(buf, byteOffset, count) {
   const out = new Float32Array(count)
   Buffer.from(out.buffer).set(buf.subarray(byteOffset, byteOffset + count * 4))
   return out
 }
 
-function alignedInt32 (buf, byteOffset, count) {
+function alignedInt32(buf, byteOffset, count) {
   const out = new Int32Array(count)
   Buffer.from(out.buffer).set(buf.subarray(byteOffset, byteOffset + count * 4))
   return out
 }
 
-function alignedUint8 (buf, byteOffset, count) {
+function alignedUint8(buf, byteOffset, count) {
   return new Uint8Array(buf.subarray(byteOffset, byteOffset + count))
 }
 
@@ -61,7 +61,7 @@ function alignedUint8 (buf, byteOffset, count) {
 // that flow into typed-array lengths or C++ tensor allocators — without this,
 // a crafted client could ask for `state_dim=2**30`, allocating gigabytes
 // before the C++ side ever sees the request.
-function validateInt (header, key, min, max) {
+function validateInt(header, key, min, max) {
   const v = header[key]
   if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
     throw new Error(`header.${key} must be an integer in [${min}, ${max}] (got: ${v})`)
@@ -69,7 +69,7 @@ function validateInt (header, key, min, max) {
   return v
 }
 
-function parseRequest (body) {
+function parseRequest(body) {
   if (body.length < 4) throw new Error('body shorter than header-length prefix')
   const headerLen = body.readUInt32LE(0)
   // headerLen has to fit in the body and be small. JSON header is tens of
@@ -122,7 +122,7 @@ function parseRequest (body) {
   return { state, images, tokens, mask, noise, imgWidth: imgW, imgHeight: imgH }
 }
 
-function encodeResponse (actions, stats) {
+function encodeResponse(actions, stats) {
   const header = {
     chunk_size: model.hparams.chunkSize,
     action_dim: model.hparams.actionDim,

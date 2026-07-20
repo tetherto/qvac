@@ -2,27 +2,20 @@ import type {
   LoadModelRequest,
   LoadModelResponse,
   ModelProgressUpdate,
-  ReloadConfigRequest,
-} from "@/schemas";
+  ReloadConfigRequest
+} from '@/schemas'
 import {
   normalizeModelType,
   PROFILING_KEY,
   OPERATION_EVENT_KEY,
-  type OperationEvent,
-} from "@/schemas";
-import { loadModel } from "@/server/bare/ops/load-model";
-import { createResolveSession } from "@/server/rpc/handlers/load-model/resolve-session";
-import { nowMs, generateProfileId } from "@/profiling/clock";
-import {
-  getModelEntry,
-  updateModelConfig,
-} from "@/server/bare/registry/model-registry";
-import {
-  generateShortHash,
-  canonicalConfigString,
-  transformConfigForReload,
-} from "@/server/utils";
-import { buildDownloadProfilingFields } from "@/server/rpc/handlers/load-model/types";
+  type OperationEvent
+} from '@/schemas'
+import { loadModel } from '@/server/bare/ops/load-model'
+import { createResolveSession } from '@/server/rpc/handlers/load-model/resolve-session'
+import { nowMs, generateProfileId } from '@/profiling/clock'
+import { getModelEntry, updateModelConfig } from '@/server/bare/registry/model-registry'
+import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/server/utils'
+import { buildDownloadProfilingFields } from '@/server/rpc/handlers/load-model/types'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
@@ -31,18 +24,15 @@ import {
   ModelNotFoundError,
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
-  PluginNotFoundError,
-} from "@/utils/errors-server";
-import { getServerLogger } from "@/logging";
-import { formatZodError } from "@/utils/zod-error";
-import { getPlugin } from "@/server/plugins";
-import {
-  getRequestRegistry,
-  withRequestContext,
-} from "@/server/bare/runtime";
-import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+  PluginNotFoundError
+} from '@/utils/errors-server'
+import { getServerLogger } from '@/logging'
+import { formatZodError } from '@/utils/zod-error'
+import { getPlugin } from '@/server/plugins'
+import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
+import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 
-const logger = getServerLogger();
+const logger = getServerLogger()
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -50,21 +40,20 @@ const logger = getServerLogger();
 
 export async function handleLoadModel(
   request: LoadModelRequest,
-  progressCallback?: (update: ModelProgressUpdate) => void,
+  progressCallback?: (update: ModelProgressUpdate) => void
 ): Promise<LoadModelResponse> {
   if (isReloadConfigRequest(request)) {
-    return handleConfigReload(request);
+    return handleConfigReload(request)
   }
 
-  const { modelSrc, modelName, seed } = request;
-  const canonicalModelType = normalizeModelType(request.modelType);
+  const { modelSrc, modelName, seed } = request
+  const canonicalModelType = normalizeModelType(request.modelType)
 
   const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
-    | { enabled?: boolean; id?: string }
-    | undefined;
-  const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta;
+    { enabled?: boolean; id?: string } | undefined
+  const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta
 
-  const requestId = request.requestId ?? generateServerRequestId();
+  const requestId = request.requestId ?? generateServerRequestId()
   // The handler `modelId` is derived from the config hash below — it
   // isn't known until after `resolveConfig` runs. The registry context
   // is opened with `modelId: undefined` so a cancel-by-modelId fired
@@ -72,29 +61,29 @@ export async function handleLoadModel(
   // half-built entry). Cancel-by-`requestId` works from `begin(...)` on.
   await using ctx = await getRequestRegistry().begin({
     requestId,
-    kind: "loadModel",
-  });
-  const log = withRequestContext(getServerLogger(), ctx);
-  log.debug(`loadModel start modelSrc=${String(modelSrc ?? "")}`);
+    kind: 'loadModel'
+  })
+  const log = withRequestContext(getServerLogger(), ctx)
+  log.debug(`loadModel start modelSrc=${String(modelSrc ?? '')}`)
 
   try {
-    const plugin = getPlugin(canonicalModelType);
+    const plugin = getPlugin(canonicalModelType)
     if (!plugin) {
-      throw new PluginNotFoundError(canonicalModelType);
+      throw new PluginNotFoundError(canonicalModelType)
     }
 
-    let resolvedModelConfig = (request.modelConfig ?? {});
+    let resolvedModelConfig = request.modelConfig ?? {}
 
-    const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig);
+    const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig)
     if (!parseResult.success) {
       throw new PluginLoadConfigValidationFailedError(
         canonicalModelType,
-        formatZodError(parseResult.error),
-      );
+        formatZodError(parseResult.error)
+      )
     }
-    resolvedModelConfig = parseResult.data as Record<string, unknown>;
+    resolvedModelConfig = parseResult.data as Record<string, unknown>
 
-    const totalLoadStart = profilingEnabled ? nowMs() : 0;
+    const totalLoadStart = profilingEnabled ? nowMs() : 0
 
     const session = createResolveSession({
       progressCallback,
@@ -104,31 +93,32 @@ export async function handleLoadModel(
       requestBinding: {
         signal: ctx.signal,
         scope: ctx.scope,
-        requestId,
-      },
-    });
+        requestId
+      }
+    })
 
-    const primaryResolve = session.resolvePrimaryModelPath(modelSrc);
+    const primaryResolve = session.resolvePrimaryModelPath(modelSrc)
 
-    let resolvedModelPath: string;
-    let pluginResolveResult: Awaited<ReturnType<NonNullable<typeof plugin.resolveConfig>>> | undefined;
+    let resolvedModelPath: string
+    let pluginResolveResult:
+      Awaited<ReturnType<NonNullable<typeof plugin.resolveConfig>>> | undefined
 
     try {
       const pluginResolve = plugin.resolveConfig
         ? Promise.resolve().then(() =>
             plugin.resolveConfig!(
               resolvedModelConfig,
-              session.createResolveContext(modelSrc, canonicalModelType, modelName),
-            ),
+              session.createResolveContext(modelSrc, canonicalModelType, modelName)
+            )
           )
-        : undefined;
+        : undefined
 
-      [resolvedModelPath, pluginResolveResult] = pluginResolve
+      ;[resolvedModelPath, pluginResolveResult] = pluginResolve
         ? await Promise.all([primaryResolve, pluginResolve])
-        : [await primaryResolve, undefined];
+        : [await primaryResolve, undefined]
     } catch (error) {
-      session.cancelAll();
-      throw error;
+      session.cancelAll()
+      throw error
     }
 
     // Phase boundary between download and load. The bare load path
@@ -138,37 +128,32 @@ export async function handleLoadModel(
     // surface `InferenceCancelledError` before sinking time into the
     // addon work.
     if (ctx.signal.aborted) {
-      throw new InferenceCancelledError(requestId);
+      throw new InferenceCancelledError(requestId)
     }
 
-    const configStr = canonicalConfigString(
-      request.modelConfig,
-    );
-    const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
-    const modelId = generateShortHash(modelHashInput);
+    const configStr = canonicalConfigString(request.modelConfig)
+    const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`
+    const modelId = generateShortHash(modelHashInput)
 
-    let pluginArtifacts: Record<string, string> = {};
+    let pluginArtifacts: Record<string, string> = {}
     if (pluginResolveResult) {
-      resolvedModelConfig = pluginResolveResult.config;
+      resolvedModelConfig = pluginResolveResult.config
       if (pluginResolveResult.artifacts) {
-        pluginArtifacts = pluginResolveResult.artifacts as Record<
-          string,
-          string
-        >;
+        pluginArtifacts = pluginResolveResult.artifacts as Record<string, string>
       }
     }
 
-    if ("modelPath" in pluginArtifacts) {
+    if ('modelPath' in pluginArtifacts) {
       throw new ModelLoadFailedError(
-        "Plugin returned reserved key \"modelPath\" in artifacts; primary model resolution is core-owned",
-      );
+        'Plugin returned reserved key "modelPath" in artifacts; primary model resolution is core-owned'
+      )
     }
 
     // An empty resolved path is legitimate when the plugin opts out of
     // primary-model-path validation (bundled weights). For every other
     // plugin, an empty path means resolution failed and we must abort.
     if (!resolvedModelPath && !plugin.skipPrimaryModelPathValidation) {
-      throw new ModelLoadFailedError("modelPath resolution failed");
+      throw new ModelLoadFailedError('modelPath resolution failed')
     }
 
     const loadResult = await loadModel(
@@ -178,13 +163,13 @@ export async function handleLoadModel(
         options: {
           ...request,
           modelType: canonicalModelType,
-          modelConfig: resolvedModelConfig,
+          modelConfig: resolvedModelConfig
         },
         artifacts: Object.keys(pluginArtifacts).length > 0 ? pluginArtifacts : undefined,
-        modelName,
+        modelName
       },
-      profilingEnabled ? { collectTiming: true } : undefined,
-    );
+      profilingEnabled ? { collectTiming: true } : undefined
+    )
 
     // Load phase soft-cancel limitation: `plugin.createModel(...)` and
     // `model.load(false)` ran without a signal. A cancel that arrived
@@ -196,46 +181,47 @@ export async function handleLoadModel(
     // limitation that requires a per-load cancel surface on the addon
     // to fix end-to-end.
     if (ctx.signal.aborted) {
-      throw new InferenceCancelledError(requestId);
+      throw new InferenceCancelledError(requestId)
     }
 
     const response: LoadModelResponse = {
-      type: "loadModel",
+      type: 'loadModel',
       success: true,
-      modelId,
-    };
+      modelId
+    }
 
     if (profilingEnabled) {
-      const totalLoadTimeMs = nowMs() - totalLoadStart;
-      const profileId = profilingMeta?.id ?? generateProfileId();
+      const totalLoadTimeMs = nowMs() - totalLoadStart
+      const profileId = profilingMeta?.id ?? generateProfileId()
 
-      const resolveResult = session.getAggregateResult();
+      const resolveResult = session.getAggregateResult()
       const { gauges, tags } = buildDownloadProfilingFields(
         resolveResult?.downloadStats,
-        resolveResult?.sourceType,
-      );
-      gauges["totalLoadTime"] = totalLoadTimeMs;
+        resolveResult?.sourceType
+      )
+      gauges['totalLoadTime'] = totalLoadTimeMs
       if (loadResult.timing?.modelInitializationTimeMs !== undefined) {
-        gauges["modelInitializationTime"] =
-          loadResult.timing.modelInitializationTimeMs;
+        gauges['modelInitializationTime'] = loadResult.timing.modelInitializationTimeMs
       }
       if (canonicalModelType) {
-        tags["modelType"] = canonicalModelType;
+        tags['modelType'] = canonicalModelType
       }
 
       const operationEvent: OperationEvent = {
-        op: "loadModel",
-        kind: "handler",
+        op: 'loadModel',
+        kind: 'handler',
         ms: totalLoadTimeMs,
         profileId,
         gauges: Object.keys(gauges).length > 0 ? gauges : undefined,
-        tags: Object.keys(tags).length > 0 ? tags : undefined,
-      };
+        tags: Object.keys(tags).length > 0 ? tags : undefined
+      }
 
-      (response as LoadModelResponse & { [OPERATION_EVENT_KEY]?: OperationEvent })[OPERATION_EVENT_KEY] = operationEvent;
+      ;(response as LoadModelResponse & { [OPERATION_EVENT_KEY]?: OperationEvent })[
+        OPERATION_EVENT_KEY
+      ] = operationEvent
     }
 
-    return response;
+    return response
   } catch (error) {
     // `InferenceCancelledError` rides the rejection path verbatim: the
     // client side wants a typed cancel error on the promise it `await`s,
@@ -244,77 +230,69 @@ export async function handleLoadModel(
     // legacy `success: false` shape for backward compat with consumers
     // that switch on the envelope.
     if (error instanceof InferenceCancelledError) {
-      log.info(`loadModel cancelled requestId=${requestId}`);
-      throw error;
+      log.info(`loadModel cancelled requestId=${requestId}`)
+      throw error
     }
-    logger.error("Error loading model:", error);
+    logger.error('Error loading model:', error)
     return {
-      type: "loadModel",
+      type: 'loadModel',
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }
 
-async function handleConfigReload(
-  request: ReloadConfigRequest,
-): Promise<LoadModelResponse> {
-  const { modelId, modelType, modelConfig } = request;
+async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadModelResponse> {
+  const { modelId, modelType, modelConfig } = request
 
   try {
-    const entry = getModelEntry(modelId);
+    const entry = getModelEntry(modelId)
     if (!entry) {
-      throw new ModelNotFoundError(modelId);
+      throw new ModelNotFoundError(modelId)
     }
 
     if (entry.isDelegated) {
-      throw new ModelIsDelegatedError(modelId);
+      throw new ModelIsDelegatedError(modelId)
     }
 
-    const storedModelType = entry.local.modelType;
-    const normalizedRequestType = normalizeModelType(modelType);
+    const storedModelType = entry.local.modelType
+    const normalizedRequestType = normalizeModelType(modelType)
     if (storedModelType !== normalizedRequestType) {
-      throw new ModelTypeMismatchError(storedModelType, normalizedRequestType);
+      throw new ModelTypeMismatchError(storedModelType, normalizedRequestType)
     }
 
-    const model = entry.local.model;
-    const currentConfig = entry.local.config;
+    const model = entry.local.model
+    const currentConfig = entry.local.config
 
-    if (typeof model.reload !== "function") {
-      throw new ConfigReloadNotSupportedError(modelId);
+    if (typeof model.reload !== 'function') {
+      throw new ConfigReloadNotSupportedError(modelId)
     }
 
     const mergedConfig = {
       ...(currentConfig as Record<string, unknown>),
-      ...(modelConfig as Record<string, unknown>),
-    };
+      ...(modelConfig as Record<string, unknown>)
+    }
 
-    const reloadConfig = transformConfigForReload(
-      storedModelType,
-      mergedConfig,
-    );
+    const reloadConfig = transformConfigForReload(storedModelType, mergedConfig)
 
-    await model.reload(reloadConfig);
-    updateModelConfig(modelId, mergedConfig);
+    await model.reload(reloadConfig)
+    updateModelConfig(modelId, mergedConfig)
 
     return {
-      type: "loadModel",
+      type: 'loadModel',
       success: true,
-      modelId,
-    };
+      modelId
+    }
   } catch (error) {
-    logger.error("Error reloading config:", error);
+    logger.error('Error reloading config:', error)
     return {
-      type: "loadModel",
+      type: 'loadModel',
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
   }
 }
 
-function isReloadConfigRequest(
-  request: LoadModelRequest,
-): request is ReloadConfigRequest {
-  return "modelId" in request && !("modelSrc" in request);
+function isReloadConfigRequest(request: LoadModelRequest): request is ReloadConfigRequest {
+  return 'modelId' in request && !('modelSrc' in request)
 }
-

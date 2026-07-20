@@ -134,6 +134,26 @@ When triggered, prompt the user to run `qv-sdk-bare-sdk-sync` so the same change
 
 To skip the bare-sdk sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps changed but bare-sdk was not synced. Run `/qv-sdk-bare-sdk-sync` before merge or expect `check:deps-vs-sdk` to fail in CI."
 
+## Docs Artifacts (SDK Releases)
+
+**Context:** for `@qvac/sdk` releases, the `qv-sdk-changelog` skill (Step 8)
+now generates the documentation-site API reference + release notes locally and
+ships them in this same release PR. There is **no longer a separate
+auto-generated docs PR** (the old `docs-release.yml` workflow was removed).
+
+Staging works the same as for the rest of the release commit — no special
+handling is needed. Step 8's three committable surfaces
+(`docs/website/content/docs/reference/api/**`,
+`docs/website/content/docs/reference/release-notes/**`,
+`docs/website/src/lib/versions.ts`) show up in `git status` alongside the
+changelog, while every generation/build byproduct
+(`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`, `next-env.d.ts`,
+`packages/sdk/dist/`) is gitignored and therefore never appears. Review
+`git status` and commit the shown files as usual.
+
+Reviewers should expect the `reference/api` + `reference/release-notes` diff in
+the release PR alongside the changelog.
+
 ## Release Target Dual-PR Flow
 
 **Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package.
@@ -174,6 +194,7 @@ Before outputting the PR description, verify:
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
+- [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 
 ## References

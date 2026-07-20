@@ -96,6 +96,17 @@ export interface SdConfig {
   threads?: NumericLike
   /** Preferred compute device: 'gpu' (default; try GPU backends) or 'cpu' */
   device?: 'gpu' | 'cpu'
+  /**
+   * GPU to pin when `device` is 'gpu': a GPU-device index, `'integrated'`, or
+   * `'dedicated'` (the discrete GPU with the most VRAM). Omit to let the
+   * backend choose (the first enumerated device). Resolved against the addon's
+   * own ggml device enumeration, so it cannot desync from the device list the
+   * backend actually uses. If an explicit request cannot be satisfied (e.g.
+   * `'integrated'` on a host with no integrated GPU, `'dedicated'` with no
+   * discrete GPU, or an out-of-range index) the addon falls back to CPU rather
+   * than substituting a different GPU.
+   */
+  'main-gpu'?: number | 'integrated' | 'dedicated'
   /** Weight quantization type */
   type?: WeightType
   /** RNG type for reproducible generation */
@@ -106,6 +117,8 @@ export interface SdConfig {
   clip_on_cpu?: boolean
   /** Run VAE decoder on CPU even when GPU is available */
   vae_on_cpu?: boolean
+  /** Load only VAE decoder weights. Defaults to false so img2img/fusion can encode input images. */
+  vae_decode_only?: boolean
   /** Enable VAE tiling to reduce VRAM usage */
   vae_tiling?: boolean
   /** Enable flash attention for memory efficiency */
@@ -159,7 +172,10 @@ export interface DiffusionFiles {
   clipG?: string
   /** SD3: absolute path to T5-XXL text encoder */
   t5Xxl?: string
-  /** FLUX.2 [klein]: absolute path to Qwen3 4B text encoder (llm_path) */
+  /**
+   * LLM text encoder (llm_path). FLUX.2 [klein] → Qwen3 4B;
+   * Ideogram 4 → Qwen3-VL 8B Instruct.
+   */
   llm?: string
   /** Absolute path to VAE file */
   vae?: string
@@ -171,6 +187,12 @@ export interface DiffusionFiles {
    * be present as an empty string when unset.
    */
   highNoiseDiffusionModel?: string
+  /**
+   * Ideogram 4 only: unconditional (CFG) diffusion model
+   * (uncond_diffusion_model_path), loaded alongside `model` so real
+   * classifier-free guidance works. Omit for all other models.
+   */
+  uncondModel?: string
 }
 
 export interface EsrganFiles {
@@ -335,9 +357,15 @@ export interface GenerationParams {
  * across the lifetime of the model instance; per-job fields (generationMs, width,
  * height, seed) reflect only the most recent generation.
  *
- * Derivable rates (stepsPerSecond, msPerStep, megapixelsPerSecond) are intentionally
+ * The per-job phase breakdown (conditionerMs, denoiseMs, vaeMs, postProcessMs)
+ * splits the most recent generation into its conditioning (text-encode),
+ * denoising, VAE decode, and post-generate (encode/upscale/output) phases;
+ * these four sum to generationMs. stepsPerSecond is the measured denoising
+ * throughput for that job. All are derived from the native progress sequence
+ * rather than from the cumulative totals.
+ *
+ * Other derivable rates (msPerStep, megapixelsPerSecond) are intentionally
  * omitted — callers can compute them from the primitives provided:
- *   stepsPerSecond    = totalSteps  / (totalWallMs / 1000)
  *   msPerStep         = totalWallMs / totalSteps
  *   megapixelsPerSec  = (totalPixels / 1e6) / (totalWallMs / 1000)
  */
@@ -364,6 +392,20 @@ export interface RuntimeStats {
   height: number
   /** Seed used for the most recent generation */
   seed: number
+  /** Conditioning (text-encode) phase before denoising, most recent job (ms) */
+  conditionerMs: number
+  /** Denoising loop duration, most recent job (ms) */
+  denoiseMs: number
+  /** VAE decode phase after denoising, most recent job (ms) */
+  vaeMs: number
+  /**
+   * Post-generate work after VAE decode — PNG encode, optional ESRGAN upscale,
+   * and output callbacks — for the most recent job (ms). Completes the phase
+   * breakdown so conditionerMs + denoiseMs + vaeMs + postProcessMs === generationMs.
+   */
+  postProcessMs: number
+  /** Denoising throughput, most recent job (steps per second) */
+  stepsPerSecond: number
 }
 
 export interface EsrganRuntimeStats {

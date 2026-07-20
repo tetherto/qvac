@@ -66,7 +66,10 @@ interface CLIServeOptions {
   publicBaseUrl?: string | undefined
 }
 
-export function parseServeConfig (rawConfig: RawServeConfig, cliOptions: CLIServeOptions): ServeConfig {
+export function parseServeConfig(
+  rawConfig: RawServeConfig,
+  cliOptions: CLIServeOptions
+): ServeConfig {
   const serve = rawConfig.serve ?? {}
   const rawModels = serve.models ?? {}
 
@@ -105,7 +108,7 @@ export function parseServeConfig (rawConfig: RawServeConfig, cliOptions: CLIServ
   }
 }
 
-function normalizePublicBaseUrl (raw: string | undefined): string | null {
+function normalizePublicBaseUrl(raw: string | undefined): string | null {
   if (raw === undefined || raw === null) return null
   const trimmed = raw.trim()
   if (trimmed.length === 0) return null
@@ -120,7 +123,7 @@ const DEFAULT_SPEECH_VOICE = 'alloy'
 // pressure bounded since we buffer the full WAV before responding.
 const DEFAULT_MAX_INPUT_CHARS = 4096
 
-function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
+function parseOpenAIOptions(raw: RawOpenAIOptions | undefined): {
   audio: {
     speech: {
       defaultVoice: string | null
@@ -146,12 +149,16 @@ function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
   let voices: Record<string, string> | null = null
   if (rawVoices !== undefined && rawVoices !== null) {
     if (typeof rawVoices !== 'object' || Array.isArray(rawVoices)) {
-      throw new Error('serve.openai.audio.speech.voices must be a JSON object (voice -> model alias)')
+      throw new Error(
+        'serve.openai.audio.speech.voices must be a JSON object (voice -> model alias)'
+      )
     }
     const out: Record<string, string> = {}
     for (const [key, val] of Object.entries(rawVoices as Record<string, unknown>)) {
       if (typeof val !== 'string' || !val.trim()) {
-        throw new Error(`serve.openai.audio.speech.voices["${key}"] must be a non-empty string (model alias)`)
+        throw new Error(
+          `serve.openai.audio.speech.voices["${key}"] must be a non-empty string (model alias)`
+        )
       }
       const k = key.trim().toLowerCase()
       if (!k) continue
@@ -174,7 +181,7 @@ function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
   return { audio: { speech: { defaultVoice, voices, maxInputChars } } }
 }
 
-export function normalizeEndpointCategory (sdkType: string): string {
+export function normalizeEndpointCategory(sdkType: string): string {
   return ENDPOINT_CATEGORY[sdkType] ?? sdkType
 }
 
@@ -186,7 +193,7 @@ const VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION = 'whispercpp-audio-translation'
  * (whisper modelConfig is flat whisper fields, not a nested whisperConfig object).
  * Exported for unit tests.
  */
-export function resolveExplicitServeModel (
+export function resolveExplicitServeModel(
   type: string,
   config: Record<string, unknown>
 ): {
@@ -229,7 +236,7 @@ export function resolveExplicitServeModel (
   }
 }
 
-function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
+function isConstantModelEntry(entry: unknown): entry is ConstantModelEntry {
   return (
     entry !== null &&
     typeof entry === 'object' &&
@@ -238,12 +245,12 @@ function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
   )
 }
 
-export function resolveModelConstant (alias: string, entry: ConstantModelEntry): ResolvedModelEntry {
+export function resolveModelConstant(alias: string, entry: ConstantModelEntry): ResolvedModelEntry {
   const model = loadModelConstants().get(entry.model)
   if (!model) {
     throw new Error(
       `serve.models.${alias}: unknown model constant "${entry.model}". ` +
-      'Use a valid SDK model name (e.g. QWEN3_600M_INST_Q4).'
+        'Use a valid SDK model name (e.g. QWEN3_600M_INST_Q4).'
     )
   }
 
@@ -267,10 +274,7 @@ export function resolveModelConstant (alias: string, entry: ConstantModelEntry):
   }
 }
 
-function parseExplicitEntry (
-  alias: string,
-  entry: ExplicitModelEntry
-): ResolvedModelEntry {
+function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
   if (!entry.src) {
     throw new Error(`serve.models.${alias}: "src" is required`)
   }
@@ -298,7 +302,7 @@ function parseExplicitEntry (
   }
 }
 
-function resolveDefaults (models: Map<string, ResolvedModelEntry>): Map<string, string> {
+function resolveDefaults(models: Map<string, ResolvedModelEntry>): Map<string, string> {
   const defaults = new Map<string, string>()
 
   for (const [alias, entry] of models) {
@@ -310,7 +314,10 @@ function resolveDefaults (models: Map<string, ResolvedModelEntry>): Map<string, 
   return defaults
 }
 
-export function resolveModelAlias (serveConfig: ServeConfig, modelName: string | null | undefined): ResolvedModelEntry | null {
+export function resolveModelAlias(
+  serveConfig: ServeConfig,
+  modelName: string | null | undefined
+): ResolvedModelEntry | null {
   if (!modelName) return null
 
   const entry = serveConfig.models.get(modelName)
@@ -323,6 +330,6 @@ export function resolveModelAlias (serveConfig: ServeConfig, modelName: string |
   return null
 }
 
-function srcOf (modelSrc: string | ModelConstant): string {
+function srcOf(modelSrc: string | ModelConstant): string {
   return typeof modelSrc === 'string' ? modelSrc : modelSrc.src
 }

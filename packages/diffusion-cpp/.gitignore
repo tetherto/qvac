@@ -27,6 +27,8 @@ temp/
 # Ignore generated PNGs but keep test/example images in assets/
 !assets/**
 *.png
+*.avi
+*.webm
 test/model/
 test/results/
 test/integration/all.js

@@ -5,18 +5,18 @@ export default {
   mqtt: {
     // Broker configuration (separate host/port)
     broker: {
-      protocol: { env: "MQTT_PROTOCOL" },
-      host: { env: "MQTT_HOST" },
-      port: { env: "MQTT_PORT" },
-      path: { env: "MQTT_PATH" },
+      protocol: { env: 'MQTT_PROTOCOL' },
+      host: { env: 'MQTT_HOST' },
+      port: { env: 'MQTT_PORT' },
+      path: { env: 'MQTT_PATH' }
     },
 
     // Authentication
-    username: { env: "MQTT_USERNAME" },
-    password: { env: "MQTT_PASSWORD" },
+    username: { env: 'MQTT_USERNAME' },
+    password: { env: 'MQTT_PASSWORD' },
 
     // Disable certificate validation for self-signed certs (testing only)
-    rejectUnauthorized: true,
+    rejectUnauthorized: true
 
     // Optional: TLS certificates
     // caPath: { env: "MQTT_CA_PATH" },
@@ -24,35 +24,44 @@ export default {
     // keyPath: { env: 'MQTT_KEY_PATH' },
   },
 
-  testDir: "./dist/tests",
+  testDir: './dist/tests',
 
   consumers: {
     shared: {
-      include: ["./dist/tests/shared/**"],
+      include: ['./dist/tests/shared/**']
     },
     desktop: {
-      platforms: ["macos"],
-      entry: "./dist/tests/desktop/consumer.js",
-      include: ["./tests/**"],
-      dependencies: "auto",
+      platforms: ['macos'],
+      entry: './dist/tests/desktop/consumer.js',
+      include: ['./tests/**'],
+      dependencies: 'auto'
+    },
+    electron: {
+      platforms: ['macos', 'windows', 'linux'],
+      entry: './dist/tests/electron/consumer.js',
+      appDir: '.',
+      appName: 'QVACSDKElectronE2E',
+      include: ['./dist/tests/**', './fixtures/qvac.config.electron.json'],
+      dependencies: 'auto',
+      packageManager: 'npm',
+      packageScript: 'package:electron'
     },
     mobile: {
-      platforms: ["ios", "android"],
-      entry: "./dist/tests/mobile/consumer.js",
-      include: ["./dist/tests/**"],
-      dependencies: "auto",
-      metroConfig: "./metro.config.js",
-      expoPlugins: [
-        "@qvac/sdk/expo-plugin",
-      ],
+      platforms: ['ios', 'android'],
+      entry: './dist/tests/mobile/consumer.js',
+      include: ['./dist/tests/**'],
+      dependencies: 'auto',
+      metroConfig: './metro.config.js',
+      qvacConfig: './fixtures/qvac.config.e2e.json',
+      expoPlugins: ['@qvac/sdk/expo-plugin'],
       assets: {
         patterns: [
-          "./assets/audio/**/*",
-          "./assets/images/**/*",
-          "./assets/documents/**/*",
-          "./fixtures/**/*",
-        ],
-      },
-    },
-  },
-};
+          './assets/audio/**/*',
+          './assets/images/**/*',
+          './assets/documents/**/*',
+          './fixtures/**/*'
+        ]
+      }
+    }
+  }
+}

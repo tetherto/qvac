@@ -5,24 +5,24 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Logger } from '../src/logger.js'
 import { bindClientDisconnectCancel } from '../src/serve/core/cancel-bridge.js'
 
-function makeLogger (): Logger & { debugs: string[] } {
+function makeLogger(): Logger & { debugs: string[] } {
   const debugs: string[] = []
   return {
-    error () {},
-    warn () {},
-    info () {},
-    debug (m: string) {
+    error() {},
+    warn() {},
+    info() {},
+    debug(m: string) {
       debugs.push(m)
     },
     debugs
   } as unknown as Logger & { debugs: string[] }
 }
 
-function makeReq (): IncomingMessage {
+function makeReq(): IncomingMessage {
   return new EventEmitter() as unknown as IncomingMessage
 }
 
-function makeRes (initial: { writableEnded?: boolean } = {}): ServerResponse {
+function makeRes(initial: { writableEnded?: boolean } = {}): ServerResponse {
   return { writableEnded: initial.writableEnded ?? false } as unknown as ServerResponse
 }
 
@@ -31,6 +31,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     const cancels: { requestId: string }[] = []
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-1', makeLogger(), async (opts) => {
       cancels.push(opts)
     })
@@ -48,6 +49,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes({ writableEnded: true })
     let called = 0
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-2', makeLogger(), async () => {
       called++
     })
@@ -62,6 +64,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     const logger = makeLogger()
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-3', logger, async () => {
       throw new Error('cancel race lost')
     })
@@ -79,6 +82,7 @@ describe('bindClientDisconnectCancel', () => {
     const req = makeReq()
     const res = makeRes()
     let called = 0
+    // lunte-disable-next-line require-await
     bindClientDisconnectCancel(req, res, 'rid-4', makeLogger(), async () => {
       called++
     })

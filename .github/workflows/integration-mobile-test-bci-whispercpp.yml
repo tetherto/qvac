@@ -8,6 +8,11 @@ name: Mobile Integration Tests (BCI WhisperCPP)
 on:
   workflow_call:
     inputs:
+      prebuild_package:
+        description: "Full NPM package spec (name@version) whose prebuilds to pin instead of the freshly-built artifact (e.g. @qvac/bci-whispercpp@1.0.0). Empty = artifact-first (unchanged)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref to checkout"
         type: string
@@ -99,6 +104,8 @@ jobs:
           addon-npm-name: '@qvac/bci-whispercpp'
           prebuild-artifact-prefix: 'bci-whispercpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
+          package-version: ${{ inputs.prebuild_package }}
+          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
       # `npm run test:mobile:generate` downloads models + fixtures
       # (BCI signal traces, whisper weights) into test/mobile/testAssets/
@@ -137,8 +144,9 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}
-          enables-perf: 'false'
-          mocha-timeout-ms: '900000'
+          enables-perf: 'true'
+          mocha-timeout-ms: '2700000'
+          wdio-waitfor-timeout-ms: '600000'
 
       - name: Schedule Device Farm test runs
         id: schedule
@@ -172,9 +180,22 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           addon-npm-name: '@qvac/bci-whispercpp'
-          enables-perf: 'false'
+          enables-perf: 'true'
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           run-arns: ${{ steps.schedule.outputs.run-arns }}
+
+      - name: Extract and report BCI performance
+        if: always() && steps.schedule.outputs.run-arns != '[]' && steps.schedule.outputs.run-arns != ''
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
+        with:
+          platform: ${{ matrix.platform }}
+          step-summary-title: 'Mobile Performance: bci (${{ matrix.platform }})'
+          artifact-name: perf-report-bci-whispercpp-${{ matrix.platform }}-${{ github.run_number }}
+          # iOS (and multi-device Android pools) write the PERF_REPORT markers
+          # into bare_console.log inside Customer_Artifacts.zip; unzip them so
+          # extract-from-log.js can find the per-device performance reports.
+          # Without this iOS produces no benchmark rows. Mirrors parakeet.
+          unzip-customer-artifacts: 'true'
 
       - name: Comment results on PR
         if: always() && !cancelled()

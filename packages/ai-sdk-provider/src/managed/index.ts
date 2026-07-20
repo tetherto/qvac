@@ -39,15 +39,15 @@ interface Resolved {
   readonly port: number
 }
 
-function delay (ms: number): Promise<void> {
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function errorPath (fleetKey: string): string {
+function errorPath(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.error`)
 }
 
-async function readErrorFile (fleetKey: string): Promise<string | undefined> {
+async function readErrorFile(fleetKey: string): Promise<string | undefined> {
   try {
     return (await readFile(errorPath(fleetKey), 'utf8')).trim()
   } catch {
@@ -58,7 +58,7 @@ async function readErrorFile (fleetKey: string): Promise<string | undefined> {
 // The pid recorded inside a lock file, or undefined if it's missing/empty/
 // unreadable (e.g. a crashed writer left a zero-byte file, or we caught it in
 // the tiny window between create and pid-write).
-async function readLockOwner (key: string): Promise<number | undefined> {
+async function readLockOwner(key: string): Promise<number | undefined> {
   try {
     const raw = (await readFile(lockPath(key), 'utf8')).trim()
     const pid = Number.parseInt(raw, 10)
@@ -68,7 +68,7 @@ async function readLockOwner (key: string): Promise<number | undefined> {
   }
 }
 
-async function lockOlderThan (key: string, ms: number): Promise<boolean> {
+async function lockOlderThan(key: string, ms: number): Promise<boolean> {
   try {
     const st = await stat(lockPath(key))
     return Date.now() - st.mtimeMs > ms
@@ -85,7 +85,7 @@ async function lockOlderThan (key: string, ms: number): Promise<boolean> {
 // spawn a *duplicate* runner/serve and double-load the model. The mtime check
 // is a fallback only for a lock whose owner pid we can't read.
 // Exported for tests; not part of the package's public surface.
-export async function tryLock (key: string): Promise<boolean> {
+export async function tryLock(key: string): Promise<boolean> {
   await mkdir(managedServesDir(), { recursive: true })
   try {
     const fh = await open(lockPath(key), 'wx')
@@ -111,14 +111,14 @@ export async function tryLock (key: string): Promise<boolean> {
 }
 
 // Exported for tests; not part of the package's public surface.
-export async function releaseLock (key: string): Promise<void> {
+export async function releaseLock(key: string): Promise<void> {
   await rm(lockPath(key), { force: true }).catch(() => {})
 }
 
 // Poll the registry until a healthy record appears for `fleetKey`, the runner
 // reports a startup error, or `untilMs` passes. Returns the record, or
 // undefined on the deadline (caller decides whether to retry or fail).
-async function waitForHealthyRecord (
+async function waitForHealthyRecord(
   fleetKey: string,
   fetchImpl: typeof fetch,
   untilMs: number
@@ -134,7 +134,7 @@ async function waitForHealthyRecord (
   return undefined
 }
 
-function spawnRunner (params: {
+function spawnRunner(params: {
   fleetKey: string
   configPath: string
   port: number
@@ -154,7 +154,7 @@ function spawnRunner (params: {
   child.unref()
 }
 
-export async function startManagedQvac (options: QvacManagedOptions): Promise<ManagedQvacProvider> {
+export async function startManagedQvac(options: QvacManagedOptions): Promise<ManagedQvacProvider> {
   const host = options.serveHost ?? DEFAULT_SERVE_HOST
   const startTimeoutMs = options.serveStartTimeout ?? DEFAULT_SERVE_START_TIMEOUT_MS
   // Health checks (and respawn retries) use the raw fetch, never the provider's
@@ -200,7 +200,7 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
     parentWatch.unref()
   }
 
-  async function resolveServe (): Promise<Resolved> {
+  async function resolveServe(): Promise<Resolved> {
     // Clear dead/orphaned records first so discovery and spawn see a clean slate.
     await sweepServes(fetchImpl).catch(() => {})
 
@@ -289,8 +289,10 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // Single-flight re-resolution so a burst of in-flight requests hitting a dead
   // serve triggers exactly one recovery, not one per request.
   let resolving: Promise<Resolved> | null = null
-  function reresolve (): Promise<Resolved> {
-    resolving ??= resolveServe().finally(() => { resolving = null })
+  function reresolve(): Promise<Resolved> {
+    resolving ??= resolveServe().finally(() => {
+      resolving = null
+    })
     return resolving
   }
 
@@ -332,12 +334,13 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
   // Deregister on clean exit so the runner's idle clock can start promptly. An
   // abrupt termination (signal/crash) is handled by the runner's dead-pid
   // pruning, so we deliberately don't hijack SIGINT/SIGTERM here.
-  function onExit (): void {
+  function onExit(): void {
     removeConsumer(fleetKey, consumerId)
   }
   process.once('exit', onExit)
 
-  async function close (): Promise<void> {
+  // lunte-disable-next-line require-await
+  async function close(): Promise<void> {
     if (closed) return
     closed = true
     if (parentWatch !== undefined) clearInterval(parentWatch)
@@ -364,7 +367,10 @@ export async function startManagedQvac (options: QvacManagedOptions): Promise<Ma
 // the three fetch input shapes (string, URL, Request); anything unparseable
 // passes through. `@ai-sdk/openai-compatible` uses string URLs today, but
 // handling Request keeps self-healing correct if a future version switches.
-function retargetUrl (input: Parameters<typeof fetch>[0], baseURL: string): Parameters<typeof fetch>[0] {
+function retargetUrl(
+  input: Parameters<typeof fetch>[0],
+  baseURL: string
+): Parameters<typeof fetch>[0] {
   try {
     const live = new URL(baseURL)
     if (typeof input === 'string') {
@@ -383,7 +389,7 @@ function retargetUrl (input: Parameters<typeof fetch>[0], baseURL: string): Para
   return input
 }
 
-function retargetOrigin (u: URL, live: URL): URL {
+function retargetOrigin(u: URL, live: URL): URL {
   u.protocol = live.protocol
   u.host = live.host
   return u
@@ -395,8 +401,8 @@ function retargetOrigin (u: URL, live: URL): URL {
 // can occur *after* the serve received and began processing a completion, so a
 // blind replay could double-submit. Undici surfaces ECONNREFUSED as a
 // `TypeError: fetch failed` with `cause.code`, which the cause check catches.
-function isRetryableConnError (err: unknown): boolean {
-  const e = err as { name?: string, code?: string, cause?: { code?: string } }
+function isRetryableConnError(err: unknown): boolean {
+  const e = err as { name?: string; code?: string; cause?: { code?: string } }
   if (e?.name === 'AbortError') return false // caller cancellation, not a dead serve
   return (e?.cause?.code ?? e?.code) === 'ECONNREFUSED'
 }
@@ -405,6 +411,6 @@ function isRetryableConnError (err: unknown): boolean {
 // parent is gone when our parent pid is no longer the one we started under: on
 // POSIX a dead parent reparents us to init (ppid 1), and any change from the
 // original pid is a reliable "parent exited" signal. Exported for tests.
-export function parentIsGone (originalPpid: number, currentPpid: number): boolean {
+export function parentIsGone(originalPpid: number, currentPpid: number): boolean {
   return currentPpid === 1 || currentPpid !== originalPpid
 }

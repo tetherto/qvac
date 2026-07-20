@@ -923,3 +923,104 @@ TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
 }
+
+// QVAC-21867: chooseBackend reports Mali GPUs via outIsMaliGpu so the caller
+// can pick the per-device-class default for the multimodal projector backend.
+TEST_F(BackendSelectionTest, OutIsMaliGpuTrueForMaliVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = false;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_TRUE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, OutIsMaliGpuTrueForMaliIGpuCaseInsensitive) {
+  mockBackend.addDevice(createIGPUDevice("ARM MALI-G710", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = false;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_TRUE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, OutIsMaliGpuFalseForAdreno) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_FALSE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, OutIsMaliGpuFalseForDesktopGpu) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::GPU);
+  EXPECT_FALSE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenNoGpuDevices) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::CPU);
+  EXPECT_FALSE(isMaliGpu);
+}
+
+TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
+  // Devices are only enumerated for GPU preference; CPU preference must
+  // report no Mali rather than stale/true.
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  bool isMaliGpu = true;
+  auto result = chooseBackend(
+      BackendType::CPU,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      &isMaliGpu);
+  EXPECT_EQ(result.first, BackendType::CPU);
+  EXPECT_FALSE(isMaliGpu);
+}

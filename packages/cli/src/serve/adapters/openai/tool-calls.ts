@@ -13,7 +13,9 @@ export interface OpenAIToolCallDelta extends OpenAIToolCall {
   index: number
 }
 
-export function sdkToolCallsToOpenai (toolCalls: ToolCall[] | null | undefined): OpenAIToolCall[] | undefined {
+export function sdkToolCallsToOpenai(
+  toolCalls: ToolCall[] | null | undefined
+): OpenAIToolCall[] | undefined {
   if (!toolCalls || toolCalls.length === 0) return undefined
 
   return toolCalls.map((tc) => ({
@@ -26,7 +28,9 @@ export function sdkToolCallsToOpenai (toolCalls: ToolCall[] | null | undefined):
   }))
 }
 
-export function sdkToolCallsToOpenaiDeltas (toolCalls: ToolCall[] | null | undefined): OpenAIToolCallDelta[] | undefined {
+export function sdkToolCallsToOpenaiDeltas(
+  toolCalls: ToolCall[] | null | undefined
+): OpenAIToolCallDelta[] | undefined {
   if (!toolCalls || toolCalls.length === 0) return undefined
 
   return toolCalls.map((tc, i) => ({

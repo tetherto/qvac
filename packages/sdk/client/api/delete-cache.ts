@@ -1,9 +1,6 @@
-import type { DeleteCacheRequest, DeleteCacheResponse } from "@/schemas";
-import { send } from "@/client/rpc/rpc-client";
-import {
-  InvalidDeleteCacheParamsError,
-  DeleteCacheFailedError,
-} from "@/utils/errors-client";
+import type { DeleteCacheRequest, DeleteCacheResponse } from '@/schemas'
+import { send } from '@/client/rpc/rpc-client'
+import { InvalidDeleteCacheParamsError, DeleteCacheFailedError } from '@/utils/errors-client'
 
 /**
  * Deletes KV cache files.
@@ -27,32 +24,32 @@ import {
  * ```
  */
 export async function deleteCache(
-  params: { all: true } | { kvCacheKey: string; modelId?: string },
+  params: { all: true } | { kvCacheKey: string; modelId?: string }
 ) {
-  let req: DeleteCacheRequest;
+  let req: DeleteCacheRequest
 
-  if ("all" in params && params.all) {
+  if ('all' in params && params.all) {
     req = {
-      type: "deleteCache",
-      all: true,
-    };
-  } else if ("kvCacheKey" in params) {
+      type: 'deleteCache',
+      all: true
+    }
+  } else if ('kvCacheKey' in params) {
     req = {
-      type: "deleteCache",
+      type: 'deleteCache',
       kvCacheKey: params.kvCacheKey,
-      modelId: params.modelId,
-    };
+      modelId: params.modelId
+    }
   } else {
-    throw new InvalidDeleteCacheParamsError();
+    throw new InvalidDeleteCacheParamsError()
   }
 
-  const response = (await send(req)) as DeleteCacheResponse;
+  const response = (await send(req)) as DeleteCacheResponse
 
   if (!response.success && response.error) {
-    throw new DeleteCacheFailedError(response.error);
+    throw new DeleteCacheFailedError(response.error)
   }
 
   return {
-    success: response.success,
-  };
+    success: response.success
+  }
 }

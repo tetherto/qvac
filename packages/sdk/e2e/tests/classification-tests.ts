@@ -1,4 +1,4 @@
-import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 // The bundled MobileNetV3-Small classifier returns 3 classes
 // ("food", "report", "other") with softmax probabilities. These tests
@@ -10,163 +10,159 @@ const createClassificationTest = (
   testId: string,
   params: Record<string, unknown>,
   expectation:
-    | { validation: "type"; expectedType: "string" | "number" | "array" }
+    | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }
     | {
-        validation: "function";
-        fn: (result: unknown) => { passed: boolean; output?: string };
+        validation: 'function'
+        fn: (result: unknown) => { passed: boolean; output?: string }
       },
   estimatedDurationMs: number = 60000,
-  suites?: string[],
+  suites?: string[]
 ): TestDefinition => ({
   testId,
   params,
   expectation,
   ...(suites && { suites }),
   metadata: {
-    category: "classification",
-    dependency: "classification",
-    estimatedDurationMs,
-  },
-});
+    category: 'classification',
+    dependency: 'classification',
+    estimatedDurationMs
+  }
+})
 
 // Result shape: an array of `{label, confidence}` objects sorted by
 // descending confidence. With the bundled MobileNetV3-Small all three
 // canonical labels must appear and every confidence must be in [0, 1].
 export const classificationResultsShape = createClassificationTest(
-  "classification-results-shape",
+  'classification-results-shape',
   {},
   {
-    validation: "function",
+    validation: 'function',
     fn: (result: unknown) => {
       const r = result as {
-        results?: { label?: string; confidence?: number }[];
-      };
+        results?: { label?: string; confidence?: number }[]
+      }
       if (!Array.isArray(r.results)) {
-        return { passed: false, output: "results is not an array" };
+        return { passed: false, output: 'results is not an array' }
       }
       if (r.results.length === 0) {
-        return { passed: false, output: "results array is empty" };
+        return { passed: false, output: 'results array is empty' }
       }
       for (const item of r.results) {
-        if (typeof item.label !== "string" || item.label.length === 0) {
+        if (typeof item.label !== 'string' || item.label.length === 0) {
           return {
             passed: false,
-            output: `result item missing string label (got: ${JSON.stringify(item)})`,
-          };
+            output: `result item missing string label (got: ${JSON.stringify(item)})`
+          }
         }
-        if (
-          typeof item.confidence !== "number" ||
-          item.confidence < 0 ||
-          item.confidence > 1
-        ) {
+        if (typeof item.confidence !== 'number' || item.confidence < 0 || item.confidence > 1) {
           return {
             passed: false,
-            output: `confidence out of [0,1] for label '${item.label}' (got ${item.confidence})`,
-          };
+            output: `confidence out of [0,1] for label '${item.label}' (got ${item.confidence})`
+          }
         }
       }
       // Descending-confidence ordering invariant.
       for (let i = 1; i < r.results.length; i++) {
-        const prev = r.results[i - 1]?.confidence ?? 0;
-        const cur = r.results[i]?.confidence ?? 0;
+        const prev = r.results[i - 1]?.confidence ?? 0
+        const cur = r.results[i]?.confidence ?? 0
         if (cur > prev) {
           return {
             passed: false,
-            output: `results not sorted by descending confidence at index ${i}`,
-          };
+            output: `results not sorted by descending confidence at index ${i}`
+          }
         }
       }
-      return { passed: true };
-    },
+      return { passed: true }
+    }
   },
   60000,
-  ["smoke"],
-);
+  ['smoke']
+)
 
 // Softmax invariant: probabilities sum to approximately 1 when topK is not
 // applied. Allow 1e-3 slack for FP16 / accumulator noise.
 export const classificationConfidenceSum = createClassificationTest(
-  "classification-confidence-sum",
+  'classification-confidence-sum',
   {},
   {
-    validation: "function",
+    validation: 'function',
     fn: (result: unknown) => {
       const r = result as {
-        results?: { confidence?: number }[];
-      };
-      if (!Array.isArray(r.results) || r.results.length === 0) {
-        return { passed: false, output: "results missing or empty" };
+        results?: { confidence?: number }[]
       }
-      const sum = r.results.reduce((acc, x) => acc + (x.confidence ?? 0), 0);
+      if (!Array.isArray(r.results) || r.results.length === 0) {
+        return { passed: false, output: 'results missing or empty' }
+      }
+      const sum = r.results.reduce((acc, x) => acc + (x.confidence ?? 0), 0)
       if (Math.abs(sum - 1) > 1e-3) {
         return {
           passed: false,
-          output: `confidence sum ${sum} not within 1e-3 of 1`,
-        };
+          output: `confidence sum ${sum} not within 1e-3 of 1`
+        }
       }
-      return { passed: true };
-    },
-  },
-);
+      return { passed: true }
+    }
+  }
+)
 
 // `topK: 1` must truncate to exactly one result.
 export const classificationTopK = createClassificationTest(
-  "classification-topk",
+  'classification-topk',
   { topK: 1 },
   {
-    validation: "function",
+    validation: 'function',
     fn: (result: unknown) => {
-      const r = result as { results?: unknown[] };
+      const r = result as { results?: unknown[] }
       if (!Array.isArray(r.results)) {
-        return { passed: false, output: "results is not an array" };
+        return { passed: false, output: 'results is not an array' }
       }
       if (r.results.length !== 1) {
         return {
           passed: false,
-          output: `topK:1 expected 1 result, got ${r.results.length}`,
-        };
+          output: `topK:1 expected 1 result, got ${r.results.length}`
+        }
       }
-      return { passed: true };
-    },
+      return { passed: true }
+    }
   },
   60000,
-  ["smoke"],
-);
+  ['smoke']
+)
 
 // An invalid image buffer (too small to decode as JPEG/PNG) must reject
 // cleanly, and the model must remain usable for a follow-up valid call —
 // proves the addon does not wedge on the rejection path.
 export const classificationInvalidImage = createClassificationTest(
-  "classification-invalid-image",
-  { inputs: "invalid" },
+  'classification-invalid-image',
+  { inputs: 'invalid' },
   {
-    validation: "function",
+    validation: 'function',
     fn: (result: unknown) => {
       const r = result as {
-        rejected?: boolean;
-        recoveryRan?: boolean;
-        errorMsg?: string;
-      };
+        rejected?: boolean
+        recoveryRan?: boolean
+        errorMsg?: string
+      }
       if (!r.rejected) {
         return {
           passed: false,
-          output: "expected classify() to reject on invalid image bytes",
-        };
+          output: 'expected classify() to reject on invalid image bytes'
+        }
       }
       if (!r.recoveryRan) {
         return {
           passed: false,
-          output: "follow-up classify() did not succeed after rejection",
-        };
+          output: 'follow-up classify() did not succeed after rejection'
+        }
       }
-      return { passed: true };
-    },
-  },
-);
+      return { passed: true }
+    }
+  }
+)
 
 export const classificationTests: TestDefinition[] = [
   classificationResultsShape,
   classificationConfidenceSum,
   classificationTopK,
-  classificationInvalidImage,
-];
+  classificationInvalidImage
+]

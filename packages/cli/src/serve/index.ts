@@ -54,11 +54,11 @@ export interface StartServerOptions {
   transcribeOverride?: QvacContext['transcribeOverride']
 }
 
-export async function buildServer (options: StartServerOptions): Promise<FastifyInstance> {
+export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
   const logger = createLogger(options.quiet ? 'silent' : options.verbose ? 'debug' : 'info')
 
   const configPath = findConfigFile(options.projectRoot, options.config)
-  const rawConfig = configPath ? await loadConfig(configPath) as Record<string, unknown> : {}
+  const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
   const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
   const registry = createModelRegistry()
 
@@ -72,7 +72,9 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
   const chunkAttributions = createChunkAttributionStore()
   const ffmpegAvailable = await probeFfmpegAvailable()
   if (!ffmpegAvailable) {
-    logger.warn('ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac doctor')
+    logger.warn(
+      'ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac doctor'
+    )
   }
   // `onEvict` captures `qvacContext` by reference; the closure runs lazily
   // (only when the store actually evicts), long after `qvacContext` is wired
@@ -94,7 +96,9 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     responsesStore,
     videoJobsStore,
     ffmpegAvailable,
-    ...(options.transcribeOverride !== undefined ? { transcribeOverride: options.transcribeOverride } : {})
+    ...(options.transcribeOverride !== undefined
+      ? { transcribeOverride: options.transcribeOverride }
+      : {})
   }
 
   const app = Fastify({
@@ -118,9 +122,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
         description: 'OpenAI-compatible REST API served by `qvac serve openai`.',
         version: '1.0.0'
       },
-      servers: [
-        { url: `http://${options.host}:${options.port}`, description: 'this server' }
-      ],
+      servers: [{ url: `http://${options.host}:${options.port}`, description: 'this server' }],
       tags: Object.entries(TAG_DESCRIPTIONS).map(([name, description]) => ({ name, description })),
       components: {
         securitySchemes: {
@@ -132,6 +134,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     transform: jsonSchemaTransform
   })
 
+  // lunte-disable-next-line require-await
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger())
 
   if (options.docs) {
@@ -167,12 +170,14 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
     await app.register(authPlugin, { apiKey: options.apiKey })
   }
 
+  // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
     if (!isIntrospectionPath(req.url)) {
       logger.info(`→ ${req.method} ${req.url.split('?')[0]}`)
     }
     ;(req as unknown as { qvacStart: number }).qvacStart = performance.now()
   })
+  // lunte-disable-next-line require-await
   app.addHook('onResponse', async (req, reply) => {
     if (isIntrospectionPath(req.url)) return
     const start = (req as unknown as { qvacStart?: number }).qvacStart
@@ -201,7 +206,7 @@ export async function buildServer (options: StartServerOptions): Promise<Fastify
   return app as unknown as FastifyInstance
 }
 
-export async function startServer (options: StartServerOptions): Promise<FastifyInstance> {
+export async function startServer(options: StartServerOptions): Promise<FastifyInstance> {
   const app = await buildServer(options)
 
   // Resolve plugin registrations (decorators, route table) but DON'T listen
@@ -224,14 +229,17 @@ export async function startServer (options: StartServerOptions): Promise<Fastify
   return app
 }
 
-function isIntrospectionPath (url: string): boolean {
+function isIntrospectionPath(url: string): boolean {
   return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
 }
 
-function logStartupSummary (app: FastifyInstance, logger: Logger): void {
+function logStartupSummary(app: FastifyInstance, logger: Logger): void {
   logger.info('')
   logger.info('Endpoints:')
-  const routes = app.printRoutes({ commonPrefix: false }).split('\n').filter((l) => l.trim().length > 0)
+  const routes = app
+    .printRoutes({ commonPrefix: false })
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
   for (const line of routes) {
     logger.info(`  ${line}`)
   }

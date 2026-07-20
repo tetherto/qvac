@@ -1,15 +1,20 @@
 import fp from 'fastify-plugin'
 import type { FastifyError, FastifyPluginAsync } from 'fastify'
-import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } from 'fastify-type-provider-zod'
+import {
+  hasZodFastifySchemaValidationErrors,
+  isResponseSerializationError
+} from 'fastify-type-provider-zod'
 import { HttpError, errorType } from '../lib/http-error.js'
 import { sendSSE, endSSE } from '../lib/sse.js'
 
+// lunte-disable-next-line require-await
 const plugin: FastifyPluginAsync = async (app) => {
   app.setErrorHandler((err: FastifyError, req, reply) => {
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
     const message = err.message ?? 'An internal error occurred.'
 
     if (reply.raw.headersSent) {
+      app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
       sendSSE(reply.raw, {
         error: {
           message,
@@ -29,27 +34,45 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
 
     if (hasZodFastifySchemaValidationErrors(err)) {
-      const issue = err.validation[0] as { instancePath?: string; message?: string; keyword?: string } | undefined
+      const issue = err.validation[0] as
+        { instancePath?: string; message?: string; keyword?: string } | undefined
       const head = headFromInstancePath(issue?.instancePath)
       const code = head in ZOD_PATH_TO_CODE ? ZOD_PATH_TO_CODE[head]! : 'invalid_request'
       const detail = issue?.message ?? 'Request body failed validation.'
       reply.code(400).send({
-        error: { message: head ? `${head}: ${detail}` : detail, type: 'invalid_request_error', code }
+        error: {
+          message: head ? `${head}: ${detail}` : detail,
+          type: 'invalid_request_error',
+          code
+        }
       })
       return
     }
 
-    if (err.code === 'FST_ERR_CTP_INVALID_JSON_BODY' || err.code === 'FST_ERR_CTP_EMPTY_JSON_BODY') {
+    if (
+      err.code === 'FST_ERR_CTP_INVALID_JSON_BODY' ||
+      err.code === 'FST_ERR_CTP_EMPTY_JSON_BODY'
+    ) {
       reply.code(400).send({
-        error: { message: 'Request body must be valid JSON.', type: 'invalid_request_error', code: 'invalid_json' }
+        error: {
+          message: 'Request body must be valid JSON.',
+          type: 'invalid_request_error',
+          code: 'invalid_json'
+        }
       })
       return
     }
 
     if (isResponseSerializationError(err)) {
-      req.log.error({ err }, 'response_serialization_error')
+      app.qvac.logger.error(
+        formatServerError('response_serialization_error', req.method, req.url, err)
+      )
       reply.code(500).send({
-        error: { message: 'Response serialization failed.', type: 'server_error', code: 'internal_error' }
+        error: {
+          message: 'Response serialization failed.',
+          type: 'server_error',
+          code: 'internal_error'
+        }
       })
       return
     }
@@ -68,9 +91,13 @@ const plugin: FastifyPluginAsync = async (app) => {
       return
     }
 
-    req.log.error({ err }, 'unhandled')
+    app.qvac.logger.error(formatServerError('unhandled', req.method, req.url, err))
     reply.code(500).send({
-      error: { message: 'An internal error occurred.', type: 'server_error', code: 'internal_error' }
+      error: {
+        message: 'An internal error occurred.',
+        type: 'server_error',
+        code: 'internal_error'
+      }
     })
   })
 
@@ -108,7 +135,12 @@ const ZOD_PATH_TO_CODE: Record<string, string> = {
   seconds: 'invalid_seconds'
 }
 
-function headFromInstancePath (instancePath: string | undefined): string {
+function formatServerError(label: string, method: string, url: string, err: FastifyError): string {
+  const stack = err.stack ?? `${err.name}: ${err.message}`
+  return `${label} ${method} ${url}\n${stack}`
+}
+
+function headFromInstancePath(instancePath: string | undefined): string {
   if (!instancePath) return ''
   const trimmed = instancePath.replace(/^\/+/, '')
   const slash = trimmed.indexOf('/')

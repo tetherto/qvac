@@ -2,9 +2,16 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <iostream>
+#include <iterator>
+#include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -13,10 +20,12 @@
 #include <ggml-backend.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 
 namespace {
 
@@ -115,6 +124,11 @@ protected:
            "QWEN3_BATCH_MODEL_PATH",
            MP::OnMissing::Skip,
            "https://huggingface.co/QuantFactory/Qwen3-0.6B-GGUF");
+    qwen35HybridModel_ =
+        MP("Qwen3.5-0.8B-Q8_0.gguf",
+           "QWEN35_BATCH_MODEL_PATH",
+           MP::OnMissing::Skip,
+           "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
     harmonyModel_ =
         MP("gpt-oss-20b-Q2_K.gguf",
            "HARMONY_BATCH_MODEL_PATH",
@@ -159,6 +173,7 @@ protected:
   std::unordered_map<std::string, std::string> config_;
   test_common::TestModelPath model_;
   test_common::TestModelPath qwen3Model_;
+  test_common::TestModelPath qwen35HybridModel_;
   test_common::TestModelPath harmonyModel_;
 };
 
@@ -342,6 +357,131 @@ TEST_F(
   // would average about 1.33 occupied slots. This higher threshold, plus the
   // coexistence flag above, confirms the second group joined the first.
   EXPECT_GT(avgConcurrentSeq, 1.6);
+}
+
+/// Regression for the unconditional all-sequence KV wipe at
+/// processPromptBatchImpl entry: when one batch job is already in flight, a
+/// second overlapping processPromptBatch call must NOT clear the active job's
+/// KV. The first batch is parked inside its first-token callback so its slot
+/// KV is populated (and no llama decode is running) while the main thread
+/// fires an empty overlapping batch. With the bug the empty call's entry wipe
+/// clears the active sequence; with the fix it is skipped because another
+/// batch job is active.
+TEST_F(ContinuousBatchingIntegrationTest, OverlappingBatchDoesNotWipeActiveKv) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool firstTokenSeen = false;
+  bool releaseFirst = false;
+
+  auto firstPrompt = makePrompt("List several facts about redwood forests.");
+  firstPrompt.outputCallback =
+      [&mtx, &cv, &firstTokenSeen, &releaseFirst](const std::string&) {
+        std::unique_lock<std::mutex> lk(mtx);
+        if (!firstTokenSeen) {
+          firstTokenSeen = true;
+          cv.notify_all();
+        }
+        cv.wait(lk, [&releaseFirst] { return releaseFirst; });
+      };
+
+  auto firstFuture = std::async(std::launch::async, [&model, firstPrompt] {
+    std::vector<LlamaModel::Prompt> prompts{firstPrompt};
+    return model->processPromptBatch(prompts);
+  });
+
+  {
+    std::unique_lock<std::mutex> lk(mtx);
+    ASSERT_TRUE(cv.wait_for(lk, std::chrono::seconds(60), [&firstTokenSeen] {
+      return firstTokenSeen;
+    })) << "first batch never produced a token";
+  }
+
+  llama_context* lctx = model->getContext();
+  ASSERT_NE(lctx, nullptr);
+  llama_memory_t mem = llama_get_memory(lctx);
+  ASSERT_NE(mem, nullptr);
+  const int nSeqMax = llama_n_seq_max(lctx);
+
+  llama_seq_id activeSeq = -1;
+  for (int seqId = 0; seqId < nSeqMax; seqId++) {
+    if (llama_memory_seq_pos_max(mem, static_cast<llama_seq_id>(seqId)) >= 0) {
+      activeSeq = static_cast<llama_seq_id>(seqId);
+      break;
+    }
+  }
+  ASSERT_NE(activeSeq, -1) << "first batch slot has no KV while parked";
+
+  const std::vector<LlamaModel::Prompt> emptyBatch;
+  const auto emptyOutputs = model->processPromptBatch(emptyBatch);
+  EXPECT_TRUE(emptyOutputs.empty());
+
+  const llama_pos posAfter = llama_memory_seq_pos_max(mem, activeSeq);
+
+  model->cancel();
+  {
+    std::lock_guard<std::mutex> lk(mtx);
+    releaseFirst = true;
+  }
+  cv.notify_all();
+  ASSERT_EQ(
+      firstFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
+  (void)firstFuture.get();
+
+  EXPECT_GE(posAfter, 0)
+      << "overlapping processPromptBatch wiped the active job's KV: seq "
+      << activeSeq << " pos_max=" << posAfter
+      << ". The entry-time all-sequence KV wipe must be skipped when another "
+         "batch job is already in flight.";
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    ConcurrentBatchEntriesDoNotRaceOnKvWipe) {
+  // Reproduces comment-4742982980: two batch calls that enter
+  // processPromptBatchImpl concurrently can collide in the entry section
+  // before either has incremented activeBatchJobs_. Without a batch-entry
+  // mutex the first caller's KV wipe races with the second caller's scheduler
+  // admission, potentially clearing the second caller's sequences.
+  //
+  // The test uses an atomic counter as a rendezvous to maximise the chance
+  // that both callers execute the entry section simultaneously.
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "16";
+  auto model = loadModel();
+
+  std::atomic<int> ready{0};
+
+  auto runBatch = [&](const std::string& question) {
+    // Spin until both threads are lined up, then enter together.
+    ready.fetch_add(1);
+    while (ready.load() < 2) {
+      std::this_thread::yield();
+    }
+    std::vector<LlamaModel::Prompt> prompts{makePrompt(question)};
+    return model->processPromptBatch(prompts);
+  };
+
+  auto f1 = std::async(std::launch::async, runBatch, "What is 2+2?");
+  auto f2 = std::async(std::launch::async, runBatch, "What is 3+3?");
+
+  ASSERT_EQ(f1.wait_for(std::chrono::seconds(120)), std::future_status::ready)
+      << "first concurrent batch call timed out";
+  ASSERT_EQ(f2.wait_for(std::chrono::seconds(120)), std::future_status::ready)
+      << "second concurrent batch call timed out";
+
+  auto out1 = f1.get();
+  auto out2 = f2.get();
+  ASSERT_EQ(out1.size(), 1u);
+  ASSERT_EQ(out2.size(), 1u);
+  EXPECT_FALSE(out1[0].empty()) << "first concurrent batch returned empty";
+  EXPECT_FALSE(out2[0].empty()) << "second concurrent batch returned empty";
 }
 
 TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
@@ -623,6 +763,164 @@ TEST_F(
   EXPECT_TRUE(containsCaseInsensitive(outputs[1], "GREEN")) << outputs[1];
 }
 
+/// Regression: Qwen3.5 is a hybrid SSM family; on the continuous-batching
+/// path the end-of-prefill recurrent snapshot must be taken inside
+/// `TextLlmContext::onPrefillComplete` (not only inside the single-prompt
+/// `evalMessageWithTools` prefill loop). Without the snapshot,
+/// `compactThinkSpan` aborts early for hybrid models and
+/// `remove_thinking_from_context` becomes a silent no-op for batched
+/// requests. This test pins the success path by submitting two reasoning
+/// prompts in parallel with `remove_thinking_from_context = true` and
+/// asserting that at least one slot reports a thinking discard with zero
+/// compaction failures.
+///
+/// Platform gate: follows the same intent as the JS Qwen3.5 guards in
+/// `test/integration/reasoning.test.js` (which skip darwin-x64 and
+/// win32-x64), but is stricter for this C++ test because Linux and
+/// Windows CI runners hit the CPU backend for this addon and the
+/// Qwen3.5-0.8B Q8 checkpoint does not produce a closed
+/// `<think>...</think>` reliably on CPU under greedy decoding: it
+/// drifts into self-referential loops, never emits `</think>`, and
+/// `compactThinkSpan` correctly stays a no-op — which is the right
+/// product behavior but turns this regression check into a flake. The
+/// snapshot path itself is covered cross-platform by the
+/// `ReasoningSnapshotPolicy` and `ReasoningBlockCompactor*` unit tests
+/// in `test_reasoning_block_compactor.cpp`.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    TwoPromptBatchQwen35HybridDropsThinkBlocks) {
+#if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
+  GTEST_SKIP() << "Qwen3.5-0.8B closed `</think>` is not deterministic on "
+                  "non-Apple-Silicon CI runners (CPU backend); see comment.";
+#endif
+  REQUIRE_MODEL(qwen35HybridModel_);
+  // Qwen3.5 thinking traces are long; give each slot enough cache and
+  // generation budget to actually close `</think>` so the compactor fires.
+  config_["ctx_size"] = "16384";
+  config_["n_predict"] = "3072";
+  config_["parallel"] = "2";
+  auto model = loadModel(qwen35HybridModel_);
+
+  // Mirror the chat shape used by the single-prompt reasoning integration
+  // tests (system + short user prompt). With `temp=0` Qwen3.5 reliably
+  // opens and closes `<think>` for this shape, which is what the compactor
+  // needs to fire.
+  auto makeOptInPrompt = []() {
+    LlamaModel::Prompt p;
+    p.input = R"([{"role":"system","content":"You are an AI assistant. )"
+              R"(Always provide a clear answer after thinking"},)"
+              R"({"role":"user","content":"what are you thinking"}])";
+    p.generationParams.remove_thinking_from_context = true;
+    return p;
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{makeOptInPrompt(), makeOptInPrompt()};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+
+  const auto stats = model->runtimeStats();
+  const double thinkingDiscards =
+      test_common::getStatValue(stats, "thinkingBlockDiscards");
+
+  EXPECT_GE(thinkingDiscards, 1.0)
+      << "scheduler path must take the end-of-prefill recurrent snapshot "
+         "so `compactThinkSpan` can fire on the hybrid; got "
+      << thinkingDiscards << " discards. outputs[0]=" << outputs[0]
+      << " outputs[1]=" << outputs[1];
+  // Under the uniform hard-fail contract (PR #2813), a compaction
+  // failure would have thrown `qvac_errors::StatusError` from
+  // `processPromptBatch` and failed the assertions above; reaching
+  // this point means the scheduler's recurrent snapshot / restore /
+  // replay path succeeded on both slots.
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["ctx_size"] = "512";
+  config_["parallel"] = "2";
+  config_["n_predict"] = "-1";
+  config_["n_discarded"] = "0";
+  config_["temp"] = "0";
+  auto model = loadModel(qwen35HybridModel_);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-qwen35-seqlimit-rollback-" + uniqueTestId() + ".bin");
+
+  const char* systemMsg =
+      R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
+  const char* userTurn1 =
+      R"({"role":"user","content":"What is the capital of France?"})";
+
+  LlamaModel::Prompt primer;
+  primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  primer.generationParams.reasoning_budget = 0;
+  primer.generationParams.n_predict = 16;
+  auto primerOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{primer});
+  ASSERT_EQ(primerOutputs.size(), 1u);
+  ASSERT_TRUE(containsCaseInsensitive(primerOutputs[0], "Paris"))
+      << "primer should answer from the clean cache seed: " << primerOutputs[0];
+  ASSERT_TRUE(fs::exists(cachePath));
+  const double primeCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(primeCacheTokens, 0.0) << "primer did not populate CacheTokens";
+
+  auto makeLimitPrompt = [systemMsg, userTurn1] {
+    LlamaModel::Prompt p;
+    p.input =
+        std::string("[") + systemMsg + "," + userTurn1 +
+        R"(,{"role":"assistant","content":"Paris"},{"role":"user","content":"Before answering, reason in detail for at least 80 sentences, then answer: What is the capital of France?"}])";
+    p.generationParams.remove_thinking_from_context = true;
+    return p;
+  };
+
+  auto limit = makeLimitPrompt();
+  limit.cacheKey = cachePath.string();
+  limit.saveCacheToDisk = true;
+  auto limitOutputs =
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{limit});
+  ASSERT_EQ(limitOutputs.size(), 1u);
+  EXPECT_FALSE(limitOutputs[0].empty());
+  const double limitGeneratedTokens =
+      test_common::getStatValue(model->runtimeStats(), "generatedTokens");
+  const double limitCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  SCOPED_TRACE(
+      "limitGeneratedTokens=" + std::to_string(limitGeneratedTokens) +
+      ", primeCacheTokens=" + std::to_string(primeCacheTokens) +
+      ", limitCacheTokens=" + std::to_string(limitCacheTokens) +
+      ", limit output (first 240 chars): " + limitOutputs[0].substr(0, 240));
+  EXPECT_GE(limitGeneratedTokens, 64.0)
+      << "n_predict is unbounded, so a long generation here means the "
+         "scheduler slot cap, not n_predict, truncated the request";
+  EXPECT_LE(std::abs(limitCacheTokens - primeCacheTokens), 1.0)
+      << "sequence-limit truncation must roll back to the warm cache baseline";
+
+  auto sibling = makePrompt("What is 2+2? Answer with just the number.");
+  sibling.generationParams.reasoning_budget = 0;
+  sibling.generationParams.n_predict = 16;
+  std::vector<LlamaModel::Prompt> prompts{
+      makeLimitPrompt(), std::move(sibling)};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "sequence-limit truncated prompt should still return partial output";
+  EXPECT_FALSE(outputs[1].empty())
+      << "healthy sibling request must complete instead of being failed by "
+         "the truncated recurrent reasoning request";
+
+  fs::remove(cachePath);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchHarmonyToolCalls) {
   REQUIRE_MODEL(harmonyModel_);
   config_["ctx_size"] = "4096";
@@ -666,6 +964,8 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   EXPECT_TRUE(outputs[1].empty());
   ASSERT_TRUE(fs::exists(cachePath));
   EXPECT_GT(fs::file_size(cachePath), 0u);
+  EXPECT_FALSE(fs::exists(cachePath.string() + ".tmp"))
+      << "batch save must promote the temp file and remove the sidecar";
 
   auto cachedFollowup = makePrompt("Say cached follow up.");
   cachedFollowup.cacheKey = cachePath.string();
@@ -676,8 +976,220 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
   ASSERT_EQ(followupOutputs.size(), 2u);
   EXPECT_FALSE(followupOutputs[0].empty());
   EXPECT_FALSE(followupOutputs[1].empty());
+  EXPECT_FALSE(fs::exists(cachePath.string() + ".tmp"));
 
   fs::remove(cachePath);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheBackingStoreSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir =
+      fs::temp_directory_path() / ("batch-deleted-cache-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch cache setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> removedBackingStore = false;
+  auto followup = makePrompt("Write several words about the cached setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cacheDir,
+                             &removedBackingStore](const std::string&) {
+    if (!removedBackingStore.exchange(true)) {
+      fs::remove_all(cacheDir);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(removedBackingStore.load())
+      << "test setup: generation did not reach the deletion callback";
+  EXPECT_FALSE(fs::exists(cacheDir))
+      << "stale deleted cache directory must not be recreated at terminal save";
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDeletedPersistedCacheFileSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir = fs::temp_directory_path() /
+                            ("batch-deleted-cache-file-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch cache file setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> removedCacheFile = false;
+  auto followup =
+      makePrompt("Write several words about the cached file setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &removedCacheFile](const std::string&) {
+    if (!removedCacheFile.exchange(true)) {
+      fs::remove(cachePath);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(removedCacheFile.load())
+      << "test setup: generation did not reach the deletion callback";
+  EXPECT_TRUE(fs::exists(cacheDir))
+      << "test setup: parent directory should remain present";
+  EXPECT_FALSE(fs::exists(cachePath))
+      << "stale deleted cache file must not be recreated at terminal save";
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchEmptyPersistedCacheFileSkipsTerminalSave) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cacheDir =
+      fs::temp_directory_path() / ("batch-empty-cache-file-" + uniqueTestId());
+  const fs::path cachePath = cacheDir / "session.bin";
+
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+
+  auto seed = makePrompt("Remember this batch empty cache setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> truncatedCacheFile = false;
+  auto followup =
+      makePrompt("Write several words about the cached empty file setup.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &truncatedCacheFile](const std::string&) {
+    if (!truncatedCacheFile.exchange(true)) {
+      std::ofstream truncate(cachePath, std::ios::trunc);
+    }
+  };
+
+  auto outputs = model->processPromptBatch(
+      std::vector<LlamaModel::Prompt>{std::move(followup)});
+
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(truncatedCacheFile.load())
+      << "test setup: generation did not reach the truncation callback";
+  ASSERT_TRUE(fs::exists(cachePath));
+  EXPECT_EQ(fs::file_size(cachePath), 0u)
+      << "stale empty cache file must not be rewritten at terminal save";
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchUnsavedMissingParentSaveStillThrows) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path badCacheDir =
+      fs::temp_directory_path() / ("batch-no-such-dir-" + uniqueTestId());
+  const fs::path badCachePath = badCacheDir / "session.bin";
+
+  fs::remove_all(badCacheDir);
+
+  auto prompt = makePrompt("Write a few words about batch cache failures.");
+  prompt.cacheKey = badCachePath.string();
+  prompt.saveCacheToDisk = true;
+
+  try {
+    model->processPromptBatch(
+        std::vector<LlamaModel::Prompt>{std::move(prompt)});
+    FAIL() << "expected UnableToSaveSessionFile throw";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
+  }
+
+  EXPECT_FALSE(fs::exists(badCacheDir));
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchPersistedCachePathReplacedByDirectoryStillThrows) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-cache-replaced-by-dir-" + uniqueTestId() + ".bin");
+
+  fs::remove_all(cachePath);
+
+  auto seed = makePrompt("Remember this directory replacement setup.");
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  model->processPromptBatch(std::vector<LlamaModel::Prompt>{std::move(seed)});
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  std::atomic<bool> replacedWithDirectory = false;
+  auto followup =
+      makePrompt("Write several words after loading the batch cache.");
+  followup.cacheKey = cachePath.string();
+  followup.saveCacheToDisk = true;
+  followup.outputCallback = [&cachePath,
+                             &replacedWithDirectory](const std::string&) {
+    if (!replacedWithDirectory.exchange(true)) {
+      fs::remove(cachePath);
+      fs::create_directory(cachePath);
+    }
+  };
+
+  try {
+    model->processPromptBatch(
+        std::vector<LlamaModel::Prompt>{std::move(followup)});
+    FAIL() << "expected UnableToSaveSessionFile throw";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        std::string(e.codeString()).find("UnableToSaveSessionFile"),
+        std::string::npos);
+  }
+
+  EXPECT_TRUE(replacedWithDirectory.load())
+      << "test setup: generation did not replace the cache path";
+  EXPECT_TRUE(fs::is_directory(cachePath));
+  fs::remove_all(cachePath);
 }
 
 /// Two prompts in ONE batch that save to the SAME non-empty `cacheKey`
@@ -1055,12 +1567,12 @@ TEST_F(
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
-  auto* scheduler = model->batchSchedulerForTesting();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr)
-      << "batchSchedulerForTesting() returned null -- is parallel >= 2?";
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
 
-  scheduler->setDecodeFuncForTesting(
-      [](llama_context*, llama_batch&) -> int { return 1; });
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [](llama_context*, llama_batch&) -> int { return 1; });
 
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("What is the capital of France? Answer in one word."),
@@ -1078,10 +1590,174 @@ TEST_F(
   }
 }
 
+/// Reproduce bug: A per-slot cancel that lands while `stepLocked()` has
+/// released the scheduler mutex (around media eval / llama_decode) is recorded
+/// in `pendingSlotCancels_` and only applied at the *next* worker-loop top.
+/// Before the fix, the same step then advances/samples the still-present slot,
+/// so the cancelled sequence streams one more token after cancellation. The
+/// reviewer flagged the media-eval window; the decode window shares the exact
+/// defect and is the one reachable deterministically here, since the cancel is
+/// issued from inside the injected decode stub -- which runs in that very
+/// unlock window. The RAII relock-guard fix reconciles deferred teardown on
+/// every lock reacquisition, closing both windows.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelInUnlockWindowDoesNotStreamAfterTeardown) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // Second admitted prompt; admission is in submission order so it owns
+  // seqId 1.
+  constexpr uint32_t kCancelSeqId = 1;
+
+  std::atomic<int> seqBTokens = 0;
+  std::atomic<bool> readyToCancel = false;
+  std::atomic<bool> cancelIssued = false;
+  std::atomic<bool> streamedAfterCancel = false;
+
+  // The stub runs while stepLocked() holds no lock -- the same window a
+  // concurrent caller's cancel() would hit. Issuing the cancel here records it
+  // as deferred teardown, then delegates to the real decode so generation
+  // continues.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued](
+          llama_context* ctx, llama_batch& batch) {
+        if (readyToCancel.load() && !cancelIssued.exchange(true)) {
+          scheduler->cancel(kCancelSeqId);
+        }
+        return llama_decode(ctx, batch);
+      });
+
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  // Arm the cancel only once seqId 1 is actively generating (>= 2 streamed
+  // tokens), so the step that observes the deferred cancel would otherwise
+  // sample and stream another token for it.
+  promptB.outputCallback = [&seqBTokens,
+                            &readyToCancel,
+                            &cancelIssued,
+                            &streamedAfterCancel](const std::string&) {
+    if (cancelIssued.load()) {
+      streamedAfterCancel.store(true);
+    }
+    if (seqBTokens.fetch_add(1) + 1 >= 2) {
+      readyToCancel.store(true);
+    }
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: seqId 1 never reached the cancel arming point";
+  EXPECT_FALSE(streamedAfterCancel.load())
+      << "DEFERRED-TEARDOWN LEAK: seqId " << kCancelSeqId
+      << " streamed a token after a cancel recorded during the decode unlock "
+         "window. stepLocked() advanced/sampled the slot before "
+         "applyDeferredTeardownLocked() ran; teardown must be reconciled on "
+         "lock reacquisition.";
+}
+
+/// A per-slot cancel runs the slot's driver teardown -- onCancel + saveCache --
+/// from the noexcept StepUnlockGuard destructor (a cancel issued in the decode
+/// unlock window is applied on lock reacquisition). When saveCache throws --
+/// here forced by an unwritable cacheKey -- the throw must be swallowed in
+/// place: before the fix it escaped the noexcept destructor and
+/// std::terminate'd the whole process. The batch must instead survive: the
+/// cancelled slot is freed, its group completes, and the sibling sequence still
+/// finishes normally.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    PerSlotCancelSwallowsThrowingDriverTeardown) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // Admission is in submission order, so the second prompt owns seqId 1.
+  constexpr uint32_t kCancelSeqId = 1;
+
+  std::atomic<int> seqBTokens = 0;
+  std::atomic<bool> readyToCancel = false;
+  std::atomic<bool> cancelIssued = false;
+  std::atomic<bool> cancelHitOccupied = false;
+
+  // Issue the cancel from inside the decode unlock window so its teardown runs
+  // in the StepUnlockGuard destructor, then delegate to the real decode so the
+  // surviving sequence keeps generating. Capture cancel()'s return: it is true
+  // only when seqId 1 was still occupied, i.e. the throwing teardown actually
+  // ran. Without it the test could pass vacuously when the slot finished first
+  // and the cancel was a no-op.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
+          llama_context* ctx, llama_batch& batch) {
+        if (readyToCancel.load() && !cancelIssued.exchange(true)) {
+          cancelHitOccupied.store(scheduler->cancel(kCancelSeqId));
+        }
+        return llama_decode(ctx, batch);
+      });
+
+  // cacheKey under a directory that does not exist: the atomic temp write
+  // cannot open cacheKey+".tmp", so TextLlmContext::saveCache throws on the
+  // cancel path.
+  const fs::path unwritable = fs::temp_directory_path() /
+                              ("no-such-dir-" + uniqueTestId()) / "cache.bin";
+  ASSERT_FALSE(fs::exists(unwritable.parent_path()))
+      << "precondition: the cacheKey's parent dir must be absent so saveCache "
+         "throws on the cancel path";
+
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  promptB.cacheKey = unwritable.string();
+  promptB.saveCacheToDisk = true;
+  // Arm the cancel as soon as seqId 1 streams its first token: the cancel then
+  // lands on the very next decode, leaving essentially no window for the slot
+  // to finish naturally first (which would instead hit the deliberately
+  // throwing normal-completion save path and fail the whole batch).
+  promptB.outputCallback = [&seqBTokens, &readyToCancel](const std::string&) {
+    seqBTokens.fetch_add(1);
+    readyToCancel.store(true);
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
+  // Returning from this call at all proves the throwing teardown did not
+  // std::terminate the process.
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: seqId 1 never reached the cancel arming point";
+  ASSERT_TRUE(cancelHitOccupied.load())
+      << "cancel must hit the still-occupied seqId 1 so the throwing saveCache "
+         "teardown actually runs; false means the slot finished first and the "
+         "teardown path was never exercised";
+  EXPECT_FALSE(outputs[0].empty())
+      << "sibling sequence (seqId 0) must finish normally despite the throwing "
+         "teardown on seqId 1";
+}
+
 /// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
 /// must slide (`contextSlides > 0`) and keep generating, like the
 /// single-prompt path does, instead of being hard-truncated at the window.
-/// `CacheTokens` must reflect the generated tokens, not just the prompt.
 ///
 /// The slide machinery reads the driver's `nPast_`, but during batched
 /// generation only the batcher's `Request::currentPos` advances; `nPast_`
@@ -1095,7 +1771,11 @@ TEST_F(
 /// the decode stub (`llama_n_ctx / parallel`). The prompt elicits an
 /// output long enough to cross the window; once enough pieces stream
 /// out to prove generation survived past it, the test cancels to bound
-/// the run.
+/// the run. The cancel rolls the driver's cache back to the pre-request
+/// cursor (this PR's cancel contract), so post-cancel `CacheTokens` is
+/// not a witness of "generation happened" any more; `contextSlides > 0`
+/// carries that invariant on its own — slides only fire when the
+/// sequence has advanced past the per-slot window.
 TEST_F(
     ContinuousBatchingIntegrationTest, BatchGenerationSlidesPastPerSlotWindow) {
   REQUIRE_MODEL(model_);
@@ -1106,11 +1786,11 @@ TEST_F(
   config_["n_discarded"] = "32";
   auto model = loadModel();
 
-  auto* scheduler = model->batchSchedulerForTesting();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
   std::atomic<size_t> perSlotWindow = 0;
-  scheduler->setDecodeFuncForTesting(
-      [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler, [&perSlotWindow](llama_context* ctx, llama_batch& batch) {
         perSlotWindow.store(static_cast<size_t>(llama_n_ctx(ctx)) / kParallel);
         return llama_decode(ctx, batch);
       });
@@ -1139,8 +1819,6 @@ TEST_F(
   const auto stats = model->runtimeStats();
   const double contextSlides =
       test_common::getStatValue(stats, "contextSlides");
-  const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
-  const double promptTokens = test_common::getStatValue(stats, "promptTokens");
 
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_FALSE(outputs[0].empty());
@@ -1148,9 +1826,210 @@ TEST_F(
       << "SLIDE NEVER FIRED: the sequence was truncated at the per-slot "
          "window instead of sliding; pieces emitted: "
       << pieces.load() << ", per-slot window: " << perSlotWindow.load();
-  EXPECT_GT(cacheTokens, promptTokens)
-      << "CacheTokens only counted the prompt (driver position frozen at "
-         "prefill); generated tokens are missing from the stat";
+}
+
+/// Cancel = "request never happened": `onCancel` rolls the driver's
+/// `nPast` back to the admission cursor (the warm baseline loaded from
+/// `cacheKey`), and `saveCacheForSlot` persists that rolled-back state.
+/// `CacheTokens` in the batch runtime stats must equal the warm baseline
+/// — not the transient peak reached mid-generation, and not zero from
+/// an over-rollback that wiped the baseline.
+///
+/// The scheduler resets its stats snapshot at admission whenever the
+/// queue is idle, so each `processPromptBatch` call reports CacheTokens
+/// for that batch alone. Prime a `cacheKey` with a short prefill, then
+/// run a baseline batch (finishes naturally) and a cancel batch on the
+/// same key. The cancel batch's `CacheTokens` must (a) be much smaller
+/// than the baseline (no peak leak) and (b) match the primer's value
+/// within a tiny tolerance (rollback lands exactly on the warm baseline).
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchCancelRestoresCacheToWarmBaseline) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  const fs::path cachePath = fs::temp_directory_path() /
+                             ("batch-cancel-warm-" + uniqueTestId() + ".bin");
+
+  auto primer = makePrompt("Remember these facts: the sky is blue.");
+  primer.prefill = true;
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
+  model->processPromptBatch(primeBatch);
+  ASSERT_TRUE(fs::exists(cachePath));
+  const double primeCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(primeCacheTokens, 0.0) << "prefill did not populate CacheTokens";
+
+  auto baseline = makePrompt("Say two short sentences about the sky.");
+  baseline.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> baselineBatch{std::move(baseline)};
+  auto baselineOutputs = model->processPromptBatch(baselineBatch);
+  ASSERT_EQ(baselineOutputs.size(), 1u);
+  EXPECT_FALSE(baselineOutputs[0].empty());
+  const double baselineCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(baselineCacheTokens, primeCacheTokens)
+      << "baseline batch did not grow past the warm baseline; test setup is "
+         "not exercising the peak-vs-rollback distinction";
+
+  std::atomic<bool> cancelIssued = false;
+  auto cancelPrompt = makePrompt("Say two short sentences about the sky.");
+  cancelPrompt.cacheKey = cachePath.string();
+  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
+    bool expected = false;
+    if (cancelIssued.compare_exchange_strong(expected, true)) {
+      model->cancel();
+    }
+  };
+  std::vector<LlamaModel::Prompt> cancelBatch{std::move(cancelPrompt)};
+  model->processPromptBatch(cancelBatch);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: cancel was never issued, the run finished naturally";
+  const double cancelledCacheTokens =
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
+
+  EXPECT_LT(cancelledCacheTokens, baselineCacheTokens)
+      << "cancelled batch reported CacheTokens=" << cancelledCacheTokens
+      << " >= baseline " << baselineCacheTokens
+      << "; pre-rollback peak is leaking into stats";
+  // Rollback must land exactly on the admission cursor. A tolerance of
+  // 1 absorbs any single-token accounting drift; anything larger points
+  // at either a stale peak (>> primeCacheTokens) or an over-rollback
+  // that wiped the warm baseline (== 0).
+  EXPECT_LE(std::abs(cancelledCacheTokens - primeCacheTokens), 1.0)
+      << "cancelled batch CacheTokens=" << cancelledCacheTokens
+      << " but warm baseline was " << primeCacheTokens
+      << "; rollback did not restore the admission cursor";
+
+  fs::remove(cachePath);
+}
+
+namespace {
+
+/// Read a file into a byte buffer for byte-for-byte comparison.
+/// Used by the "cache preserved on hard failure" test to prove the
+/// scheduler's error-recovery path does not overwrite the primed cache
+/// with an inconsistent post-throw state.
+std::vector<uint8_t> readFileBytes(const fs::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(in), {}};
+}
+
+} // namespace
+
+/// Error-recovery cancel must not save a cache from an unhealthy driver
+/// state. When a decode fails mid-batch, `failGroupLocked` tears each
+/// affected slot down through `cancelSlotLocked(SaveCachePolicy::Skip)`;
+/// the graceful-cancel path (user-issued `cancel()`) still passes the
+/// default `Save`. This test forces the decode-error path by injecting a
+/// failing `decodeFunc_` while a batch is in flight against a primed
+/// `cacheKey`, then asserts the on-disk cache is preserved.
+///
+/// The strong invariant is "saveCache did not run", not "bytes are
+/// equal": for the plain decode-error path, `onCancel` rolls state
+/// cleanly back to `preRequestNPast_` / `preRequestFirstMsgTokens_`
+/// captured at admission, and `llama_state_seq_save_file` writes
+/// deterministic metadata + a truncated KV tail, so a fresh save from
+/// the rolled-back state would very likely produce byte-identical
+/// output on this path. What that would still change is the file's
+/// `last_write_time`, so mtime is the discriminating assertion here:
+/// under the old always-save code `cancelSlotLocked` would touch the
+/// file (identical bytes, fresh mtime); under the fix it never opens
+/// it. Byte equality is kept as a secondary regression guard for the
+/// class of bugs where a driver whose accounting was reset to zero
+/// (e.g. hybrid-recurrent compaction throw path) is subsequently
+/// serialized on top of the warm baseline.
+///
+/// The `cancelSlotLocked(SaveCachePolicy::Save)` graceful contract is
+/// already covered by `BatchCancelRestoresCacheToWarmBaseline`: it
+/// primes a cache, cancels via `model->cancel()`, and asserts the
+/// rolled-back state was persisted.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchDecodeErrorDoesNotOverwritePrimedCache) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "32";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-decode-err-preserve-" + uniqueTestId() + ".bin");
+
+  // Prime the cache with a valid warm baseline (runs against the real
+  // decode; the failure injection happens only for the follow-up batch).
+  auto primer = makePrompt("Remember these facts: the ocean is deep.");
+  primer.prefill = true;
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
+  model->processPromptBatch(primeBatch);
+  ASSERT_TRUE(fs::exists(cachePath))
+      << "test setup: primer did not write the cache file";
+  const auto primedBytes = readFileBytes(cachePath);
+  ASSERT_FALSE(primedBytes.empty()) << "test setup: primed cache file is empty";
+  const auto primedMtime = fs::last_write_time(cachePath);
+
+  // Sleep just past the filesystem mtime resolution so any subsequent
+  // rewrite of the cache is guaranteed to bump `last_write_time`
+  // (POSIX allows 1s granularity on some filesystems; a generous
+  // margin here keeps the assertion reliable across platforms without
+  // being long enough to affect test wall time meaningfully).
+  std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+
+  // Any decode returning non-zero drives the scheduler through
+  // stepLocked -> markAllFinished(DecodeError) -> failGroupLocked ->
+  // cancelSlotLocked(..., Skip). That is the exact error-recovery leg
+  // the SaveCachePolicy::Skip fix protects.
+  ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+      *scheduler,
+      [](llama_context* /*ctx*/, llama_batch& /*b*/) { return -1; });
+
+  auto failing = makePrompt("Say two short sentences about the ocean.");
+  failing.cacheKey = cachePath.string();
+  failing.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> failingBatch{std::move(failing)};
+
+  // The batch must surface the decode error rather than complete
+  // silently: if it does complete, `saveCacheForSlot` would fire on the
+  // graceful path and this test would degrade into checking rollback
+  // fidelity rather than the "no save on error" invariant.
+  EXPECT_ANY_THROW({ (void)model->processPromptBatch(failingBatch); })
+      << "decode-error batch must propagate the failure; without the throw "
+         "the error-recovery leg is not exercised";
+
+  // Primary invariant: `saveCacheForSlot` never ran on the error
+  // recovery leg. `llama_state_seq_save_file` truncates + rewrites,
+  // so a call — even one that writes the same bytes — bumps mtime.
+  // GTest cannot stream `file_time_type` on the target SDK, so wrap
+  // the comparison in `EXPECT_TRUE` and surface the mtime deltas
+  // explicitly in the failure message.
+  const auto postFailMtime = fs::last_write_time(cachePath);
+  EXPECT_TRUE(postFailMtime == primedMtime)
+      << "CACHE FILE mtime CHANGED on error recovery: saveCacheForSlot ran "
+         "and rewrote the primed cache during a failed batch. mtime delta="
+      << std::chrono::duration_cast<std::chrono::nanoseconds>(
+             postFailMtime - primedMtime)
+             .count()
+      << "ns. cancelSlotLocked must pass SaveCachePolicy::Skip on the "
+         "error-recovery leg so the last known-good cache is preserved.";
+
+  // Secondary regression guard: even if a future save ever became a
+  // no-op-when-bytes-match, this still catches the class of bugs
+  // where a driver reset (e.g. hybrid-recurrent compaction throw
+  // zeroing nPast_) leaks into an on-disk overwrite of the warm
+  // baseline.
+  const auto postFailBytes = readFileBytes(cachePath);
+  EXPECT_EQ(postFailBytes, primedBytes)
+      << "PRIMED CACHE BYTES DIVERGED after error recovery: the failing "
+         "batch's post-throw state overwrote the warm baseline on disk.";
+
+  fs::remove(cachePath);
 }
 
 namespace {
@@ -1168,8 +2047,8 @@ public:
       qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
           scheduler)
       : model_(model) {
-    scheduler.setDecodeFuncForTesting(
-        [this](llama_context* ctx, llama_batch& batch) {
+    ContinuousBatchSchedulerTestPeer::setDecodeFunc(
+        scheduler, [this](llama_context* ctx, llama_batch& batch) {
           const int rc = llama_decode(ctx, batch);
           if (decodeCalls_.fetch_add(1) == 0) {
             decodeInFlight_.store(true);
@@ -1234,7 +2113,7 @@ TEST_F(
     CancelSeqIsNotAppliedWhileDecodeInFlight) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto* scheduler = model->batchSchedulerForTesting();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
 
   BlockedDecodeHarness harness(*model, *scheduler);
@@ -1261,7 +2140,7 @@ TEST_F(
     ContinuousBatchingIntegrationTest, ClearIsNotAppliedWhileDecodeInFlight) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
-  auto* scheduler = model->batchSchedulerForTesting();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
   ASSERT_NE(scheduler, nullptr);
 
   BlockedDecodeHarness harness(*model, *scheduler);
@@ -1279,4 +2158,536 @@ TEST_F(
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_EQ(scheduler->numActive(), 0u)
       << "deferred clear was never applied after the decode finished";
+}
+
+namespace {
+
+/// Reads the elephant.jpg VLM fixture from the package `media/` dir. The
+/// C++ tests run either from the package root or from build/test/unit, so
+/// both relative roots are probed (mirroring BaseTestModelPath). The batch
+/// media path takes the image as raw bytes in Prompt::media; the chat input
+/// carries a matching media marker message so tokenization lines up.
+std::vector<uint8_t> readElephantImage() {
+  for (const char* candidate :
+       {"../../../media/elephant.jpg", "media/elephant.jpg"}) {
+    std::ifstream file(candidate, std::ios::binary);
+    if (file) {
+      return {
+          std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>()};
+    }
+  }
+  return {};
+}
+
+} // namespace
+
+/// A media-segment eval that throws mid-batch must fail only its own
+/// request and leave the scheduler servicing everything else.
+/// serviceNextMediaSegmentLocked wraps evalMediaSegment in try/catch and
+/// routes a throw to failSlotLocked (which fails just that slot's group);
+/// the worker loop never sees the exception, so sibling requests in other
+/// groups keep running and the scheduler stays alive.
+///
+/// Without the eval-media seam (ContinuousBatchSchedulerTestPeer::
+/// setEvalMediaFunc) this path was unverifiable: the
+/// scheduler builds its own real MtmdLlmContext drivers, so there was no
+/// seam to force one slot's evalMediaSegment to throw short of corrupting a
+/// real image. The injected throw stands in for a real mtmd encode failure.
+TEST_F(
+    ContinuousBatchingIntegrationTest, MediaEvalFailureFailsOnlyThatRequest) {
+  const std::string vlmPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  const std::string mmprojPath = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "SmolVLM multimodal model/projection not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  // Long generation so the text slot is still decoding when the media barrier
+  // throws; widened ctx_size avoids an unrelated context-overflow stop.
+  cfg["ctx_size"] = "2048";
+  cfg["n_predict"] = "200";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // Force every media eval to throw (stands in for an mtmd encode failure);
+  // capture whether the text sibling is still in flight -- the only state in
+  // which per-slot vs whole-scheduler failure is observable.
+  std::atomic<bool> textFinished = false;
+  std::atomic<bool> mediaEvalInvoked = false;
+  std::atomic<bool> textRunningAtThrow = false;
+  ContinuousBatchSchedulerTestPeer::setEvalMediaFunc(
+      *scheduler, [&](SequenceDriver&, size_t, llama_pos) -> llama_pos {
+        mediaEvalInvoked.store(true);
+        textRunningAtThrow.store(!textFinished.load());
+        throw std::runtime_error("injected media-eval failure");
+      });
+
+  // The marker message (empty content) makes formatPrompt insert a media
+  // marker into the chat without loading bytes onto the shared context; the
+  // per-slot driver loads the actual image from Prompt::media.
+  LlamaModel::Prompt mediaPrompt;
+  mediaPrompt.input = R"([{"role":"user","type":"media","content":""},)"
+                      R"({"role":"user","content":"What is in this image?"}])";
+  mediaPrompt.media.push_back(image);
+
+  // Text request (own group) started first with a head start, so it is
+  // provably in flight when the media slot's eval throws.
+  std::atomic<size_t> textPieces = 0;
+  auto textPrompt = makePrompt(
+      "Write a long, detailed essay about the history of mathematics.");
+  textPrompt.outputCallback = [&textPieces](const std::string&) {
+    textPieces.fetch_add(1);
+  };
+  auto textFuture = std::async(std::launch::async, [&] {
+    std::vector<LlamaModel::Prompt> prompts{textPrompt};
+    auto outputs = model->processPromptBatch(prompts);
+    textFinished.store(true);
+    return outputs;
+  });
+  // Wait until the text slot is actively generating before admitting the
+  // media request, so the media barrier throws mid-generation. Bounded so a
+  // text request that dies early fails the test instead of hanging it.
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(30);
+  while (textPieces.load() < 2) {
+    ASSERT_LT(std::chrono::steady_clock::now(), deadline)
+        << "text slot never started generating; cannot exercise the "
+           "media-eval failure overlap";
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+
+  auto mediaFuture = std::async(std::launch::async, [&] {
+    std::vector<LlamaModel::Prompt> prompts{mediaPrompt};
+    return model->processPromptBatch(prompts);
+  });
+
+  EXPECT_THROW(mediaFuture.get(), std::exception)
+      << "media-eval throw must fail the offending request";
+  ASSERT_TRUE(mediaEvalInvoked.load())
+      << "media request failed before reaching the injected eval; the "
+         "media-eval failure path was never exercised";
+
+  bool textThrew = false;
+  std::vector<std::string> textOutputs;
+  try {
+    textOutputs = textFuture.get();
+  } catch (...) {
+    textThrew = true;
+  }
+
+  // Skip loudly (not a vacuous pass) if timing ever changes so the text slot
+  // finished before the throw.
+  if (!textRunningAtThrow.load()) {
+    GTEST_SKIP() << "text slot had already stopped generating when the media "
+                    "barrier threw; overlap not established, so per-slot vs "
+                    "whole-scheduler failure is indistinguishable on this run";
+  }
+
+  // Text request (own group) must survive: failSlotLocked fails only the
+  // media group.
+  ASSERT_FALSE(textThrew)
+      << "the in-flight text request was killed by the media failure; "
+         "failSlotLocked must fail only the offending group and leave the "
+         "scheduler running";
+  ASSERT_EQ(textOutputs.size(), 1u);
+  EXPECT_FALSE(textOutputs[0].empty());
+}
+
+// GGSQ unification (sub-tasks 2 + 3): the batch multimodal path must support
+// prompt caching on GGSQ. Today MtmdLlmContext::saveCache throws, so a batched
+// media prompt with saveCacheToDisk writes no cache and this fails. The fixture
+// is Qwen3.5 (M-RoPE, n_pos_per_embd()==4) so a successful save+reload round
+// trip actually exercises per-cell llama_kv_cell_ext (x/y) restore — SmolVLM
+// (n_pos_per_embd()==1) could not. Its image prefill commits far more KV cells
+// (~2899) than positions (~90), so the round trip really exercises the M-RoPE
+// per-cell x/y metadata. The reload pass does not just assert the cache loads:
+// it asks a follow-up that depends on the cached image and checks the answer
+// still names the image subject, so a cache that reloads but restores
+// corrupt/incomplete image KV fails. The fixture is fetched on every platform
+// by scripts/download-unit-test-models.js; GTEST_SKIP when it is absent.
+TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  const fs::path cachePath = fs::temp_directory_path() /
+                             ("qwen35-mrope-cache-" + uniqueTestId() + ".bin");
+
+  auto makeModel = [&] {
+    std::string path = vlmPath;
+    std::string projection = mmprojPath;
+    auto cfg = config_;
+    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE: cells >>
+    // positions), so the round trip needs the 4096 the Qwen3.5 mtmd unit tests
+    // use.
+    cfg["ctx_size"] = "4096";
+    // Qwen3.5 is a reasoning model; without this it spends the whole n_predict
+    // budget on chain-of-thought and never reaches the one-word answer. 0
+    // disables thinking so the subject keyword fits, as the VLM perf tests do.
+    cfg["reasoning-budget"] = "0";
+    cfg["n_predict"] = "32";
+    auto m = std::make_unique<LlamaModel>(
+        std::move(path), std::move(projection), std::move(cfg));
+    m->waitForLoadInitialization();
+    return m;
+  };
+
+  auto makeMediaPrompt = [&]() {
+    LlamaModel::Prompt p;
+    p.input = R"([{"role":"user","type":"media","content":""},)"
+              R"({"role":"user","content":"What is in this image?"}])";
+    p.media.push_back(image);
+    return p;
+  };
+
+  // Save pass: prefill the image into a slot and persist the per-slot cache.
+  auto saveModel = makeModel();
+  ASSERT_TRUE(saveModel->isLoaded());
+  auto savePrompt = makeMediaPrompt();
+  savePrompt.prefill = true;
+  savePrompt.cacheKey = cachePath.string();
+  savePrompt.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> savePrompts;
+  savePrompts.push_back(std::move(savePrompt));
+
+  bool saveThrew = false;
+  std::string saveErr;
+  try {
+    saveModel->processPromptBatch(savePrompts);
+  } catch (const std::exception& e) {
+    saveThrew = true;
+    saveErr = e.what();
+  } catch (...) {
+    saveThrew = true;
+    saveErr = "<non-std exception>";
+  }
+  EXPECT_FALSE(saveThrew) << "batch MTMD cache save threw: " << saveErr;
+  ASSERT_TRUE(fs::exists(cachePath))
+      << "batch MTMD path persisted no cache file";
+  EXPECT_GT(fs::file_size(cachePath), 0u);
+
+  // The persisted cache must be the per-sequence GGSQ format shared with the
+  // text path so it round-trips through the same loader.
+  {
+    std::ifstream file(cachePath, std::ios::binary);
+    ASSERT_TRUE(file.is_open());
+    std::uint32_t magic = 0;
+    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+    EXPECT_EQ(magic, static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC));
+  }
+
+  // Reload pass: a fresh model loads the cached image context, then we ask a
+  // follow-up that can ONLY be answered from the cached image -- no image is
+  // re-supplied on this turn. A non-empty reply is not enough: a corrupt
+  // M-RoPE KV (wrong per-cell kv_cell_ext x/y positions) still reloads and
+  // still generates, just garbage. So we assert the answer actually names the
+  // elephant in the fixture, proving the restored image context is
+  // semantically intact -- not merely present. If only the text context were
+  // restored (image KV missing), the model has nothing to describe and cannot
+  // produce "elephant".
+  auto reloadModel = makeModel();
+  ASSERT_TRUE(reloadModel->isLoaded());
+  auto followup =
+      makePrompt("What animal was in the image? Answer with one word.");
+  followup.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> followupPrompts;
+  followupPrompts.push_back(std::move(followup));
+
+  std::vector<std::string> followupOutputs;
+  bool reloadThrew = false;
+  try {
+    followupOutputs = reloadModel->processPromptBatch(followupPrompts);
+  } catch (...) {
+    reloadThrew = true;
+  }
+  EXPECT_FALSE(reloadThrew) << "batch MTMD cache reload threw";
+  ASSERT_EQ(followupOutputs.size(), 1u);
+  ASSERT_FALSE(followupOutputs[0].empty())
+      << "reload from MTMD cache produced no output; M-RoPE KV not restored";
+  EXPECT_TRUE(containsCaseInsensitive(followupOutputs[0], "elephant"))
+      << "follow-up could not name the cached image's subject from the "
+         "reloaded cache; the M-RoPE image KV is missing or corrupt (e.g. only "
+         "text context was restored, or kv_cell_ext x/y positions are wrong). "
+         "Got: "
+      << followupOutputs[0];
+
+  std::error_code ec;
+  fs::remove(cachePath, ec);
+}
+
+/// Regression for PR #2813's MTMD continuous-batching path. Text slots already
+/// funnel `onPrefillComplete` / `onLogitsReady` / `onGenerationFinished`
+/// through the reasoning compactor lifecycle; multimodal slots must do the
+/// same or `remove_thinking_from_context` becomes a silent no-op under
+/// `parallel > 1`. Two media prompts are submitted so the regression covers
+/// multiple MTMD slots coexisting in the scheduler, not just the scheduler path
+/// for a single slot.
+///
+/// Platform gate: mirrors `TwoPromptBatchQwen35HybridDropsThinkBlocks`. Linux
+/// and Windows CI runners do not reliably close Qwen3.5's reasoning span under
+/// greedy CPU decode; with the strict compaction contract that correctly
+/// hard-fails before this test can reach its post-run skip. Keep this
+/// end-to-end closed-span assertion on Apple Silicon, where the fixture is
+/// deterministic enough for the compactor to fire.
+TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
+#if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
+  GTEST_SKIP() << "Qwen3.5 MTMD closed `</think>` is not deterministic on "
+                  "non-Apple-Silicon CI runners (CPU backend); see comment.";
+#endif
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  cfg["ctx_size"] = "4096";
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "1024";
+  cfg["temp"] = "0";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr)
+      << "test requires the continuous-batching scheduler";
+
+  auto makeMediaPrompt = [&](const std::string& question) {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        R"([{"role":"system","content":"Answer with just one word: yes or no."},)"
+        R"({"role":"user","type":"media","content":""},)"
+        R"({"role":"user","content":")" +
+        question + R"("}])";
+    prompt.media.push_back(image);
+    prompt.generationParams.remove_thinking_from_context = true;
+    return prompt;
+  };
+
+  std::vector<LlamaModel::Prompt> prompts;
+  prompts.push_back(makeMediaPrompt("Is there fruit in this image?"));
+  prompts.push_back(makeMediaPrompt("Is there an animal in this image?"));
+
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({ outputs = model->processPromptBatch(prompts); });
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty())
+      << "first MTMD slot compaction must not break generation";
+  EXPECT_FALSE(outputs[1].empty())
+      << "batch MTMD compaction must not break generation";
+
+  const auto stats = model->runtimeStats();
+  const double discards =
+      test_common::getStatValue(stats, "thinkingBlockDiscards");
+  SCOPED_TRACE(
+      "thinkingBlockDiscards=" + std::to_string(discards) +
+      ", output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
+      ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
+
+  const bool reasoningClosed =
+      outputs[0].find("</think>") != std::string::npos ||
+      outputs[1].find("</think>") != std::string::npos;
+  if (!reasoningClosed) {
+    GTEST_SKIP() << "Qwen3.5 multimodal batch did not close </think> within "
+                    "n_predict=1024 — discard assertion skipped";
+  }
+  EXPECT_GE(discards, 1.0)
+      << "Qwen3.5 multimodal batch with remove_thinking_from_context=true "
+         "must compact at least one thinking block once </think> lands";
+}
+
+/// MTMD + hybrid (Qwen3.5 M-RoPE + recurrent memory) is the hardest cancel
+/// path: partial `seq_rm` is rejected by recurrent memory, so
+/// `cancelGenerationCleanup` restores a full sequence-state snapshot instead
+/// of tail-removing tokens. The single-prompt path captures that snapshot
+/// mid-`evalMessageWithTools`; the batch path never runs that site, so
+/// `snapshotPreRequestRollbackAnchor` (called by the scheduler at admission
+/// right after `snapshotPreRequestCursor`) must take it. If it doesn't,
+/// `hasPrefillEntry()` returns false at cancel time,
+/// `cancelGenerationCleanup` silently does nothing, and `CacheTokens` still
+/// reports the transient peak — same failure mode as the text case, just
+/// wearing a different mask.
+///
+/// Structure mirrors `BatchCancelRestoresCacheToWarmBaseline` but with an
+/// image primer (the only way to exercise M-RoPE per-cell KV in the cache
+/// snapshot). Each phase runs on a fresh model to isolate per-batch stats.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdHybridCancelRestoresCacheToWarmBaseline) {
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  const std::vector<uint8_t> image = readElephantImage();
+  ASSERT_FALSE(image.empty()) << "elephant.jpg media fixture not found";
+
+  const fs::path cachePath = fs::temp_directory_path() /
+                             ("mtmd-hybrid-cancel-" + uniqueTestId() + ".bin");
+
+  auto makeModel = [&] {
+    std::string path = vlmPath;
+    std::string projection = mmprojPath;
+    auto cfg = config_;
+    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE cells >>
+    // positions); 4096 is the minimum the Qwen3.5 mtmd unit tests use.
+    cfg["ctx_size"] = "4096";
+    // Reasoning model; disable thinking so generation reaches user-visible
+    // tokens fast enough for the outputCallback cancel to fire.
+    cfg["reasoning-budget"] = "0";
+    cfg["n_predict"] = "32";
+    auto m = std::make_unique<LlamaModel>(
+        std::move(path), std::move(projection), std::move(cfg));
+    m->waitForLoadInitialization();
+    return m;
+  };
+
+  auto primer = [&] {
+    LlamaModel::Prompt p;
+    p.input = R"([{"role":"user","type":"media","content":""},)"
+              R"({"role":"user","content":"Describe this image."}])";
+    p.media.push_back(image);
+    p.prefill = true;
+    p.cacheKey = cachePath.string();
+    p.saveCacheToDisk = true;
+    return p;
+  }();
+
+  auto primeModel = makeModel();
+  ASSERT_TRUE(primeModel->isLoaded());
+  std::vector<LlamaModel::Prompt> primeBatch;
+  primeBatch.push_back(std::move(primer));
+  primeModel->processPromptBatch(primeBatch);
+  ASSERT_TRUE(fs::exists(cachePath));
+  const double primeCacheTokens =
+      test_common::getStatValue(primeModel->runtimeStats(), "CacheTokens");
+  ASSERT_GT(primeCacheTokens, 0.0)
+      << "image prefill did not populate CacheTokens";
+
+  auto baselineModel = makeModel();
+  ASSERT_TRUE(baselineModel->isLoaded());
+  auto baseline = makePrompt("Continue the description with a short sentence.");
+  baseline.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> baselineBatch;
+  baselineBatch.push_back(std::move(baseline));
+  auto baselineOutputs = baselineModel->processPromptBatch(baselineBatch);
+  ASSERT_EQ(baselineOutputs.size(), 1u);
+  EXPECT_FALSE(baselineOutputs[0].empty());
+  const double baselineCacheTokens =
+      test_common::getStatValue(baselineModel->runtimeStats(), "CacheTokens");
+  ASSERT_GT(baselineCacheTokens, primeCacheTokens)
+      << "baseline batch did not grow past the warm baseline; test setup "
+         "is not exercising the peak-vs-rollback distinction";
+
+  auto cancelModel = makeModel();
+  ASSERT_TRUE(cancelModel->isLoaded());
+  std::atomic<bool> cancelIssued = false;
+  auto cancelPrompt =
+      makePrompt("Continue the description with a short sentence.");
+  cancelPrompt.cacheKey = cachePath.string();
+  cancelPrompt.outputCallback = [&cancelModel,
+                                 &cancelIssued](const std::string&) {
+    bool expected = false;
+    if (cancelIssued.compare_exchange_strong(expected, true)) {
+      cancelModel->cancel();
+    }
+  };
+  std::vector<LlamaModel::Prompt> cancelBatch;
+  cancelBatch.push_back(std::move(cancelPrompt));
+  cancelModel->processPromptBatch(cancelBatch);
+  ASSERT_TRUE(cancelIssued.load())
+      << "test setup: cancel was never issued, the run finished naturally";
+  const double cancelledCacheTokens =
+      test_common::getStatValue(cancelModel->runtimeStats(), "CacheTokens");
+
+  EXPECT_LT(cancelledCacheTokens, baselineCacheTokens)
+      << "cancelled batch reported CacheTokens=" << cancelledCacheTokens
+      << " >= baseline " << baselineCacheTokens
+      << "; pre-rollback peak is leaking into stats";
+  // Rollback must land on the admission cursor. If the batch-path
+  // prefill-entry snapshot is missing (the bug this test guards),
+  // `cancelGenerationCleanup` is a silent no-op on hybrid and CacheTokens
+  // stays at peak, blowing this assertion.
+  EXPECT_LE(std::abs(cancelledCacheTokens - primeCacheTokens), 1.0)
+      << "cancelled batch CacheTokens=" << cancelledCacheTokens
+      << " but warm baseline was " << primeCacheTokens
+      << "; hybrid batch rollback did not restore the admission cursor "
+         "(the prefill-entry snapshot at admission is missing or its "
+         "restore short-read)";
+
+  std::error_code ec2;
+  fs::remove(cachePath, ec2);
+}
+
+// GGSQ unification (sub-task 3): four metadata fields everywhere. The
+// single-prompt CacheManager persists all four fields; the text batch path must
+// read them too, otherwise a single-prompt-saved cache cannot be resumed in
+// batch -- llama_state_seq_load_file rejects the file ("token count exceeded
+// capacity") when its four stored tokens exceed a two-field reader. This proves
+// the shared format actually round-trips across both paths.
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchTextLoadsFourFieldSinglePromptCache) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path cachePath =
+      fs::temp_directory_path() / ("xpath-cache-" + uniqueTestId() + ".bin");
+
+  // Single-prompt save -> CacheManager writes GGSQ with all four fields.
+  auto savePrompt = makePrompt("The capital of France is Paris.");
+  savePrompt.prefill = true;
+  savePrompt.cacheKey = cachePath.string();
+  savePrompt.saveCacheToDisk = true;
+  ASSERT_NO_THROW(model->processPrompt(savePrompt));
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  // Batch text load of that same four-field file via the per-slot path.
+  auto loadPrompt = makePrompt("Name that capital again in one word.");
+  loadPrompt.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> prompts;
+  prompts.push_back(std::move(loadPrompt));
+
+  std::vector<std::string> outputs;
+  std::string err;
+  try {
+    outputs = model->processPromptBatch(prompts);
+  } catch (const std::exception& e) {
+    err = e.what();
+  }
+  EXPECT_TRUE(err.empty())
+      << "batch text path could not load the four-field single-prompt cache: "
+      << err;
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+
+  std::error_code ec;
+  fs::remove(cachePath, ec);
 }

@@ -5,11 +5,23 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'clipVision', 'esrgan']
+const COMPANION_FILE_KEYS = [
+  // Wan 2.1 / 2.2
+  'highNoiseDiffusionModel',
+  't5Xxl',
+  'vae',
+  'clipVision',
+  'esrgan',
+  // LTX-2 (LTXAV): Gemma text encoder (llm), audio VAE, embedding connectors.
+  // `vae` is reused for the LTX video VAE.
+  'llm',
+  'audioVae',
+  'embeddingsConnectors'
+]
 
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid'])
 
-function assertAbsolute (key, value) {
+function assertAbsolute(key, value) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`files.${key} must be an absolute path string`)
   }
@@ -29,21 +41,35 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // visible quality breakdown / repetition. We don't reject above 81 because
 // larger Wan variants (14B, future checkpoints) may extend that range, but
 // the error message points users to the recommended set.
-function validateVideoFrames (n) {
+function validateVideoFrames(n, isLtx = false) {
   // Two distinct error classes: shape (must be an integer) vs. value
-  // (the 4*k+1 / >= 5 invariant). Tests rely on these messages staying
+  // (the frame-count invariant). Tests rely on these messages staying
   // separable; merging them obscures which one tripped.
+  //
+  // Wan 2.1 / 2.2: (4*k + 1), k >= 1.  LTX-2: (8*k + 1), k >= 1, max 257
+  // (the LTX latent temporal packing factor is 8, not 4).
+  const factor = isLtx ? 8 : 4
+  const min = factor + 1
   if (!Number.isInteger(n)) {
     throw new Error(
-      `video_frames must be an integer of the form (4*k + 1) with k >= 1. Got: ${n}`
+      `video_frames must be an integer of the form (${factor}*k + 1) with k >= 1. Got: ${n}`
     )
+  }
+  if (isLtx) {
+    if (n < min || (n - 1) % 8 !== 0 || n > 257) {
+      throw new Error(
+        'LTX-2 video_frames must be an integer of the form (8*k + 1) in ' +
+          `[9, 257] (9, 17, 25, 33, ..., 257). Got: ${n}`
+      )
+    }
+    return
   }
   if (n < 5 || (n - 1) % 4 !== 0) {
     throw new Error(
       'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
-      'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
-      '57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ' +
-      `Got: ${n}`
+        'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
+        '57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ' +
+        `Got: ${n}`
     )
   }
 }
@@ -51,30 +77,38 @@ function validateVideoFrames (n) {
 // See index.js::_coerceToUint8 for the long form of this contract — duplicated
 // here only because video.js does not depend on index.js (separate entry
 // points). Keep both copies in sync.
-function _coerceToUint8 (name, value) {
+function _coerceToUint8(name, value) {
   if (value instanceof Uint8Array) return value
   if (ArrayBuffer.isView(value) && value.BYTES_PER_ELEMENT === 1) {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   }
-  if (value instanceof ArrayBuffer ||
-      (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)) {
+  if (
+    value instanceof ArrayBuffer ||
+    (typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer)
+  ) {
     return new Uint8Array(value)
   }
   throw new TypeError(
     `${name} must be a Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes. ` +
-    `Got: ${value === null ? 'null' : typeof value}`
+      `Got: ${value === null ? 'null' : typeof value}`
   )
 }
 
 // Read image width/height from a PNG or JPEG header without decoding pixels.
 // Returns { w, h } on success, or null if the buffer is too short/unrecognised.
 // Used to pre-validate off-grid frame dimensions before dispatching to C++.
-function peekImageDims (buf) {
+function peekImageDims(buf) {
   if (!buf || buf.length < 8) return null
   // PNG: 8-byte signature → 4-byte IHDR length → "IHDR" → 4-byte width → 4-byte height
   if (
-    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
-    buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
   ) {
     if (buf.length < 24) return null
     const w = ((buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19]) >>> 0
@@ -82,14 +116,14 @@ function peekImageDims (buf) {
     return { w, h }
   }
   // JPEG: scan segments for SOF0–SOF3 (0xFF 0xC0–0xC3) which carry height/width
-  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
     let i = 2
     while (i + 3 < buf.length) {
-      if (buf[i] !== 0xFF) break
+      if (buf[i] !== 0xff) break
       const marker = buf[i + 1]
-      if (marker === 0xD9 || marker === 0xDA) break // EOI or SOS
+      if (marker === 0xd9 || marker === 0xda) break // EOI or SOS
       const segLen = (buf[i + 2] << 8) | buf[i + 3]
-      if (marker >= 0xC0 && marker <= 0xC3) {
+      if (marker >= 0xc0 && marker <= 0xc3) {
         if (buf.length >= i + 9) {
           const h = (buf[i + 5] << 8) | buf[i + 6]
           const w = (buf[i + 7] << 8) | buf[i + 8]
@@ -115,9 +149,10 @@ function peekImageDims (buf) {
  * `mode` field this wrapper always sets.
  *
  * Output: a single `Uint8Array` containing an MJPG-encoded AVI (RIFF
- * container) arrives through `QvacResponse.onUpdate(data)`. Progress ticks
- * are delivered as JSON strings in the same stream, identical to the image
- * wrapper.
+ * container) arrives through `QvacResponse.onUpdate(data)`. For LTX-2 models
+ * loaded with an `audioVae`, the AVI carries a second IEEE-float PCM audio
+ * stream (48 kHz) muxed alongside the video. Progress ticks are delivered as
+ * JSON strings in the same stream, identical to the image wrapper.
  */
 class VideoStableDiffusion {
   /**
@@ -145,7 +180,7 @@ class VideoStableDiffusion {
    *        (mirrors `ImgStableDiffusion` -- one global hook for the whole addon).
    * @param {object} [args.opts]                          - Inference options
    */
-  constructor ({ files, config, logger = null, opts = {} }) {
+  constructor({ files, config, logger = null, opts = {} }) {
     if (!files || typeof files !== 'object') {
       throw new TypeError('files must be an object containing at least { model }')
     }
@@ -165,12 +200,11 @@ class VideoStableDiffusion {
     // video pipeline never wires them in, so they're silent no-ops here.
     // Surface that early so callers don't waste time tuning a tile size
     // that has no effect.
-    const upscalerKeys = Object.keys(this._config).filter((k) =>
-      k.startsWith('upscaler_'))
+    const upscalerKeys = Object.keys(this._config).filter((k) => k.startsWith('upscaler_'))
     if (upscalerKeys.length > 0) {
       this.logger.warn(
         `${upscalerKeys.join(', ')} provided in config but ESRGAN upscale ` +
-        'is image-only -- VideoStableDiffusion will ignore these keys.'
+          'is image-only -- VideoStableDiffusion will ignore these keys.'
       )
     }
     // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
@@ -181,7 +215,7 @@ class VideoStableDiffusion {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load() {
     return this._run(async () => {
       if (this.state.configLoaded) return
       await this._load()
@@ -189,7 +223,7 @@ class VideoStableDiffusion {
     })
   }
 
-  async _load () {
+  async _load() {
     this.logger.info('Starting Wan video model load')
 
     // Wan always uses the `diffusionModelPath` slot for the low-noise /
@@ -200,13 +234,19 @@ class VideoStableDiffusion {
       path: '',
       diffusionModelPath: this._files.model,
       highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
+      uncondDiffusionModelPath: '',
       clipLPath: '',
       clipGPath: '',
       t5XxlPath: this._files.t5Xxl || '',
-      llmPath: '',
+      // Gemma text encoder for LTX-2 (reuses the llm_path slot, same as FLUX.2
+      // Qwen3). Empty for Wan.
+      llmPath: this._files.llm || '',
       vaePath: this._files.vae || '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',
+      // LTX-2 (LTXAV) extras. Empty for Wan.
+      audioVaePath: this._files.audioVae || '',
+      embeddingsConnectorsPath: this._files.embeddingsConnectors || '',
       config: this._config
     }
 
@@ -223,7 +263,9 @@ class VideoStableDiffusion {
       this.logger.error('Error during Wan video model load:', loadError)
       // Best-effort cleanup of the partially-initialized addon so a
       // subsequent load() does not leak a zombie native instance.
-      try { await this.addon?.unload?.() } catch (_) {}
+      try {
+        await this.addon?.unload?.()
+      } catch (_) {}
       this.addon = null
       throw loadError
     }
@@ -235,16 +277,12 @@ class VideoStableDiffusion {
    * @param {object} configurationParams
    * @returns {SdInterface}
    */
-  _createAddon (configurationParams) {
+  _createAddon(configurationParams) {
     const binding = require('./binding')
-    return new SdInterface(
-      binding,
-      configurationParams,
-      this._addonOutputCallback.bind(this)
-    )
+    return new SdInterface(binding, configurationParams, this._addonOutputCallback.bind(this))
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     const mapped = mapAddonEvent(event, data, error)
     if (mapped === null) {
       this.logger.debug(`Unhandled addon event: ${event} (data type: ${typeof data})`)
@@ -275,7 +313,8 @@ class VideoStableDiffusion {
    *   - `'img2vid'`  — animate a single starting frame; requires `init_image`.
    *
    * Output stream (via `QvacResponse.onUpdate(data)`):
-   *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job.
+   *   - `Uint8Array` — a single MJPG AVI buffer at end-of-job (with a muxed
+   *     IEEE-float PCM audio stream for LTX-2 + audioVae).
    *   - `string`     — per-step progress JSON `{"step":N,"total":M,"elapsed_ms":T}`
    *
    * @param {object} params
@@ -310,11 +349,11 @@ class VideoStableDiffusion {
    * @param {number} [params.cache_threshold]
    * @returns {Promise<QvacResponse>}
    */
-  async run (params) {
+  async run(params) {
     return this._run(() => this._runInternal(params))
   }
 
-  async _runInternal (params) {
+  async _runInternal(params) {
     if (!params || typeof params !== 'object') {
       throw new TypeError('run(params): params must be an object')
     }
@@ -332,7 +371,7 @@ class VideoStableDiffusion {
     if (typeof params.mode !== 'string' || !VIDEO_MODES.has(params.mode)) {
       throw new Error(
         'VideoStableDiffusion.run: params.mode is required and must be one of ' +
-        `'txt2vid' | 'img2vid'. Got: ${JSON.stringify(params.mode)}`
+          `'txt2vid' | 'img2vid'. Got: ${JSON.stringify(params.mode)}`
       )
     }
     const { mode } = params
@@ -342,27 +381,34 @@ class VideoStableDiffusion {
     // names the actual pixels rather than an internal derived value.
     const dimsImplicit = params.width == null && params.height == null
 
-    // ── Dimension alignment (multiples of 16) ────────────────────────────
+    // LTX-2 has stricter constraints than Wan: 32x spatial VAE compression
+    // (dims multiple of 32) and 8*k+1 frame packing. Detected from the
+    // LTX-only companion files supplied at construction.
+    const isLtx = this._isLtx()
+
+    // ── Dimension alignment (multiples of 16 for Wan, 32 for LTX-2) ───────
     // Wan's spatial compression requires 16-aligned width/height (see
     // addon.js::_fillDimsFromImage). Only validate provided dims; C++ falls
     // back to 480x832 (portrait, phone-screen friendly) when omitted. Override
     // either field for landscape (832x480 is Wan 1.3B's training res).
-    const alignTo = 16
+    const alignTo = isLtx ? 32 : 16
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
     const hBad = h != null && (!Number.isFinite(h) || h <= 0 || h % alignTo !== 0)
     if (wBad || hBad) {
-      const suggestW = Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : 480
-      const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : 832
+      const suggestW =
+        Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : isLtx ? 768 : 480
+      const suggestH =
+        Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : isLtx ? 512 : 832
       throw new Error(
         `width and height must be positive multiples of ${alignTo}. ` +
-        `Got: ${w}x${h}. Use ${suggestW}x${suggestH} instead.`
+          `Got: ${w}x${h}. Use ${suggestW}x${suggestH} instead.`
       )
     }
 
-    // ── Frame-count validation (4*k+1 rule) ──────────────────────────────
-    if (params.video_frames != null) validateVideoFrames(params.video_frames)
+    // ── Frame-count validation (4*k+1 Wan / 8*k+1 LTX-2) ──────────────────
+    if (params.video_frames != null) validateVideoFrames(params.video_frames, isLtx)
 
     // ── FPS validation ───────────────────────────────────────────────────
     if (params.fps != null) {
@@ -389,10 +435,10 @@ class VideoStableDiffusion {
       }
       if (dimsImplicit) {
         const dims = peekImageDims(params.init_image)
-        if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+        if (dims && (dims.w % alignTo !== 0 || dims.h % alignTo !== 0)) {
           throw new Error(
-            `init_image dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
-            'Pass explicit width/height to override or pre-scale the image.'
+            `init_image dimensions ${dims.w}x${dims.h} must be multiples of ${alignTo}. ` +
+              'Pass explicit width/height to override or pre-scale the image.'
           )
         }
       }
@@ -402,22 +448,22 @@ class VideoStableDiffusion {
     if (params.init_images != null) {
       throw new Error(
         'VideoStableDiffusion does not accept init_images (FLUX fusion is ' +
-        'image-only). Use init_image or control_frames for VACE guidance.'
+          'image-only). Use init_image or control_frames for VACE guidance.'
       )
     }
 
     // ── Mode-vs-inputs invariants ─────────────────────────────────────────
     if (mode === 'txt2vid') {
       if (params.init_image != null) {
-        throw new Error(
-          "txt2vid does not accept init_image. Use mode='img2vid' instead."
-        )
+        throw new Error("txt2vid does not accept init_image. Use mode='img2vid' instead.")
       }
     } else if (mode === 'img2vid') {
       // After coercion above, init_image is either a normalized Uint8Array
       // or null/undefined.
       if (!(params.init_image instanceof Uint8Array)) {
-        throw new Error('img2vid requires init_image (Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes).')
+        throw new Error(
+          'img2vid requires init_image (Uint8Array / Buffer / ArrayBuffer of PNG/JPEG bytes).'
+        )
       }
     }
 
@@ -425,14 +471,13 @@ class VideoStableDiffusion {
     if (params.control_frames != null) {
       if (!Array.isArray(params.control_frames)) {
         throw new TypeError(
-          'control_frames must be an Array of Uint8Array. ' +
-          `Got: ${typeof params.control_frames}`
+          'control_frames must be an Array of Uint8Array. ' + `Got: ${typeof params.control_frames}`
         )
       }
       if (params.control_frames.length === 0) {
         throw new Error(
           'control_frames must not be an empty array. Omit the field ' +
-          'entirely to skip VACE guidance.'
+            'entirely to skip VACE guidance.'
         )
       }
       for (let i = 0; i < params.control_frames.length; i++) {
@@ -450,10 +495,10 @@ class VideoStableDiffusion {
       if (dimsImplicit) {
         for (let i = 0; i < params.control_frames.length; i++) {
           const dims = peekImageDims(params.control_frames[i])
-          if (dims && (dims.w % 16 !== 0 || dims.h % 16 !== 0)) {
+          if (dims && (dims.w % alignTo !== 0 || dims.h % alignTo !== 0)) {
             throw new Error(
-              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of 16. ` +
-              'Pass explicit width/height to override or pre-scale the frame.'
+              `control_frames[${i}] dimensions ${dims.w}x${dims.h} must be multiples of ${alignTo}. ` +
+                'Pass explicit width/height to override or pre-scale the frame.'
             )
           }
         }
@@ -463,12 +508,11 @@ class VideoStableDiffusion {
     // ── vace_strength is only meaningful with control_frames ─────────────
     if (
       params.vace_strength != null &&
-      (!Array.isArray(params.control_frames) ||
-        params.control_frames.length === 0)
+      (!Array.isArray(params.control_frames) || params.control_frames.length === 0)
     ) {
       this.logger.warn(
         'vace_strength was set but control_frames is not provided — ' +
-        'vace_strength will have no effect.'
+          'vace_strength will have no effect.'
       )
     }
 
@@ -476,20 +520,31 @@ class VideoStableDiffusion {
     // clip_vision_h.safetensors (OpenCLIP ViT-H/14) is required for image
     // conditioning in Wan 2.1 I2V. Without it the C++ layer cannot build the
     // img_emb projection and will produce garbage or crash.
-    if (mode === 'img2vid' && !this._files.clipVision) {
+    // LTX-2 (LTXAV) img2vid conditions on the input frame through the video VAE
+    // rather than clip_vision, so this requirement is Wan-only — gating it on
+    // isLtx keeps LTX img2vid usable from JS without a clip_vision file.
+    if (mode === 'img2vid' && !isLtx && !this._files.clipVision) {
       throw new TypeError(
         `mode='${mode}' requires files.clipVision (OpenCLIP ViT-H/14). ` +
-        'Download clip_vision_h.safetensors from ' +
-        'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
-        'files.clipVision.'
+          'Download clip_vision_h.safetensors from ' +
+          'Comfy-Org/Wan_2.1_ComfyUI_repackaged and pass its absolute path as ' +
+          'files.clipVision.'
       )
     }
 
     // ── Wan 2.2 sanity check ─────────────────────────────────────────────
-    // Friendly warning when high-noise-only params are set without a
-    // high-noise expert configured on the context.
+    // Phase timings currently track the supported single-expert sampler path.
+    // A Wan 2.2 job uses separate high- and low-noise sampler invocations, so
+    // its phase fields cannot yet report the combined denoise duration/rate.
     const hasHighNoiseExpert = !!this._files.highNoiseDiffusionModel
-    if (!hasHighNoiseExpert) {
+    if (hasHighNoiseExpert) {
+      this.logger.warn(
+        'Wan 2.2 phase timing stats currently cover only single-expert generation; ' +
+          'the high- and low-noise sampling stages are not yet measured together.'
+      )
+    } else {
+      // Friendly warning when high-noise-only params are set without a
+      // high-noise expert configured on the context.
       const highNoiseParams = [
         'high_noise_steps',
         'high_noise_sampler',
@@ -502,7 +557,7 @@ class VideoStableDiffusion {
       if (used.length > 0) {
         this.logger.warn(
           `${used.join(', ')} supplied but files.highNoiseDiffusionModel ` +
-          'is not set — these params are Wan 2.2-only and will be ignored.'
+            'is not set — these params are Wan 2.2-only and will be ignored.'
         )
       }
     }
@@ -511,8 +566,8 @@ class VideoStableDiffusion {
     if (params.lora != null) {
       throw new Error(
         'params.lora is not supported for video generation yet. ' +
-        'Video generation uses distinct diffusion and expert components ' +
-        'that do not yet support LoRA injection.'
+          'Video generation uses distinct diffusion and expert components ' +
+          'that do not yet support LoRA injection.'
       )
     }
 
@@ -551,7 +606,9 @@ class VideoStableDiffusion {
     }
 
     this._hasActiveResponse = true
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
     finalized.catch((err) => {
       this.logger?.warn?.('Video generation response rejected:', err?.message || err)
     })
@@ -564,7 +621,7 @@ class VideoStableDiffusion {
   /**
    * Cancel the in-flight video generation job.
    */
-  async cancel () {
+  async cancel() {
     if (this.addon?.cancel) {
       await this.addon.cancel()
     }
@@ -573,7 +630,7 @@ class VideoStableDiffusion {
   /**
    * Unload the model and release all resources.
    */
-  async unload () {
+  async unload() {
     return this._run(async () => {
       await this.cancel()
       if (this._job.active) {
@@ -588,7 +645,22 @@ class VideoStableDiffusion {
     })
   }
 
-  getState () { return this.state }
+  getState() {
+    return this.state
+  }
+
+  /**
+   * True when the configured model is LTX-2 (LTXAV). Keyed on the
+   * embeddings-connectors input, which no other model family uses; this matches
+   * the native detection (SdModel: isLtxModel_ = !embeddingsConnectorsPath.empty()).
+   * audioVae is intentionally not used here: it is optional for LTX (silent runs
+   * omit it), so keying on it would disagree with the native layer. Drives
+   * model-aware validation (8*k+1 frames, x32 dims) on the JS side.
+   * @returns {boolean}
+   */
+  _isLtx() {
+    return !!this._files.embeddingsConnectors
+  }
 }
 
 module.exports = VideoStableDiffusion

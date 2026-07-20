@@ -1,6 +1,6 @@
 // example-chroma.ts
-import { embed, loadModel, unloadModel, GTE_LARGE_FP16 } from "@qvac/sdk";
-import { ChromaClient } from "chromadb";
+import { embed, loadModel, unloadModel, GTE_LARGE_FP16 } from '@qvac/sdk'
+import { ChromaClient } from 'chromadb'
 
 // Setup instructions for ChromaDB server
 const CHROMADB_SETUP_INSTRUCTIONS = `
@@ -17,127 +17,127 @@ Setup options:
    docker run -p 8000:8000 chromadb/chroma
 
 For more details, visit: https://docs.trychroma.com/docs/overview/getting-started?lang=typescript
-`;
+`
 
 async function initializeChromaClient() {
-  const client = new ChromaClient({ host: "localhost", port: 8000 });
+  const client = new ChromaClient({ host: 'localhost', port: 8000 })
 
   try {
-    await client.heartbeat();
-    console.log("▸ Connected to ChromaDB server");
-    return client;
+    await client.heartbeat()
+    console.log('▸ Connected to ChromaDB server')
+    return client
   } catch {
-    console.error("✖ Failed to connect to ChromaDB server");
-    console.error("▸ Please ensure the server is running on localhost:8000");
-    console.error(CHROMADB_SETUP_INSTRUCTIONS);
-    process.exit(1);
+    console.error('✖ Failed to connect to ChromaDB server')
+    console.error('▸ Please ensure the server is running on localhost:8000')
+    console.error(CHROMADB_SETUP_INSTRUCTIONS)
+    process.exit(1)
   }
 }
 
 try {
   // Get query from command line or use default
-  const query = process.argv[2] || "machine learning algorithms";
-  console.log(`▸ Query: "${query}"`);
+  const query = process.argv[2] || 'machine learning algorithms'
+  console.log(`▸ Query: "${query}"`)
 
-  const client = await initializeChromaClient();
+  const client = await initializeChromaClient()
 
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
     onProgress: (p) => {
-      const mb = (n: number) => (n / 1e6).toFixed(1);
-      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`;
-      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`);
-      if (p.percentage >= 100) process.stderr.write("\n");
-    },
-  });
+      const mb = (n: number) => (n / 1e6).toFixed(1)
+      const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
+      process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+      if (p.percentage >= 100) process.stderr.write('\n')
+    }
+  })
 
   // Sample corpus
   const samples = [
     {
       id: 1,
-      text: "Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and make predictions from data without being explicitly programmed for every task.",
+      text: 'Machine learning is a subset of artificial intelligence that focuses on algorithms that can learn and make predictions from data without being explicitly programmed for every task.'
     },
     {
       id: 2,
-      text: "Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, enabling breakthroughs in image recognition and natural language processing.",
+      text: 'Deep learning uses neural networks with multiple layers to process and learn from complex data patterns, enabling breakthroughs in image recognition and natural language processing.'
     },
     {
       id: 3,
-      text: "Natural language processing combines computational linguistics with machine learning to help computers understand, interpret, and generate human language in a meaningful way.",
+      text: 'Natural language processing combines computational linguistics with machine learning to help computers understand, interpret, and generate human language in a meaningful way.'
     },
     {
       id: 4,
-      text: "Computer vision enables machines to interpret and understand visual information from the world, using techniques like image classification, object detection, and facial recognition.",
+      text: 'Computer vision enables machines to interpret and understand visual information from the world, using techniques like image classification, object detection, and facial recognition.'
     },
     {
       id: 5,
-      text: "Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers, potentially solving certain problems exponentially faster.",
+      text: 'Quantum computing leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers, potentially solving certain problems exponentially faster.'
     },
     {
       id: 6,
-      text: "Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions without requiring a central authority or intermediary.",
+      text: 'Blockchain technology creates decentralized, immutable ledgers that enable secure peer-to-peer transactions without requiring a central authority or intermediary.'
     },
     {
       id: 7,
-      text: "Cloud computing delivers computing services over the internet, allowing users to access resources like storage, processing power, and applications on-demand from anywhere.",
+      text: 'Cloud computing delivers computing services over the internet, allowing users to access resources like storage, processing power, and applications on-demand from anywhere.'
     },
     {
       id: 8,
-      text: "Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.",
-    },
-  ];
+      text: 'Cybersecurity protects digital systems, networks, and data from malicious attacks, unauthorized access, and various forms of cyber threats through multiple layers of defense.'
+    }
+  ]
 
   // (Re)create the collection
-  const collectionName = "documents";
+  const collectionName = 'documents'
   try {
-    await client.deleteCollection({ name: collectionName });
+    await client.deleteCollection({ name: collectionName })
   } catch (e) {
-    console.warn(`▸ Collection didn't exist, no need to delete: ${String(e)}`);
+    console.warn(`▸ Collection didn't exist, no need to delete: ${String(e)}`)
   }
   const collection = await client.createCollection({
     name: collectionName,
-    embeddingFunction: null,
-  });
+    embeddingFunction: null
+  })
 
   // Embed and add documents (we're bringing our own embeddings)
-  console.log("▸ Embedding documents...");
-  const ids: string[] = [];
-  const documents: string[] = [];
-  const embeddings: number[][] = [];
+  console.log('▸ Embedding documents...')
+  const ids: string[] = []
+  const documents: string[] = []
+  const embeddings: number[][] = []
 
   for (const s of samples) {
-    ids.push(String(s.id));
-    documents.push(s.text);
-    embeddings.push((await embed({ modelId, text: s.text })).embedding);
+    ids.push(String(s.id))
+    documents.push(s.text)
+    embeddings.push((await embed({ modelId, text: s.text })).embedding)
   }
 
   await collection.add({
     ids,
     documents,
-    embeddings,
-  });
+    embeddings
+  })
 
-  console.log("▸ Searching for similar documents...");
-  const { embedding: queryEmbedding } = await embed({ modelId, text: query });
+  console.log('▸ Searching for similar documents...')
+  const { embedding: queryEmbedding } = await embed({ modelId, text: query })
 
   // Query top 3 by vector similarity and include distances
   const res = await collection.query({
     queryEmbeddings: [queryEmbedding],
     nResults: 3,
-    include: ["documents", "distances"],
-  });
+    include: ['documents', 'distances']
+  })
 
-  console.log("▸ Top 3 most similar documents:");
-  const docs = res.documents?.[0] ?? [];
-  const dists = res.distances?.[0] ?? [];
+  console.log('▸ Top 3 most similar documents:')
+  const docs = res.documents?.[0] ?? []
+  const dists = res.distances?.[0] ?? []
   for (let i = 0; i < docs.length; i++) {
-    console.log(`${i + 1}. (Score: ${dists[i]?.toFixed(4)})`);
-    console.log(`   ${docs[i]}`);
-    console.log();
+    console.log(`${i + 1}. (Score: ${dists[i]?.toFixed(4)})`)
+    console.log(`   ${docs[i]}`)
+    console.log()
   }
 
-  await unloadModel({ modelId });
+  await unloadModel({ modelId })
 } catch (error) {
-  console.error("✖", error);
-  process.exit(1);
+  console.error('✖', error)
+  process.exit(1)
 }

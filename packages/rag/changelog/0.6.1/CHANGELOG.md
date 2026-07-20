@@ -9,4 +9,3 @@ Release Date: 2026-05-27
 ## 🐞 Fixes
 
 - Load RAG hard deps with require() for Pear/CJS compatibility. (see PR [#2284](https://github.com/tetherto/qvac/pull/2284))
-
