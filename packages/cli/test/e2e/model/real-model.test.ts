@@ -79,10 +79,13 @@ describe('chat completions (blocking)', () => {
     const first = await post('/v1/chat/completions', {
       model: E2E.llm,
       messages: [{ role: 'user', content: 'Reply with exactly the word: apple' }],
+      reasoning_budget: false,
       max_tokens: 64
     })
     assert.equal(first.statusCode, 200)
-    const firstMessage = (first.json() as any).choices[0].message
+    const firstBody = first.json() as any
+    assert.equal(firstBody.choices[0].finish_reason, 'stop')
+    const firstMessage = firstBody.choices[0].message
     assert.ok(firstMessage.content.length > 0)
 
     // Turn 2 replays the prior assistant turn verbatim so the auto-cache key
@@ -95,6 +98,7 @@ describe('chat completions (blocking)', () => {
         { role: 'assistant', content: firstMessage.content },
         { role: 'user', content: 'Now reply with exactly the word: banana' }
       ],
+      reasoning_budget: false,
       max_tokens: 128
     })
     assert.equal(second.statusCode, 200)
@@ -103,7 +107,7 @@ describe('chat completions (blocking)', () => {
     const secondMessage = secondBody.choices[0].message
     assert.equal(secondMessage.role, 'assistant')
     assert.ok(secondMessage.content.length > 0, 'second turn returned empty content')
-    assert.ok(['stop', 'length'].includes(secondBody.choices[0].finish_reason))
+    assert.equal(secondBody.choices[0].finish_reason, 'stop')
   })
 
   it('respects max_completion_tokens', async () => {
