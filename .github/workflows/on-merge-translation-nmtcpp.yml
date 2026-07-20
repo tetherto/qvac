@@ -134,6 +134,21 @@ jobs:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
 
+      # Rebuild the TypeScript wrapper before publishing so the generated
+      # JavaScript and declaration files are present in the published tarball.
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run build:ts
+
       - name: Publish to GitHub Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-gpr
@@ -183,6 +198,21 @@ jobs:
         with:
           name: prebuilds
           path: ${{ env.PKG_DIR }}/prebuilds
+
+      # Rebuild the TypeScript wrapper before publishing so the generated
+      # JavaScript and declaration files are present in the published tarball.
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag
