@@ -477,7 +477,7 @@ private:
   std::optional<llama_perf_context_data> userVisiblePerf_;
 
   // MTP speculative decoding state.
-  llama_context_ptr      ctxDraft_;
+  llama_context_ptr ctxDraft_;
   common_speculative_ptr spec_;
   // common_speculative_get_draft_params requires a non-null .prompt; the MTP
   // impl never reads its contents (only id_last/n_past/n_max).

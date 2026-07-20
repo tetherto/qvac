@@ -31,7 +31,7 @@ const PROMPT = [
   { role: 'user', content: 'What is the capital of France? Answer in one complete sentence.' }
 ]
 
-function createLogger () {
+function createLogger() {
   return {
     info: (...args) => console.info(...args),
     warn: (...args) => console.warn(...args),
@@ -40,18 +40,22 @@ function createLogger () {
   }
 }
 
-async function collectResponse (response) {
+async function collectResponse(response) {
   const chunks = []
   const ticker = setInterval(() => {}, 50)
   try {
-    await response.onUpdate(data => { chunks.push(data) }).await()
+    await response
+      .onUpdate((data) => {
+        chunks.push(data)
+      })
+      .await()
   } finally {
     clearInterval(ticker)
   }
   return chunks.join('').trim()
 }
 
-async function runOnce ({ withSpec, overrides = {} }) {
+async function runOnce({ withSpec, overrides = {} }) {
   const [modelName, dirPath] = await ensureModel({
     modelName: MODEL.name,
     downloadUrl: MODEL.url
@@ -90,88 +94,90 @@ async function runOnce ({ withSpec, overrides = {} }) {
   }
 }
 
-test('Qwen3.5-0.8B with spec-type=draft-mtp drafts + accepts', {
-  timeout: 600_000
-}, async t => {
-  const { output, stats } = await runOnce({ withSpec: true })
-  t.ok(output.length > 0, `spec run produced output (${output.length} chars)`)
-  console.log(`  spec output: "${output.slice(0, 200)}"`)
-  t.ok(stats, 'spec run has response.stats')
-  t.ok(
-    /paris/i.test(output),
-    'spec output names the capital (Paris) in the reply'
-  )
-  // The real speculative signal: the MTP head must have drafted tokens that the
-  // target model verified and accepted. Without this assertion the test would
-  // pass even if draft-mtp were inert (no draft context, no acceptance).
-  console.log(
-    `  draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
-  )
-  t.ok(
-    stats.draftTotal > 0,
-    `MTP head produced draft tokens (draftTotal=${stats.draftTotal})`
-  )
-  t.ok(
-    stats.draftAccepted > 0,
-    `target accepted MTP draft tokens (draftAccepted=${stats.draftAccepted})`
-  )
-})
-
-test('Qwen3.5-0.8B without spec-type', {
-  timeout: 600_000
-}, async t => {
-  // Sentinel: confirms the addon's existing single-context path still works,
-  // proving the MTP code added to TextLlmContext is correctly gated behind
-  // the `spec-type` config check and doesn't fire for default-config loads.
-  const { output, stats } = await runOnce({ withSpec: false })
-  t.ok(output.length > 0, `non-spec run produced output (${output.length} chars)`)
-  t.ok(stats, 'non-spec run has stats')
-  t.ok(
-    /paris/i.test(output),
-    'non-spec output names the capital (Paris) in the reply'
-  )
-  t.is(
-    stats.draftAccepted, 0,
-    'non-spec run performs no speculative drafting (draftAccepted=0)'
-  )
-})
-
-test('Qwen3.5-0.8B MTP with reasoning enabled stays coherent + balanced', {
-  timeout: 600_000
-}, async t => {
-  const { output, stats } = await runOnce({
-    withSpec: true,
-    overrides: { 'reasoning-budget': '32', n_predict: '200' }
-  })
-  t.ok(output.length > 0, `produced output (${output.length} chars)`)
-  console.log(`  reasoning+spec output: "${output.slice(0, 200)}"`)
-  t.ok(
-    stats.draftAccepted > 0,
-    `MTP still drafts with reasoning on (draftAccepted=${stats.draftAccepted})`
-  )
-
-  if (output.includes('<think>')) {
-    t.ok(output.includes('</think>'), 'reasoning block closed (balanced tags)')
+test(
+  'Qwen3.5-0.8B with spec-type=draft-mtp drafts + accepts',
+  {
+    timeout: 600_000
+  },
+  async (t) => {
+    const { output, stats } = await runOnce({ withSpec: true })
+    t.ok(output.length > 0, `spec run produced output (${output.length} chars)`)
+    console.log(`  spec output: "${output.slice(0, 200)}"`)
+    t.ok(stats, 'spec run has response.stats')
+    t.ok(/paris/i.test(output), 'spec output names the capital (Paris) in the reply')
+    // The real speculative signal: the MTP head must have drafted tokens that the
+    // target model verified and accepted. Without this assertion the test would
+    // pass even if draft-mtp were inert (no draft context, no acceptance).
+    console.log(`  draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`)
+    t.ok(stats.draftTotal > 0, `MTP head produced draft tokens (draftTotal=${stats.draftTotal})`)
+    t.ok(
+      stats.draftAccepted > 0,
+      `target accepted MTP draft tokens (draftAccepted=${stats.draftAccepted})`
+    )
   }
-  t.ok(/paris/i.test(output), 'output still names the capital after reasoning')
-})
+)
 
-test('Qwen3.5-0.8B MTP honors a small n_predict without over-committing KV', {
-  timeout: 600_000
-}, async t => {
-  const nPredict = 4
-  const { output, stats } = await runOnce({
-    withSpec: true,
-    overrides: { n_predict: String(nPredict) }
-  })
-  t.ok(output.length > 0, `produced output (${output.length} chars)`)
-  console.log(
-    `  short output: "${output.slice(0, 120)}" ` +
-    `draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
-  )
-  t.ok(
-    stats.draftAccepted <= nPredict,
-    'accepted drafts bounded by the budget, no over-committed tail ' +
-    `(draftAccepted=${stats.draftAccepted} <= n_predict=${nPredict})`
-  )
-})
+test(
+  'Qwen3.5-0.8B without spec-type',
+  {
+    timeout: 600_000
+  },
+  async (t) => {
+    // Sentinel: confirms the addon's existing single-context path still works,
+    // proving the MTP code added to TextLlmContext is correctly gated behind
+    // the `spec-type` config check and doesn't fire for default-config loads.
+    const { output, stats } = await runOnce({ withSpec: false })
+    t.ok(output.length > 0, `non-spec run produced output (${output.length} chars)`)
+    t.ok(stats, 'non-spec run has stats')
+    t.ok(/paris/i.test(output), 'non-spec output names the capital (Paris) in the reply')
+    t.is(stats.draftAccepted, 0, 'non-spec run performs no speculative drafting (draftAccepted=0)')
+  }
+)
+
+test(
+  'Qwen3.5-0.8B MTP with reasoning enabled stays coherent + balanced',
+  {
+    timeout: 600_000
+  },
+  async (t) => {
+    const { output, stats } = await runOnce({
+      withSpec: true,
+      overrides: { 'reasoning-budget': '32', n_predict: '200' }
+    })
+    t.ok(output.length > 0, `produced output (${output.length} chars)`)
+    console.log(`  reasoning+spec output: "${output.slice(0, 200)}"`)
+    t.ok(
+      stats.draftAccepted > 0,
+      `MTP still drafts with reasoning on (draftAccepted=${stats.draftAccepted})`
+    )
+
+    if (output.includes('<think>')) {
+      t.ok(output.includes('</think>'), 'reasoning block closed (balanced tags)')
+    }
+    t.ok(/paris/i.test(output), 'output still names the capital after reasoning')
+  }
+)
+
+test(
+  'Qwen3.5-0.8B MTP honors a small n_predict without over-committing KV',
+  {
+    timeout: 600_000
+  },
+  async (t) => {
+    const nPredict = 4
+    const { output, stats } = await runOnce({
+      withSpec: true,
+      overrides: { n_predict: String(nPredict) }
+    })
+    t.ok(output.length > 0, `produced output (${output.length} chars)`)
+    console.log(
+      `  short output: "${output.slice(0, 120)}" ` +
+        `draftAccepted=${stats.draftAccepted} draftTotal=${stats.draftTotal}`
+    )
+    t.ok(
+      stats.draftAccepted <= nPredict,
+      'accepted drafts bounded by the budget, no over-committed tail ' +
+        `(draftAccepted=${stats.draftAccepted} <= n_predict=${nPredict})`
+    )
+  }
+)

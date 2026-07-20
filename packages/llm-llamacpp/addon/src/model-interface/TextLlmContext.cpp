@@ -177,7 +177,8 @@ void TextLlmContext::initializeCommonState() {
   // fails, we log and continue without speculation (spec_ stays null).
   const bool wantMtpDraft =
       std::find(
-          params_.speculative.types.begin(), params_.speculative.types.end(),
+          params_.speculative.types.begin(),
+          params_.speculative.types.end(),
           COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
   if (wantMtpDraft) {
     try {
@@ -1026,8 +1027,11 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
     idxs.push_back(0);
     for (size_t i = 0; i < draft.size(); ++i) {
       common_batch_add(
-          *specBatch, draft[i], nPast_ + 1 + static_cast<llama_pos>(i),
-          {seqId_}, true);
+          *specBatch,
+          draft[i],
+          nPast_ + 1 + static_cast<llama_pos>(i),
+          {seqId_},
+          true);
       idxs.push_back(static_cast<int>(i + 1));
     }
     if (decodeAndSpecProcess(*specBatch) != 0) {
@@ -1097,8 +1101,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponseSpeculative(
     if (!reasoningRecovered) {
       // Keep id_last + the accepted drafts, drop the rejected/stop tail from
       // both contexts and reset nPast_ to just past the kept prefix.
-      const llama_pos keepPos =
-          posBase + 1 + static_cast<llama_pos>(nAccepted);
+      const llama_pos keepPos = posBase + 1 + static_cast<llama_pos>(nAccepted);
       clearSequenceMemory(modelCtx_.lctx, keepPos, -1);
       if (ctxDraft_) {
         clearSequenceMemory(ctxDraft_.get(), keepPos, -1);
@@ -1172,7 +1175,10 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   bool sampled = false;
   const llama_token tokenId = sampleToken(logitIdx, sampled);
   SequenceStepResult result = processToken(
-      tokenId, sampled, generatedAfterAccept, outputCallback,
+      tokenId,
+      sampled,
+      generatedAfterAccept,
+      outputCallback,
       inlineDecodeBatch);
   result.discarded = discarded;
   return result;
@@ -1282,8 +1288,7 @@ SequenceStepResult TextLlmContext::processToken(
     if (inlineDecodeBatch != nullptr) {
       if (handleReasoningEOS(
               tokenId, tokenStr, **inlineDecodeBatch, nPast_, outputCallback)) {
-        return {
-            .token = tokenId, .finished = false, .decodedInline = true};
+        return {.token = tokenId, .finished = false, .decodedInline = true};
       }
     } else if (
         reasoningState_.inside_reasoning &&
@@ -1330,8 +1335,7 @@ SequenceStepResult TextLlmContext::processToken(
     return {
         .token = tokenId,
         .finished = true,
-        .stopReason = GenerationStopReason::Eos,
-        .discarded = discarded};
+        .stopReason = GenerationStopReason::Eos};
   }
   GenerationStopReason stopReason = GenerationStopReason::None;
   if (isEos) {
@@ -1347,11 +1351,7 @@ SequenceStepResult TextLlmContext::processToken(
     flushPendingUtf8ToCallback(outputCallback);
   }
 
-  return {
-      .token = tokenId,
-      .finished = finished,
-      .stopReason = stopReason,
-      .discarded = discarded};
+  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
 void TextLlmContext::onSequenceEnd(
