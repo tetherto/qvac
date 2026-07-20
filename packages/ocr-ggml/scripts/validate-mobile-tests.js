@@ -14,7 +14,7 @@ const autoFile = path.join(mobileDir, 'integration.auto.cjs')
 const runtimeFile = path.join(mobileDir, 'integration-runtime.cjs')
 const testGroupsFile = path.join(mobileDir, 'test-groups.json')
 
-function main () {
+function main() {
   const errors = []
 
   if (!fs.existsSync(mobileDir)) {
@@ -36,7 +36,7 @@ function main () {
 
   if (errors.length > 0) {
     console.error('Mobile test validation failed:')
-    errors.forEach(err => console.error('  -', err))
+    errors.forEach((err) => console.error('  -', err))
     process.exit(1)
   }
 

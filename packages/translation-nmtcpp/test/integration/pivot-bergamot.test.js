@@ -66,19 +66,19 @@ const PIVOT_TIMEOUT = isMobile ? 900_000 : 180_000
  * @param {string} dst - destination language code (e.g. 'en')
  * @returns {Promise<string>} path to model directory
  */
-async function ensureModelPair (src, dst) {
+async function ensureModelPair(src, dst) {
   const pairKey = `${src}${dst}`
   const relativeDir = `../../model/bergamot/${pairKey}`
   const modelDir = path.resolve(__dirname, relativeDir)
 
   if (fs.existsSync(modelDir)) {
     const files = fs.readdirSync(modelDir)
-    const hasModel = files.some(f => f.includes('.intgemm') || f.includes('.bin'))
-    const hasVocab = files.some(f => f.includes('.spm'))
+    const hasModel = files.some((f) => f.includes('.intgemm') || f.includes('.bin'))
+    const hasVocab = files.some((f) => f.includes('.spm'))
     if (hasModel && hasVocab) return modelDir
   }
 
-  const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
+  const writableRoot = isMobile ? global.testDir || '/tmp' : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', pairKey)
   // `ensureBergamotModelFiles` (not the raw `downloadBergamotFromFirefox`)
   // short-circuits when destDir is already populated — important for the
@@ -97,17 +97,17 @@ async function ensureModelPair (src, dst) {
  * @param {string} modelDir - path to model directory
  * @returns {{ modelFile: string, vocabFile: string }}
  */
-function findModelFiles (modelDir) {
+function findModelFiles(modelDir) {
   const files = fs.readdirSync(modelDir)
-  const modelFile = files.find(f => f.includes('.intgemm') && f.includes('.bin'))
-  const vocabFile = files.find(f => f.includes('.spm'))
+  const modelFile = files.find((f) => f.includes('.intgemm') && f.includes('.bin'))
+  const vocabFile = files.find((f) => f.includes('.spm'))
   return { modelFile, vocabFile }
 }
 
 /**
  * Creates pivot translation constructor args from model directories.
  */
-function createPivotArgs (primaryDir, primaryFiles, pivotDir, pivotFiles, opts = {}) {
+function createPivotArgs(primaryDir, primaryFiles, pivotDir, pivotFiles, opts = {}) {
   return {
     files: {
       model: path.join(primaryDir, primaryFiles.modelFile),
@@ -142,10 +142,12 @@ function createPivotArgs (primaryDir, primaryFiles, pivotDir, pivotFiles, opts =
 /**
  * Shared runner for the es→en→it pivot test on a specific GPU device or CPU.
  */
-async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
+async function runEsEnItPivotTest(t, label, useGpu, gpuDevice) {
   t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-  t.comment(`${label} Testing with use_gpu: ${useGpu}` +
-    (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : ''))
+  t.comment(
+    `${label} Testing with use_gpu: ${useGpu}` +
+      (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : '')
+  )
 
   t.comment(`${label} Ensuring es→en model...`)
   const esEnDir = await ensureModelPair('es', 'en')
@@ -188,23 +190,29 @@ async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
 
     const response = await model.run(testSentence)
     await response
-      .onUpdate(data => { perfCollector.onToken(data) })
+      .onUpdate((data) => {
+        perfCollector.onToken(data)
+      })
       .await()
 
     const addonStats = response.stats || {}
     t.comment(`${label} Native addon stats: ${JSON.stringify(addonStats)}`)
     const metrics = perfCollector.getMetrics(testSentence, addonStats)
-    t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
-      fixturePath: PIVOT_BERGAMOT_FIXTURE,
-      srcLang: 'es',
-      dstLang: 'it'
-    }))
+    t.comment(
+      formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'es',
+        dstLang: 'it'
+      })
+    )
 
     t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
     t.pass(`${label} Pivot translation completed successfully`)
   } finally {
     if (model) {
-      try { await model.unload() } catch (e) {
+      try {
+        await model.unload()
+      } catch (e) {
         t.comment(`${label} unload error: ${e.message}`)
       }
     }
@@ -213,102 +221,120 @@ async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
 
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
-    test(`Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const devices = await discoverGpuDevices()
-      const device = devices[gpuIdx]
+    test(
+      `Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`,
+      { timeout: PIVOT_TIMEOUT },
+      async function (t) {
+        const devices = await discoverGpuDevices()
+        const device = devices[gpuIdx]
 
-      if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
-        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
-        return
+        if (!device) {
+          t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
+          t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+          return
+        }
+
+        const label = `[GPU:${device.index} ${device.name}]`
+        await runEsEnItPivotTest(t, label, true, device.index)
       }
-
-      const label = `[GPU:${device.index} ${device.name}]`
-      await runEsEnItPivotTest(t, label, true, device.index)
-    })
+    )
   }
 }
 
-test('Pivot translation [CPU] - Spanish → English → Italian', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  await runEsEnItPivotTest(t, '[CPU]', false, undefined)
-})
+test(
+  'Pivot translation [CPU] - Spanish → English → Italian',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    await runEsEnItPivotTest(t, '[CPU]', false, undefined)
+  }
+)
 
 // ---------------------------------------------------------------------------
 // Test: Pivot stats are populated (regression for v0.6.1 hang fix)
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - stats object is populated (no hang)', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - stats object is populated (no hang)',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    await model.load()
+      await model.load()
 
-    const response = await model.run('Hola mundo')
-    let output = ''
-    await response
-      .onUpdate(data => { output += data })
-      .await()
+      const response = await model.run('Hola mundo')
+      let output = ''
+      await response
+        .onUpdate((data) => {
+          output += data
+        })
+        .await()
 
-    const stats = response.stats
-    t.ok(stats, 'stats object should exist')
-    t.ok(typeof stats === 'object', 'stats should be an object')
-    t.comment('Pivot stats keys: ' + Object.keys(stats).join(', '))
-    t.ok(output.length > 0, 'translation output should not be empty')
-    t.pass('Stats received without hang')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      const stats = response.stats
+      t.ok(stats, 'stats object should exist')
+      t.ok(typeof stats === 'object', 'stats should be an object')
+      t.comment('Pivot stats keys: ' + Object.keys(stats).join(', '))
+      t.ok(output.length > 0, 'translation output should not be empty')
+      t.pass('Stats received without hang')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Pivot batch translation via runBatch()
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - batch translation via runBatch()', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - batch translation via runBatch()',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    await model.load()
+      await model.load()
 
-    const inputs = [
-      'Buenos días',
-      'Gracias por tu ayuda',
-      'El gato está en la mesa'
-    ]
-    t.comment('Batch input: ' + JSON.stringify(inputs))
+      const inputs = ['Buenos días', 'Gracias por tu ayuda', 'El gato está en la mesa']
+      t.comment('Batch input: ' + JSON.stringify(inputs))
 
-    const results = await model.runBatch(inputs)
+      const results = await model.runBatch(inputs)
 
-    t.ok(Array.isArray(results), 'batch results should be an array')
-    t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
+      t.ok(Array.isArray(results), 'batch results should be an array')
+      t.is(results.length, inputs.length, `should return ${inputs.length} translations`)
 
-    for (let i = 0; i < results.length; i++) {
-      t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
-      t.ok(results[i].length > 0, `result[${i}] should not be empty`)
-      t.comment(`  "${inputs[i]}" → "${results[i]}"`)
-    }
+      for (let i = 0; i < results.length; i++) {
+        t.ok(typeof results[i] === 'string', `result[${i}] should be a string`)
+        t.ok(results[i].length > 0, `result[${i}] should not be empty`)
+        t.comment(`  "${inputs[i]}" → "${results[i]}"`)
+      }
 
-    t.pass('Batch pivot translation completed')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.pass('Batch pivot translation completed')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Cancel during pivot translation
@@ -326,7 +352,8 @@ test('Pivot translation - cancel does not crash', { timeout: PIVOT_TIMEOUT }, as
 
     await model.load()
 
-    const longText = 'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
+    const longText =
+      'Esta es una oración muy larga que debería tomar un poco de tiempo para traducir. ' +
       'Queremos asegurarnos de que la cancelación funcione correctamente durante la traducción pivote. ' +
       'El texto sigue y sigue para dar tiempo al proceso de ser cancelado antes de terminar.'
 
@@ -343,7 +370,9 @@ test('Pivot translation - cancel does not crash', { timeout: PIVOT_TIMEOUT }, as
     }
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -352,39 +381,47 @@ test('Pivot translation - cancel does not crash', { timeout: PIVOT_TIMEOUT }, as
 // Test: Multiple sequential translations reuse the same loaded model
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - multiple sequential runs', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - multiple sequential runs',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    await model.load()
+      await model.load()
 
-    const sentences = ['Hola', 'Adiós', 'Gracias']
-    const results = []
+      const sentences = ['Hola', 'Adiós', 'Gracias']
+      const results = []
 
-    for (const sentence of sentences) {
-      const response = await model.run(sentence)
-      let output = ''
-      await response
-        .onUpdate(data => { output += data })
-        .await()
-      results.push(output)
-      t.ok(output.length > 0, `"${sentence}" produced output: "${output}"`)
-    }
+      for (const sentence of sentences) {
+        const response = await model.run(sentence)
+        let output = ''
+        await response
+          .onUpdate((data) => {
+            output += data
+          })
+          .await()
+        results.push(output)
+        t.ok(output.length > 0, `"${sentence}" produced output: "${output}"`)
+      }
 
-    t.is(results.length, 3, 'all 3 sequential translations completed')
-    t.pass('Multiple sequential pivot translations succeeded')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.is(results.length, 3, 'all 3 sequential translations completed')
+      t.pass('Multiple sequential pivot translations succeeded')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Empty string input
@@ -405,7 +442,9 @@ test('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async
     const response = await model.run('')
     let output = ''
     await response
-      .onUpdate(data => { output += data })
+      .onUpdate((data) => {
+        output += data
+      })
       .await()
 
     t.comment('Empty input produced output: "' + output + '"')
@@ -415,7 +454,9 @@ test('Pivot translation - empty string input', { timeout: PIVOT_TIMEOUT }, async
     t.pass('Empty string input handled gracefully')
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -447,7 +488,9 @@ test('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, 
     }
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -456,49 +499,59 @@ test('Pivot translation - run after unload throws', { timeout: PIVOT_TIMEOUT }, 
 // Test: Load → unload → reload cycle
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - load, unload, reload cycle',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    // First load and translate
-    await model.load()
-    t.pass('First load succeeded')
+      // First load and translate
+      await model.load()
+      t.pass('First load succeeded')
 
-    const response1 = await model.run('Hola')
-    let output1 = ''
-    await response1
-      .onUpdate(data => { output1 += data })
-      .await()
-    t.ok(output1.length > 0, 'First translation produced output: "' + output1 + '"')
+      const response1 = await model.run('Hola')
+      let output1 = ''
+      await response1
+        .onUpdate((data) => {
+          output1 += data
+        })
+        .await()
+      t.ok(output1.length > 0, 'First translation produced output: "' + output1 + '"')
 
-    // Unload
-    await model.unload()
-    t.pass('Unload succeeded')
+      // Unload
+      await model.unload()
+      t.pass('Unload succeeded')
 
-    // Reload and translate again
-    await model.load()
-    t.pass('Reload succeeded')
+      // Reload and translate again
+      await model.load()
+      t.pass('Reload succeeded')
 
-    const response2 = await model.run('Gracias')
-    let output2 = ''
-    await response2
-      .onUpdate(data => { output2 += data })
-      .await()
-    t.ok(output2.length > 0, 'Second translation after reload produced output: "' + output2 + '"')
+      const response2 = await model.run('Gracias')
+      let output2 = ''
+      await response2
+        .onUpdate((data) => {
+          output2 += data
+        })
+        .await()
+      t.ok(output2.length > 0, 'Second translation after reload produced output: "' + output2 + '"')
 
-    t.pass('Load → unload → reload cycle completed successfully')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.pass('Load → unload → reload cycle completed successfully')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Different language pair (fr → en → es)
@@ -511,10 +564,12 @@ test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT 
 /**
  * Shared runner for the fr→en→es pivot test on a specific GPU device or CPU.
  */
-async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
+async function runFrEnEsPivotTest(t, label, useGpu, gpuDevice) {
   t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-  t.comment(`${label} Testing with use_gpu: ${useGpu}` +
-    (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : ''))
+  t.comment(
+    `${label} Testing with use_gpu: ${useGpu}` +
+      (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : '')
+  )
 
   t.comment(`${label} Ensuring fr→en model...`)
   const frEnDir = await ensureModelPair('fr', 'en')
@@ -551,29 +606,35 @@ async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
     await model.load()
     t.pass(`${label} Pivot model loaded (fr→en→es)`)
 
-    const testSentence = 'Bonjour, comment allez-vous aujourd\'hui?'
+    const testSentence = "Bonjour, comment allez-vous aujourd'hui?"
     t.comment(`${label} Translating: "${testSentence}"`)
 
     perfCollector.start()
 
     const response = await model.run(testSentence)
     await response
-      .onUpdate(data => { perfCollector.onToken(data) })
+      .onUpdate((data) => {
+        perfCollector.onToken(data)
+      })
       .await()
 
     const addonStats = response.stats || {}
     const metrics = perfCollector.getMetrics(testSentence, addonStats)
-    t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
-      fixturePath: PIVOT_BERGAMOT_FIXTURE,
-      srcLang: 'fr',
-      dstLang: 'es'
-    }))
+    t.comment(
+      formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
+        fixturePath: PIVOT_BERGAMOT_FIXTURE,
+        srcLang: 'fr',
+        dstLang: 'es'
+      })
+    )
 
     t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
     t.pass(`${label} fr→en→es pivot translation completed successfully`)
   } finally {
     if (model) {
-      try { await model.unload() } catch (e) {
+      try {
+        await model.unload()
+      } catch (e) {
         t.comment(`${label} unload error: ${e.message}`)
       }
     }
@@ -582,25 +643,33 @@ async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
 
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
-    test(`Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const devices = await discoverGpuDevices()
-      const device = devices[gpuIdx]
+    test(
+      `Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`,
+      { timeout: PIVOT_TIMEOUT },
+      async function (t) {
+        const devices = await discoverGpuDevices()
+        const device = devices[gpuIdx]
 
-      if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
-        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
-        return
+        if (!device) {
+          t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
+          t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+          return
+        }
+
+        const label = `[GPU:${device.index} ${device.name}]`
+        await runFrEnEsPivotTest(t, label, true, device.index)
       }
-
-      const label = `[GPU:${device.index} ${device.name}]`
-      await runFrEnEsPivotTest(t, label, true, device.index)
-    })
+    )
   }
 }
 
-test('Pivot translation [CPU] - French → English → Spanish', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  await runFrEnEsPivotTest(t, '[CPU]', false, undefined)
-})
+test(
+  'Pivot translation [CPU] - French → English → Spanish',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    await runFrEnEsPivotTest(t, '[CPU]', false, undefined)
+  }
+)
 
 // ---------------------------------------------------------------------------
 // Test: Long multi-paragraph text
@@ -612,47 +681,58 @@ test('Pivot translation [CPU] - French → English → Spanish', { timeout: PIVO
 // handoff between models. If this breaks in production, users lose trust.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - long multi-paragraph text',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    await model.load()
+      await model.load()
 
-    const longText =
-      'Era una mañana soleada cuando María decidió visitar el mercado local. ' +
-      'Compró frutas frescas, verduras y flores para su casa. ' +
-      'El vendedor le recomendó las mejores manzanas de la temporada. ' +
-      'María también encontró un hermoso libro antiguo en una tienda cercana. ' +
-      'Fue un día perfecto para explorar la ciudad. ' +
-      'Por la tarde, visitó el museo de arte contemporáneo donde admiró las obras de artistas locales. ' +
-      'La exposición principal presentaba pinturas abstractas con colores vibrantes. ' +
-      'Al final del día, María se sentó en un café junto al río y reflexionó sobre todas las experiencias del día.'
+      const longText =
+        'Era una mañana soleada cuando María decidió visitar el mercado local. ' +
+        'Compró frutas frescas, verduras y flores para su casa. ' +
+        'El vendedor le recomendó las mejores manzanas de la temporada. ' +
+        'María también encontró un hermoso libro antiguo en una tienda cercana. ' +
+        'Fue un día perfecto para explorar la ciudad. ' +
+        'Por la tarde, visitó el museo de arte contemporáneo donde admiró las obras de artistas locales. ' +
+        'La exposición principal presentaba pinturas abstractas con colores vibrantes. ' +
+        'Al final del día, María se sentó en un café junto al río y reflexionó sobre todas las experiencias del día.'
 
-    t.comment('Input length: ' + longText.length + ' characters')
+      t.comment('Input length: ' + longText.length + ' characters')
 
-    const response = await model.run(longText)
-    let output = ''
-    await response
-      .onUpdate(data => { output += data })
-      .await()
+      const response = await model.run(longText)
+      let output = ''
+      await response
+        .onUpdate((data) => {
+          output += data
+        })
+        .await()
 
-    t.ok(output.length > 0, 'long text produced output')
-    t.ok(output.length > 50, 'output is substantial (>' + 50 + ' chars, got ' + output.length + ')')
-    t.comment('Output length: ' + output.length + ' characters')
-    t.comment('Output preview: "' + output.substring(0, 120) + '..."')
-    t.pass('Long multi-paragraph pivot translation completed')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      t.ok(output.length > 0, 'long text produced output')
+      t.ok(
+        output.length > 50,
+        'output is substantial (>' + 50 + ' chars, got ' + output.length + ')'
+      )
+      t.comment('Output length: ' + output.length + ' characters')
+      t.comment('Output preview: "' + output.substring(0, 120) + '..."')
+      t.pass('Long multi-paragraph pivot translation completed')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Text with numbers, punctuation, and special characters
@@ -665,39 +745,48 @@ test('Pivot translation - long multi-paragraph text', { timeout: PIVOT_TIMEOUT }
 // This is a common production bug in chained translation pipelines.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - numbers and special characters preserved', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - numbers and special characters preserved',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
 
-    await model.load()
+      await model.load()
 
-    const textWithSpecials = 'El precio es $49.99 y la fecha es 15/03/2026. Contacto: maria@ejemplo.com (Tel: +34-600-123-456)'
-    t.comment('Input: "' + textWithSpecials + '"')
+      const textWithSpecials =
+        'El precio es $49.99 y la fecha es 15/03/2026. Contacto: maria@ejemplo.com (Tel: +34-600-123-456)'
+      t.comment('Input: "' + textWithSpecials + '"')
 
-    const response = await model.run(textWithSpecials)
-    let output = ''
-    await response
-      .onUpdate(data => { output += data })
-      .await()
+      const response = await model.run(textWithSpecials)
+      let output = ''
+      await response
+        .onUpdate((data) => {
+          output += data
+        })
+        .await()
 
-    t.ok(output.length > 0, 'special character text produced output')
-    t.comment('Output: "' + output + '"')
+      t.ok(output.length > 0, 'special character text produced output')
+      t.comment('Output: "' + output + '"')
 
-    const hasNumbers = /\d/.test(output)
-    t.ok(hasNumbers, 'output retains numeric content')
-    t.pass('Numbers and special characters handled through pivot chain')
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      const hasNumbers = /\d/.test(output)
+      t.ok(hasNumbers, 'output retains numeric content')
+      t.pass('Numbers and special characters handled through pivot chain')
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Test: Batch with single item
@@ -729,7 +818,9 @@ test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, a
     t.pass('Single-item batch pivot translation works')
   } finally {
     if (model) {
-      try { await model.unload() } catch (_) {}
+      try {
+        await model.unload()
+      } catch (_) {}
     }
   }
 })
@@ -743,37 +834,53 @@ test('Pivot translation - batch with single item', { timeout: PIVOT_TIMEOUT }, a
 // state would go undetected.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - cancel mid-inference leaves model reusable', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - cancel mid-inference leaves model reusable',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
-    await model.load()
-
-    const response = await model.run(CANCEL_LONG_TEXT_ES)
-    await response.cancel()
-    t.pass('cancel() during pivot translation did not crash')
-
-    try { await response.await() } catch (_) { /* cancelled job may settle as error */ }
-
+    let model
     try {
-      const r2 = await model.run('Gracias')
-      let out2 = ''
-      await r2.onUpdate(data => { out2 += data }).await()
-      t.pass(`second run() after cancel completed (output: "${out2 || '<empty — sync cancel landed post-completion>'}")`)
-    } catch (e) {
-      t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
-    }
-  } finally {
-    if (model) {
-      try { await model.unload() } catch (_) {}
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+      await model.load()
+
+      const response = await model.run(CANCEL_LONG_TEXT_ES)
+      await response.cancel()
+      t.pass('cancel() during pivot translation did not crash')
+
+      try {
+        await response.await()
+      } catch (_) {
+        /* cancelled job may settle as error */
+      }
+
+      try {
+        const r2 = await model.run('Gracias')
+        let out2 = ''
+        await r2
+          .onUpdate((data) => {
+            out2 += data
+          })
+          .await()
+        t.pass(
+          `second run() after cancel completed (output: "${out2 || '<empty — sync cancel landed post-completion>'}")`
+        )
+      } catch (e) {
+        t.fail('run() after cancel threw: ' + (e instanceof Error ? e.message : e))
+      }
+    } finally {
+      if (model) {
+        try {
+          await model.unload()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // Cancel then immediate destroy (race condition)
@@ -782,29 +889,35 @@ test('Pivot translation - cancel mid-inference leaves model reusable', { timeout
 // the surface area for use-after-free bugs.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - cancel then immediate destroy does not crash', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - cancel then immediate destroy does not crash',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
-    await model.load()
+    let model
+    try {
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+      await model.load()
 
-    const response = await model.run(CANCEL_LONG_TEXT_ES)
-    response.cancel()
-    await model.destroy()
+      const response = await model.run(CANCEL_LONG_TEXT_ES)
+      response.cancel()
+      await model.destroy()
 
-    t.pass('cancel() then destroy() did not crash')
-    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
-  } finally {
-    if (model && !model.getState().destroyed) {
-      try { await model.destroy() } catch (_) {}
+      t.pass('cancel() then destroy() did not crash')
+      t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+    } finally {
+      if (model && !model.getState().destroyed) {
+        try {
+          await model.destroy()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // run() after destroy() must throw
@@ -812,33 +925,39 @@ test('Pivot translation - cancel then immediate destroy does not crash', { timeo
 // WHY: destroy() is permanent teardown. Apps must get a clear error.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - run after destroy throws', { timeout: PIVOT_TIMEOUT }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - run after destroy throws',
+  { timeout: PIVOT_TIMEOUT },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  let model
-  try {
-    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
-    await model.load()
-    await model.destroy()
-
-    t.ok(model.getState().destroyed === true, 'model state marked destroyed')
-
+    let model
     try {
-      await model.run('Hola')
-      t.fail('Expected run() after destroy to throw')
-    } catch (e) {
-      t.ok(e instanceof Error, 'run() after destroy threw an Error instance')
-      t.comment('Error message: ' + e.message)
-    }
-  } finally {
-    if (model && !model.getState().destroyed) {
-      try { await model.destroy() } catch (_) {}
+      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+      await model.load()
+      await model.destroy()
+
+      t.ok(model.getState().destroyed === true, 'model state marked destroyed')
+
+      try {
+        await model.run('Hola')
+        t.fail('Expected run() after destroy to throw')
+      } catch (e) {
+        t.ok(e instanceof Error, 'run() after destroy threw an Error instance')
+        t.comment('Error message: ' + e.message)
+      }
+    } finally {
+      if (model && !model.getState().destroyed) {
+        try {
+          await model.destroy()
+        } catch (_) {}
+      }
     }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // run() before load() must throw
@@ -873,38 +992,48 @@ test('Pivot translation - run before load throws', { timeout: PIVOT_TIMEOUT }, a
 // runtime manageable given the two-model overhead.
 // ---------------------------------------------------------------------------
 
-test('Pivot translation - multi-cycle load/unload stress', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
-  const esEnDir = await ensureModelPair('es', 'en')
-  const enItDir = await ensureModelPair('en', 'it')
-  const esEn = findModelFiles(esEnDir)
-  const enIt = findModelFiles(enItDir)
+test(
+  'Pivot translation - multi-cycle load/unload stress',
+  { timeout: TEST_TIMEOUT * 2 },
+  async function (t) {
+    const esEnDir = await ensureModelPair('es', 'en')
+    const enItDir = await ensureModelPair('en', 'it')
+    const esEn = findModelFiles(esEnDir)
+    const enIt = findModelFiles(enItDir)
 
-  const CYCLES = 4
+    const CYCLES = 4
 
-  for (let i = 1; i <= CYCLES; i++) {
-    let model
-    const started = Date.now()
-    try {
-      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
-      await model.load()
+    for (let i = 1; i <= CYCLES; i++) {
+      let model
+      const started = Date.now()
+      try {
+        model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt))
+        await model.load()
 
-      const response = await model.run('Muchas gracias')
-      let output = ''
-      await response.onUpdate(data => { output += data }).await()
-      t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`cycle ${i} unload error: ${e.message}`)
+        const response = await model.run('Muchas gracias')
+        let output = ''
+        await response
+          .onUpdate((data) => {
+            output += data
+          })
+          .await()
+        t.ok(output.length > 0, `cycle ${i}/${CYCLES} produced output`)
+      } finally {
+        if (model) {
+          try {
+            await model.unload()
+          } catch (e) {
+            t.comment(`cycle ${i} unload error: ${e.message}`)
+          }
         }
       }
-    }
-    t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
+      t.comment(`cycle ${i}/${CYCLES} completed in ${Date.now() - started}ms`)
 
-    if (isMobile) {
-      await new Promise(resolve => setTimeout(resolve, 200))
+      if (isMobile) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
     }
+
+    t.pass(`Completed ${CYCLES} pivot load/unload cycles without failure`)
   }
-
-  t.pass(`Completed ${CYCLES} pivot load/unload cycles without failure`)
-})
+)

@@ -24,6 +24,7 @@ using qvac_lib_inference_addon_llama::batching::StopReason;
 class RecordingDriver : public SequenceDriver {
 public:
   std::vector<std::string> calls;
+  GenerationStopReason terminalReason = GenerationStopReason::None;
 
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
   [[nodiscard]] int32_t getNSlides() const override { return 0; }
@@ -48,9 +49,12 @@ public:
   void onSequenceEnd(const std::function<void(const std::string&)>&) override {
     calls.emplace_back("onSequenceEnd");
   }
-  void onGenerationFinished(
-      const std::function<void(const std::string&)>&) override {
+  [[nodiscard]] bool onGenerationFinished(
+      const std::function<void(const std::string&)>&,
+      GenerationStopReason reason = GenerationStopReason::None) override {
     calls.emplace_back("onGenerationFinished");
+    terminalReason = reason;
+    return rollbackOk;
   }
   [[nodiscard]] bool
   onCancel(const std::function<void(const std::string&)>&) override {
@@ -105,6 +109,20 @@ TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
       driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback);
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::None);
+}
+
+/// Scheduler-imposed per-sequence cap is a known truncation reason. Preserve it
+/// at the finalization boundary so recurrent drivers can roll back open
+/// reasoning spans instead of treating the slot as a normal completion and
+/// attempting strict compaction.
+TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
+  RecordingDriver driver;
+  (void)finalizeTerminalDriver(
+      driver, StopReason::LimitReached, /*prefillOnly=*/false, kNoCallback);
+
+  EXPECT_TRUE(driver.fired("onGenerationFinished"));
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
 }
 
 /// A prefill-only slot never generated, so it only flushes via onSequenceEnd
@@ -119,10 +137,11 @@ TEST(ContinuousBatchFinalize, PrefillOnlyOnlyFlushes) {
   EXPECT_FALSE(driver.fired("onCancel"));
 }
 
-/// `finalizeTerminalDriver` must forward the driver's rollback-ok signal
-/// from `onCancel` on Cancelled / DecodeError paths so the scheduler can
-/// skip `saveCache` when a recurrent full-state restore was refused.
-/// Non-cancel paths always report OK because no rollback runs.
+/// `finalizeTerminalDriver` must forward the driver's rollback-ok signal so
+/// the scheduler can skip `saveCache` when a recurrent full-state restore was
+/// refused. Cancelled / DecodeError paths report through `onCancel`; natural
+/// generation finalization can also report a rollback failure when generation
+/// was truncated mid-reasoning.
 TEST(ContinuousBatchFinalize, CancelForwardsRollbackFailure) {
   RecordingDriver driver;
   driver.rollbackOk = false;
@@ -137,9 +156,9 @@ TEST(ContinuousBatchFinalize, CancelForwardsRollbackSuccess) {
       driver, StopReason::Cancelled, /*prefillOnly=*/false, kNoCallback));
 }
 
-TEST(ContinuousBatchFinalize, NaturalFinishAlwaysReportsRollbackOk) {
+TEST(ContinuousBatchFinalize, NaturalFinishForwardsRollbackFailure) {
   RecordingDriver driver;
-  driver.rollbackOk = false; // Should be ignored on non-cancel paths.
-  EXPECT_TRUE(finalizeTerminalDriver(
+  driver.rollbackOk = false;
+  EXPECT_FALSE(finalizeTerminalDriver(
       driver, StopReason::Finished, /*prefillOnly=*/false, kNoCallback));
 }

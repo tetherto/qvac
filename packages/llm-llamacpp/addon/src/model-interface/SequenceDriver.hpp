@@ -17,6 +17,15 @@
 class LlamaBatch;
 struct PromptLayout;
 
+enum class GenerationStopReason : uint8_t {
+  None,
+  Eos,
+  Antiprompt,
+  PredictionLimit,
+  SequenceLimit,
+  ContextOverflow,
+};
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -26,6 +35,7 @@ struct SequenceStepResult {
   bool finished = false;
   bool decodedInline = false;
   bool contextOverflow = false;
+  GenerationStopReason stopReason = GenerationStopReason::None;
   /// Tokens dropped from this sequence's KV-cache by an in-step context
   /// slide. The scheduler must subtract it from the request's position
   /// before feeding the next token.
@@ -211,9 +221,16 @@ public:
   virtual void onSequenceEnd(
       const std::function<void(const std::string&)>& outputCallback) = 0;
 
-  /// Fired when generation reaches a natural EOG / stop token.
-  virtual void onGenerationFinished(
-      const std::function<void(const std::string&)>& outputCallback) = 0;
+  /// Fired when generation reaches a natural EOG / stop token, generation
+  /// budget limit, or scheduler-imposed sequence limit. `terminalReason`
+  /// carries reasons known only at finalization time (e.g. the scheduler's
+  /// per-sequence slot cap). Returns `false` when finalisation had to roll
+  /// back the request but could not prove live recurrent state matches
+  /// metadata, in which case callers MUST skip cache persistence for this
+  /// request.
+  [[nodiscard]] virtual bool onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback,
+      GenerationStopReason terminalReason = GenerationStopReason::None) = 0;
 
   /// Fired when the sequence is cancelled (user-requested or fatal error).
   /// Returns `true` when internal rollback (metadata + live KV / recurrent

@@ -1,0 +1,56 @@
+name: License compliance
+
+# Canonical license/compliance gate (dependency license policy + lockfile drift
+# + advisory NOTICE presence) rolled out to Tier-1 repos per QVAC-21554. This is
+# a thin caller that delegates to the org's reusable workflow (authored under the
+# same ticket); its inputs and behavior are documented in
+# tetherto/qvac-actions/docs/license-compliance-ci.md.
+#
+# Rollout stage: WARN-ONLY (shadow mode). Findings are annotated on the PR and in
+# the job summary but never block a merge. Flipping to a required blocking check
+# is a follow-up once shadow-mode telemetry is acceptable and TL sign-off is in.
+#
+# Uses plain `pull_request` (never `pull_request_target`): fork PRs run with a
+# read-only token and no secrets, and this gate needs none of the privileged
+# context (it only reads the dependency diff and, for same-repo PRs, upserts one
+# comment), so the "pwn request" surface of `pull_request_target` buys nothing.
+#
+# Coverage limitation: package lockfiles are gitignored in this repo, so
+# GitHub's dependency graph is manifest-only and this gate classifies direct /
+# declared dependencies, NOT the full transitive tree — a disallowed transitive
+# license can still pass. Full transitive resolution is the compliance SKILL's
+# job (run before releases / on a schedule). See
+# tetherto/qvac-actions/docs/license-compliance-ci.md "Known limitation".
+#
+# The compliance SKILL (`.cursor/skills/qv-notice-generate`) is the human
+# fallback for the long tail this deterministic gate cannot classify.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  license:
+    # Pinned to the qvac-actions license-compliance branch commit while the
+    # reusable workflow's release tag is being cut. Repin to the 0.3.0 tag's
+    # immutable commit SHA (freeze-and-pin convention, never `@main`) once
+    # tetherto/qvac-actions#12 merges and the tag is published.
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-license.yml@ce61672c6a49861ee5ff2e5e6617e4f0df665d37 # pending 0.3.0
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      # Shadow mode: annotate, never block. Drop this (or set false) when the
+      # check is promoted to a required status check in branch protection.
+      warn-only: true
+      allowlist-path: .github/license-allowlist.yml

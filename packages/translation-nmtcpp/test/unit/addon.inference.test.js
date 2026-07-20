@@ -135,12 +135,12 @@ test('AddonInterface runJob triggers output callback correctly', async (t) => {
   await wait()
 
   t.ok(
-    events.some(e => e.data && e.data.type === 'number' && e.data.data === 5),
+    events.some((e) => e.data && e.data.type === 'number' && e.data.data === 5),
     'Output callback should report length 5 for input "abcde"'
   )
 
   t.ok(
-    events.some(e => e.data && e.data.TPS !== undefined),
+    events.some((e) => e.data && e.data.TPS !== undefined),
     'Stats callback should be emitted with TPS'
   )
 })
@@ -177,12 +177,12 @@ test('AddonInterface runJob handles sequences type', async (t) => {
   await wait()
 
   t.ok(
-    events.some(e => Array.isArray(e.data) && e.data.length === 2),
+    events.some((e) => Array.isArray(e.data) && e.data.length === 2),
     'Output callback should receive array result for batch'
   )
 
   t.ok(
-    events.some(e => e.data && e.data.TPS !== undefined),
+    events.some((e) => e.data && e.data.TPS !== undefined),
     'Stats callback should be emitted after batch'
   )
 })

@@ -111,10 +111,13 @@ bool finalizeTerminalDriver(
   }
   if (prefillOnly) {
     driver.onSequenceEnd(outputCallback);
+    return true;
   } else {
-    driver.onGenerationFinished(outputCallback);
+    const GenerationStopReason terminalReason =
+        reason == StopReason::LimitReached ? GenerationStopReason::SequenceLimit
+                                           : GenerationStopReason::None;
+    return driver.onGenerationFinished(outputCallback, terminalReason);
   }
-  return true;
 }
 
 bool computeSlideCapable(

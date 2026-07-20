@@ -12,8 +12,7 @@ test('MosesTokenizer should tokenize a sentence correctly', (t) => {
   const moses = new MosesTokenizer()
 
   // Tokenize a sentence with weird symbols
-  const text =
-    'This, is a sentence with weird\xbb symbols\u2026 appearing everywhere\xbf'
+  const text = 'This, is a sentence with weird\xbb symbols\u2026 appearing everywhere\xbf'
   const expectedTokens =
     'This , is a sentence with weird \xbb symbols \u2026 appearing everywhere \xbf'
   const tokenizedText = moses.tokenize(text, false, true) // returnStr=true
@@ -103,10 +102,7 @@ test('MosesTokenizer should handle XML escaping correctly', (t) => {
     '?'
   ]
 
-  t.alike(
-    moses.tokenize(text, false, false, true),
-    expectedTokensWithXmlEscape
-  )
+  t.alike(moses.tokenize(text, false, false, true), expectedTokensWithXmlEscape)
   t.alike(moses.tokenize(text, false, false, false), expectedTokensWoXmlEscape)
 })
 
@@ -123,10 +119,7 @@ test('MosesTokenizer, should handle aggressive dash splitting', (t) => {
   const expectedTokensWithAggressiveDashSplit = ['foo', '@-@', 'bar']
 
   t.alike(moses.tokenize('foo-bar'), expectedTokensWoAggressiveDashSplit)
-  t.alike(
-    moses.tokenize('foo-bar', true),
-    expectedTokensWithAggressiveDashSplit
-  )
+  t.alike(moses.tokenize('foo-bar', true), expectedTokensWithAggressiveDashSplit)
 })
 
 test('MosesTokenizer, should handle opening brackets correctly', (t) => {
@@ -143,8 +136,7 @@ test('MosesTokenizer, should handle opening brackets correctly', (t) => {
 test('MosesTokenizer, should handle dot splitting correctly', (t) => {
   const moses = new MosesTokenizer()
   const text = 'The meeting will take place at 11:00 a.m. Tuesday.'
-  const expectedTokens =
-    'The meeting will take place at 11 : 00 a.m. Tuesday .'.split(' ')
+  const expectedTokens = 'The meeting will take place at 11 : 00 a.m. Tuesday .'.split(' ')
   t.alike(moses.tokenize(text), expectedTokens)
 })
 
@@ -171,20 +163,14 @@ test('MosesTokenizer, should protect patterns correctly', (t) => {
   ]
 
   // Test with BASIC_PROTECTED_PATTERNS
-  t.alike(
-    moses.tokenize(text, false, false, true, moses.BASIC_PROTECTED_PATTERNS),
-    expectedTokens
-  )
+  t.alike(moses.tokenize(text, false, false, true, moses.BASIC_PROTECTED_PATTERNS), expectedTokens)
 
   // Testing against pattern from issues
   const noePatterns = [
     /(?:http|ftp)s?:\/\/(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?))(?::\d+)?(?:\/\w+)*(?:(?:\.[a-z]+)|\/?)(?:\?[^\s]*)?(?:#[^\s]*)?/i
   ]
 
-  t.alike(
-    moses.tokenize(text, false, false, true, noePatterns),
-    expectedTokens
-  )
+  t.alike(moses.tokenize(text, false, false, true, noePatterns), expectedTokens)
 })
 
 test('MosesTokenizer, should protect overlapping patterns with longest match first', (t) => {
@@ -200,10 +186,7 @@ test('MosesTokenizer, should protect overlapping patterns with longest match fir
   t.alike(moses.tokenize(text, false, false, true, patterns), expected)
 
   // Test with patterns in reversed order - should give same result
-  t.alike(
-    moses.tokenize(text, false, false, true, [...patterns].reverse()),
-    expected
-  )
+  t.alike(moses.tokenize(text, false, false, true, [...patterns].reverse()), expected)
 })
 
 test('MosesTokenizer, should split final comma after numbers correctly', (t) => {
@@ -258,8 +241,7 @@ test('MosesDetokenizer, should detokenize correctly', (t) => {
   const tokenizer = new MosesTokenizer()
   const detokenizer = new MosesDetokenizer()
 
-  const text =
-    'This, is a sentence with weird\xbb symbols\u2026 appearing everywhere\xbf'
+  const text = 'This, is a sentence with weird\xbb symbols\u2026 appearing everywhere\xbf'
   const expectedTokens = tokenizer.tokenize(text)
   const expectedDetokens =
     'This, is a sentence with weird \xbb symbols \u2026 appearing everywhere \xbf'
@@ -354,15 +336,7 @@ test('MosesDetokenizer, should handle mixed CJK tokenization correctly', (t) => 
   const detokenizer = new MosesDetokenizer()
   const text = 'Japan is 日本 in Japanese.'
 
-  t.alike(tokenizer.tokenize(text), [
-    'Japan',
-    'is',
-    '日',
-    '本',
-    'in',
-    'Japanese',
-    '.'
-  ])
+  t.alike(tokenizer.tokenize(text), ['Japan', 'is', '日', '本', 'in', 'Japanese', '.'])
   console.log(detokenizer.detokenize(tokenizer.tokenize(text)), text)
   t.is(detokenizer.detokenize(tokenizer.tokenize(text)), text)
 })

@@ -11,12 +11,8 @@ class TranslationInterface {
    * @param {Function} outputCb - to be called on any inference event ( started, new output, error, etc )
    * @param {Function} transitionCb - to be called on addon state changes (LISTENING, IDLE, STOPPED, etc )
    */
-  constructor (configurationParams, outputCb, transitionCb = null) {
-    this._handle = binding.createInstance(
-      this,
-      configurationParams,
-      outputCb
-    )
+  constructor(configurationParams, outputCb, transitionCb = null) {
+    this._handle = binding.createInstance(this, configurationParams, outputCb)
 
     // Set up C++ → JS logger
     this._loggerInitialized = false
@@ -35,14 +31,14 @@ class TranslationInterface {
   }
 
   // For BaseInference.
-  async destroyInstance () {
+  async destroyInstance() {
     await this.destroy()
   }
 
   /**
    * Stops addon process and clears resources (including memory).
    */
-  async unload () {
+  async unload() {
     await this.destroy()
   }
 
@@ -54,7 +50,7 @@ class TranslationInterface {
    * @param {Uint8Array} weightsData.contents
    * @param {Boolean} weightsData.completed
    */
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     try {
       binding.loadWeights(this._handle, weightsData)
     } catch (err) {
@@ -69,7 +65,7 @@ class TranslationInterface {
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
-  async activate () {
+  async activate() {
     try {
       binding.activate(this._handle)
     } catch (err) {
@@ -84,7 +80,7 @@ class TranslationInterface {
   /**
    * Cancel a inference process
    */
-  async cancel () {
+  async cancel() {
     try {
       await binding.cancel(this._handle)
     } catch (err) {
@@ -106,7 +102,7 @@ class TranslationInterface {
    * Synchronous by design: reads cached state populated at load() time.
    * @returns {string}
    */
-  getActiveBackendName () {
+  getActiveBackendName() {
     if (this._handle === null) {
       return 'Unloaded'
     }
@@ -132,7 +128,7 @@ class TranslationInterface {
    * binding wrappers in this class.
    * @returns {string}
    */
-  getActiveBackendDescription () {
+  getActiveBackendDescription() {
     if (this._handle === null) {
       return ''
     }
@@ -150,7 +146,7 @@ class TranslationInterface {
    * @param {String | String[]} data.input
    * @returns {boolean} true if job was accepted
    */
-  async runJob (data) {
+  async runJob(data) {
     try {
       return binding.runJob(this._handle, data)
     } catch (err) {
@@ -165,7 +161,7 @@ class TranslationInterface {
   /**
    * Stops addon process and clears resources (including memory).
    */
-  async destroy () {
+  async destroy() {
     // If already destroyed, do nothing
     if (this._handle === null) {
       return
