@@ -326,6 +326,33 @@ async function collectText(response) {
   return chunks.join('')
 }
 
+// Resolves with the first streamed chunk of a response — the deterministic
+// "this job is decoding in a slot" signal the targeted-cancel tests key on
+// (no fixed sleeps). Replays chunks already delivered (QvacResponse.output)
+// so a listener attached a tick late can never hang.
+function firstChunk(response) {
+  if (response.output.length > 0) return Promise.resolve(response.output[0])
+  return new Promise((resolve) => response.once('output', resolve))
+}
+
+// Resolves once every id in `ids` has streamed at least one chunk on a batch
+// response (batch chunks are `{ id, chunk }`). Replays already-delivered
+// chunks like firstChunk does.
+function waitForChunkFromEach(response, ids) {
+  return new Promise((resolve) => {
+    const pending = new Set(ids)
+    const onChunk = ({ id }) => {
+      pending.delete(id)
+      if (pending.size === 0) {
+        response.off('output', onChunk)
+        resolve()
+      }
+    }
+    response.on('output', onChunk)
+    for (const delivered of response.output) onChunk(delivered)
+  })
+}
+
 function logStreamingProgress(response, tag) {
   const logTag = tag || 'continuous-batching'
   const chunksPerLog = 8
@@ -1071,5 +1098,152 @@ test(
       toNumber(stats.avgConcurrentSeq) > 1.05,
       `avgConcurrentSeq (${toNumber(stats.avgConcurrentSeq)}) confirms full-width parallel decode`
     )
+  }
+)
+
+// The headline multi-job behavior, end to end: response.cancel() targets only
+// its own native job. Three independent run() calls decode together; the
+// long story job is cancelled through the public API once every job has
+// streamed its first chunk (so all three are provably in slots, not queued —
+// the documented graceful-cancel case). Per docs/continuous-batching.md
+// "Cancellation semantics", the in-slot cancelled job resolves normally with
+// whatever it generated so far; the survivors must finish with their own
+// complete answers and per-job stats.
+test(
+  'continuous batching: response.cancel() stops only its own run(); concurrent runs finish',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const doomed = CASES.find((item) => item.id === 'story-otter')
+    const survivors = ['capital-france', 'bee-product'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+
+    // Fire every run() before awaiting any, so all three jobs are admitted
+    // together. The doomed job gets a 512-token budget so it is still
+    // decoding whenever the cancel lands.
+    const [doomedResponse, ...survivorResponses] = await Promise.all([
+      model.run(buildPrompt(doomed), { generationParams: { predict: 512 } }),
+      ...survivors.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    ])
+
+    // Collectors attach before yielding to the event loop, so no chunk is lost.
+    const doomedTextPromise = collectText(doomedResponse)
+    const survivorTextPromises = survivorResponses.map(collectText)
+
+    // Deterministic cancel point: every job has produced its first token.
+    await Promise.all([doomedResponse, ...survivorResponses].map(firstChunk))
+    await doomedResponse.cancel()
+
+    // In-slot cancel is graceful: the response resolves normally (no
+    // rejection) and keeps the pre-cancel output — it streamed at least one
+    // chunk by construction.
+    const doomedText = await doomedTextPromise
+    t.comment(`doomed output (cut short by cancel): ${doomedText.trim()}`)
+    t.ok(doomedText.length > 0, 'cancelled run() resolves with the output generated so far')
+    t.ok(
+      toNumber(doomedResponse.stats.generatedTokens) > 0,
+      'cancelled run() still reports its own terminal stats'
+    )
+
+    const survivorTexts = await Promise.all(survivorTextPromises)
+    for (let idx = 0; idx < survivors.length; idx++) {
+      const item = survivors[idx]
+      console.log(`[targeted-cancel survivor] ${item.id}: ${survivorTexts[idx].trim()}`)
+      t.comment(`${item.id}: ${survivorTexts[idx].trim()}`)
+      t.ok(survivorTexts[idx].trim().length > 0, `${item.id} produced non-empty output`)
+      t.ok(
+        containsExpectedWord(survivorTexts[idx], item.expected),
+        `${item.id} completed with its own answer despite the peer cancel`
+      )
+
+      const stats = survivorResponses[idx].stats
+      t.comment(
+        `${item.id} per-job stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${toNumber(stats.generatedTokens)} promptTokens=${toNumber(stats.promptTokens)}`
+      )
+      t.ok(toNumber(stats.generatedTokens) > 0, `${item.id} reports its own generatedTokens`)
+      t.ok(toNumber(stats.TTFT) > 0, `${item.id} reports its own time to first token`)
+      t.ok(toNumber(stats.promptTokens) > 0, `${item.id} reports its own promptTokens`)
+    }
+  }
+)
+
+// Group-scope variant of the targeted cancel: cancelling a batch response
+// cancels only that group's native job; a plain run() sharing the scheduler
+// keeps decoding to completion. With 2 batch prompts + 1 single job under
+// parallel 4 every prompt is admitted straight into a slot, and waiting for a
+// first chunk from each proves it — so per README "Cancelling a batch" the
+// cancelled group must RESOLVE normally (in-flight prompts keep their partial
+// output; only queued never-admitted prompts would reject with Cancelled).
+test(
+  'continuous batching: batch group cancel leaves a concurrent plain run() untouched',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const batchItems = ['story-lantern', 'story-canyon'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+    const survivor = CASES.find((item) => item.id === 'frozen-water')
+
+    // Fire the batch and the single run before awaiting either, so the group
+    // and the plain job are in flight together. The story prompts get a
+    // 512-token budget so the group is still decoding when cancelled.
+    const [batchResponse, survivorResponse] = await Promise.all([
+      model.run(
+        batchItems.map((item) => ({
+          id: item.id,
+          prompt: buildPrompt(item),
+          runOptions: { generationParams: { predict: 512 } }
+        }))
+      ),
+      model.run(buildPrompt(survivor), runOptionsForCase(survivor))
+    ])
+
+    const survivorTextPromise = collectText(survivorResponse)
+
+    // Deterministic cancel point: both group prompts and the plain job have
+    // each produced their first token.
+    await Promise.all([
+      waitForChunkFromEach(batchResponse, batchResponse.ids),
+      firstChunk(survivorResponse)
+    ])
+    await batchResponse.cancel()
+
+    // Documented settlement: no queued prompts in the group, so the batch
+    // call resolves with [{ id, output }] carrying the pre-cancel output.
+    const batchResults = await batchResponse.await()
+    t.alike(
+      batchResults.map((result) => result.id),
+      batchItems.map((item) => item.id),
+      'cancelled group still reports its own ids in order'
+    )
+    for (const result of batchResults) {
+      const output = String(result.output || '')
+      t.comment(`cancelled batch ${result.id}: ${output.trim()}`)
+      t.ok(output.length > 0, `${result.id} keeps the output generated before the cancel`)
+    }
+    t.ok(
+      toNumber(batchResponse.stats.generatedTokens) > 0,
+      'cancelled group still reports its own per-group stats'
+    )
+
+    const survivorText = await survivorTextPromise
+    console.log(`[group-cancel survivor] ${survivor.id}: ${survivorText.trim()}`)
+    t.comment(`${survivor.id}: ${survivorText.trim()}`)
+    t.ok(survivorText.trim().length > 0, 'plain run() produced non-empty output')
+    t.ok(
+      containsExpectedWord(survivorText, survivor.expected),
+      'plain run() completed with its own answer despite the group cancel'
+    )
+
+    const stats = survivorResponse.stats
+    t.comment(
+      `${survivor.id} per-job stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${toNumber(stats.generatedTokens)} promptTokens=${toNumber(stats.promptTokens)}`
+    )
+    t.ok(toNumber(stats.generatedTokens) > 0, 'plain run() reports its own generatedTokens')
+    t.ok(toNumber(stats.TTFT) > 0, 'plain run() reports its own time to first token')
+    t.ok(toNumber(stats.promptTokens) > 0, 'plain run() reports its own promptTokens')
   }
 )
