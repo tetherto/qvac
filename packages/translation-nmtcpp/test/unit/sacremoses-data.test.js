@@ -56,8 +56,15 @@ test('Perluniprops: every category that tokenizer.js asks for is non-empty', (t)
   // initialization time. If any of them returns empty, MosesTokenizer
   // builds broken regexes and translation quality silently degrades.
   const expected = [
-    'IsAlnum', 'IsAlpha', 'IsLower', 'IsN', 'IsPf', 'IsPi',
-    'IsSc', 'IsSo', 'IsUpper'
+    'IsAlnum',
+    'IsAlpha',
+    'IsLower',
+    'IsN',
+    'IsPf',
+    'IsPi',
+    'IsSc',
+    'IsSo',
+    'IsUpper'
   ]
   const p = new Perluniprops()
   for (const category of expected) {
@@ -94,7 +101,10 @@ test('NonbreakingPrefixes: English contains common abbreviations', (t) => {
   for (const expected of ['A', 'B', 'C', 'Adj', 'Adv']) {
     t.ok(enPrefixes.has(expected), `en nonbreaking prefixes should contain '${expected}'`)
   }
-  t.ok(enPrefixes.size > 50, `en nonbreaking prefixes should have > 50 entries (got ${enPrefixes.size})`)
+  t.ok(
+    enPrefixes.size > 50,
+    `en nonbreaking prefixes should have > 50 entries (got ${enPrefixes.size})`
+  )
 })
 
 test('NonbreakingPrefixes: Hindi prefixes (the IndicTrans target language) are populated', (t) => {
@@ -104,7 +114,10 @@ test('NonbreakingPrefixes: Hindi prefixes (the IndicTrans target language) are p
   // the QVAC-16488 root cause. > 0 is enough to confirm the data
   // path works; the existing integration test's chrF++ assertion
   // is the quality guard.
-  t.ok(hiPrefixes.length > 0, `hi nonbreaking prefixes must not be empty (got ${hiPrefixes.length})`)
+  t.ok(
+    hiPrefixes.length > 0,
+    `hi nonbreaking prefixes must not be empty (got ${hiPrefixes.length})`
+  )
 })
 
 test('NonbreakingPrefixes: language-name aliases work (english → en)', (t) => {
@@ -127,5 +140,8 @@ test('NonbreakingPrefixes: lang=null yields prefixes from every language', (t) =
   // We have 38 supported languages; at minimum the all-langs set
   // should be substantially larger than just English.
   const en = np.getWordsAsArray('en')
-  t.ok(all.length > en.length, `all-langs should yield more than just en (${all.length} vs ${en.length})`)
+  t.ok(
+    all.length > en.length,
+    `all-langs should yield more than just en (${all.length} vs ${en.length})`
+  )
 })

@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -44,6 +46,23 @@ fs::path multimodalTestImagePath() {
 #endif
 
   return "packages/llm-llamacpp/media/fruitPlate.png";
+}
+
+bool containsCaseInsensitive(
+    const std::string& haystack, const std::string& needle) {
+  auto toLower = [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  };
+  std::string haystackLower = haystack;
+  std::string needleLower = needle;
+  std::transform(
+      haystackLower.begin(),
+      haystackLower.end(),
+      haystackLower.begin(),
+      toLower);
+  std::transform(
+      needleLower.begin(), needleLower.end(), needleLower.begin(), toLower);
+  return haystackLower.find(needleLower) != std::string::npos;
 }
 } // namespace
 
@@ -447,6 +466,100 @@ TEST_F(
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
       getStatValue(stats, "CacheTokens"), static_cast<double>(sequenceCells));
+
+  fs::remove(cachePath);
+}
+
+TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  config_files["n_predict"] = "64";
+  config_files["temp"] = "0";
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr) << "Qwen3.5 VLM must use the MTMD context";
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-npredict-rollback.bin";
+  fs::remove(cachePath);
+
+  const char* systemMsg =
+      R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
+  const char* userTurn1 =
+      R"({"role":"user","content":"What is the capital of France?"})";
+
+  LlamaModel::Prompt primer;
+  primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
+  primer.cacheKey = cachePath.string();
+  primer.generationParams.reasoning_budget = 0;
+
+  const std::string primerOutput = model->processPrompt(primer);
+  ASSERT_TRUE(containsCaseInsensitive(primerOutput, "Paris"))
+      << "primer should answer from the clean cache seed: " << primerOutput;
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+  const llama_pos primerCacheTokens = ctx->getCacheTokens();
+  const llama_pos primerSequenceCells =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+  ASSERT_GT(primerCacheTokens, 0)
+      << "primer must populate the MTMD cache before rollback test";
+  ASSERT_EQ(primerCacheTokens, primerSequenceCells)
+      << "test setup expects MTMD bookkeeping to match live memory";
+
+  LlamaModel::Prompt cutoff;
+  cutoff.input =
+      R"([{"role":"user","content":"Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?"}])";
+  cutoff.cacheKey = cachePath.string();
+  cutoff.generationParams.remove_thinking_from_context = true;
+
+  const std::string cutoffOutput = model->processPrompt(cutoff);
+  const auto cutoffStats = model->runtimeStats();
+  const double generatedTokens = getStatValue(cutoffStats, "generatedTokens");
+  const double reportedCacheTokens = getStatValue(cutoffStats, "CacheTokens");
+  const llama_pos postCutoffSequenceCells =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+
+  SCOPED_TRACE(
+      "generatedTokens=" + std::to_string(generatedTokens) +
+      ", reportedCacheTokens=" + std::to_string(reportedCacheTokens) +
+      ", primerCacheTokens=" + std::to_string(primerCacheTokens) +
+      ", ctxCacheTokens=" + std::to_string(ctx->getCacheTokens()) +
+      ", sequenceCells=" + std::to_string(postCutoffSequenceCells) +
+      ", cutoff output (first 200 chars): " + cutoffOutput.substr(0, 200));
+
+  EXPECT_NE(cutoffOutput.find("<think>"), std::string::npos)
+      << "small-budget MTMD run must enter reasoning before n_predict cutoff";
+  EXPECT_EQ(cutoffOutput.find("</think>"), std::string::npos)
+      << "test must stop inside reasoning to exercise rollback, not compaction";
+  EXPECT_GE(generatedTokens, 64.0)
+      << "small-budget MTMD run should reach n_predict";
+  EXPECT_EQ(ctx->getCacheTokens(), primerCacheTokens)
+      << "MTMD rollback must restore cache-token bookkeeping to primer state";
+  EXPECT_EQ(postCutoffSequenceCells, primerSequenceCells)
+      << "MTMD rollback must restore live llama memory to primer state";
+  EXPECT_EQ(reportedCacheTokens, static_cast<double>(primerCacheTokens))
+      << "runtime stats must report the rolled-back cache size";
+
+  LlamaModel::Prompt followUp;
+  followUp.input =
+      R"([{"role":"user","content":"And what about Germany? Answer with just the city name."}])";
+  followUp.cacheKey = cachePath.string();
+  followUp.generationParams.reasoning_budget = 0;
+
+  const std::string followUpOutput = model->processPrompt(followUp);
+  EXPECT_TRUE(containsCaseInsensitive(followUpOutput, "Berlin"))
+      << "follow-up after rollback should answer from clean cache: "
+      << followUpOutput;
+  EXPECT_GT(ctx->getCacheTokens(), primerCacheTokens)
+      << "follow-up should extend the rolled-back primer cache";
 
   fs::remove(cachePath);
 }

@@ -33,9 +33,10 @@ const logger = VERBOSE
     }
   : null // null = suppress all C++ logs
 
-const text = 'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
+const text =
+  'Machine translation has revolutionized how we communicate across language barriers in the modern digital world.'
 
-async function testBergamot () {
+async function testBergamot() {
   console.log('\n=== Testing Bergamot Backend ===\n')
 
   const {
@@ -83,7 +84,7 @@ async function testBergamot () {
     const response = await model.run(text)
 
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         console.log('Translation output:', data)
       })
       .await()
@@ -96,7 +97,7 @@ async function testBergamot () {
   }
 }
 
-async function main () {
+async function main() {
   try {
     await testBergamot()
 
