@@ -78,6 +78,7 @@
     "bare-fs": "^4.5.1",
     "bare-os": "^3.7.1",
     "bare-process": "^4.2.2",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.19.1",
     "cmake-bare": "^1.7.5",
