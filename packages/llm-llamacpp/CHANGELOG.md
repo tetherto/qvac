@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.38.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
+## [0.37.1] - 2026-07-18
+
+This patch release hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.
+
+### Fixed
+
+- Qwen3.5 text and multimodal requests now roll back the current request when `n_predict` is reached inside an open reasoning span, avoiding recurrent compaction failures when no close marker was captured.
+- Continuous batching now propagates scheduler-imposed per-sequence slot truncation as `SequenceLimit`, allowing the driver to use the same rollback path as prediction-limit truncation.
+- Batch stop-reason precedence now preserves `Eos` > `PredictionLimit` > `Antiprompt`, so `n_predict` truncation still triggers rollback when a stop string would also match on the same token.
+- Added focused C++ regression coverage for MTMD `n_predict` rollback, scheduler `LimitReached` propagation, Qwen3.5 continuous-batching sequence-limit rollback, and sibling request survival.
+
+### Pull Requests
+
+- [#3318](https://github.com/tetherto/qvac/pull/3318) - QVAC-22472 fix: handle Qwen3.5 n_predict cutoff inside reasoning
+
 ## [0.37.0] - 2026-07-14
 
 ### Fixed

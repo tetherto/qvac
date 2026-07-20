@@ -15,11 +15,7 @@ test('IndicProcessor, should preprocess from eng_Latn to mal_Mlym', (t) => {
   const sentences = [
     'Modern science is objective analysis, while spirituality is subjective understanding. Science explores the outer world with a series of questions beginning with the basic query, “What is this? What is this world all about?”, while spirituality begins with the questions, “Who am I?”'
   ]
-  const preProcessedBatch = ip.preprocessBatch(
-    sentences,
-    'eng_Latn',
-    'mal_Mlym'
-  )
+  const preProcessedBatch = ip.preprocessBatch(sentences, 'eng_Latn', 'mal_Mlym')
   t.alike(preProcessedBatch, [
     'eng_Latn mal_Mlym Modern science is objective analysis , while spirituality is subjective understanding . Science explores the outer world with a series of questions beginning with the basic query , “ What is this ? What is this world all about ? ” , while spirituality begins with the questions , “ Who am I ? ”'
   ])
@@ -28,11 +24,7 @@ test('IndicProcessor, should preprocess from eng_Latn to mal_Mlym', (t) => {
 test('IndicProcessor, should preprocess from mal_Mlym to eng_Latn', (t) => {
   const ip = new IndicProcessor(true)
   const sentences = ['ശരിയായ സമയത്ത് ശരിയായ ചിന്ത ലഭിക്കുക എന്നതാണ് അവബോധം.']
-  const preProcessedBatch = ip.preprocessBatch(
-    sentences,
-    'mal_Mlym',
-    'eng_Latn'
-  )
+  const preProcessedBatch = ip.preprocessBatch(sentences, 'mal_Mlym', 'eng_Latn')
   t.alike(preProcessedBatch, [
     'mal_Mlym eng_Latn शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'
   ])
@@ -41,11 +33,7 @@ test('IndicProcessor, should preprocess from mal_Mlym to eng_Latn', (t) => {
 test('IndicProcessor, should preprocess from mal_Mlym to ory_Orya', (t) => {
   const ip = new IndicProcessor(true)
   const sentences = ['ശരിയായ സമയത്ത് ശരിയായ ചിന്ത ലഭിക്കുക എന്നതാണ് അവബോധം.']
-  const preProcessedBatch = ip.preprocessBatch(
-    sentences,
-    'mal_Mlym',
-    'ory_Orya'
-  )
+  const preProcessedBatch = ip.preprocessBatch(sentences, 'mal_Mlym', 'ory_Orya')
   t.alike(preProcessedBatch, [
     'mal_Mlym ory_Orya शरियाय समयत्त् शरियाय चिन्त लभिक्कुक ऎन्नताण् अवबोधं .'
   ])
@@ -56,11 +44,7 @@ test('IndicProcessor, should preprocess from eng_Latn to hin_Deva', (t) => {
   const sentences = [
     'Please send an SMS to 9876543210 and an email on newemail123@xyz.com by 15th October, 2023.'
   ]
-  const preProcessedBatch = ip.preprocessBatch(
-    sentences,
-    'eng_Latn',
-    'hin_Deva'
-  )
+  const preProcessedBatch = ip.preprocessBatch(sentences, 'eng_Latn', 'hin_Deva')
   t.alike(preProcessedBatch, [
     'eng_Latn hin_Deva Please send an SMS to 9876543210 and an email on < ID1 > by 15th October , 2023 .'
   ])
@@ -105,19 +89,13 @@ test('IndicProcessor,should postprocess & postprocess from eng_Latn to hin_Deva,
   const sentences = [
     'Please send an SMS to 9876543210 and an email on newemail123@xyz.com by 15th October, 2023.'
   ]
-  const preProcessedBatch = ip.preprocessBatch(
-    sentences,
-    'eng_Latn',
-    'hin_Deva'
-  )
+  const preProcessedBatch = ip.preprocessBatch(sentences, 'eng_Latn', 'hin_Deva')
   t.alike(preProcessedBatch, [
     'eng_Latn hin_Deva Please send an SMS to 9876543210 and an email on < ID1 > by 15th October , 2023 .'
   ])
 
   const postprocessBatch = ip.postprocessBatch(
-    [
-      'कृपया 9876543210 पर एक एस. एम. एस. और 15 अक्टूबर, 2023 तक < ID1 > पर एक ईमेल भेजें ।'
-    ],
+    ['कृपया 9876543210 पर एक एस. एम. एस. और 15 अक्टूबर, 2023 तक < ID1 > पर एक ईमेल भेजें ।'],
     'hin_Deva'
   )
   t.alike(postprocessBatch, [
