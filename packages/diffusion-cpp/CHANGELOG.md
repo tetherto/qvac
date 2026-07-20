@@ -1,17 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- Wan 2.2 TI2V-5B Turbo Q5_K_S downloader, runnable example, integrity pin,
-  and opt-in Linux/CUDA AVI smoke test.
-
-### Changed
-
-- The Wan 2.2 workflow now supports only the community-distilled TI2V-5B Turbo
-  Q5_K_S GGUF model and its required UMT5-XXL encoder and Wan 2.2 VAE.
-
 ## [0.15.0] - 2026-07-16
 
 This release adds an exhaustive per-phase timing breakdown to image and video
