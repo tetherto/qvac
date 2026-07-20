@@ -6,17 +6,40 @@ const fs = require('#fs')
 const path = require('#path')
 const { withRetry } = require('../../utils/retry')
 
+// Forwards the client's own log lines into TAP output when a test passes `t`,
+// so the run shows which production branches actually executed.
+function makeLogger(t) {
+  const emit = (level, msg, data) => {
+    if (!t) return
+    let detail = ''
+    if (data instanceof Error) detail = ` ${data.message}`
+    else if (data) detail = ` ${JSON.stringify(data).slice(0, 120)}`
+    t.comment(`[${level}] ${msg}${detail}`)
+  }
+
+  return {
+    info(msg, data) { emit('info', msg, data) },
+    debug(msg, data) { emit('debug', msg, data) },
+    warn(msg, data) { emit('warn', msg, data) },
+    error(msg, data) { emit('error', msg, data) }
+  }
+}
+
+function now() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
+}
+
 // Builds a QVACRegistryClient instance WITHOUT running the constructor (which
 // would open a real Corestore and join a real swarm). Only the collaborators
 // that downloadModel touches are stubbed, so the real retry path runs.
-function makeClient() {
+function makeClient(t) {
   const QVACRegistryClient = require('../../lib/client')
   const client = Object.create(QVACRegistryClient.prototype)
 
   const events = []
   client._events = events
 
-  client.logger = { info() {}, debug() {}, warn() {}, error() {} }
+  client.logger = makeLogger(t)
 
   const core = {
     discoveryKey: Buffer.alloc(32),
@@ -290,23 +313,32 @@ test('downloadModel clears cached blocks when the download fails', async t => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'model.gguf')
 
-  const client = makeClient()
+  const client = makeClient(t)
   const clears = []
-  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
+  client._core.download = () => ({
+    destroy () {
+      client._events.push('destroy')
+      t.comment('step: rangeDownload.destroy() called from the catch path')
+    }
+  })
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
+    t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
   }
   client._streamBlobToFile = async () => {
     client._events.push('stream')
+    t.comment('step: _streamBlobToFile rejecting to force the catch path')
     throw new Error('Download cancelled')
   }
 
+  const started = now()
   await t.exception(
     () => client.downloadModel('models/tiny.gguf', 's3', { outputFile }),
     /Download cancelled/,
     'the failed download rejects'
   )
+  t.comment(`timing: downloadModel failure+release took ${(now() - started).toFixed(1)}ms`)
 
   t.is(clears.length, 1, 'partial blocks cleared exactly once on the failure path')
   t.alike(clears[0], { start: 0, end: 10 }, 'cleared the model block range')
@@ -322,20 +354,30 @@ test('downloadModel clears cached blocks when the download fails', async t => {
 })
 
 test('downloadModel clears cached blocks when the returned stream is destroyed', async t => {
-  const client = makeClient()
+  const client = makeClient(t)
   const clears = []
-  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
+  client._core.download = () => ({
+    destroy () {
+      client._events.push('destroy')
+      t.comment('step: rangeDownload.destroy() called from the stream release')
+    }
+  })
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
+    t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
   }
 
   const { artifact } = await client.downloadModel('models/tiny.gguf', 's3')
+  t.comment('step: stream artifact returned, release handlers bound')
 
   t.is(clears.length, 0, 'nothing cleared while the stream is still live')
 
   // A cancelled consumer destroys the stream, which emits 'close' without 'end'.
+  t.comment("step: emitting 'close' without 'end' (consumer destroyed the stream)")
+  const started = now()
   await artifact.stream.emit('close')
+  t.comment(`timing: stream release took ${(now() - started).toFixed(1)}ms`)
 
   t.is(clears.length, 1, 'blocks cleared when the stream closes without ending')
   t.alike(clears[0], { start: 0, end: 10 }, 'cleared the model block range')
@@ -347,23 +389,31 @@ test('downloadModel clears cached blocks when the returned stream is destroyed',
 })
 
 test('downloadModel releases the stream download exactly once', async t => {
-  const client = makeClient()
+  const client = makeClient(t)
   let clears = 0
-  client._clearBlobBlocks = async () => { clears++ }
+  client._clearBlobBlocks = async () => {
+    clears++
+    t.comment(`step: _clearBlobBlocks call #${clears}`)
+  }
 
   const { artifact } = await client.downloadModel('models/tiny.gguf', 's3')
 
+  t.comment("step: emitting 'end' (normal completion)")
   await artifact.stream.emit('end')
+  t.comment("step: emitting 'close' (follows end on an autodestroyed stream)")
   await artifact.stream.emit('close')
 
   t.is(clears, 1, 'the end-then-close sequence releases only once')
 })
 
 test('downloadBlob clears cached blocks when the returned stream is destroyed', async t => {
-  const client = makeClient()
+  const client = makeClient(t)
   client.ready = async () => {}
   const clears = []
-  client._clearBlobBlocks = async (core, start, end) => { clears.push({ start, end }) }
+  client._clearBlobBlocks = async (core, start, end) => {
+    clears.push({ start, end })
+    t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
+  }
 
   const { artifact } = await client.downloadBlob({
     coreKey: Buffer.alloc(32),
@@ -372,6 +422,7 @@ test('downloadBlob clears cached blocks when the returned stream is destroyed', 
     byteLength: 700
   })
 
+  t.comment("step: emitting 'close' without 'end' on the direct blob stream")
   await artifact.stream.emit('close')
 
   t.is(clears.length, 1, 'blocks cleared when the stream closes without ending')
@@ -382,15 +433,24 @@ test('downloadBlob clears cached blocks when the download fails', async t => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'blob.bin')
 
-  const client = makeClient()
+  const client = makeClient(t)
   client.ready = async () => {}
   const clears = []
-  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
+  client._core.download = () => ({
+    destroy () {
+      client._events.push('destroy')
+      t.comment('step: rangeDownload.destroy() called from the catch path')
+    }
+  })
   client._clearBlobBlocks = async (core, start, end) => {
     client._events.push('clear')
     clears.push({ start, end })
+    t.comment(`step: _clearBlobBlocks(${start}, ${end}) called`)
   }
-  client._streamBlobToFile = async () => { throw new Error('Download cancelled') }
+  client._streamBlobToFile = async () => {
+    t.comment('step: _streamBlobToFile rejecting to force the catch path')
+    throw new Error('Download cancelled')
+  }
 
   const blobBinding = {
     coreKey: Buffer.alloc(32),
