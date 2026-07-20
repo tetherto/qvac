@@ -4765,9 +4765,7 @@
     "quantization": "q4_K_M",
     "params": "4B",
     "tags": [
-      "generation",
-      "qwen3",
-      "text-encoder"
+      "generation"
     ]
   },
   {
