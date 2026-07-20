@@ -377,7 +377,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        stream.once('end', () => this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd))
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -482,7 +482,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        stream.once('end', () => this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd))
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -495,6 +495,22 @@ class QVACRegistryClient extends ReadyResource {
 
       throw error
     }
+  }
+
+  _releaseOnStreamEnd (stream, core, blobs, rangeDownload, blockStart, blockEnd) {
+    let released = false
+
+    // 'close' also covers a destroyed or errored stream; on 'end' alone a
+    // cancelled stream download would never free its blocks.
+    const release = () => {
+      if (released) return
+      released = true
+      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+        .catch(e => this.logger.warn('Error releasing blob resources', { error: e.message }))
+    }
+
+    stream.once('end', release)
+    stream.once('close', release)
   }
 
   async _releaseDownload (core, blobs, rangeDownload, blockStart, blockEnd) {

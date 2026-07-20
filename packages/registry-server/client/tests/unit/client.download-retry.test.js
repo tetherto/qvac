@@ -37,8 +37,13 @@ function makeClient() {
     off() {}
   }
   // lunte-disable-next-line require-await
-  const blobs = { async close() {} }
+  const blobs = {
+    async close() {},
+    createReadStream() { return client._stream }
+  }
   client._core = core
+  client._blobs = blobs
+  client._stream = fakeStream()
 
   client.hyperswarm = {
     suspended: false,
@@ -67,6 +72,20 @@ function makeClient() {
   client._clearBlobBlocks = async () => {}
 
   return client
+}
+
+// Stands in for the hyperblobs read stream; emit() resolves once the release
+// handlers it triggered have settled.
+function fakeStream() {
+  const handlers = {}
+  return {
+    once(event, fn) { (handlers[event] = handlers[event] || []).push(fn) },
+    emit(event) {
+      const fns = handlers[event] || []
+      handlers[event] = []
+      return Promise.all(fns.map(fn => fn()))
+    }
+  }
 }
 
 function requestTimeout() {
@@ -300,6 +319,63 @@ test('downloadModel clears cached blocks when the download fails', async t => {
     destroyedAt !== -1 && destroyedAt < client._events.indexOf('clear'),
     'replication is stopped before clearing so blocks are not refetched'
   )
+})
+
+test('downloadModel clears cached blocks when the returned stream is destroyed', async t => {
+  const client = makeClient()
+  const clears = []
+  client._core.download = () => ({ destroy () { client._events.push('destroy') } })
+  client._clearBlobBlocks = async (core, start, end) => {
+    client._events.push('clear')
+    clears.push({ start, end })
+  }
+
+  const { artifact } = await client.downloadModel('models/tiny.gguf', 's3')
+
+  t.is(clears.length, 0, 'nothing cleared while the stream is still live')
+
+  // A cancelled consumer destroys the stream, which emits 'close' without 'end'.
+  await artifact.stream.emit('close')
+
+  t.is(clears.length, 1, 'blocks cleared when the stream closes without ending')
+  t.alike(clears[0], { start: 0, end: 10 }, 'cleared the model block range')
+  const destroyedAt = client._events.indexOf('destroy')
+  t.ok(
+    destroyedAt !== -1 && destroyedAt < client._events.indexOf('clear'),
+    'replication is stopped before clearing so blocks are not refetched'
+  )
+})
+
+test('downloadModel releases the stream download exactly once', async t => {
+  const client = makeClient()
+  let clears = 0
+  client._clearBlobBlocks = async () => { clears++ }
+
+  const { artifact } = await client.downloadModel('models/tiny.gguf', 's3')
+
+  await artifact.stream.emit('end')
+  await artifact.stream.emit('close')
+
+  t.is(clears, 1, 'the end-then-close sequence releases only once')
+})
+
+test('downloadBlob clears cached blocks when the returned stream is destroyed', async t => {
+  const client = makeClient()
+  client.ready = async () => {}
+  const clears = []
+  client._clearBlobBlocks = async (core, start, end) => { clears.push({ start, end }) }
+
+  const { artifact } = await client.downloadBlob({
+    coreKey: Buffer.alloc(32),
+    blockOffset: 3,
+    blockLength: 7,
+    byteLength: 700
+  })
+
+  await artifact.stream.emit('close')
+
+  t.is(clears.length, 1, 'blocks cleared when the stream closes without ending')
+  t.alike(clears[0], { start: 3, end: 10 }, 'cleared the blob block range')
 })
 
 test('downloadBlob clears cached blocks when the download fails', async t => {
