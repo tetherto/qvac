@@ -100,7 +100,11 @@ test(
 
     await t.execution(world.load(), 'ABot DiT + Wan2.2 VAE + UMT5 load via the addon')
 
-    const generation = world.run({
+    // run() resolves to a QvacResponse; the failure surfaces on its terminal.
+    // The engine-side guard message ("ABot-World models are not supported by
+    // batch generate_video()...") is logged natively; the JS-visible rejection
+    // is "processVideo: generate_video() failed".
+    const response = await world.run({
       mode: 'txt2vid',
       prompt: 'a coastal street',
       width: 832,
@@ -109,9 +113,9 @@ test(
     })
 
     await t.exception(
-      generation,
-      /ABot-World|not supported by batch|interactive session/i,
-      'batch generation rejected with the documented ABot message'
+      response.onUpdate(() => {}).await(),
+      /generate_video\(\) failed|ABot-World|not supported by batch/i,
+      'batch generation rejected (ABot is interactive-only; guard fired)'
     )
 
     await world.unload().catch(() => {})
