@@ -40,7 +40,7 @@ const {
 
 const TEST_SENTENCE = 'Hello, how are you?'
 
-async function loadAndTranslate (t, { modelPath, openclCacheDir, label }) {
+async function loadAndTranslate(t, { modelPath, openclCacheDir, label }) {
   const logger = createLogger()
   const perfCollector = createPerformanceCollector()
   const model = new TranslationNmtcpp({
@@ -69,7 +69,11 @@ async function loadAndTranslate (t, { modelPath, openclCacheDir, label }) {
   try {
     await model.load()
   } catch (err) {
-    try { await model.unload() } catch (_) { /* noop */ }
+    try {
+      await model.unload()
+    } catch (_) {
+      /* noop */
+    }
     throw err
   }
   const loadMs = Date.now() - loadStart
@@ -78,7 +82,7 @@ async function loadAndTranslate (t, { modelPath, openclCacheDir, label }) {
 
   perfCollector.start()
   const response = await model.run(TEST_SENTENCE)
-  await response.onUpdate(d => perfCollector.onToken(d)).await()
+  await response.onUpdate((d) => perfCollector.onToken(d)).await()
 
   const addonStats = response.stats || {}
   const metrics = perfCollector.getMetrics(TEST_SENTENCE, addonStats)
@@ -86,7 +90,7 @@ async function loadAndTranslate (t, { modelPath, openclCacheDir, label }) {
   return { model, backendName, loadMs, metrics }
 }
 
-function dirHasBlob (dir) {
+function dirHasBlob(dir) {
   try {
     if (!fs.existsSync(dir)) return false
     // Recursively walk the cache dir — ggml-opencl writes cache files in a
@@ -111,64 +115,84 @@ function dirHasBlob (dir) {
   }
 }
 
-test('OpenCL kernel cache populates on first load and persists (Android)', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
-  if (platform !== 'android') {
-    t.comment(`SKIP: OpenCL cache test is Android-only (platform=${platform})`)
-    t.pass('skipped on non-Android platform')
-    return
-  }
-
-  const modelPath = await ensureIndicTransModel()
-  const writableRoot = global.testDir || '/tmp'
-  const cacheDir = path.join(writableRoot, `opencl-cache-test-${Date.now()}`)
-  fs.mkdirSync(cacheDir, { recursive: true })
-  t.comment(`Using OpenCL cache dir: ${cacheDir}`)
-
-  let first, second
-  try {
-    first = await loadAndTranslate(t, {
-      modelPath, openclCacheDir: cacheDir, label: '[COLD]'
-    })
-
-    // Soft-skip when OpenCL is not the active backend. This test exercises
-    // OpenCL-specific plumbing (GGML_OPENCL_CACHE_DIR), which only applies
-    // when the OpenCL backend is selected. Under the default USE_OPENCL=OFF
-    // build (QVAC-17790 Adreno 830 mitigation) the selector picks Vulkan on
-    // Android and the OpenCL cache dir stays empty by design. Callers that
-    // want to exercise this path can set config.gpu_backend='opencl' (opt-in
-    // bypass of the guard) once the upstream ggml fix for the q4_0 transpose
-    // assertion lands.
-    if (!/opencl/i.test(first.backendName)) {
-      t.comment(`SKIP: active backend='${first.backendName}' — OpenCL cache test only applies when OpenCL is selected (USE_OPENCL=OFF default; set config.gpu_backend='opencl' to opt in)`)
-      t.pass('skipped: OpenCL not the active compute backend')
+test(
+  'OpenCL kernel cache populates on first load and persists (Android)',
+  { timeout: TEST_TIMEOUT * 2 },
+  async function (t) {
+    if (platform !== 'android') {
+      t.comment(`SKIP: OpenCL cache test is Android-only (platform=${platform})`)
+      t.pass('skipped on non-Android platform')
       return
     }
 
-    await first.model.unload()
-    first.model = null
+    const modelPath = await ensureIndicTransModel()
+    const writableRoot = global.testDir || '/tmp'
+    const cacheDir = path.join(writableRoot, `opencl-cache-test-${Date.now()}`)
+    fs.mkdirSync(cacheDir, { recursive: true })
+    t.comment(`Using OpenCL cache dir: ${cacheDir}`)
 
-    t.ok(dirHasBlob(cacheDir), 'OpenCL cache dir should contain ≥1 kernel blob after first run')
+    let first, second
+    try {
+      first = await loadAndTranslate(t, {
+        modelPath,
+        openclCacheDir: cacheDir,
+        label: '[COLD]'
+      })
 
-    second = await loadAndTranslate(t, {
-      modelPath, openclCacheDir: cacheDir, label: '[WARM]'
-    })
+      // Soft-skip when OpenCL is not the active backend. This test exercises
+      // OpenCL-specific plumbing (GGML_OPENCL_CACHE_DIR), which only applies
+      // when the OpenCL backend is selected. Under the default USE_OPENCL=OFF
+      // build (QVAC-17790 Adreno 830 mitigation) the selector picks Vulkan on
+      // Android and the OpenCL cache dir stays empty by design. Callers that
+      // want to exercise this path can set config.gpu_backend='opencl' (opt-in
+      // bypass of the guard) once the upstream ggml fix for the q4_0 transpose
+      // assertion lands.
+      if (!/opencl/i.test(first.backendName)) {
+        t.comment(
+          `SKIP: active backend='${first.backendName}' — OpenCL cache test only applies when OpenCL is selected (USE_OPENCL=OFF default; set config.gpu_backend='opencl' to opt in)`
+        )
+        t.pass('skipped: OpenCL not the active compute backend')
+        return
+      }
 
-    // Log-only signal. A true cache hit should give >=2x speedup on load;
-    // we log the comparison and any significant regression becomes visible
-    // in the Step Summary without gating CI.
-    const firstTotal = first.metrics.totalTime
-    const secondTotal = second.metrics.totalTime
-    t.comment(`[COLD] total_time_ms=${firstTotal.toFixed(0)}`)
-    t.comment(`[WARM] total_time_ms=${secondTotal.toFixed(0)}`)
-    if (secondTotal < firstTotal * 0.5) {
-      t.comment('Cache speedup observed: warm total_time_ms < 0.5 * cold')
-    } else {
-      t.comment(`NOTE: warm total_time_ms=${secondTotal.toFixed(0)} is NOT < 0.5 * cold=${firstTotal.toFixed(0)}`)
+      await first.model.unload()
+      first.model = null
+
+      t.ok(dirHasBlob(cacheDir), 'OpenCL cache dir should contain ≥1 kernel blob after first run')
+
+      second = await loadAndTranslate(t, {
+        modelPath,
+        openclCacheDir: cacheDir,
+        label: '[WARM]'
+      })
+
+      // Log-only signal. A true cache hit should give >=2x speedup on load;
+      // we log the comparison and any significant regression becomes visible
+      // in the Step Summary without gating CI.
+      const firstTotal = first.metrics.totalTime
+      const secondTotal = second.metrics.totalTime
+      t.comment(`[COLD] total_time_ms=${firstTotal.toFixed(0)}`)
+      t.comment(`[WARM] total_time_ms=${secondTotal.toFixed(0)}`)
+      if (secondTotal < firstTotal * 0.5) {
+        t.comment('Cache speedup observed: warm total_time_ms < 0.5 * cold')
+      } else {
+        t.comment(
+          `NOTE: warm total_time_ms=${secondTotal.toFixed(0)} is NOT < 0.5 * cold=${firstTotal.toFixed(0)}`
+        )
+      }
+
+      t.pass('OpenCL cache load/unload/load cycle completed')
+    } finally {
+      try {
+        if (first && first.model) await first.model.unload()
+      } catch (_) {
+        /* noop */
+      }
+      try {
+        if (second && second.model) await second.model.unload()
+      } catch (_) {
+        /* noop */
+      }
     }
-
-    t.pass('OpenCL cache load/unload/load cycle completed')
-  } finally {
-    try { if (first && first.model) await first.model.unload() } catch (_) { /* noop */ }
-    try { if (second && second.model) await second.model.unload() } catch (_) { /* noop */ }
   }
-})
+)

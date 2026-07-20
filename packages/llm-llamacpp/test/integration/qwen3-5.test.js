@@ -421,6 +421,128 @@ test(
 )
 
 test(
+  'Qwen3.5-0.8B n_predict exhaustion mid-reasoning does not abort',
+  {
+    timeout: 600_000
+  },
+  async (t) => {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: QWEN3_5_MODEL.name,
+      downloadUrl: QWEN3_5_MODEL.url
+    })
+    const modelPath = path.join(dirPath, modelName)
+
+    const addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: {
+        device: useCpu ? 'cpu' : 'gpu',
+        gpu_layers: '999',
+        ctx_size: '2048',
+        n_predict: '64',
+        temp: '0',
+        seed: '42',
+        verbosity: '2'
+      },
+      logger: createLogger(),
+      opts: { stats: true }
+    })
+
+    try {
+      await addon.load()
+
+      const sessionName = path.join(dirPath, 'qwen3-5-npredict-mid-reasoning-cache.bin')
+      cleanupIntegrationCacheFiles(sessionName)
+      const systemMsg = {
+        role: 'system',
+        content: 'You are a helpful assistant. Answer concisely with just the city name.'
+      }
+      const userTurn1 = {
+        role: 'user',
+        content: 'What is the capital of France?'
+      }
+      const noReasoning = {
+        generationParams: { reasoning_budget: 0 }
+      }
+      const primerResponse = await addon.run([systemMsg, userTurn1], {
+        cacheKey: sessionName,
+        ...noReasoning
+      })
+      const primerOutput = await collectResponse(primerResponse)
+      t.ok(/paris/i.test(primerOutput), `primer mentions Paris: "${primerOutput.slice(0, 100)}"`)
+      t.ok(
+        primerResponse.stats?.CacheTokens > 0,
+        `primer populated cache (CacheTokens=${primerResponse.stats?.CacheTokens})`
+      )
+
+      const response = await addon.run(
+        [
+          systemMsg,
+          userTurn1,
+          { role: 'assistant', content: primerOutput },
+          {
+            role: 'user',
+            content:
+              'Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?'
+          }
+        ],
+        {
+          cacheKey: sessionName,
+          generationParams: {
+            remove_thinking_from_context: true
+          }
+        }
+      )
+      const output = await collectResponse(response)
+
+      t.comment(`small-budget output (${output.length} chars): "${output.slice(0, 300)}"`)
+      t.comment(`small-budget stats: ${JSON.stringify(response.stats || {})}`)
+      t.ok(output.length > 0, `small-budget run produced output (${output.length} chars)`)
+      t.ok(
+        output.includes('<think>'),
+        `small-budget run should enter reasoning before n_predict cutoff: "${output.slice(0, 120)}"`
+      )
+      t.absent(
+        /<\/think>/.test(output),
+        `small-budget run should be cut off before closing reasoning: "${output.slice(-120)}"`
+      )
+      t.ok(
+        response.stats?.generatedTokens >= 64,
+        `small-budget run should reach n_predict (generatedTokens=${response.stats?.generatedTokens})`
+      )
+      t.is(
+        response.stats?.CacheTokens,
+        primerResponse.stats?.CacheTokens,
+        `small-budget run should roll cache back to primer state (${primerResponse.stats?.CacheTokens})`
+      )
+
+      const followUpResponse = await addon.run(
+        [
+          systemMsg,
+          userTurn1,
+          { role: 'assistant', content: primerOutput },
+          { role: 'user', content: 'And what about Germany?' }
+        ],
+        {
+          cacheKey: sessionName,
+          ...noReasoning
+        }
+      )
+      const followUpOutput = await collectResponse(followUpResponse)
+      t.ok(
+        /berlin/i.test(followUpOutput),
+        `follow-up after rollback should still answer from clean cache: "${followUpOutput.slice(0, 100)}"`
+      )
+      t.ok(
+        followUpResponse.stats?.CacheTokens > primerResponse.stats?.CacheTokens,
+        `follow-up should extend primer cache (${primerResponse.stats?.CacheTokens} -> ${followUpResponse.stats?.CacheTokens})`
+      )
+    } finally {
+      await addon.unload().catch(() => {})
+    }
+  }
+)
+
+test(
   'Qwen3.5-0.8B per-request generationParams.reasoning_budget overrides load-time default',
   {
     timeout: 600_000

@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated the published wrapper sources to TypeScript while preserving the
+  existing CommonJS entrypoints and package exports. Generated declarations
+  are now rebuilt and freshness-checked during validation and publishing.
 - Consolidated scattered streaming/VAD defaults into named configuration
   objects, and split large C++/JS functions (and their inlined loops) into
   smaller named helpers per the team coding standards. These are internal

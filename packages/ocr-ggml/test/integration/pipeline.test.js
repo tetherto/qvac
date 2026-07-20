@@ -28,7 +28,7 @@ test('Test for a fix of missing end of job event', { timeout: TEST_TIMEOUT }, as
     runOptions: { paragraph: false },
     perfLabel: '[EasyOCR pipeline unrecognizable_text]',
     perfOpts: { imagePath },
-    assertResult (output) {
+    assertResult(output) {
       t.ok(Array.isArray(output), 'output should be an array')
       t.pass('Response completed successfully - JobEnded event was received')
     }

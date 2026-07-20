@@ -15,7 +15,10 @@ try {
   console.log('[OCR-DLOPEN-DEBUG] cause.stack:', c && c.stack)
   try {
     console.log('[OCR-DLOPEN-DEBUG] cause.keys:', c && Object.getOwnPropertyNames(c))
-    console.log('[OCR-DLOPEN-DEBUG] cause.JSON:', c && JSON.stringify(c, Object.getOwnPropertyNames(c)))
+    console.log(
+      '[OCR-DLOPEN-DEBUG] cause.JSON:',
+      c && JSON.stringify(c, Object.getOwnPropertyNames(c))
+    )
   } catch (_) {}
   throw e
 }

@@ -19,14 +19,14 @@ const AddonInterface = require('./MockAddon')
 const { createJobHandler } = require('@qvac/infer-base')
 
 class MLCMarian {
-  constructor (args, config) {
+  constructor(args, config) {
     this.args = args
     this.config = config
     this.addon = null
     this._job = createJobHandler({ cancel: () => this.addon.cancel() })
   }
 
-  async load () {
+  async load() {
     const configurationParams = {
       config: this.config
     }
@@ -34,18 +34,15 @@ class MLCMarian {
     await this.addon.activate()
   }
 
-  async run (input) {
+  async run(input) {
     return this._runInternal(input)
   }
 
-  createAddon (configurationParams) {
-    return new AddonInterface(
-      configurationParams,
-      this._addonOutputCallback.bind(this)
-    )
+  createAddon(configurationParams) {
+    return new AddonInterface(configurationParams, this._addonOutputCallback.bind(this))
   }
 
-  _addonOutputCallback (addon, event, data, error) {
+  _addonOutputCallback(addon, event, data, error) {
     if (typeof data === 'object' && data !== null && 'TPS' in data) {
       return this._job.end(this.opts?.stats ? data : null)
     }
@@ -54,17 +51,21 @@ class MLCMarian {
       return this._job.fail(error || data)
     }
 
-    if (typeof data === 'string' || Array.isArray(data) || (typeof data === 'object' && data !== null)) {
+    if (
+      typeof data === 'string' ||
+      Array.isArray(data) ||
+      (typeof data === 'object' && data !== null)
+    ) {
       return this._job.output(data)
     }
   }
 
-  async _runInternal (input) {
+  async _runInternal(input) {
     this.addon.runJob({ type: 'text', input })
     return this._job.start()
   }
 
-  async destroy () {
+  async destroy() {
     if (this.addon) {
       await this.addon.destroy()
     }
