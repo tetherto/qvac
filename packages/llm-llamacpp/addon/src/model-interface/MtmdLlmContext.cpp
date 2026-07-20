@@ -101,6 +101,51 @@ void MtmdLlmContext::initializeCommonState() {
         ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
   }
 
+  // MTP draft context: only text-only turns actually draft on the mtmd path
+  // (image turns fall back). On failure `spec_` stays null and generation
+  // runs non-speculatively.
+  const bool wantMtpDraft =
+      std::find(
+          params_.speculative.types.begin(),
+          params_.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
+  if (wantMtpDraft) {
+    try {
+      auto cparamsMtp = common_context_params_to_llama(params_);
+      cparamsMtp.ctx_type = LLAMA_CONTEXT_TYPE_MTP;
+      cparamsMtp.type_k = params_.speculative.draft.cache_type_k;
+      cparamsMtp.type_v = params_.speculative.draft.cache_type_v;
+      cparamsMtp.n_rs_seq = 0;
+      cparamsMtp.n_outputs_max =
+          static_cast<uint32_t>(std::max(1, params_.n_parallel));
+      ctxDraft_.reset(llama_init_from_model(modelCtx_.model, cparamsMtp));
+      if (!ctxDraft_) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[MtmdLlm] MTP draft context could not be created for this "
+            "model; spec-type=draft-mtp will be inert\n");
+      } else {
+        params_.speculative.draft.ctx_tgt = modelCtx_.lctx;
+        params_.speculative.draft.ctx_dft = ctxDraft_.get();
+        spec_.reset(common_speculative_init(
+            params_.speculative, std::max<uint32_t>(1, params_.n_parallel)));
+        ctxTgtSeqRmType_ = common_context_can_seq_rm(modelCtx_.lctx);
+        QLOG_IF(
+            Priority::INFO,
+            "[MtmdLlm] MTP draft context + common_speculative initialized\n");
+      }
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[MtmdLlm] MTP draft setup failed (%s); continuing without "
+              "speculative decoding\n",
+              e.what()));
+      ctxDraft_.reset();
+      spec_.reset();
+    }
+  }
+
   if ((llama_model_chat_template(modelCtx_.model, nullptr) == nullptr) &&
       params_.chat_template.empty()) {
     QLOG_IF(
@@ -637,6 +682,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
     int32_t res;
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+      // The vision decode bypasses the MTP draft context, leaving it
+      // misaligned: disable speculation for the rest of the session.
+      spec_.reset();
+      ctxDraft_.reset();
       // Inlined copy of the IMAGE branch of qvac-fabric's
       // mtmd_helper_eval_chunk_single (tools/mtmd/mtmd-helper.cpp): encode ->
       // get_output_embd -> decode_image_chunk, called with the SAME args the
@@ -672,6 +721,32 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             /*callback=*/nullptr,
             /*user_data=*/nullptr);
       }
+    } else if (spec_) {
+      // Decode through decodeAndSpecProcess instead of the mtmd helper so the
+      // MTP draft context tracks the prefill and stays aligned.
+      size_t nTextTokens = 0;
+      const llama_token* textTokens =
+          mtmd_input_chunk_get_tokens_text(chunk, &nTextTokens);
+      res = 0;
+      const auto nBatch = static_cast<size_t>(params_.n_batch);
+      LlamaBatch textBatch(
+          static_cast<int>(std::min(nBatch, nTextTokens)) + 1, 0, 1);
+      for (size_t off = 0; off < nTextTokens && res == 0; off += nBatch) {
+        const size_t end = std::min(off + nBatch, nTextTokens);
+        common_batch_clear(*textBatch);
+        for (size_t k = off; k < end; ++k) {
+          const bool isFinalPrefillToken =
+              chunkLogitsLast && (k + 1 == nTextTokens);
+          common_batch_add(
+              *textBatch,
+              textTokens[k],
+              nPastLocal + static_cast<llama_pos>(k),
+              {seqId_},
+              isFinalPrefillToken);
+        }
+        res = decodeAndSpecProcess(*textBatch);
+      }
+      nPastLocal += static_cast<llama_pos>(nTextTokens);
     } else {
       res = mtmd_helper_eval_chunk_single(
           visionContext(),
@@ -808,6 +883,10 @@ void MtmdLlmContext::applyContextDiscard() {
 
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
+
+  if (spec_) {
+    return runSpeculativeGeneration(outputCallback);
+  }
 
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
@@ -1045,6 +1124,125 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   const bool rollbackOk =
       onGenerationFinished(outputCallback, generationStopReason_);
   return {.rollbackOk = rollbackOk};
+}
+
+void MtmdLlmContext::specBeginGeneration(
+    const std::function<void(const std::string&)>& outputCallback) {
+  reasoningState_.inside_reasoning = false;
+  reasoningState_.recent_output_buffer.clear();
+  compactor_.reset();
+  generationStopReason_ = GenerationStopReason::None;
+
+  if (thinkingForcedOpen_) {
+    if (outputCallback) {
+      outputCallback(thinkingForcedOpenText_);
+    }
+    if (reasoningEnabled_) {
+      setOpenThinkSpan(
+          current_.pos -
+          static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
+      reasoningState_.inside_reasoning = true;
+    }
+  }
+}
+
+// Per-token processing for the speculative loop.
+SequenceStepResult MtmdLlmContext::specProcessToken(
+    llama_token tokenId, bool /*sampled*/, unsigned /*generated*/,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* /*inlineDecodeBatch*/) {
+  const std::string tokenStr =
+      common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+  if (outputCallback) {
+    const std::string completeChars = utf8Buffer_.addToken(tokenStr);
+    if (!completeChars.empty()) {
+      outputCallback(completeChars);
+    }
+  }
+  recordPostReasoningTokenIfActive(tokenId);
+
+  if (reasoningEnabled_) {
+    const bool wasInside = reasoningState_.inside_reasoning;
+    if (!wasInside) {
+      compactor_.recordPreReasoningToken(tokenId);
+    }
+    qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
+        tokenStr, reasoningState_);
+    const bool nowInside = reasoningState_.inside_reasoning;
+    if (!wasInside && nowInside) {
+      setOpenThinkSpan(
+          current_.pos -
+          static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
+    }
+    if (wasInside && !nowInside) {
+      compactor_.requestCloseCapture();
+      compactor_.recordCloseMarkerForReplay(
+          reasoningState_.cached_close_tag_token);
+    }
+  }
+
+  const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
+  if (isEos && isHarmonyModel_ && params_.use_jinja &&
+      tokenId == harmonyCallToken_) {
+    if (outputCallback) {
+      const std::string callMarker =
+          common_token_to_piece(modelCtx_.lctx, tokenId, true);
+      if (!callMarker.empty()) {
+        outputCallback(callMarker);
+      }
+    }
+    flushPendingUtf8ToCallback(outputCallback);
+    generationStopReason_ = GenerationStopReason::Eos;
+    return {
+        .token = tokenId,
+        .finished = true,
+        .stopReason = GenerationStopReason::Eos};
+  }
+
+  GenerationStopReason stopReason = GenerationStopReason::None;
+  if (isEos) {
+    stopReason = GenerationStopReason::Eos;
+  } else if (checkAntiprompt()) {
+    stopReason = GenerationStopReason::Antiprompt;
+  }
+  const bool finished = stopReason != GenerationStopReason::None;
+  if (finished) {
+    generationStopReason_ = stopReason;
+    flushPendingUtf8ToCallback(outputCallback);
+  } else {
+    capturePendingThinkClose();
+  }
+  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
+}
+
+// Substitute the cached close marker and decode it so the span-end position
+// is recorded.
+void MtmdLlmContext::specRecoverReasoning(
+    llama_token /*tok*/, LlamaBatch& batch,
+    const std::function<void(const std::string&)>& outputCallback) {
+  const llama_token closeTok = reasoningState_.cached_close_tag_token;
+  const std::string closeStr =
+      common_token_to_piece(modelCtx_.lctx, closeTok, params_.special);
+  reasoningState_.inside_reasoning = false;
+  compactor_.requestCloseCapture();
+  compactor_.recordCloseMarkerForReplay(closeTok);
+  if (outputCallback) {
+    const std::string completeChars = utf8Buffer_.addToken(closeStr);
+    if (!completeChars.empty()) {
+      outputCallback(completeChars);
+    }
+  }
+  common_batch_clear(*batch);
+  common_batch_add(*batch, closeTok, current_.pos, {seqId_}, true);
+  if (decodeAndSpecProcess(*batch) != 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        "[MtmdLlm] failed to decode substituted reasoning close tag\n");
+  }
+  ++current_.pos;
+  ++current_.cacheTokens;
+  capturePendingThinkClose();
 }
 
 std::function<void()>

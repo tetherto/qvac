@@ -1,17 +1,22 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 
+#include <llama-cpp.h>
+
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
 #include "common/sampling.h"
+#include "common/speculative.h"
 #include "llama.h"
+#include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
@@ -410,12 +415,12 @@ public:
   virtual void resetVisionEncodeMs() {}
 
   /**
-   * Speculative-decoding counters for the most recent generation. Default 0
-   * for contexts without speculative decoding; the single-prompt MTP path
-   * overrides these to surface draft acceptance via RuntimeStats.
+   * Speculative-decoding counters for the most recent generation. Zero for
+   * contexts that never ran a speculative generation; maintained by the shared
+   * `runSpeculativeGeneration` loop and surfaced via RuntimeStats.
    */
-  [[nodiscard]] virtual int64_t getDraftAccepted() const { return 0; }
-  [[nodiscard]] virtual int64_t getDraftTotal() const { return 0; }
+  [[nodiscard]] int64_t getDraftAccepted() const { return draftAccepted_; }
+  [[nodiscard]] int64_t getDraftTotal() const { return draftTotal_; }
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -520,4 +525,235 @@ protected:
   /// instances under `ContinuousBatchScheduler` set this to their
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
+
+  // MTP speculative decoding state, shared by TextLlmContext + MtmdLlmContext.
+  // The derived contexts populate these during their own initialization.
+  llama_context_ptr ctxDraft_;
+  common_speculative_ptr spec_;
+  // common_speculative_get_draft_params requires a non-null .prompt; the MTP
+  // impl never reads its contents (only id_last/n_past/n_max).
+  std::vector<llama_token> specPromptDummy_;
+  // Drafts are capped to the target's bounded partial-seq_rm capacity so a
+  // rejected draft is always a plain seq_rm.
+  common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
+  int64_t draftAccepted_ = 0;
+  int64_t draftTotal_ = 0;
+  std::atomic<bool> stopGeneration_ = false;
+
+  // Wraps llama_decode(target, batch). When MTP is active, also feeds the
+  // batch into common_speculative_process so the draft context tracks the
+  // target's post-norm hidden states.
+  int decodeAndSpecProcess(const llama_batch& batch) {
+    if (spec_ && batch.logits != nullptr) {
+      for (int32_t i = 0; i < batch.n_tokens; ++i) {
+        batch.logits[i] = 1;
+      }
+    }
+    const int ret = llama_decode(getCtx(), batch);
+    if (ret != 0) {
+      return ret;
+    }
+    if (spec_) {
+      if (!common_speculative_process(spec_.get(), batch)) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[LlmContext] common_speculative_process failed; disabling spec "
+            "for the rest of this model lifetime\n");
+        spec_.reset();
+        ctxDraft_.reset();
+      }
+    }
+    return ret;
+  }
+
+  // MTP speculative-decoding generation loop: draft from the MTP head, verify
+  // the draft against the target in one batch, accept the longest matching
+  // prefix, and feed each accepted token through specProcessToken.
+  GenerateResponseResult runSpeculativeGeneration(
+      const std::function<void(const std::string&)>& outputCallback) {
+    specBeginGeneration(outputCallback);
+    draftAccepted_ = 0;
+    draftTotal_ = 0;
+
+    if (stopGeneration_.load()) {
+      stopGeneration_.store(false);
+      return specCancel(outputCallback);
+    }
+
+    common_params& params = getParams();
+    // Cap the draft so a fully-rejected draft never exceeds the target's
+    // bounded partial-seq_rm capacity.
+    int nMax = common_speculative_n_max(&params.speculative);
+    if (nMax < 1) {
+      nMax = 1;
+    }
+    if (ctxTgtSeqRmType_ == COMMON_CONTEXT_SEQ_RM_TYPE_RS) {
+      const int cap = static_cast<int>(llama_n_rs_seq(getCtx()));
+      if (cap > 0 && nMax > cap) {
+        nMax = cap;
+      }
+    }
+    LlamaBatch specBatch(nMax + 1, 0, 1);
+
+    // Reset the speculative draft state at the start of each generation.
+    common_speculative_begin(spec_.get(), seqId_, {});
+
+    unsigned generated = 0;
+
+    // The prompt is already decoded + speculative-processed, so its logits sit
+    // at position -1. Sample the first generated token and treat it as id_last.
+    bool sampled = false;
+    llama_token idLast = specSampleFirstToken(sampled);
+    {
+      const SequenceStepResult step = specProcessToken(
+          idLast, sampled, ++generated, outputCallback, nullptr);
+      idLast = step.token;
+      if (step.finished) {
+        return specFinish(outputCallback, /*ok=*/true);
+      }
+    }
+
+    std::vector<llama_token> draft;
+    while (params.n_predict <= 0 ||
+           generated < static_cast<unsigned>(params.n_predict)) {
+      if (stopGeneration_.load()) {
+        stopGeneration_.store(false);
+        return specCancel(outputCallback);
+      }
+
+      if (specPos() + 1 > specCtxCeiling()) {
+        specApplyContextDiscard();
+        if (specPos() + 1 > specCtxCeiling()) {
+          return specFinish(outputCallback, /*ok=*/false);
+        }
+      }
+
+      // 1. Draft from the MTP head.
+      draft.clear();
+      if (spec_) {
+        common_speculative_draft_params& dp =
+            common_speculative_get_draft_params(spec_.get(), seqId_);
+        dp.drafting = true;
+        dp.n_max = nMax;
+        dp.n_past = specPos();
+        dp.id_last = idLast;
+        dp.prompt = &specPromptDummy_;
+        dp.result = &draft;
+        common_speculative_draft(spec_.get());
+      }
+      if (ctxDraft_) {
+        clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
+      }
+
+      // 2. Verify: decode [id_last, draft0, ..., draftN-1] in one batch.
+      const llama_pos posBase = specPos();
+      common_batch_clear(*specBatch);
+      common_batch_add(*specBatch, idLast, posBase, {seqId_}, true);
+      for (size_t i = 0; i < draft.size(); ++i) {
+        common_batch_add(
+            *specBatch,
+            draft[i],
+            posBase + 1 + static_cast<llama_pos>(i),
+            {seqId_},
+            true);
+      }
+      if (decodeAndSpecProcess(*specBatch) != 0) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(FailedToDecode),
+            "[LlmContext] failed to decode speculative batch\n");
+      }
+
+      // 3. Sample + accept the longest matching prefix.
+      size_t nAccepted = 0;
+      bool finished = false;
+      bool reasoningRecovered = false;
+      for (size_t j = 0; j <= draft.size(); ++j) {
+        if (params.n_predict > 0 &&
+            generated >= static_cast<unsigned>(params.n_predict)) {
+          break;
+        }
+
+        const llama_token tok = specSampleAndAccept(static_cast<int>(j));
+        specSetPos(posBase + 1 + static_cast<llama_pos>(j));
+
+        // EOS inside the reasoning channel: drop the rejected tail from both
+        // contexts, commit the close marker, then sample the answer fresh.
+        if (specShouldRecoverReasoning(tok)) {
+          clearSequenceMemory(getCtx(), specPos(), -1);
+          if (ctxDraft_) {
+            clearSequenceMemory(ctxDraft_.get(), specPos(), -1);
+          }
+          specRecoverReasoning(tok, specBatch, outputCallback);
+          const llama_token next = specSampleAndAccept(-1);
+          const SequenceStepResult nstep = specProcessToken(
+              next, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+          idLast = nstep.token;
+          finished = nstep.finished;
+          reasoningRecovered = true;
+          break;
+        }
+
+        const SequenceStepResult step = specProcessToken(
+            tok, /*sampled=*/true, ++generated, outputCallback, &specBatch);
+        idLast = step.token;
+        if (step.finished) {
+          finished = true;
+          break;
+        }
+        if (j < draft.size() && tok == draft[j]) {
+          ++nAccepted;
+          continue;
+        }
+        break; // mismatch
+      }
+
+      if (!reasoningRecovered) {
+        // Keep id_last + the accepted drafts, drop the rejected/stop tail from
+        // both contexts and reset the cursor to just past the kept prefix.
+        const llama_pos keepPos =
+            posBase + 1 + static_cast<llama_pos>(nAccepted);
+        clearSequenceMemory(getCtx(), keepPos, -1);
+        if (ctxDraft_) {
+          clearSequenceMemory(ctxDraft_.get(), keepPos, -1);
+        }
+        specSetPos(keepPos);
+        if (!draft.empty() && spec_) {
+          common_speculative_accept(
+              spec_.get(), seqId_, static_cast<uint16_t>(nAccepted));
+        }
+      }
+      draftAccepted_ += static_cast<int64_t>(nAccepted);
+      draftTotal_ += static_cast<int64_t>(draft.size());
+      if (finished) {
+        break;
+      }
+    }
+
+    return specFinish(outputCallback, /*ok=*/true);
+  }
+
+  // Context-specific pieces of the MTP loop. The cursor is `nPast_` on
+  // TextLlmContext and `current_.pos` on MtmdLlmContext.
+  virtual void
+  specBeginGeneration(const std::function<void(const std::string&)>&) = 0;
+  [[nodiscard]] virtual llama_pos specPos() const = 0;
+  virtual void specSetPos(llama_pos pos) = 0;
+  [[nodiscard]] virtual llama_pos specCtxCeiling() const = 0;
+  virtual void specApplyContextDiscard() = 0;
+  virtual llama_token specSampleFirstToken(bool& sampled) = 0;
+  virtual llama_token specSampleAndAccept(int logitIdx) = 0;
+  virtual SequenceStepResult specProcessToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch) = 0;
+  virtual bool specShouldRecoverReasoning(llama_token tok) = 0;
+  virtual void specRecoverReasoning(
+      llama_token tok, LlamaBatch& batch,
+      const std::function<void(const std::string&)>& outputCallback) = 0;
+  virtual GenerateResponseResult specFinish(
+      const std::function<void(const std::string&)>& outputCallback,
+      bool ok) = 0;
+  virtual GenerateResponseResult
+  specCancel(const std::function<void(const std::string&)>& outputCallback) = 0;
 };

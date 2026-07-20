@@ -330,11 +330,54 @@ private:
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
 
-  // Wraps llama_decode(lctx_, batch). When MTP/speculative is active, also
-  // feeds the batch into common_speculative_process so the draft (MTP) context
-  // tracks the target's post-norm hidden states on every prefill ubatch and
-  // generation step (required before common_speculative_draft can run).
-  int decodeAndSpecProcess(const llama_batch& batch);
+  // Hooks for the shared MTP loop in `LlmContext`.
+  void specBeginGeneration(
+      const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] llama_pos specPos() const override { return nPast_; }
+  void specSetPos(llama_pos pos) override { nPast_ = pos; }
+  [[nodiscard]] llama_pos specCtxCeiling() const override {
+    return ctxCeiling();
+  }
+  void specApplyContextDiscard() override { applyContextDiscard(); }
+  llama_token specSampleFirstToken(bool& sampled) override {
+    return sampleToken(-1, sampled);
+  }
+  llama_token specSampleAndAccept(int logitIdx) override {
+    const llama_token tok =
+        common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
+    common_sampler_accept(smpl_.get(), tok, true);
+    return tok;
+  }
+  SequenceStepResult specProcessToken(
+      llama_token tokenId, bool sampled, unsigned generated,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch) override {
+    return processToken(
+        tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
+  }
+  bool specShouldRecoverReasoning(llama_token tok) override {
+    return llama_vocab_is_eog(modelCtx_.vocab, tok) &&
+           isQwen3ReasoningFamily_ && reasoningState_.inside_reasoning &&
+           reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL;
+  }
+  void specRecoverReasoning(
+      llama_token tok, LlamaBatch& batch,
+      const std::function<void(const std::string&)>& outputCallback) override {
+    llama_token closeTok = tok;
+    std::string closeStr;
+    handleReasoningEOS(closeTok, closeStr, *batch, nPast_, outputCallback);
+  }
+  GenerateResponseResult specFinish(
+      const std::function<void(const std::string&)>& outputCallback,
+      bool ok) override {
+    onGenerationFinished(outputCallback);
+    return {.ok = ok};
+  }
+  GenerateResponseResult specCancel(
+      const std::function<void(const std::string&)>& outputCallback) override {
+    return {
+        .ok = true, .cancelled = true, .rollbackOk = onCancel(outputCallback)};
+  }
 
   // Sample token from the logits at logitIdx. Extracted from
   // onLogitsReady so the speculative path, which obtains its tokens from
@@ -348,12 +391,6 @@ private:
       llama_token tokenId, bool sampled, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch);
-
-  // MTP speculative-decoding generation loop: draft from the MTP head, verify
-  // the draft against the target in one batch, accept the longest matching
-  // prefix, and feed each accepted token through processToken.
-  GenerateResponseResult generateResponseSpeculative(
-      const std::function<void(const std::string&)>& outputCallback);
 
   ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
@@ -475,27 +512,4 @@ private:
   // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
   // Reset at the start of each inference and on `resetState`.
   std::optional<llama_perf_context_data> userVisiblePerf_;
-
-  // MTP speculative decoding state.
-  llama_context_ptr ctxDraft_;
-  common_speculative_ptr spec_;
-  // common_speculative_get_draft_params requires a non-null .prompt; the MTP
-  // impl never reads its contents (only id_last/n_past/n_max).
-  std::vector<llama_token> specPromptDummy_;
-  // Drafts are capped to the target's bounded partial-seq_rm capacity so a
-  // rejected draft is always a plain seq_rm.
-  common_context_seq_rm_type ctxTgtSeqRmType_ = COMMON_CONTEXT_SEQ_RM_TYPE_PART;
-  // Speculative stats surfaced via response.stats (draftAccepted/draftTotal).
-  int64_t draftAccepted_ = 0;
-  int64_t draftTotal_ = 0;
-
-  std::atomic<bool> stopGeneration_ = false;
-
-public:
-  // Speculative-decoding counters surfaced through RuntimeStats. Default 0 on
-  // the base; only the single-prompt MTP path increments them.
-  [[nodiscard]] int64_t getDraftAccepted() const override {
-    return draftAccepted_;
-  }
-  [[nodiscard]] int64_t getDraftTotal() const override { return draftTotal_; }
 };
