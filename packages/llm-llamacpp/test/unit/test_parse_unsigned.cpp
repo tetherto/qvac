@@ -11,7 +11,7 @@ namespace {
 unsigned parseParallel(const std::string& raw) {
   return parseUnsignedInRange(raw, 1, 1024, "parallel");
 }
-}  // namespace
+} // namespace
 
 TEST(ParseUnsignedInRangeTest, AcceptsWholeStringIntegersInRange) {
   EXPECT_EQ(parseParallel("1"), 1U);

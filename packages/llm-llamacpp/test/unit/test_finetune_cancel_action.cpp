@@ -24,7 +24,7 @@ LlamaModel::Prompt makeFinetunePrompt() {
   return prompt;
 }
 
-}  // namespace
+} // namespace
 
 // A cancel parked between the scheduler's dequeue announcement (jobStarting)
 // and the finetune arming must abort the job before training starts:
@@ -33,7 +33,7 @@ LlamaModel::Prompt makeFinetunePrompt() {
 TEST(FinetuneCancelActionTest, ParkedCancelAbortsBeforeTrainingStarts) {
   LlamaModel model = makeUnloadedModel();
   model.jobStarting(7);
-  model.cancel();  // whole-model cancel parks on the still-unarmed entry
+  model.cancel(); // whole-model cancel parks on the still-unarmed entry
 
   const std::any output = model.process(std::any(makeFinetunePrompt()), 7);
 

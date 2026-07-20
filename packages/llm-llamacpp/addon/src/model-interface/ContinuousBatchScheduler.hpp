@@ -91,7 +91,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all);
 
 /// The never-matching admission id: no slot is ever stamped with it, so a
 /// cancel carrying it is always a no-op. Real admission ids start at 1.
-inline constexpr uint64_t kUnknownAdmissionId = 0;
+inline constexpr uint64_t K_UNKNOWN_ADMISSION_ID = 0;
 
 /// Per-request streaming sinks. All are optional; missing callbacks
 /// are no-ops.
@@ -415,11 +415,11 @@ private:
     /// Carried from SubmitRequest so the drain can compute observed stats.
     std::chrono::steady_clock::time_point enqueuedAt{};
     /// Ownership token for this admission, strictly incrementing across the
-    /// scheduler's lifetime and never `kUnknownAdmissionId`. `cancel()`
+    /// scheduler's lifetime and never `K_UNKNOWN_ADMISSION_ID`. `cancel()`
     /// only tears the slot down when the caller presents this exact id, so
     /// a cancel aimed at a finished request cannot hit the recycled seqId's
     /// next occupant.
-    uint64_t admissionId = kUnknownAdmissionId;
+    uint64_t admissionId = K_UNKNOWN_ADMISSION_ID;
   };
 
   void ensureWorkerStartedLocked();
@@ -454,7 +454,7 @@ private:
   /// have drained and been re-admitted between record and apply.
   struct PendingSlotCancel {
     uint32_t seqId = 0;
-    uint64_t admissionId = kUnknownAdmissionId;
+    uint64_t admissionId = K_UNKNOWN_ADMISSION_ID;
   };
 
   /// Append one deferred per-slot cancel under `pendingCancelsMtx_` only.
@@ -561,8 +561,8 @@ private:
   bool clearRequested_ = false;
   /// Source of the strictly-incrementing per-admission ownership tokens.
   /// Guarded by `mutex_` (minted inside submitLocked). Starts past
-  /// `kUnknownAdmissionId` so the sentinel never matches a live slot.
-  uint64_t nextAdmissionId_ = kUnknownAdmissionId + 1;
+  /// `K_UNKNOWN_ADMISSION_ID` so the sentinel never matches a live slot.
+  uint64_t nextAdmissionId_ = K_UNKNOWN_ADMISSION_ID + 1;
   RuntimeStatsSnapshot stats_;
 
   /// Decode function used in stepLocked(). Defaults to llama_decode; a test
