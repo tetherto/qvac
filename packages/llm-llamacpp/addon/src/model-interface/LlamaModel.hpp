@@ -460,6 +460,18 @@ private:
   /// engine that silently cancelled its next, unrelated run.
   mutable std::atomic<unsigned> activeSingleJobs_{0};
   mutable std::atomic<unsigned> activeBatchJobs_{0};
+
+  /// Owner of the single-prompt context: the tagged single-path job whose
+  /// armed cancel action may stop it (kNoJobId when none runs). The action
+  /// validates its own id against this before stopping — the run-counter
+  /// gate alone cannot tell a cancel for the running job from one that
+  /// outlived its target (entry still live during the job's completion
+  /// tail, or an action copy executing after removal), and such a cancel
+  /// must not stop a successor. The scheduler path pins the same ownership
+  /// with its (seqId, admissionId) pair.
+  std::atomic<qvac_lib_inference_addon_cpp::JobId> currentSingleJobId_{
+      qvac_lib_inference_addon_cpp::kNoJobId};
+
   int64_t runtimeBackendDevice_ = 0;
 
   /// Live tagged jobs and each one's cancel action: a concurrent job binds

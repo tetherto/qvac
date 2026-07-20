@@ -88,6 +88,8 @@ public:
    */
   void stop() override;
 
+  void resetStopFlag() override;
+
   /**
    * The get context method. It returns the context.
    *
