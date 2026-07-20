@@ -40,6 +40,12 @@ runs:
         export NM="${TOOLCHAIN}/bin/llvm-nm"
         EXTRA=""
         if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
+        # Fabric consumers link the shared runtime (DT_NEEDED qvac__fabric@0.bare),
+        # which ships in node_modules -- not beside the addon -- and is pre-loaded
+        # at runtime. Index it as an external provider so its ggml_* exports resolve
+        # the addon's UND engine symbols instead of a false-positive hard-fail.
+        FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
+        if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform android $EXTRA
 
     - if: ${{ inputs.platform == 'linux' || inputs.platform == 'darwin' || inputs.platform == 'ios' }}
@@ -53,6 +59,12 @@ runs:
         set -euo pipefail
         EXTRA=""
         if [ "$ENFORCE_EXPORTS" = "true" ]; then EXTRA="--enforce-exports"; fi
+        # Fabric consumers link the shared runtime (DT_NEEDED qvac__fabric@0.bare),
+        # which ships in node_modules -- not beside the addon -- and is pre-loaded
+        # at runtime. Index it as an external provider so its ggml_* exports resolve
+        # the addon's UND engine symbols instead of a false-positive hard-fail.
+        FABRIC_PREBUILDS="node_modules/@qvac/fabric/prebuilds"
+        if [ -d "$FABRIC_PREBUILDS" ]; then EXTRA="$EXTRA --provider-dir $FABRIC_PREBUILDS"; fi
         node "$GITHUB_ACTION_PATH/verify-prebuild-symbols.mjs" --dir prebuilds --platform "$PLATFORM" $EXTRA
 
     - if: ${{ inputs.platform == 'win32' }}
