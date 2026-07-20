@@ -35,6 +35,34 @@ test('destroying addon with pending JS output callback does not crash', async (t
   t.pass(`completed ${iterations} create/run/destroy cycles (${callbacks} callbacks observed)`)
 })
 
+test('teardown flush runs its JS output callbacks on the JS thread', async (t) => {
+  t.timeout(10000)
+  t.plan(2)
+
+  const events = []
+  const handle = addon.createMultiInstance({ name: 'off-thread-flush' }, () => {
+    events.push(addon.onJsThread())
+  })
+
+  addon.runJob(handle, 'job-a') // in-flight: blocks until the model is cancelled
+  addon.runJob(handle, 'job-b') // queued behind job-a (concurrency 1)
+
+  // The cancel task captures shared_ptr<AddonCpp>; destroying the instance in
+  // the same tick makes that capture the last owner. Holding the JS thread in
+  // blockEventLoop keeps the loop from draining, so the terminal events for
+  // both jobs are still queued when the task thread releases the last owner
+  // and ~AddonCpp flushes them.
+  const cancelled = addon.cancelJob(handle)
+  addon.destroyInstance(handle)
+  addon.blockEventLoop(300)
+
+  await cancelled
+  await nextTick()
+
+  t.ok(events.length >= 2, `terminal events delivered (${events.length})`)
+  t.ok(events.every(Boolean), 'every output callback ran on the JS thread')
+})
+
 test('destroying addon from inside output callback does not crash', async (t) => {
   t.timeout(10000)
   t.plan(1)
