@@ -10,17 +10,17 @@
  */
 
 class AddonInterface {
-  constructor (configurationParams, outputCb, transitionCb = null) {
+  constructor(configurationParams, outputCb, transitionCb = null) {
     this.outputCb = outputCb
     this.transitionCb = transitionCb
     this._destroyed = false
   }
 
-  async loadWeights (weightsData) {
+  async loadWeights(weightsData) {
     // Weights loading is a no-op for mock
   }
 
-  async activate () {
+  async activate() {
     // Activation is a no-op for mock
   }
 
@@ -29,7 +29,7 @@ class AddonInterface {
    * @param {Object} data - { type: 'text'|'sequences', input: string|string[] }
    * @returns {boolean} true if the job was accepted
    */
-  runJob (data) {
+  runJob(data) {
     if (this._destroyed) return false
 
     const { type, input } = data
@@ -44,7 +44,7 @@ class AddonInterface {
       return true
     } else if (type === 'sequences') {
       setImmediate(() => {
-        const results = input.map(text => `mock_${text}`)
+        const results = input.map((text) => `mock_${text}`)
         this.outputCb(this, 'MockBatchOutput', results, null)
       })
       setImmediate(() => {
@@ -59,11 +59,11 @@ class AddonInterface {
     return true
   }
 
-  async cancel () {
+  async cancel() {
     // Cancel is a no-op for mock
   }
 
-  async destroy () {
+  async destroy() {
     this._destroyed = true
   }
 }

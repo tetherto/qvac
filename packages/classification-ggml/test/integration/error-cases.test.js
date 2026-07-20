@@ -31,8 +31,10 @@ test('classify(non-image buffer without dims) rejects', async function (t) {
   const classifier = makeClassifier()
   await classifier.load()
   try {
-    await t.exception.all(() => classifier.classify(Buffer.from('not an image')),
-      /unsupported|jpeg|png/i)
+    await t.exception.all(
+      () => classifier.classify(Buffer.from('not an image')),
+      /unsupported|jpeg|png/i
+    )
   } finally {
     await cleanupClassifier(classifier)
   }
@@ -72,7 +74,7 @@ test('classify(bmp buffer) rejects as unsupported format', async function (t) {
   await classifier.load()
   try {
     // BMP signature 'BM' followed by a minimal header.
-    const bmp = Buffer.from([0x42, 0x4D, 0x00, 0x00, 0x00, 0x00])
+    const bmp = Buffer.from([0x42, 0x4d, 0x00, 0x00, 0x00, 0x00])
     await t.exception.all(() => classifier.classify(bmp), /unsupported|jpeg|png/i)
   } finally {
     await cleanupClassifier(classifier)
@@ -97,10 +99,7 @@ test('classify after unload() rejects', async function (t) {
   const classifier = makeClassifier()
   await classifier.load()
   await cleanupClassifier(classifier)
-  await t.exception.all(
-    () => classifier.classify(loadImage('meal_1.jpg')),
-    /not loaded|load\(\)/i
-  )
+  await t.exception.all(() => classifier.classify(loadImage('meal_1.jpg')), /not loaded|load\(\)/i)
 })
 
 test('tiny 1x1 raw image is accepted (upscaled)', async function (t) {

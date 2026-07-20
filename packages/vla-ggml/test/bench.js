@@ -16,7 +16,10 @@ const { VlaModel, preprocessImage, padState } = require('..')
 
 const argv = process.argv.slice(2)
 const iters = parseInt(argv[0] || '5', 10)
-const backends = (argv[1] || 'auto,cpu').split(',').map((s) => s.trim()).filter(Boolean)
+const backends = (argv[1] || 'auto,cpu')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 
 const modelPath = process.env.QVAC_VLA_MODEL
 if (!modelPath || !fs.existsSync(modelPath)) {
@@ -24,15 +27,13 @@ if (!modelPath || !fs.existsSync(modelPath)) {
   process.exit(1)
 }
 
-function median (xs) {
+function median(xs) {
   const sorted = xs.slice().sort((a, b) => a - b)
   const n = sorted.length
-  return n % 2 === 0
-    ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2
-    : sorted[(n - 1) / 2]
+  return n % 2 === 0 ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2 : sorted[(n - 1) / 2]
 }
 
-async function runBackend (backend) {
+async function runBackend(backend) {
   const model = new VlaModel({
     files: { model: [path.resolve(modelPath)] },
     opts: { stats: true }
@@ -52,19 +53,30 @@ async function runBackend (backend) {
   for (let i = 0; i < noise.length; i++) noise[i] = 0
 
   const stages = ['vision_ms', 'smollm2_compute_ms', 'smollm2_total_ms', 'ode_ms', 'total_ms']
-  const results = stages.reduce((acc, k) => { acc[k] = []; return acc }, {})
+  const results = stages.reduce((acc, k) => {
+    acc[k] = []
+    return acc
+  }, {})
 
   for (let i = 0; i < iters; i++) {
-    const response = await model.run({ images: [img, img], imgWidth: size, imgHeight: size, state, tokens, mask, noise })
+    const response = await model.run({
+      images: [img, img],
+      imgWidth: size,
+      imgHeight: size,
+      state,
+      tokens,
+      mask,
+      noise
+    })
     const { stats } = await response.await()
     for (const k of stages) results[k].push(stats[k])
     console.log(
       `[BENCH ${backend} iter=${i + 1}/${iters}]` +
-      ` vision=${stats.vision_ms.toFixed(0)}` +
-      ` smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}` +
-      ` smollm2_total=${stats.smollm2_total_ms.toFixed(0)}` +
-      ` ode=${stats.ode_ms.toFixed(0)}` +
-      ` total=${stats.total_ms.toFixed(0)}`
+        ` vision=${stats.vision_ms.toFixed(0)}` +
+        ` smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}` +
+        ` smollm2_total=${stats.smollm2_total_ms.toFixed(0)}` +
+        ` ode=${stats.ode_ms.toFixed(0)}` +
+        ` total=${stats.total_ms.toFixed(0)}`
     )
   }
 
@@ -79,7 +91,9 @@ async function runBackend (backend) {
   }
   console.log(`[SUMMARY ${backend}] (warm, n=${Math.max(1, iters - 1)})`)
   for (const k of stages) {
-    console.log(`  ${k}: min=${summary[k].min.toFixed(0)} med=${summary[k].med.toFixed(0)} max=${summary[k].max.toFixed(0)}`)
+    console.log(
+      `  ${k}: min=${summary[k].min.toFixed(0)} med=${summary[k].med.toFixed(0)} max=${summary[k].max.toFixed(0)}`
+    )
   }
   return { backend, results, summary }
 }

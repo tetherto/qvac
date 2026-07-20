@@ -460,6 +460,76 @@ safeTest(
   }
 )
 
+// The MTMD batch tests below are desktop-only. This smoke test is the one that
+// runs on the Device Farm pools: it is the minimum shape that proves the batch
+// scheduler drives a vision slot on device (parallel: 2, one image), keeping
+// per-slot context and device time within mobile budgets.
+// safeTest (not plain test like the other MTMD cases): on Device Farm a thrown
+// native-addon error would abort the whole mobile shard; safeTest converts it
+// into a readable t.fail instead.
+safeTest(
+  'continuous batching MTMD: mobile smoke — image and text slots decode together',
+  { timeout: 900_000, skip: isDarwin },
+  async (t) => {
+    // parallel: 2 against the default ctx_size 4096 leaves each slot a 2048-token
+    // window — comfortably above SmolVLM2-500M's ~256 vision tokens plus prompt
+    // and output, which matters because oversized prompts are rejected outright
+    // rather than truncated.
+    const model = await setupMultimodalBatchModel(t, { parallel: '2' })
+
+    const imageCase = IMAGE_CASES[0]
+    const textCase = CASES[0]
+    t.ok(
+      fs.existsSync(getMediaPath(imageCase.imageFile)),
+      `media file ${imageCase.imageFile} exists`
+    )
+
+    // One image slot beside one text slot. Vision encode is serialized across
+    // slots, so this pairing is what would expose an encode barrier starving the
+    // text slot: the text sequence must keep decoding while the image encodes.
+    const batchInput = [buildBatchItem(imageCase), buildVlmBatchItem(textCase)]
+
+    const batchResponse = await model.run(batchInput)
+    const streamingProgress = logStreamingProgress(batchResponse, 'cb-mtmd-mobile')
+    const batchResults = await batchResponse.await()
+    streamingProgress.flush()
+
+    const avgConcurrentSeq = toNumber(batchResponse.stats.avgConcurrentSeq)
+    t.comment(`native TPS: ${toNumber(batchResponse.stats.TPS)}`)
+    t.comment(`avgConcurrentSeq: ${avgConcurrentSeq}`)
+
+    t.alike(
+      batchResults.map((r) => r.id),
+      [imageCase.id, textCase.id],
+      'both ids reported in input order'
+    )
+
+    const resultsById = new Map(batchResults.map((r) => [r.id, r.output]))
+    for (const item of [imageCase, textCase]) {
+      const output = resultsById.get(item.id) || ''
+      console.log(`[cb-mtmd-mobile result] ${item.id}: ${output.trim()}`)
+      t.comment(`${item.id}: ${output.trim()}`)
+      t.ok(
+        containsExpectedWord(output, item.expected),
+        `${item.id} output includes one of [${item.expected.join(', ')}]. Full output: "${output.trim()}"`
+      )
+    }
+
+    // avgConcurrentSeq counts every scheduler step (prefill and media-barrier
+    // steps included, see RuntimeStatsSnapshot::recordDecodeStep), so it
+    // measures slot co-residency, not decode interleaving — co-batched prefill
+    // alone can clear 1.0 even with decode pipelining regressed. 1.2 is the
+    // same bar the 2-slot rolling-admission test uses; the measured value is a
+    // deterministic 1.571 on Android/Windows/Linux (seed 42, temp 0), leaving
+    // ~30% margin. Decode-phase correctness is guarded by the per-slot output
+    // assertions above, not by this stat.
+    t.ok(
+      avgConcurrentSeq > 1.2,
+      `avgConcurrentSeq (${avgConcurrentSeq}) > 1.2 confirms the image and text slots were batched together`
+    )
+  }
+)
+
 test(
   'continuous batching MTMD: image-only batch returns correct descriptions',
   { timeout: 900_000, skip: skipHeavyPlatform },
@@ -556,6 +626,80 @@ test(
         `${item.id} output includes one of [${item.expected.join(', ')}]. Full output: "${output.trim()}"`
       )
     }
+  }
+)
+
+test(
+  'continuous batching MTMD: image prompts outnumber slots and roll through freed slots',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    // The other MTMD batch tests submit 4 image prompts into 4 slots, so every
+    // sequence is admitted in the initial wave and no slot is ever recycled.
+    // Halving the slots forces the second half of IMAGE_CASES to wait in
+    // pending_ and be admitted into slots freed by finished sequences, which is
+    // the rolling-admission path: a per-slot MTMD driver must reset its media
+    // and vision-encode a new image while the other slot keeps decoding.
+    const model = await setupMultimodalBatchModel(t, { parallel: '2' })
+    const slotCount = 2
+
+    for (const item of IMAGE_CASES) {
+      t.ok(fs.existsSync(getMediaPath(item.imageFile)), `media file ${item.imageFile} exists`)
+    }
+
+    t.ok(
+      IMAGE_CASES.length > slotCount,
+      `${IMAGE_CASES.length} image prompts exceed ${slotCount} slots, forcing rolling admission`
+    )
+
+    const batchInput = IMAGE_CASES.map(buildBatchItem)
+    const batchStartedAt = Date.now()
+    const batchResponse = await model.run(batchInput)
+    const streamingProgress = logStreamingProgress(batchResponse, 'cb-mtmd-rolling')
+    const batchResults = await batchResponse.await()
+    streamingProgress.flush()
+
+    const avgConcurrentSeq = toNumber(batchResponse.stats.avgConcurrentSeq)
+    t.comment(`elapsed: ${Date.now() - batchStartedAt}ms`)
+    t.comment(`native TPS: ${toNumber(batchResponse.stats.TPS)}`)
+    t.comment(`avgConcurrentSeq: ${avgConcurrentSeq}`)
+
+    t.alike(
+      batchResults.map((r) => r.id),
+      IMAGE_CASES.map((item) => item.id),
+      'all ids reported in input order despite being admitted in separate waves'
+    )
+    t.alike(
+      streamingProgress.ids().sort(),
+      IMAGE_CASES.map((item) => item.id).sort(),
+      'all ids emitted streaming chunks'
+    )
+
+    // IMAGE_CASES pairs two questions per image (elephant.jpg, news-paper.jpg).
+    // A slot that fails to reset media on recycle answers a late prompt from the
+    // image the previous sequence loaded, so a wrong-image answer surfaces here.
+    const resultsById = new Map(batchResults.map((r) => [r.id, r.output]))
+    for (const item of IMAGE_CASES) {
+      const output = resultsById.get(item.id) || ''
+      console.log(`[cb-mtmd-rolling result] ${item.id}: ${output.trim()}`)
+      t.comment(`${item.id}: ${output.trim()}`)
+      t.ok(
+        containsExpectedWord(output, item.expected),
+        `${item.id} output includes one of [${item.expected.join(', ')}]. Full output: "${output.trim()}"`
+      )
+    }
+
+    // Sequences admitted later still overlap the ones already decoding. The bar
+    // is below the 4-slot tests' 1.5: only 2 slots are ever live, and the tail
+    // of each wave drains to a single sequence, which pulls the mean down.
+    t.ok(
+      avgConcurrentSeq > 1.2,
+      `avgConcurrentSeq (${avgConcurrentSeq}) > 1.2 confirms rolled-in sequences decode alongside active ones`
+    )
+    // Admission must respect n_seq_max: more pending work must not oversubscribe.
+    t.ok(
+      avgConcurrentSeq <= slotCount,
+      `avgConcurrentSeq (${avgConcurrentSeq}) never exceeds the ${slotCount} configured slots`
+    )
   }
 )
 

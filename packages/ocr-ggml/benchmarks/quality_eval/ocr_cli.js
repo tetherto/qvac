@@ -19,7 +19,9 @@ const process = require('bare-process')
 
 const args = process.argv.slice(2)
 if (args.length < 1) {
-  console.error('Usage: bare ocr_cli.js <image_path> --detector <path> --recognizer <path> [--pipeline easyocr|doctr] [--lang en]')
+  console.error(
+    'Usage: bare ocr_cli.js <image_path> --detector <path> --recognizer <path> [--pipeline easyocr|doctr] [--lang en]'
+  )
   process.exit(1)
 }
 
@@ -50,7 +52,7 @@ if (!detectorPath || !recognizerPath) {
   process.exit(1)
 }
 
-async function main () {
+async function main() {
   try {
     const { OcrGgml } = require('../..')
 
@@ -76,16 +78,17 @@ async function main () {
     const response = await model.run({ path: imagePath })
 
     let result = []
-    await response.onUpdate(data => {
-      result = data
-    }).await()
+    await response
+      .onUpdate((data) => {
+        result = data
+      })
+      .await()
 
     const boxes = result || []
-    const texts = boxes.map(item => item[1] || '')
-    const confidences = boxes.map(item => item[2] || 0)
-    const avgConfidence = confidences.length > 0
-      ? confidences.reduce((a, b) => a + b, 0) / confidences.length
-      : 0
+    const texts = boxes.map((item) => item[1] || '')
+    const confidences = boxes.map((item) => item[2] || 0)
+    const avgConfidence =
+      confidences.length > 0 ? confidences.reduce((a, b) => a + b, 0) / confidences.length : 0
 
     const output = {
       boxes,

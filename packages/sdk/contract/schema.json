@@ -2237,7 +2237,27 @@
               "type": "number"
             },
             "generationMs": {
-              "description": "Wall-clock time in milliseconds spent generating images.",
+              "description": "Wall-clock time in milliseconds spent generating the output.",
+              "type": "number"
+            },
+            "conditionerMs": {
+              "description": "Time in milliseconds spent conditioning the prompt before denoising.",
+              "type": "number"
+            },
+            "denoiseMs": {
+              "description": "Time in milliseconds spent in the diffusion denoising loop.",
+              "type": "number"
+            },
+            "vaeMs": {
+              "description": "Time in milliseconds spent decoding diffusion latents with the VAE.",
+              "type": "number"
+            },
+            "postProcessMs": {
+              "description": "Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+              "type": "number"
+            },
+            "stepsPerSecond": {
+              "description": "Diffusion denoising throughput in sampling steps per second.",
               "type": "number"
             },
             "totalGenerationMs": {
@@ -10909,7 +10929,27 @@
               "type": "number"
             },
             "generationMs": {
-              "description": "Wall-clock time in milliseconds spent generating images.",
+              "description": "Wall-clock time in milliseconds spent generating the output.",
+              "type": "number"
+            },
+            "conditionerMs": {
+              "description": "Time in milliseconds spent conditioning the prompt before denoising.",
+              "type": "number"
+            },
+            "denoiseMs": {
+              "description": "Time in milliseconds spent in the diffusion denoising loop.",
+              "type": "number"
+            },
+            "vaeMs": {
+              "description": "Time in milliseconds spent decoding diffusion latents with the VAE.",
+              "type": "number"
+            },
+            "postProcessMs": {
+              "description": "Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+              "type": "number"
+            },
+            "stepsPerSecond": {
+              "description": "Diffusion denoising throughput in sampling steps per second.",
               "type": "number"
             },
             "totalGenerationMs": {

@@ -52,23 +52,26 @@ try {
       runner: 'device-farm'
     }
     return {
-      record (testName, metrics, extra) {
+      record(testName, metrics, extra) {
         _results.push({
           test: testName,
           execution_provider: (extra && extra.execution_provider) || null,
-          metrics: Object.assign({
-            total_time_ms: null,
-            vision_time_ms: null,
-            prefill_compute_time_ms: null,
-            prefill_total_time_ms: null,
-            ode_time_ms: null
-          }, metrics),
+          metrics: Object.assign(
+            {
+              total_time_ms: null,
+              vision_time_ms: null,
+              prefill_compute_time_ms: null,
+              prefill_total_time_ms: null,
+              ode_time_ms: null
+            },
+            metrics
+          ),
           quality: (extra && extra.quality) || undefined,
           input: (extra && extra.input) || null,
           output: (extra && extra.output) || null
         })
       },
-      toJSON () {
+      toJSON() {
         return {
           schema_version: '1.0',
           addon: _addon,
@@ -78,7 +81,7 @@ try {
           results: _results
         }
       },
-      writeReport () {
+      writeReport() {
         const json = JSON.stringify(this.toJSON())
         const dirs = []
         if (global.testDir) dirs.push(global.testDir)
@@ -90,15 +93,17 @@ try {
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
-            try { fs.mkdirSync(d, { recursive: true }) } catch (_) {}
+            try {
+              fs.mkdirSync(d, { recursive: true })
+            } catch (_) {}
             const p = path.join(d, 'perf-report-pi05.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
           } catch (_) {}
         }
       },
-      writeStepSummary () {},
-      writeToConsole () {
+      writeStepSummary() {},
+      writeToConsole() {
         try {
           const json = JSON.stringify(this.toJSON())
           const CHUNK = 800
@@ -108,12 +113,23 @@ try {
             const id = Date.now().toString(36)
             const n = Math.ceil(json.length / CHUNK)
             for (let i = 0; i < n; i++) {
-              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+              console.log(
+                '[PERF_CHUNK:' +
+                  id +
+                  ':' +
+                  i +
+                  ':' +
+                  n +
+                  ']' +
+                  json.substring(i * CHUNK, (i + 1) * CHUNK)
+              )
             }
           }
         } catch (_) {}
       },
-      get length () { return _results.length }
+      get length() {
+        return _results.length
+      }
     }
   }
 }
@@ -153,7 +169,7 @@ process.on('exit', () => {
 //   - FAIL: env vars are set but a file is missing → loud failure.
 //           CI sets the env vars unconditionally on desktop; a silent
 //           skip would hide a broken S3 download or a stale asset path.
-function _hasMobileAssetsBundle () {
+function _hasMobileAssetsBundle() {
   if (!_isMobile) return false
   if (typeof global === 'undefined' || !global.assetPaths) return false
   // We only need to confirm presence of the URL JSON here — the
@@ -171,7 +187,7 @@ function _hasMobileAssetsBundle () {
   return false
 }
 
-const _assetsState = (function detectAssets () {
+const _assetsState = (function detectAssets() {
   const keys = ['PI05_TEST_GGUF', 'PI05_TEST_FIXTURE', 'PI05_TEST_ACTIVATIONS']
   const values = keys.map((k) => process.env[k])
   const allUnset = values.every((v) => !v)
@@ -183,7 +199,8 @@ const _assetsState = (function detectAssets () {
   if (missing.length > 0) {
     return {
       state: 'FAIL',
-      reason: 'Some PI05_TEST_* env vars point at missing files: ' +
+      reason:
+        'Some PI05_TEST_* env vars point at missing files: ' +
         missing.map((k) => `${k}=${process.env[k] || '<unset>'}`).join(', ')
     }
   }
@@ -198,7 +215,7 @@ const SKIP_REASON =
 // Header: 8-byte LE uint64 = JSON header byte length, then the JSON header,
 // then the contiguous tensor data blob. Only the slice we need: read a
 // named tensor's dtype/shape/data range and return a typed array view.
-function loadSafetensors (path) {
+function loadSafetensors(path) {
   const buf = fs.readFileSync(path)
   const headerLen = Number(buf.readBigUInt64LE(0))
   if (headerLen <= 0 || headerLen > buf.length - 8) {
@@ -208,8 +225,10 @@ function loadSafetensors (path) {
   const header = JSON.parse(headerJson)
   const blobStart = 8 + headerLen
   return {
-    has (name) { return Object.prototype.hasOwnProperty.call(header, name) },
-    get (name) {
+    has(name) {
+      return Object.prototype.hasOwnProperty.call(header, name)
+    },
+    get(name) {
       const rec = header[name]
       if (!rec) throw new Error(`safetensors: missing tensor '${name}' in ${path}`)
       const start = blobStart + rec.data_offsets[0]
@@ -226,7 +245,7 @@ function loadSafetensors (path) {
           throw new Error(`safetensors: unsupported dtype ${rec.dtype} for '${name}'`)
       }
     },
-    shape (name) {
+    shape(name) {
       const rec = header[name]
       if (!rec) throw new Error(`safetensors: missing tensor '${name}' in ${path}`)
       return rec.shape
@@ -234,7 +253,7 @@ function loadSafetensors (path) {
   }
 }
 
-function cosineSim (a, b) {
+function cosineSim(a, b) {
   let dot = 0
   let na = 0
   let nb = 0
@@ -247,7 +266,7 @@ function cosineSim (a, b) {
   return denom > 0 ? dot / denom : 0
 }
 
-function maxAbsDiff (a, b) {
+function maxAbsDiff(a, b) {
   let m = 0
   for (let i = 0; i < a.length; i++) {
     const d = Math.abs(a[i] - b[i])
@@ -256,7 +275,7 @@ function maxAbsDiff (a, b) {
   return m
 }
 
-function maxAbs (a) {
+function maxAbs(a) {
   let m = 0
   for (let i = 0; i < a.length; i++) {
     const v = Math.abs(a[i])
@@ -273,7 +292,7 @@ function maxAbs (a) {
 // shared to avoid a refactor across both tests in this change — follow-up
 // could extract into test/integration/_mobile-fetch.js).
 
-function _loadMobileUrlsConfig () {
+function _loadMobileUrlsConfig() {
   if (typeof global === 'undefined' || !global.assetPaths) return null
   const candidates = [
     '../../testAssets/pi05-urls.json',
@@ -294,7 +313,7 @@ function _loadMobileUrlsConfig () {
   return null
 }
 
-function _loadMobileFixtureJson () {
+function _loadMobileFixtureJson() {
   if (typeof global === 'undefined' || !global.assetPaths) return null
   const fixCandidates = [
     '../../testAssets/pi05-fixture.json',
@@ -308,7 +327,7 @@ function _loadMobileFixtureJson () {
     'testAssets/pi05-actions-ref.json',
     '../testAssets/pi05-actions-ref.json'
   ]
-  function _readFirst (candidates, label) {
+  function _readFirst(candidates, label) {
     for (const c of candidates) {
       const p = global.assetPaths[c]
       if (!p) continue
@@ -332,7 +351,9 @@ function _loadMobileFixtureJson () {
   }
   const imageBytes = Buffer.from(fixture.images_chw_f32_b64, 'base64')
   const images = new Float32Array(
-    imageBytes.buffer, imageBytes.byteOffset, imageBytes.byteLength / 4
+    imageBytes.buffer,
+    imageBytes.byteOffset,
+    imageBytes.byteLength / 4
   )
   const tokens = Int32Array.from(fixture.tokens)
   const mask = Uint8Array.from(fixture.mask)
@@ -349,24 +370,38 @@ function _loadMobileFixtureJson () {
   return { images, tokens, mask, noise, expected }
 }
 
-function _streamDownload (url, destPath, maxRedirects = 5) {
+function _streamDownload(url, destPath, maxRedirects = 5) {
   const https = require('bare-https')
   return new Promise((resolve, reject) => {
     let resolved = false
-    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
     console.log(`[pi05-mobile] downloading: ${url.substring(0, 60)}...`)
     const file = fs.createWriteStream(destPath)
     file.on('error', (err) => {
       file.destroy()
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
       safeReject(err)
     })
     const req = https.request(url, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
         if (typeof res.resume === 'function') res.resume()
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         const location = res.headers.location
         if (location && maxRedirects > 0) {
           _streamDownload(location, destPath, maxRedirects - 1).then(safeResolve, safeReject)
@@ -378,7 +413,9 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         if (typeof res.resume === 'function') res.resume()
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
         return
       }
@@ -391,15 +428,20 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
         downloadedBytes += chunk.length
         if (downloadedBytes >= nextLogBytes) {
           const mb = downloadedBytes / (1024 * 1024)
-          const pct = contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
+          const pct =
+            contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
           console.log(`[pi05-mobile] progress: ${mb.toFixed(0)}MB${pct}`)
           nextLogBytes += LOG_INTERVAL_BYTES
         }
       })
-      res.on('end', () => { responseEnded = true })
+      res.on('end', () => {
+        responseEnded = true
+      })
       res.on('error', (err) => {
         file.destroy()
-        try { fs.unlinkSync(destPath) } catch (_) {}
+        try {
+          fs.unlinkSync(destPath)
+        } catch (_) {}
         safeReject(err)
       })
       res.pipe(file)
@@ -412,19 +454,27 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       file.on('close', () => {
         const mb = downloadedBytes / (1024 * 1024)
         if (contentLength > 0 && downloadedBytes !== contentLength) {
-          try { fs.unlinkSync(destPath) } catch (_) {}
-          safeReject(new Error(
-            `incomplete stream: got ${downloadedBytes} of ${contentLength} bytes ` +
-            `(${mb.toFixed(1)} MB), responseEnded=${responseEnded}`
-          ))
+          try {
+            fs.unlinkSync(destPath)
+          } catch (_) {}
+          safeReject(
+            new Error(
+              `incomplete stream: got ${downloadedBytes} of ${contentLength} bytes ` +
+                `(${mb.toFixed(1)} MB), responseEnded=${responseEnded}`
+            )
+          )
           return
         }
         if (!responseEnded) {
-          try { fs.unlinkSync(destPath) } catch (_) {}
-          safeReject(new Error(
-            `incomplete stream: response ended early at ${downloadedBytes} bytes ` +
-            `(${mb.toFixed(1)} MB; no Content-Length to cross-check)`
-          ))
+          try {
+            fs.unlinkSync(destPath)
+          } catch (_) {}
+          safeReject(
+            new Error(
+              `incomplete stream: response ended early at ${downloadedBytes} bytes ` +
+                `(${mb.toFixed(1)} MB; no Content-Length to cross-check)`
+            )
+          )
           return
         }
         console.log(`[pi05-mobile] downloaded: ${path.basename(destPath)} (${mb.toFixed(1)}MB)`)
@@ -433,14 +483,16 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
     })
     req.on('error', (err) => {
       file.destroy()
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
       safeReject(err)
     })
     req.end()
   })
 }
 
-async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 5) {
+async function _downloadFile(url, destPath, maxRedirects = 5, maxRetries = 5) {
   // Longer backoff than the default exponential, because the failure
   // mode we hit on Device Farm (cas-bridge.xethub.hf.co — the HF LFS
   // CDN backing host that resolve/main redirects to) is bare-dns
@@ -452,9 +504,11 @@ async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 5) {
   let lastErr = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
-      const backoffMs = 2000 * (2 ** (attempt - 1))
-      console.log(`[pi05-mobile] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`)
-      await new Promise(resolve => setTimeout(resolve, backoffMs))
+      const backoffMs = 2000 * 2 ** (attempt - 1)
+      console.log(
+        `[pi05-mobile] retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last: ${lastErr && lastErr.message})`
+      )
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
     }
     try {
       await _streamDownload(url, destPath, maxRedirects)
@@ -462,18 +516,30 @@ async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 5) {
     } catch (err) {
       lastErr = err
       if (err && /HTTP \d{3}/.test(err.message || '')) throw err
-      try { fs.unlinkSync(destPath) } catch (_) {}
+      try {
+        fs.unlinkSync(destPath)
+      } catch (_) {}
     }
   }
-  throw new Error(`[pi05-mobile] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
+  throw new Error(
+    `[pi05-mobile] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`
+  )
 }
 
-async function _sha256File (filePath) {
+async function _sha256File(filePath) {
   let crypto
-  try { crypto = require('bare-crypto') } catch (_) { return null }
+  try {
+    crypto = require('bare-crypto')
+  } catch (_) {
+    return null
+  }
   return await new Promise((resolve, reject) => {
     let hash
-    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    try {
+      hash = crypto.createHash('sha256')
+    } catch (_) {
+      return resolve(null)
+    }
     const stream = fs.createReadStream(filePath)
     stream.on('data', (chunk) => hash.update(chunk))
     stream.on('error', reject)
@@ -481,7 +547,7 @@ async function _sha256File (filePath) {
   })
 }
 
-async function _verifyCachedModel (filePath, urlConfig) {
+async function _verifyCachedModel(filePath, urlConfig) {
   const stat = fs.statSync(filePath)
   if (urlConfig && Number.isInteger(urlConfig.sizeBytes)) {
     if (stat.size !== urlConfig.sizeBytes) {
@@ -496,7 +562,10 @@ async function _verifyCachedModel (filePath, urlConfig) {
   if (urlConfig && typeof urlConfig.sha256 === 'string' && urlConfig.sha256.length === 64) {
     const got = await _sha256File(filePath)
     if (got === null) {
-      return { ok: false, reason: 'sha256 configured but bare-crypto unavailable — cannot verify integrity' }
+      return {
+        ok: false,
+        reason: 'sha256 configured but bare-crypto unavailable — cannot verify integrity'
+      }
     }
     if (got !== urlConfig.sha256.toLowerCase()) {
       return { ok: false, reason: `sha256 ${got} != expected ${urlConfig.sha256}` }
@@ -506,11 +575,13 @@ async function _verifyCachedModel (filePath, urlConfig) {
   return { ok: true }
 }
 
-async function _ensureMobilePi05Model () {
+async function _ensureMobilePi05Model() {
   const modelFilename = 'pi05-base-q-aggressive.gguf'
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'vla-models')
-  try { fs.mkdirSync(modelsDir, { recursive: true }) } catch (_) {}
+  try {
+    fs.mkdirSync(modelsDir, { recursive: true })
+  } catch (_) {}
   const destPath = path.join(modelsDir, modelFilename)
 
   const urlConfig = _loadMobileUrlsConfig()
@@ -526,7 +597,9 @@ async function _ensureMobilePi05Model () {
       return destPath
     }
     console.log(`[pi05-mobile] cached GGUF rejected (${verdict.reason}) — re-downloading`)
-    try { fs.unlinkSync(destPath) } catch (_) {}
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
   }
 
   await _downloadFile(urlConfig.modelUrl, destPath)
@@ -540,7 +613,7 @@ async function _ensureMobilePi05Model () {
 // Unified input loader. Returns the same { ggufPath, images[3], tokens,
 // mask, noise, expected } shape regardless of which side has assets, so
 // the test body doesn't have to branch on platform.
-async function _loadTestInputs () {
+async function _loadTestInputs() {
   const perCam = 3 * 224 * 224
   if (_assetsState.state === 'HAVE_DESKTOP') {
     const fixture = loadSafetensors(process.env.PI05_TEST_FIXTURE)
@@ -591,7 +664,7 @@ async function _loadTestInputs () {
 // Parse the quant variant from a GGUF basename so the perf-table test
 // names carry which model is being benchmarked. Falls back to
 // `unknown-quant` when the filename doesn't match the convention.
-function _quantFromGgufPath (ggufPath) {
+function _quantFromGgufPath(ggufPath) {
   const base = path.basename(ggufPath || '', '.gguf')
   // Conventional naming: `pi05-base-<quant>.gguf` (the S3 / CI form,
   // hyphen-separated) or `pi05_base_<quant>.gguf` (the converter's
@@ -607,7 +680,7 @@ function _quantFromGgufPath (ggufPath) {
 // (e.g. 'cpu', 'metal', 'vulkan') so the caller can dedupe when `auto`
 // falls through to cpu. Throws on assertion failures via the `t`
 // brittle context.
-async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
+async function _runPi05EndToEnd(t, ggufPath, inputs, backend, quant) {
   const { images, tokens, mask, noise, expected } = inputs
   const tag = `pi05-${quant}/${backend}`
 
@@ -653,16 +726,22 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     t.is(result.actions.length, 50 * 32, `[${tag}] actions length`)
 
     const stats = result.stats || {}
-    for (const key of ['vision_ms', 'prefill_compute_ms', 'prefill_total_ms', 'ode_ms', 'total_ms']) {
+    for (const key of [
+      'vision_ms',
+      'prefill_compute_ms',
+      'prefill_total_ms',
+      'ode_ms',
+      'total_ms'
+    ]) {
       t.is(typeof stats[key], 'number', `[${tag}] stats.${key} is a number`)
       t.ok(stats[key] >= 0, `[${tag}] stats.${key} >= 0`)
     }
     console.log(
       `[VLA TIMING ${tag}] vision=${stats.vision_ms.toFixed(0)}ms ` +
-      `prefill_compute=${stats.prefill_compute_ms.toFixed(0)}ms ` +
-      `prefill_total=${stats.prefill_total_ms.toFixed(0)}ms ` +
-      `ode=${stats.ode_ms.toFixed(0)}ms ` +
-      `total=${stats.total_ms.toFixed(0)}ms`
+        `prefill_compute=${stats.prefill_compute_ms.toFixed(0)}ms ` +
+        `prefill_total=${stats.prefill_total_ms.toFixed(0)}ms ` +
+        `ode=${stats.ode_ms.toFixed(0)}ms ` +
+        `total=${stats.total_ms.toFixed(0)}ms`
     )
 
     const cos = cosineSim(result.actions, expected)
@@ -670,7 +749,8 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     const max = maxAbs(expected)
     const rel = diff / Math.max(max, 1e-9)
     let meanAbsDiff = 0
-    for (let i = 0; i < expected.length; i++) meanAbsDiff += Math.abs(result.actions[i] - expected[i])
+    for (let i = 0; i < expected.length; i++)
+      meanAbsDiff += Math.abs(result.actions[i] - expected[i])
     meanAbsDiff /= expected.length
     const quality = {
       model: 'lerobot/pi05_base',
@@ -681,10 +761,10 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     }
     console.log(
       `[VLA QUALITY ${tag}] vs ${quality.model}: ` +
-      `max|Δ|=${quality.action_max_abs_diff.toFixed(4)} ` +
-      `mean|Δ|=${quality.action_mean_abs_diff.toFixed(4)} ` +
-      `cos=${quality.action_cos_sim.toFixed(4)} ` +
-      `(${quality.compared} values)`
+        `max|Δ|=${quality.action_max_abs_diff.toFixed(4)} ` +
+        `mean|Δ|=${quality.action_mean_abs_diff.toFixed(4)} ` +
+        `cos=${quality.action_cos_sim.toFixed(4)} ` +
+        `(${quality.compared} values)`
     )
 
     // Plan §5 bars: CPU end-to-end cos > 0.999, rel_max < 0.05;
@@ -695,7 +775,7 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     // stays at ~0.3 %, so cos (direction parity) is the main signal.
     // Matches the spirit of smolvla's per-backend tolerances in
     // addon.test.js (which uses absolute max-abs < 0.6 on Vulkan).
-    const isCpu = (model.backendName.toLowerCase() === 'cpu')
+    const isCpu = model.backendName.toLowerCase() === 'cpu'
     const cosBar = isCpu ? 0.999 : 0.99
     // The most-aggressive quant on the CPU path lands ~0.053 rel_max on
     // linux-x64 under GGML_BACKEND_DL (GGML_CPU_ALL_VARIANTS + repack kernels),
@@ -707,23 +787,27 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
     // everywhere, so the aggressive quant gets a cross-arch rel_max of 0.08 with
     // cos as the real correctness gate. Every other quant keeps the 0.05 CPU bar.
     const isAggressive = /aggressive/i.test(quant)
-    const relBar = isCpu ? (isAggressive ? 0.08 : 0.05) : 0.20
+    const relBar = isCpu ? (isAggressive ? 0.08 : 0.05) : 0.2
     t.ok(cos > cosBar, `[${tag}] cos sim ${cos} > ${cosBar} (${isCpu ? 'CPU' : 'GPU-class'} bar)`)
     t.ok(rel < relBar, `[${tag}] rel max diff ${rel} < ${relBar}`)
 
     const ep = model.backendName || null
     console.log(`[VLA BACKEND ${tag}] execution_provider=${ep ?? 'unknown'}`)
 
-    _perfReporter.record(`end-to-end inference (${tag})`, {
-      total_time_ms: stats.total_ms,
-      vision_time_ms: stats.vision_ms,
-      prefill_compute_time_ms: stats.prefill_compute_ms,
-      prefill_total_time_ms: stats.prefill_total_ms,
-      ode_time_ms: stats.ode_ms
-    }, {
-      execution_provider: ep,
-      quality
-    })
+    _perfReporter.record(
+      `end-to-end inference (${tag})`,
+      {
+        total_time_ms: stats.total_ms,
+        vision_time_ms: stats.vision_ms,
+        prefill_compute_time_ms: stats.prefill_compute_ms,
+        prefill_total_time_ms: stats.prefill_total_ms,
+        ode_time_ms: stats.ode_ms
+      },
+      {
+        execution_provider: ep,
+        quality
+      }
+    )
 
     if (_isMobile) {
       // Device Farm tears down the BareKit process before exit handlers
@@ -768,51 +852,55 @@ async function _runPi05EndToEnd (t, ggufPath, inputs, backend, quant) {
 // with com.apple.developer.kernel.increased-memory-limit.
 const _skipMobilePi05 = _isMobile
 
-test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout: 1200000, skip: _skipMobilePi05 }, async (t) => {
-  if (_assetsState.state === 'SKIP') {
-    t.comment('skipping: ' + SKIP_REASON)
-    return
-  }
-  if (_assetsState.state === 'FAIL') {
-    t.fail(_assetsState.reason)
-    return
-  }
+test(
+  'pi05 integration: VlaModel.run() matches PyTorch actions_final',
+  { timeout: 1200000, skip: _skipMobilePi05 },
+  async (t) => {
+    if (_assetsState.state === 'SKIP') {
+      t.comment('skipping: ' + SKIP_REASON)
+      return
+    }
+    if (_assetsState.state === 'FAIL') {
+      t.fail(_assetsState.reason)
+      return
+    }
 
-  // ── Load inputs + expected (desktop safetensors OR mobile JSON) ────────
-  const inputs = await _loadTestInputs()
-  if (!inputs) {
-    t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
-    return
-  }
-  const { ggufPath, images, tokens, mask, noise, expected } = inputs
-  const quant = _quantFromGgufPath(ggufPath)
+    // ── Load inputs + expected (desktop safetensors OR mobile JSON) ────────
+    const inputs = await _loadTestInputs()
+    if (!inputs) {
+      t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
+      return
+    }
+    const { ggufPath, images, tokens, mask, noise, expected } = inputs
+    const quant = _quantFromGgufPath(ggufPath)
 
-  // Shared sanity checks (don't repeat per backend — input shape is
-  // platform-agnostic and the addon's hparams contract is identical
-  // regardless of backend).
-  const perCam = 3 * 224 * 224
-  t.is(images.length, 3, 'three camera buffers')
-  t.is(images[0].length, perCam, 'camera 0 length')
-  t.is(images[1].length, perCam, 'camera 1 length')
-  t.is(images[2].length, perCam, 'camera 2 length')
-  t.is(tokens.length, 200, 'tokens length')
-  t.is(mask.length, 200, 'mask length')
-  t.is(noise.length, 50 * 32, 'noise length')
-  t.is(expected.length, 50 * 32, 'expected actions length')
+    // Shared sanity checks (don't repeat per backend — input shape is
+    // platform-agnostic and the addon's hparams contract is identical
+    // regardless of backend).
+    const perCam = 3 * 224 * 224
+    t.is(images.length, 3, 'three camera buffers')
+    t.is(images[0].length, perCam, 'camera 0 length')
+    t.is(images[1].length, perCam, 'camera 1 length')
+    t.is(images[2].length, perCam, 'camera 2 length')
+    t.is(tokens.length, 200, 'tokens length')
+    t.is(mask.length, 200, 'mask length')
+    t.is(noise.length, 50 * 32, 'noise length')
+    t.is(expected.length, 50 * 32, 'expected actions length')
 
-  // Run each backend in the same Bare process so the GGUF stays mmap'd
-  // and the prebuilt addon only loads once. Mirrors the smolvla pattern
-  // (addon.test.js loops auto + cpu). `auto` picks Metal/Vulkan/etc.
-  // when available; `cpu` forces the baseline. The dual perf-report
-  // rows let CI compare backends without scheduling two runs.
-  //
-  // On runners with no GPU device, `auto` falls through to cpu and the
-  // two rows naturally collapse (same numbers) — we still emit both for
-  // schema consistency.
-  for (const backend of ['auto', 'cpu']) {
-    await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
+    // Run each backend in the same Bare process so the GGUF stays mmap'd
+    // and the prebuilt addon only loads once. Mirrors the smolvla pattern
+    // (addon.test.js loops auto + cpu). `auto` picks Metal/Vulkan/etc.
+    // when available; `cpu` forces the baseline. The dual perf-report
+    // rows let CI compare backends without scheduling two runs.
+    //
+    // On runners with no GPU device, `auto` falls through to cpu and the
+    // two rows naturally collapse (same numbers) — we still emit both for
+    // schema consistency.
+    for (const backend of ['auto', 'cpu']) {
+      await _runPi05EndToEnd(t, ggufPath, inputs, backend, quant)
+    }
   }
-})
+)
 
 // ── Error-path tests (architecture-neutral but kept here for shape
 //    symmetry with addon.test.js — see plan §5 "integration parity"). ──
@@ -828,100 +916,127 @@ test('pi05 integration: VlaModel rejects missing/invalid files.model', (t) => {
   // above the architecture dispatch so its behaviour is identical for
   // pi05 callers. Re-asserted here so the pi05 suite reads stand-alone.
   let err1 = null
-  try { const m = new VlaModel({ files: { model: [] } }); t.absent(m) } catch (e) { err1 = e }
+  try {
+    const m = new VlaModel({ files: { model: [] } })
+    t.absent(m)
+  } catch (e) {
+    err1 = e
+  }
   t.ok(err1 && /non-empty array/.test(err1.message))
 
   let err2 = null
-  try { const m = new VlaModel(); t.absent(m) } catch (e) { err2 = e }
+  try {
+    const m = new VlaModel()
+    t.absent(m)
+  } catch (e) {
+    err2 = e
+  }
   t.ok(err2 && /non-empty array/.test(err2.message))
 
   let err3 = null
-  try { const m = new VlaModel({ files: { model: ['relative/path.gguf'] } }); t.absent(m) } catch (e) { err3 = e }
+  try {
+    const m = new VlaModel({ files: { model: ['relative/path.gguf'] } })
+    t.absent(m)
+  } catch (e) {
+    err3 = e
+  }
   t.ok(err3 && /absolute path/.test(err3.message))
 })
 
 test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
   const m = new VlaModel({ files: { model: ['/definitely/does/not/exist/pi05.gguf'] } })
   let err = null
-  try { await m.load() } catch (e) { err = e }
+  try {
+    await m.load()
+  } catch (e) {
+    err = e
+  }
   t.ok(err, 'expected an error for missing GGUF')
 })
 
-test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000, skip: _skipMobilePi05 }, async (t) => {
-  if (_assetsState.state === 'SKIP') {
-    t.comment('skipping: ' + SKIP_REASON)
-    return
-  }
-  if (_assetsState.state === 'FAIL') {
-    t.fail(_assetsState.reason)
-    return
-  }
-
-  const inputs = await _loadTestInputs()
-  if (!inputs) {
-    t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
-    return
-  }
-
-  const model = new VlaModel({
-    files: { model: [path.resolve(inputs.ggufPath)] },
-    config: { verbosity: 1 }
-  })
-  try {
-    await model.load({ backend: 'cpu' })
-    const hp = model.hparams
-    const size = hp.visionImageSize
-    // pi05_base lives at 224 → pick 256 as the "wrong" size; pi05 ignores
-    // anything other than 224 and the validator should catch it before any
-    // C++ inference runs.
-    const wrongSize = size === 224 ? 256 : 224
-
-    // Pixel buffer sized for the (wrong) imgWidth/Height so we don't trip
-    // the upstream "pixel.length === 3*imgW*imgH" check first.
-    const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
-    const tokens = new Int32Array(hp.tokenizerMaxLength)
-    const mask = new Uint8Array(hp.tokenizerMaxLength)
-    tokens[0] = 1
-    mask[0] = 1
-    const badInput = {
-      images: [dummyPixels, dummyPixels, dummyPixels],
-      imgWidth: wrongSize,
-      imgHeight: wrongSize,
-      state: new Float32Array(0), // pi05 ignores `state`
-      tokens,
-      mask
+test(
+  'pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)',
+  { timeout: 600000, skip: _skipMobilePi05 },
+  async (t) => {
+    if (_assetsState.state === 'SKIP') {
+      t.comment('skipping: ' + SKIP_REASON)
+      return
+    }
+    if (_assetsState.state === 'FAIL') {
+      t.fail(_assetsState.reason)
+      return
     }
 
-    let rejectErr = null
-    try { await model.run(badInput) } catch (e) { rejectErr = e }
-    t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
-    t.ok(
-      rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
-      `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
-    )
-
-    // Verify the model is still usable after rejection. If the rejection
-    // had wedged `_hasActiveResponse`, the next run() would immediately
-    // throw JOB_ALREADY_RUNNING — same regression smolvla's equivalent
-    // test guards against.
-    const goodInput = {
-      images: inputs.images,
-      imgWidth: 224,
-      imgHeight: 224,
-      state: new Float32Array(0),
-      tokens: inputs.tokens,
-      mask: inputs.mask,
-      noise: inputs.noise
+    const inputs = await _loadTestInputs()
+    if (!inputs) {
+      t.fail('_loadTestInputs returned null despite asset state ' + _assetsState.state)
+      return
     }
-    const response = await model.run(goodInput)
-    const { actions } = await response.await()
-    t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
-    t.is(
-      actions.length,
-      hp.chunkSize * hp.actionDim,
-      'follow-up run actions length matches chunk_size*action_dim'
-    )
-  } finally {
-    await model.unload().catch(() => {})
+
+    const model = new VlaModel({
+      files: { model: [path.resolve(inputs.ggufPath)] },
+      config: { verbosity: 1 }
+    })
+    try {
+      await model.load({ backend: 'cpu' })
+      const hp = model.hparams
+      const size = hp.visionImageSize
+      // pi05_base lives at 224 → pick 256 as the "wrong" size; pi05 ignores
+      // anything other than 224 and the validator should catch it before any
+      // C++ inference runs.
+      const wrongSize = size === 224 ? 256 : 224
+
+      // Pixel buffer sized for the (wrong) imgWidth/Height so we don't trip
+      // the upstream "pixel.length === 3*imgW*imgH" check first.
+      const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
+      const tokens = new Int32Array(hp.tokenizerMaxLength)
+      const mask = new Uint8Array(hp.tokenizerMaxLength)
+      tokens[0] = 1
+      mask[0] = 1
+      const badInput = {
+        images: [dummyPixels, dummyPixels, dummyPixels],
+        imgWidth: wrongSize,
+        imgHeight: wrongSize,
+        state: new Float32Array(0), // pi05 ignores `state`
+        tokens,
+        mask
+      }
+
+      let rejectErr = null
+      try {
+        await model.run(badInput)
+      } catch (e) {
+        rejectErr = e
+      }
+      t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
+      t.ok(
+        rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
+        `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
+      )
+
+      // Verify the model is still usable after rejection. If the rejection
+      // had wedged `_hasActiveResponse`, the next run() would immediately
+      // throw JOB_ALREADY_RUNNING — same regression smolvla's equivalent
+      // test guards against.
+      const goodInput = {
+        images: inputs.images,
+        imgWidth: 224,
+        imgHeight: 224,
+        state: new Float32Array(0),
+        tokens: inputs.tokens,
+        mask: inputs.mask,
+        noise: inputs.noise
+      }
+      const response = await model.run(goodInput)
+      const { actions } = await response.await()
+      t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
+      t.is(
+        actions.length,
+        hp.chunkSize * hp.actionDim,
+        'follow-up run actions length matches chunk_size*action_dim'
+      )
+    } finally {
+      await model.unload().catch(() => {})
+    }
   }
-})
+)
