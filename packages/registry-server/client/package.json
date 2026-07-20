@@ -49,8 +49,8 @@
     "test": "npm run test:unit && npm run test:integration",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint": "standard",
-    "lint:fix": "standard --fix",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
@@ -74,9 +74,9 @@
   "devDependencies": {
     "brittle": "^3.4.0",
     "dotenv": "^17.2.3",
+    "lunte": "^1.8.4",
     "prettier": "^3.9.6",
     "prettier-config-holepunch": "^2.0.0",
-    "standard": "^17.1.0",
     "test-tmp": "^1.4.0",
     "typescript": "^5.9.3"
   }
