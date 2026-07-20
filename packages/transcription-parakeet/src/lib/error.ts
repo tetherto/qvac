@@ -8,7 +8,7 @@ type QvacErrorOptions = ConstructorParameters<typeof QvacErrorBase>[0];
 
 export class QvacErrorAddonParakeet extends QvacErrorBase {
   constructor(options?: QvacErrorOptions | number) {
-    super(options as QvacErrorOptions);
+    super(typeof options === "number" ? { code: options } : options);
   }
 }
 

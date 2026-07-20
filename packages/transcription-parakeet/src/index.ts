@@ -343,9 +343,9 @@ class TranscriptionParakeet {
     streamingConfig: StreamingRunConfig,
   ): Promise<QvacResponse<TranscriptionParakeet.ParakeetRunOutput>> {
     const normalized = this._normalizeAudioStream(audioStream);
+    const addon = this._requireAddon();
     const response =
       this._job.start() as QvacResponse<TranscriptionParakeet.ParakeetRunOutput>;
-    const addon = this._requireAddon();
     try {
       await addon.startStreaming(streamingConfig || {});
     } catch (error) {

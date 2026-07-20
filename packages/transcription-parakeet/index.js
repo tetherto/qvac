@@ -143,8 +143,8 @@ class TranscriptionParakeet {
     }
     async _runStreamingInternal(audioStream, streamingConfig) {
         const normalized = this._normalizeAudioStream(audioStream);
-        const response = this._job.start();
         const addon = this._requireAddon();
+        const response = this._job.start();
         try {
             await addon.startStreaming(streamingConfig || {});
         }

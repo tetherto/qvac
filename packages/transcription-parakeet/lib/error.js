@@ -7,7 +7,7 @@ const QvacError = require("@qvac/error");
 const { QvacErrorBase, addCodes } = QvacError;
 class QvacErrorAddonParakeet extends QvacErrorBase {
     constructor(options) {
-        super(options);
+        super(typeof options === "number" ? { code: options } : options);
     }
 }
 exports.QvacErrorAddonParakeet = QvacErrorAddonParakeet;
