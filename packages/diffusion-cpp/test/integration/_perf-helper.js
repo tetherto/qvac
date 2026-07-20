@@ -84,7 +84,12 @@ try {
               ttfb_ms: null,
               total_steps: null,
               width: null,
-              height: null
+              height: null,
+              conditioner_ms: null,
+              denoise_ms: null,
+              vae_ms: null,
+              post_process_ms: null,
+              steps_per_second: null
             },
             metrics
           ),
@@ -238,6 +243,12 @@ function recordPerformance(label, stats, extra) {
   const h = _num(stats.height)
   const ttfbMs = extra && extra.ttfbMs != null ? _num(extra.ttfbMs) : null
 
+  const conditionerMs = _num(stats.conditionerMs)
+  const denoiseMs = _num(stats.denoiseMs)
+  const vaeMs = _num(stats.vaeMs)
+  const postProcessMs = _num(stats.postProcessMs)
+  const stepsPerSecond = _num(stats.stepsPerSecond)
+
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
   const effectiveDevice = (extra && extra.execution_provider) || labelDevice || 'gpu'
   const backend = resolveBackend(effectiveDevice)
@@ -250,7 +261,12 @@ function recordPerformance(label, stats, extra) {
       ttfb_ms: ttfbMs,
       total_steps: totalSteps,
       width: w,
-      height: h
+      height: h,
+      conditioner_ms: conditionerMs,
+      denoise_ms: denoiseMs,
+      vae_ms: vaeMs,
+      post_process_ms: postProcessMs,
+      steps_per_second: stepsPerSecond
     },
     {
       scenario: (extra && extra.scenario) || 'default',
@@ -275,6 +291,15 @@ function recordPerformance(label, stats, extra) {
     `    - Steps: ${totalSteps || 'n/a'}`,
     `    - Resolution: ${w || '?'}x${h || '?'}`
   ]
+  if (!isEsrgan && conditionerMs != null) {
+    lines.push(
+      `    - Conditioner: ${conditionerMs}ms`,
+      `    - Denoise: ${denoiseMs != null ? denoiseMs + 'ms' : 'n/a'}`,
+      `    - VAE: ${vaeMs != null ? vaeMs + 'ms' : 'n/a'}`,
+      `    - Post-process: ${postProcessMs != null ? postProcessMs + 'ms' : 'n/a'}`,
+      `    - Steps/sec: ${stepsPerSecond != null ? stepsPerSecond.toFixed(2) : 'n/a'}`
+    )
+  }
   return lines.join('\n')
 }
 

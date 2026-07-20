@@ -68,6 +68,7 @@ safeTest(
 
       const images = []
       const progressTicks = []
+      let stats = null
 
       // ── Load ─────────────────────────────────────────────────────────────────
       console.log('\n=== Loading model ===')
@@ -137,6 +138,8 @@ safeTest(
         const genMs = Date.now() - tGen
         console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
 
+        stats = response.stats
+
         if (!isWarmup) {
           t.comment(
             recordPerformance('[SD3 img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
@@ -163,6 +166,36 @@ safeTest(
       t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
       t.ok(img.length > 1000, `Image has meaningful size (${img.length} bytes)`)
       t.ok(isPng(img), 'Image has valid PNG magic bytes')
+
+      // ── Runtime stats (per-phase breakdown) ───────────────────────────────────
+      t.ok(stats, 'stats object is populated')
+      t.ok(
+        typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+        `conditionerMs is a positive number (got ${stats.conditionerMs})`
+      )
+      t.ok(
+        typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+        `denoiseMs is a positive number (got ${stats.denoiseMs})`
+      )
+      t.ok(
+        typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+        `vaeMs is a positive number (got ${stats.vaeMs})`
+      )
+      t.ok(
+        typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
+        `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
+      )
+      t.ok(
+        typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+        `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
+      )
+      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
+      const tolerance = Math.max(2, stats.generationMs * 0.01)
+      const diff = Math.abs(totalPhaseMs - stats.generationMs)
+      t.ok(
+        diff <= tolerance,
+        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
+      )
 
       const outPath = path.join(modelDir, 'generate-image--sd3-i2i-seed3.png')
       fs.writeFileSync(outPath, img)

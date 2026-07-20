@@ -169,6 +169,12 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
       `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
     )
 
+    t.ok(
+      Math.abs((stats.stepsPerSecond * stats.denoiseMs) / 1000 - 10) < 0.001,
+      'stepsPerSecond is consistent with denoiseMs and the 10 configured steps ' +
+        `(got ${((stats.stepsPerSecond * stats.denoiseMs) / 1000).toFixed(3)})`
+    )
+
     // The four phases are exhaustive: conditioner + denoise + vae + postProcess
     // spans t0..t1, which is exactly generationMs. Only int-rounding of
     // generationMs and sub-ms jitter clamps separate them, so hold a tight bound.
