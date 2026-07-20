@@ -681,6 +681,7 @@ describe('responses API', () => {
           model: E2E.llm,
           input: 'Remember the code word is XYZZY.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 512,
           temperature: 0,
           seed: 1
@@ -707,6 +708,7 @@ describe('responses API', () => {
           model: E2E.llm,
           input: 'Remember the code word is XYZZY.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 512,
           temperature: 0,
           seed: 1
@@ -720,6 +722,7 @@ describe('responses API', () => {
           previous_response_id: rid1,
           input: 'Got it.',
           store: true,
+          reasoning_budget: false,
           max_output_tokens: 256,
           temperature: 0,
           seed: 1
@@ -731,6 +734,7 @@ describe('responses API', () => {
         model: E2E.llm,
         previous_response_id: rid2,
         input: 'What is the code word? Reply with one word only.',
+        reasoning_budget: false,
         max_output_tokens: 512,
         temperature: 0,
         seed: 1
