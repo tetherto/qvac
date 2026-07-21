@@ -1,0 +1,135 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@rpc/get-identity",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/identity",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@rpc/get-user-profile",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/user-profile-result",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@rpc/set-user-profile",
+      "request": {
+        "name": "@rpc/user-profile",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/user-profile",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@rpc/watch-user-profile",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/user-profile-result",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@rpc/create-task",
+      "request": {
+        "name": "@rpc/create-task-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/task",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 5,
+      "name": "@rpc/update-task",
+      "request": {
+        "name": "@rpc/update-task-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/task",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 6,
+      "name": "@rpc/get-task",
+      "request": {
+        "name": "@rpc/task-id",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/task-result",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 7,
+      "name": "@rpc/list-tasks",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/task-list",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 8,
+      "name": "@rpc/watch-tasks",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/task-list",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@rpc/describe-runtime",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/runtime-info",
+        "stream": false
+      },
+      "version": 2
+    }
+  ]
+}

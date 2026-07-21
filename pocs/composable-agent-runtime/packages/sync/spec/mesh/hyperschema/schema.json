@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "task-status",
+      "namespace": "sync",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "pending",
+          "version": 1
+        },
+        {
+          "key": "running",
+          "version": 1
+        },
+        {
+          "key": "completed",
+          "version": 1
+        },
+        {
+          "key": "failed",
+          "version": 1
+        },
+        {
+          "key": "cancelled",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "task",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "input",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "status",
+          "required": true,
+          "type": "@sync/task-status",
+          "version": 1
+        },
+        {
+          "name": "result",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "originDeviceId",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "put-task-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "task",
+          "required": true,
+          "type": "@sync/task",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}

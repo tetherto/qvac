@@ -1,0 +1,25 @@
+{
+  "name": "@qvac/supervisor",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test/run.ts",
+    "test:node": "node --experimental-strip-types test/all.ts",
+    "test:bun": "bun test/all.ts",
+    "test:bare": "bare test/all.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/brittle": "^3.5.0",
+    "@types/bun": "^1.3.14",
+    "brittle": "^4.0.2",
+    "typescript": "^5.9.3"
+  }
+}

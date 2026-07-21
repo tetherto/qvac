@@ -1,0 +1,21 @@
+{
+  "name": "@qvac/agents",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test/run.ts",
+    "test:node": "node --experimental-strip-types test/all.ts",
+    "test:bun": "bun test/all.ts",
+    "test:bare": "brittle-bare test/all.ts",
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module Preserve --moduleResolution Bundler --erasableSyntaxOnly --allowImportingTsExtensions test/brittle.d.ts test/all.ts index.ts"
+  },
+  "devDependencies": {
+    "brittle": "^4.0.2",
+    "typescript": "^5.9.3"
+  }
+}

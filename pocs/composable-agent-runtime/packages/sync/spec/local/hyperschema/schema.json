@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "user-profile",
+      "namespace": "local",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mesh-session",
+      "namespace": "local",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "seed",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "key",
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "creator",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}

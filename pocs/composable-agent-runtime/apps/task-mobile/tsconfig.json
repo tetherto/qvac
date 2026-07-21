@@ -1,0 +1,17 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true
+  },
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "worklets/**/*.ts",
+    "generated/**/*.d.ts"
+  ]
+}

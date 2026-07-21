@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": [
+      "bun"
+    ]
+  },
+  "include": [
+    "index.ts",
+    "child-entry.ts",
+    "deterministic-sdk-entry.ts",
+    "qwen-sdk-entry.ts",
+    "lib/**/*.ts",
+    "test/**/*.ts"
+  ]
+}

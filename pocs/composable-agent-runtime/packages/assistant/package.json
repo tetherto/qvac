@@ -1,0 +1,25 @@
+{
+  "name": "@qvac/assistant",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@qvac/harness": "0.0.0-poc",
+    "@qvac/runtime-contracts": "0.0.0-poc",
+    "@qvac/supervisor": "0.0.0-poc",
+    "@qvac/sync": "0.0.0-poc",
+    "bare-stow": "0.1.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

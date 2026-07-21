@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@sync/put-task",
+      "requestType": "@sync/put-task-operation",
+      "version": 1
+    }
+  ]
+}

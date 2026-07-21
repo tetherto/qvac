@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Composable Runtime Feasibility",
+    "slug": "qvac-composable-runtime-feasibility",
+    "version": "0.0.0",
+    "newArchEnabled": true,
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.qvac.poc.composable-runtime",
+      "entitlements": {
+        "com.apple.developer.kernel.increased-memory-limit": true
+      }
+    },
+    "android": {
+      "package": "com.qvac.poc.composableruntime"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": [
+      "bun"
+    ]
+  },
+  "include": [
+    "apps/**/*.ts",
+    "packages/**/*.ts",
+    "test/**/*.ts"
+  ]
+}

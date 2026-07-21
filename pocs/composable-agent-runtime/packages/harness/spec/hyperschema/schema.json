@@ -1,0 +1,119 @@
+{
+  "version": 3,
+  "schema": [
+    {
+      "name": "wire-frame",
+      "namespace": "harness",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "type",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "runId",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "messages",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "args",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "result",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "metrics",
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "traceId",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "component",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "runtime",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "instanceId",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "processId",
+          "type": "uint",
+          "version": 2
+        },
+        {
+          "name": "contract",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "protocolVersion",
+          "type": "uint",
+          "version": 2
+        },
+        {
+          "name": "capabilities",
+          "type": "json",
+          "version": 2
+        },
+        {
+          "name": "buildVersion",
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "sdkIdentity",
+          "type": "json",
+          "version": 2
+        },
+        {
+          "name": "error",
+          "type": "json",
+          "version": 3
+        }
+      ]
+    }
+  ]
+}

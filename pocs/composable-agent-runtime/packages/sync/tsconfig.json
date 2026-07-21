@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "target": "ESNext",
+    "types": [
+      "bun"
+    ]
+  },
+  "include": [
+    "index.ts",
+    "sidecar-entry.ts",
+    "*.d.ts",
+    "lib/**/*.ts",
+    "schema/**/*.ts",
+    "test/**/*.ts",
+    "spec/**/*.d.ts"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "target": "ESNext"
+  },
+  "include": [
+    "index.ts",
+    "lib/**/*.ts",
+    "test/**/*.ts",
+    "../../packages/sync/vendor.d.ts",
+    "../../packages/sync/spec/**/*.d.ts"
+  ]
+}

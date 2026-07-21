@@ -1,0 +1,290 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "name": "empty",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": []
+    },
+    {
+      "name": "identity",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "deviceId",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "user-profile",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "user-profile-result",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "profile",
+          "type": "@rpc/user-profile",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "task-status",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "pending",
+          "version": 1
+        },
+        {
+          "key": "running",
+          "version": 1
+        },
+        {
+          "key": "completed",
+          "version": 1
+        },
+        {
+          "key": "failed",
+          "version": 1
+        },
+        {
+          "key": "cancelled",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "task",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 4,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "input",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "status",
+          "required": true,
+          "type": "@rpc/task-status",
+          "version": 1
+        },
+        {
+          "name": "result",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "originDeviceId",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "create-task-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "input",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "update-task-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "status",
+          "type": "@rpc/task-status",
+          "version": 1
+        },
+        {
+          "name": "result",
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "task-id",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "task-result",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "task",
+          "type": "@rpc/task",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "task-list",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "tasks",
+          "required": true,
+          "array": true,
+          "type": "@rpc/task",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "runtime-info",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "component",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "runtime",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "instanceId",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "processId",
+          "required": true,
+          "type": "uint",
+          "version": 2
+        },
+        {
+          "name": "contract",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "protocolVersion",
+          "required": true,
+          "type": "uint",
+          "version": 2
+        },
+        {
+          "name": "capabilities",
+          "required": true,
+          "array": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "buildVersion",
+          "required": true,
+          "type": "string",
+          "version": 2
+        }
+      ]
+    }
+  ]
+}

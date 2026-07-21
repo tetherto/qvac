@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@harness/run",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": true
+      },
+      "version": 1
+    },
+    {
+      "id": 0,
+      "name": "@harness/describe-runtime",
+      "request": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "response": {
+        "name": "@harness/wire-frame",
+        "stream": false
+      },
+      "version": 2
+    }
+  ]
+}

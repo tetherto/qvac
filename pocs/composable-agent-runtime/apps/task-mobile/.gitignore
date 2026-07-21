@@ -1,0 +1,4 @@
+.expo/
+generated/*.bundle
+generated/*.js
+generated/build-measurements.json

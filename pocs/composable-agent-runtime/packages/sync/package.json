@@ -1,0 +1,67 @@
+{
+  "name": "@qvac/sync",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./core": "./lib/core.ts",
+    "./client": "./lib/client.ts",
+    "./spawn": "./lib/spawn.ts",
+    "./sidecar-entry": "./sidecar-entry.ts"
+  },
+  "imports": {
+    "#process": {
+      "bare": "bare-process",
+      "default": "./lib/process.ts"
+    },
+    "fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "path": {
+      "bare": "bare-path",
+      "default": "path"
+    },
+    "url": {
+      "bare": "bare-url",
+      "default": "url"
+    }
+  },
+  "scripts": {
+    "build:schema": "bare schema/build.ts",
+    "test": "bun test/run.ts all",
+    "test:node": "bun test/run.ts node",
+    "test:bare": "bun test/run.ts bare",
+    "test:spawn": "bun test/run.ts spawn",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@qvac/runtime-contracts": "0.0.0-poc",
+    "autobee": "^1.0.10",
+    "bare-fs": "^4.7.2",
+    "bare-path": "^3.0.1",
+    "bare-process": "4.4.1",
+    "bare-sidecar": "0.5.3",
+    "bare-stow": "0.1.4",
+    "bare-url": "^2.4.5",
+    "corestore": "^7.11.0",
+    "hrpc": "^4.3.0",
+    "hyperdb": "^6.7.0",
+    "hypercore-crypto": "^3.7.0",
+    "hypercore-storage": "^3.1.2",
+    "hyperdispatch": "^1.6.0",
+    "hyperschema": "^1.21.0",
+    "hyperschema-ts": "^0.1.0",
+    "hyperswarm": "^4.17.0",
+    "ready-resource": "^1.2.0",
+    "streamx": "^2.28.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "brittle": "^4.0.2",
+    "hyperdht": "^6.32.0",
+    "test-tmp": "^1.4.0",
+    "typescript": "^5.9.3"
+  }
+}

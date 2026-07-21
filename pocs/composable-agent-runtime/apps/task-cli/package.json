@@ -1,0 +1,22 @@
+{
+  "name": "@qvac-poc/task-cli",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "smoke:qwen": "node --experimental-strip-types index.ts execute --qwen"
+  },
+  "dependencies": {
+    "@qvac/assistant": "0.0.0-poc",
+    "@qvac/runtime-contracts": "0.0.0-poc",
+    "@qvac-poc/task-shared": "0.0.0-poc"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

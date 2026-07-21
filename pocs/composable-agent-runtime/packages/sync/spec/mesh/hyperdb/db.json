@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "tasks",
+      "namespace": "sync",
+      "id": 0,
+      "type": 1,
+      "version": 1,
+      "versionField": null,
+      "indexes": [
+        "@sync/tasks-by-created"
+      ],
+      "schema": "@sync/task",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "tasks-by-created",
+      "namespace": "sync",
+      "id": 1,
+      "type": 2,
+      "version": 1,
+      "collection": "@sync/tasks",
+      "unique": false,
+      "deprecated": false,
+      "key": [
+        "createdAt"
+      ]
+    }
+  ]
+}

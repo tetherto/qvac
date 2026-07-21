@@ -1,0 +1,16 @@
+{
+  "name": "@qvac-poc/task-shared",
+  "version": "0.0.0-poc",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit --strict --target ES2022 --module Preserve --moduleResolution Bundler --allowImportingTsExtensions --erasableSyntaxOnly --skipLibCheck index.ts task-flow.test.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}
