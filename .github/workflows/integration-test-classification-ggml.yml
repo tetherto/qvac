@@ -57,9 +57,12 @@ jobs:
             platform: darwin
             arch: arm64
             runner: qvac-macos26-arm64-gpu
-          - os: windows-2022
-            platform: win32
+          # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
+          # the Vulkan loader installed (same env as llm-llamacpp and other fabric
+          # consumers being migrated).
+          - platform: win32
             arch: x64
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Manual Workspace Cleanup

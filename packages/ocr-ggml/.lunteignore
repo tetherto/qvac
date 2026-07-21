@@ -11,3 +11,8 @@ test/results
 examples
 addon
 *.d.ts
+index.js
+ocr-ggml.js
+addonLogging.js
+lib
+src

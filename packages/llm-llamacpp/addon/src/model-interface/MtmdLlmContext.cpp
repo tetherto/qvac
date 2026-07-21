@@ -668,7 +668,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             nPastLocal,
             0,
             params_.n_batch,
-            &nPastLocal);
+            &nPastLocal,
+            /*callback=*/nullptr,
+            /*user_data=*/nullptr);
       }
     } else {
       res = mtmd_helper_eval_chunk_single(
@@ -1413,7 +1415,11 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
   }
 
   mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(
-      visionContext(), media.data(), media.size()));
+                       visionContext(),
+                       media.data(),
+                       media.size(),
+                       /*placeholder=*/false)
+                       .bitmap);
   if (!bmp.ptr) {
     resetMedia();
     const char* errorMsg =
@@ -1445,8 +1451,11 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
         ADDON_ID, toString(UnableToLoadModel), errorMsg);
   }
 
-  mtmd::bitmap bmp(
-      mtmd_helper_bitmap_init_from_file(visionContext(), fname.c_str()));
+  mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(
+                       visionContext(),
+                       fname.c_str(),
+                       /*placeholder=*/false)
+                       .bitmap);
   if (!bmp.ptr) {
     resetMedia();
     std::string errorMsg = string_format(
@@ -1679,7 +1688,9 @@ llama_pos MtmdLlmContext::evalMediaSegment(size_t mediaIndex, llama_pos pos) {
           pos,
           seqId_,
           params_.n_batch,
-          &newPos);
+          &newPos,
+          /*callback=*/nullptr,
+          /*user_data=*/nullptr);
     }
   } else {
     res = mtmd_helper_eval_chunk_single(
