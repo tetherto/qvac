@@ -4495,14 +4495,13 @@
   },
   {
     "source": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
-    "engine": "@qvac/diffusion-cpp",
-    "description": "Qwen3 4B model",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen3 4B base GGUF. Usable for completion and as the FLUX.2 Klein text encoder via modelConfig.llmModelSrc.",
     "licenseId": "Apache-2.0",
-    "quantization": "Q4_K_M",
+    "quantization": "q4_K_M",
     "params": "4B",
     "tags": [
-      "generation",
-      "diffusion"
+      "generation"
     ]
   },
   {

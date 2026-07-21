@@ -41,6 +41,7 @@ type DiffusionArtifactKey =
   | 'llmModelPath'
   | 'vaeModelPath'
   | 'highNoiseDiffusionModelPath'
+  | 'uncondModelPath'
   | 'audioVaeModelPath'
   | 'embeddingsConnectorsModelPath'
   | 'esrganModelPath'
@@ -96,6 +97,19 @@ export const diffusionPlugin = definePlugin({
     cfg: SdcppConfig,
     ctx: ResolveContext
   ): Promise<ResolveResult<SdcppConfig, DiffusionArtifactKey>> {
+    if (cfg.uncondModelSrc && cfg.mode !== 'diffusion') {
+      throw new ModelLoadFailedError(
+        'modelConfig.uncondModelSrc is Ideogram 4 diffusion only. ' +
+          "Use mode: 'diffusion' or remove uncondModelSrc."
+      )
+    }
+    if (cfg.uncondModelSrc && (!cfg.llmModelSrc || !cfg.vaeModelSrc)) {
+      throw new ModelLoadFailedError(
+        'modelConfig.uncondModelSrc selects the Ideogram 4 layout and requires ' +
+          'modelConfig.llmModelSrc (Qwen3-VL) and modelConfig.vaeModelSrc.'
+      )
+    }
+
     // Standalone-upscaler mode never references auxiliary models: the primary
     // modelSrc IS the ESRGAN file. Skip resolution to avoid downloading
     // unused encoders/VAEs and to keep load fast.
@@ -111,6 +125,7 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
+      uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
       upscaler,
@@ -153,6 +168,7 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc,
       vaeModelSrc,
       highNoiseDiffusionModelSrc,
+      uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
       esrganModelSrc
@@ -172,6 +188,7 @@ export const diffusionPlugin = definePlugin({
       llmModelPath,
       vaeModelPath,
       highNoiseDiffusionModelPath,
+      uncondModelPath,
       audioVaeModelPath,
       embeddingsConnectorsModelPath,
       esrganModelPath
@@ -183,6 +200,7 @@ export const diffusionPlugin = definePlugin({
       llmModelSrc ? resolve(llmModelSrc) : undefined,
       vaeModelSrc ? resolve(vaeModelSrc) : undefined,
       highNoiseDiffusionModelSrc ? resolve(highNoiseDiffusionModelSrc) : undefined,
+      uncondModelSrc ? resolve(uncondModelSrc) : undefined,
       audioVaeModelSrc ? resolve(audioVaeModelSrc) : undefined,
       embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined
@@ -198,6 +216,7 @@ export const diffusionPlugin = definePlugin({
         ...(llmModelPath && { llmModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
         ...(highNoiseDiffusionModelPath && { highNoiseDiffusionModelPath }),
+        ...(uncondModelPath && { uncondModelPath }),
         ...(audioVaeModelPath && { audioVaeModelPath }),
         ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
         ...(esrganModelPath && { esrganModelPath })
@@ -314,6 +333,7 @@ export const diffusionPlugin = definePlugin({
         llmModelSrc,
         vaeModelSrc,
         highNoiseDiffusionModelSrc,
+        uncondModelSrc,
         audioVaeModelSrc,
         embeddingsConnectorsModelSrc,
         upscaler,
@@ -339,6 +359,9 @@ export const diffusionPlugin = definePlugin({
       ...(artifacts?.['t5XxlModelPath'] && { t5Xxl: artifacts['t5XxlModelPath'] }),
       ...(artifacts?.['llmModelPath'] && { llm: artifacts['llmModelPath'] }),
       ...(artifacts?.['vaeModelPath'] && { vae: artifacts['vaeModelPath'] }),
+      ...(artifacts?.['uncondModelPath'] && {
+        uncondModel: artifacts['uncondModelPath']
+      }),
       ...(artifacts?.['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
     }
 
