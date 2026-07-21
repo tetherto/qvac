@@ -169,6 +169,37 @@ async def test_conformance_case(transport, case):
         await asyncio.wait_for(canceller, timeout=10)
         assert cancelled, f"{case['id']}: expected the run to report cancellation"
 
+    elif category == "completionOrchestrate":
+        # The WORKER runs the multi-turn tool loop and calls back for each tool;
+        # this is the Python-only capability the corpus checks. The tool spec is
+        # data-driven (name + fixed result) so the case stays language-neutral --
+        # the handler just returns the declared result.
+        from tetherto.qvac_sdk._completion import completion_orchestrate
+
+        tool_spec = params["tool"]
+
+        async def _handler(_arguments: dict) -> str:
+            return tool_spec["result"]
+
+        run = completion_orchestrate(
+            transport,
+            model_id=model_id,
+            history=params["history"],
+            tools=[
+                {
+                    "name": tool_spec["name"],
+                    "description": tool_spec["description"],
+                    "parameters": {"type": "object", "properties": {}},
+                    "handler": _handler,
+                }
+            ],
+            generation_params=params.get("generationParams"),
+        )
+        async for _event in run.events:
+            pass
+        final = await run.final
+        _assert_text(case["expect"], final.content_text, case["id"])
+
     elif category == "tts":
         samples: list[float] = []
         async for response in text_to_speech(

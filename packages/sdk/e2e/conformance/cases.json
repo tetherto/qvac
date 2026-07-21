@@ -1,5 +1,5 @@
 {
-  "description": "Language-neutral cross-client conformance corpus. Both the JS runner (run.mjs) and the Python runner (packages/sdk-python/tests/test_conformance.py) execute these identical cases against a locally-built worker and assert the same expectations, so the two clients cannot drift on the covered behaviour. `model` is the constant name each client resolves from its own registry (qvac.models / @qvac/sdk). Completion/translation are deterministic (greedy + fixed seed).",
+  "description": "Language-neutral cross-client conformance corpus. Both the JS runner (run.mjs) and the Python runner (packages/sdk-python/tests/test_conformance.py) execute these cases against a locally-built worker and assert the same expectations, so the two clients cannot drift on the covered behaviour. `model` is the constant name each client resolves from its own registry (qvac.models / @qvac/sdk). Completion/translation are deterministic (greedy + fixed seed). Most cases run on both clients; a case whose capability only one client exposes today is driven by that client and logged as a skip by the other -- e.g. `completionOrchestrate` is the WORKER-driven tool loop, which only the Python client wraps (`completion_orchestrate`); the JS client drives tool loops client-side, so its runner skips that case rather than reimplementing the loop.",
   "cases": [
     {
       "id": "completion-arithmetic-2plus2",
@@ -82,6 +82,25 @@
         ]
       },
       "expect": { "kind": "cancelled" }
+    },
+    {
+      "id": "orchestrate-tool-loop",
+      "category": "completionOrchestrate",
+      "model": "QWEN3_600M_INST_Q4",
+      "modelType": "llamacpp-completion",
+      "modelConfig": { "n_ctx": 4096, "tools": true },
+      "params": {
+        "history": [
+          { "role": "user", "content": "Call the get_secret_code tool, then tell me the code." }
+        ],
+        "tool": {
+          "name": "get_secret_code",
+          "description": "Returns the current secret code.",
+          "result": "the secret code is 4242"
+        },
+        "generationParams": { "temp": 0, "seed": 42, "predict": 512 }
+      },
+      "expect": { "kind": "contains", "value": "4242" }
     },
     {
       "id": "tts-produces-audio",

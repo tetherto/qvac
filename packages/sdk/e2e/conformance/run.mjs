@@ -53,6 +53,18 @@ async function runCase(testCase) {
   if (!modelSrc) throw new Error(`unknown model constant ${model}`)
   const loadOpts = { modelSrc, modelType, ...(modelConfig && { modelConfig }) }
 
+  // Worker-driven tool loop: only the Python client wraps it
+  // (`completion_orchestrate`). The JS client runs tool loops client-side, so
+  // there is no JS entry point that drives the worker loop -- skip rather than
+  // reimplement the loop here (that would test the runner, not the SDK). Skip
+  // before loadModel: the case's modelConfig is expressed in the worker's
+  // snake_case (`n_ctx`), which the JS client's camelCase modelConfig schema
+  // rejects. The Python runner covers this case; see cases.json's description.
+  if (category === 'completionOrchestrate') {
+    console.log(`SKIP ${testCase.id} (completionOrchestrate is worker-driven; JS orchestrates client-side)`)
+    return
+  }
+
   if (category === 'modelLifecycle') {
     const modelId = await loadModel(loadOpts)
     if (!modelId) throw new Error('load returned no model id')
