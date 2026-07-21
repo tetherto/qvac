@@ -10,6 +10,12 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
 
+## [0.12.1] - 2026-07-20
+
+### Fixed
+
+- `addonLogging.d.ts` now exports the `AddonLogging` interface. The TypeScript-wrapper migration left it unexported behind an `export =` value, so consumers that embed the logging surface in an exported declaration (such as an SDK plugin returning it from `definePlugin`) failed declaration emit with TS4023. The wrapper now exports the value with `export default` and an explicit `module.exports = addonLogging`, matching the other migrated addon wrappers and keeping the bare CommonJS runtime shape unchanged.
+
 ## [0.12.0] - 2026-07-20
 
 ### Changed
