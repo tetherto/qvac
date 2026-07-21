@@ -44,7 +44,9 @@ namespace qvac_lib_inference_addon_cpp {
 /// model cannot know ids it never received): the job is unlinked in O(1) via
 /// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
 /// queued as its terminal event. In-flight cancellation routes to the model:
-/// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(); that
+/// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(),
+/// falling back to per-id cancel of the in-flight snapshot on models that
+/// only implement cancelById (teardown cancels the same way); that
 /// id -> internal-slot mapping is the model's concern. cancelJobs(liveJobIds())
 /// is the snapshot form the JS binding uses for cancel-all, so jobs admitted
 /// after the cancel was requested survive it. Dequeue announces the
@@ -156,6 +158,14 @@ class MultiJobScheduler final : public IJobScheduler {
     queued_.clear();
     queuedIndex_.clear();
     return dropped;
+  }
+
+  /// Snapshot of the in-flight ids, for the per-id cancel fallback when the
+  /// model has no whole-model cancel(). jobStarting is announced under mtx_,
+  /// so every id snapshotted here is already known to the model.
+  std::vector<JobId> inFlightIds() const {
+    std::lock_guard lock(mtx_);
+    return {inFlight_.begin(), inFlight_.end()};
   }
 
   /// Worker body. Per-job input/id are copied onto the stack while the lock is
@@ -283,18 +293,25 @@ public:
   }
 
   ~MultiJobScheduler() override {
-    bool jobsInFlight = false;
+    std::vector<JobId> jobsInFlight;
     {
       std::lock_guard lock(mtx_);
       running_.store(false);
-      jobsInFlight = !inFlight_.empty();
+      jobsInFlight.assign(inFlight_.begin(), inFlight_.end());
     }
     workCv_.notify_all();
     // Unblock a worker stuck inside model process(): teardown must not wait
-    // for the model to finish on its own. Cancel only while a job is in
-    // flight — an idle scheduler's model may already be destroyed.
-    if (jobsInFlight && cancel_ != nullptr) {
-      cancel_->cancel();
+    // for the model to finish on its own. Fall back to per-id cancellation
+    // when the model has no whole-model cancel(). Cancel only while a job is
+    // in flight — an idle scheduler's model may already be destroyed.
+    if (!jobsInFlight.empty()) {
+      if (cancel_ != nullptr) {
+        cancel_->cancel();
+      } else if (cancelById_ != nullptr) {
+        for (const JobId id : jobsInFlight) {
+          cancelById_->cancelById(id);
+        }
+      }
     }
     for (std::thread& worker : workers_) {
       if (worker.joinable()) {
@@ -374,6 +391,15 @@ public:
     }
     if (cancel_ != nullptr) {
       cancel_->cancel();
+      return;
+    }
+    if (cancelById_ != nullptr) {
+      // No whole-model cancel (a per-job-context model may have no global
+      // stop switch): the scheduler owns the id set, cancel each in-flight
+      // job individually.
+      for (const JobId id : inFlightIds()) {
+        cancelById_->cancelById(id);
+      }
       return;
     }
     QLOG(logger::Priority::WARNING, "Model does not support cancellation (of all jobs in a single-call)");
