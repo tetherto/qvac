@@ -414,3 +414,55 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
     assert (
         "4242" in final.content_text
     ), f"final answer did not reflect the tool result: {final.content_text!r}"
+
+
+async def test_completion_orchestrate_cancel_stops_generation(transport) -> None:
+    """cancel(request_id=...) against a running orchestrate must abort the turn
+    that is currently generating. The orchestrate handler threads its requestId
+    into each inner completionStream turn, so the registry entry the client can
+    target is the turn actually decoding -- without that plumbing the inner turn
+    ran under a server-generated id the client never saw, and Stop did nothing."""
+    from tetherto.qvac_sdk import cancel
+    from tetherto.qvac_sdk._completion import completion_orchestrate
+    from tetherto.qvac_sdk.errors import InferenceCancelledError
+
+    load_request = LoadModelRequest.model_validate(
+        {
+            "type": "loadModel",
+            "modelSrc": QWEN3_600M_INST_Q4.src,
+            "modelType": "llamacpp-completion",
+            "modelConfig": {"n_ctx": 2048},
+        }
+    )
+    load_response = await load_model(transport, load_request)
+    assert load_response.success, load_response.error
+    assert load_response.model_id is not None
+
+    run = completion_orchestrate(
+        transport,
+        model_id=load_response.model_id,
+        history=[
+            {
+                "role": "user",
+                "content": "Write an extremely long, detailed essay about "
+                "the entire history of the Roman Empire.",
+            }
+        ],
+        tools=[],
+        # A large predict budget so generation is still running when the cancel
+        # lands -- the run must not finish on its own before we cancel it.
+        generation_params={"predict": 4096, "temp": 0, "seed": 42},
+    )
+
+    async def wait_for_generation_start() -> None:
+        async for event in run.events:
+            if event.type == "contentDelta":
+                return
+
+    # Once a content delta has arrived the turn's requestId is registered and it
+    # is decoding, so the cancel has a live target.
+    await asyncio.wait_for(wait_for_generation_start(), timeout=60)
+    await cancel(transport, request_id=run.request_id)
+
+    with pytest.raises(InferenceCancelledError):
+        await asyncio.wait_for(run.final, timeout=30)

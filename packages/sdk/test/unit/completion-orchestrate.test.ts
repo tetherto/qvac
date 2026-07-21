@@ -138,6 +138,43 @@ test('orchestrateCompletion: maxToolTurns caps a tool-calling loop', async (t) =
 
   t.is(turn, 3, 'stops at the cap')
   t.is(frames.at(-1)?.done, true, 'still ends with a terminal frame')
+  t.is(
+    frames.at(-1)?.stopReason,
+    'maxToolTurns',
+    'truncation frame is marked so the client can tell it from a natural finish'
+  )
+})
+
+test('orchestrateCompletion: threads the orchestrate requestId into each turn', async (t) => {
+  const seenIds: (string | undefined)[] = []
+  let turn = 0
+  async function* runTurn(request: CompletionStreamRequest) {
+    seenIds.push(request.requestId)
+    turn++
+    yield turn === 1 ? toolTurn('call-1', 'noop', {}) : contentTurn('done')
+  }
+
+  await collect(
+    orchestrateCompletion(
+      baseRequest({ requestId: 'orch-1' }),
+      runTurn,
+      stubReader({ 'call-1': null })
+    )
+  )
+
+  // Every inner turn must run under the orchestrate requestId so
+  // cancel({ requestId }) reaches whichever turn is currently generating.
+  t.is(turn, 2, 'two turns ran')
+  t.alike(seenIds, ['orch-1', 'orch-1'], 'both turns carry the orchestrate requestId')
+})
+
+test('orchestrateCompletion: natural finish leaves stopReason unset', async (t) => {
+  async function* runTurn() {
+    yield contentTurn('all done')
+  }
+  const frames = await collect(orchestrateCompletion(baseRequest(), runTurn, stubReader({})))
+  t.is(frames.at(-1)?.done, true, 'terminal frame')
+  t.absent(frames.at(-1)?.stopReason, 'no stopReason on a natural finish')
 })
 
 test('ToolResultReader: reassembles JSON lines across chunk boundaries', async (t) => {

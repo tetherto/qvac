@@ -135,13 +135,17 @@ export async function* orchestrateCompletion(
   runTurn: RunTurn,
   reader: Pick<ToolResultReader, 'waitFor'>
 ): AsyncGenerator<CompletionOrchestrateResponse> {
-  // Pull the orchestrate-only fields out of the per-turn base: `maxToolTurns`
-  // bounds the loop, and the orchestrate-level `requestId` is dropped so each
-  // inner completionStream turn gets its own server-side id — reusing one id
-  // across turns would collide in the request registry. Each turn's `history`
-  // and `type` are set below.
-  const { maxToolTurns, requestId: _orchestrateRequestId, ...turnBase } = request
-  void _orchestrateRequestId
+  // Pull the loop bound out of the per-turn base; everything else (including
+  // `requestId`) flows into each inner completionStream turn. Threading the
+  // orchestrate `requestId` down is what makes `cancel({ requestId })` reach
+  // the turn that's currently generating — the expensive part a Stop button
+  // targets. Turns run strictly sequentially: turn N's request-registry entry
+  // is disposed (on the `for await` break below) before turn N+1 calls
+  // `begin(...)`, so reusing the id can't collide in `entries`. A cancel that
+  // lands between turns (during a tool-result wait) is caught by the
+  // registry's cancel-before-begin tripwire and aborts the next turn's
+  // `begin(...)`. Each turn's `history` and `type` are set below.
+  const { maxToolTurns, ...turnBase } = request
   const maxTurns = maxToolTurns ?? DEFAULT_MAX_TOOL_TURNS
   let history = [...request.history]
 
