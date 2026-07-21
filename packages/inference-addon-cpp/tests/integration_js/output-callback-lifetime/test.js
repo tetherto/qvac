@@ -63,6 +63,49 @@ test('teardown flush runs its JS output callbacks on the JS thread', async (t) =
   t.ok(events.every(Boolean), 'every output callback ran on the JS thread')
 })
 
+test('a throwing JS handler must not drop later events in the same drained batch', async (t) => {
+  t.timeout(10000)
+  t.plan(3)
+
+  // A handler throw crossing js_call_function surfaces as a Bare
+  // uncaughtException; swallow it like a long-lived app would so the process
+  // survives and the delivery loop's behaviour is observable.
+  let uncaught = 0
+  const onUncaught = (err) => {
+    if (err.message === 'boom') {
+      uncaught++
+      return
+    }
+    throw err
+  }
+  Bare.on('uncaughtException', onUncaught)
+  t.teardown(() => Bare.off('uncaughtException', onUncaught))
+
+  let calls = 0
+  let delivered = 0
+  const handle = addon.createInstance({ name: 'throwing-handler' }, () => {
+    calls++
+    if (calls === 1) throw new Error('boom')
+    delivered++
+  })
+
+  addon.runJob(handle, 'job-a')
+  addon.runJob(handle, 'job-b')
+
+  // Hold the JS thread so both jobs finish and queue all their events before
+  // the async callback fires: one deliverQueued drain then carries entries
+  // for both jobs, and the first delivery throwing exercises the drop.
+  addon.blockEventLoop(100)
+  await nextTick()
+  await nextTick()
+
+  t.ok(uncaught >= 1, `throwing handler surfaced as uncaughtException (${uncaught})`)
+  t.ok(calls >= 2, `later entries of the drained batch were dispatched (${calls} calls)`)
+  t.ok(delivered >= 1, `events after the throwing one were delivered (${delivered})`)
+
+  addon.destroyInstance(handle)
+})
+
 test('destroying addon from inside output callback does not crash', async (t) => {
   t.timeout(10000)
   t.plan(1)
