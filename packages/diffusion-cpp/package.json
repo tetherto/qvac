@@ -107,6 +107,9 @@
       "types": "./video.d.ts",
       "default": "./video.js"
     },
+    "./world": {
+      "default": "./world.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
@@ -114,7 +117,8 @@
     "./addonLogging.js": "./addonLogging.js",
     "./addon.js": "./addon.js",
     "./binding.js": "./binding.js",
-    "./video.js": "./video.js"
+    "./video.js": "./video.js",
+    "./world.js": "./world.js"
   },
   "types": "index.d.ts"
 }

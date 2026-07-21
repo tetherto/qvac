@@ -334,9 +334,69 @@ class EsrganUpscalerInterface {
   }
 }
 
+class WorldSessionInterface {
+  /**
+   * @param {object} binding - The native addon binding (from require.addon())
+   * @param {object} configurationParams - World-session configuration
+   * @param {string} configurationParams.diffusionModelPath - ABot-World DiT GGUF
+   * @param {string} configurationParams.taehvPath - taew2_2 GGUF (pixel decoder)
+   * @param {string} configurationParams.scenePath - scene pack safetensors
+   * @param {object} [configurationParams.config] - threads, seed, backend, ...
+   * @param {Function} outputCb - Called on any walk event (frames, progress, error)
+   */
+  constructor(binding, configurationParams, outputCb) {
+    this._binding = binding
+
+    if (!configurationParams.config) {
+      configurationParams.config = {}
+    }
+
+    if (!configurationParams.config.backendsDir) {
+      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
+    }
+
+    configurationParams.config = Object.fromEntries(
+      Object.entries(configurationParams.config)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    )
+
+    this._handle = this._binding.createWorldInstance(this, configurationParams, outputCb)
+  }
+
+  async activate() {
+    this._binding.activateWorld(this._handle)
+  }
+
+  async cancel() {
+    if (!this._handle) return
+    await this._binding.cancel(this._handle)
+  }
+
+  /**
+   * Generate the next block under an 8-key action mask
+   * (bit 0..7 = W,A,S,D,I,J,K,L held).
+   * @param {number} actionMask
+   * @returns {Promise<boolean>} true if the job was accepted, false if busy
+   */
+  async runStep(actionMask) {
+    return this._binding.runWorldStepJob(this._handle, {
+      type: 'text',
+      input: JSON.stringify({ actionMask })
+    })
+  }
+
+  async unload() {
+    if (!this._handle) return
+    this._binding.destroyInstance(this._handle)
+    this._handle = null
+  }
+}
+
 module.exports = {
   SdInterface,
   EsrganUpscalerInterface,
+  WorldSessionInterface,
   mapAddonEvent,
   readImageDimensions
 }

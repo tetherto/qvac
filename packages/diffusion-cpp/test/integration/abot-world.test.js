@@ -1,13 +1,16 @@
 'use strict'
 
-// ABot-World integration test (first increment).
+// ABot-World integration tests.
 //
-// Proves, through the addon built against qvac-ext-stable-diffusion.cpp#22
-// (temporary vcpkg overlay port), that the ABot-World model set loads natively
-// on the GPU runner and that batch video generation is rejected with the
-// documented "interactive session not implemented yet" error — ABot is a
-// causal/interactive model, not a one-shot generator. Replaced by a real walk
-// assertion when the causal core lands.
+// Two lanes, both through the addon built against
+// qvac-ext-stable-diffusion.cpp#22 (temporary vcpkg overlay port):
+//
+//   1. Guard lane — the ABot model set loads natively and batch video
+//      generation is rejected: ABot is a causal/interactive model, not a
+//      one-shot generator.
+//   2. Walk lane — the real thing: an interactive walk session
+//      (@qvac/diffusion-cpp/world) steps through the fixed scene under
+//      keyboard actions and streams decoded PNG frames.
 //
 // Model provisioning (self-contained):
 //   - UMT5-XXL comes from the pinned models manifest via ensureModelPath
@@ -18,6 +21,10 @@
 //     verified against the SHA256SUMS published in the same S3 prefix.
 //   - ABOT_MODELS_DIR overrides both (local runs, see
 //     scripts/download-model-abot.sh).
+//   - The walk lane additionally needs the scene pack (scene.safetensors)
+//     and taew2_2_f16.gguf; if the scene pack is not present after
+//     provisioning (not uploaded yet), the walk lane passes as a no-op with
+//     an explanatory message instead of failing the suite.
 //
 // The S3 path is Linux-only (aws CLI + sha256sum are present on the
 // qvac-ubuntu*-gpu runners); other platforms skip unless ABOT_MODELS_DIR is
@@ -30,11 +37,15 @@ const fs = require('bare-fs')
 const test = require('brittle')
 
 const VideoStableDiffusion = require('../../video.js')
+const WorldStableDiffusion = require('../../world.js')
+const { readImageDimensions } = require('../../addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
 
 const S3_PREFIX = 's3://tether-ai-dev/qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17'
 const DIT_NAME = 'abot-world-0-5b-lf-dit-q8_0.gguf'
 const VAE_NAME = 'wan2.2_vae_f16.gguf'
+const TAEHV_NAME = 'taew2_2_f16.gguf'
+const SCENE_NAME = 'scene.safetensors'
 const SUMS_NAME = 'SHA256SUMS'
 
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
@@ -61,10 +72,17 @@ function run(cmd, args, opts) {
 
 async function provisionFromS3(dir) {
   fs.mkdirSync(dir, { recursive: true })
-  for (const name of [SUMS_NAME, DIT_NAME, VAE_NAME]) {
+  for (const name of [SUMS_NAME, DIT_NAME, VAE_NAME, TAEHV_NAME]) {
     const dest = path.join(dir, name)
     if (name !== SUMS_NAME && fs.existsSync(dest)) continue
     await run('aws', ['s3', 'cp', `${S3_PREFIX}/${name}`, dest])
+  }
+  // The scene pack ships alongside the GGUFs; tolerate its absence (the walk
+  // lane no-ops without it) so the guard lane keeps working against older
+  // uploads of the model set.
+  const sceneDest = path.join(dir, SCENE_NAME)
+  if (!fs.existsSync(sceneDest)) {
+    await run('aws', ['s3', 'cp', `${S3_PREFIX}/${SCENE_NAME}`, sceneDest]).catch(() => {})
   }
   // Verify transfer integrity against the checksums published with the set.
   await run('sha256sum', ['--check', '--ignore-missing', SUMS_NAME], { cwd: dir })
@@ -116,6 +134,81 @@ test(
       response.onUpdate(() => {}).await(),
       /generate_video\(\) failed|ABot-World|not supported by batch/i,
       'batch generation rejected (ABot is interactive-only; guard fired)'
+    )
+
+    await world.unload().catch(() => {})
+  }
+)
+
+test(
+  'ABot-World: interactive walk session steps through the fixed scene',
+  { skip, timeout: 2_400_000 },
+  async (t) => {
+    setupJsLogger()
+
+    const dir = overrideDir || path.resolve(__dirname, '../model/abot')
+    if (!overrideDir) {
+      await provisionFromS3(dir)
+    }
+
+    const scenePath = path.join(dir, SCENE_NAME)
+    const taehvPath = path.join(dir, TAEHV_NAME)
+    if (!fs.existsSync(scenePath) || !fs.existsSync(taehvPath)) {
+      t.pass(
+        'walk lane skipped: scene pack / taehv not provisioned yet ' +
+          `(need ${SCENE_NAME} + ${TAEHV_NAME} in ${dir})`
+      )
+      return
+    }
+
+    const world = new WorldStableDiffusion({
+      files: {
+        model: path.join(dir, DIT_NAME),
+        taehv: taehvPath,
+        scene: scenePath
+      },
+      config: { seed: 42 },
+      logger: console,
+      opts: { stats: true }
+    })
+
+    await t.execution(world.load(), 'walk session loads (DiT + taehv + scene pack)')
+
+    // Two blocks: idle, then walk forward (W). The first stateless-decoded
+    // block yields 4*3-3 = 9 px frames; subsequent blocks yield 4*3 = 12.
+    const blocks = []
+    for (const keys of [{}, { W: true }]) {
+      const frames = []
+      let progress = 0
+      const response = await world.step(keys)
+      await response
+        .onUpdate((data) => {
+          if (data instanceof Uint8Array) frames.push(data)
+          else if (typeof data === 'string') progress++
+        })
+        .await()
+      blocks.push(frames)
+      t.ok(progress >= 1, `block ${blocks.length - 1}: progress JSON received`)
+    }
+
+    t.is(blocks[0].length, 9, 'first block streams 9 PNG frames (decoder warmup)')
+    t.is(blocks[1].length, 12, 'second block streams 12 PNG frames')
+
+    for (let b = 0; b < blocks.length; b++) {
+      const allCorrect = blocks[b].every((frame) => {
+        const dims = readImageDimensions(frame)
+        return dims && dims.width === 832 && dims.height === 480
+      })
+      t.ok(allCorrect, `block ${b}: every frame is an 832x480 PNG`)
+    }
+
+    // The walk must actually move: last frame of the W block differs from the
+    // last frame of the idle block.
+    const a = blocks[0][blocks[0].length - 1]
+    const b = blocks[1][blocks[1].length - 1]
+    t.ok(
+      a.length !== b.length || !a.every((v, i) => v === b[i]),
+      'walking forward produces different frames than idling'
     )
 
     await world.unload().catch(() => {})

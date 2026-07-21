@@ -23,6 +23,13 @@ for f in \
   fi
 done
 
+# Scene pack for the interactive walk lane; tolerate absence so the guard-lane
+# set keeps working against uploads that predate it.
+if [ ! -f "$OUT/scene.safetensors" ]; then
+  aws s3 cp "$PREFIX/scene.safetensors" "$OUT/scene.safetensors" || \
+    echo "NOTE: scene.safetensors not on S3 yet -- walk lane will no-op"
+fi
+
 # integrity check if sha256sum + SHA256SUMS are available
 if command -v sha256sum >/dev/null 2>&1 && [ -f "$OUT/SHA256SUMS" ]; then
   ( cd "$OUT" && sha256sum -c SHA256SUMS ) || {
