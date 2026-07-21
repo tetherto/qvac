@@ -111,8 +111,7 @@ std::any WorldSessionModel::process(const std::any& input) {
       if (png.empty()) {
         sd_abot_session_frames_free(frames, numFrames);
         throw StatusError(
-            general_error::InternalError,
-            "failed to encode walk frame as PNG");
+            general_error::InternalError, "failed to encode walk frame as PNG");
       }
       job.outputCallback(png);
       delivered++;
@@ -141,8 +140,7 @@ std::any WorldSessionModel::process(const std::any& input) {
   lastStats_.emplace_back("frames", static_cast<int64_t>(delivered));
   lastStats_.emplace_back("width", width);
   lastStats_.emplace_back("height", height);
-  lastStats_.emplace_back(
-      "actionMask", static_cast<int64_t>(job.actionMask));
+  lastStats_.emplace_back("actionMask", static_cast<int64_t>(job.actionMask));
 
   return std::any{};
 }

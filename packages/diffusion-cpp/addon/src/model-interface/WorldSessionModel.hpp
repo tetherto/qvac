@@ -17,15 +17,15 @@ namespace qvac_lib_inference_addon_sd {
 // standalone (its own DiT + taehv decoder + fixed scene pack); it does not
 // share an sd_ctx with the batch txt2img/txt2vid pipeline.
 struct WorldSessionConfig {
-  std::string ditModelPath;   // ABot-World DiT GGUF (F16 or Q8_0)
-  std::string taehvPath;      // taew2_2 GGUF (streaming pixel decoder)
-  std::string scenePath;      // scene pack safetensors
-  std::string backendsDir;    // DL backend modules directory
-  std::string backend;        // backend spec ("" = default; "cpu", "cuda", ...)
-  int nThreads = -1;          // -1 = auto-detect physical cores
-  int64_t seed = 42;          // walk noise seed
-  int numFramePerBlock = 0;   // 0 = model default (3)
-  int localAttnSize = 0;      // 0 = config default; latent-frame window
+  std::string ditModelPath; // ABot-World DiT GGUF (F16 or Q8_0)
+  std::string taehvPath;    // taew2_2 GGUF (streaming pixel decoder)
+  std::string scenePath;    // scene pack safetensors
+  std::string backendsDir;  // DL backend modules directory
+  std::string backend;      // backend spec ("" = default; "cpu", "cuda", ...)
+  int nThreads = -1;        // -1 = auto-detect physical cores
+  int64_t seed = 42;        // walk noise seed
+  int numFramePerBlock = 0; // 0 = model default (3)
+  int localAttnSize = 0;    // 0 = config default; latent-frame window
   bool offloadParamsToCpu = false;
 };
 

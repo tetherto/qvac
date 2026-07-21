@@ -419,8 +419,7 @@ JSCATCH
  * activateUpscaler(): WorldSessionModel does not implement IModelAsyncLoad.
  * Args: [0] instance handle
  */
-inline js_value_t*
-activateWorld(js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t* activateWorld(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
