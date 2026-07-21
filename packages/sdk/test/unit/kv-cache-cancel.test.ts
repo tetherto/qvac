@@ -1,7 +1,8 @@
 import test from 'brittle'
 import {
   decideCachedHistorySlice,
-  type HistoryMessage
+  type HistoryMessage,
+  shouldCommitCachedTurn
 } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state'
 
 // -----------------------------------------------------------------------------
@@ -135,4 +136,61 @@ test('regression: an externally-seeded stale savedCount still triggers the fallb
     { role: 'user', content: 'u2' }
   ])
   t.is(clearStaleCount, true, 'must prompt caller to clean up the stale count')
+})
+
+test('shouldCommitCachedTurn: completed turn with tokens commits', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: true,
+      generatedTokens: 12,
+      predict: 64
+    }),
+    true
+  )
+})
+
+test('shouldCommitCachedTurn: token-budget stop rolls back', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: true,
+      generatedTokens: 64,
+      predict: 64
+    }),
+    false
+  )
+})
+
+test('shouldCommitCachedTurn: unlimited prediction does not imply truncation', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: true,
+      generatedTokens: 64,
+      predict: -1
+    }),
+    true
+  )
+})
+
+test('shouldCommitCachedTurn: aborted or empty turns roll back', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: true,
+      producedTokens: true,
+      generatedTokens: 12,
+      predict: 64
+    }),
+    false
+  )
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: false,
+      generatedTokens: 0,
+      predict: 64
+    }),
+    false
+  )
 })
