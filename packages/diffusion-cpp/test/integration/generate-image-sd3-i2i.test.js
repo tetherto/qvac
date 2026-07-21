@@ -6,7 +6,7 @@ const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
-const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
+const { recordPerformance, assertPhaseStats, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -68,6 +68,7 @@ safeTest(
 
       const images = []
       const progressTicks = []
+      let stats = null
 
       // ── Load ─────────────────────────────────────────────────────────────────
       console.log('\n=== Loading model ===')
@@ -137,6 +138,8 @@ safeTest(
         const genMs = Date.now() - tGen
         console.log(`Generated in ${(genMs / 1000).toFixed(1)}s (TTFB: ${ttfbMs}ms)`)
 
+        stats = response.stats
+
         if (!isWarmup) {
           t.comment(
             recordPerformance('[SD3 img2img] [' + (useCpu ? 'CPU' : 'GPU') + ']', response.stats, {
@@ -163,6 +166,11 @@ safeTest(
       t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
       t.ok(img.length > 1000, `Image has meaningful size (${img.length} bytes)`)
       t.ok(isPng(img), 'Image has valid PNG magic bytes')
+
+      // ── Runtime stats (per-phase breakdown) ───────────────────────────────────
+      // img2img: effective sampler steps are steps*strength, so the
+      // stepsPerSecond consistency check is intentionally skipped.
+      assertPhaseStats(t, stats)
 
       const outPath = path.join(modelDir, 'generate-image--sd3-i2i-seed3.png')
       fs.writeFileSync(outPath, img)
