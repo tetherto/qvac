@@ -38,6 +38,7 @@ _CODE_TRANSLATION_FAILED = _CODES["TRANSLATION_FAILED"]
 _CODE_TRANSCRIPTION_FAILED = _CODES["TRANSCRIPTION_FAILED"]
 _CODE_TEXT_TO_SPEECH_STREAM_FAILED = _CODES["TEXT_TO_SPEECH_STREAM_FAILED"]
 _CODE_COMPLETION_FAILED = _CODES["COMPLETION_FAILED"]
+_CODE_EMBED_FAILED = _CODES["EMBED_FAILED"]
 _CODE_INFERENCE_CANCELLED = _CODES["INFERENCE_CANCELLED"]
 _CODE_MODEL_UNLOAD_FAILED = _CODES["MODEL_UNLOAD_FAILED"]
 _CODE_REQUEST_ID_CONFLICT = _CODES["REQUEST_ID_CONFLICT"]
@@ -244,6 +245,16 @@ class CompletionFailedError(QvacError):
             str(message) if message else "completion failed",
             name="COMPLETION_FAILED",
             code=_CODE_COMPLETION_FAILED,
+            cause=cause,
+        )
+
+
+class EmbedFailedError(QvacError):
+    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
+        super().__init__(
+            str(message) if message else "embed failed",
+            name="EMBED_FAILED",
+            code=_CODE_EMBED_FAILED,
             cause=cause,
         )
 
@@ -514,6 +525,7 @@ __all__ = [
     "TranscriptionFailedError",
     "TextToSpeechStreamFailedError",
     "CompletionFailedError",
+    "EmbedFailedError",
     "InferenceCancelledError",
     "StreamEndedError",
     "InvalidResponseError",

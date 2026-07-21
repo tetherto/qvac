@@ -186,10 +186,11 @@ export async function* orchestrateCompletion(
     }
   }
 
-  // Turn cap reached without a natural end. Emit a terminal done frame so
-  // the client's fold ends deterministically; the last turn's events carry
+  // Turn cap reached without a natural end. Emit a terminal done frame with a
+  // stopReason so the client can tell this was truncated (the model still
+  // wanted a tool) rather than a natural finish; the last turn's events carry
   // whatever the model produced.
-  yield { type: 'completionOrchestrate', done: true }
+  yield { type: 'completionOrchestrate', done: true, stopReason: 'maxToolTurns' }
 }
 
 export async function* handleCompletionOrchestrate(

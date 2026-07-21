@@ -1,5 +1,5 @@
-"""`python -m qvac install-worker` — fetch the pinned `@qvac/sdk` worker via
-npm into a version-scoped cache dir, so a thin `qvac` install can start a
+"""`python -m tetherto.qvac_sdk install-worker` — fetch the pinned `@qvac/sdk`
+worker via npm into a version-scoped cache dir, so a thin install can start a
 worker without a bundled wheel or a checkout. Requires node/npm.
 """
 
@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if args == ["install-worker"]:
         return install_worker()
-    print("usage: python -m qvac install-worker", file=sys.stderr)
+    print("usage: python -m tetherto.qvac_sdk install-worker", file=sys.stderr)
     return 2
 
 

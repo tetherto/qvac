@@ -3,7 +3,8 @@ import {
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
-  RequestRejectedByPolicyError
+  RequestRejectedByPolicyError,
+  TranslationFailedError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -155,6 +156,12 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
       readOptionalStringField(response.typedFields, 'modelId'),
       response.cause
     )
+  },
+  // Source-language autodetect now fails server-side (translate detection moved
+  // into the worker), so this crosses the RPC and reconstructs as the typed
+  // class -- matching the Python client's reconstructor.
+  TRANSLATION_FAILED: (response) => {
+    return new TranslationFailedError(response.message, response.cause)
   }
 }
 

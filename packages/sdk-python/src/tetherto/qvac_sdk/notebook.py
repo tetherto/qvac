@@ -27,7 +27,7 @@ from typing import Any
 
 from ._generated import methods as _methods
 from ._transport import Transport
-from .errors import QvacError
+from .errors import EmbedFailedError
 from .schemas import (
     CompletionStreamRequest,
     EmbedRequest,
@@ -46,16 +46,6 @@ def _require_numpy() -> Any:
     if np is None:
         raise NumpyNotInstalledError()
     return np
-
-
-class EmbedFailedError(QvacError):
-    def __init__(self, message: Any = None, *, cause: Any = None) -> None:
-        super().__init__(
-            str(message) if message else "embed failed",
-            name="EMBED_FAILED",
-            code=52401,
-            cause=cause,
-        )
 
 
 class _LiveText:

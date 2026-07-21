@@ -1456,6 +1456,13 @@ class CompletionOrchestrateResponse(GeneratedBaseModel):
         Field(alias="toolCallback", title="CompletionOrchestrateResponseToolCallback"),
     ] = None
     done: bool | None = None
+    stop_reason: Annotated[
+        Literal["maxToolTurns"] | None,
+        Field(
+            alias="stopReason",
+            description="Set on the terminal `done` frame only when the loop stopped because it hit `maxToolTurns` (the model still wanted a tool). Absent on a natural finish, so the caller can tell a truncated run from a completed one.",
+        ),
+    ] = None
 
 
 class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):

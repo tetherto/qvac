@@ -268,7 +268,15 @@ export const completionOrchestrateResponseSchema = z
         arguments: z.record(z.string(), z.unknown())
       })
       .optional(),
-    done: z.boolean().optional()
+    done: z.boolean().optional(),
+    stopReason: z
+      .literal('maxToolTurns')
+      .optional()
+      .describe(
+        'Set on the terminal `done` frame only when the loop stopped because it ' +
+          'hit `maxToolTurns` (the model still wanted a tool). Absent on a natural ' +
+          'finish, so the caller can tell a truncated run from a completed one.'
+      )
   })
   .strict()
 
