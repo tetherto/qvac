@@ -107,6 +107,27 @@ function pushable() {
   }
 }
 
+test('runStreaming before load does not activate a response', async (t) => {
+  const model = createMockedModel()
+  const unloadedStream = pushable()
+  unloadedStream.end()
+
+  await t.exception(
+    () => model.runStreaming(unloadedStream),
+    /Parakeet addon is not loaded/,
+    'Pre-load streaming rejects before starting a response'
+  )
+  t.absent(model._job.active, 'No response remains active after rejection')
+
+  await model.load()
+  const loadedStream = pushable()
+  const response = await model.runStreaming(loadedStream)
+  loadedStream.end()
+  await response.await()
+
+  await model.unload()
+})
+
 test('runStreaming surfaces one Output per pushed chunk and one JobEnded on close', async (t) => {
   const events = []
   const model = createMockedModel({

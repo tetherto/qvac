@@ -86,7 +86,6 @@ export interface QvacProviderAuthResult {
   readonly configPatch: {
     readonly agents: {
       readonly defaults: {
-        readonly experimental: Record<string, unknown>
         readonly models: Record<string, {}>
       }
     }
@@ -380,10 +379,6 @@ export function createQvacSetupResult(
     configPatch: {
       agents: {
         defaults: {
-          experimental: {
-            ...config.agents?.defaults?.experimental,
-            localModelLean: true
-          },
           models: {
             ...config.agents?.defaults?.models,
             [defaultModel]: {}
@@ -414,7 +409,6 @@ export function applyQvacSetupConfig(
       ...config.agents,
       defaults: {
         ...config.agents?.defaults,
-        experimental: setup.agents.defaults.experimental,
         models: setup.agents.defaults.models
       }
     },

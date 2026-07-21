@@ -3,12 +3,14 @@
 // PR status / review-queue / my-PRs dashboard.
 
 import {
+  AUTHOR_TIER_ORDER,
   STATE_ICONS,
   classifyMyPRs,
   classifyReviewPRs,
   classifyTeamPRs,
   collectPRActivity,
   formatAge,
+  groupTeamPRsByTier,
   memberState,
   toJsonablePR,
 } from "./pr-activity.mjs";
@@ -40,19 +42,28 @@ const pod = (() => {
 
 const authorScope = (() => {
   const val = readArg("--authors") ?? "any";
-  if (!["any", "pod"].includes(val)) {
-    console.error(`Unknown --authors value: ${val}. Use any|pod.`);
+  if (!["any", "pod", "union"].includes(val)) {
+    console.error(`Unknown --authors value: ${val}. Use any|pod|union.`);
     process.exit(1);
   }
-  if (val === "pod" && mode !== "team") {
-    console.error(`--authors pod is only honored in --mode team (got ${mode}); ignoring.`);
+  if ((val === "pod" || val === "union") && mode !== "team") {
+    console.error(`--authors ${val} is only honored in --mode team (got ${mode}); ignoring.`);
     return "any";
   }
   return val;
 })();
 
+const authorTiers = (() => {
+  if (!process.argv.includes("--tiers")) return false;
+  if (mode !== "team") {
+    console.error(`--tiers is only honored in --mode team (got ${mode}); ignoring.`);
+    return false;
+  }
+  return true;
+})();
+
 const jsonOutput = process.argv.includes("--json");
-const state = collectPRActivity({ mode, pod, authorScope });
+const state = collectPRActivity({ mode, pod, authorScope, authorTiers });
 
 let slackState = { map: {}, pendingReview: [] };
 if (mode === "my") {
@@ -81,7 +92,34 @@ function formatTarget(target) {
     : slackHandle(target.login);
 }
 
-function renderPRLine(pr, podRoles = state.roles, extras = []) {
+function missingApprovals(pr, podRoles) {
+  const missing = [];
+  // Approval gates use formal review state only (not conversation comments).
+  if (!podRoles.members.some((member) => pr.reviewState.get(member) === "APPROVED")) {
+    missing.push("team member approval");
+  }
+  if (!podRoles.leads.some((lead) => pr.reviewState.get(lead) === "APPROVED")) {
+    missing.push("team lead approval");
+  }
+  return missing;
+}
+
+function reviewLines(pr, podRoles) {
+  const acted = [];
+  for (const member of podRoles.allTeam) {
+    const status = memberState(pr, member);
+    if (status === "PENDING" || status === "AUTHOR") continue;
+    acted.push(`${STATE_ICONS[status] || "?"} ${member}`);
+  }
+  const outsideState = pr.displayReviewState || pr.reviewState;
+  const outside = [...outsideState.entries()]
+    .filter(([login, status]) => !podRoles.allTeam.includes(login) && status !== "COMMENTED")
+    .map(([login, status]) => `${STATE_ICONS[status] || "?"} ${login}`);
+  return { acted, outside };
+}
+
+// Plain-text renderer used by --mode review / my.
+function renderPRLine(pr, podRoles = state.roles, extras = [], { showNeeds = true } = {}) {
   const extraList = Array.isArray(extras) ? extras : extras ? [extras] : [];
   const lines = [
     `${pr.prRef ?? `#${pr.number}`} ${pr.title}`,
@@ -91,30 +129,36 @@ function renderPRLine(pr, podRoles = state.roles, extras = []) {
   if (pr.mergeable === "CONFLICTING") lines.push("⚠️ MERGE CONFLICTS!");
   for (const extra of extraList) if (extra) lines.push(extra);
 
-  const missing = [];
-  if (!podRoles.members.some((member) => memberState(pr, member) === "APPROVED")) {
-    missing.push("team member approval");
+  if (showNeeds) {
+    const missing = missingApprovals(pr, podRoles);
+    if (missing.length) lines.push(`Needs: ${missing.join(", ")}`);
   }
-  if (!podRoles.leads.some((lead) => memberState(pr, lead) === "APPROVED")) {
-    missing.push("team lead approval");
-  }
-  if (missing.length) lines.push(`Needs: ${missing.join(", ")}`);
 
-  const acted = [];
-  for (const member of podRoles.allTeam) {
-    const status = memberState(pr, member);
-    if (status === "PENDING" || status === "AUTHOR") continue;
-    const role = podRoles.leads.includes(member) ? "(lead)" : "";
-    acted.push(`${STATE_ICONS[status] || "?"} ${member} ${role}`.trim());
-  }
+  const { acted, outside } = reviewLines(pr, podRoles);
   if (acted.length) lines.push(`Reviews: ${acted.join(" · ")}`);
-
-  const outside = [...pr.reviewState.entries()]
-    .filter(([login, status]) => !podRoles.allTeam.includes(login) && status !== "COMMENTED")
-    .map(([login, status]) => `${STATE_ICONS[status] || "?"} ${login}`);
   if (outside.length) lines.push(`Other: ${outside.join(" · ")}`);
+  if (pr.ciRed) lines.push(pr.ciRed);
 
   return lines.map((line) => `  ${line}`).join("\n");
+}
+
+// Chat/Slack-friendly markdown renderer used by --mode team.
+function renderMarkdownPR(pr, podRoles = state.roles, { showNeeds = true } = {}) {
+  const ref = pr.prRef ?? `#${pr.number}`;
+  const lines = [
+    `- [**${ref}**](${pr.url}) — ${pr.title}`,
+    `  - by ${pr.author.name || pr.author.login} · ${formatAge(pr.ready)} old`,
+  ];
+  if (pr.mergeable === "CONFLICTING") lines.push("  - ⚠️ Merge conflicts");
+  if (showNeeds) {
+    const missing = missingApprovals(pr, podRoles);
+    if (missing.length) lines.push(`  - Needs: ${missing.join(", ")}`);
+  }
+  const { acted, outside } = reviewLines(pr, podRoles);
+  if (acted.length) lines.push(`  - Reviews: ${acted.join(" · ")}`);
+  if (outside.length) lines.push(`  - Other: ${outside.join(" · ")}`);
+  if (pr.ciRed) lines.push(`  - ${pr.ciRed}`);
+  return lines.join("\n");
 }
 
 function printSection(title, items, render) {
@@ -128,14 +172,19 @@ function printSection(title, items, render) {
   console.log("");
 }
 
-function jsonPRs(prs) {
-  return prs.map(toJsonablePR);
+function printMarkdownSection(heading, items, render) {
+  if (items.length === 0) return;
+  console.log(heading);
+  console.log("");
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) console.log("");
+    console.log(render(items[i]));
+  }
+  console.log("");
 }
 
-function renderExcludedLine(pr) {
-  const author = pr.author.name || pr.author.login;
-  const ref = pr.prRef ?? `#${pr.number}`;
-  return `  ${ref} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
+function jsonPRs(prs) {
+  return prs.map(toJsonablePR);
 }
 
 // Per-repo render cap for the Excluded section. With sole-owner extraRepos,
@@ -145,42 +194,90 @@ function renderExcludedLine(pr) {
 const EXCLUDED_RENDER_CAP_PER_REPO = 10;
 
 function printExcludedSection(excludedPRs, primaryRepo) {
-  console.log("⏭️  EXCLUDED (author outside roster)");
-  console.log("─".repeat(60));
+  console.log("⏭️ **Excluded** (author outside roster)");
+  console.log("");
   const byRepo = new Map();
   for (const pr of excludedPRs) {
     const key = pr.repo ?? primaryRepo;
     if (!byRepo.has(key)) byRepo.set(key, []);
     byRepo.get(key).push(pr);
   }
+  let printed = 0;
   for (const [repo, prs] of byRepo) {
     for (const pr of prs.slice(0, EXCLUDED_RENDER_CAP_PER_REPO)) {
-      console.log("");
-      console.log(renderExcludedLine(pr));
+      if (printed > 0) console.log("");
+      const author = pr.author.name || pr.author.login;
+      const ref = pr.prRef ?? `#${pr.number}`;
+      console.log(`- [**${ref}**](${pr.url}) — ${pr.title}`);
+      console.log(`  - by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`);
+      printed++;
     }
     const hidden = prs.length - EXCLUDED_RENDER_CAP_PER_REPO;
     if (hidden > 0) {
       console.log("");
-      console.log(`  … +${hidden} more in ${repo} — use --json for the full list`);
+      console.log(`- … +${hidden} more in ${repo} — use \`--json\` for the full list`);
     }
   }
   console.log("");
 }
 
+function tierHeading(tierKey) {
+  const teamName = state.pods?.[0]?.name || "Pod";
+  const coreLabel = teamName.replace(/\s*Pod\s*$/i, "").trim() || teamName;
+  if (tierKey === "core") return `## 👥 ${coreLabel} Core`;
+  if (tierKey === "platform") return "## 🧩 Platform/Middleware";
+  return "## 🌍 External Contribution";
+}
+
+function tierAttentionCount(tierGroups) {
+  return (
+    tierGroups.reReviewPRs.length +
+    tierGroups.stalePRs.length +
+    tierGroups.activePRs.length
+  );
+}
+
+function printTierBuckets(tierGroups) {
+  printMarkdownSection(
+    "🔁 **Needs Your Re-Review** (commits since your last review or comment)",
+    tierGroups.reReviewPRs,
+    (pr) => renderMarkdownPR(pr),
+  );
+  printMarkdownSection(
+    `🔴 **Stale** (>${state.staleDays}d)`,
+    tierGroups.stalePRs,
+    (pr) => renderMarkdownPR(pr),
+  );
+  printMarkdownSection(
+    "🟡 **Needs Review**",
+    tierGroups.activePRs,
+    (pr) => renderMarkdownPR(pr),
+  );
+  printMarkdownSection(
+    "🟢 **Fully Approved — Ready to Merge**",
+    tierGroups.approvedPRs,
+    (pr) => renderMarkdownPR(pr, state.roles, { showNeeds: false }),
+  );
+}
+
 function modeTeam() {
   const groups = classifyTeamPRs(state);
   const excludedPRs = state.excludedPRs ?? [];
+  const useTiers = Boolean(state.authorTiers);
+  const byTier = useTiers ? groupTeamPRsByTier(groups) : null;
+
   if (jsonOutput) {
-    console.log(JSON.stringify({
+    const payload = {
       mode,
       repo: state.repo,
       repos: state.repos,
       currentUser: state.currentUser,
       staleDays: state.staleDays,
       authorScope: state.authorScope,
+      authorTiers: useTiers,
       summary: {
         needsAction: groups.needsAction.length,
-        fullyApprovedHidden: groups.skipped,
+        fullyApproved: groups.approvedPRs.length,
         reReview: groups.reReviewPRs.length,
         stale: groups.stalePRs.length,
         conflicts: groups.conflictCount,
@@ -190,34 +287,86 @@ function modeTeam() {
         reReview: jsonPRs(groups.reReviewPRs),
         stale: jsonPRs(groups.stalePRs),
         needsReview: jsonPRs(groups.activePRs),
+        fullyApproved: jsonPRs(groups.approvedPRs),
         excluded: jsonPRs(excludedPRs),
       },
-    }, null, 2));
+    };
+    if (useTiers) {
+      payload.summary.core = tierAttentionCount(byTier.core);
+      payload.summary.platform = tierAttentionCount(byTier.platform);
+      payload.summary.external = tierAttentionCount(byTier.external);
+      payload.tiers = {};
+      for (const key of AUTHOR_TIER_ORDER) {
+        payload.tiers[key] = {
+          reReview: jsonPRs(byTier[key].reReviewPRs),
+          stale: jsonPRs(byTier[key].stalePRs),
+          needsReview: jsonPRs(byTier[key].activePRs),
+          fullyApproved: jsonPRs(byTier[key].approvedPRs),
+        };
+      }
+    }
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
   const extraRepos = (state.repos ?? []).filter((r) => r !== state.repo);
   if (extraRepos.length > 0) {
     console.log(
-      `Repos: ${state.repo} (primary) + ${extraRepos.length} extra: ${extraRepos.join(", ")}\n`,
+      `Repos: ${state.repo} (primary) + ${extraRepos.length} extra: ${extraRepos.join(", ")}`,
     );
+    console.log("");
   }
+
+  if (groups.needsAction.length === 0 && groups.approvedPRs.length === 0) {
+    console.log("All clear — no open pod PRs need attention.");
+    return;
+  }
+
   const conflictNote = groups.conflictCount > 0
     ? ` · ${groups.conflictCount} ⚠️ merge conflicts`
     : "";
-  const scopeNote = state.authorScope === "pod"
-    ? ` (scoped to pod-roster authors${excludedPRs.length ? `; ${excludedPRs.length} excluded` : ""})`
-    : "";
-  console.log(
-    `${groups.needsAction.length} PRs need attention · ${groups.skipped} fully approved (hidden) · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}${scopeNote}\n`,
-  );
-  printSection("🔁 NEEDS YOUR RE-REVIEW (commits since your last review)", groups.reReviewPRs, renderPRLine);
-  printSection(`🔴 STALE (>${state.staleDays}d)`, groups.stalePRs, renderPRLine);
-  printSection("🟡 NEEDS REVIEW", groups.activePRs, renderPRLine);
+
+  if (useTiers) {
+    const nCore = tierAttentionCount(byTier.core);
+    const nPlat = tierAttentionCount(byTier.platform);
+    const nExt = tierAttentionCount(byTier.external);
+    const teamName = state.pods?.[0]?.name || "Pod";
+    const coreLabel = (teamName.replace(/\s*Pod\s*$/i, "").trim() || teamName).toLowerCase();
+    console.log(
+      `**${nCore} ${coreLabel} core need attention** · ${nPlat} platform · ${nExt} external · ${groups.approvedPRs.length} fully approved · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}`,
+    );
+    console.log("");
+
+    const tierBlocks = [];
+    for (const key of AUTHOR_TIER_ORDER) {
+      const t = byTier[key];
+      const total =
+        t.reReviewPRs.length + t.stalePRs.length + t.activePRs.length + t.approvedPRs.length;
+      if (!total) continue;
+      tierBlocks.push({ key, groups: t });
+    }
+
+    for (let i = 0; i < tierBlocks.length; i++) {
+      if (i > 0) {
+        console.log("---");
+        console.log("");
+      }
+      console.log(tierHeading(tierBlocks[i].key));
+      console.log("");
+      printTierBuckets(tierBlocks[i].groups);
+    }
+  } else {
+    console.log(
+      `**${groups.needsAction.length} PRs need attention** · ${groups.approvedPRs.length} fully approved · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}`,
+    );
+    console.log("");
+    printTierBuckets(groups);
+  }
+
   if (state.authorScope === "pod" && excludedPRs.length > 0) {
     printExcludedSection(excludedPRs, state.repo);
   }
   if (groups.needsAction.length === 0) {
-    console.log("All clear — every PR has team + lead approval.");
+    console.log("All clear — every remaining PR has team + lead approval.");
   }
 }
 

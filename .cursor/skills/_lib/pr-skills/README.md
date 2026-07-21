@@ -27,7 +27,7 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 
 | Mode | Pod scope | What it shows | Used by |
 |---|---|---|---|
-| `team` | required (`--pod`) | All open PRs touching the pod's `ownedPaths` (in the primary repo) plus **every open PR** in the pod's `extraRepos` (pod is treated as sole owner there) that still need reviews. Three sections: needs-your-re-review, stale (>3d), needs-review. PRs with `mergeable: CONFLICTING` are flagged with `⚠️ MERGE CONFLICTS!`. Pass `--authors pod` to additionally scope the dashboard to PRs authored by pod-roster members; non-roster authors are surfaced in a separate "Excluded" section. When `extraRepos` resolve, the first output line is a `Repos:` summary and extra-repo PRs render as `owner/repo#<num>`. | `<pod>-pr-status` |
+| `team` | required (`--pod`) | Open PRs in the primary repo scoped by `--authors` (see below), plus **every open PR** in the pod's `extraRepos` (pod is treated as sole owner there). Renders chat/Slack-friendly markdown: bold summary line, nested bullets, clickable `[**#N**](url)` PR links (no `─` underlines, no separate URL line). Sections: needs-your-re-review, stale (>3d), needs-review, fully-approved (ready to merge). PRs with `mergeable: CONFLICTING` are flagged with `⚠️ Merge conflicts`. Failing checks (excluding approval-gate checks) surface as `⚠ CI red — …` (check-rollup fetch is team-mode only). Unresolved review-thread comments (and top-level issue comments) count as engagement for the re-review queue and `Reviews:` 💬 display; resolved threads are ignored. Only formal `APPROVED` reviews satisfy approval gates / ping targets. When `extraRepos` resolve, the first output line is a `Repos:` summary and extra-repo PRs render as `owner/repo#<num>`. | `<pod>-pr-status` |
 | `review` | required (`--pod`) | The current user's personal review queue: PRs needing their first review, plus PRs where their review was dismissed. | (currently unused; available for a future skill) |
 | `my` | optional (`--pod`); cross-pod by default | The current user's own open PRs grouped by merge readiness. Per-PR pod resolution drives ping logic. Emits copy-paste Slack ping messages for missing reviewers. | `qv-pr-mine` |
 
@@ -36,6 +36,12 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 ```bash
 # pod-scoped
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode <team|review>
+
+# pod-scoped, path hits OR roster-authored PRs (recommended for SDK)
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --authors union
+
+# same, with author-tier sections (SDK Core / Platform / External)
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --authors union --tiers
 
 # pod-scoped, restricted to PRs authored by pod-roster members
 # (non-roster authors who touch pod paths are surfaced as an Excluded section)
@@ -48,13 +54,18 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode my
 
 # machine-readable output
-node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --json
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --authors union --tiers --json
 ```
 
 `--authors` accepts:
 
-- `any` (default) — original behavior, all PRs touching pod paths are listed regardless of author.
-- `pod` — only PRs authored by `leads ∪ members` from the pod's team JSON. PRs touching pod paths (or, for `extraRepos`, any open PR) but authored outside the roster are surfaced as a separate "Excluded" section so the pod can still see them for context. The Excluded section is capped at 10 rendered PRs per repo (a `… +N more in <repo>` line summarizes the rest) so a busy `extraRepos` entry can't bury the dashboard; `--json` always carries the complete list. Only honored with `--mode team`; ignored (with a warning on stderr) for other modes.
+- `any` (default for the shared CLI) — path-only: all PRs touching pod `ownedPaths` (or sole-owned `extraRepos` PRs), regardless of author.
+- `union` — path hit **or** author is in `leads ∪ members`. Catches roster CI/infra/tooling PRs that miss package paths. Used by `/qv-sdk-pr-status`.
+- `pod` — **restricts** to PRs authored by `leads ∪ members`. PRs touching pod paths (or, for `extraRepos`, any open PR) but authored outside the roster are surfaced as a separate "Excluded" section so the pod can still see them for context. The Excluded section is capped at 10 rendered PRs per repo (a `… +N more in <repo>` line summarizes the rest) so a busy `extraRepos` entry can't bury the dashboard; `--json` always carries the complete list.
+
+`pod` and `union` are only honored with `--mode team`; other modes ignore them (with a warning on stderr).
+
+`--tiers` (opt-in, `--mode team` only): split the dashboard into author tiers — pod Core (roster authors), Platform/Middleware (same GitHub org, not on roster), External Contribution (outside the org, or `community-contribution` label fallback). Off by default so other pods keep a flat list; `/qv-sdk-pr-status` passes it.
 
 `pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
 GitHub repo and stale-day settings. If config is missing, the repo is inferred
@@ -78,7 +89,7 @@ from the local `upstream` remote.
 
    `extraRepos` (optional, `--mode team` only) is a list of additional `owner/name` repos the pod owns wholesale: **every** open PR there is in-scope regardless of touched paths. Plain `owner/name` entries are used as-is; an entry whose name segment contains `*` (e.g. `owner/prefix-*`) is treated as a glob and resolved per run against the org's non-archived repos via `gh repo list`. Repos the caller cannot read are skipped with a one-line stderr warning. The primary repo (`config.github.repo`) stays path-filtered — do not duplicate it under `extraRepos`. PRs from extra repos carry a `prRef` of `owner/repo#<num>` (primary-repo PRs keep `#<num>`).
 
-2. Create the per-pod dashboard skill by copying `.cursor/skills/qv-sdk-pr-status/` to `.cursor/skills/qv-<pod>-pr-status/`. Inside the copy, update the SKILL.md frontmatter (`name:`, `description:`) and the script invocation in the `## Usage` block to swap `--pod sdk` for `--pod <pod>`. No other changes required.
+2. Create the per-pod dashboard skill by copying `.cursor/skills/qv-sdk-pr-status/` to `.cursor/skills/qv-<pod>-pr-status/`. Inside the copy, update the SKILL.md frontmatter (`name:`, `description:`) and the script invocation in the `## Usage` block to swap `--pod sdk` for `--pod <pod>`. Drop SDK-only flags (`--authors union`, `--tiers`) unless the new pod explicitly wants them — default shared CLI behavior is `--authors any` with a flat (non-tiered) list.
 
 3. `qv-pr-mine`, `qv-pr-review`, and `qv-pr-test` are NOT pod-specific and do not need duplication. They live at `.cursor/skills/qv-pr-mine/`, `.cursor/skills/qv-pr-review/`, and `.cursor/skills/qv-pr-test/` and discover the new pod automatically.
 
