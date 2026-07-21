@@ -1,0 +1,258 @@
+name: NOTICE drift
+
+# Regenerates every shipping package's NOTICE from the canonical
+# `qv-notice-generate` scripts and verifies the committed files are still
+# in sync (a drift gate). This keeps third-party / model attributions correct
+# on every release instead of relying on a human remembering to run the skill.
+# Rolled out to the qvac monorepo (the pilot Tier-1 repo, docs/devops/TIER-1-SCOPE.md
+# §A) per QVAC-21558.
+#
+# Why this gate lives IN-repo (unlike the license/security gates):
+# license-compliance.yml and security-baseline.yml are thin callers to generic
+# reusable workflows in tetherto/qvac-actions. NOTICE generation is NOT generic —
+# it drives repo-local scripts (.cursor/skills/qv-notice-generate/scripts) over
+# this repo's package layout, models.prod.json, and vcpkg registries. So the gate
+# is a self-contained in-repo workflow that runs those scripts directly.
+#
+# Rollout stage: WARN-ONLY (shadow mode). NOTHING in the job fails a merge —
+# neither a generator crash (the regenerate step is `continue-on-error`) nor
+# detected drift (the "Report outcome" step only `exit 1`s when ENFORCE=true, set
+# via workflow_dispatch). This is required because package lockfiles are
+# gitignored in this repo (docs/devops/TIER-1-SCOPE.md §B1): without committed
+# lockfiles the JS/Python scans resolve latest-compatible versions, so an
+# unrelated upstream patch release can produce benign NOTICE drift. Promotion to
+# a required blocking check is a follow-up, gated on resolving that
+# non-determinism (commit lockfiles or scope the drift check to the deterministic
+# model/C++ sections) plus TL sign-off.
+#
+# Prerequisite for a real signal: NPM_TOKEN must be provisioned as a repo/org
+# secret (GitHub renders an unset secret as an empty string, which the generator
+# preflight rejects). Until then every run warns "generation did not complete"
+# instead of producing drift results — it just never blocks.
+#
+# Fork PRs are skipped: NOTICE generation needs org secrets (PAT_TOKEN for the
+# private qvac-registry-vcpkg + GitHub Packages, NPM_TOKEN for npm) that fork PRs
+# never receive. The push-to-main and weekly scheduled runs are the backstop.
+#
+# Scope note: "all packages the generator covers" is used as the shipping set
+# today. Narrowing to the locked C1/C4 shipping rows is gated on QVAC-19052
+# (docs/devops/TIER-1-SCOPE.md §A is still a DRAFT stub).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/**/package.json"
+      - "packages/**/vcpkg.json"
+      - "packages/**/vcpkg-configuration.json"
+      - "packages/**/vcpkg/ports/**/portfile.cmake"
+      - "packages/**/vcpkg/triplets/*.cmake"
+      - "packages/**/requirements*.txt"
+      - "packages/**/pyproject.toml"
+      - "packages/registry-server/data/models.prod.json"
+      - "packages/**/NOTICE"
+      - ".cursor/skills/qv-notice-generate/**"
+      - ".github/workflows/notice-drift.yml"
+  pull_request:
+    paths:
+      - "packages/**/package.json"
+      - "packages/**/vcpkg.json"
+      - "packages/**/vcpkg-configuration.json"
+      - "packages/**/vcpkg/ports/**/portfile.cmake"
+      - "packages/**/vcpkg/triplets/*.cmake"
+      - "packages/**/requirements*.txt"
+      - "packages/**/pyproject.toml"
+      - "packages/registry-server/data/models.prod.json"
+      - "packages/**/NOTICE"
+      - ".cursor/skills/qv-notice-generate/**"
+      - ".github/workflows/notice-drift.yml"
+  schedule:
+    # Weekly freshness backstop (Mon 05:00 UTC): catches drift from upstream
+    # dependency releases even when no NOTICE-affecting file changed in a PR.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: "Fail the job on NOTICE drift (default: warn-only shadow mode)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  notice-drift:
+    name: notice-drift
+    # Skip fork PRs — generation needs org secrets forks never receive (see header).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Full --all regeneration does an npm install + license-checker per package,
+    # a pip venv for Python deps, and throttled GitHub API calls for every vcpkg
+    # port, so it is minutes-long, not seconds. 45m leaves headroom.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # generate-notice.js reads GH_TOKEN for GitHub API (private vcpkg registry
+      # portfiles + repo license lookups) and GitHub Packages npm auth. The repo
+      # PAT_TOKEN has the cross-repo read scope the built-in GITHUB_TOKEN lacks.
+      GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # NPM_TOKEN must be provisioned as a repo/org secret for the generator's
+      # preflight to pass (an unset secret renders as an empty string, which the
+      # generator rejects). Until then the regenerate step below fails and, in
+      # shadow mode, is reported as a warning rather than blocking.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit only for the first rollout; the scans reach npm, GitHub API,
+          # PyPI, and (indirectly) HuggingFace. Promote to block once egress is
+          # characterized from audit logs.
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.x"
+
+      - name: Regenerate NOTICE files for all shipping packages
+        id: regen
+        # Tolerate generator failure so the warn-only (shadow-mode) contract
+        # actually holds: a crash here (missing NPM_TOKEN, npm/PyPI/GitHub API
+        # hiccup) must not hard-fail the job — otherwise the schedule / push:main
+        # backstops go permanently red. "Report outcome" below converts a failure
+        # into a warning unless ENFORCE=true. continue-on-error is intentional
+        # here precisely because this is a shadow-mode gate, not a Tier-1 blocker.
+        continue-on-error: true
+        run: node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all
+
+      - name: Detect NOTICE drift
+        id: drift
+        if: steps.regen.outcome == 'success'
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Mark any newly-required (untracked) NOTICE as intent-to-add so it shows
+          # up in the diff. A missing committed NOTICE is the compliance case this
+          # gate most needs to catch, and plain `git diff` only reports changes to
+          # tracked files. node_modules, package-lock.json, and per-package .npmrc
+          # the generator also touches stay gitignored, so the diff is still clean.
+          git add --intent-to-add -- ':(glob)**/NOTICE'
+          mapfile -t changed < <(git diff --name-only -- ':(glob)**/NOTICE')
+          if [ ${#changed[@]} -eq 0 ]; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "No NOTICE drift detected — committed files match freshly generated output." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "drift=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "## NOTICE drift detected"
+            echo
+            echo "These committed NOTICE files differ from freshly generated output:"
+            echo
+            for f in "${changed[@]}"; do
+              echo "- \`$f\`"
+            done
+            echo
+            echo "Regenerate with the \`qv-notice-generate\` skill (or run"
+            echo "\`node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all\`)"
+            echo "and commit the result."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment drift on PR
+        if: >-
+          steps.regen.outcome == 'success' &&
+          steps.drift.outputs.drift == 'true' &&
+          github.event_name == 'pull_request'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- notice-drift -->';
+            const body = [
+              marker,
+              '## NOTICE drift detected (shadow mode)',
+              '',
+              'Committed `NOTICE` files differ from freshly generated output. This',
+              'check is **warn-only** for now and does not block the merge.',
+              '',
+              'To resolve, regenerate and commit:',
+              '',
+              '```bash',
+              'source .env',
+              'node .cursor/skills/qv-notice-generate/scripts/generate-notice.js --all',
+              '```',
+              '',
+              `See the [job summary](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for the exact files.`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Report outcome
+        if: always()
+        shell: bash
+        env:
+          REGEN_OUTCOME: ${{ steps.regen.outcome }}
+          DRIFT: ${{ steps.drift.outputs.drift }}
+        run: |
+          set -uo pipefail
+          # Shadow mode (ENFORCE != true): nothing here fails the job — neither a
+          # generator crash nor detected drift. ENFORCE=true (workflow_dispatch)
+          # flips both into hard failures for a blocking trial.
+          if [ "$REGEN_OUTCOME" != "success" ]; then
+            msg="NOTICE generation did not complete — see the 'Regenerate' step logs (e.g. a missing NPM_TOKEN secret)."
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::$msg Failing (enforce mode)."
+              exit 1
+            fi
+            echo "::warning::$msg Not failing (shadow mode); no drift signal was produced this run."
+            exit 0
+          fi
+          if [ "$DRIFT" = "true" ]; then
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::NOTICE drift detected (enforce mode). Failing the job."
+              exit 1
+            fi
+            echo "::warning::NOTICE drift detected (shadow mode). Not failing — see the job summary and PR comment."
+            exit 0
+          fi
+          echo "NOTICE files are in sync."

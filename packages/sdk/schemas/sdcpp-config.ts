@@ -54,7 +54,8 @@ export const sdcppConfigSchema = z.object({
     .describe(
       'Operation mode for the diffusion plugin. ' +
         "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from " +
-        'the primary model plus optional auxiliary text encoders, VAE, and ESRGAN ' +
+        'the primary model plus optional auxiliary text encoders, VAE, unconditional ' +
+        'diffusion model, and ESRGAN ' +
         'upscaler, and exposes diffusion({ ... }). ' +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
         'file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). ' +
@@ -147,18 +148,26 @@ export const sdcppConfigSchema = z.object({
   llmModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for ' +
-        'LTX-2 video (Gemma).'
+      'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
+        'Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).'
     ),
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), ' +
-        'optional for SDXL.'
+      'VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and ' +
+        'LTX-2 video (video VAE); optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
     .optional()
     .describe('High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models'),
+  uncondModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Unconditional diffusion model — Ideogram 4 only. Requires diffusion mode, ' +
+        'llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured ' +
+        'caption with explicit bounding boxes as the generation prompt. Plain-text ' +
+        "prompts produce degenerate output or the model's placeholder response."
+    ),
   clipVisionModelSrc: modelSrcInputSchema
     .optional()
     .describe(

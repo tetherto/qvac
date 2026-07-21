@@ -1,6 +1,6 @@
 type NativeLoggerCallback = (priority: number, message: string) => void;
 
-interface AddonLogging {
+export interface AddonLogging {
   setLogger: (callback: NativeLoggerCallback) => void;
   releaseLogger: () => void;
 }
@@ -21,4 +21,6 @@ const addonLogging: AddonLogging = {
   },
 };
 
-export = addonLogging;
+export default addonLogging;
+
+module.exports = addonLogging;

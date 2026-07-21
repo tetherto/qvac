@@ -58,12 +58,18 @@ async function loadChatterboxTTS(params = {}) {
     config.useGPU = false
   }
 
+  const files = {
+    modelDir,
+    t3Model: t3ModelPath,
+    s3genModel: s3genModelPath
+  }
+  // The enhancer / denoiser paths are the "on" switches for the LavaSR stages;
+  // only set them when a path was resolved so an unset value leaves the stage off.
+  if (params.lavasrEnhancerPath) files.lavasrEnhancer = params.lavasrEnhancerPath
+  if (params.lavasrDenoiserPath) files.lavasrDenoiser = params.lavasrDenoiserPath
+
   const model = new TTSGgml({
-    files: {
-      modelDir,
-      t3Model: t3ModelPath,
-      s3genModel: s3genModelPath
-    },
+    files,
     referenceAudio: refWavPath,
     voiceDir: params.voiceDir,
     seed: params.seed,
