@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 1,
   "schema": [
     {
       "name": "empty",
@@ -7,6 +7,63 @@
       "compact": false,
       "flagsPosition": -1,
       "fields": []
+    },
+    {
+      "name": "runtime-info",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "component",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "runtime",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "instanceId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "processId",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "contract",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "protocolVersion",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "capabilities",
+          "required": true,
+          "array": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "buildVersion",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
     },
     {
       "name": "identity",
@@ -230,59 +287,122 @@
       ]
     },
     {
-      "name": "runtime-info",
+      "name": "pairing-status",
+      "namespace": "rpc",
+      "offset": 1,
+      "enum": [
+        {
+          "key": "pending",
+          "version": 1
+        },
+        {
+          "key": "approved",
+          "version": 1
+        },
+        {
+          "key": "rejected",
+          "version": 1
+        }
+      ],
+      "strings": true
+    },
+    {
+      "name": "create-pairing-invite-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": 0,
+      "fields": [
+        {
+          "name": "expiresInMs",
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "pairing-invite",
       "namespace": "rpc",
       "compact": false,
       "flagsPosition": -1,
       "fields": [
         {
-          "name": "component",
+          "name": "id",
           "required": true,
-          "type": "string",
-          "version": 2
+          "type": "fixed32",
+          "version": 1
         },
         {
-          "name": "runtime",
+          "name": "invite",
           "required": true,
-          "type": "string",
-          "version": 2
+          "type": "buffer",
+          "version": 1
         },
         {
-          "name": "instanceId",
-          "required": true,
-          "type": "string",
-          "version": 2
-        },
-        {
-          "name": "processId",
+          "name": "expiresAt",
           "required": true,
           "type": "uint",
-          "version": 2
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "pairing-request-id",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "pairing-request",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
         },
         {
-          "name": "contract",
+          "name": "writerKey",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        },
+        {
+          "name": "fingerprint",
           "required": true,
           "type": "string",
-          "version": 2
+          "version": 1
         },
         {
-          "name": "protocolVersion",
+          "name": "status",
           "required": true,
-          "type": "uint",
-          "version": 2
-        },
+          "type": "@rpc/pairing-status",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "pairing-request-list",
+      "namespace": "rpc",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
         {
-          "name": "capabilities",
+          "name": "requests",
           "required": true,
           "array": true,
-          "type": "string",
-          "version": 2
-        },
-        {
-          "name": "buildVersion",
-          "required": true,
-          "type": "string",
-          "version": 2
+          "type": "@rpc/pairing-request",
+          "version": 1
         }
       ]
     }

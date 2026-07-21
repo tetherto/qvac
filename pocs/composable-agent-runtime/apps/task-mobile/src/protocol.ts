@@ -2,7 +2,7 @@ export const PROTOCOL_CONTRACT = 'qvac.mobile-runtime-feasibility'
 export const PROTOCOL_VERSION = 1
 export const BUILD_VERSION = '0.0.0-poc'
 
-export const COMPONENTS = ['Sync', 'Harness', 'SDK'] as const
+export const COMPONENTS = ['Harness', 'SDK'] as const
 export type ComponentName = (typeof COMPONENTS)[number]
 
 export type RuntimeState =

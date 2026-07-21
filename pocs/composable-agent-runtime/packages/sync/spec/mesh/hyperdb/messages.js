@@ -130,8 +130,61 @@ const encoding2 = {
   }
 }
 
-// @sync/task/hyperdb#0
+// @sync/update-task-operation
 const encoding3 = {
+  preencode(state, m) {
+    c.string.preencode(state, m.id)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.title) c.string.preencode(state, m.title)
+    if (m.status) encoding0.preencode(state, m.status)
+    if (m.result) c.string.preencode(state, m.result)
+    c.uint.preencode(state, m.updatedAt)
+  },
+  encode(state, m) {
+    const flags = (m.title ? 1 : 0) | (m.status ? 2 : 0) | (m.result ? 4 : 0)
+
+    c.string.encode(state, m.id)
+    c.uint.encode(state, flags)
+
+    if (m.title) c.string.encode(state, m.title)
+    if (m.status) encoding0.encode(state, m.status)
+    if (m.result) c.string.encode(state, m.result)
+    c.uint.encode(state, m.updatedAt)
+  },
+  decode(state) {
+    const r0 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      title: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      status: (flags & 2) !== 0 ? encoding0.decode(state) : null,
+      result: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      updatedAt: c.uint.decode(state)
+    }
+  }
+}
+
+// @sync/add-writer-operation
+const encoding4 = {
+  preencode(state, m) {
+    c.fixed32.preencode(state, m.key)
+  },
+  encode(state, m) {
+    c.fixed32.encode(state, m.key)
+  },
+  decode(state) {
+    const r0 = c.fixed32.decode(state)
+
+    return {
+      key: r0
+    }
+  }
+}
+
+// @sync/task/hyperdb#0
+const encoding5 = {
   preencode(state, m) {
     c.string.preencode(state, m.title)
     c.string.preencode(state, m.input)
@@ -206,8 +259,12 @@ function getEncoding(name) {
       return encoding1
     case '@sync/put-task-operation':
       return encoding2
-    case '@sync/task/hyperdb#0':
+    case '@sync/update-task-operation':
       return encoding3
+    case '@sync/add-writer-operation':
+      return encoding4
+    case '@sync/task/hyperdb#0':
+      return encoding5
     default:
       throw new Error('Encoder not found ' + name)
   }

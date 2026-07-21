@@ -7,6 +7,18 @@
       "name": "@sync/put-task",
       "requestType": "@sync/put-task-operation",
       "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@sync/update-task",
+      "requestType": "@sync/update-task-operation",
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@sync/add-writer",
+      "requestType": "@sync/add-writer-operation",
+      "version": 1
     }
   ]
 }

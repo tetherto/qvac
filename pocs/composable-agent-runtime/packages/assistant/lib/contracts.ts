@@ -9,6 +9,8 @@ import type {
 } from '@qvac/runtime-contracts'
 import type {
   SyncCoreOptions,
+  SyncPairingInvite,
+  SyncPairingRequest,
   SyncTask,
   SyncTaskStatus,
   SyncUserProfile
@@ -32,6 +34,18 @@ export interface AssistantStateEndpoint {
   getTask(request: { id: string }): Promise<{ task?: SyncTask | null }>
   listTasks(): Promise<{ tasks: SyncTask[] }>
   watchTasks(): AsyncIterable<{ tasks: SyncTask[] }>
+  createPairingInvite(request?: {
+    expiresInMs?: number
+  }): Promise<SyncPairingInvite>
+  approvePairingRequest(request: {
+    id: Buffer
+  }): Promise<SyncPairingRequest>
+  rejectPairingRequest(request: {
+    id: Buffer
+  }): Promise<SyncPairingRequest>
+  watchPairingRequests(): AsyncIterable<{
+    requests: SyncPairingRequest[]
+  }>
 }
 
 export interface AssistantComponent {
@@ -75,11 +89,16 @@ export interface CreateAssistantOptions {
 }
 
 export interface AssistantRunInput {
-  readonly runId: string
+  readonly runId?: string
   readonly traceId?: string
-  readonly model: string
+  readonly model?: string
   readonly messages: readonly HarnessMessage[]
   readonly signal?: AbortSignal
+}
+
+export interface AssistantRun extends AsyncIterable<HarnessEvent> {
+  readonly id: string
+  readonly traceId: string
 }
 
 export interface AssistantInspection {

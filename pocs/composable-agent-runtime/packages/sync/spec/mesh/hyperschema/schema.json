@@ -97,6 +97,55 @@
           "version": 1
         }
       ]
+    },
+    {
+      "name": "update-task-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": 1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "status",
+          "type": "@sync/task-status",
+          "version": 1
+        },
+        {
+          "name": "result",
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "add-writer-operation",
+      "namespace": "sync",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "fixed32",
+          "version": 1
+        }
+      ]
     }
   ]
 }

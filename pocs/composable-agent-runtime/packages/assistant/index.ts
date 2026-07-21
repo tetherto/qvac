@@ -21,6 +21,7 @@ import type {
   AssistantComponents,
   AssistantHarnessComponent,
   AssistantInspection,
+  AssistantRun,
   AssistantRunInput,
   AssistantStateEndpoint,
   AssistantSyncComponent,
@@ -33,6 +34,7 @@ export type {
   AssistantHarnessComponent,
   AssistantInference,
   AssistantInspection,
+  AssistantRun,
   AssistantRunInput,
   AssistantStateEndpoint,
   AssistantSyncComponent,
@@ -42,7 +44,7 @@ export type {
 export interface AssistantFacade {
   readonly state: AssistantStateEndpoint
   ready(): Promise<void>
-  run(input: AssistantRunInput): AsyncIterable<HarnessEvent>
+  run(input: AssistantRunInput): AssistantRun
   readRun(runId: string): Promise<readonly HarnessEvent[]>
   suspend(): Promise<void>
   resume(): Promise<void>
@@ -52,6 +54,9 @@ export interface AssistantFacade {
 }
 
 export const DEFAULT_ASSISTANT_STORAGE_PATH = '.assistant'
+export const DEFAULT_ASSISTANT_INFERENCE = Object.freeze({ kind: 'qwen' } as const)
+export const DEFAULT_ASSISTANT_MODEL =
+  'registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf'
 
 export function createAssistant(
   options: CreateAssistantOptions = {}
@@ -105,26 +110,42 @@ export function createAssistant(
     inspect: (component) => component.inspect?.() ?? {}
   })
 
-  async function* run(input: AssistantRunInput) {
+  function run(input: AssistantRunInput): AssistantRun {
+    const runId = input.runId ?? createRunId()
+    const traceId = input.traceId ?? createTraceId()
+    const events = runEvents(input, runId, traceId)
+    return {
+      id: runId,
+      traceId,
+      [Symbol.asyncIterator]() {
+        return events
+      }
+    }
+  }
+
+  async function* runEvents(
+    input: AssistantRunInput,
+    runId: string,
+    traceId: string
+  ) {
     await supervisor.ready()
     const harness = supervisor.get<AssistantHarnessComponent>('harness')
     const controller = input.signal ? null : new AbortController()
-    const traceId = input.traceId ?? createTraceId()
-    logger.info('run started', { runId: input.runId, traceId })
+    logger.info('run started', { runId, traceId })
     yield* harness.harness.run({
-      runId: input.runId,
+      runId,
       traceId,
-      model: input.model,
+      model: input.model ?? DEFAULT_ASSISTANT_MODEL,
       messages: input.messages,
       signal: input.signal ?? controller?.signal ?? abortedSignal()
     })
-    logger.info('run completed', { runId: input.runId, traceId })
+    logger.info('run completed', { runId, traceId })
   }
 
+  const state = createStateFacade(supervisor)
+
   return {
-    get state() {
-      return supervisor.get<AssistantSyncComponent>('sync').state
-    },
+    state,
     ready: () => supervisor.ready(),
     run,
     async readRun(runId) {
@@ -152,12 +173,58 @@ export function createAssistant(
   }
 }
 
+function createStateFacade(supervisor: Supervisor): AssistantStateEndpoint {
+  async function current() {
+    await supervisor.ready()
+    return supervisor.get<AssistantSyncComponent>('sync').state
+  }
+
+  return {
+    async getIdentity() {
+      return (await current()).getIdentity()
+    },
+    async getUserProfile() {
+      return (await current()).getUserProfile()
+    },
+    async setUserProfile(profile) {
+      return (await current()).setUserProfile(profile)
+    },
+    async createTask(request) {
+      return (await current()).createTask(request)
+    },
+    async updateTask(request) {
+      return (await current()).updateTask(request)
+    },
+    async getTask(request) {
+      return (await current()).getTask(request)
+    },
+    async listTasks() {
+      return (await current()).listTasks()
+    },
+    async *watchTasks() {
+      yield* (await current()).watchTasks()
+    },
+    async createPairingInvite(request) {
+      return (await current()).createPairingInvite(request)
+    },
+    async approvePairingRequest(request) {
+      return (await current()).approvePairingRequest(request)
+    },
+    async rejectPairingRequest(request) {
+      return (await current()).rejectPairingRequest(request)
+    },
+    async *watchPairingRequests() {
+      yield* (await current()).watchPairingRequests()
+    }
+  }
+}
+
 function defaultComponents(
   options: CreateAssistantOptions,
   onSdkStart: () => void
 ): AssistantComponents {
   const storagePath = options.storagePath ?? DEFAULT_ASSISTANT_STORAGE_PATH
-  const inference = options.inference ?? { kind: 'deterministic' }
+  const inference = options.inference ?? DEFAULT_ASSISTANT_INFERENCE
   return {
     startSync: () =>
       startSyncComponent({
@@ -168,6 +235,10 @@ function defaultComponents(
     startHarness: ({ state }) =>
       startHarnessComponent(state, inference, onSdkStart, options.logging)
   }
+}
+
+function createRunId() {
+  return createTraceId().replace(/^trc_/, 'run_')
 }
 
 async function negotiate(

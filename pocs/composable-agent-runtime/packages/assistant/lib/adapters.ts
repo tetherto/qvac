@@ -12,10 +12,10 @@ import {
   spawnSync,
   type SyncCoreOptions
 } from '@qvac/sync'
-import { mkdir } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import type {
   AssistantHarnessComponent,
   AssistantInference,
@@ -33,7 +33,8 @@ export function syncHandshake(): RuntimeHandshake {
       'local-profile',
       'tasks',
       'task-watches',
-      'passive-replication'
+      'passive-replication',
+      'writer-pairing'
     ],
     requiredPeerCapabilities: [],
     buildVersion: BUILD_VERSION
@@ -53,7 +54,12 @@ export function harnessHandshake(): RuntimeHandshake {
 export function expectedSyncHandshake(): RuntimeHandshake {
   return {
     ...syncHandshake(),
-    requiredPeerCapabilities: ['local-profile', 'tasks', 'task-watches']
+    requiredPeerCapabilities: [
+      'local-profile',
+      'tasks',
+      'task-watches',
+      'writer-pairing'
+    ]
   }
 }
 
@@ -67,19 +73,26 @@ export function expectedHarnessHandshake(): RuntimeHandshake {
 export async function startSyncComponent(
   options: SyncCoreOptions
 ): Promise<AssistantSyncComponent> {
-  const entry = await bundledEntry(
-    'sync',
-    new URL('../../sync/sidecar-entry.ts', import.meta.url),
-    new URL('../../sync/', import.meta.url)
-  )
-  const client = await spawnSync({ entry, ...options })
-  const identity = await client.describeRuntime()
-  return {
-    handshake: handshakeFrom(identity),
-    state: client,
-    exited: client.exited,
-    close: () => client.close(),
-    inspect: () => ({ ...identity })
+  const bundles = acquireBundleLease()
+  try {
+    const entry = await bundles.entry(
+      'sync',
+      new URL('../../sync/sidecar-entry.ts', import.meta.url),
+      new URL('../../sync/', import.meta.url)
+    )
+    const client = await spawnSync({ entry, ...options })
+    const identity = await client.describeRuntime()
+    const close = closeWithRelease(() => client.close(), bundles.release)
+    return {
+      handshake: handshakeFrom(identity),
+      state: client,
+      exited: client.exited,
+      close,
+      inspect: () => ({ ...identity })
+    }
+  } catch (error) {
+    await bundles.release()
+    throw error
   }
 }
 
@@ -89,48 +102,120 @@ export async function startHarnessComponent(
   onSdkStart: () => void,
   logging?: RuntimeLoggingConfig
 ): Promise<AssistantHarnessComponent> {
+  const bundles = acquireBundleLease()
   const stateAdapter = createSyncStateAdapter(state)
-  const harnessEntry = await bundledEntry(
-    'harness',
-    new URL('../../harness/child-entry.ts', import.meta.url),
-    new URL('../../../', import.meta.url)
-  )
-  const sdkEntry =
-    inference.kind === 'deterministic'
-      ? new URL('../../harness/deterministic-sdk-entry.ts', import.meta.url)
-      : new URL('../../harness/qwen-sdk-entry.ts', import.meta.url)
-  const args = [
-    `--sdk-entry=${await bundledEntry(
-      `${inference.kind}-sdk`,
-      sdkEntry,
+  try {
+    const harnessEntry = await bundles.entry(
+      'harness',
+      new URL('../../harness/child-entry.ts', import.meta.url),
       new URL('../../../', import.meta.url)
-    )}`,
-    `--logging=${JSON.stringify(logging ?? {})}`
-  ]
-  const remote = spawnHarness({ entry: harnessEntry, args })
-  let identity = await remote.describeRuntime()
-  let sdkStarted = false
-  const harness: HarnessRuntime = {
-    async *run(input) {
-      for await (const event of remote.run(input)) {
-        await stateAdapter.append(input.runId, event)
-        yield event
-      }
-      identity = await remote.describeRuntime()
-      if (!sdkStarted && identity.sdkIdentity) {
-        sdkStarted = true
-        onSdkStart()
-      }
-    },
-    close: () => remote.close()
+    )
+    const sdkEntry =
+      inference.kind === 'deterministic'
+        ? new URL('../../harness/deterministic-sdk-entry.ts', import.meta.url)
+        : new URL('../../harness/qwen-sdk-entry.ts', import.meta.url)
+    const args = [
+      `--sdk-entry=${await bundles.entry(
+        `${inference.kind}-sdk`,
+        sdkEntry,
+        new URL('../../../', import.meta.url)
+      )}`,
+      `--logging=${JSON.stringify(logging ?? {})}`
+    ]
+    const remote = spawnHarness({ entry: harnessEntry, args })
+    let identity = await remote.describeRuntime()
+    let sdkStarted = false
+    const close = closeWithRelease(() => remote.close(), bundles.release)
+    const harness: HarnessRuntime = {
+      async *run(input) {
+        for await (const event of remote.run(input)) {
+          await stateAdapter.append(input.runId, event)
+          yield event
+        }
+        identity = await remote.describeRuntime()
+        if (!sdkStarted && identity.sdkIdentity) {
+          sdkStarted = true
+          onSdkStart()
+        }
+      },
+      close
+    }
+    return {
+      handshake: handshakeFrom(identity),
+      harness,
+      exited: remote.exited,
+      readRun: stateAdapter.read,
+      close,
+      inspect: () => ({ ...identity })
+    }
+  } catch (error) {
+    await bundles.release()
+    throw error
   }
+}
+
+interface BundleOwner {
+  readonly directory: Promise<string>
+  readonly bundles: Map<string, Promise<string>>
+  leases: number
+}
+
+interface BundleLease {
+  entry(name: string, entry: URL, base: URL): Promise<string>
+  release(): Promise<void>
+}
+
+let activeBundleOwner: BundleOwner | null = null
+
+function acquireBundleLease(): BundleLease {
+  const owner = activeBundleOwner ?? createBundleOwner()
+  activeBundleOwner = owner
+  owner.leases++
+  let released = false
   return {
-    handshake: handshakeFrom(identity),
-    harness,
-    exited: remote.exited,
-    readRun: stateAdapter.read,
-    close: () => harness.close(),
-    inspect: () => ({ ...identity })
+    entry(name, entry, base) {
+      const existing = owner.bundles.get(name)
+      if (existing) return existing
+      const building = buildBundle(owner.directory, name, entry, base)
+      owner.bundles.set(name, building)
+      return building
+    },
+    async release() {
+      if (released) return
+      released = true
+      owner.leases--
+      if (owner.leases !== 0) return
+      if (activeBundleOwner === owner) activeBundleOwner = null
+      await rm(await owner.directory, { force: true, recursive: true })
+    }
+  }
+}
+
+function createBundleOwner(): BundleOwner {
+  return {
+    directory: mkdtemp(
+      fileURLToPath(new URL('../../../.stow-assistant-', import.meta.url))
+    ),
+    bundles: new Map(),
+    leases: 0
+  }
+}
+
+function closeWithRelease(
+  close: () => Promise<void>,
+  release: () => Promise<void>
+) {
+  let closed: Promise<void> | null = null
+  return function closeOnce() {
+    if (closed) return closed
+    closed = (async () => {
+      try {
+        await close()
+      } finally {
+        await release()
+      }
+    })()
+    return closed
   }
 }
 
@@ -149,21 +234,13 @@ function handshakeFrom(identity: {
   }
 }
 
-const bundles = new Map<string, Promise<string>>()
-
-function bundledEntry(name: string, entry: URL, base: URL) {
-  const existing = bundles.get(name)
-  if (existing) return existing
-  const building = buildBundle(name, entry, base)
-  bundles.set(name, building)
-  return building
-}
-
-async function buildBundle(name: string, entry: URL, base: URL) {
-  const directory = fileURLToPath(
-    new URL(`../../../.stow-assistant-${process.pid}/`, import.meta.url)
-  )
-  await mkdir(directory, { recursive: true })
+async function buildBundle(
+  directoryPromise: Promise<string>,
+  name: string,
+  entry: URL,
+  base: URL
+) {
+  const directory = await directoryPromise
   const output = join(directory, `${name}.js`)
   const stowCli = fileURLToPath(
     new URL('../../../node_modules/bare-stow/bin.js', import.meta.url)
@@ -180,7 +257,7 @@ async function buildBundle(name: string, entry: URL, base: URL) {
     '--host',
     `${process.platform}-${process.arch}`
   ])
-  return fileURLToPath(pathToFileURL(join(directory, `${name}.bundle`)))
+  return join(directory, `${name}.bundle`)
 }
 
 function runStow(args: readonly string[]) {

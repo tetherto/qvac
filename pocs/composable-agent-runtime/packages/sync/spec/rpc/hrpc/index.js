@@ -8,24 +8,32 @@ import { getEncoding } from './messages.js'
 const methods = new Map([
   ['@rpc/get-identity', 0],
   [0, '@rpc/get-identity'],
-  ['@rpc/get-user-profile', 1],
-  [1, '@rpc/get-user-profile'],
-  ['@rpc/set-user-profile', 2],
-  [2, '@rpc/set-user-profile'],
-  ['@rpc/watch-user-profile', 3],
-  [3, '@rpc/watch-user-profile'],
-  ['@rpc/create-task', 4],
-  [4, '@rpc/create-task'],
-  ['@rpc/update-task', 5],
-  [5, '@rpc/update-task'],
-  ['@rpc/get-task', 6],
-  [6, '@rpc/get-task'],
-  ['@rpc/list-tasks', 7],
-  [7, '@rpc/list-tasks'],
-  ['@rpc/watch-tasks', 8],
-  [8, '@rpc/watch-tasks'],
-  ['@rpc/describe-runtime', 9],
-  [9, '@rpc/describe-runtime']
+  ['@rpc/describe-runtime', 1],
+  [1, '@rpc/describe-runtime'],
+  ['@rpc/get-user-profile', 2],
+  [2, '@rpc/get-user-profile'],
+  ['@rpc/set-user-profile', 3],
+  [3, '@rpc/set-user-profile'],
+  ['@rpc/watch-user-profile', 4],
+  [4, '@rpc/watch-user-profile'],
+  ['@rpc/create-task', 5],
+  [5, '@rpc/create-task'],
+  ['@rpc/update-task', 6],
+  [6, '@rpc/update-task'],
+  ['@rpc/get-task', 7],
+  [7, '@rpc/get-task'],
+  ['@rpc/list-tasks', 8],
+  [8, '@rpc/list-tasks'],
+  ['@rpc/watch-tasks', 9],
+  [9, '@rpc/watch-tasks'],
+  ['@rpc/create-pairing-invite', 10],
+  [10, '@rpc/create-pairing-invite'],
+  ['@rpc/approve-pairing-request', 11],
+  [11, '@rpc/approve-pairing-request'],
+  ['@rpc/reject-pairing-request', 12],
+  [12, '@rpc/reject-pairing-request'],
+  ['@rpc/watch-pairing-requests', 13],
+  [13, '@rpc/watch-pairing-requests']
 ])
 
 class HRPC {
@@ -34,6 +42,7 @@ class HRPC {
     this._handlers = []
     this._requestEncodings = new Map([
       ['@rpc/get-identity', getEncoding('@rpc/empty')],
+      ['@rpc/describe-runtime', getEncoding('@rpc/empty')],
       ['@rpc/get-user-profile', getEncoding('@rpc/empty')],
       ['@rpc/set-user-profile', getEncoding('@rpc/user-profile')],
       ['@rpc/watch-user-profile', getEncoding('@rpc/empty')],
@@ -42,10 +51,14 @@ class HRPC {
       ['@rpc/get-task', getEncoding('@rpc/task-id')],
       ['@rpc/list-tasks', getEncoding('@rpc/empty')],
       ['@rpc/watch-tasks', getEncoding('@rpc/empty')],
-      ['@rpc/describe-runtime', getEncoding('@rpc/empty')]
+      ['@rpc/create-pairing-invite', getEncoding('@rpc/create-pairing-invite-request')],
+      ['@rpc/approve-pairing-request', getEncoding('@rpc/pairing-request-id')],
+      ['@rpc/reject-pairing-request', getEncoding('@rpc/pairing-request-id')],
+      ['@rpc/watch-pairing-requests', getEncoding('@rpc/empty')]
     ])
     this._responseEncodings = new Map([
       ['@rpc/get-identity', getEncoding('@rpc/identity')],
+      ['@rpc/describe-runtime', getEncoding('@rpc/runtime-info')],
       ['@rpc/get-user-profile', getEncoding('@rpc/user-profile-result')],
       ['@rpc/set-user-profile', getEncoding('@rpc/user-profile')],
       ['@rpc/watch-user-profile', getEncoding('@rpc/user-profile-result')],
@@ -54,7 +67,10 @@ class HRPC {
       ['@rpc/get-task', getEncoding('@rpc/task-result')],
       ['@rpc/list-tasks', getEncoding('@rpc/task-list')],
       ['@rpc/watch-tasks', getEncoding('@rpc/task-list')],
-      ['@rpc/describe-runtime', getEncoding('@rpc/runtime-info')]
+      ['@rpc/create-pairing-invite', getEncoding('@rpc/pairing-invite')],
+      ['@rpc/approve-pairing-request', getEncoding('@rpc/pairing-request')],
+      ['@rpc/reject-pairing-request', getEncoding('@rpc/pairing-request')],
+      ['@rpc/watch-pairing-requests', getEncoding('@rpc/pairing-request-list')]
     ])
     this._rpc = new RPC(stream, async (req) => {
       const command = methods.get(req.command)
@@ -156,6 +172,10 @@ class HRPC {
     return this._call('@rpc/get-identity', args)
   }
 
+  async describeRuntime(args) {
+    return this._call('@rpc/describe-runtime', args)
+  }
+
   async getUserProfile(args) {
     return this._call('@rpc/get-user-profile', args)
   }
@@ -188,12 +208,28 @@ class HRPC {
     return this._callSync('@rpc/watch-tasks', args)
   }
 
-  async describeRuntime(args) {
-    return this._call('@rpc/describe-runtime', args)
+  async createPairingInvite(args) {
+    return this._call('@rpc/create-pairing-invite', args)
+  }
+
+  async approvePairingRequest(args) {
+    return this._call('@rpc/approve-pairing-request', args)
+  }
+
+  async rejectPairingRequest(args) {
+    return this._call('@rpc/reject-pairing-request', args)
+  }
+
+  watchPairingRequests(args) {
+    return this._callSync('@rpc/watch-pairing-requests', args)
   }
 
   onGetIdentity(responseFn) {
     this._handlers['@rpc/get-identity'] = responseFn
+  }
+
+  onDescribeRuntime(responseFn) {
+    this._handlers['@rpc/describe-runtime'] = responseFn
   }
 
   onGetUserProfile(responseFn) {
@@ -228,8 +264,20 @@ class HRPC {
     this._handlers['@rpc/watch-tasks'] = responseFn
   }
 
-  onDescribeRuntime(responseFn) {
-    this._handlers['@rpc/describe-runtime'] = responseFn
+  onCreatePairingInvite(responseFn) {
+    this._handlers['@rpc/create-pairing-invite'] = responseFn
+  }
+
+  onApprovePairingRequest(responseFn) {
+    this._handlers['@rpc/approve-pairing-request'] = responseFn
+  }
+
+  onRejectPairingRequest(responseFn) {
+    this._handlers['@rpc/reject-pairing-request'] = responseFn
+  }
+
+  onWatchPairingRequests(responseFn) {
+    this._handlers['@rpc/watch-pairing-requests'] = responseFn
   }
 
   _requestIsStream(command) {
@@ -240,7 +288,8 @@ class HRPC {
   _responseIsStream(command) {
     return [
       '@rpc/watch-user-profile',
-      '@rpc/watch-tasks'
+      '@rpc/watch-tasks',
+      '@rpc/watch-pairing-requests'
     ].includes(command)
   }
 

@@ -4,7 +4,9 @@ import type { Capabilities } from '../spec/rpc/capabilities.d.ts'
 import { createCalls } from '../spec/rpc/calls.js'
 import HRPC from '../spec/rpc/hrpc/index.js'
 import type {
+  RpcCreatePairingInviteRequest,
   RpcCreateTaskRequest,
+  RpcPairingRequestId,
   RpcTaskId,
   RpcUpdateTaskRequest,
   RpcUserProfile
@@ -66,6 +68,22 @@ export class SyncClient extends ReadyResource {
 
   watchTasks() {
     return this.api().watchTasks({})
+  }
+
+  createPairingInvite(request: RpcCreatePairingInviteRequest = {}) {
+    return this.api().createPairingInvite(request)
+  }
+
+  approvePairingRequest(request: RpcPairingRequestId) {
+    return this.api().approvePairingRequest(request)
+  }
+
+  rejectPairingRequest(request: RpcPairingRequestId) {
+    return this.api().rejectPairingRequest(request)
+  }
+
+  watchPairingRequests() {
+    return this.api().watchPairingRequests({})
   }
 
   private api() {

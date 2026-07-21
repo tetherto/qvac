@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 1,
   "schema": [
     {
       "id": 0,
@@ -16,6 +16,19 @@
     },
     {
       "id": 1,
+      "name": "@rpc/describe-runtime",
+      "request": {
+        "name": "@rpc/empty",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/runtime-info",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 2,
       "name": "@rpc/get-user-profile",
       "request": {
         "name": "@rpc/empty",
@@ -28,7 +41,7 @@
       "version": 1
     },
     {
-      "id": 2,
+      "id": 3,
       "name": "@rpc/set-user-profile",
       "request": {
         "name": "@rpc/user-profile",
@@ -41,7 +54,7 @@
       "version": 1
     },
     {
-      "id": 3,
+      "id": 4,
       "name": "@rpc/watch-user-profile",
       "request": {
         "name": "@rpc/empty",
@@ -54,7 +67,7 @@
       "version": 1
     },
     {
-      "id": 4,
+      "id": 5,
       "name": "@rpc/create-task",
       "request": {
         "name": "@rpc/create-task-request",
@@ -67,7 +80,7 @@
       "version": 1
     },
     {
-      "id": 5,
+      "id": 6,
       "name": "@rpc/update-task",
       "request": {
         "name": "@rpc/update-task-request",
@@ -80,7 +93,7 @@
       "version": 1
     },
     {
-      "id": 6,
+      "id": 7,
       "name": "@rpc/get-task",
       "request": {
         "name": "@rpc/task-id",
@@ -93,7 +106,7 @@
       "version": 1
     },
     {
-      "id": 7,
+      "id": 8,
       "name": "@rpc/list-tasks",
       "request": {
         "name": "@rpc/empty",
@@ -106,7 +119,7 @@
       "version": 1
     },
     {
-      "id": 8,
+      "id": 9,
       "name": "@rpc/watch-tasks",
       "request": {
         "name": "@rpc/empty",
@@ -119,17 +132,56 @@
       "version": 1
     },
     {
-      "id": 1,
-      "name": "@rpc/describe-runtime",
+      "id": 10,
+      "name": "@rpc/create-pairing-invite",
+      "request": {
+        "name": "@rpc/create-pairing-invite-request",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/pairing-invite",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 11,
+      "name": "@rpc/approve-pairing-request",
+      "request": {
+        "name": "@rpc/pairing-request-id",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/pairing-request",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 12,
+      "name": "@rpc/reject-pairing-request",
+      "request": {
+        "name": "@rpc/pairing-request-id",
+        "stream": false
+      },
+      "response": {
+        "name": "@rpc/pairing-request",
+        "stream": false
+      },
+      "version": 1
+    },
+    {
+      "id": 13,
+      "name": "@rpc/watch-pairing-requests",
       "request": {
         "name": "@rpc/empty",
         "stream": false
       },
       "response": {
-        "name": "@rpc/runtime-info",
-        "stream": false
+        "name": "@rpc/pairing-request-list",
+        "stream": true
       },
-      "version": 2
+      "version": 1
     }
   ]
 }

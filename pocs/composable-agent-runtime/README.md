@@ -15,6 +15,38 @@ Composable Agent Runtime QIP. It is evidence, not a production package source.
 The task application owns human profile fields, task schemas, ordering, and
 completion policy. QVAC packages do not infer those domain semantics.
 
+## Integrate Assistant
+
+The production-oriented path has durable storage, Qwen 3.5 4B, model source,
+run ID, and trace ID defaults:
+
+```ts
+import { createAssistant } from '@qvac/assistant'
+
+const assistant = createAssistant()
+await assistant.ready()
+
+const run = assistant.run({
+  messages: [{ role: 'user', content: 'Process my pending tasks' }]
+})
+
+for await (const event of run) {
+  console.log(event)
+}
+
+await assistant.close()
+```
+
+`run.id` and `run.traceId` are available immediately for UI state,
+correlation, and later `readRun(run.id)` calls. Tests opt into
+`{ inference: { kind: 'deterministic' } }` explicitly.
+
+`assistant.state` is a stable facade. It can be captured before `ready()`, and
+each operation waits for readiness and resolves the current Sync endpoint after
+runtime replacement. Active watch iterators are not silently reconnected; a
+runtime failure terminates the current stream so the application can observe
+the discontinuity.
+
 ## Run the desktop slice
 
 Install once from this directory:

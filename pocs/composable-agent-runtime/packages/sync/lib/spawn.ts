@@ -72,6 +72,7 @@ export async function spawnSync({
   bootstrap,
   meshSeed,
   meshKey,
+  pairingInvite,
   logging
 }: SpawnSyncOptions): Promise<SpawnedSyncClient> {
   if (!storagePath) throw new Error('spawnSync storagePath is required')
@@ -81,6 +82,7 @@ export async function spawnSync({
     bootstrap,
     meshSeed: meshSeed?.toString('hex'),
     meshKey: meshKey?.toString('hex'),
+    pairingInvite: pairingInvite?.toString('hex'),
     logging
   })
   const child = new Sidecar(entry, [`--sync-options=${options}`])

@@ -1,6 +1,5 @@
 import harnessHarness from '../generated/harness.js'
 import sdkHarness from '../generated/sdk.js'
-import syncHarness from '../generated/sync.js'
 import {
   BUILD_VERSION,
   COMPONENTS,
@@ -19,7 +18,7 @@ import {
 
 const RESPONSE_TIMEOUT_MS = 5_000
 
-type WorkletHarness = typeof syncHarness
+type WorkletHarness = typeof harnessHarness
 type StartedHarness = Awaited<ReturnType<WorkletHarness['start']>>
 
 export interface RuntimeSnapshot {
@@ -60,7 +59,6 @@ interface Runner {
 
 export function createRunnerBroker(onChange: () => void): RunnerBroker {
   const runners: Record<ComponentName, Runner> = {
-    Sync: createRunner('Sync', syncHarness),
     Harness: createRunner('Harness', harnessHarness),
     SDK: createRunner('SDK', sdkHarness)
   }

@@ -12,6 +12,8 @@
     "scripts/**/*.ts",
     "src/**/*.ts",
     "worklets/**/*.ts",
-    "generated/**/*.d.ts"
+    "generated/**/*.d.ts",
+    "vendor.d.ts",
+    "../../packages/sync/vendor.d.ts"
   ]
 }

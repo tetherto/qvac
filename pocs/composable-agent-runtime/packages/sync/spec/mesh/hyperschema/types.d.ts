@@ -19,8 +19,22 @@ export interface SyncPutTaskOperation {
   task: SyncTask
 }
 
+export interface SyncUpdateTaskOperation {
+  id: string
+  title?: string | null
+  status?: SyncTaskStatus | null
+  result?: string | null
+  updatedAt: number
+}
+
+export interface SyncAddWriterOperation {
+  key: Buffer
+}
+
 export interface SchemaTypes {
   "@sync/task-status": SyncTaskStatus
   "@sync/task": SyncTask
   "@sync/put-task-operation": SyncPutTaskOperation
+  "@sync/update-task-operation": SyncUpdateTaskOperation
+  "@sync/add-writer-operation": SyncAddWriterOperation
 }

@@ -7,6 +7,7 @@ import type {
 
 const PROFILE_ID = '@task-cli/profile'
 const TASK_PREFIX = 'task-cli/task/'
+const MOBILE_TASK_PREFIX = 'phone-'
 
 export interface SeedProfile {
   readonly name: string
@@ -62,13 +63,29 @@ export function createTaskCliStore(
     async listTasks() {
       const { tasks } = await state.listTasks()
       return tasks
-        .filter((task) => task.id.startsWith(TASK_PREFIX))
+        .filter(isApplicationTask)
         .map(decodeTask)
         .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
     },
+    async *watchTasks() {
+      for await (const { tasks } of state.watchTasks()) {
+        yield tasks
+          .filter(isApplicationTask)
+          .map(decodeTask)
+          .sort(
+            (left, right) =>
+              left.order - right.order || left.id.localeCompare(right.id)
+          )
+      }
+    },
     async saveTask(_userId, task) {
-      const id = `${TASK_PREFIX}${task.id}`
-      const existing = await state.getTask({ id })
+      let id = task.id
+      let existing = await state.getTask({ id })
+      const prefixedId = `${TASK_PREFIX}${task.id}`
+      if (!existing.task) {
+        id = prefixedId
+        existing = await state.getTask({ id })
+      }
       if (!existing.task) {
         await state.createTask({
           id,
@@ -89,16 +106,23 @@ export function createTaskCliStore(
   }
 }
 
+function isApplicationTask(task: { readonly id: string }) {
+  return task.id.startsWith(TASK_PREFIX) || task.id.startsWith(MOBILE_TASK_PREFIX)
+}
+
 function decodeTask(task: {
   readonly id: string
   readonly input: string
   readonly status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   readonly result?: string | null
+  readonly createdAt: number
 }): Task {
-  const input = parseTaskInput(task.input)
+  const input = parseTaskInput(task.input, task.createdAt)
   const outcome = task.result ? parseTaskOutcome(task.result) : {}
   return {
-    id: task.id.slice(TASK_PREFIX.length),
+    id: task.id.startsWith(TASK_PREFIX)
+      ? task.id.slice(TASK_PREFIX.length)
+      : task.id,
     text: input.text,
     order: input.order,
     status: decodeStatus(task.status),
@@ -108,7 +132,7 @@ function decodeTask(task: {
 
 function encodeStatus(status: TaskStatus) {
   switch (status) {
-    case 'processing':
+    case 'running':
       return 'running' as const
     case 'completed':
       return 'completed' as const
@@ -122,7 +146,6 @@ function encodeStatus(status: TaskStatus) {
 function decodeStatus(
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 ): TaskStatus {
-  if (status === 'running') return 'processing'
   if (status === 'cancelled') return 'failed'
   return status
 }
@@ -140,19 +163,21 @@ function parseProfileMetadata(serialized: string) {
   return { age }
 }
 
-function parseTaskInput(serialized: string) {
-  const value = JSON.parse(serialized)
+function parseTaskInput(serialized: string, createdAt: number) {
+  let value: unknown
+  try {
+    value = JSON.parse(serialized)
+  } catch {
+    return { text: serialized, order: createdAt }
+  }
   const text = typeof value === 'object' && value !== null
     ? Reflect.get(value, 'text')
     : undefined
   const order = typeof value === 'object' && value !== null
     ? Reflect.get(value, 'order')
     : undefined
-  if (
-    typeof text !== 'string' ||
-    typeof order !== 'number'
-  ) {
-    throw new Error('Invalid task input')
+  if (typeof text !== 'string' || typeof order !== 'number') {
+    return { text: serialized, order: createdAt }
   }
   return { text, order }
 }

@@ -44,6 +44,7 @@ declare module 'corestore' {
   import type CorestoreStorage from 'hypercore-storage'
   export default class Corestore {
     constructor(storage: string | CorestoreStorage)
+    readonly manifestVersion: number
     ready(): Promise<void>
     createKeyPair(name: string): Promise<{
       readonly publicKey: Buffer
@@ -51,6 +52,15 @@ declare module 'corestore' {
     }>
     namespace(name: string | Buffer): Corestore
     close(): Promise<void>
+  }
+}
+
+declare module 'hypercore' {
+  export default class Hypercore {
+    static key(manifest: {
+      readonly version: number
+      readonly signers: ReadonlyArray<{ readonly publicKey: Buffer }>
+    }): Buffer
   }
 }
 
@@ -63,6 +73,7 @@ declare module 'hyperswarm' {
       readonly bootstrap?: ReadonlyArray<BootstrapNode>
       readonly keyPair?: KeyPair
     })
+    readonly connections: ReadonlyArray<Duplex>
     on(event: 'connection', listener: (stream: Duplex) => void): void
     join(topic: Buffer, options: { readonly server: boolean; readonly client: boolean }): object
     destroy(): Promise<void>
@@ -96,7 +107,9 @@ declare module 'autobee' {
     readonly value: Buffer | null
     readonly key: Buffer
   }
-  export interface AutobeeHost {}
+  export interface AutobeeHost {
+    addWriter(key: Buffer, options?: { readonly isIndexer?: boolean }): void
+  }
   export interface AutobeeOptions<T> {
     readonly open: (view: AutobeeView) => T
     readonly apply: (
@@ -111,11 +124,64 @@ declare module 'autobee' {
   export default class Autobee<T> extends ReadyResource {
     constructor(store: object, key: Buffer | null, options: AutobeeOptions<T>)
     readonly key: Buffer
+    readonly discoveryKey: Buffer
     readonly writable: boolean
     readonly view: T
     append(data: Buffer): Promise<void>
     update(): Promise<void>
     replicate(stream: Duplex): void
+  }
+}
+
+declare module 'blind-pairing' {
+  import type Hyperswarm from 'hyperswarm'
+  import type ReadyResource from 'ready-resource'
+
+  interface CandidateRequest {
+    once(event: 'rejected', listener: (error: Error) => void): void
+  }
+
+  interface Member {
+    ready(): Promise<void>
+    flushed(): Promise<void>
+    close(): Promise<void>
+  }
+
+  interface PairingRequest {
+    readonly inviteId: Buffer
+    readonly id: Buffer
+    readonly userData: Buffer
+    open(publicKey: Buffer): Buffer
+    confirm(options: {
+      readonly key: Buffer
+      readonly encryptionKey: Buffer
+    }): void
+    deny(options?: { readonly status?: number }): void
+  }
+
+  export default class BlindPairing extends ReadyResource {
+    constructor(swarm: Hyperswarm)
+    static createInvite(key: Buffer, options?: { readonly expires?: number }): {
+      readonly id: Buffer
+      readonly invite: Buffer
+      readonly publicKey: Buffer
+      readonly discoveryKey: Buffer
+    }
+    static decodeInvite(invite: Buffer): {
+      readonly expires: number
+    }
+    addMember(options: {
+      readonly discoveryKey: Buffer
+      readonly onadd: (request: PairingRequest) => void | Promise<void>
+    }): Member
+    addCandidate(options: {
+      readonly invite: Buffer
+      readonly userData: Buffer
+      readonly onadd: (result: {
+        readonly key: Buffer
+        readonly encryptionKey: Buffer
+      }) => void | Promise<void>
+    }): ReadyResource & { readonly request: CandidateRequest }
   }
 }
 

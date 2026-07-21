@@ -53,6 +53,20 @@ export function registerMeshTypes(namespace: any) {
     name: 'put-task-operation',
     fields: [{ name: 'task', type: '@sync/task', required: true }]
   })
+  namespace.register({
+    name: 'update-task-operation',
+    fields: [
+      { name: 'id', type: 'string', required: true },
+      { name: 'title', type: 'string' },
+      { name: 'status', type: '@sync/task-status' },
+      { name: 'result', type: 'string' },
+      { name: 'updatedAt', type: 'uint', required: true }
+    ]
+  })
+  namespace.register({
+    name: 'add-writer-operation',
+    fields: [{ name: 'key', type: 'fixed32', required: true }]
+  })
 }
 
 export function registerMeshCollections(database: any) {
@@ -71,6 +85,8 @@ export function registerMeshCollections(database: any) {
 
 export function registerMeshDispatch(dispatch: any) {
   dispatch.register({ name: 'put-task', requestType: '@sync/put-task-operation' })
+  dispatch.register({ name: 'update-task', requestType: '@sync/update-task-operation' })
+  dispatch.register({ name: 'add-writer', requestType: '@sync/add-writer-operation' })
 }
 
 export function registerRpcTypes(namespace: any) {
@@ -147,6 +163,47 @@ export function registerRpcTypes(namespace: any) {
     name: 'task-list',
     fields: [{ name: 'tasks', type: '@rpc/task', array: true, required: true }]
   })
+  namespace.register({
+    name: 'pairing-status',
+    enum: ['pending', 'approved', 'rejected'],
+    strings: true
+  })
+  namespace.register({
+    name: 'create-pairing-invite-request',
+    fields: [{ name: 'expiresInMs', type: 'uint' }]
+  })
+  namespace.register({
+    name: 'pairing-invite',
+    fields: [
+      { name: 'id', type: 'fixed32', required: true },
+      { name: 'invite', type: 'buffer', required: true },
+      { name: 'expiresAt', type: 'uint', required: true }
+    ]
+  })
+  namespace.register({
+    name: 'pairing-request-id',
+    fields: [{ name: 'id', type: 'fixed32', required: true }]
+  })
+  namespace.register({
+    name: 'pairing-request',
+    fields: [
+      { name: 'id', type: 'fixed32', required: true },
+      { name: 'writerKey', type: 'fixed32', required: true },
+      { name: 'fingerprint', type: 'string', required: true },
+      { name: 'status', type: '@rpc/pairing-status', required: true }
+    ]
+  })
+  namespace.register({
+    name: 'pairing-request-list',
+    fields: [
+      {
+        name: 'requests',
+        type: '@rpc/pairing-request',
+        array: true,
+        required: true
+      }
+    ]
+  })
 }
 
 export function registerRpcApi(api: any) {
@@ -173,4 +230,12 @@ export function registerRpcApi(api: any) {
   unary('get-task', '@rpc/task-id', '@rpc/task-result')
   unary('list-tasks', '@rpc/empty', '@rpc/task-list')
   watch('watch-tasks', '@rpc/empty', '@rpc/task-list')
+  unary(
+    'create-pairing-invite',
+    '@rpc/create-pairing-invite-request',
+    '@rpc/pairing-invite'
+  )
+  unary('approve-pairing-request', '@rpc/pairing-request-id', '@rpc/pairing-request')
+  unary('reject-pairing-request', '@rpc/pairing-request-id', '@rpc/pairing-request')
+  watch('watch-pairing-requests', '@rpc/empty', '@rpc/pairing-request-list')
 }

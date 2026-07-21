@@ -9,14 +9,22 @@ const defaultVersion = version
 class Router {
   constructor () {
     this._handler0 = null
+    this._handler1 = null
+    this._handler2 = null
 
-    this._missing = 1
+    this._missing = 3
   }
 
   add (name, handler) {
     switch (name) {
       case '@sync/put-task':
         this._handler0 = handler
+        break
+      case '@sync/update-task':
+        this._handler1 = handler
+        break
+      case '@sync/add-writer':
+        this._handler2 = handler
         break
       default:
         throw DispatchError.NONEXISTENT_ROUTE(name)
@@ -26,6 +34,8 @@ class Router {
 
   _checkAll () {
     assert(this._handler0 !== null, 'Missing handler for "@sync/put-task"')
+    assert(this._handler1 !== null, 'Missing handler for "@sync/update-task"')
+    assert(this._handler2 !== null, 'Missing handler for "@sync/add-writer"')
   }
 
   async dispatch (message, context) {
@@ -40,6 +50,10 @@ class Router {
     switch (op.id) {
       case 0:
         return this._handler0(op.value, context)
+      case 1:
+        return this._handler1(op.value, context)
+      case 2:
+        return this._handler2(op.value, context)
       default:
         throw DispatchError.HANDLER_NOT_FOUND_BY_ID(op.id)
     }
@@ -79,10 +93,26 @@ const route0 = {
   enc: getEncoding('@sync/put-task-operation')
 }
 
+const route1 = {
+  name: '@sync/update-task',
+  id: 1,
+  enc: getEncoding('@sync/update-task-operation')
+}
+
+const route2 = {
+  name: '@sync/add-writer',
+  id: 2,
+  enc: getEncoding('@sync/add-writer-operation')
+}
+
 function getRouteByName (name) {
   switch (name) {
     case '@sync/put-task':
       return route0
+    case '@sync/update-task':
+      return route1
+    case '@sync/add-writer':
+      return route2
     default:
       throw DispatchError.ROUTE_NOT_FOUND_BY_NAME(name)
   }
@@ -92,6 +122,10 @@ function getRouteById (id) {
   switch (id) {
     case 0:
       return route0
+    case 1:
+      return route1
+    case 2:
+      return route2
     default:
       throw DispatchError.HANDLER_NOT_FOUND_BY_ID(id)
   }

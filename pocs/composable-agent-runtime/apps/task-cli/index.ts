@@ -5,13 +5,17 @@ import {
 } from '@qvac/assistant'
 import {
   processIncompleteTasks,
+  watchIncompleteTasks,
+  type TaskStore,
   type TaskRunner,
-  type TaskRunEvent
+  type TaskRunEvent,
+  type WatchTaskOptions
 } from '@qvac-poc/task-shared'
 import { createTraceId } from '@qvac/runtime-contracts'
 import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { createTaskCliStore } from './lib/task-store.ts'
 
@@ -39,12 +43,24 @@ type TaskCommand =
       readonly model: string
       readonly trace: boolean
     }
+  | {
+      readonly mode: 'serve'
+      readonly storagePath: string
+      readonly inference: { readonly kind: 'qwen' }
+      readonly model: string
+      readonly trace: boolean
+    }
 
 export function parseTaskCommand(args: readonly string[]): TaskCommand {
   const mode = args[0]
-  if (mode !== 'seed' && mode !== 'observe' && mode !== 'execute') {
+  if (
+    mode !== 'seed' &&
+    mode !== 'observe' &&
+    mode !== 'execute' &&
+    mode !== 'serve'
+  ) {
     throw new Error(
-      'Usage: task-cli <seed|observe|execute> [--storage <path>]'
+      'Usage: task-cli <seed|observe|execute|serve> [--storage <path>]'
     )
   }
   const storagePath = option(args, '--storage') ?? '.assistant'
@@ -67,6 +83,18 @@ export function parseTaskCommand(args: readonly string[]): TaskCommand {
     return { mode, storagePath, once: args.includes('--once'), trace }
   }
   const qwen = args.includes('--qwen')
+  if (mode === 'serve' && !qwen) {
+    throw new Error('serve requires --qwen')
+  }
+  if (mode === 'serve') {
+    return {
+      mode,
+      storagePath,
+      inference: { kind: 'qwen' },
+      model: option(args, '--model') ?? defaultQwenModelPath(),
+      trace
+    }
+  }
   return {
     mode,
     storagePath,
@@ -79,12 +107,22 @@ export function parseTaskCommand(args: readonly string[]): TaskCommand {
 }
 
 export async function runTaskCommand(command: TaskCommand): Promise<void> {
+  if (
+    (command.mode === 'execute' || command.mode === 'serve') &&
+    command.inference.kind === 'qwen'
+  ) {
+    await access(command.model).catch(() => {
+      throw new Error(
+        `Qwen service requires a pre-provisioned model at ${command.model}`
+      )
+    })
+  }
   const assistant = createAssistant({
     storagePath: command.storagePath,
-    sync: { bootstrap: [] },
+    sync: command.mode === 'serve' ? {} : { bootstrap: [] },
     logging: { level: command.trace ? 'debug' : 'off' },
     inference:
-      command.mode === 'execute'
+      command.mode === 'execute' || command.mode === 'serve'
         ? command.inference
         : { kind: 'deterministic' }
   })
@@ -104,12 +142,9 @@ export async function runTaskCommand(command: TaskCommand): Promise<void> {
       await observe(assistant, store, command.once)
       return
     }
-    if (command.inference.kind === 'qwen') {
-      await access(command.model).catch(() => {
-        throw new Error(
-          `Qwen smoke requires a pre-provisioned model at ${command.model}`
-        )
-      })
+    if (command.mode === 'serve') {
+      await serve(assistant, store, command)
+      return
     }
 
     writeTraceIf(command.trace, 'task-cli.execute.started', {
@@ -131,6 +166,174 @@ export async function runTaskCommand(command: TaskCommand): Promise<void> {
   } finally {
     stopTracing()
     await assistant.close()
+  }
+}
+
+export function runTaskService(
+  store: TaskStore,
+  runner: TaskRunner,
+  options: WatchTaskOptions
+) {
+  return watchIncompleteTasks(store, runner, options)
+}
+
+export function formatPairingUri(invite: {
+  readonly invite: Buffer
+  readonly expiresAt: number
+}) {
+  const encoded = invite.invite.toString('base64url')
+  return `qvac-poc://pair?invite=${encoded}&expiresAt=${invite.expiresAt}`
+}
+
+async function serve(
+  assistant: AssistantFacade,
+  store: ReturnType<typeof createTaskCliStore>,
+  command: Extract<TaskCommand, { mode: 'serve' }>
+) {
+  const controller = new AbortController()
+  const removeSignalHandlers = installShutdownHandlers(controller)
+  const invite = await assistant.state.createPairingInvite({
+    expiresInMs: 30 * 60_000
+  })
+  console.log(formatPairingUri(invite))
+  writeOutput({
+    mode: 'service',
+    event: 'ready',
+    expiresAt: invite.expiresAt
+  })
+  try {
+    await Promise.all([
+      approvePairingCandidates(assistant, controller.signal),
+      runTaskService(
+        store,
+        createRunner(assistant, command.model, command.trace),
+        {
+          signal: controller.signal,
+          onStaleTasks(tasks) {
+            writeOutput({
+              mode: 'service',
+              event: 'stale-running-tasks',
+              tasks: tasks.map((task) => ({
+                id: task.id,
+                result: task.result ?? null
+              }))
+            })
+          }
+        }
+      )
+    ])
+  } finally {
+    controller.abort('Task service stopped')
+    removeSignalHandlers()
+  }
+}
+
+async function approvePairingCandidates(
+  assistant: AssistantFacade,
+  signal: AbortSignal
+) {
+  const terminal = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  })
+  const handled = new Set<string>()
+  const iterator =
+    assistant.state.watchPairingRequests()[Symbol.asyncIterator]()
+  try {
+    while (!signal.aborted) {
+      const next = await nextUntilAbort(iterator, signal)
+      if (next.done) return
+      for (const request of next.value.requests) {
+        const id = request.id.toString('hex')
+        if (request.status !== 'pending' || handled.has(id)) continue
+        handled.add(id)
+        writeOutput({
+          mode: 'service',
+          event: 'pairing-candidate',
+          fingerprint: request.fingerprint
+        })
+        const approved = await confirmPairing(
+          terminal,
+          request.fingerprint,
+          signal
+        )
+        if (signal.aborted) return
+        if (approved) {
+          await assistant.state.approvePairingRequest({ id: request.id })
+        } else {
+          await assistant.state.rejectPairingRequest({ id: request.id })
+        }
+        writeOutput({
+          mode: 'service',
+          event: approved ? 'pairing-approved' : 'pairing-rejected',
+          fingerprint: request.fingerprint
+        })
+      }
+    }
+  } finally {
+    terminal.close()
+    // A pending HRPC iterator.next() cannot be cancelled by iterator.return().
+    // Assistant shutdown closes the transport after the abort.
+    if (!signal.aborted) await iterator.return?.()
+  }
+}
+
+async function confirmPairing(
+  terminal: ReturnType<typeof createInterface>,
+  fingerprint: string,
+  signal: AbortSignal
+) {
+  while (!signal.aborted) {
+    let answer: string
+    try {
+      answer = await terminal.question(
+        `Pair writer ${fingerprint}? [y/n] `,
+        { signal }
+      )
+    } catch (error) {
+      if (signal.aborted) return false
+      throw error
+    }
+    const normalized = answer.trim().toLowerCase()
+    if (normalized === 'y') return true
+    if (normalized === 'n') return false
+    console.log('Please answer y or n.')
+  }
+  return false
+}
+
+function installShutdownHandlers(controller: AbortController) {
+  function stop(signal: 'SIGINT' | 'SIGTERM') {
+    controller.abort(`Task service stopped by ${signal}`)
+  }
+  function onSigint() {
+    stop('SIGINT')
+  }
+  function onSigterm() {
+    stop('SIGTERM')
+  }
+  process.once('SIGINT', onSigint)
+  process.once('SIGTERM', onSigterm)
+  return function removeSignalHandlers() {
+    process.removeListener('SIGINT', onSigint)
+    process.removeListener('SIGTERM', onSigterm)
+  }
+}
+
+async function nextUntilAbort<T>(
+  iterator: AsyncIterator<T>,
+  signal: AbortSignal
+): Promise<IteratorResult<T>> {
+  if (signal.aborted) return { done: true, value: undefined }
+  let onAbort = () => {}
+  const aborted = new Promise<IteratorResult<T>>((resolve) => {
+    onAbort = () => resolve({ done: true, value: undefined })
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([iterator.next(), aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
   }
 }
 
@@ -189,9 +392,10 @@ function createRunner(
         traceId
       })
       for await (const event of assistant.run({
-              runId: `task-${input.taskId}`,
-              traceId,
+        runId: `task-${input.taskId}`,
+        traceId,
         model,
+        signal: input.signal,
         messages: [
           {
             role: 'system',
@@ -204,6 +408,12 @@ function createRunner(
           yield { type: 'content', text: event.text }
         } else if (event.type === 'error') {
           throw new Error(event.message)
+        } else if (event.type === 'aborted') {
+          throw new Error(
+            typeof input.signal?.reason === 'string'
+              ? input.signal.reason
+              : 'Task execution aborted'
+          )
         } else {
           yield { type: 'status', text: event.type }
         }

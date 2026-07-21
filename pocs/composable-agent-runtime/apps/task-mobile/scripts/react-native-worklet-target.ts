@@ -5,7 +5,7 @@ import { Asset } from 'expo-asset'
 import bundle from ${JSON.stringify(bundleSpecifier)}
 
 export default {
-  async start(id, opts = {}) {
+  async start(id, opts = {}, args = []) {
     const asset = Asset.fromModule(bundle)
     await asset.downloadAsync()
     const uri = asset.localUri ?? asset.uri
@@ -16,7 +16,7 @@ export default {
     const bytes = new Uint8Array(await response.arrayBuffer())
     const filename = id.toLowerCase() + '.bundle'
     const worklet = new Worklet(filename, opts)
-    worklet.start('/' + filename, bytes)
+    worklet.start('/' + filename, bytes, args)
 
     await new Promise((resolve) => setTimeout(resolve, 500))
     return { ipc: worklet.IPC, worklet }
@@ -27,7 +27,8 @@ export default {
 declare const harness: {
   start(
     id: string,
-    opts?: import('react-native-bare-kit').WorkletOptions
+    opts?: import('react-native-bare-kit').WorkletOptions,
+    args?: string[]
   ): Promise<{
     ipc: import('react-native-bare-kit').Worklet['IPC']
     worklet: import('react-native-bare-kit').Worklet

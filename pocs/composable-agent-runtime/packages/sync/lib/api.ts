@@ -7,6 +7,7 @@ import type {
 import type { SyncTask } from '../spec/mesh/hyperschema/types.d.ts'
 import type { LocalStore } from './local.ts'
 import type { Mesh } from './mesh.ts'
+import type { PairingCoordinator } from './pairing.ts'
 import { watchable } from './watchable.ts'
 
 const TASKS = '@sync/tasks'
@@ -15,6 +16,7 @@ const TASKS_BY_CREATED = '@sync/tasks-by-created'
 export function createApi(
   local: LocalStore,
   mesh: Mesh,
+  pairing: PairingCoordinator,
   deviceId: Buffer,
   processId: number
 ): CapabilityHandlers {
@@ -34,22 +36,25 @@ export function createApi(
       updatedAt: now,
       originDeviceId: deviceId
     }
-    await mesh.dispatch(task)
+    await mesh.createTask(task)
     return task as RpcTask
   }
 
   async function updateTask(request: RpcUpdateTaskRequest): Promise<RpcTask> {
     const existing = await mesh.view.get<SyncTask>(TASKS, { id: request.id })
     if (!existing) throw new Error(`Task not found: ${request.id}`)
-    const task: SyncTask = {
-      ...existing,
+    const update = {
+      id: request.id,
       ...(request.title == null ? null : { title: request.title }),
       ...(request.status == null ? null : { status: request.status }),
       ...(request.result == null ? null : { result: request.result }),
       updatedAt: Math.max(Date.now(), existing.updatedAt + 1)
     }
-    await mesh.dispatch(task)
-    return task as RpcTask
+    await mesh.updateTask(update)
+    return {
+      ...existing,
+      ...update
+    } as RpcTask
   }
 
   return {
@@ -64,7 +69,8 @@ export function createApi(
         'local-profile',
         'tasks',
         'task-watches',
-        'passive-replication'
+        'passive-replication',
+        'writer-pairing'
       ],
       buildVersion: '0.0.0-poc'
     }),
@@ -84,6 +90,12 @@ export function createApi(
       task: (await mesh.view.get<SyncTask>(TASKS, { id })) as RpcTask | null
     }),
     listTasks,
-    watchTasks: watchable(mesh, listTasks)
+    watchTasks: watchable(mesh, listTasks),
+    createPairingInvite: async (request) => pairing.createInvite(request),
+    approvePairingRequest: async ({ id }) => pairing.approve(id),
+    rejectPairingRequest: async ({ id }) => pairing.reject(id),
+    watchPairingRequests: watchable(pairing, async () => ({
+      requests: pairing.listRequests()
+    }))
   }
 }

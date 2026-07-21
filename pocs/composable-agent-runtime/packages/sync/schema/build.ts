@@ -28,6 +28,17 @@ const meshDatabaseDirectory = path.join(specDirectory, 'mesh', 'hyperdb')
 const meshDispatchDirectory = path.join(specDirectory, 'mesh', 'hyperdispatch')
 
 fs.mkdirSync(specDirectory, { recursive: true })
+for (const directory of [
+  rpcSchemaDirectory,
+  path.join(rpcDirectory, 'hrpc'),
+  localSchemaDirectory,
+  localDatabaseDirectory,
+  meshSchemaDirectory,
+  meshDatabaseDirectory,
+  meshDispatchDirectory
+]) {
+  fs.rmSync(directory, { recursive: true, force: true })
+}
 
 const rpcSchema = Hyperschema.from(rpcSchemaDirectory)
 registerRpcTypes(rpcSchema.namespace('rpc'))

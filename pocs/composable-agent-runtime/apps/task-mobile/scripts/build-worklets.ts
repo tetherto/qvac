@@ -4,7 +4,8 @@ import traverse from 'bare-module-traverse'
 import pack from 'bare-pack'
 import { listPrefix, readModule } from 'bare-pack/fs'
 import strip from 'bare-type-stripper'
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   generateWorkletHarness,
@@ -16,31 +17,40 @@ type BareURL = import('bare-url')
 const appRoot = new URL('../', import.meta.url) as unknown as BareURL
 const generated = fileURLToPath(new URL('../generated/', import.meta.url).href)
 const worklets = ['sync', 'harness', 'sdk'] as const
+const linkedWorklets = new Set<(typeof worklets)[number]>(['sync', 'sdk'])
 
 await rm(generated, { recursive: true, force: true })
 await mkdir(generated, { recursive: true })
 
 const bundleBytes: Record<string, number> = {}
+const addonPackagesByWorklet: Record<string, string[]> = {}
 for (const worklet of worklets) {
   const entry = new URL(
     `../worklets/__mobile-${worklet}.mjs`,
     import.meta.url
   ) as unknown as BareURL
+  const startArguments =
+    worklet === 'sync' ? ', Bare.argv[2]' : ''
   const entrySource = `\
 import start from './${worklet}.ts'
 
-await start(BareKit.IPC)
+await start(BareKit.IPC${startArguments})
 `
+  const addonParents = new Set<string>()
   const bundle = await pack(
     entry,
     {
       base: appRoot,
       hosts: workletHosts,
-      linked: worklet === 'sdk',
+      linked: linkedWorklets.has(worklet),
       offload: false,
-      resolve: resolveWorklet as NonNullable<
-        import('bare-pack').PackOptions['resolve']
-      >,
+      resolve: ((entry, parentURL, options) =>
+        resolveWorklet(entry, parentURL, {
+          ...options,
+          onAddon(parentURL) {
+            addonParents.add(parentURL.href)
+          }
+        })) as NonNullable<import('bare-pack').PackOptions['resolve']>,
       aliases: {
         '.ts': '.js',
         '.mts': '.mjs',
@@ -76,6 +86,14 @@ await start(BareKit.IPC)
   console.log(`generated ${typesPath}`)
   console.log(`generated ${bundlePath}`)
   bundleBytes[worklet] = (await stat(bundlePath)).size
+  const addonPackages = await resolveAddonPackages(addonParents)
+  addonPackagesByWorklet[worklet] = addonPackages
+  if (worklet === 'sync' && addonPackages.length === 0) {
+    throw new Error('Real Sync bundle did not resolve any native addons')
+  }
+  if (addonPackages.length > 0) {
+    console.log(`${worklet} linked addons: ${addonPackages.join(', ')}`)
+  }
 }
 
 const measurements = {
@@ -90,6 +108,19 @@ await writeFile(
   ),
   `${JSON.stringify(measurements, null, 2)}\n`
 )
+await writeFile(
+  fileURLToPath(
+    new URL('../generated/native-addons.json', import.meta.url).href
+  ),
+  `${JSON.stringify(
+    {
+      worklets: addonPackagesByWorklet,
+      packages: [...new Set(Object.values(addonPackagesByWorklet).flat())].sort()
+    },
+    null,
+    2
+  )}\n`
+)
 
 console.log(`worklet artifacts written to ${generated}`)
 
@@ -101,6 +132,7 @@ interface WorkletImport {
 interface WorkletResolveOptions {
   readonly linked?: boolean
   readonly hosts?: readonly string[]
+  readonly onAddon?: (parentURL: BareURL) => void
   readonly [key: string]: unknown
 }
 
@@ -115,6 +147,12 @@ function resolveWorklet(
   let conditions = hosts.map((host) => ['bare', 'node', ...host.split('-')])
 
   if (entry.type & lex.constants.ADDON) {
+    if (entry.type & lex.constants.DYNAMIC) {
+      throw new Error(
+        `Dynamic native addon loading is not supported from ${parentURL.href}`
+      )
+    }
+    options.onAddon?.(parentURL)
     extensions = linked ? [] : ['.bare', '.node']
     conditions = conditions.map((condition) => ['addon', ...condition])
     return resolverApis().addon(entry.specifier || '.', parentURL, {
@@ -171,4 +209,47 @@ function resolverApis() {
       }
     }
   ).resolve
+}
+
+async function resolveAddonPackages(parents: ReadonlySet<string>) {
+  const packages = new Set<string>()
+  for (const parent of parents) {
+    packages.add(await findAddonPackage(parent))
+  }
+  return [...packages].sort()
+}
+
+async function findAddonPackage(parent: string) {
+  let directory = path.dirname(fileURLToPath(parent))
+  while (true) {
+    const packagePath = path.join(directory, 'package.json')
+    try {
+      const parsed: unknown = JSON.parse(await readFile(packagePath, 'utf8'))
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'addon' in parsed &&
+        parsed.addon === true &&
+        'name' in parsed &&
+        typeof parsed.name === 'string'
+      ) {
+        return parsed.name
+      }
+    } catch (error) {
+      if (!isMissing(error)) throw error
+    }
+    const next = path.dirname(directory)
+    if (next === directory) break
+    directory = next
+  }
+  throw new Error(`Could not identify native addon package for ${parent}`)
+}
+
+function isMissing(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ENOENT'
+  )
 }

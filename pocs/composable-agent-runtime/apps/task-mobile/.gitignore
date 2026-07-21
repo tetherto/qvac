@@ -2,3 +2,5 @@
 generated/*.bundle
 generated/*.js
 generated/build-measurements.json
+generated/ios-addons.json
+generated/native-addons.json

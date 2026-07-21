@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   BUILD_VERSION,
+  COMPONENTS,
   PROTOCOL_CONTRACT,
   PROTOCOL_VERSION,
   capabilitiesFor,
@@ -49,8 +50,8 @@ describe('mobile runtime protocol', () => {
   })
 
   test('advertises native abort only for the SDK runtime', () => {
+    expect(COMPONENTS).toEqual(['Harness', 'SDK'])
     expect(capabilitiesFor('SDK')).toContain('test-only-native-abort')
-    expect(capabilitiesFor('Sync')).not.toContain('test-only-native-abort')
     expect(capabilitiesFor('Harness')).not.toContain('test-only-native-abort')
   })
 })

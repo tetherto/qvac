@@ -1,10 +1,11 @@
 # Mobile runtime feasibility host
 
-This private Expo host is limited to the physical-device feasibility gate. Its
-Hermes runner broker creates independent BareKit Worklets named `Sync`,
-`Harness`, and `SDK`. Run `build:worklets` before Metro to generate direct
-BareKit bundles. Run `build:ios-addons` followed by `pod install` to link the
-SDK-only native abort probe into an iOS build.
+This private Expo host is limited to the physical-device feasibility gate. Real
+Sync runs in its own BareKit Worklet with app-owned durable storage and HRPC to
+Hermes. The existing `Harness` and `SDK` Worklets remain independent lifecycle
+probes. Run `build:worklets` before Metro to generate direct BareKit bundles.
+Run `build:ios-addons` followed by `pod install` to link the native addons
+discovered from the Sync and SDK bundle graphs into an iOS build.
 
 Do not treat simulator results as isolation evidence. Before any iOS command,
 attach and unlock a physical iOS device, enable its developer settings, and

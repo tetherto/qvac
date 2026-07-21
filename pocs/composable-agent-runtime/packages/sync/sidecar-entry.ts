@@ -7,6 +7,7 @@ interface EncodedSyncCoreOptions {
   readonly bootstrap?: SyncCoreOptions['bootstrap']
   readonly meshSeed?: string
   readonly meshKey?: string
+  readonly pairingInvite?: string
   readonly logging?: SyncCoreOptions['logging']
 }
 
@@ -33,6 +34,9 @@ function decodeOptions(argv: readonly string[]): SyncCoreOptions {
     bootstrap: options.bootstrap,
     logging: options.logging,
     meshSeed: options.meshSeed ? Buffer.from(options.meshSeed, 'hex') : undefined,
-    meshKey: options.meshKey ? Buffer.from(options.meshKey, 'hex') : undefined
+    meshKey: options.meshKey ? Buffer.from(options.meshKey, 'hex') : undefined,
+    pairingInvite: options.pairingInvite
+      ? Buffer.from(options.pairingInvite, 'hex')
+      : undefined
   }
 }

@@ -10,6 +10,7 @@ function armed(stream) {
 export function createCalls(rpc) {
   return {
     getIdentity: (input) => rpc.getIdentity(input),
+    describeRuntime: (input) => rpc.describeRuntime(input),
     getUserProfile: (input) => rpc.getUserProfile(input),
     setUserProfile: (input) => rpc.setUserProfile(input),
     watchUserProfile: (input) => armed(rpc.watchUserProfile(input)),
@@ -18,6 +19,9 @@ export function createCalls(rpc) {
     getTask: (input) => rpc.getTask(input),
     listTasks: (input) => rpc.listTasks(input),
     watchTasks: (input) => armed(rpc.watchTasks(input)),
-    describeRuntime: (input) => rpc.describeRuntime(input),
+    createPairingInvite: (input) => rpc.createPairingInvite(input),
+    approvePairingRequest: (input) => rpc.approvePairingRequest(input),
+    rejectPairingRequest: (input) => rpc.rejectPairingRequest(input),
+    watchPairingRequests: (input) => armed(rpc.watchPairingRequests(input)),
   }
 }
