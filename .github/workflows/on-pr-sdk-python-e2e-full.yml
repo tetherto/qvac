@@ -62,15 +62,28 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-        with:
-          python-version: "3.10"
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 22
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
+      # Use the runner's own Python. actions/setup-python doesn't work on these
+      # self-hosted GPU runners: its python-versions tarball ships a setup.sh
+      # that hardcodes `mkdir /Users/runner/hostedtoolcache`, which isn't
+      # writable here (the runner user's home is /Users/actions-runner-*). The
+      # runners already have Python; make a venv from it so installs don't touch
+      # the system interpreter. Fails loudly if the system Python is < 3.10.
+      # Per infra: don't run any toolchain "setup" on these runners -- Python,
+      # Node, and bun are already provisioned. Use the present Python (a venv
+      # off it keeps installs out of the system interpreter). Fails loudly if
+      # the system Python is < 3.10.
+      - name: Set up Python (runner's system Python)
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          echo "System Python: $("$PY" --version) at $(command -v "$PY")"
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv .venv
+          if [ -x ".venv/bin/python" ]; then PYBIN="$(pwd)/.venv/bin/python"; else PYBIN="$(pwd)/.venv/Scripts/python"; fi
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+          "$PYBIN" -m pip install --upgrade pip
+          node --version
+          bun --version
 
       # Shared model cache, keyed on the same registry the SDK e2e keys on, so
       # it invalidates in lockstep. Cross-OS so the three platforms share it.
@@ -88,16 +101,22 @@ jobs:
           enableCrossOsArchive: true
 
       - name: Install (with transport + optional extras)
-        run: python -m pip install -e ".[gen,dev,bare-rpc,vla,notebook]"
+        run: |
+          "$PYBIN" -m pip install -e ".[gen,dev,bare-rpc,vla,notebook]"
 
       - name: Build worker
-        run: python scripts/build_worker.py
+        run: |
+          "$PYBIN" scripts/build_worker.py
 
       - name: Test (full suite, real worker)
-        run: python -m pytest tests/ -v
+        run: |
+          "$PYBIN" -m pytest tests/ -v
 
+      # Save even on test failure so the (multi-GB) models downloaded this run
+      # are cached and the next run doesn't re-fetch them. Skipped only when the
+      # cache already hit.
       - name: Save models cache
-        if: steps.models-cache.outputs.cache-hit != 'true'
+        if: always() && steps.models-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.qvac-cache
