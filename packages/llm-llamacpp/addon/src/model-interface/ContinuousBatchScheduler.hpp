@@ -32,9 +32,10 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 /// Fire the terminal lifecycle hook for a finished sequence. A sequence that
 /// ran generation goes through onCancel (cancel/error) or onGenerationFinished
-/// (natural stop) so onGenerationCompletePolicy runs; a prefill-only slot only
-/// flushes via onSequenceEnd. One place for the mapping every terminal path
-/// shares (normal drain, cancel-all, decode-error finalization).
+/// (natural stop, which flushes output and runs end-of-generation reasoning
+/// compaction); a prefill-only slot only flushes via onSequenceEnd. One place
+/// for the mapping every terminal path shares (normal drain, cancel-all,
+/// decode-error finalization).
 ///
 /// Returns `true` when the terminal hook left the driver in a state safe
 /// to persist via `saveCache`. Cancel/DecodeError paths forward

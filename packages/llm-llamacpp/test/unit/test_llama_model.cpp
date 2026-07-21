@@ -832,6 +832,24 @@ TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
   EXPECT_TRUE(model.getCommonParams().use_mmap);
 }
 
+// The dynamic tools ("tools_compact") feature was removed, but the config key
+// is still tolerated: it must be ignored, not rejected as an unknown argument
+// (which would fail the whole model load). Guards the deprecation tombstone in
+// commonParamsParse.
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactIgnored) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["tools_compact"] = "true";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+}
+
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

@@ -1857,6 +1857,26 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(iter);
   }
 
+  // The dynamic tools ("tools_compact") feature has been removed. Accept and
+  // ignore a lingering `tools_compact` key instead of letting it fall through
+  // to the generic CLI-arg conversion below, where the unknown
+  // `--tools-compact` argument would throw InvalidArgument and fail the entire
+  // model load. This keeps configs that still carry the key — including older
+  // SDK builds that emit it — loading, matching the pre-removal behavior where
+  // the key was a no-op (`false`) or ignored-with-warning. Remove this
+  // tombstone in a future release once no consumer emits the key.
+  for (const std::string& key : {"tools_compact", "tools-compact"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] `%s` is deprecated and no longer supported; "
+              "ignoring it\n",
+              key.c_str()));
+      configFilemap.erase(it);
+    }
+  }
+
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
   auto hIt = configFilemap.find("split-mode");
   auto uIt = configFilemap.find("split_mode");

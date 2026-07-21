@@ -412,15 +412,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         *request.overrides.remove_thinking_from_context);
   }
 
-  bool hasKvCacheContext = false;
-  if (!request.cacheKey.empty()) {
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(request.cacheKey, ec);
-    if (!ec && size != 0) {
-      hasKvCacheContext = true;
-    }
-  }
-
   const bool isCacheLoaded =
       driver->loadCache(request.cacheKey, configuredNDiscarded_);
 
@@ -1435,8 +1426,9 @@ void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
   // fails the batch (failGroupLocked) instead of completing it as a success;
   // teardown paths use notifyDoneNoexcept. The throw then skips freeSlot below,
   // so recovery re-runs teardown (onCancel/saveCache/onDone) on this slot. That
-  // is benign and only happens when onDone itself threw: onGenerationFinished's
-  // generationStarted_ guard makes the re-run a no-op, recovery's onCancel({})
+  // is benign and only happens when onDone itself threw: the re-run's
+  // onGenerationFinished finds an already-consumed reasoning span (compaction
+  // no-ops) and an already-flushed UTF-8 buffer, recovery's onCancel({})
   // re-emits nothing, and saveCache just rewrites the same file.
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
