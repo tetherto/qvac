@@ -82,10 +82,17 @@ openclaw onboard \
 openclaw config validate
 ```
 
-The setup command creates the QVAC provider entry, selects `qvac/qwen3.5-9b`,
-and enables OpenClaw's lean local-model agent mode. The 9B model is recommended
-for the OpenClaw agent smoke test. Smaller models can answer direct prompts, but
-they are less reliable with the full agent harness.
+The setup command creates the QVAC provider entry and selects
+`qvac/qwen3.5-9b`. It leaves OpenClaw's experimental settings unchanged. The 9B
+model is recommended for the OpenClaw agent smoke test. Smaller models can
+answer direct prompts, but they are less reliable with the full agent harness.
+
+If an earlier QVAC plugin setup enabled OpenClaw's local-model lean mode, disable
+it to restore direct access to tools such as `browser`, `cron`, and `message`:
+
+```bash
+openclaw config set agents.defaults.experimental.localModelLean false
+```
 
 ### 4. Confirm OpenClaw can see the QVAC model
 
@@ -104,7 +111,7 @@ Expected result:
 
 ```bash
 openclaw agent --local \
-  --session-id qvac-smoke-9b-lean \
+  --session-id qvac-smoke-9b \
   --model qvac/qwen3.5-9b \
   --message "Reply with exactly: pong" \
   --thinking off \
