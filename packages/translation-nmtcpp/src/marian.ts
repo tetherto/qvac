@@ -88,9 +88,10 @@ export class TranslationInterface {
         // Priority: ERROR=0, WARNING=1, INFO=2, DEBUG=3
         const levels = ["error", "warn", "info", "debug"] as const;
         const level = levels[priority] || "info";
-        const write = transitionCb[level];
-        if (typeof write === "function") {
-          write(message);
+        // Invoke as a method on the logger object — QvacLogger methods rely
+        // on `this` internally, so the call must not be detached.
+        if (typeof transitionCb[level] === "function") {
+          transitionCb[level](message);
         }
       });
       this._loggerInitialized = true;
