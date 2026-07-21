@@ -81,3 +81,5 @@ We require a DCO 1.1 sign-off on every commit. By signing off you certify that y
 - The sign-off name and email must match the commit author and reflect your real identity.
 - If you amend or rebase, keep the sign-off lines intact (`git commit --amend --no-edit -s`).
 - For co-authored work, each author should add their own `Signed-off-by` line.
+
+<!-- QVAC-18048 validation: temporary marker, no-addon SDK-only change, to be reverted before this PR closes -->
