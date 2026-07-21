@@ -1,0 +1,62 @@
+{
+  "name": "tts-cpp",
+  "version-date": "2026-07-17",
+  "description": "LOCAL OVERLAY of tts-cpp built from a working-tree checkout of qvac-ext-lib-whisper.cpp/tts-cpp (adds the CosyVoice3 engine ahead of the registry pin). Set TTS_CPP_LOCAL_SOURCE to the local tts-cpp dir, or it defaults to ../../../qvac-ext-lib-whisper.cpp/tts-cpp. Do NOT publish; drop this overlay once the CosyVoice3 pin lands in qvac-registry-vcpkg.",
+  "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "ggml-speech",
+      "version>=": "2026-07-14"
+    },
+    "mecab",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        { "name": "ggml-speech", "features": ["cuda"] }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration (macOS / iOS)",
+      "dependencies": [
+        { "name": "ggml-speech", "features": ["metal"] }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android / Adreno)",
+      "dependencies": [
+        { "name": "ggml-speech", "features": ["opencl"] }
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        { "name": "ggml-speech", "features": ["vulkan"] }
+      ]
+    }
+  }
+}

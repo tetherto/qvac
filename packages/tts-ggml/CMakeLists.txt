@@ -154,6 +154,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
 )
 
 target_include_directories(
@@ -316,6 +317,7 @@ if(BUILD_TESTING)
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_supertonic_config.cpp
+      addon/tests/test_cosyvoice_config.cpp
       addon/tests/test_time_stretch.cpp
       addon/tests/test_streaming_enhancer.cpp
       addon/tests/test_output_resampler.cpp
@@ -323,6 +325,7 @@ if(BUILD_TESTING)
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp
+      addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
   )
 
   target_include_directories(tts_ggml_tests

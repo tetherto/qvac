@@ -13,6 +13,10 @@ const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
+// CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). Ships as a small set of GGUFs
+// (cosyvoice3-{llm,flow,hift,s3tok,campplus,voices}-*.gguf); a modelDir holding
+// them (or an explicit `files.cosyvoiceModelDir`) routes here.
+const ENGINE_COSYVOICE3 = "cosyvoice3";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -28,6 +32,74 @@ const SUPERTONIC_V3_QUANT_ORDER = [
     "q8_0",
     "q4_0",
 ];
+// The LLM sub-model is the tell for CosyVoice3 modelDir auto-detection.
+const COSYVOICE3_LLM_RE = /^cosyvoice3-llm(-[a-z0-9_]+)?\.gguf$/i;
+// CosyVoice3 instruct2 control vocabulary (cosyvoice/utils/common.py
+// instruct_list). The structured `instruct` option renders to the exact
+// trained instruction string; the native engine wraps it as
+// "You are a helpful assistant. " + <instruction> + "<|endofprompt|>" and
+// drops the LM prompt speech tokens. One control applies per synthesis
+// (the model is trained on single instructions).
+const COSYVOICE_DIALECTS = {
+    cantonese: "广东话",
+    northeastern: "东北话",
+    gansu: "甘肃话",
+    guizhou: "贵州话",
+    henan: "河南话",
+    hubei: "湖北话",
+    hunan: "湖南话",
+    jiangxi: "江西话",
+    minnan: "闽南话",
+    ningxia: "宁夏话",
+    shanxi: "山西话",
+    shaanxi: "陕西话",
+    shandong: "山东话",
+    shanghai: "上海话",
+    sichuan: "四川话",
+    tianjin: "天津话",
+    yunnan: "云南话",
+};
+const COSYVOICE_EMOTIONS = {
+    happy: "请非常开心地说一句话。",
+    sad: "请非常伤心地说一句话。",
+    angry: "请非常生气地说一句话。",
+};
+const COSYVOICE_SPEEDS = {
+    slow: "请用尽可能慢地语速说一句话。",
+    fast: "请用尽可能快地语速说一句话。",
+};
+const COSYVOICE_VOLUMES = {
+    loud: "Please say a sentence as loudly as possible.",
+    soft: "Please say a sentence in a very soft voice.",
+};
+const COSYVOICE_STYLES = {
+    peppa: "我想体验一下小猪佩奇风格，可以吗？",
+    robot: "你可以尝试用机器人的方式解答吗？",
+};
+/**
+ * Render a CosyVoice3 `instruct` option to the trained instruction string.
+ * A raw string passes through (trimmed); the structured form emits exactly one
+ * control by precedence dialect > emotion > speed > volume > style. Returns ""
+ * for no instruction (zero-shot).
+ */
+function renderCosyvoiceInstruct(instruct) {
+    if (instruct == null)
+        return "";
+    if (typeof instruct === "string")
+        return instruct.trim();
+    if (instruct.dialect) {
+        return `请用${COSYVOICE_DIALECTS[instruct.dialect]}表达。`;
+    }
+    if (instruct.emotion)
+        return COSYVOICE_EMOTIONS[instruct.emotion];
+    if (instruct.speed)
+        return COSYVOICE_SPEEDS[instruct.speed];
+    if (instruct.volume)
+        return COSYVOICE_VOLUMES[instruct.volume];
+    if (instruct.style)
+        return COSYVOICE_STYLES[instruct.style];
+    return "";
+}
 function normalizeError(error) {
     return typeof error === "string"
         ? error
@@ -79,6 +151,22 @@ function findSupertonicV3InDir(modelDir) {
     matches.sort((left, right) => rank(left) - rank(right));
     return path.join(modelDir, matches[0]);
 }
+/**
+ * True when `modelDir` contains a CosyVoice3 LLM GGUF (the sub-model that
+ * unambiguously identifies a CosyVoice3 model directory).
+ */
+function dirHasCosyvoice3(modelDir) {
+    if (!modelDir)
+        return false;
+    let entries;
+    try {
+        entries = fs.readdirSync(modelDir);
+    }
+    catch {
+        return false;
+    }
+    return entries.some((name) => COSYVOICE3_LLM_RE.test(name));
+}
 function normalizeGgmlFiles(files) {
     if (files == null || typeof files !== "object")
         return {};
@@ -87,6 +175,14 @@ function normalizeGgmlFiles(files) {
         t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
         s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
         supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
+        // CosyVoice3: either a dedicated modelDir of cosyvoice3-*.gguf files, or
+        // explicit per-component paths. Falls back to the shared `modelDir`.
+        cosyvoiceModelDir: firstNonEmpty(files.cosyvoiceModelDir),
+        cosyvoiceLlmModel: firstNonEmpty(files.cosyvoiceLlmModel, files.cosyvoiceLlmModelPath),
+        cosyvoiceFlowModel: firstNonEmpty(files.cosyvoiceFlowModel, files.cosyvoiceFlowModelPath),
+        cosyvoiceHiftModel: firstNonEmpty(files.cosyvoiceHiftModel, files.cosyvoiceHiftModelPath),
+        cosyvoiceS3tokModel: firstNonEmpty(files.cosyvoiceS3tokModel, files.cosyvoiceS3tokModelPath),
+        cosyvoiceCampplusModel: firstNonEmpty(files.cosyvoiceCampplusModel, files.cosyvoiceCampplusModelPath),
         voicesDir: firstNonEmpty(files.voicesDir),
         lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
         lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -95,18 +191,26 @@ function normalizeGgmlFiles(files) {
     };
 }
 function detectEngineType(engine, files) {
-    if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
+    if (engine === ENGINE_CHATTERBOX ||
+        engine === ENGINE_SUPERTONIC ||
+        engine === ENGINE_COSYVOICE3) {
         return engine;
     }
     if (engine != null && engine !== "") {
-        throw new Error("tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " +
-            `(got '${String(engine)}')`);
+        throw new Error("tts-ggml: 'engine' option must be 'chatterbox', 'supertonic' or " +
+            `'cosyvoice3' (got '${String(engine)}')`);
+    }
+    // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
+    if (files.cosyvoiceModelDir || files.cosyvoiceLlmModel) {
+        return ENGINE_COSYVOICE3;
     }
     if (files.t3Model || files.s3genModel)
         return ENGINE_CHATTERBOX;
     if (files.supertonicModel)
         return ENGINE_SUPERTONIC;
     if (files.modelDir) {
+        if (dirHasCosyvoice3(files.modelDir))
+            return ENGINE_COSYVOICE3;
         const hasChatterbox = fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_TURBO)) ||
             fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_MTL));
         const hasSupertonic = fileExistsSafe(path.join(files.modelDir, SUPERTONIC_DEFAULT)) ||
@@ -265,6 +369,7 @@ class TTSGgml {
     };
     static ENGINE_CHATTERBOX = ENGINE_CHATTERBOX;
     static ENGINE_SUPERTONIC = ENGINE_SUPERTONIC;
+    static ENGINE_COSYVOICE3 = ENGINE_COSYVOICE3;
     opts;
     exclusiveRun;
     logger;
@@ -282,6 +387,12 @@ class TTSGgml {
     _supertonicModelPath;
     _t3ModelPath;
     _s3genModelPath;
+    _cosyvoiceModelDir;
+    _cosyvoiceLlmModelPath;
+    _cosyvoiceFlowModelPath;
+    _cosyvoiceHiftModelPath;
+    _cosyvoiceS3tokModelPath;
+    _cosyvoiceCampplusModelPath;
     _mecabDictPath;
     _cangjieTsvPath;
     _referenceAudio;
@@ -293,8 +404,11 @@ class TTSGgml {
     _threads;
     _streamChunkTokens;
     _streamFirstChunkTokens;
+    _streamLeftContextTokens;
     _cfmSteps;
     _cfgRate;
+    _promptText;
+    _instruct;
     _voice;
     _steps;
     _speed;
@@ -347,6 +461,18 @@ class TTSGgml {
     }
     _resolveEngineAndModelPaths(files) {
         this._voicesDir = files.voicesDir;
+        if (this._engineType === ENGINE_COSYVOICE3) {
+            // CosyVoice3 discovers its sub-model GGUFs from a model directory; the
+            // native engine resolves the individual components. Explicit
+            // per-component paths win over the directory.
+            this._cosyvoiceModelDir = firstNonEmpty(files.cosyvoiceModelDir, files.modelDir);
+            this._cosyvoiceLlmModelPath = files.cosyvoiceLlmModel;
+            this._cosyvoiceFlowModelPath = files.cosyvoiceFlowModel;
+            this._cosyvoiceHiftModelPath = files.cosyvoiceHiftModel;
+            this._cosyvoiceS3tokModelPath = files.cosyvoiceS3tokModel;
+            this._cosyvoiceCampplusModelPath = files.cosyvoiceCampplusModel;
+            return;
+        }
         if (this._engineType === ENGINE_SUPERTONIC) {
             this._supertonicModelPath = firstNonEmpty(files.supertonicModel, files.modelDir
                 ? resolveSupertonicModelDirPath(files.modelDir)
@@ -373,8 +499,14 @@ class TTSGgml {
         this._threads = options.threads;
         this._streamChunkTokens = options.streamChunkTokens;
         this._streamFirstChunkTokens = options.streamFirstChunkTokens;
+        // CosyVoice3-only: left-context speech tokens carried into each streaming chunk.
+        this._streamLeftContextTokens = options.streamLeftContextTokens;
         this._cfmSteps = options.cfmSteps;
         this._cfgRate = options.cfgRate;
+        // CosyVoice3-only: transcript of the reference audio for zero-shot cloning.
+        this._promptText = options.promptText;
+        // CosyVoice3-only: render the structured/raw instruct2 control to its string.
+        this._instruct = renderCosyvoiceInstruct(options.instruct) || undefined;
         this._voice = firstNonEmpty(options.voice, options.voiceName);
         this._steps = firstNonEmpty(options.steps, options.numInferenceSteps);
         this._speed = options.speed;
@@ -682,9 +814,58 @@ class TTSGgml {
         }
     }
     _buildTtsParams() {
-        return this._engineType === ENGINE_SUPERTONIC
-            ? this._buildSupertonicParams()
-            : this._buildChatterboxParams();
+        if (this._engineType === ENGINE_SUPERTONIC) {
+            return this._buildSupertonicParams();
+        }
+        if (this._engineType === ENGINE_COSYVOICE3) {
+            return this._buildCosyvoiceParams();
+        }
+        return this._buildChatterboxParams();
+    }
+    _buildCosyvoiceParams() {
+        const parameters = {
+            engineType: ENGINE_COSYVOICE3,
+            cosyvoiceModelDir: this._cosyvoiceModelDir || "",
+            language: this._config.language || "en",
+        };
+        if (this._cosyvoiceLlmModelPath) {
+            parameters.cosyvoiceLlmModelPath = this._cosyvoiceLlmModelPath;
+        }
+        if (this._cosyvoiceFlowModelPath) {
+            parameters.cosyvoiceFlowModelPath = this._cosyvoiceFlowModelPath;
+        }
+        if (this._cosyvoiceHiftModelPath) {
+            parameters.cosyvoiceHiftModelPath = this._cosyvoiceHiftModelPath;
+        }
+        if (this._cosyvoiceS3tokModelPath) {
+            parameters.cosyvoiceS3tokModelPath = this._cosyvoiceS3tokModelPath;
+        }
+        if (this._cosyvoiceCampplusModelPath) {
+            parameters.cosyvoiceCampplusModelPath = this._cosyvoiceCampplusModelPath;
+        }
+        if (this._referenceAudio != null) {
+            parameters.referenceAudio = this._referenceAudio;
+        }
+        if (this._promptText != null) {
+            parameters.promptText = String(this._promptText);
+        }
+        if (this._instruct)
+            parameters.instruct = this._instruct;
+        if (this._voice)
+            parameters.voice = this._voice;
+        this._assignCommonNativeParams(parameters);
+        if (this._cfmSteps != null)
+            parameters.cfmSteps = this._cfmSteps | 0;
+        if (this._streamChunkTokens != null) {
+            parameters.streamChunkTokens = this._streamChunkTokens | 0;
+        }
+        if (this._streamFirstChunkTokens != null) {
+            parameters.streamFirstChunkTokens = this._streamFirstChunkTokens | 0;
+        }
+        if (this._streamLeftContextTokens != null) {
+            parameters.streamLeftContextTokens = this._streamLeftContextTokens | 0;
+        }
+        return parameters;
     }
     _buildChatterboxParams() {
         const parameters = {
