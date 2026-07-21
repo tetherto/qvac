@@ -68,10 +68,11 @@ jobs:
       # writable here (the runner user's home is /Users/actions-runner-*). The
       # runners already have Python; make a venv from it so installs don't touch
       # the system interpreter. Fails loudly if the system Python is < 3.10.
-      # Per infra: don't run any toolchain "setup" on these runners -- Python,
-      # Node, and bun are already provisioned. Use the present Python (a venv
-      # off it keeps installs out of the system interpreter). Fails loudly if
-      # the system Python is < 3.10.
+      # Per infra, don't run actions/setup-python on these runners: Python is
+      # already provisioned, and setup-python hard-fails anyway (its
+      # python-versions tarball hardcodes an unwritable /Users/runner toolcache
+      # path). Use the present Python via a venv (keeps installs out of the
+      # system interpreter). Fails loudly if the system Python is < 3.10.
       - name: Set up Python (runner's system Python)
         run: |
           set -e
@@ -82,8 +83,16 @@ jobs:
           if [ -x ".venv/bin/python" ]; then PYBIN="$(pwd)/.venv/bin/python"; else PYBIN="$(pwd)/.venv/Scripts/python"; fi
           echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
           "$PYBIN" -m pip install --upgrade pip
-          node --version
-          bun --version
+      # node/bun are needed to build the worker. Unlike setup-python these
+      # actions work on the runners (they find the pre-cached tool, no download),
+      # and bun in particular is not otherwise on PATH. Same actions the SDK's
+      # own desktop e2e (test-node-sdk.yml) uses on these runners.
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
 
       # Shared model cache, keyed on the same registry the SDK e2e keys on, so
       # it invalidates in lockstep. Cross-OS so the three platforms share it.
