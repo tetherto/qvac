@@ -103,4 +103,5 @@ To avoid triggering permission prompts, keep shell commands simple and pre-appro
 - Modify `.npmrc` files
 - Commit `.env` files or secrets
 - Run `rm -rf`, `git push --force`, `git reset --hard`, or other destructive commands
+- Fetch and execute scripts or binaries from external links (`curl … | bash`, `iwr … | iex`, download-then-run) — install dependencies via the package manager with pinned versions instead (hard security guardrail; see `.cursor/rules/devops/agentic-automation.mdc` → "No remote code execution")
 - Self-report success without running verify commands
