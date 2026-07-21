@@ -24,7 +24,7 @@ import {
   diffusionImg2imgInvalidStrength,
   diffusionStreaming,
   diffusionStreamingProgress,
-  diffusionStatsPresent,
+  diffusionStatsValid,
   diffusionFaAccepted,
   diffusionFaDisabledAccepted,
   diffusionFusionFlux2Basic,
@@ -98,7 +98,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     [diffusionEsrganUpscaleX4.testId]: this.runBasic.bind(this, 'diffusion-esrgan'),
     [diffusionSeedReproducibility.testId]: this.seedReproducibility.bind(this),
     [diffusionStreamingProgress.testId]: this.streamingProgress.bind(this),
-    [diffusionStatsPresent.testId]: this.statsPresent.bind(this),
+    [diffusionStatsValid.testId]: this.statsValid.bind(this),
     [diffusionImg2imgVsTxt2imgBaseline.testId]: this.img2imgVsTxt2imgBaseline.bind(this),
     [diffusionFusionFlux2Basic.testId]: this.fusionFlux2Basic.bind(this),
     [diffusionStandaloneUpscalerX4.testId]: this.standaloneUpscalerX4.bind(this),
@@ -198,7 +198,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     }
   }
 
-  async statsPresent(params: DiffusionParams): Promise<TestResult> {
+  async statsValid(params: DiffusionParams): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('diffusion')
 
     try {
@@ -210,12 +210,48 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
         return { passed: false, output: 'Stats missing from response' }
       }
 
-      const passed =
-        typeof finalStats.totalSteps === 'number' ||
-        typeof finalStats.generationMs === 'number' ||
-        typeof finalStats.modelLoadMs === 'number'
+      const {
+        generationMs,
+        conditionerMs,
+        denoiseMs,
+        vaeMs,
+        postProcessMs,
+        stepsPerSecond,
+        totalSteps
+      } = finalStats
 
-      return { passed, output: `Stats present: ${JSON.stringify(finalStats)}` }
+      if (
+        typeof generationMs !== 'number' ||
+        typeof conditionerMs !== 'number' ||
+        conditionerMs < 0 ||
+        typeof denoiseMs !== 'number' ||
+        denoiseMs < 0 ||
+        typeof vaeMs !== 'number' ||
+        vaeMs < 0 ||
+        typeof postProcessMs !== 'number' ||
+        postProcessMs < 0 ||
+        typeof stepsPerSecond !== 'number' ||
+        stepsPerSecond <= 0 ||
+        typeof totalSteps !== 'number' ||
+        totalSteps <= 0
+      ) {
+        return {
+          passed: false,
+          output: `Phase stats missing or invalid: ${JSON.stringify(finalStats)}`
+        }
+      }
+
+      const phaseTotal = conditionerMs + denoiseMs + vaeMs + postProcessMs
+      // Mirrors @qvac/diffusion-cpp's invariant test. generationMs is integer-valued,
+      // while phase timings retain fractional milliseconds.
+      const toleranceMs = Math.max(2, generationMs * 0.01)
+      const phaseDeltaMs = Math.abs(phaseTotal - generationMs)
+      const passed = phaseDeltaMs <= toleranceMs
+
+      return {
+        passed,
+        output: `Phase stats: ${JSON.stringify(finalStats)}, phase delta: ${phaseDeltaMs.toFixed(2)}ms`
+      }
     } catch (error) {
       return this.fail('Stats', error)
     }

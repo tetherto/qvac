@@ -1,11 +1,15 @@
 import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
 import type { CacheMessage } from './types'
 
-function normalizeAssistantMessage(message: CacheMessage): CacheMessage {
-  if (message.role !== 'assistant') {
-    return message
+function normalizeCacheMessage(message: CacheMessage): CacheMessage {
+  const { attachments, ...normalized } = message
+  if (message.role === 'assistant') {
+    normalized.content = normalizeAssistantCacheContent(message.content)
   }
-  return { ...message, content: normalizeAssistantCacheContent(message.content) }
+  return {
+    ...normalized,
+    ...(attachments && attachments.length > 0 ? { attachments } : {})
+  }
 }
 
 export function getAutoCacheLookupHistory(currentHistory: CacheMessage[]): CacheMessage[] {
@@ -13,7 +17,7 @@ export function getAutoCacheLookupHistory(currentHistory: CacheMessage[]): Cache
     return []
   }
 
-  return currentHistory.slice(0, -1).map(normalizeAssistantMessage)
+  return currentHistory.slice(0, -1).map(normalizeCacheMessage)
 }
 
 export function buildAutoCacheSaveHistory(
@@ -21,10 +25,10 @@ export function buildAutoCacheSaveHistory(
   assistantResponse: string
 ): CacheMessage[] {
   return [
-    ...currentHistory,
-    {
+    ...currentHistory.map(normalizeCacheMessage),
+    normalizeCacheMessage({
       role: 'assistant',
-      content: normalizeAssistantCacheContent(assistantResponse)
-    }
+      content: assistantResponse
+    })
   ]
 }
