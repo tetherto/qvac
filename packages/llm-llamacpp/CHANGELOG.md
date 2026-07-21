@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.38.0] - 2026-07-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9341.1.6` → `9840.0.0` (llama.cpp b9840 rebase; no API change for this package).
+
+### Pull Requests
+
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+
 ## [0.37.1] - 2026-07-18
 
 This patch release hardens reasoning-cache rollback when generation is truncated before a reasoning span closes. It covers both explicit `n_predict` limits and continuous-batching per-sequence slot limits, preserving the last known-good cache state instead of attempting unsafe reasoning compaction.

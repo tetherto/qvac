@@ -30,6 +30,19 @@
  *   QVAC_TTS_GGML_BENCHMARK_ENGINE       chatterbox | chatterbox-mtl | supertonic | supertonic-mtl | supertonic3
  *                                        (default: chatterbox)
  *   QVAC_TTS_GGML_BENCHMARK_VARIANT      q4 | q8 | f16 | mixed       (default: q4, label only)
+ *   QVAC_TTS_GGML_BENCHMARK_ENHANCER     none | lavasr               (default: none)
+ *                                        `lavasr` layers the LavaSR 48 kHz
+ *                                        bandwidth-extension enhancer on top of
+ *                                        the engine; GGUF fetched from the QVAC
+ *                                        registry — a published tier hard-fails if
+ *                                        unresolved, an unpublished tier soft-skips
+ *                                        (see lavasrResolve)
+ *   QVAC_TTS_GGML_BENCHMARK_DENOISER     none | lavasr               (default: none)
+ *                                        `lavasr` runs the LavaSR UL-UNAS denoiser
+ *                                        before the engine output (independent of
+ *                                        the enhancer axis); GGUF fetched from the
+ *                                        QVAC registry — published, so it hard-fails
+ *                                        if unresolved (see lavasrResolve)
  *   QVAC_TTS_GGML_BENCHMARK_USE_GPU      1 | true | 0 | false        (default: false)
  *   QVAC_TTS_GGML_BENCHMARK_BACKEND      cpu | metal | vulkan | cuda | opencl
  *                                        (free-form hint; defaults derived from
@@ -56,8 +69,15 @@ const {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
-  supertonic3QuantFromVariant
+  supertonic3QuantFromVariant,
+  normalizeEnhancer,
+  normalizeDenoiser,
+  normalizeEnhancerVariant,
+  enhancerTag,
+  denoiserTag
 } = require('../utils/downloadModel')
+const { resolveEnhancer, resolveDenoiser } = require('../utils/lavasrResolve')
+const { buildBenchmarkArtifactFileName } = require('../utils/artifactName')
 const {
   readRssBytes,
   createMemorySampler,
@@ -125,7 +145,15 @@ function buildCanonicalReport(settings, summary, backend) {
   const ep = useGPU ? 'gpu' : 'cpu'
   const engine = settings.engine
   const variant = settings.variant
-  const testLabel = `[${ep.toUpperCase()}] ${engine} ${variant} ${backend}`
+  const enhancer = settings.enhancer || 'none'
+  const enhancerVariant = settings.enhancerVariant || 'f16'
+  const denoiser = settings.denoiser || 'none'
+  // Append the enhancer / denoiser tokens only when enabled so existing 5-token
+  // labels (`[CPU] engine variant backend`) parse unchanged in the aggregator.
+  // Distinct tokens (`lavasr` / `denoise`) keep the two axes unambiguous.
+  const lavasrTokens = [enhancerTag(enhancer), denoiserTag(denoiser)].filter(Boolean)
+  const lavasrSuffix = lavasrTokens.length ? ` ${lavasrTokens.join(' ')}` : ''
+  const testLabel = `[${ep.toUpperCase()}] ${engine} ${variant} ${backend}${lavasrSuffix}`
 
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -150,6 +178,9 @@ function buildCanonicalReport(settings, summary, backend) {
       {
         test: testLabel,
         execution_provider: ep,
+        enhancer,
+        enhancerVariant,
+        denoiser,
         metrics: {
           real_time_factor: typeof rtf.mean === 'number' ? rtf.mean : null,
           rtf_p50: typeof rtf.p50 === 'number' ? rtf.p50 : null,
@@ -212,6 +243,15 @@ function getSettings() {
     throw new Error(`Invalid benchmark variant: ${variant}. Valid: ${VALID_VARIANTS.join(', ')}`)
   }
 
+  const enhancer = normalizeEnhancer(getEnv('QVAC_TTS_GGML_BENCHMARK_ENHANCER'))
+  const denoiser = normalizeDenoiser(getEnv('QVAC_TTS_GGML_BENCHMARK_DENOISER'))
+  // Enhancer quant tier (f16 default | f32 | q8_0). Only meaningful when
+  // enhancer=lavasr; picks which enhancer GGUF the registry fetch resolves.
+  // Validated here so a typo fails loudly.
+  const enhancerVariant = normalizeEnhancerVariant(
+    getEnv('QVAC_TTS_GGML_BENCHMARK_ENHANCER_VARIANT')
+  )
+
   const numThreadsRaw = getEnv('QVAC_TTS_GGML_BENCHMARK_NUM_THREADS') || ''
   const numThreadsParsed = Number.parseInt(numThreadsRaw, 10)
   const numThreads =
@@ -220,6 +260,17 @@ function getSettings() {
   return {
     engine,
     variant,
+    enhancer,
+    denoiser,
+    enhancerVariant,
+    // Optional registry-path override (e.g. to pull a one-off enhancer build);
+    // empty uses the tier resolved from enhancerVariant in ensureLavaSREnhancerGguf.
+    enhancerRegistryPath: getEnv('LAVASR_ENHANCER_REGISTRY_PATH') || '',
+    enhancerRegistrySource: getEnv('LAVASR_ENHANCER_REGISTRY_SOURCE') || '',
+    // Same override for the denoiser leg (e.g. the fp32 build); empty uses the
+    // baked-in default in ensureLavaSRDenoiserGguf.
+    denoiserRegistryPath: getEnv('LAVASR_DENOISER_REGISTRY_PATH') || '',
+    denoiserRegistrySource: getEnv('LAVASR_DENOISER_REGISTRY_SOURCE') || '',
     useGPU: getEnvBoolean('QVAC_TTS_GGML_BENCHMARK_USE_GPU', false),
     backendHint: getEnv('QVAC_TTS_GGML_BENCHMARK_BACKEND') || '',
     deviceLabel: getEnv('QVAC_TTS_GGML_BENCHMARK_DEVICE') || '',
@@ -256,15 +307,7 @@ function resolveBackend(platformName, useGPU, backendHint) {
 }
 
 function getArtifactFileName(settings) {
-  const parts = [
-    'rtf-benchmark',
-    platformArch,
-    settings.engine,
-    settings.variant,
-    settings.useGPU ? 'gpu' : 'cpu'
-  ]
-  if (settings.label) parts.push(settings.label)
-  return `${parts.join('-')}.json`
+  return buildBenchmarkArtifactFileName('rtf-benchmark', platformArch, settings)
 }
 
 function nowMs() {
@@ -384,6 +427,21 @@ async function loadModelForEngine(settings) {
   const modelsDir = path.join(baseDir, 'models')
   const threadOpts = settings.numThreads !== undefined ? { threads: settings.numThreads } : {}
 
+  const enhancer = await resolveEnhancer(settings, baseDir)
+  if (enhancer.skip) return { skip: true, skipReason: enhancer.skipReason }
+  const denoiser = await resolveDenoiser(settings, baseDir)
+  if (denoiser.skip) return { skip: true, skipReason: denoiser.skipReason }
+  // The enhancer / denoiser GGUFs load alongside the engine, so fold them into
+  // the model options + the on-disk size accounting when present.
+  const lavasrOpts = {
+    ...(enhancer.path ? { lavasrEnhancerPath: enhancer.path } : {}),
+    ...(denoiser.path ? { lavasrDenoiserPath: denoiser.path } : {})
+  }
+  const lavasrFiles = [
+    ...(enhancer.path ? [enhancer.path] : []),
+    ...(denoiser.path ? [denoiser.path] : [])
+  ]
+
   if (settings.engine === 'chatterbox') {
     const download = await ensureChatterboxModels({ targetDir: modelsDir })
     if (!download.success) throw new Error('Chatterbox GGUFs unavailable (registry fetch failed)')
@@ -392,13 +450,15 @@ async function loadModelForEngine(settings) {
       modelDir: dir,
       language: 'en',
       useGPU: settings.useGPU,
-      ...threadOpts
+      ...threadOpts,
+      ...lavasrOpts
     })
     return {
       model,
       modelFiles: [
         path.join(dir, 'chatterbox-t3-turbo.gguf'),
-        path.join(dir, 'chatterbox-s3gen.gguf')
+        path.join(dir, 'chatterbox-s3gen.gguf'),
+        ...lavasrFiles
       ]
     }
   }
@@ -414,13 +474,15 @@ async function loadModelForEngine(settings) {
       s3genModelPath: path.join(dir, 'chatterbox-s3gen-mtl.gguf'),
       language: 'es',
       useGPU: settings.useGPU,
-      ...threadOpts
+      ...threadOpts,
+      ...lavasrOpts
     })
     return {
       model,
       modelFiles: [
         path.join(dir, 'chatterbox-t3-mtl.gguf'),
-        path.join(dir, 'chatterbox-s3gen-mtl.gguf')
+        path.join(dir, 'chatterbox-s3gen-mtl.gguf'),
+        ...lavasrFiles
       ]
     }
   }
@@ -436,9 +498,10 @@ async function loadModelForEngine(settings) {
       voice: 'F1',
       language: 'es',
       useGPU: settings.useGPU,
-      ...threadOpts
+      ...threadOpts,
+      ...lavasrOpts
     })
-    return { model, modelFiles: [supertonicPath] }
+    return { model, modelFiles: [supertonicPath, ...lavasrFiles] }
   }
 
   if (settings.engine === 'supertonic3') {
@@ -453,9 +516,10 @@ async function loadModelForEngine(settings) {
       voice: 'F1',
       language: 'en',
       useGPU: settings.useGPU,
-      ...threadOpts
+      ...threadOpts,
+      ...lavasrOpts
     })
-    return { model, modelFiles: [supertonicPath] }
+    return { model, modelFiles: [supertonicPath, ...lavasrFiles] }
   }
 
   const download = await ensureSupertonicModel({ targetDir: modelsDir })
@@ -468,9 +532,10 @@ async function loadModelForEngine(settings) {
     voice: 'F1',
     language: 'en',
     useGPU: settings.useGPU,
-    ...threadOpts
+    ...threadOpts,
+    ...lavasrOpts
   })
-  return { model, modelFiles: [supertonicPath] }
+  return { model, modelFiles: [supertonicPath, ...lavasrFiles] }
 }
 
 // All Supertonic tiers (v1 / v2-mtl / v3) run through the Supertonic runner;
@@ -500,6 +565,10 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
   console.log(`  Platform:       ${platformArch}`)
   console.log(`  Engine:         ${settings.engine}`)
   console.log(`  Variant:        ${settings.variant}`)
+  console.log(
+    `  Enhancer:       ${settings.enhancer}${settings.enhancer === 'lavasr' ? ` (${settings.enhancerVariant})` : ''}`
+  )
+  console.log(`  Denoiser:       ${settings.denoiser}`)
   console.log(`  GPU requested:  ${settings.useGPU}`)
   console.log(`  Backend:        ${backend}`)
   if (settings.deviceLabel) console.log(`  Device label:   ${settings.deviceLabel}`)
@@ -521,14 +590,20 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
   const loadStart = nowMs()
   let model
   let modelFiles = []
+  let loaded
   try {
-    const loaded = await loadModelForEngine(settings)
-    model = loaded.model
-    modelFiles = loaded.modelFiles || []
+    loaded = await loadModelForEngine(settings)
   } catch (err) {
     t.fail(`Model load failed: ${err.message}`)
     return
   }
+  if (loaded && loaded.skip) {
+    t.comment(loaded.skipReason || 'benchmark configuration unavailable')
+    t.pass(`skipped — ${loaded.skipReason || 'unavailable'}`)
+    return
+  }
+  model = loaded.model
+  modelFiles = loaded.modelFiles || []
   const loadMs = nowMs() - loadStart
   const rssAfterLoad = readRssBytes()
   const modelSizeBytes = collectFilesSizeBytes(modelFiles)
@@ -718,6 +793,9 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
       model: {
         type: settings.engine,
         variant: settings.variant,
+        enhancer: settings.enhancer,
+        enhancerVariant: settings.enhancerVariant,
+        denoiser: settings.denoiser,
         sizeBytes: modelSizeBytes
       },
       labels: {
@@ -735,12 +813,18 @@ test('RTF benchmark: GGML TTS on CI device', { timeout: 1800000 }, async (t) => 
         benchmarkRuns: settings.numRuns,
         useGPU: settings.useGPU,
         variant: settings.variant,
+        enhancer: settings.enhancer,
+        enhancerVariant: settings.enhancerVariant,
+        denoiser: settings.denoiser,
         modelLoadMs: loadMs,
         numThreads: settings.numThreads !== undefined ? settings.numThreads : null
       },
       requested: {
         engine: settings.engine,
         variant: settings.variant,
+        enhancer: settings.enhancer,
+        enhancerVariant: settings.enhancerVariant,
+        denoiser: settings.denoiser,
         useGPU: settings.useGPU,
         backendHint: settings.backendHint,
         deviceLabel: settings.deviceLabel,

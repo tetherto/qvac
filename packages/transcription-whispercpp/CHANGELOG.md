@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A malformed audio buffer whose byte length is not a multiple of 4 (`f32le`) no longer poisons the batch transcription queue. The buffered audio is now drained when a job is finalized, so the bad request fails on its own and later well-formed `transcribe` calls on the same model recover instead of repeatedly failing until the process restarts ([tetherto/qvac#3221](https://github.com/tetherto/qvac/issues/3221)).
+
+## [0.12.1] - 2026-07-20
+
 ### Removed
 
 - **Breaking:** the `detect_language` whisper config parameter. It was
@@ -37,11 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrated the published wrapper sources to TypeScript while preserving the
+  existing CommonJS entrypoints and package exports. Generated declarations
+  are now rebuilt and freshness-checked during validation and publishing.
 - Consolidated scattered streaming/VAD defaults into named configuration
   objects, and split large C++/JS functions (and their inlined loops) into
   smaller named helpers per the team coding standards. These are internal
   refactors with no public API change.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`whisper-cpp` override 1.9.1#3, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (base f16 mean RTF 0.332 -> 0.097, base q8_0 0.127 -> 0.063, small f16 1.345 -> 0.343 on ubuntu-24.04-arm). The addon now loads the dynamically-loadable ggml backends on linux-arm64 (previously Android-only).
+- Bumped the `whisper-cpp` override from `1.9.1#3` to `1.9.1#4` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), consuming the QVAC-21623 Adreno OpenCL whisper base/small q8_0 decode optimization: `1.9.1#4` pins `tetherto/qvac-ext-lib-whisper.cpp` master `d95e742b` ([#91](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/91), fused-QKV decoder repack + vocab-logits slice) and floors `ggml-speech` to `2026-07-15`, which pins `tetherto/qvac-ext-ggml` speech `d7e27ac7` ([#42](https://github.com/tetherto/qvac-ext-ggml/pull/42), ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM; FA-on-GPU decode routing opt-in via `GGML_OPENCL_FA_ADRENO`). Registry baseline unchanged; the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical).
 
 ## [0.12.0] - 2026-07-14
 
