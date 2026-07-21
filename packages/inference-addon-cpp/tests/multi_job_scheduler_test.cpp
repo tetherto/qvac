@@ -602,6 +602,19 @@ protected:
     scheduler_->start(outputQueue_);
   }
 
+  /// Build a scheduler whose model exposes only per-job cancellation (cancel =
+  /// nullptr), the shape of a multi-job model with per-job contexts and no
+  /// global stop switch, so cancelAll/teardown must reach jobs via cancelById.
+  void buildNoWholeModelCancel(
+      unsigned maxConcurrency, std::chrono::milliseconds processTime) {
+    model_ = std::make_unique<ConcurrentTestModel>(processTime);
+    callback_ = std::make_unique<MockOutputCallback>();
+    outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+    scheduler_ = std::make_unique<MultiJobScheduler>(
+        model_.get(), maxConcurrency, /*cancel=*/nullptr, model_.get(), 0);
+    scheduler_->start(outputQueue_);
+  }
+
   void TearDown() override {
     scheduler_.reset();
     outputQueue_.reset();
@@ -1100,6 +1113,53 @@ TEST_F(MultiJobSchedulerTest, CancelJobsWithoutCancelByIdUsesWholeModelCancel) {
   }
   EXPECT_EQ(model_->active(), 0)
       << "the fallback must still stop the in-flight snapshot jobs";
+}
+
+// (k1d) cancelAll on a model with only per-job cancellation (cancel = nullptr)
+// falls back to cancelById for each in-flight id — the scheduler owns the id
+// set, so lacking a whole-model cancel must not leave in-flight jobs running.
+TEST_F(MultiJobSchedulerTest, CancelAllWithoutWholeModelCancelUsesCancelById) {
+  constexpr unsigned kConcurrency = 2;
+  buildNoWholeModelCancel(kConcurrency, std::chrono::milliseconds{10000});
+
+  for (unsigned job = 0; job < kConcurrency; ++job) {
+    EXPECT_TRUE(scheduler_->runJob(std::string("job")).has_value());
+  }
+  ASSERT_EQ(
+      waitForActive(*model_, kConcurrency, std::chrono::seconds{2}),
+      static_cast<int>(kConcurrency));
+
+  scheduler_->cancelAll();
+
+  const std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (model_->active() > 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{2});
+  }
+  EXPECT_EQ(model_->active(), 0)
+      << "cancelAll must stop in-flight jobs via cancelById when the model "
+         "has no whole-model cancel";
+}
+
+// (k1e) Teardown with an in-flight job on a cancelById-only model must not
+// wait for the model to finish on its own: the destructor falls back to
+// per-id cancellation before joining its workers.
+TEST_F(MultiJobSchedulerTest, DestructorWithoutWholeModelCancelUsesCancelById) {
+  buildNoWholeModelCancel(1, std::chrono::milliseconds{10000});
+
+  ASSERT_TRUE(scheduler_->runJob(std::string("job")).has_value());
+  ASSERT_EQ(waitForActive(*model_, 1, std::chrono::seconds{2}), 1);
+
+  const std::chrono::steady_clock::time_point start =
+      std::chrono::steady_clock::now();
+  scheduler_.reset();
+  const std::chrono::milliseconds elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - start);
+  EXPECT_LT(elapsed.count(), 5000)
+      << "teardown must interrupt the in-flight job instead of waiting the "
+         "full process time";
 }
 
 // (k2) Dequeue must announce the job to the model (jobStarting) before
