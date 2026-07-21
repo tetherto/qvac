@@ -534,6 +534,10 @@ test('audit-called-out privileged checkouts are pinned to event head SHA', () =>
     sanityChecks,
     /repository:\s+\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}\r?\n\s+ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
   )
+  assert.doesNotMatch(
+    sanityChecks,
+    /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/,
+  )
 })
 
 test('no GitHub Actions checkout/ref input resolves mutable PR head.ref', () => {
