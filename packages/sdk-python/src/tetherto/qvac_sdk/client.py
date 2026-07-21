@@ -107,7 +107,9 @@ def _npm_global_sdk_root() -> Path | None:
 
 def _warn_on_version_mismatch(sdk_root: Path) -> None:
     try:
-        version = json.loads((sdk_root / "package.json").read_text()).get("version")
+        version = json.loads(
+            (sdk_root / "package.json").read_text(encoding="utf-8")
+        ).get("version")
     except (OSError, ValueError):
         return
     if version and version != SDK_VERSION:

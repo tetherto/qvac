@@ -56,9 +56,10 @@ def test_resolve_command_resolves_worker_and_bare_independently(monkeypatch) -> 
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     bare, worker = _resolve_command("/explicit/worker.js", None, "/sdk")
     assert worker == "/explicit/worker.js"
-    assert (
-        bare
-        == f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
+    # Derived paths are OS-native (pathlib), so compare via Path, not a POSIX
+    # string literal -- on Windows the join yields backslashes.
+    assert Path(bare) == Path(
+        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
     )
 
 
@@ -66,10 +67,9 @@ def test_resolve_command_derives_from_sdk_dir(monkeypatch) -> None:
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     bare, worker = _resolve_command(None, None, "/sdk")
-    assert worker == "/sdk/dist/server/worker.js"
-    assert (
-        bare
-        == f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
+    assert Path(worker) == Path("/sdk/dist/server/worker.js")
+    assert Path(bare) == Path(
+        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
     )
 
 
@@ -78,7 +78,7 @@ def test_resolve_command_sdk_dir_env_var(monkeypatch) -> None:
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     monkeypatch.setenv("QVAC_SDK_DIR", "/env-sdk")
     bare, worker = _resolve_command(None, None, None)
-    assert worker == "/env-sdk/dist/server/worker.js"
+    assert Path(worker) == Path("/env-sdk/dist/server/worker.js")
 
 
 def test_resolve_command_raises_with_no_inputs(monkeypatch, tmp_path) -> None:
@@ -102,7 +102,12 @@ def test_resolve_command_uses_managed_worker_cache(monkeypatch, tmp_path) -> Non
     (root / "dist" / "server" / "worker.js").write_text("")
     bare, worker = _resolve_command(None, None, None)
     assert worker == str(root / "dist" / "server" / "worker.js")
-    assert bare.endswith(f"bare-runtime-{_bare_runtime_package_suffix()}/bin/bare")
+    # as_posix() so the tail check is separator-agnostic (backslashes on Windows).
+    assert (
+        Path(bare)
+        .as_posix()
+        .endswith(f"bare-runtime-{_bare_runtime_package_suffix()}/bin/bare")
+    )
 
 
 def test_resolve_command_uses_global_npm_when_present(monkeypatch, tmp_path) -> None:
