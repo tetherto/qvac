@@ -207,21 +207,38 @@ async def test_transcribe_stream_duplex(transport) -> None:
         for i in range(0, len(trailing_silence), bytes_per_chunk)
     ]
 
-    transcribe_request = TranscribeStreamRequest.model_validate(
-        {
-            "type": "transcribeStream",
-            "modelId": model_id,
-            "parakeetStreamingConfig": {"chunkMs": chunk_ms, "emitPartials": True},
-        }
-    )
+    async def _stream_once() -> str:
+        # Fresh request + paced generator per attempt (the generator is
+        # single-use). emitPartials so we accumulate incremental text.
+        request = TranscribeStreamRequest.model_validate(
+            {
+                "type": "transcribeStream",
+                "modelId": model_id,
+                "parakeetStreamingConfig": {
+                    "chunkMs": chunk_ms,
+                    "emitPartials": True,
+                },
+            }
+        )
+        text = ""
+        async for response in transcribe_stream(
+            transport, request, _paced_chunks(chunks, chunk_ms / 1000)
+        ):
+            piece = response.text or (
+                response.segment.text if response.segment else None
+            )
+            if piece:
+                text += piece
+        return text
 
+    # A parakeet streaming session can yield zero events on the first attempt
+    # (a known warm-up quirk the SDK's own runner recovers from via
+    # `recoveryMaxAttempts`); retry a few times before failing.
     text = ""
-    async for response in transcribe_stream(
-        transport, transcribe_request, _paced_chunks(chunks, chunk_ms / 1000)
-    ):
-        piece = response.text or (response.segment.text if response.segment else None)
-        if piece:
-            text += piece
+    for _attempt in range(3):
+        text = await _stream_once()
+        if text.strip():
+            break
     assert text.strip(), "expected real transcript text via the bare_rpc duplex stream"
 
 

@@ -635,15 +635,26 @@ def compare_dirs(fresh: Path, committed: Path) -> bool:
     import filecmp
 
     dcmp = filecmp.dircmp(fresh, committed)
-    ok = not dcmp.left_only and not dcmp.right_only and not dcmp.diff_files
+    ok = not dcmp.left_only and not dcmp.right_only
     for name in dcmp.left_only:
         print(f"missing: {(committed / name).relative_to(PACKAGE_ROOT)}")
     for name in dcmp.right_only:
         print(
             f"unexpected (stale, should be removed): {(committed / name).relative_to(PACKAGE_ROOT)}"
         )
-    for name in dcmp.diff_files:
-        print(f"out of date: {(committed / name).relative_to(PACKAGE_ROOT)}")
+    # Compare common files by newline-normalized content, not filecmp's stat
+    # signature: on Windows a fresh build writes the platform-default CRLF while
+    # the committed tree is LF, so a byte/size comparison would flag every file
+    # as differing on a pure line-ending artifact. The generator's guarantee is
+    # about logical content, so any real drift still fails.
+    for name in dcmp.common_files:
+        fresh_text = (fresh / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+        committed_text = (
+            (committed / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+        )
+        if fresh_text != committed_text:
+            print(f"out of date: {(committed / name).relative_to(PACKAGE_ROOT)}")
+            ok = False
     for name in dcmp.common_dirs:
         ok = compare_dirs(fresh / name, committed / name) and ok
     return ok

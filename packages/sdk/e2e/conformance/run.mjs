@@ -61,7 +61,9 @@ async function runCase(testCase) {
   // snake_case (`n_ctx`), which the JS client's camelCase modelConfig schema
   // rejects. The Python runner covers this case; see cases.json's description.
   if (category === 'completionOrchestrate') {
-    console.log(`SKIP ${testCase.id} (completionOrchestrate is worker-driven; JS orchestrates client-side)`)
+    console.log(
+      `SKIP ${testCase.id} (completionOrchestrate is worker-driven; JS orchestrates client-side)`
+    )
     return
   }
 
