@@ -1,10 +1,15 @@
-"""Production `tetherto.qvac_sdk._transport.Transport` implementation, backed by
+r"""Production `tetherto.qvac_sdk._transport.Transport` implementation, backed by
 `bare_rpc.RPC` (github.com/holepunchto/bare-rpc-python).
 
-Mirrors the JS SDK's `client/rpc/node-rpc-client.ts`: create a Unix
-socket / Windows named pipe, spawn the worker with that path (plus
-`HOME_DIR`) as its JSON config argument, and wire `bare_rpc.RPC` to the
-connection the worker dials back in on.
+Like the JS SDK's `client/rpc/node-rpc-client.ts`, this listens for the
+worker to dial back and wires `bare_rpc.RPC` to that connection. It differs
+in the socket family: the Node client uses a Unix domain socket (or a
+`\\.\pipe\...` named pipe on Windows), but asyncio has no cross-platform
+server for either (`start_unix_server` is Unix-only). So this binds a
+loopback TCP port (`127.0.0.1:0`) on every OS and hands the worker a
+`tcp://127.0.0.1:<port>` endpoint. One code path everywhere, and Windows
+works without a named-pipe server. The port is loopback-only; the worker is
+the caller's own child process.
 
 Locating the Bare binary and the worker's JS entry point is not this
 module's job — `command` is supplied by the caller. This is a thin
@@ -17,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import tempfile
 from collections.abc import AsyncIterable, AsyncIterator, Sequence
 from typing import Any
 
@@ -113,9 +117,6 @@ class BareRpcTransport:
         if cache_dir and "cacheDirectory" not in merged_config:
             merged_config["cacheDirectory"] = cache_dir
         self._config: dict[str, Any] = merged_config
-        self._sock_path = os.path.join(
-            tempfile.gettempdir(), f"qvac-worker-{os.getpid()}-{id(self)}.sock"
-        )
         self._server: asyncio.AbstractServer | None = None
         self._proc: asyncio.subprocess.Process | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -123,9 +124,6 @@ class BareRpcTransport:
         self.rpc: bare_rpc.RPC | None = None
 
     async def connect(self, *, timeout: float = 30) -> BareRpcTransport:
-        if os.path.exists(self._sock_path):
-            os.unlink(self._sock_path)
-
         connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
 
         async def on_client(
@@ -157,10 +155,14 @@ class BareRpcTransport:
                 if self.rpc is not None:
                     self.rpc.close()
 
-        self._server = await asyncio.start_unix_server(on_client, path=self._sock_path)
+        # Loopback TCP on every OS -- see the module docstring for why this is
+        # not a Unix socket. port=0 lets the kernel pick a free port.
+        self._server = await asyncio.start_server(on_client, host="127.0.0.1", port=0)
+        port = self._server.sockets[0].getsockname()[1]
+        endpoint = f"tcp://127.0.0.1:{port}"
 
         spawn_config = json.dumps(
-            {"QVAC_IPC_SOCKET_PATH": self._sock_path, "HOME_DIR": self._home_dir}
+            {"QVAC_IPC_SOCKET_PATH": endpoint, "HOME_DIR": self._home_dir}
         )
         self._proc = await asyncio.create_subprocess_exec(*self._command, spawn_config)
 
@@ -213,8 +215,6 @@ class BareRpcTransport:
                 # Best-effort close: if the server socket doesn't finish within
                 # the timeout, don't block teardown on it.
                 pass
-        if os.path.exists(self._sock_path):
-            os.unlink(self._sock_path)
 
     async def __aenter__(self) -> BareRpcTransport:
         return await self.connect()
