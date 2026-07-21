@@ -153,13 +153,10 @@ TimedDecodeResult timeDecodeStep(
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-    llama_pos configuredNDiscarded,
-    std::optional<ToolsCompactProfile> toolsCompactProfile,
-    DriverFactory driverFactory)
+    llama_pos configuredNDiscarded, DriverFactory driverFactory)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       configuredNDiscarded_(configuredNDiscarded),
-      toolsCompactProfile_(std::move(toolsCompactProfile)),
       driverFactory_(std::move(driverFactory)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
@@ -402,9 +399,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
-  auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
-      tmpParams, *tools, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
+      tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
   // `applyGenerationParamsToContext` above resolves the sampling/n_predict/
   // reasoning_budget overrides into `tmpParams` (which the driver copies),
@@ -424,9 +420,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
       hasKvCacheContext = true;
     }
   }
-
-  driver->validatePromptPolicy(
-      request.chatMsgs, request.tools, request.layout, hasKvCacheContext);
 
   const bool isCacheLoaded =
       driver->loadCache(request.cacheKey, configuredNDiscarded_);
@@ -535,7 +528,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   slots_[seqId].emplace(
       SlotState{
           .streams = std::move(streamsLocal),
-          .tools = std::move(tools),
           .driver = std::move(driver),
           .cacheKey = std::move(request.cacheKey),
           .group = std::move(queued.group),
