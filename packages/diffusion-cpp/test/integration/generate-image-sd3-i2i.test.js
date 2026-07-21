@@ -6,7 +6,7 @@ const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
-const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
+const { recordPerformance, assertPhaseStats, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -168,34 +168,9 @@ safeTest(
       t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
       // ── Runtime stats (per-phase breakdown) ───────────────────────────────────
-      t.ok(stats, 'stats object is populated')
-      t.ok(
-        typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
-        `conditionerMs is a positive number (got ${stats.conditionerMs})`
-      )
-      t.ok(
-        typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
-        `denoiseMs is a positive number (got ${stats.denoiseMs})`
-      )
-      t.ok(
-        typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
-        `vaeMs is a positive number (got ${stats.vaeMs})`
-      )
-      t.ok(
-        typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
-        `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
-      )
-      t.ok(
-        typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
-        `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
-      )
-      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
-      const tolerance = Math.max(2, stats.generationMs * 0.01)
-      const diff = Math.abs(totalPhaseMs - stats.generationMs)
-      t.ok(
-        diff <= tolerance,
-        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
-      )
+      // img2img: effective sampler steps are steps*strength, so the
+      // stepsPerSecond consistency check is intentionally skipped.
+      assertPhaseStats(t, stats)
 
       const outPath = path.join(modelDir, 'generate-image--sd3-i2i-seed3.png')
       fs.writeFileSync(outPath, img)

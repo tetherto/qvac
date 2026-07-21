@@ -6,7 +6,7 @@ const os = require('bare-os')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
-const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
+const { recordPerformance, assertPhaseStats, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const proc = require('bare-process')
 
@@ -17,6 +17,8 @@ const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
 const skip = isMobile || noGpu
+
+const STEPS = 10
 
 const DIFFUSION_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf'
@@ -110,7 +112,7 @@ safeTest(
         const response = await model.run({
           prompt:
             'a red fox in a snowy forest, laying on a rock with a santa hat, cartoon, watercolor',
-          steps: 10,
+          steps: STEPS,
           width: 512,
           height: 512,
           guidance: 3.5,
@@ -158,8 +160,8 @@ safeTest(
       t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
       t.is(
         progressTicks[progressTicks.length - 1].total,
-        10,
-        'Final progress tick reports 10 total steps'
+        STEPS,
+        `Final progress tick reports ${STEPS} total steps`
       )
 
       t.is(images.length, 1, 'Received exactly 1 image')
@@ -170,39 +172,7 @@ safeTest(
       t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
       // ── Runtime stats (per-phase breakdown) ─────────────────────────────────
-      t.ok(stats, 'stats object is populated')
-      t.ok(
-        typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
-        `conditionerMs is a positive number (got ${stats.conditionerMs})`
-      )
-      t.ok(
-        typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
-        `denoiseMs is a positive number (got ${stats.denoiseMs})`
-      )
-      t.ok(
-        typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
-        `vaeMs is a positive number (got ${stats.vaeMs})`
-      )
-      t.ok(
-        typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
-        `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
-      )
-      t.ok(
-        typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
-        `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
-      )
-      t.ok(
-        Math.abs((stats.stepsPerSecond * stats.denoiseMs) / 1000 - 10) < 0.001,
-        'stepsPerSecond is consistent with denoiseMs and the 10 configured steps ' +
-          `(got ${((stats.stepsPerSecond * stats.denoiseMs) / 1000).toFixed(3)})`
-      )
-      const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
-      const tolerance = Math.max(2, stats.generationMs * 0.01)
-      const diff = Math.abs(totalPhaseMs - stats.generationMs)
-      t.ok(
-        diff <= tolerance,
-        `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
-      )
+      assertPhaseStats(t, stats, { expectedSteps: STEPS })
 
       const outPath = path.join(modelDir, 'generate-image--flux2-txt2img-seed42.png')
       fs.writeFileSync(outPath, img)

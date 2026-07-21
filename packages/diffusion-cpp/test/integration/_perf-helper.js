@@ -303,6 +303,84 @@ function recordPerformance(label, stats, extra) {
   return lines.join('\n')
 }
 
+// The four phase timings are exhaustive: conditioner + denoise + vae +
+// postProcess spans the entire generation, so their sum equals generationMs.
+// The ONLY expected drift is integer-millisecond rounding of those five
+// values, which is bounded by timer precision and independent of how long
+// generation runs. Five values each rounded to the nearest ms drift by at
+// most ~2.5ms combined; 5ms leaves headroom for sub-ms scheduler jitter while
+// staying far tighter than a generation-time-relative bound (a 1% bound would
+// allow ~6s of unaccounted time on a 10-minute run).
+const PHASE_SUM_TOLERANCE_MS = 5
+
+// stepsPerSecond is derived from denoiseMs and may be rounded when serialized
+// into response.stats, so reconstructing the step count
+// (stepsPerSecond * denoiseMs / 1000) is not bit-exact. A small relative bound
+// absorbs that rounding while still catching gross errors — e.g. a batch run
+// that fails to count every sampler sequence, which is a ~2x miss.
+const STEPS_CONSISTENCY_REL_TOLERANCE = 0.02
+
+/**
+ * Shared assertion block for the per-phase diffusion runtime stats.
+ * Verifies the five phase fields are present and well-signed, that
+ * stepsPerSecond is consistent with denoiseMs and the effective step count
+ * (when provided), and that the four phase timings sum to generationMs within
+ * timer-rounding precision.
+ *
+ * @param {Object} t                     brittle test handle (`t.ok`)
+ * @param {Object} stats                 response.stats (RuntimeStats / VideoRuntimeStats)
+ * @param {Object} [opts]
+ * @param {number} [opts.expectedSteps]  effective sampler steps; when provided,
+ *   also asserts stepsPerSecond is consistent with denoiseMs. Omit for img2img
+ *   where the effective count depends on strength/scheduler.
+ */
+function assertPhaseStats(t, stats, opts) {
+  const options = opts || {}
+
+  t.ok(stats, 'stats object is populated')
+  if (!stats) return
+
+  t.ok(
+    typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
+    `conditionerMs is a positive number (got ${stats.conditionerMs})`
+  )
+  t.ok(
+    typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
+    `denoiseMs is a positive number (got ${stats.denoiseMs})`
+  )
+  t.ok(
+    typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
+    `vaeMs is a positive number (got ${stats.vaeMs})`
+  )
+  t.ok(
+    typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
+    `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
+  )
+  t.ok(
+    typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
+    `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
+  )
+
+  if (options.expectedSteps != null) {
+    const expected = options.expectedSteps
+    const reconstructed = (stats.stepsPerSecond * stats.denoiseMs) / 1000
+    const tol = Math.max(STEPS_CONSISTENCY_REL_TOLERANCE * expected, 0.1)
+    t.ok(
+      Math.abs(reconstructed - expected) <= tol,
+      `stepsPerSecond is consistent with denoiseMs and the ${expected} configured step(s): ` +
+        `reconstructed ${reconstructed.toFixed(3)} \u2248 ${expected} (tol ${tol.toFixed(3)})`
+    )
+  }
+
+  const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
+  const diff = Math.abs(totalPhaseMs - stats.generationMs)
+  t.ok(
+    diff <= PHASE_SUM_TOLERANCE_MS,
+    `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms \u2248 ${stats.generationMs}ms ` +
+      `(diff ${diff.toFixed(0)}ms, tol ${PHASE_SUM_TOLERANCE_MS}ms)`
+  )
+}
+
 module.exports = {
   platform,
   arch,
@@ -312,6 +390,9 @@ module.exports = {
   isMobile,
   resolveBackend,
   recordPerformance,
+  assertPhaseStats,
+  PHASE_SUM_TOLERANCE_MS,
+  STEPS_CONSISTENCY_REL_TOLERANCE,
   PERF_RUNS,
   WARMUP_RUNS
 }
