@@ -106,7 +106,8 @@ public:
 class ConcurrentTestModel : public model::IModel,
                             public model::IModelMultiprocessor,
                             public model::IModelCancel,
-                            public model::IModelCancelById {
+                            public model::IModelCancelById,
+                            public model::IModelJobLifecycle {
   const std::chrono::milliseconds processTime_;
 
   mutable std::mutex mtx_;
@@ -175,6 +176,10 @@ public:
     std::lock_guard lock(self->mtx_);
     self->cancelledIds_.insert(id);
   }
+
+  /// Satisfies the ctor's cancelById-requires-lifecycle contract. Nothing to
+  /// register: this fake's cancelById accepts ids it has never seen.
+  void jobStarting(JobId /*id*/) override {}
 
   int peakActive() const {
     std::lock_guard lock(mtx_);
@@ -1521,6 +1526,35 @@ TEST(MultiJobSchedulerCtorTest, RejectsBadArguments) {
   EXPECT_THROW(
       MultiJobScheduler(&model, 0, &model, &model, 0),
       std::invalid_argument);
+}
+
+/// Model shape the ctor must refuse when wired with cancelById: per-job
+/// cancellation without the jobStarting(id) lifecycle hook, so a cancel
+/// arriving between dequeue and the model's own registration could no-op.
+struct NoLifecycleModel : model::IModel,
+                          model::IModelMultiprocessor,
+                          model::IModelCancelById {
+  std::string getName() const override { return "NoLifecycleModel"; }
+  RuntimeStats runtimeStats() const override { return RuntimeStats{}; }
+  std::any process(const std::any& input) override { return input; }
+  std::any process(const std::any& input, JobId /*id*/) override {
+    return input;
+  }
+  void cancelById(JobId /*id*/) const override {}
+};
+
+// (s2) The ctor contract for the lost-cancel window: cancelById without
+// IModelJobLifecycle is refused up front — cancelById() may no-op for ids the
+// model has not registered yet, so only the jobStarting(id) announcement makes
+// per-job cancel race-free. Without lifecycle the model must not wire
+// cancelById (passing nullptr instead stays valid).
+TEST(MultiJobSchedulerCtorTest, RejectsCancelByIdWithoutLifecycle) {
+  NoLifecycleModel model;
+  EXPECT_THROW(
+      MultiJobScheduler(&model, 2, /*cancel=*/nullptr, &model, 0),
+      std::invalid_argument);
+  EXPECT_NO_THROW(
+      MultiJobScheduler(&model, 2, /*cancel=*/nullptr, /*cancelById=*/nullptr, 0));
 }
 
 // (t) Cancelling a MIDDLE queued job while several wait: the queued_/

@@ -262,6 +262,11 @@ public:
   /// @throws std::invalid_argument on a null @p multiprocessor or a zero
   /// @p maxConcurrency — zero workers could never drain an admitted job, so
   /// accepting either would only fail later, off in a worker or as a hang.
+  /// Also thrown when @p cancelById is wired but the model does not implement
+  /// IModelJobLifecycle: cancelById() may no-op for ids the model does not
+  /// know yet, so without the jobStarting(id) announcement a cancel landing
+  /// between dequeue and the model's own registration is silently lost.
+  /// Failing construction turns that race into an immediate wiring error.
   MultiJobScheduler(
       model::IModelMultiprocessor* multiprocessor, unsigned maxConcurrency,
       model::IModelCancel* cancel, model::IModelCancelById* cancelById,
@@ -275,6 +280,12 @@ public:
     }
     if (maxConcurrency_ == 0) {
       throw std::invalid_argument("maxConcurrency must be > 0");
+    }
+    if (cancelById_ != nullptr && lifecycle_ == nullptr) {
+      throw std::invalid_argument(
+          "cancelById requires the model to implement IModelJobLifecycle: "
+          "without jobStarting(id) a cancel can land between dequeue and the "
+          "model's own registration and silently no-op");
     }
   }
 
