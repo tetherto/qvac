@@ -99,12 +99,14 @@ test('Multiple writers replicate through Autobase', async (t) => {
       key: writer2.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === true, 15000)
 
     await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, {
       key: writer3.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer3.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer3.service.base.isIndexer === true, 15000)
 
     // Writer1 adds a model - using real HuggingFace URL
@@ -448,6 +450,7 @@ test('deleteModel throws for non-existent model', async (t) => {
     await ensureIndexer(ctx.service)
 
     await t.exception(
+      // lunte-disable-next-line require-await
       async () => ctx.service.deleteModel({ path: 'non/existent/model', source: 's3' }),
       /Model not found/,
       'throws for non-existent model'
@@ -634,6 +637,7 @@ test('addModel extracts GGUF metadata for .gguf files', async (t) => {
 async function waitForConnection(swarm1, swarm2) {
   await swarm1.flush()
   await swarm2.flush()
+  // lunte-disable-next-line require-await
   await waitFor(async () => {
     return swarm1.connections.size > 0 && swarm2.connections.size > 0
   }, 10000)
@@ -656,5 +660,6 @@ async function flushAutobases(...bases) {
 async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }

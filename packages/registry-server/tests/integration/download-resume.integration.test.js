@@ -65,6 +65,7 @@ async function cleanupService({ service, store, swarm }) {
 async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }
 
@@ -145,6 +146,7 @@ async function createTestClient(t, serviceCtx, bootstrap, storage) {
     _checkBlobProgress: proto._checkBlobProgress,
     _getBlobsCore: proto._getBlobsCore.bind({ corestore, logger: noopLogger }),
 
+    // lunte-disable-next-line require-await
     async ready() {},
 
     async getModel(modelPath, source) {
@@ -158,8 +160,9 @@ async function createTestClient(t, serviceCtx, bootstrap, storage) {
 
       const model = await this.getModel(modelPath, source)
       if (!model) throw new Error('Model not found')
-      if (!model.blobBinding || !model.blobBinding.coreKey)
+      if (!model.blobBinding || !model.blobBinding.coreKey) {
         throw new Error('Model missing blob binding')
+      }
 
       const { core, blobs } = await this._getBlobsCore(model.blobBinding.coreKey)
 

@@ -9,11 +9,13 @@ const VALID_PAYLOAD = {
   licenseId: 'Apache-2.0'
 }
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema accepts minimal valid payload', async (t) => {
   const result = addModelRequestSchema.safeParse(VALID_PAYLOAD)
   t.ok(result.success)
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema accepts full valid payload', async (t) => {
   const result = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -31,6 +33,7 @@ test('addModelRequestSchema accepts full valid payload', async (t) => {
   t.ok(result.success)
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema rejects unknown fields (.strict)', async (t) => {
   const result = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -44,6 +47,7 @@ test('addModelRequestSchema rejects unknown fields (.strict)', async (t) => {
   )
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema rejects missing required fields', async (t) => {
   for (const field of ['source', 'engine', 'licenseId']) {
     const payload = { ...VALID_PAYLOAD }
@@ -53,6 +57,7 @@ test('addModelRequestSchema rejects missing required fields', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema rejects empty required fields', async (t) => {
   for (const field of ['source', 'engine', 'licenseId']) {
     const result = addModelRequestSchema.safeParse({ ...VALID_PAYLOAD, [field]: '' })
@@ -60,6 +65,7 @@ test('addModelRequestSchema rejects empty required fields', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema enforces max length on description', async (t) => {
   const result = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -72,6 +78,7 @@ test('addModelRequestSchema enforces max length on description', async (t) => {
   )
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema enforces max length on deprecationReason', async (t) => {
   const result = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -84,6 +91,7 @@ test('addModelRequestSchema enforces max length on deprecationReason', async (t)
   )
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema enforces tag limits', async (t) => {
   const tooManyTags = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -103,6 +111,7 @@ test('addModelRequestSchema enforces tag limits', async (t) => {
   t.ok(tagTooLong.error.issues.length > 0, 'error has issues')
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema rejects non-boolean skipExisting', async (t) => {
   const result = addModelRequestSchema.safeParse({
     ...VALID_PAYLOAD,
@@ -115,12 +124,14 @@ test('addModelRequestSchema rejects non-boolean skipExisting', async (t) => {
   )
 })
 
+// lunte-disable-next-line require-await
 test('addModelRequestSchema rejects non-object input', async (t) => {
   t.absent(addModelRequestSchema.safeParse(null).success)
   t.absent(addModelRequestSchema.safeParse('string').success)
   t.absent(addModelRequestSchema.safeParse(42).success)
 })
 
+// lunte-disable-next-line require-await
 test('baseModelFields is exported for CI schema reuse', async (t) => {
   t.ok(baseModelFields)
   t.ok(baseModelFields.source)

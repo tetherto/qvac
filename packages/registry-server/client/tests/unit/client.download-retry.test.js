@@ -24,16 +24,19 @@ function makeClient() {
       events.push('findingPeers')
       return () => {}
     },
+    // lunte-disable-next-line require-await
     async update() {
       events.push('core.update')
     },
     download() {
       return { destroy() {} }
     },
+    // lunte-disable-next-line require-await
     async close() {},
     on() {},
     off() {}
   }
+  // lunte-disable-next-line require-await
   const blobs = { async close() {} }
   client._core = core
 
@@ -42,10 +45,13 @@ function makeClient() {
     join() {
       events.push('swarm.join')
     },
+    // lunte-disable-next-line require-await
     async flush() {}
   }
 
+  // lunte-disable-next-line require-await
   client._ensureMetadata = async () => {}
+  // lunte-disable-next-line require-await
   client.getModel = async () => ({
     name: 'tiny-model',
     blobBinding: {
@@ -55,7 +61,9 @@ function makeClient() {
       byteLength: 1000
     }
   })
+  // lunte-disable-next-line require-await
   client._getBlobsCore = async () => ({ core, blobs })
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {}
 
   return client
@@ -80,6 +88,7 @@ test('downloadModel keeps cached blocks across a REQUEST_TIMEOUT retry', async (
   const client = makeClient()
   let clearCalls = 0
   let clearsBeforeRetrySucceeded = null
+  // lunte-disable-next-line require-await
   client._clearBlobBlocks = async () => {
     clearCalls++
   }
@@ -209,6 +218,7 @@ test('downloadModel gives up after maxRetries on persistent REQUEST_TIMEOUT', as
   const client = makeClient()
   let attempt = 0
 
+  // lunte-disable-next-line require-await
   client._streamBlobToFile = async () => {
     attempt++
     throw requestTimeout()
@@ -263,6 +273,7 @@ test('withRetry retries only listed codes and stays bounded', async (t) => {
   await t.exception(
     () =>
       withRetry(
+        // lunte-disable-next-line require-await
         async () => {
           calls++
           throw requestTimeout()
@@ -277,6 +288,7 @@ test('withRetry retries only listed codes and stays bounded', async (t) => {
   await t.exception(
     () =>
       withRetry(
+        // lunte-disable-next-line require-await
         async () => {
           nonRetriable++
           const e = new Error('nope')

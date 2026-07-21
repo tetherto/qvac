@@ -34,10 +34,11 @@ async function cleanup() {
   console.log('\nCleanup complete!')
 }
 
-if (require.main === module)
+if (require.main === module) {
   cleanup().catch((err) => {
     console.error('Cleanup failed:', err)
     process.exit(1)
   })
+}
 
 module.exports = { cleanup }

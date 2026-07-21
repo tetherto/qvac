@@ -29,6 +29,7 @@ class ReseedTracker {
     })
   }
 
+  // lunte-disable-next-line require-await
   async waitForComplete({ progressTimeout = 30000, pollInterval = 2500 } = {}) {
     if (this._cores.length === 0) return
 

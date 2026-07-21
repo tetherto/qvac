@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 
+// lunte-disable-next-line require-await
 test('client config - uses default registry core key when none provided', async (t) => {
   t.plan(2)
 
@@ -13,6 +14,7 @@ test('client config - uses default registry core key when none provided', async 
   t.is(typeof key, 'string', 'Default key is a string')
 })
 
+// lunte-disable-next-line require-await
 test('client config - explicit key takes precedence over default', async (t) => {
   t.plan(1)
 
@@ -24,6 +26,7 @@ test('client config - explicit key takes precedence over default', async (t) => 
   t.is(key, explicit, 'Returns the explicitly provided key')
 })
 
+// lunte-disable-next-line require-await
 test('client error - invalid path parameter', async (t) => {
   t.plan(2)
 
@@ -45,6 +48,7 @@ test('client error - invalid path parameter', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('client error - invalid source parameter', async (t) => {
   t.plan(2)
 
@@ -99,6 +103,7 @@ test('downloadBlob - rejects missing coreKey', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('client error - invalid options parameter', async (t) => {
   t.plan(1)
 
@@ -110,6 +115,7 @@ test('client error - invalid options parameter', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('client error - invalid search parameters', async (t) => {
   t.plan(3)
 

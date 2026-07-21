@@ -117,6 +117,7 @@ async function addModel() {
 }
 
 if (require.main === module) {
+  // lunte-disable-next-line require-await
   addModel().catch(async (err) => {
     logger.error('Fatal error:', err)
     process.exit(1)

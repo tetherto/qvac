@@ -3,6 +3,7 @@
 const test = require('brittle')
 const { parseCanonicalSource, resolveS3Bucket } = require('../../lib/source-helpers')
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - S3 URL with bucket', async (t) => {
   const result = parseCanonicalSource('s3://my-bucket/path/to/model.gguf')
 
@@ -14,6 +15,7 @@ test('parseCanonicalSource - S3 URL with bucket', async (t) => {
   t.is(result.canonicalUrl, 's3://my-bucket/path/to/model.gguf')
 })
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - S3 URL without bucket', async (t) => {
   const result = parseCanonicalSource(
     's3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf'
@@ -27,6 +29,7 @@ test('parseCanonicalSource - S3 URL without bucket', async (t) => {
   t.is(result.canonicalUrl, 's3:///qvac_models_compiled/ggml/Llama-3.2-1B/2025-12-04/model.gguf')
 })
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - S3 URL with leading slash in path', async (t) => {
   const result = parseCanonicalSource('s3://bucket-name//some/path/file.bin')
 
@@ -36,6 +39,7 @@ test('parseCanonicalSource - S3 URL with leading slash in path', async (t) => {
   t.is(result.path, 'some/path/file.bin')
 })
 
+// lunte-disable-next-line require-await
 test('resolveS3Bucket - injects bucket when missing', async (t) => {
   const source = parseCanonicalSource('s3:///path/to/model.gguf')
   t.is(source.bucket, null)
@@ -46,6 +50,7 @@ test('resolveS3Bucket - injects bucket when missing', async (t) => {
   t.is(resolved.canonicalUrl, 's3://my-bucket/path/to/model.gguf')
 })
 
+// lunte-disable-next-line require-await
 test('resolveS3Bucket - preserves existing bucket', async (t) => {
   const source = parseCanonicalSource('s3://existing-bucket/path/to/model.gguf')
   const resolved = resolveS3Bucket(source, 'other-bucket')
@@ -54,6 +59,7 @@ test('resolveS3Bucket - preserves existing bucket', async (t) => {
   t.is(resolved.canonicalUrl, 's3://existing-bucket/path/to/model.gguf')
 })
 
+// lunte-disable-next-line require-await
 test('resolveS3Bucket - throws when bucket missing and none provided', async (t) => {
   const source = parseCanonicalSource('s3:///path/to/model.gguf')
 
@@ -65,6 +71,7 @@ test('resolveS3Bucket - throws when bucket missing and none provided', async (t)
   }
 })
 
+// lunte-disable-next-line require-await
 test('resolveS3Bucket - no-op for non-S3 sources', async (t) => {
   const source = parseCanonicalSource('https://huggingface.co/org/repo/resolve/main/model.gguf')
   const resolved = resolveS3Bucket(source, 'some-bucket')
@@ -73,6 +80,7 @@ test('resolveS3Bucket - no-op for non-S3 sources', async (t) => {
   t.is(resolved.bucket, undefined, 'HF source should not get a bucket')
 })
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - HuggingFace URL', async (t) => {
   const result = parseCanonicalSource('https://huggingface.co/org/repo/resolve/main/model.gguf')
 
@@ -83,6 +91,7 @@ test('parseCanonicalSource - HuggingFace URL', async (t) => {
   t.is(result.key, undefined)
 })
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - throws on unsupported URL', async (t) => {
   try {
     parseCanonicalSource('https://example.com/file.bin')
@@ -99,6 +108,7 @@ test('parseCanonicalSource - throws on unsupported URL', async (t) => {
   }
 })
 
+// lunte-disable-next-line require-await
 test('parseCanonicalSource - throws on empty/invalid input', async (t) => {
   try {
     parseCanonicalSource('')

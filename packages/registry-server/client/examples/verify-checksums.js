@@ -25,6 +25,7 @@ const { QVACRegistryClient } = require('../index')
  * @param {string} filePath - Path to file
  * @returns {Promise<string>} Hex-encoded SHA256 hash
  */
+// lunte-disable-next-line require-await
 async function computeSha256(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256')

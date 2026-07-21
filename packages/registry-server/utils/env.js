@@ -49,8 +49,9 @@ function getEnv(key, defaultValue = undefined) {
 
 function requireEnv(key) {
   const value = getEnv(key)
-  if (value === undefined)
+  if (value === undefined) {
     throw new Error(`Required environment variable ${key} not found in process.env or .env file`)
+  }
   return value
 }
 
@@ -77,9 +78,11 @@ function updateEnvFile(key, value) {
     }
     const newLine = `${key}=${formattedValue}`
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    if (envContent.includes(`${key}=`))
+    if (envContent.includes(`${key}=`)) {
       envContent = envContent.replace(new RegExp(`^${escapedKey}=.*$`, 'm'), newLine)
-    else envContent = envContent.trimEnd() + `\n${newLine}\n`
+    } else {
+      envContent = envContent.trimEnd() + `\n${newLine}\n`
+    }
     fs.writeFileSync(envPath, envContent)
     envCache = null
     return true

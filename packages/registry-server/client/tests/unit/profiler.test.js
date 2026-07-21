@@ -4,6 +4,7 @@ const test = require('brittle')
 const { decodeCoreKey, collectStats, formatStats, formatSummary } = require('../../lib/profiler')
 const IdEnc = require('hypercore-id-encoding')
 
+// lunte-disable-next-line require-await
 test('profiler module exports', async (t) => {
   t.ok(typeof decodeCoreKey === 'function', 'decodeCoreKey is a function')
   t.ok(typeof collectStats === 'function', 'collectStats is a function')
@@ -13,6 +14,7 @@ test('profiler module exports', async (t) => {
 
 // --- decodeCoreKey ---
 
+// lunte-disable-next-line require-await
 test('decodeCoreKey - Buffer passthrough', async (t) => {
   const buf = Buffer.alloc(32, 0xab)
   const result = decodeCoreKey(buf)
@@ -20,6 +22,7 @@ test('decodeCoreKey - Buffer passthrough', async (t) => {
   t.ok(result.equals(buf), 'returns the same buffer')
 })
 
+// lunte-disable-next-line require-await
 test('decodeCoreKey - object with data array', async (t) => {
   const original = Buffer.alloc(32, 0xcd)
   const obj = { data: Array.from(original) }
@@ -28,6 +31,7 @@ test('decodeCoreKey - object with data array', async (t) => {
   t.ok(result.equals(original), 'decodes correctly from data array')
 })
 
+// lunte-disable-next-line require-await
 test('decodeCoreKey - z32 string', async (t) => {
   const buf = Buffer.alloc(32, 0xef)
   const encoded = IdEnc.normalize(buf)
@@ -76,6 +80,7 @@ function createMockBlobCore() {
   }
 }
 
+// lunte-disable-next-line require-await
 test('collectStats - returns structured snapshot', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
@@ -111,6 +116,7 @@ test('collectStats - returns structured snapshot', async (t) => {
   t.is(stats.peers[0].remoteContiguous, 115)
 })
 
+// lunte-disable-next-line require-await
 test('collectStats - handles zero elapsed', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
@@ -121,6 +127,7 @@ test('collectStats - handles zero elapsed', async (t) => {
   t.is(stats.network.txPerSec, 0, 'no division by zero')
 })
 
+// lunte-disable-next-line require-await
 test('collectStats - handles no peers', async (t) => {
   const sw = createMockSwarmStats()
   const hc = createMockHypercoreStats()
@@ -133,6 +140,7 @@ test('collectStats - handles no peers', async (t) => {
 
 // --- formatStats ---
 
+// lunte-disable-next-line require-await
 test('formatStats - contains expected sections', async (t) => {
   const stats = {
     elapsedSec: 12.5,
@@ -182,6 +190,7 @@ test('formatStats - contains expected sections', async (t) => {
   t.ok(output.includes('remote=55/60'), 'has peer remote info')
 })
 
+// lunte-disable-next-line require-await
 test('formatStats - no peers section when empty', async (t) => {
   const stats = {
     elapsedSec: 1,
@@ -218,6 +227,7 @@ test('formatStats - no peers section when empty', async (t) => {
 
 // --- formatSummary ---
 
+// lunte-disable-next-line require-await
 test('formatSummary - contains expected fields', async (t) => {
   const output = formatSummary({
     modelPath: 'test/model.gguf',

@@ -341,6 +341,7 @@ function parseHfDownloadUrl(urlString) {
 }
 
 if (require.main === module) {
+  // lunte-disable-next-line require-await
   testGGUFExtraction().catch(async (err) => {
     logger.error('Fatal error:', err)
     process.exit(1)

@@ -14,6 +14,7 @@ test('RegistryService.listModels returns HyperDB results', async (t) => {
   service.view = {
     opened: true,
     findModelsByPath: () => ({
+      // lunte-disable-next-line require-await
       toArray: async () => expectedModels
     })
   }
@@ -30,6 +31,7 @@ test('RegistryService.getModelByKey resolves from HyperDB', async (t) => {
   const service = createServiceWithRpc()
   service.view = {
     opened: true,
+    // lunte-disable-next-line require-await
     getModel: async () => expectedModel
   }
   const result = await service.getModelByKey(lookup)

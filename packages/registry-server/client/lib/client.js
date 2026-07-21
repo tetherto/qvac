@@ -357,8 +357,7 @@ class QVACRegistryClient extends ReadyResource {
         await withRetry(
           () => this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options),
           {
-            maxRetries:
-              options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            maxRetries: options.maxRetries ?? DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
             // Wait for the swarm to resume + reconnect peers before retrying,
             // so the retry doesn't immediately time out again against a dead
@@ -501,8 +500,7 @@ class QVACRegistryClient extends ReadyResource {
         await withRetry(
           () => this._streamBlobToFile(blobs, core, pointer, options.outputFile, options),
           {
-            maxRetries:
-              options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            maxRetries: options.maxRetries ?? DEFAULT_DOWNLOAD_MAX_RETRIES,
             retryCodes: RETRIABLE_DOWNLOAD_CODES,
             // Wait for swarm resume + peer reconnect before retrying (see
             // downloadModel). Cached blocks are reused; the file is re-streamed.

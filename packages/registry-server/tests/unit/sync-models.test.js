@@ -24,6 +24,7 @@ test('waitForModelAfterAmbiguousAdd polls until the model appears', async (t) =>
   const calls = []
 
   const client = {
+    // lunte-disable-next-line require-await
     async getModel(modelPath, source) {
       calls.push([modelPath, source])
       return calls.length === 2 ? expected : null
@@ -36,6 +37,7 @@ test('waitForModelAfterAmbiguousAdd polls until the model appears', async (t) =>
     timeoutMs: 10,
     pollIntervalMs: 5,
     logger: { info() {} },
+    // lunte-disable-next-line require-await
     sleep: async () => {}
   })
 
@@ -51,6 +53,7 @@ test('recoverAfterAmbiguousAdd reconnects even when polling times out', async (t
 
   const staleConnection = {
     cleaned: false,
+    // lunte-disable-next-line require-await
     async cleanup() {
       this.cleaned = true
     }
@@ -64,10 +67,12 @@ test('recoverAfterAmbiguousAdd reconnects even when polling times out', async (t
     sourceInfo: { path: 'repo/model.gguf', protocol: 'hf' },
     logger: { info() {}, warn() {} },
     connection: staleConnection,
+    // lunte-disable-next-line require-await
     reconnect: async () => {
       reconnects++
       return freshConnection
     },
+    // lunte-disable-next-line require-await
     waitForModel: async () => {
       throw pollError
     }

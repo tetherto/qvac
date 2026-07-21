@@ -323,8 +323,9 @@ function needsMetadataUpdate(config, existing, sourceInfo) {
 
 function getChanges(config, existing) {
   const changes = {}
-  if (config.engine !== existing.engine)
+  if (config.engine !== existing.engine) {
     changes.engine = { from: existing.engine, to: config.engine }
+  }
   if (config.licenseId !== existing.licenseId) {
     changes.licenseId = { from: existing.licenseId, to: config.licenseId }
   }

@@ -189,6 +189,7 @@ class RegistryService extends ReadyResource {
     await view.db.flush()
   }
 
+  // lunte-disable-next-line require-await
   async _appendOperation(route, payload) {
     return this.base.append(encodeDispatch(route, payload))
   }
@@ -754,6 +755,7 @@ class RegistryService extends ReadyResource {
       }
     })
 
+    // lunte-disable-next-line require-await
     rpc.respond('ping', async () => {
       if (this.metrics) this.metrics.recordRpcRequest('ping')
       return {
@@ -1162,6 +1164,7 @@ class RegistryService extends ReadyResource {
     return localPath
   }
 
+  // lunte-disable-next-line require-await
   async _createS3Client() {
     const credentials = this.config.getAWSCredentials()
     const config = {}

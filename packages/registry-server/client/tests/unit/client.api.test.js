@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 
+// lunte-disable-next-line require-await
 test('client api surface', async (t) => {
   const { QVACRegistryClient } = require('../../index')
   t.ok(QVACRegistryClient, 'QVACRegistryClient class exists')
@@ -21,6 +22,7 @@ test('client api surface', async (t) => {
   t.ok(QVACRegistryClient.prototype.resume, 'has resume method')
 })
 
+// lunte-disable-next-line require-await
 test('client find methods are async functions', async (t) => {
   const QVACRegistryClient = require('../../lib/client')
 

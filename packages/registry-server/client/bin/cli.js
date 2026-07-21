@@ -55,8 +55,9 @@ function printModelFull(model, opts = {}) {
   if (model.quantization) console.log(`    quantization: ${model.quantization}`)
   if (model.params) console.log(`    params:       ${model.params}`)
   console.log(`    size:         ${formatSize(blob.byteLength || model.sizeBytes)}`)
-  if (model.licenseId || model.license)
+  if (model.licenseId || model.license) {
     console.log(`    license:      ${model.licenseId || model.license}`)
+  }
   if (blob.sha256 || model.sha256) console.log(`    sha256:       ${blob.sha256 || model.sha256}`)
   if (opts.verbose && model.description) console.log(`    description:  ${model.description}`)
   if (opts.verbose) console.log(`    blob core:    ${coreKey}`)

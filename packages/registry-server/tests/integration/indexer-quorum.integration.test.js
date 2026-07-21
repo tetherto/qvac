@@ -53,6 +53,7 @@ async function cleanupService({ service, store, swarm }) {
 async function waitForConnection(swarm1, swarm2) {
   await swarm1.flush()
   await swarm2.flush()
+  // lunte-disable-next-line require-await
   await waitFor(async () => {
     return swarm1.connections.size > 0 && swarm2.connections.size > 0
   }, 10000)
@@ -79,6 +80,7 @@ async function flushAutobases(...bases) {
 async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }
 
@@ -102,6 +104,7 @@ test('Add indexer to quorum and verify data replication', async (t) => {
       key: writer2.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === true, 15000)
 
     t.ok(writer1.service.base.isIndexer, 'writer1 is indexer')
@@ -153,6 +156,7 @@ test('Remove indexer from quorum preserves data and remaining indexer', async (t
       key: writer2.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === true, 15000)
 
     // Seed data before removal
@@ -173,6 +177,7 @@ test('Remove indexer from quorum preserves data and remaining indexer', async (t
       key: writer2.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === false, 15000)
 
     t.ok(writer1.service.base.isIndexer, 'writer1 still indexer after removal')
@@ -227,12 +232,14 @@ test('Full indexer lifecycle: add, remove, re-add', async (t) => {
       key: writer2.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === true, 15000)
 
     await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, {
       key: writer3.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base, writer3.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer3.service.base.isIndexer === true, 15000)
 
     t.ok(writer1.service.base.isIndexer, 'phase1: writer1 is indexer')
@@ -262,6 +269,7 @@ test('Full indexer lifecycle: add, remove, re-add', async (t) => {
       key: writer3.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base, writer3.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer3.service.base.isIndexer === false, 15000)
 
     t.ok(writer1.service.base.isIndexer, 'phase2: writer1 still indexer')
@@ -292,6 +300,7 @@ test('Full indexer lifecycle: add, remove, re-add', async (t) => {
       key: writer3.service.base.local.key
     })
     await flushAutobases(writer1.service.base, writer2.service.base, writer3.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer3.service.base.isIndexer === true, 15000)
 
     t.ok(writer3.service.base.isIndexer, 'phase3: writer3 re-added as indexer')

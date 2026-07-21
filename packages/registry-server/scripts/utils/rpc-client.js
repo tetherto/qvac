@@ -121,6 +121,7 @@ async function connectToRegistry({
       })
       store.replicate(conn)
 
+      // lunte-disable-next-line require-await
       const closeConnection = async () => {
         try {
           conn.destroy()
