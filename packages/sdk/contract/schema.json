@@ -2742,12 +2742,6 @@
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
       "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
-    "constants.ToolsMode": {
-      "title": "ToolsMode",
-      "type": "string",
-      "enum": ["static", "dynamic"],
-      "x-enum-varnames": ["static", "dynamic"]
-    },
     "constants.Verbosity": {
       "title": "Verbosity",
       "type": "number",
@@ -7945,12 +7939,6 @@
                     },
                     "tools": {
                       "type": "boolean"
-                    },
-                    "toolsMode": {
-                      "type": "string",
-                      "enum": ["static", "dynamic"],
-                      "description": "Controls tool placement in the prompt. \"static\" (default) prepends the tool set once and reuses it across the session. \"dynamic\" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.",
-                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode"
                     },
                     "cache-type-k": {
                       "type": "string"
