@@ -221,5 +221,6 @@ export declare class EsrganUpscaler {
 export declare function applyFluxImg2ImgDimDefaults(params: GenerationParams, prediction: string, hasInitImages: boolean): GenerationParams;
 export type { VideoDiffusionFiles, VideoGenerationParams, VideoMode, VideoRuntimeStats, VideoStableDiffusionArgs } from './video';
 export type { QvacResponse };
+export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>;
 export declare const VideoStableDiffusion: typeof VideoStableDiffusionConstructor;
 export default ImgStableDiffusion;

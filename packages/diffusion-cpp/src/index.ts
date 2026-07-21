@@ -887,6 +887,8 @@ export type {
 } from './video'
 export type { QvacResponse }
 
+export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- preserve the CommonJS video subpath export.
 export const VideoStableDiffusion = require('./video') as typeof VideoStableDiffusionConstructor
 
