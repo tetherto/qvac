@@ -785,12 +785,20 @@ function setupParams(modelDir, overrides = {}) {
   const { testId = 'pause-resume', datasetSize, ...finetuneOverrides } = overrides
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
+  // Scope the LoRA-adapter output dir per testId and wipe it up front. It was
+  // previously a single shared `finetune-output/` dir, so back-to-back finetunes
+  // (e.g. the two models in the archs loop, or a prior run on a persistent
+  // runner) wrote to the same path — a finetune that failed to produce an
+  // adapter would leave the previous run's `trained-lora-adapter.gguf` for the
+  // inference phase to load, yielding a spurious pass or a confusing failure.
+  const outputParametersDir = path.resolve(modelDir, `finetune-output_${testId}`)
   createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
+  cleanupCheckpoints(outputParametersDir)
 
   return {
     trainDatasetDir: trainDatasetPath,
-    outputParametersDir: path.resolve(modelDir, 'finetune-output'),
+    outputParametersDir,
     learningRate: 1e-5,
     lrMin: 1e-8,
     loraModules: 'attn_q,attn_k,attn_v,attn_o',
@@ -916,6 +924,94 @@ async function verifyFinalStatus(t, model, result = null) {
   t.ok(result, 'Result must be provided')
 }
 
+// Assert a finetune stat is a finite number IF present. Only null/undefined
+// counts as "absent" — a NaN value must FAIL. NaN is the exact symptom of a
+// broken backward op (the reason these finetune suites exist), so we must NOT
+// early-return on it as an earlier version did (which hid regressions).
+function assertFiniteMetricIfPresent(t, stats, key, id) {
+  const v = stats?.[key]
+  if (v == null) return
+  t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
+  t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
+}
+
+// Resolve once a finetune handle has emitted at least `minSteps` progress
+// events; reject on timeout. Used by suites that pause/resume mid-training.
+function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(
+        new Error(
+          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
+        )
+      )
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
+// Load a base model with a trained LoRA adapter and run a short generation to
+// confirm the adapter is usable. Single source of truth for what were three
+// copy-pasted copies (archs / moe / pause-resume finetune suites). The only real
+// differences between them were `gpuLayers` — MoE uses partial offload, the
+// dense suites use full '999' — and whether inference stats are logged.
+async function runLoraInference(
+  t,
+  { id, modelPath, loraAdapterPath, gpuLayers = '999', forceCpuDevice = false, logStats = false }
+) {
+  // Required lazily so merely importing utils.js (e.g. from a manifest script)
+  // does not eagerly load the native addon — only callers that run inference do.
+  const LlmLlamacpp = require('./../../index.js')
+  // Guard: the adapter must exist before we try to verify it. A soft-failed
+  // COMPLETED assertion does not abort the test (safeTest only catches throws),
+  // so without this a missing/stale adapter would be silently loaded — fail loud.
+  t.ok(
+    fs.existsSync(loraAdapterPath),
+    `[${id}] trained LoRA adapter must exist at ${loraAdapterPath}`
+  )
+  t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
+  const inferModel = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config: {
+      gpu_layers: gpuLayers,
+      ctx_size: '512',
+      device: forceCpuDevice ? 'cpu' : 'gpu',
+      predict: '32',
+      lora: loraAdapterPath
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+  try {
+    await inferModel.load()
+    const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
+    let generated = ''
+    await response
+      .onUpdate((token) => {
+        generated += token
+      })
+      .await()
+    t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
+    t.comment(
+      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
+    )
+    if (logStats) {
+      t.comment(`[${id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
+    }
+  } finally {
+    await inferModel.unload().catch(() => {})
+  }
+}
+
 const test = require('brittle')
 
 function safeTest(name, opts, fn) {
@@ -959,6 +1055,9 @@ module.exports = {
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
+  assertFiniteMetricIfPresent,
+  waitForProgress,
+  runLoraInference,
   safeTest,
   downloadFileWithRetries
 }
