@@ -1,6 +1,6 @@
 name: Authorize PR
 description: >
-  Security gate for pull_request_target workflows. Checks actor write permission, author association, and label presence for external fork PRs. Strips the gate label on synchronize events from non-writers to force re-review after new commits.
+  Security gate for pull_request_target workflows. Checks actor write permission, author association, and label presence for external fork PRs. Strips the gate label on every external-fork synchronize event to force re-review after any commit change.
 inputs:
   label:
     description: "Label name required for external fork PRs (default: verified)"
@@ -43,6 +43,7 @@ runs:
         ACTION: ${{ github.event.action }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         BASE_REPO: ${{ github.repository }}
+        IS_DRAFT: ${{ github.event.pull_request.draft }}
         AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
         HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
         LABEL_NAME: ${{ inputs.label }}
@@ -55,10 +56,32 @@ runs:
           exit 0
         fi
 
-        # Same-repo PRs are always trusted
-        if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+        if [ "$IS_DRAFT" = "true" ]; then
+          echo "::notice::Draft PR — blocked until ready-for-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Same-repo PRs are always trusted. Compare case-insensitively and
+        # require a non-empty head repo; missing metadata fails closed.
+        IS_SAME_REPO=false
+        shopt -s nocasematch
+        if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" ]]; then
+          IS_SAME_REPO=true
+        fi
+        shopt -u nocasematch
+        if [ "$IS_SAME_REPO" = "true" ]; then
           echo "::notice::Same-repo PR — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Any external-fork synchronize invalidates the commit-specific
+        # approval, regardless of who pushed it (including a maintainer using
+        # "allow edits"). The strip step below forces re-review + re-label.
+        if [ "$ACTION" = "synchronize" ]; then
+          echo "::warning::External fork synchronize — blocking until re-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -82,16 +105,6 @@ runs:
         HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "$LABEL_NAME" \
           'if . == null then "false" elif any(. == $l) then "true" else "false" end')
 
-        # On synchronize from a non-writer, reject even if the label is still
-        # present. The label was granted for the previous commit; new unreviewed
-        # code must not run with secrets. The strip step below removes the label
-        # so that a re-review + re-label is required for the next run.
-        if [ "$ACTION" = "synchronize" ]; then
-          echo "::warning::External fork synchronize from non-writer — blocking until re-review"
-          echo "allowed=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
         if [ "$HAS_LABEL" = "true" ]; then
           echo "::notice::Fork PR with '$LABEL_NAME' label — authorized"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
@@ -102,12 +115,12 @@ runs:
         fi
 
     # -----------------------------------------------------------------
-    # 3. Strip the gate label on synchronize from non-writers
+    # 3. Strip the gate label on every external-fork synchronize
     #    This forces a maintainer to re-review before the NEXT run.
     # -----------------------------------------------------------------
-    - name: Strip label on new pushes from non-writers
+    - name: Strip label on new external-fork pushes
+      # GitHub expression string comparisons are case-insensitive.
       if: |
-        steps.perm.outputs.has-permission != '1' &&
         github.event.action == 'synchronize' &&
         github.event.pull_request.head.repo.full_name != github.repository
       shell: bash
@@ -119,4 +132,4 @@ runs:
         gh api -X DELETE \
           "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/${LABEL}" \
           2>/dev/null || true
-        echo "::warning::Removed '${LABEL}' label — new commits from non-writer. Re-review required."
+        echo "::warning::Removed '${LABEL}' label — external fork commit changed. Re-review required."

@@ -19,7 +19,6 @@ inputs:
     description: "Working directory inside the repo (monorepo package path)"
     required: false
     default: "."
-    type: string
 
 runs:
   using: composite
@@ -28,9 +27,10 @@ runs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.ref }}
+        ref: ${{ github.event.pull_request.head.sha }}
         token: ${{ inputs.pat-token }}
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Fetch PR head and target branch
       shell: bash

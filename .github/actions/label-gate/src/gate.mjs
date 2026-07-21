@@ -144,6 +144,30 @@ export async function gate({
     };
   }
 
+  // Internal same-repo PRs are inherently trusted: pushing a branch to the
+  // base repo requires write access, so there is no untrusted fork code to
+  // gate. The verified label is required for EXTERNAL FORK PRs only.
+  const baseRepo = String(repo).trim().toLowerCase();
+  const headRepo = String(payload?.pull_request?.head?.repo?.full_name ?? '')
+    .trim()
+    .toLowerCase();
+  if (headRepo && headRepo === baseRepo) {
+    // Internal draft PRs run nothing until marked ready-for-review (the
+    // workflow re-triggers on ready_for_review), keeping label-gate in
+    // lockstep with ci-router's draft gate.
+    if (payload?.pull_request?.draft === true) {
+      return {
+        authorised: false,
+        reason:
+          'internal draft PR — authorised on ready-for-review (verified not required)',
+      };
+    }
+    return {
+      authorised: true,
+      reason: 'internal same-repo PR — verified not required (fork-only gate)',
+    };
+  }
+
   if (teams.length === 0 && users.length === 0) {
     return {
       authorised: false,
@@ -186,25 +210,17 @@ export async function gate({
     };
   }
 
-  // Synchronize: protect against new commits from non-trusted actors.
-  // Only reachable when the label IS currently applied (above), so a
-  // strip will always have something to remove.
+  // Any change to an external fork invalidates the commit-specific approval,
+  // regardless of who pushed it (including a maintainer using "allow edits").
+  // Only reachable when the label IS currently applied (above), so a strip
+  // will always have something to remove.
   if (action === 'synchronize') {
-    const senderTrust = await isTrustedActor(sender, {
-      users: usersSet,
-      teams,
-      org,
-      client,
-    });
-    if (!senderTrust.authorised) {
-      const stripped = await client.stripLabel(prNumber, label);
-      return {
-        authorised: false,
-        reason: `synchronize from non-trusted '${sender}' — label stripped`,
-        stripped,
-      };
-    }
-    // trusted-actor synchronize falls through to the standard applier check
+    const stripped = await client.stripLabel(prNumber, label);
+    return {
+      authorised: false,
+      reason: `external fork synchronize by '${sender}' — label stripped; re-review required`,
+      stripped,
+    };
   }
 
   // Resolve the label applier.

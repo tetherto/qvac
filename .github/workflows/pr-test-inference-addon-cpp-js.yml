@@ -5,7 +5,7 @@ permissions:
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     paths:
       - "packages/inference-addon-cpp/**"
       - ".github/workflows/pr-test-inference-addon-cpp-js.yml"
@@ -28,10 +28,18 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
           HAS_VERIFIED_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verified') }}
+          HAS_RUN_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-desktop-addon-tests') }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "::notice::Draft PR: JS tests skipped until ready-for-review."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -44,12 +52,19 @@ jobs:
             exit 0
           fi
 
-          if [ "$HAS_VERIFIED_LABEL" = "true" ]; then
+          # Internal same-repo PRs are trusted without 'verified', but desktop
+          # tests remain opt-in behind their dedicated capacity-control label.
+          if [ "$IS_FORK" = "false" ]; then
+            echo "allowed=$HAS_RUN_LABEL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$HAS_VERIFIED_LABEL" = "true" ] && [ "$HAS_RUN_LABEL" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::notice::JS tests require the 'verified' label. A trusted reviewer must apply it after reviewing the diff."
+          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require trusted 'verified'."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-js-tests:

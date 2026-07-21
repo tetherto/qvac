@@ -214,7 +214,7 @@ test('synchronize from non-team-member -> strip label, not authorised', async ()
   assert.equal(client.stripped[0].label, 'verified');
 });
 
-test('synchronize from team-member with team-member label applier -> authorised, no strip', async () => {
+test('external fork synchronize from team-member -> strip and require re-review', async () => {
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: 'alice-team-member',
@@ -226,12 +226,13 @@ test('synchronize from team-member with team-member label applier -> authorised,
     payload,
     client,
   });
-  assert.equal(d.authorised, true);
-  assert.equal(client.calls.stripLabel, 0);
-  assert.equal(d.applier, 'alice-team-member');
+  assert.equal(d.authorised, false);
+  assert.equal(d.stripped, true);
+  assert.equal(client.calls.stripLabel, 1);
+  assert.equal(client.calls.findLabelApplier, 0);
 });
 
-test('synchronize from team-member with non-member label applier -> not authorised, no strip', async () => {
+test('external fork synchronize strips before checking historical label applier', async () => {
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: 'mallory-outsider',
@@ -244,11 +245,11 @@ test('synchronize from team-member with non-member label applier -> not authoris
     client,
   });
   assert.equal(d.authorised, false);
-  assert.equal(client.calls.stripLabel, 0, 'AC: do not strip on team-member synchronize');
-  assert.equal(d.applier, 'mallory-outsider');
+  assert.equal(client.calls.stripLabel, 1);
+  assert.equal(client.calls.findLabelApplier, 0);
 });
 
-test('synchronize from team-member with no prior label -> not authorised', async () => {
+test('external fork synchronize with no prior label applier still strips current label', async () => {
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: null,
@@ -261,7 +262,127 @@ test('synchronize from team-member with no prior label -> not authorised', async
     client,
   });
   assert.equal(d.authorised, false);
-  assert.match(d.reason, /no 'verified' label/);
+  assert.equal(client.calls.stripLabel, 1);
+  assert.equal(client.calls.findLabelApplier, 0);
+});
+
+// --- internal (same-repo) PRs: verified label not required -------------------
+
+test('internal same-repo PR (opened, no label) -> authorised, no API calls, no strip', async () => {
+  const client = makeClient({ teamMembers: [] });
+  const payload = {
+    action: 'opened',
+    number: 1234,
+    pull_request: {
+      number: 1234,
+      head: { repo: { full_name: 'tetherto/qvac' }, ref: 'feature/x' },
+      labels: [],
+    },
+    sender: { login: 'internal-dev' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+  assert.match(d.reason, /internal same-repo/);
+  assert.equal(client.calls.isTeamMember, 0);
+  assert.equal(client.calls.findLabelApplier, 0);
+  assert.equal(client.calls.stripLabel, 0);
+});
+
+test('internal same-repo PR (synchronize, no label, non-member sender) -> authorised, no strip', async () => {
+  // Same-repo push implies write access; the fork strip-on-synchronize policy
+  // does not apply. This is the internal fast lane.
+  const client = makeClient({ teamMembers: [] });
+  const payload = {
+    action: 'synchronize',
+    number: 1235,
+    pull_request: {
+      number: 1235,
+      head: { repo: { full_name: 'tetherto/qvac' }, ref: 'feature/x' },
+      labels: [],
+    },
+    sender: { login: 'internal-dev' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+  assert.equal(client.calls.stripLabel, 0);
+});
+
+test('internal same-repo match is case-insensitive', async () => {
+  const client = makeClient();
+  const payload = {
+    action: 'opened',
+    number: 1236,
+    pull_request: {
+      number: 1236,
+      head: { repo: { full_name: 'Tetherto/QVAC' }, ref: 'feature/x' },
+      labels: [],
+    },
+    sender: { login: 'internal-dev' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+});
+
+test('internal same-repo DRAFT PR -> not authorised (runs on ready-for-review), no strip', async () => {
+  const client = makeClient({ teamMembers: [] });
+  const payload = {
+    action: 'synchronize',
+    number: 1238,
+    pull_request: {
+      number: 1238,
+      draft: true,
+      head: { repo: { full_name: 'tetherto/qvac' }, ref: 'feature/x' },
+      labels: [],
+    },
+    sender: { login: 'internal-dev' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /internal draft/);
+  assert.equal(client.calls.stripLabel, 0);
+});
+
+test('external fork PR (head.repo != base) is NOT treated as internal', async () => {
+  // Guards the fork-only invariant: a fork must still require the label.
+  const client = makeClient({ teamMembers: [] });
+  const payload = {
+    action: 'opened',
+    number: 1237,
+    pull_request: {
+      number: 1237,
+      head: { repo: { full_name: 'external-fork/qvac' }, ref: 'feature/x' },
+      labels: [],
+    },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /not currently applied/);
 });
 
 // --- non-labeled, non-synchronize PR actions (e.g. opened, reopened) ---------
