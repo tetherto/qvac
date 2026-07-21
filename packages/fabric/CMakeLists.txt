@@ -95,16 +95,20 @@ target_link_libraries(
   ${qvac-fabric}
   PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::llama>"
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::common>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::llama-common>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::mtmd>"
 )
 
-# build_info is a small separate static library defining the LLAMA_BUILD_NUMBER
-# / LLAMA_COMMIT globals that libcommon references; whole-archive it so those
-# symbols are present and can be exported.
-if(TARGET llama::build_info)
+# llama-common-base (formerly build_info) is a small separate static library
+# defining the LLAMA_BUILD_NUMBER / LLAMA_COMMIT globals that llama-common
+# references; whole-archive it so those symbols are present and can be exported.
+# Upstream #21936 renamed the OBJECT `build_info` target to the STATIC
+# `llama-common-base` target (a PUBLIC dep of llama-common), so it is no longer
+# transitively pulled in by whole-archiving llama-common and must be listed
+# explicitly here.
+if(TARGET llama::llama-common-base)
   target_link_libraries(${qvac-fabric}
-    PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::build_info>")
+    PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::llama-common-base>")
 endif()
 
 # Force-include the full ggml core (ggml + ggml-base) object code on every Unix
@@ -174,22 +178,23 @@ elseif(WIN32)
 
   set(_fabric_export_libs
     "$<TARGET_FILE:llama::llama>"
-    "$<TARGET_FILE:llama::common>"
+    "$<TARGET_FILE:llama::llama-common>"
     "$<TARGET_FILE:llama::mtmd>"
     "$<TARGET_FILE:ggml::ggml>"
     "$<TARGET_FILE:ggml::ggml-base>")
-  # build_info carries the LLAMA_BUILD_NUMBER / LLAMA_COMMIT data globals. Scan
-  # it only when it is a real archive; the vcpkg export ships it as an INTERFACE
-  # (or OBJECT) target with no TARGET_FILE, in which case those objects are
-  # merged into common.lib and the symbols are picked up from there. These data
-  # globals are not exported from the runtime at all: bare delay-loads sibling
-  # .bare modules on Windows and delay-loading cannot resolve data imports, so
-  # consumers define module-local copies instead (see windows_fabric_data.cpp).
-  if(TARGET llama::build_info)
-    get_target_property(_fabric_build_info_type llama::build_info TYPE)
+  # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
+  # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
+  # vcpkg export ships it as an INTERFACE (or OBJECT) target with no TARGET_FILE,
+  # those objects are merged into llama-common.lib and the symbols are picked up
+  # from there. These data globals are not exported from the runtime at all: bare
+  # delay-loads sibling .bare modules on Windows and delay-loading cannot resolve
+  # data imports, so consumers define module-local copies instead (see
+  # windows_fabric_data.cpp).
+  if(TARGET llama::llama-common-base)
+    get_target_property(_fabric_build_info_type llama::llama-common-base TYPE)
     if(NOT _fabric_build_info_type STREQUAL "OBJECT_LIBRARY"
        AND NOT _fabric_build_info_type STREQUAL "INTERFACE_LIBRARY")
-      list(APPEND _fabric_export_libs "$<TARGET_FILE:llama::build_info>")
+      list(APPEND _fabric_export_libs "$<TARGET_FILE:llama::llama-common-base>")
     endif()
   endif()
 

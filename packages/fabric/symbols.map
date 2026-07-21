@@ -10,8 +10,9 @@
     llava_*;
     mtmd_*;
 
-    # llama.cpp build-info globals (from llama::build_info), e.g.
-    # LLAMA_BUILD_NUMBER / LLAMA_COMMIT, referenced by libcommon.
+    # llama.cpp build-info globals (from llama::llama-common-base, formerly
+    # llama::build_info), e.g. LLAMA_BUILD_NUMBER / LLAMA_COMMIT, referenced by
+    # llama-common.
     LLAMA_*;
 
     # ggml public C API (also consumed by the dlopen'd backend .so files at
