@@ -502,7 +502,16 @@ test('run | rejects moe_boundary > 1', async (t) => {
 })
 
 test('run | accepts moe_boundary at the endpoints (0 and 1)', async (t) => {
-  const m = makeWanModel()
+  const m = new VideoStableDiffusion({
+    files: {
+      model: FAKE_MODEL,
+      highNoiseDiffusionModel: FAKE_HIGH_NOISE,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE
+    },
+    config: { threads: 1 },
+    logger: makeQuiet()
+  })
   for (const b of [0, 0.0, 0.5, 1.0, 1]) {
     await t.exception.all(
       m.run({ mode: 'txt2vid', prompt: 'hi', moe_boundary: b }),
