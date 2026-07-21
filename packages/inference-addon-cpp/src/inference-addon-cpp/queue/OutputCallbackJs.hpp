@@ -340,6 +340,23 @@ private:
     drainAndTeardown(s, /*envUsable=*/true, /*removeHook=*/false);
   }
 
+  /// Clears (and drops) the env's pending JS exception, if any, so the next
+  /// JS call does not observe a stale error state.
+  static void clearPendingJsException(js_env_t* env) {
+    js_handle_scope_t* scope;
+    if (js_open_handle_scope(env, &scope) != 0)
+      return;
+    auto scopeCleanup =
+        utils::onExit([env, scope]() { js_close_handle_scope(env, scope); });
+    bool isExceptionPending;
+    if (js_is_exception_pending(env, &isExceptionPending) != 0)
+      return;
+    if (isExceptionPending) {
+      js_value_t* error;
+      js_get_and_clear_last_exception(env, &error);
+    }
+  }
+
   /**
    * @brief Drains the output queue and invokes the JS output callback for
    * each entry. Loop-thread only.
@@ -360,41 +377,42 @@ private:
       outputQueue = std::move(state.outputQueue->clear());
     }
     for (size_t i = 0; i < outputQueue.size(); i++) {
-      js_handle_scope_t* innerScope;
-      JS(js_open_handle_scope(state.env, &innerScope));
-      auto scopeCleanup =
-          utils::onExit([env = state.env, innerScope]() {
-            js_close_handle_scope(env, innerScope);
-          });
-      static constexpr auto outputCbParametersCount = 5;
-      js_value_t* outputCbParameters[outputCbParametersCount];
-      createOutputCbParams(
-          state, jsHandle, outputQueue[i].second, outputQueue[i].first,
-          outputCbParameters);
-      js_value_t* receiver;
-      JS(js_get_global(state.env, &receiver));
-      JS(js_call_function(
-          state.env,
-          receiver,
-          outputCb,
-          utils::arrayCount(outputCbParameters),
-          outputCbParameters,
-          nullptr));
+      // Per-entry isolation: the drained entries are already removed from
+      // OutputQueue, so aborting the loop on one entry's failed conversion
+      // or throwing JS handler would silently drop the remaining entries —
+      // other jobs' outputs and terminal events included. Clear that
+      // entry's pending exception and keep delivering.
+      try {
+        js_handle_scope_t* innerScope;
+        JS(js_open_handle_scope(state.env, &innerScope));
+        auto scopeCleanup =
+            utils::onExit([env = state.env, innerScope]() {
+              js_close_handle_scope(env, innerScope);
+            });
+        static constexpr auto outputCbParametersCount = 5;
+        js_value_t* outputCbParameters[outputCbParametersCount];
+        createOutputCbParams(
+            state, jsHandle, outputQueue[i].second, outputQueue[i].first,
+            outputCbParameters);
+        js_value_t* receiver;
+        JS(js_get_global(state.env, &receiver));
+        JS(js_call_function(
+            state.env,
+            receiver,
+            outputCb,
+            utils::arrayCount(outputCbParameters),
+            outputCbParameters,
+            nullptr));
+      } catch (...) {
+        clearPendingJsException(state.env);
+        QLOG(
+            logger::Priority::ERROR,
+            "jsOutputCallback: delivery failed for one queued entry; "
+            "continuing with the rest of the batch");
+      }
     }
   } catch (...) {
-    js_handle_scope_t* scope;
-    if (js_open_handle_scope(state.env, &scope) != 0)
-      return;
-    auto scopeCleanup = utils::onExit([env = state.env, scope]() {
-      js_close_handle_scope(env, scope);
-    });
-    bool isExceptionPending;
-    if (js_is_exception_pending(state.env, &isExceptionPending) != 0)
-      return;
-    if (isExceptionPending) {
-      js_value_t* error;
-      js_get_and_clear_last_exception(state.env, &error);
-    }
+    clearPendingJsException(state.env);
     QLOG(logger::Priority::ERROR, "jsOutputCallback: failed");
   }
 };
