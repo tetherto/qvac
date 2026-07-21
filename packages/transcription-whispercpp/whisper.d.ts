@@ -76,6 +76,7 @@ export declare class WhisperInterface {
     appendStreamingAudio(data: AudioData): void;
     endStreaming(): void;
     finishStreaming(): void;
+    _drainBufferedAudio(): Uint8Array;
     _concatBufferedAudio(): Uint8Array;
     private _requiredHandle;
 }
