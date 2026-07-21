@@ -17,14 +17,17 @@ class MockTranslationNmtcpp extends BaseInference {
     Bergamot: 'Bergamot'
   }
 
-  constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
+  constructor(
+    { loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args },
+    config = {}
+  ) {
     super({ logger, exclusiveRun, ...args })
     const { modelType } = config
 
     if (modelType === 'Opus') {
       throw new Error(
         'ModelTypes.Opus has been deprecated. Use ModelTypes.Bergamot instead. ' +
-        'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
+          'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
       )
     }
   }

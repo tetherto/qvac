@@ -37,12 +37,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const ROOT = path.resolve(__dirname, '..')
-const SACREMOSES_DIR = path.join(
-  ROOT,
-  'third-party',
-  'indic-processor-deps',
-  'sacremoses'
-)
+const SACREMOSES_DIR = path.join(ROOT, 'third-party', 'indic-processor-deps', 'sacremoses')
 const DATA_DIR = path.join(SACREMOSES_DIR, 'data')
 const OUT_FILE = path.join(SACREMOSES_DIR, 'data.js')
 
@@ -58,7 +53,7 @@ const OUT_FILE = path.join(SACREMOSES_DIR, 'data.js')
  * pernuliprops.js used in its `require.asset()` enumeration
  * (CJK, IsAlnum, IsN, etc.).
  */
-function loadPerluniprops () {
+function loadPerluniprops() {
   const dir = path.join(DATA_DIR, 'perluniprops')
   const out = {}
   for (const name of fs.readdirSync(dir).sort()) {
@@ -81,7 +76,7 @@ function loadPerluniprops () {
  *
  * `README.txt` lives in this directory too — explicitly skipped.
  */
-function loadNonbreakingPrefixes () {
+function loadNonbreakingPrefixes() {
   const dir = path.join(DATA_DIR, 'nonbreaking_prefixes')
   const out = {}
   for (const name of fs.readdirSync(dir).sort()) {
@@ -101,7 +96,7 @@ function loadNonbreakingPrefixes () {
  * line so future diffs (e.g. when one .txt file is updated upstream)
  * are readable.
  */
-function renderModule (perluniprops, nonbreakingPrefixes) {
+function renderModule(perluniprops, nonbreakingPrefixes) {
   const lines = []
   lines.push("'use strict'")
   lines.push('')
@@ -138,7 +133,7 @@ function renderModule (perluniprops, nonbreakingPrefixes) {
 // Main
 // ---------------------------------------------------------------------------
 
-function main () {
+function main() {
   if (!fs.existsSync(DATA_DIR)) {
     console.error(`Data directory not found: ${DATA_DIR}`)
     process.exit(1)
@@ -153,8 +148,12 @@ function main () {
   const totalChars = Object.values(perluniprops).reduce((s, v) => s + v.length, 0)
   const totalPrefixes = Object.values(nonbreakingPrefixes).reduce((s, v) => s + v.length, 0)
   console.log(`Wrote ${path.relative(ROOT, OUT_FILE)} (${(body.length / 1024).toFixed(1)} KB)`)
-  console.log(`  perluniprops:        ${Object.keys(perluniprops).length} categories, ${totalChars.toLocaleString()} chars`)
-  console.log(`  nonbreakingPrefixes: ${Object.keys(nonbreakingPrefixes).length} languages, ${totalPrefixes.toLocaleString()} prefixes`)
+  console.log(
+    `  perluniprops:        ${Object.keys(perluniprops).length} categories, ${totalChars.toLocaleString()} chars`
+  )
+  console.log(
+    `  nonbreakingPrefixes: ${Object.keys(nonbreakingPrefixes).length} languages, ${totalPrefixes.toLocaleString()} prefixes`
+  )
 }
 
 main()

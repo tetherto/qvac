@@ -4,7 +4,7 @@ const test = require('brittle')
 const TranscriptionParakeet = require('../../index.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { transitionCb, wait } = require('../mocks/utils.js')
-const { ParakeetInterface } = require('../../parakeet')
+const { ERR_CODES, ParakeetInterface, QvacErrorAddonParakeet } = require('../../parakeet')
 
 const process = require('bare-process')
 global.process = process
@@ -42,6 +42,12 @@ function createMockedModel({ onOutput = () => {}, binding = undefined } = {}) {
 
   return model
 }
+
+test('QvacErrorAddonParakeet preserves numeric error codes', (t) => {
+  const error = new QvacErrorAddonParakeet(ERR_CODES.INSTANCE_DESTROYED)
+
+  t.is(error.code, ERR_CODES.INSTANCE_DESTROYED, 'Numeric constructor input maps to code')
+})
 
 /**
  * Test that the inference process returns the expected output.
