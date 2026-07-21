@@ -383,6 +383,7 @@ function publicPrLabelPolicy(overrides = {}) {
       HEAD_REPO: 'tetherto/qvac',
       BASE_REPO: 'tetherto/qvac',
       PR_LABELS: '',
+      PR_LABELS_JSON: '[]',
       ...overrides,
     },
   ).failed
@@ -400,8 +401,17 @@ test('public-pr: external or missing head repo needs verified', () => {
     publicPrLabelPolicy({
       HEAD_REPO: 'outsider/qvac',
       PR_LABELS: 'verified',
+      PR_LABELS_JSON: '["verified"]',
     }),
     '0',
+  )
+  assert.equal(
+    publicPrLabelPolicy({
+      HEAD_REPO: 'outsider/qvac',
+      PR_LABELS: 'not verified',
+      PR_LABELS_JSON: '["not verified"]',
+    }),
+    '1',
   )
 })
 
@@ -557,6 +567,28 @@ test('on-pr context outputs resolve PR ref from head SHA, never head.ref', () =>
         /HEAD_REF:\s+\$\{\{ github\.event\.pull_request\.head\.ref \}\}/.test(
           source,
         ) || /ref="\$HEAD_REF"/.test(source)
+      )
+    })
+  assert.deepEqual(offenders, [])
+})
+
+test('merge guards accept intentionally skipped optional prebuilds', () => {
+  const workflowDirectory = join(root, '.github/workflows')
+  const offenders = readdirSync(workflowDirectory)
+    .filter((name) => /^on-pr-.*\.yml$/.test(name))
+    .filter((name) => {
+      const buildStatusLines = readFileSync(
+        join(workflowDirectory, name),
+        'utf8',
+      )
+        .split('\n')
+        .filter(
+          (line) =>
+            line.includes('build-status:') &&
+            line.includes('needs.prebuild.result'),
+        )
+      return buildStatusLines.some(
+        (line) => !line.includes("needs.prebuild.result == 'skipped'"),
       )
     })
   assert.deepEqual(offenders, [])
