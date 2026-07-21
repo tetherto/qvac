@@ -21,3 +21,10 @@ CI behaviour is driven by PR labels. The `verified` label is the security gate t
 ## Changelog
 
 Version bumps require CHANGELOG.md updates with version, date, changes by category (✨ Features, 🐛 Fixes, 🔧 Changed, etc.), and PR links.
+
+## Development
+
+- For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](./docs/gitflow.md).
+- For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
+- For the QVAC architecture as a whole, see `/docs/architecture`.
+- For the QVAC monorepo structure, see `docs/repository-layout.md`.

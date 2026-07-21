@@ -2237,7 +2237,27 @@
               "type": "number"
             },
             "generationMs": {
-              "description": "Wall-clock time in milliseconds spent generating images.",
+              "description": "Wall-clock time in milliseconds spent generating the output.",
+              "type": "number"
+            },
+            "conditionerMs": {
+              "description": "Time in milliseconds spent conditioning the prompt before denoising.",
+              "type": "number"
+            },
+            "denoiseMs": {
+              "description": "Time in milliseconds spent in the diffusion denoising loop.",
+              "type": "number"
+            },
+            "vaeMs": {
+              "description": "Time in milliseconds spent decoding diffusion latents with the VAE.",
+              "type": "number"
+            },
+            "postProcessMs": {
+              "description": "Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+              "type": "number"
+            },
+            "stepsPerSecond": {
+              "description": "Diffusion denoising throughput in sampling steps per second.",
               "type": "number"
             },
             "totalGenerationMs": {
@@ -6545,7 +6565,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -6890,7 +6910,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -6972,7 +6992,7 @@
                       ]
                     },
                     "vaeModelSrc": {
-                      "description": "VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
+                      "description": "VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and LTX-2 video (video VAE); optional for SDXL.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -7132,6 +7152,88 @@
                           },
                           "required": ["src"],
                           "title": "LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc"
+                        }
+                      ]
+                    },
+                    "uncondModelSrc": {
+                      "description": "Unconditional diffusion model — Ideogram 4 only. Requires diffusion mode, llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured caption with explicit bounding boxes as the generation prompt. Plain-text prompts produce degenerate output or the model's placeholder response.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "type": "number"
+                            },
+                            "engine": {
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "type": "string"
+                            },
+                            "addon": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc"
                         }
                       ]
                     },
@@ -10909,7 +11011,27 @@
               "type": "number"
             },
             "generationMs": {
-              "description": "Wall-clock time in milliseconds spent generating images.",
+              "description": "Wall-clock time in milliseconds spent generating the output.",
+              "type": "number"
+            },
+            "conditionerMs": {
+              "description": "Time in milliseconds spent conditioning the prompt before denoising.",
+              "type": "number"
+            },
+            "denoiseMs": {
+              "description": "Time in milliseconds spent in the diffusion denoising loop.",
+              "type": "number"
+            },
+            "vaeMs": {
+              "description": "Time in milliseconds spent decoding diffusion latents with the VAE.",
+              "type": "number"
+            },
+            "postProcessMs": {
+              "description": "Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+              "type": "number"
+            },
+            "stepsPerSecond": {
+              "description": "Diffusion denoising throughput in sampling steps per second.",
               "type": "number"
             },
             "totalGenerationMs": {
