@@ -109,6 +109,40 @@ test('vlaHparamsSchema: accepts canonical π₀.₅ shape (numCameras + discrete
   }
 })
 
+test('vlaHparamsSchema: accepts canonical GR00T shape (patches image mode + continuous state)', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    numCameras: 2,
+    stateInputMode: 'continuous',
+    imageInputMode: 'patches',
+    imagePatchElems: 262144
+  })
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data.numCameras, 2)
+    t.is(result.data.imageInputMode, 'patches')
+    t.is(result.data.imagePatchElems, 262144)
+  }
+})
+
+test('vlaHparamsSchema: rejects unknown imageInputMode', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    imageInputMode: 'tiles'
+  })
+  t.is(result.success, false)
+})
+
 test('vlaHparamsSchema: rejects unknown stateInputMode', (t) => {
   const result = vlaHparamsSchema.safeParse({
     chunkSize: 50,
