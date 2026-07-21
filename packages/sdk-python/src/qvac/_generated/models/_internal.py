@@ -1686,7 +1686,42 @@ class DiffusionStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="generationMs",
-            description="Wall-clock time in milliseconds spent generating images.",
+            description="Wall-clock time in milliseconds spent generating the output.",
+        ),
+    ] = None
+    conditioner_ms: Annotated[
+        float | None,
+        Field(
+            alias="conditionerMs",
+            description="Time in milliseconds spent conditioning the prompt before denoising.",
+        ),
+    ] = None
+    denoise_ms: Annotated[
+        float | None,
+        Field(
+            alias="denoiseMs",
+            description="Time in milliseconds spent in the diffusion denoising loop.",
+        ),
+    ] = None
+    vae_ms: Annotated[
+        float | None,
+        Field(
+            alias="vaeMs",
+            description="Time in milliseconds spent decoding diffusion latents with the VAE.",
+        ),
+    ] = None
+    post_process_ms: Annotated[
+        float | None,
+        Field(
+            alias="postProcessMs",
+            description="Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+        ),
+    ] = None
+    steps_per_second: Annotated[
+        float | None,
+        Field(
+            alias="stepsPerSecond",
+            description="Diffusion denoising throughput in sampling steps per second.",
         ),
     ] = None
     total_generation_ms: Annotated[
@@ -5265,6 +5300,50 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
     ) = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -5506,7 +5585,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -5600,14 +5679,14 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
         Field(
             alias="llmModelSrc",
-            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3) and for LTX-2 video (Gemma).",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).",
         ),
     ] = None
     vae_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
         Field(
             alias="vaeModelSrc",
-            description="VAE decoder model — required for FLUX.2 [klein] and LTX-2 video (video VAE), optional for SDXL.",
+            description="VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and LTX-2 video (video VAE); optional for SDXL.",
         ),
     ] = None
     high_noise_diffusion_model_src: Annotated[
@@ -5617,6 +5696,13 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             alias="highNoiseDiffusionModelSrc",
             description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
+        ),
+    ] = None
+    uncond_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc | None,
+        Field(
+            alias="uncondModelSrc",
+            description="Unconditional diffusion model — Ideogram 4 only. Requires diffusion mode, llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured caption with explicit bounding boxes as the generation prompt. Plain-text prompts produce degenerate output or the model's placeholder response.",
         ),
     ] = None
     clip_vision_model_src: Annotated[
@@ -8146,7 +8232,42 @@ class VideoStreamResponseStats(GeneratedBaseModel):
         float | None,
         Field(
             alias="generationMs",
-            description="Wall-clock time in milliseconds spent generating images.",
+            description="Wall-clock time in milliseconds spent generating the output.",
+        ),
+    ] = None
+    conditioner_ms: Annotated[
+        float | None,
+        Field(
+            alias="conditionerMs",
+            description="Time in milliseconds spent conditioning the prompt before denoising.",
+        ),
+    ] = None
+    denoise_ms: Annotated[
+        float | None,
+        Field(
+            alias="denoiseMs",
+            description="Time in milliseconds spent in the diffusion denoising loop.",
+        ),
+    ] = None
+    vae_ms: Annotated[
+        float | None,
+        Field(
+            alias="vaeMs",
+            description="Time in milliseconds spent decoding diffusion latents with the VAE.",
+        ),
+    ] = None
+    post_process_ms: Annotated[
+        float | None,
+        Field(
+            alias="postProcessMs",
+            description="Time in milliseconds spent encoding, upscaling, muxing, and emitting outputs.",
+        ),
+    ] = None
+    steps_per_second: Annotated[
+        float | None,
+        Field(
+            alias="stepsPerSecond",
+            description="Diffusion denoising throughput in sampling steps per second.",
         ),
     ] = None
     total_generation_ms: Annotated[

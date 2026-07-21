@@ -13,6 +13,8 @@ The following packages belong to the SDK pod:
 - `packages/logging`
 - `packages/error`
 - `packages/ai-sdk-provider`
+- `packages/inference`
+- `packages/registry-server`
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
 
@@ -28,6 +30,8 @@ globs:
   - packages/logging/**
   - packages/error/**
   - packages/ai-sdk-provider/**
+  - packages/inference/**
+  - packages/registry-server/**
 ```
 
 ## Skill Naming Convention

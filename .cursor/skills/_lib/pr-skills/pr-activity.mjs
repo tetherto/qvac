@@ -10,6 +10,10 @@ export const STATE_ICONS = {
   DISMISSED: "🔄",
 };
 
+const PR_PAGE_SIZE = 30;
+const APPROVAL_GATE_RE = /^(check-approvals|tier-based approval check)/i;
+const FAILING_STATES = new Set(["FAILURE", "CANCELLED", "TIMED_OUT", "ERROR"]);
+
 function gh(args) {
   // stderr is piped (not inherited) so it does not leak to the user's terminal
   // on success, but is captured on the thrown error so callers can surface a
@@ -40,6 +44,10 @@ function ghGraphQL(query, jq, vars = {}) {
   return raw ? JSON.parse(raw) : null;
 }
 
+function isBot(login) {
+  return !login || login.endsWith("[bot]");
+}
+
 export function rolesForPod(team, currentUser = null) {
   const leadSet = new Set(team.leads);
   const memberLogins = team.members.filter((login) => !leadSet.has(login));
@@ -49,15 +57,79 @@ export function rolesForPod(team, currentUser = null) {
   return { currentUser, currentUserRole, leads: team.leads, members: memberLogins, allTeam };
 }
 
+// Formal-review-only state used for approval gates. Most recent non-COMMENTED
+// review wins per login. Conversation comments never satisfy approval.
 export function getReviewState(reviews) {
   const latest = new Map();
-  for (const review of reviews) {
+  for (const review of reviews || []) {
     const login = review.author?.login;
-    if (!login) continue;
-    if (review.state === "COMMENTED" && latest.has(login)) continue;
-    latest.set(login, review.state);
+    if (!login || isBot(login)) continue;
+    if (review.state === "COMMENTED") continue;
+    if (!review.submittedAt) continue;
+    const prev = latest.get(login);
+    if (!prev || review.submittedAt >= prev.submittedAt) {
+      latest.set(login, { state: review.state, submittedAt: review.submittedAt });
+    }
   }
-  return latest;
+  const out = new Map();
+  for (const [login, entry] of latest) out.set(login, entry.state);
+  return out;
+}
+
+// Open discussion events for 💬 display / comment-side engagement.
+// Resolved review threads are ignored — GitHub keeps the stale
+// PullRequestReview(state=COMMENTED) even after "Resolve conversation".
+export function openDiscussionEvents(reviewThreads, issueComments) {
+  const events = [];
+  for (const thread of reviewThreads || []) {
+    if (thread.isResolved) continue;
+    for (const comment of thread.comments?.nodes || []) {
+      const login = comment.author?.login;
+      if (!login || isBot(login) || !comment.createdAt) continue;
+      events.push({ login, ts: comment.createdAt });
+    }
+  }
+  for (const comment of issueComments || []) {
+    const login = comment.author?.login;
+    if (!login || isBot(login) || !comment.createdAt) continue;
+    events.push({ login, ts: comment.createdAt });
+  }
+  return events;
+}
+
+// Display state: decisive formal reviews + open discussions only.
+// Formal COMMENTED reviews are skipped (they linger after threads resolve);
+// 💬 comes from unresolved reviewThreads and top-level issue comments.
+export function getDisplayReviewState(reviews, comments, authorLogin, reviewThreads = []) {
+  const eventsByLogin = new Map();
+
+  function add(login, ts, state) {
+    if (!login || login === authorLogin || isBot(login) || !ts) return;
+    if (!eventsByLogin.has(login)) eventsByLogin.set(login, []);
+    eventsByLogin.get(login).push({ ts, state });
+  }
+
+  for (const review of reviews || []) {
+    if (review.state === "COMMENTED") continue;
+    add(review.author?.login, review.submittedAt, review.state);
+  }
+  for (const { login, ts } of openDiscussionEvents(reviewThreads, comments)) {
+    add(login, ts, "COMMENTED");
+  }
+
+  const out = new Map();
+  for (const [login, events] of eventsByLogin) {
+    events.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const decisive = events.filter((e) =>
+      ["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(e.state),
+    );
+    if (decisive.length) {
+      out.set(login, decisive[decisive.length - 1].state);
+    } else {
+      out.set(login, "COMMENTED");
+    }
+  }
+  return out;
 }
 
 export function readySince(pr) {
@@ -77,15 +149,23 @@ export function formatAge(ts, now = Date.now()) {
 
 export function memberState(pr, member) {
   if (member === pr.author.login) return "AUTHOR";
-  return pr.reviewState.get(member) || "PENDING";
+  // Prefer display state when present (includes conversation comments).
+  const state = pr.displayReviewState?.get(member) ?? pr.reviewState?.get(member);
+  return state || "PENDING";
 }
 
 export function hasMemberApprovalInPod(pr, podRoles) {
-  return podRoles.members.some((member) => memberState(pr, member) === "APPROVED");
+  return podRoles.members.some((member) => {
+    if (member === pr.author.login) return false;
+    return pr.reviewState.get(member) === "APPROVED";
+  });
 }
 
 export function hasLeadApprovalInPod(pr, podRoles) {
-  return podRoles.leads.some((member) => memberState(pr, member) === "APPROVED");
+  return podRoles.leads.some((member) => {
+    if (member === pr.author.login) return false;
+    return pr.reviewState.get(member) === "APPROVED";
+  });
 }
 
 export function isFullyApprovedInPod(pr, podRoles) {
@@ -103,19 +183,37 @@ export function getMyReviewLatestAt(pr, me) {
   return latest;
 }
 
-export function latestNonMergeCommitAt(pr) {
+export function getMyLatestEngagementAt(pr, me) {
+  let latest = getMyReviewLatestAt(pr, me);
+  // Comment-side engagement: open discussions only (resolved threads ignored).
+  for (const { login, ts } of openDiscussionEvents(
+    pr.reviewThreads?.nodes,
+    pr.comments?.nodes,
+  )) {
+    if (login !== me) continue;
+    if (!latest || ts > latest) latest = ts;
+  }
+  return latest;
+}
+
+export function latestNonMergeCommit(pr) {
   const nodes = pr.commits?.nodes || [];
   for (let i = nodes.length - 1; i >= 0; i--) {
     const commit = nodes[i]?.commit;
     if (!commit) continue;
     if ((commit.parents?.totalCount ?? 1) > 1) continue;
-    if (commit.committedDate) return commit.committedDate;
+    return commit;
   }
   return null;
 }
 
+export function latestNonMergeCommitAt(pr) {
+  return latestNonMergeCommit(pr)?.committedDate || null;
+}
+
 export function needsMyReReview(pr, me) {
-  const myLatest = getMyReviewLatestAt(pr, me);
+  if (!me || me === pr.author?.login) return false;
+  const myLatest = getMyLatestEngagementAt(pr, me);
   if (!myLatest) return false;
   const commitAt = latestNonMergeCommitAt(pr);
   if (!commitAt) return false;
@@ -123,45 +221,198 @@ export function needsMyReReview(pr, me) {
 }
 
 export function pingTargetsForPod(pr, podRoles) {
+  // Formal review state only — conversation comments must not suppress approval pings.
+  function formalState(login) {
+    if (login === pr.author.login) return "AUTHOR";
+    return pr.reviewState.get(login) || "PENDING";
+  }
   const targets = [];
   if (!hasMemberApprovalInPod(pr, podRoles)) {
     for (const member of podRoles.members) {
-      const state = memberState(pr, member);
+      const state = formalState(member);
       if (state === "DISMISSED") targets.push({ login: member, role: "member", state });
     }
     for (const member of podRoles.members) {
-      const state = memberState(pr, member);
+      const state = formalState(member);
       if (state === "PENDING") targets.push({ login: member, role: "member", state });
     }
   }
   if (!hasLeadApprovalInPod(pr, podRoles)) {
     for (const lead of podRoles.leads) {
-      const state = memberState(pr, lead);
+      const state = formalState(lead);
       if (state === "DISMISSED") targets.push({ login: lead, role: "lead", state });
     }
     for (const lead of podRoles.leads) {
-      const state = memberState(pr, lead);
+      const state = formalState(lead);
       if (state === "PENDING") targets.push({ login: lead, role: "lead", state });
     }
   }
   return targets;
 }
 
-function fetchPRPage({ owner, name }, cursor) {
+function normalizeContexts(rollup) {
+  const nodes = rollup?.contexts?.nodes || [];
+  return nodes.map((ctx) => {
+    if (ctx.__typename === "StatusContext" || (ctx.context != null && ctx.name == null)) {
+      return {
+        name: ctx.context,
+        state: String(ctx.state || "").toUpperCase(),
+      };
+    }
+    return {
+      name: ctx.name,
+      state: String(ctx.conclusion || ctx.status || "").toUpperCase(),
+    };
+  });
+}
+
+export function failingCheckNames(contexts) {
+  const names = new Set();
+  for (const ctx of contexts || []) {
+    if (!ctx.name || APPROVAL_GATE_RE.test(ctx.name)) continue;
+    if (FAILING_STATES.has(ctx.state)) names.add(ctx.name);
+  }
+  return [...names];
+}
+
+export function formatCiRed(failingNames) {
+  if (!failingNames?.length) return null;
+  const e2eRe = /^(?:run-tests \/ )?(android|desktop|ios)-tests \//;
+  const platforms = new Set();
+  const other = [];
+  for (const name of failingNames) {
+    const m = name.match(e2eRe);
+    if (m) platforms.add(m[1]);
+    else other.push(name);
+  }
+  const labels = [];
+  if (platforms.size) {
+    labels.push(`e2e tests (${[...platforms].sort().join(", ")})`);
+  }
+  const shown = other.slice(0, 3);
+  labels.push(...shown);
+  if (other.length > 3) labels.push(`(+${other.length - 3} more)`);
+  if (!labels.length) return null;
+  return `⚠ CI red — ${labels.join(", ")}`;
+}
+
+function fetchRollupForOid({ owner, name }, oid) {
+  const query = `query($oid: GitObjectID!) {
+    repository(owner: "${owner}", name: "${name}") {
+      object(oid: $oid) {
+        ... on Commit {
+          statusCheckRollup {
+            state
+            contexts(first: 100) {
+              nodes {
+                __typename
+                ... on CheckRun { name conclusion status }
+                ... on StatusContext { context state }
+              }
+            }
+          }
+        }
+      }
+    }
+  }`;
+  const data = ghGraphQL(query, ".data.repository.object.statusCheckRollup", { oid });
+  return data;
+}
+
+function resolveCheckContexts(pr, repoConfig) {
+  const latest = pr.latestCommit?.nodes?.[0]?.commit;
+  if (!latest) return [];
+  if ((latest.parents?.totalCount ?? 1) <= 1) {
+    return normalizeContexts(latest.statusCheckRollup);
+  }
+  const nonMerge = latestNonMergeCommit(pr);
+  if (!nonMerge?.oid) return [];
+  try {
+    return normalizeContexts(fetchRollupForOid(repoConfig, nonMerge.oid));
+  } catch {
+    return [];
+  }
+}
+
+export function assignAuthorTier(pr, allTeamSet) {
+  const login = pr.author?.login;
+  if (login && allTeamSet.has(login)) return "core";
+  const labels = (pr.labels?.nodes || []).map((l) => l.name);
+  // organization is only present when the GraphQL query requested it on User.
+  // Missing field → label fallback then platform (legacy-safe).
+  if (!Object.prototype.hasOwnProperty.call(pr.author || {}, "organization")) {
+    return labels.includes("community-contribution") ? "external" : "platform";
+  }
+  if (pr.author.organization == null) return "external";
+  return "platform";
+}
+
+function fetchPRPage(
+  { owner, name },
+  cursor,
+  { includeAuthorTiers = false, includeCiChecks = false } = {},
+) {
+  const authorFields = includeAuthorTiers
+    ? `author { login ... on User { name organization(login: "${owner}") { login } } }`
+    : `author { login ... on User { name } }`;
+  const labelFields = includeAuthorTiers
+    ? `labels(first: 20) { nodes { name } }`
+    : "";
+  // CI check contexts are heavy (and flaky at scale for pods with many
+  // extraRepos). Only request them when the caller needs CI-red signals.
+  const latestCommitFields = includeCiChecks
+    ? `latestCommit: commits(last: 1) {
+            nodes {
+              commit {
+                oid
+                parents { totalCount }
+                statusCheckRollup {
+                  state
+                  contexts(first: 100) {
+                    nodes {
+                      __typename
+                      ... on CheckRun { name conclusion status }
+                      ... on StatusContext { context state }
+                    }
+                  }
+                }
+              }
+            }
+          }`
+    : "";
   const query = `query${cursor ? "($cursor: String!)" : ""} {
     repository(owner: "${owner}", name: "${name}") {
-      pullRequests(states: OPEN, first: 50${cursor ? ", after: $cursor" : ""}, orderBy: {field: CREATED_AT, direction: DESC}) {
+      pullRequests(states: OPEN, first: ${PR_PAGE_SIZE}${cursor ? ", after: $cursor" : ""}, orderBy: {field: CREATED_AT, direction: DESC}) {
         pageInfo { hasNextPage endCursor }
         nodes {
           number title url createdAt isDraft mergeable
-          author { login ... on User { name } }
+          ${authorFields}
+          ${labelFields}
           files(first: 100) { nodes { path } }
           reviews(first: 100) {
             nodes { state submittedAt author { login } }
           }
-          commits(last: 20) {
-            nodes { commit { committedDate parents { totalCount } } }
+          comments(first: 100) {
+            nodes { createdAt author { login } }
           }
+          reviewThreads(first: 100) {
+            nodes {
+              isResolved
+              comments(first: 50) {
+                nodes { createdAt author { login } }
+              }
+            }
+          }
+          commits(last: 20) {
+            nodes {
+              commit {
+                oid
+                committedDate
+                parents { totalCount }
+              }
+            }
+          }
+          ${latestCommitFields}
           timelineItems(itemTypes: [READY_FOR_REVIEW_EVENT], last: 1) {
             nodes { ... on ReadyForReviewEvent { createdAt } }
           }
@@ -176,12 +427,15 @@ function fetchPRPage({ owner, name }, cursor) {
   );
 }
 
-export function fetchOpenPRs(repoConfig) {
+export function fetchOpenPRs(
+  repoConfig,
+  { includeAuthorTiers = false, includeCiChecks = false } = {},
+) {
   const allPRs = [];
   let cursor = null;
   let pageNum = 0;
   while (true) {
-    const page = fetchPRPage(repoConfig, cursor);
+    const page = fetchPRPage(repoConfig, cursor, { includeAuthorTiers, includeCiChecks });
     if (!page) break;
     allPRs.push(...page.nodes);
     pageNum++;
@@ -270,9 +524,14 @@ function touchesOwnedPaths(files, ownedPaths) {
   return files.some((file) => ownedPaths.some((path) => file.path.startsWith(path)));
 }
 
-export function collectPRActivity({ mode = "team", pod = null, authorScope = "any" } = {}) {
-  if (!["any", "pod"].includes(authorScope)) {
-    throw new Error(`Invalid authorScope: ${authorScope}. Use "any" or "pod".`);
+export function collectPRActivity({
+  mode = "team",
+  pod = null,
+  authorScope = "any",
+  authorTiers = false,
+} = {}) {
+  if (!["any", "pod", "union"].includes(authorScope)) {
+    throw new Error(`Invalid authorScope: ${authorScope}. Use "any", "pod", or "union".`);
   }
   const config = loadConfig();
   const repoConfig = splitRepo(config.github.repo);
@@ -295,10 +554,13 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   // authorScope === "pod" filters relevantPRs to pod-roster authors only.
   // PRs that touch pod paths but were authored outside the roster are surfaced
   // separately as excludedPRs so the skill can still display them for context.
+  // authorScope === "union" includes path hits OR roster-authored PRs.
   // Only applied to mode === "team"; "my" already filters by currentUser, and
   // "review" intentionally surfaces cross-pod authors whose review is owed.
-  const enforceAuthorScope = authorScope === "pod" && mode === "team";
-  const rosterLogins = enforceAuthorScope
+  const teamModeScope = mode === "team";
+  const enforceAuthorScope = authorScope === "pod" && teamModeScope;
+  const useAuthorUnion = authorScope === "union" && teamModeScope;
+  const rosterLogins = (enforceAuthorScope || useAuthorUnion)
     ? new Set(pods.flatMap((p) => [...p.leads, ...p.members]))
     : null;
 
@@ -322,14 +584,22 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   const allPRs = [];
   const scannedRepos = [];
   let pageNum = 0;
+  const includeAuthorTiers = Boolean(authorTiers) && mode === "team";
+  // CI-red is a team-dashboard signal only — skip the heavy check-rollup
+  // payload for --mode my / review (and keep devops multi-repo scans lighter).
+  const includeCiChecks = mode === "team";
   for (const target of repoTargets) {
     try {
-      const { allPRs: prs, pageNum: pages } = fetchOpenPRs(target);
+      const { allPRs: prs, pageNum: pages } = fetchOpenPRs(target, {
+        includeAuthorTiers,
+        includeCiChecks,
+      });
       pageNum += pages;
       for (const pr of prs) {
         pr.repo = target.repo;
         pr.isPrimaryRepo = target.isPrimary;
         pr.soleOwner = target.soleOwner;
+        pr._repoConfig = { owner: target.owner, name: target.name };
       }
       allPRs.push(...prs);
       scannedRepos.push(target.repo);
@@ -341,26 +611,58 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
   const isCrossPodMy = mode === "my" && pod === null;
   const relevantPRs = [];
   const excludedPRs = [];
+  const allTeamSet = new Set(roles.allTeam);
 
   for (const pr of allPRs) {
     if (pr.isDraft) continue;
     if (!pr.author?.login) continue;
     if (mode === "my" && pr.author.login !== currentUser) continue;
     const files = pr.files?.nodes || [];
-    if (!isCrossPodMy && !pr.soleOwner && !touchesOwnedPaths(files, ownedPaths)) continue;
+    const pathHit = pr.soleOwner || touchesOwnedPaths(files, ownedPaths);
+    const authorOnRoster = rosterLogins ? rosterLogins.has(pr.author.login) : false;
+
+    if (!isCrossPodMy) {
+      if (useAuthorUnion) {
+        if (!pathHit && !authorOnRoster) continue;
+      } else if (!pathHit) {
+        continue;
+      }
+    }
+
     const reviews = pr.reviews?.nodes || [];
+    const comments = pr.comments?.nodes || [];
+    const reviewThreads = pr.reviewThreads?.nodes || [];
     const reviewState = getReviewState(reviews);
+    const displayReviewState = getDisplayReviewState(
+      reviews,
+      comments,
+      pr.author.login,
+      reviewThreads,
+    );
     const ready = readySince(pr);
     const prRef = pr.isPrimaryRepo === false ? `${pr.repo}#${pr.number}` : `#${pr.number}`;
+    const checkContexts = includeCiChecks
+      ? resolveCheckContexts(pr, pr._repoConfig || repoConfig)
+      : [];
+    const failingChecks = failingCheckNames(checkContexts);
+    const ciRed = formatCiRed(failingChecks);
     const enriched = {
       ...pr,
       files,
+      comments: { nodes: comments },
+      reviewThreads: { nodes: reviewThreads },
       reviewState,
+      displayReviewState,
       ready,
       stale: now - new Date(ready).getTime() > staleMs,
       repo: pr.repo,
       prRef,
+      failingChecks,
+      ciRed,
     };
+    if (includeAuthorTiers) {
+      enriched.authorTier = assignAuthorTier(enriched, allTeamSet);
+    }
     if (enforceAuthorScope && !rosterLogins.has(pr.author.login)) {
       excludedPRs.push(enriched);
       continue;
@@ -382,6 +684,7 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
     relevantPRs,
     excludedPRs,
     authorScope,
+    authorTiers: includeAuthorTiers,
     pageNum,
     isCrossPodMy,
   };
@@ -389,6 +692,9 @@ export function collectPRActivity({ mode = "team", pod = null, authorScope = "an
 
 export function classifyTeamPRs(state) {
   const me = state.roles.currentUser;
+  const approvedPRs = state.relevantPRs.filter((pr) =>
+    isFullyApprovedInPod(pr, state.roles),
+  );
   const needsAction = state.relevantPRs.filter(
     (pr) => !isFullyApprovedInPod(pr, state.roles),
   );
@@ -404,7 +710,7 @@ export function classifyTeamPRs(state) {
   const activePRs = needsAction.filter(
     (pr) => !pr.stale && !reReviewSet.has(pr.prRef ?? `#${pr.number}`),
   );
-  const conflictCount = needsAction.filter(
+  const conflictCount = state.relevantPRs.filter(
     (pr) => pr.mergeable === "CONFLICTING",
   ).length;
   return {
@@ -412,9 +718,32 @@ export function classifyTeamPRs(state) {
     reReviewPRs,
     stalePRs,
     activePRs,
-    skipped: state.relevantPRs.length - needsAction.length,
+    approvedPRs,
+    skipped: approvedPRs.length,
     conflictCount,
   };
+}
+
+export const AUTHOR_TIER_ORDER = ["core", "platform", "external"];
+
+export function groupTeamPRsByTier(groups) {
+  function empty() {
+    return { reReviewPRs: [], stalePRs: [], activePRs: [], approvedPRs: [] };
+  }
+  const tiers = {
+    core: empty(),
+    platform: empty(),
+    external: empty(),
+  };
+  function place(pr, key) {
+    const tier = AUTHOR_TIER_ORDER.includes(pr.authorTier) ? pr.authorTier : "platform";
+    tiers[tier][key].push(pr);
+  }
+  for (const pr of groups.reReviewPRs) place(pr, "reReviewPRs");
+  for (const pr of groups.stalePRs) place(pr, "stalePRs");
+  for (const pr of groups.activePRs) place(pr, "activePRs");
+  for (const pr of groups.approvedPRs) place(pr, "approvedPRs");
+  return tiers;
 }
 
 export function classifyReviewPRs(state) {
@@ -422,8 +751,8 @@ export function classifyReviewPRs(state) {
   const myRole = state.roles.currentUserRole;
   const candidates = state.relevantPRs.filter((pr) => {
     if (pr.author.login === me) return false;
-    const myState = memberState(pr, me);
-    if (myState === "APPROVED") return false;
+    // Approval-gate view: only formal APPROVED dismisses the queue.
+    if (pr.reviewState.get(me) === "APPROVED") return false;
     return true;
   });
   const dismissed = [];
@@ -499,6 +828,11 @@ export function toJsonablePR(pr) {
     stale: pr.stale,
     mergeable: pr.mergeable,
     files: pr.files,
-    reviews: [...pr.reviewState.entries()].map(([login, state]) => ({ login, state })),
+    authorTier: pr.authorTier || null,
+    reviews: [...(pr.displayReviewState || pr.reviewState).entries()].map(
+      ([login, state]) => ({ login, state }),
+    ),
+    failingChecks: pr.failingChecks || [],
+    ciRed: pr.ciRed || null,
   };
 }
