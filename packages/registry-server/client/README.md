@@ -26,7 +26,7 @@ Ensure the registry core key is available via environment variables or provided 
 'use strict'
 const { QVACRegistryClient } = require('@qvac/registry-client')
 
-async function main () {
+async function main() {
   const client = new QVACRegistryClient({
     registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY
   })
@@ -120,16 +120,19 @@ result.artifact.stream.pipe(fs.createWriteStream('./model.ggml'))
 This method only waits for the network layer (Corestore + Hyperswarm) — it does not wait for the metadata core to sync, making it faster for known blob coordinates.
 
 ```javascript
-const result = await client.downloadBlob({
-  coreKey: 'ey46cahego89xox118uhyryakz47bcs8bbxu97tnnpmuwmgi5wmo',
-  blockOffset: 0,
-  blockLength: 665,
-  byteOffset: 0,
-  byteLength: 43537433
-}, {
-  outputFile: './downloaded/ggml-tiny-q8_0.bin',
-  timeout: 60000
-})
+const result = await client.downloadBlob(
+  {
+    coreKey: 'ey46cahego89xox118uhyryakz47bcs8bbxu97tnnpmuwmgi5wmo',
+    blockOffset: 0,
+    blockLength: 665,
+    byteOffset: 0,
+    byteLength: 43537433
+  },
+  {
+    outputFile: './downloaded/ggml-tiny-q8_0.bin',
+    timeout: 60000
+  }
+)
 console.log('Downloaded to:', result.artifact.path)
 ```
 
@@ -332,11 +335,11 @@ The client uses custom error codes in the range 19001-20000. All errors extend `
 
 ### Error Codes
 
-| Code | Name | Description | When Thrown |
-|------|------|-------------|-------------|
-| 19001 | FAILED_TO_CONNECT | Connection to registry failed | Missing core key, network issues during initialization |
-| 19002 | FAILED_TO_CLOSE | Failed to close registry cleanly | Resource cleanup errors during shutdown |
-| 19003 | MODEL_NOT_FOUND | Model not found or invalid | Model doesn't exist or missing blob binding |
+| Code  | Name              | Description                      | When Thrown                                            |
+| ----- | ----------------- | -------------------------------- | ------------------------------------------------------ |
+| 19001 | FAILED_TO_CONNECT | Connection to registry failed    | Missing core key, network issues during initialization |
+| 19002 | FAILED_TO_CLOSE   | Failed to close registry cleanly | Resource cleanup errors during shutdown                |
+| 19003 | MODEL_NOT_FOUND   | Model not found or invalid       | Model doesn't exist or missing blob binding            |
 
 ### Error Handling Example
 
@@ -344,7 +347,7 @@ The client uses custom error codes in the range 19001-20000. All errors extend `
 const { QVACRegistryClient } = require('@qvac/registry-client')
 const { QvacErrorRegistryClient } = require('@qvac/registry-client/utils/error')
 
-async function handleErrors () {
+async function handleErrors() {
   const client = new QVACRegistryClient({
     registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY
   })

@@ -1,503 +1,231 @@
-import type { QvacResponse } from '@qvac/infer-base'
-import type QvacLogger from '@qvac/logging'
-
-export type NumericLike = number | `${number}`
-
+import QvacLogger = require('@qvac/logging');
+import { type QvacResponse } from '@qvac/infer-base';
+import type VideoStableDiffusionConstructor from './video';
+export type NumericLike = number | `${number}`;
 /**
  * Low-level addon shape exposed by `addon.js` (`SdInterface`). Both image
- * and video modes flow through the same `runJob` entrypoint -- the native
- * `SdModel::process()` dispatches on the `mode` field.
+ * and video modes flow through the same `runJob` entrypoint.
  */
 export interface Addon {
-  activate(): Promise<void>
-  runJob(
-    params:
-      | (GenerationParams & { mode: 'txt2img' | 'img2img' })
-      | { mode: 'txt2vid' | 'img2vid'; [key: string]: unknown }
-  ): Promise<boolean>
-  cancel(): Promise<void>
-  unload(): Promise<void>
+    activate(): Promise<void>;
+    runJob(params: (GenerationParams & {
+        mode: 'txt2img' | 'img2img';
+    }) | {
+        mode: 'txt2vid' | 'img2vid';
+        [key: string]: unknown;
+    }): Promise<boolean>;
+    cancel(): Promise<void>;
+    unload(): Promise<void>;
 }
-
-/** Supported diffusion sampling methods */
-export type SamplerMethod =
-  | 'euler'
-  | 'euler_a'
-  | 'heun'
-  | 'dpm2'
-  | 'dpm++2m'
-  | 'dpm++2mv2'
-  | 'dpm++2s_a'
-  | 'lcm'
-  | 'ipndm'
-  | 'ipndm_v'
-  | 'ddim_trailing'
-  | 'tcd'
-  | 'res_multistep'
-  | 'res_2s'
-
-/** Supported weight quantization types */
-export type WeightType =
-  | 'auto'
-  | 'f32'
-  | 'f16'
-  | 'bf16'
-  | 'q2_k'
-  | 'q3_k'
-  | 'q4_0'
-  | 'q4_1'
-  | 'q4_k'
-  | 'q5_0'
-  | 'q5_1'
-  | 'q5_k'
-  | 'q6_k'
-  | 'q8_0'
-
-/** Supported RNG types */
-export type RngType = 'cpu' | 'cuda' | 'std_default'
-
-/** Supported sampling schedules */
-export type ScheduleType =
-  | 'discrete'
-  | 'karras'
-  | 'exponential'
-  | 'ays'
-  | 'gits'
-  | 'sgm_uniform'
-  | 'simple'
-  | 'lcm'
-  | 'smoothstep'
-  | 'kl_optimal'
-  | 'bong_tangent'
-
-/**
- * Supported noise prediction types. `flux_flow` is kept for FLUX.1
- * back-compat -- the C++ `SdCtxHandlers` still accepts it and the JS
- * runtime validator in `index.js` matches both. New code should prefer
- * `flux2_flow` for FLUX.2.
- */
-export type PredictionType =
-  | 'auto'
-  | 'eps'
-  | 'v'
-  | 'edm_v'
-  | 'flow'
-  | 'flux_flow'
-  | 'flux2_flow'
-
-/** LoRA application mode */
-export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime'
-
-/** Step-caching algorithm */
-export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylorseer' | 'cache-dit'
-
+export type SamplerMethod = 'euler' | 'euler_a' | 'heun' | 'dpm2' | 'dpm++2m' | 'dpm++2mv2' | 'dpm++2s_a' | 'lcm' | 'ipndm' | 'ipndm_v' | 'ddim_trailing' | 'tcd' | 'res_multistep' | 'res_2s';
+export type WeightType = 'auto' | 'f32' | 'f16' | 'bf16' | 'q2_k' | 'q3_k' | 'q4_0' | 'q4_1' | 'q4_k' | 'q5_0' | 'q5_1' | 'q5_k' | 'q6_k' | 'q8_0';
+export type RngType = 'cpu' | 'cuda' | 'std_default';
+export type ScheduleType = 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits' | 'sgm_uniform' | 'simple' | 'lcm' | 'smoothstep' | 'kl_optimal' | 'bong_tangent';
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow';
+export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime';
+export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylorseer' | 'cache-dit';
 export interface SdConfig {
-  /** Number of CPU threads (-1 = auto) */
-  threads?: NumericLike
-  /** Preferred compute device: 'gpu' (default; try GPU backends) or 'cpu' */
-  device?: 'gpu' | 'cpu'
-  /**
-   * GPU to pin when `device` is 'gpu': a GPU-device index, `'integrated'`, or
-   * `'dedicated'` (the discrete GPU with the most VRAM). Omit to let the
-   * backend choose (the first enumerated device). Resolved against the addon's
-   * own ggml device enumeration, so it cannot desync from the device list the
-   * backend actually uses. If an explicit request cannot be satisfied (e.g.
-   * `'integrated'` on a host with no integrated GPU, `'dedicated'` with no
-   * discrete GPU, or an out-of-range index) the addon falls back to CPU rather
-   * than substituting a different GPU.
-   */
-  'main-gpu'?: number | 'integrated' | 'dedicated'
-  /** Weight quantization type */
-  type?: WeightType
-  /** RNG type for reproducible generation */
-  rng?: RngType
-  /** RNG type for the sampler (separate from context RNG) */
-  sampler_rng?: RngType
-  /** Run CLIP encoder on CPU even when GPU is available */
-  clip_on_cpu?: boolean
-  /** Run VAE decoder on CPU even when GPU is available */
-  vae_on_cpu?: boolean
-  /** Load only VAE decoder weights. Defaults to false so img2img/fusion can encode input images. */
-  vae_decode_only?: boolean
-  /** Enable VAE tiling to reduce VRAM usage */
-  vae_tiling?: boolean
-  /** Enable flash attention for memory efficiency */
-  flash_attn?: boolean
-  /** Enable flash attention for diffusion model only. Defaults to true (required for FLUX2 to avoid materialising the full Q·Kᵀ matrix; safe for all families — falls back on unsupported backends). */
-  diffusion_fa?: boolean
-  /** Use memory-mapped model loading */
-  mmap?: boolean
-  /** Offload model weights to CPU when not in use */
-  offload_to_cpu?: boolean
-  /**
-   * Noise prediction type override. Auto-detected from model for txt2img, but
-   * **required** for FLUX img2img: the addon's branch selection relies on this
-   * value to choose the FLUX in-context conditioning path vs. SDEdit. Set
-   * `'flux2_flow'` for FLUX.2 when using `init_image`.
-   */
-  prediction?: PredictionType
-  /** Flow-matching guidance shift */
-  flow_shift?: number
-  /** Use direct convolution in diffusion model. Defaults to true; set false to force the generic conv path. */
-  diffusion_conv_direct?: boolean
-  /** Use direct convolution in VAE. Defaults to true; set false to force the generic conv path. */
-  vae_conv_direct?: boolean
-  /** Force SDXL VAE conv scale factor */
-  force_sdxl_vae_conv_scale?: boolean
-  /** Custom backends directory path (defaults to prebuilds/) */
-  backendsDir?: string
-  /** Custom tensor type rules string */
-  tensor_type_rules?: string
-  /** LoRA application mode */
-  lora_apply_mode?: LoraApplyMode
-  /** ESRGAN upscaler tile size */
-  upscaler_tile_size?: NumericLike
-  /** Use direct convolution in ESRGAN upscaler */
-  upscaler_direct?: boolean
-  /** Keep ESRGAN upscaler weights on CPU and offload during compute */
-  upscaler_offload_params_to_cpu?: boolean
-  /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
-  upscaler_threads?: NumericLike
-  /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
-  verbosity?: NumericLike
-  [key: string]: string | number | boolean | undefined
+    threads?: NumericLike;
+    device?: 'gpu' | 'cpu';
+    'main-gpu'?: number | 'integrated' | 'dedicated';
+    type?: WeightType;
+    rng?: RngType;
+    sampler_rng?: RngType;
+    clip_on_cpu?: boolean;
+    vae_on_cpu?: boolean;
+    vae_decode_only?: boolean;
+    vae_tiling?: boolean;
+    flash_attn?: boolean;
+    diffusion_fa?: boolean;
+    mmap?: boolean;
+    offload_to_cpu?: boolean;
+    prediction?: PredictionType;
+    flow_shift?: number;
+    diffusion_conv_direct?: boolean;
+    vae_conv_direct?: boolean;
+    force_sdxl_vae_conv_scale?: boolean;
+    backendsDir?: string;
+    tensor_type_rules?: string;
+    lora_apply_mode?: LoraApplyMode;
+    upscaler_tile_size?: NumericLike;
+    upscaler_direct?: boolean;
+    upscaler_offload_params_to_cpu?: boolean;
+    upscaler_threads?: NumericLike;
+    verbosity?: NumericLike;
+    [key: string]: string | number | boolean | undefined;
 }
-
 export interface DiffusionFiles {
-  /** Absolute path to main model weights */
-  model: string
-  /** SD3: absolute path to CLIP-L text encoder */
-  clipL?: string
-  /** SDXL / SD3: absolute path to CLIP-G text encoder */
-  clipG?: string
-  /** SD3: absolute path to T5-XXL text encoder */
-  t5Xxl?: string
-  /**
-   * LLM text encoder (llm_path). FLUX.2 [klein] → Qwen3 4B;
-   * Ideogram 4 → Qwen3-VL 8B Instruct.
-   */
-  llm?: string
-  /** Absolute path to VAE file */
-  vae?: string
-  /** Absolute path to ESRGAN upscaler model */
-  esrgan?: string
-  /**
-   * Wan 2.2 only: high-noise diffusion expert. Omit for Wan 2.1 and all
-   * image models (FLUX, SD, etc.); native layer still expects the path key to
-   * be present as an empty string when unset.
-   */
-  highNoiseDiffusionModel?: string
-  /**
-   * Ideogram 4 only: unconditional (CFG) diffusion model
-   * (uncond_diffusion_model_path), loaded alongside `model` so real
-   * classifier-free guidance works. Omit for all other models.
-   */
-  uncondModel?: string
+    model: string;
+    clipL?: string;
+    clipG?: string;
+    t5Xxl?: string;
+    llm?: string;
+    vae?: string;
+    esrgan?: string;
+    highNoiseDiffusionModel?: string;
+    uncondModel?: string;
 }
-
 export interface EsrganFiles {
-  /** Absolute path to ESRGAN upscaler model */
-  esrgan: string
+    esrgan: string;
 }
-
 export interface EsrganUpscalerConfig {
-  /** Custom backends directory path (defaults to prebuilds/) */
-  backendsDir?: string
-  /** Number of CPU threads (-1 = auto) */
-  threads?: NumericLike
-  /** ESRGAN upscaler tile size */
-  upscaler_tile_size?: NumericLike
-  /** Use direct convolution in ESRGAN upscaler */
-  upscaler_direct?: boolean
-  /** Keep ESRGAN upscaler weights on CPU and offload during compute */
-  upscaler_offload_params_to_cpu?: boolean
-  /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
-  upscaler_threads?: NumericLike
-  /**
-   * Compute device for the standalone upscaler: `gpu` by default (try GPU,
-   * fall back to CPU if unavailable) or `cpu`.
-   * `EsrganRuntimeStats.backendDevice` reports the device actually used.
-   */
-  device?: 'cpu' | 'gpu'
-  /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
-  verbosity?: NumericLike
-  [key: string]: string | number | boolean | undefined
+    backendsDir?: string;
+    threads?: NumericLike;
+    upscaler_tile_size?: NumericLike;
+    upscaler_direct?: boolean;
+    upscaler_offload_params_to_cpu?: boolean;
+    upscaler_threads?: NumericLike;
+    device?: 'cpu' | 'gpu';
+    verbosity?: NumericLike;
+    [key: string]: string | number | boolean | undefined;
 }
-
 export interface ImgStableDiffusionArgs {
-  files: DiffusionFiles
-  /**
-   * Native backend configuration. Optional — when omitted, the addon
-   * forwards an empty config object and the C++ layer falls back to
-   * stable-diffusion.cpp defaults for every parameter.
-   */
-  config?: SdConfig
-  /**
-   * Logger for JS wrapper messages only. Native C++ logs are process-global;
-   * configure them with `@qvac/diffusion-cpp/addonLogging`.
-   */
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
+    files: DiffusionFiles;
+    config?: SdConfig;
+    logger?: QvacLogger | Console | null;
+    opts?: {
+        stats?: boolean;
+    };
 }
-
 export interface EsrganUpscalerArgs {
-  files: EsrganFiles
-  config?: EsrganUpscalerConfig
-  /**
-   * Logger for JS wrapper messages only. Native C++ logs are process-global;
-   * configure them with `@qvac/diffusion-cpp/addonLogging`.
-   */
-  logger?: QvacLogger | Console | null
-  opts?: { stats?: boolean }
+    files: EsrganFiles;
+    config?: EsrganUpscalerConfig;
+    logger?: QvacLogger | Console | null;
+    opts?: {
+        stats?: boolean;
+    };
 }
-
 export interface EsrganUpscaleOptions {
-  repeats?: number
+    repeats?: number;
 }
-
 export interface GenerationParams {
-  prompt: string
-  negative_prompt?: string
-  /** Non-empty absolute path to a LoRA adapter (.safetensors, etc.) */
-  lora?: string
-  /** Post-generation ESRGAN upscale. Requires files.esrgan. */
-  upscale?: boolean | { repeats?: number }
-  /** Output width (multiple of 8). FLUX img2img defaults to 1024 when omitted. */
-  width?: number
-  /** Output height (multiple of 8). FLUX img2img defaults to 1024 when omitted. */
-  height?: number
-  steps?: number
-  /** CFG scale (SD2/SDXL/SD3) */
-  cfg_scale?: number
-  /** Distilled guidance (FLUX.2) */
-  guidance?: number
-  /** Sampler name (e.g. 'euler', 'dpm++2m') */
-  sampling_method?: SamplerMethod
-  /** Alias for sampling_method — accepted by the C++ layer */
-  sampler?: SamplerMethod
-  /** Scheduler name */
-  scheduler?: ScheduleType
-  seed?: number
-  batch_count?: number
-  /** Enable VAE tiling (for large images) */
-  vae_tiling?: boolean
-  /** VAE tile dimensions — integer or 'WxH' string (e.g. '512x512') */
-  vae_tile_size?: number | string
-  /** VAE tile overlap fraction (0.0–1.0) */
-  vae_tile_overlap?: number
-  /** Step-caching algorithm */
-  cache_mode?: CacheMode
-  /** Cache preset: slow/medium/fast/ultra (shorthand for cache_mode + threshold) */
-  cache_preset?: string
-  /** Direct cache reuse threshold override (0 = library default) */
-  cache_threshold?: number
-  /** Stochasticity parameter for DDIM/TCD samplers */
-  eta?: number
-  /** Image CFG scale for img2img/inpaint (-1 = use cfg_scale) */
-  img_cfg_scale?: number
-  /** Skip last N CLIP encoder layers (SD2.x) */
-  clip_skip?: number
-  /**
-   * Input image as PNG/JPEG bytes for img2img.
-   *   - FLUX.2 → in-context conditioning (single `ref_image`). `strength` is ignored.
-   *   - SD2.x / SDXL / SD3 → SDEdit (noised init + `strength`-controlled denoise).
-   *
-   * Mutually exclusive with `init_images`.
-   */
-  init_image?: Uint8Array
-  /**
-   * **FLUX.2 only.** Array of PNG/JPEG buffers for multi-reference "fusion"
-   * conditioning. Each buffer becomes a separate reference image that the
-   * FLUX.2 transformer attends to via joint attention with distinct RoPE
-   * positions. Mutually exclusive with `init_image`; requires the context
-   * to be loaded with `files.llm` and `config.prediction: 'flux2_flow'`.
-   *
-   * Note on FLUX.2-klein specifically: the Qwen3 text encoder does **not**
-   * receive vision tokens for these references, so `@image1`, `@image2`, …
-   * tags in the prompt are just prose to the LLM. The actual fusion is
-   * purely visual (attention between ref latents and target latents in the
-   * DiT). This still works well for "blend two portraits" style prompts.
-   */
-  init_images?: Uint8Array[]
-  /**
-   * Maps to `sd_img_gen_params_t.increase_ref_index`. Default: `false`
-   * (matches the upstream library / sd-cli default).
-   *
-   *   `false` → all reference latents share the same RoPE index slot and
-   *             tile into the same image coordinate space. Attention
-   *             blends their features. **This is what produces visible
-   *             visual fusion on FLUX.2-klein.** Recommended.
-   *
-   *   `true`  → each reference gets its own incrementing RoPE index. Use
-   *             with models whose text encoder receives per-image vision
-   *             tokens (Qwen-Image-Edit, Z-Image-Omni). On FLUX.2-klein
-   *             this typically makes one ref dominate and kills fusion.
-   */
-  increase_ref_index?: boolean
-  /**
-   * When `true` (default), every reference image in `init_images` (or the
-   * single `init_image` on FLUX.2) is auto-resized to the target width /
-   * height before VAE-encoding. Disable only if you have manually
-   * pre-resized the buffers to the exact `width`/`height`.
-   */
-  auto_resize_ref_image?: boolean
-  /**
-   * img2img denoising strength (0.0 to 1.0). 0 = keep source, 1 = ignore source.
-   * SD2.x/SDXL/SD3 only. FLUX.2 ignores `strength` and routes `init_image`
-   * (or `init_images`) through in-context conditioning instead.
-   */
-  strength?: number
+    prompt: string;
+    negative_prompt?: string;
+    lora?: string;
+    upscale?: boolean | {
+        repeats?: number;
+    };
+    width?: number;
+    height?: number;
+    steps?: number;
+    cfg_scale?: number;
+    guidance?: number;
+    sampling_method?: SamplerMethod;
+    sampler?: SamplerMethod;
+    scheduler?: ScheduleType;
+    seed?: number;
+    batch_count?: number;
+    vae_tiling?: boolean;
+    vae_tile_size?: number | string;
+    vae_tile_overlap?: number;
+    cache_mode?: CacheMode;
+    cache_preset?: string;
+    cache_threshold?: number;
+    eta?: number;
+    img_cfg_scale?: number;
+    clip_skip?: number;
+    init_image?: Uint8Array;
+    init_images?: Uint8Array[];
+    increase_ref_index?: boolean;
+    auto_resize_ref_image?: boolean;
+    strength?: number;
 }
-
-/**
- * Shape of the stats object emitted on the 'stats' event of a QvacResponse.
- *
- * All time values are in milliseconds. Cumulative fields (totalGenerationMs,
- * totalWallMs, totalSteps, totalGenerations, totalImages, totalPixels) accumulate
- * across the lifetime of the model instance; per-job fields (generationMs, width,
- * height, seed) reflect only the most recent generation.
- *
- * The per-job phase breakdown (conditionerMs, denoiseMs, vaeMs, postProcessMs)
- * splits the most recent generation into its conditioning (text-encode),
- * denoising, VAE decode, and post-generate (encode/upscale/output) phases;
- * these four sum to generationMs. stepsPerSecond is the measured denoising
- * throughput for that job. All are derived from the native progress sequence
- * rather than from the cumulative totals.
- *
- * Other derivable rates (msPerStep, megapixelsPerSecond) are intentionally
- * omitted — callers can compute them from the primitives provided:
- *   msPerStep         = totalWallMs / totalSteps
- *   megapixelsPerSec  = (totalPixels / 1e6) / (totalWallMs / 1000)
- */
 export interface RuntimeStats {
-  /** Wall time to load the model weights (ms) */
-  modelLoadMs: number
-  /** Wall time for the most recent generation job (ms) */
-  generationMs: number
-  /** Cumulative generation time across all jobs (ms) */
-  totalGenerationMs: number
-  /** Cumulative wall time across all jobs (ms) */
-  totalWallMs: number
-  /** Cumulative diffusion steps across all jobs */
-  totalSteps: number
-  /** Cumulative number of generation calls */
-  totalGenerations: number
-  /** Cumulative number of images produced */
-  totalImages: number
-  /** Cumulative number of pixels produced */
-  totalPixels: number
-  /** Width of the most recent generated image (px) */
-  width: number
-  /** Height of the most recent generated image (px) */
-  height: number
-  /** Seed used for the most recent generation */
-  seed: number
-  /** Conditioning (text-encode) phase before denoising, most recent job (ms) */
-  conditionerMs: number
-  /** Denoising loop duration, most recent job (ms) */
-  denoiseMs: number
-  /** VAE decode phase after denoising, most recent job (ms) */
-  vaeMs: number
-  /**
-   * Post-generate work after VAE decode — PNG encode, optional ESRGAN upscale,
-   * and output callbacks — for the most recent job (ms). Completes the phase
-   * breakdown so conditionerMs + denoiseMs + vaeMs + postProcessMs === generationMs.
-   */
-  postProcessMs: number
-  /** Denoising throughput, most recent job (steps per second) */
-  stepsPerSecond: number
+    modelLoadMs: number;
+    generationMs: number;
+    totalGenerationMs: number;
+    totalWallMs: number;
+    totalSteps: number;
+    totalGenerations: number;
+    totalImages: number;
+    totalPixels: number;
+    width: number;
+    height: number;
+    seed: number;
+    conditionerMs: number;
+    denoiseMs: number;
+    vaeMs: number;
+    postProcessMs: number;
+    stepsPerSecond: number;
 }
-
 export interface EsrganRuntimeStats {
-  /** Wall time to load the ESRGAN model weights (ms) */
-  modelLoadMs: number
-  /** Wall time for the most recent upscale job (ms) */
-  upscaleMs: number
-  /** Cumulative upscale time across all jobs (ms) */
-  totalUpscaleMs: number
-  /** Cumulative wall time across all jobs (ms) */
-  totalWallMs: number
-  /** Cumulative number of upscale calls */
-  totalUpscales: number
-  /** Cumulative number of images produced */
-  totalImages: number
-  /** Cumulative number of pixels produced */
-  totalPixels: number
-  /** Width of the most recent emitted PNG (px) */
-  width: number
-  /** Height of the most recent emitted PNG (px) */
-  height: number
-  /** Number of ESRGAN passes used by the most recent upscale job */
-  repeats: number
-  /**
-   * Actual compute device used by the ESRGAN upscaler after init / fallback
-   * (native 0/1 mapped to 'cpu' / 'gpu' in JS).
-   */
-  backendDevice?: 'cpu' | 'gpu'
+    modelLoadMs: number;
+    upscaleMs: number;
+    totalUpscaleMs: number;
+    totalWallMs: number;
+    totalUpscales: number;
+    totalImages: number;
+    totalPixels: number;
+    width: number;
+    height: number;
+    repeats: number;
+    backendDevice?: 'cpu' | 'gpu';
 }
-
-export default class ImgStableDiffusion {
-  /**
-   * Public for advanced/test access only -- the JS implementation also
-   * exposes this property, so the type must match. Prefer the high-level
-   * `run()` / `cancel()` / `unload()` methods in normal code.
-   */
-  addon: Addon | null
-  opts: { stats?: boolean }
-  logger: QvacLogger
-  state: { configLoaded: boolean }
-
-  constructor(args: ImgStableDiffusionArgs)
-
-  load(): Promise<void>
-
-  run(params: GenerationParams): Promise<QvacResponse>
-
-  unload(): Promise<void>
-
-  /**
-   * Cancel the current generation job.
-   * During ESRGAN upscale, cancellation is honored between repeat passes.
-   */
-  cancel(): Promise<void>
-
-  getState(): { configLoaded: boolean }
+/**
+ * Text-to-image and image-to-image generation using stable-diffusion.cpp.
+ * Supports SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein], and Ideogram 4.
+ */
+export declare class ImgStableDiffusion {
+    addon: Addon | null;
+    opts: {
+        stats?: boolean;
+    };
+    logger: QvacLogger;
+    state: {
+        configLoaded: boolean;
+    };
+    private readonly _files;
+    private readonly _config;
+    private readonly _job;
+    private readonly _run;
+    private _hasActiveResponse;
+    constructor({ files, config, logger, opts }: ImgStableDiffusionArgs);
+    load(): Promise<void>;
+    private _load;
+    private _createAddon;
+    private _addonOutputCallback;
+    run(params: GenerationParams): Promise<QvacResponse>;
+    private _runInternal;
+    cancel(): Promise<void>;
+    unload(): Promise<void>;
+    getState(): {
+        configLoaded: boolean;
+    };
 }
-
-export class EsrganUpscaler {
-  opts: { stats?: boolean }
-  logger: QvacLogger
-  state: { configLoaded: boolean }
-
-  constructor(args: EsrganUpscalerArgs)
-
-  load(): Promise<void>
-
-  upscale(imageBytes: Uint8Array, options?: EsrganUpscaleOptions): Promise<QvacResponse>
-
-  unload(): Promise<void>
-
-  /**
-   * Cancel the current upscale job.
-   * Cancellation is honored between ESRGAN repeat passes.
-   */
-  cancel(): Promise<void>
-
-  getState(): { configLoaded: boolean }
+/**
+ * Standalone ESRGAN image upscaling using stable-diffusion.cpp.
+ * Accepts encoded PNG/JPEG bytes and emits PNG bytes.
+ */
+export declare class EsrganUpscaler {
+    opts: {
+        stats?: boolean;
+    };
+    logger: QvacLogger;
+    state: {
+        configLoaded: boolean;
+    };
+    private readonly _files;
+    private readonly _config;
+    private readonly _job;
+    private readonly _run;
+    private addon;
+    private _hasActiveResponse;
+    constructor({ files, config, logger, opts }: EsrganUpscalerArgs);
+    load(): Promise<void>;
+    private _load;
+    private _createAddon;
+    private _addonOutputCallback;
+    upscale(imageBytes: Uint8Array, options?: EsrganUpscaleOptions): Promise<QvacResponse>;
+    private _upscaleInternal;
+    cancel(): Promise<void>;
+    unload(): Promise<void>;
+    getState(): {
+        configLoaded: boolean;
+    };
 }
-
-export { default as VideoStableDiffusion } from './video'
-export type {
-  VideoDiffusionFiles,
-  VideoStableDiffusionArgs,
-  VideoGenerationParams,
-  VideoRuntimeStats
-} from './video'
-
-export { QvacResponse, RuntimeStats, EsrganRuntimeStats }
-
-export function applyFluxImg2ImgDimDefaults(
-  params: GenerationParams,
-  pred: string,
-  hasInitImages: boolean
-): GenerationParams
+export declare function applyFluxImg2ImgDimDefaults(params: GenerationParams, prediction: string, hasInitImages: boolean): GenerationParams;
+export type { VideoDiffusionFiles, VideoGenerationParams, VideoMode, VideoRuntimeStats, VideoStableDiffusionArgs } from './video';
+export type { QvacResponse };
+export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>;
+export declare const VideoStableDiffusion: typeof VideoStableDiffusionConstructor;
+export default ImgStableDiffusion;

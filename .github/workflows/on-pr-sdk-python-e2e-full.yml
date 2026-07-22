@@ -1,0 +1,133 @@
+# QVAC sdk-python full cross-platform e2e - PR (test-e2e-full-gated)
+#
+# The broader real-worker leg: runs the FULL pytest suite (including the `heavy`
+# parakeet/BCI streaming tests) on the self-hosted GPU runners for all three
+# desktop platforms, proving the Python client cross-platform. Models are cached
+# (keyed on the shared model registry) so repeat runs skip the cold download.
+#
+# The fast per-PR leg is on-pr-sdk-python-e2e.yml (hosted, `verified` label,
+# minimal models, -m "not heavy"). This heavier leg is gated on `test-e2e-full`.
+#
+# Plain `pull_request` (not pull_request_target): the worker build uses only the
+# public-npm `@qvac/*` packages and pytest (no `@tetherto` GPR harness / MQTT
+# secrets), so this needs no secrets. The `test-e2e-full` label is the
+# maintainer approval that gates running PR code on the self-hosted runners.
+name: QVAC Tests (sdk-python) full - PR
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    paths:
+      - "packages/sdk-python/**"
+      - "packages/sdk/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: full e2e (${{ matrix.os }})
+    # Only once `test-e2e-full` is applied (or already present, on later pushes),
+    # or on manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'test-e2e-full') ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'test-e2e-full'))
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/sdk-python
+    env:
+      # Point the worker's model storage (SDK `cacheDirectory` config, applied
+      # via BareRpcTransport's __init_config) at a cacheable, absolute, per-OS
+      # path. Same idea as the SDK e2e's cacheDirectory.
+      QVAC_CACHE_DIR: ${{ github.workspace }}/.qvac-cache
+    steps:
+      # Self-hosted runners persist the workspace between runs; wipe it.
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        working-directory: .
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      # Use the runner's own Python. actions/setup-python doesn't work on these
+      # self-hosted GPU runners: its python-versions tarball ships a setup.sh
+      # that hardcodes `mkdir /Users/runner/hostedtoolcache`, which isn't
+      # writable here (the runner user's home is /Users/actions-runner-*). The
+      # runners already have Python; make a venv from it so installs don't touch
+      # the system interpreter. Fails loudly if the system Python is < 3.10.
+      # Per infra, don't run actions/setup-python on these runners: Python is
+      # already provisioned, and setup-python hard-fails anyway (its
+      # python-versions tarball hardcodes an unwritable /Users/runner toolcache
+      # path). Use the present Python via a venv (keeps installs out of the
+      # system interpreter). Fails loudly if the system Python is < 3.10.
+      - name: Set up Python (runner's system Python)
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          echo "System Python: $("$PY" --version) at $(command -v "$PY")"
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv .venv
+          if [ -x ".venv/bin/python" ]; then PYBIN="$(pwd)/.venv/bin/python"; else PYBIN="$(pwd)/.venv/Scripts/python"; fi
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+          "$PYBIN" -m pip install --upgrade pip
+      # node/bun are needed to build the worker. Unlike setup-python these
+      # actions work on the runners (they find the pre-cached tool, no download),
+      # and bun in particular is not otherwise on PATH. Same actions the SDK's
+      # own desktop e2e (test-node-sdk.yml) uses on these runners.
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      # Shared model cache, keyed on the same registry the SDK e2e keys on, so
+      # it invalidates in lockstep. Cross-OS so the three platforms share it.
+      - name: Restore models cache
+        id: models-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.qvac-cache
+          key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          # Fall back to the SDK e2e's own cache for the same registry, so the
+          # first Python run reuses already-downloaded models instead of
+          # re-fetching them.
+          restore-keys: |
+            qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
+
+      - name: Install (with transport + optional extras)
+        run: |
+          "$PYBIN" -m pip install -e ".[gen,dev,bare-rpc,vla,notebook]"
+
+      - name: Build worker
+        run: |
+          "$PYBIN" scripts/build_worker.py
+
+      - name: Test (full suite, real worker)
+        run: |
+          "$PYBIN" -m pytest tests/ -v
+
+      # Save even on test failure so the (multi-GB) models downloaded this run
+      # are cached and the next run doesn't re-fetch them. Skipped only when the
+      # cache already hit.
+      - name: Save models cache
+        if: always() && steps.models-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.qvac-cache
+          key: qvac-py-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true

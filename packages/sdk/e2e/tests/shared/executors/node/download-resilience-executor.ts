@@ -48,7 +48,8 @@ function singleFileCachePath(registryPath: string): string {
     .update(Buffer.from(registryPath, 'utf8'))
     .digest('hex')
     .substring(0, 16)
-  return path.join(os.homedir(), '.qvac', 'models', `${hash}_${filename}`)
+  const sdkHome = process.env['SNAP_USER_COMMON'] || os.homedir()
+  return path.join(sdkHome, '.qvac', 'models', `${hash}_${filename}`)
 }
 
 function withTimeout<T>(label: string, p: Promise<T>, ms: number): Promise<T> {

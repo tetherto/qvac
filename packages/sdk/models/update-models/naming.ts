@@ -330,7 +330,14 @@ function generateLlmName({
     }
   }
 
-  const nameParts = [familyName, params, type, quantization].filter((p) => p && p !== '')
+  const familyTokens = cleanPart(familyName).split('_')
+  // Avoid duplicating params when the registry model name already ends with
+  // the same size (for example, Qwen3-4B + 4B).
+  const paramsAlreadyIncluded =
+    params !== '' && familyTokens[familyTokens.length - 1] === cleanPart(params)
+  const nameParts = [familyName, paramsAlreadyIncluded ? '' : params, type, quantization].filter(
+    (p) => p && p !== ''
+  )
   let exportName = nameParts.map(cleanPart).join('_')
 
   if (isMMProj) {

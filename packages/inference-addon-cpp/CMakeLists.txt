@@ -71,6 +71,7 @@ if(BUILD_TESTING)
         tests/simple_addon_test.cpp
         tests/batched_addon_test.cpp
         tests/job_runner_test.cpp
+        tests/multi_job_scheduler_test.cpp
         tests/addon_js_test.cpp
     )
     target_include_directories(unit_tests PRIVATE src tests/helpers_header)

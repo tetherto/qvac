@@ -1,7 +1,7 @@
 'use strict'
 
 class Logger {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     this.level = opts.level || 'info'
     this.name = opts.name || 'QVACRegistryClient'
     this.enabled = opts.enabled !== false
@@ -14,30 +14,30 @@ class Logger {
     }
   }
 
-  _shouldLog (level) {
+  _shouldLog(level) {
     if (!this.enabled) return false
     return this.levels[level] >= this.levels[this.level]
   }
 
-  _log (level, ...args) {
+  _log(level, ...args) {
     if (!this._shouldLog(level)) return
     const prefix = `[${this.name}] [${level.toUpperCase()}]`
     console[level](prefix, ...args)
   }
 
-  debug (...args) {
+  debug(...args) {
     this._log('debug', ...args)
   }
 
-  info (...args) {
+  info(...args) {
     this._log('info', ...args)
   }
 
-  warn (...args) {
+  warn(...args) {
     this._log('warn', ...args)
   }
 
-  error (...args) {
+  error(...args) {
     this._log('error', ...args)
   }
 }

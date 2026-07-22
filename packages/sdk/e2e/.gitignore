@@ -1,5 +1,11 @@
 build/
 out/
+snap/electron-dist/
+snap/dist/
+snap/parts/
+snap/prime/
+snap/stage/
+snap/*.snap
 .qvac-cache/
 .qvac-worker-backup/
 qvac.config.json
