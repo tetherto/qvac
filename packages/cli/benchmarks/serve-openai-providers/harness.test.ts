@@ -136,6 +136,25 @@ describe('serve-openai-providers harness', () => {
     }
   })
 
+  it('returns a rejected promise for a missing prompts file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-main-'))
+    try {
+      const configPath = join(dir, 'benchmark.yaml')
+      const promptsPath = join(dir, 'missing-prompts.json')
+      writeConfig(
+        configPath,
+        makeConfig({ ggufPath: join(dir, 'model.gguf'), sha256: 'a'.repeat(64) })
+      )
+
+      await assert.rejects(
+        main(['digest', '--config', configPath, '--prompts', promptsPath]),
+        /ENOENT.*missing-prompts\.json/
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies the configured GGUF digest', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-digest-'))
     try {
