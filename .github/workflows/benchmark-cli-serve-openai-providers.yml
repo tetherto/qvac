@@ -9,6 +9,7 @@ on:
     paths:
       - 'packages/cli/benchmarks/serve-openai-providers/**'
       - 'packages/cli/package.json'
+      - 'packages/cli/tsconfig.benchmark.json'
       - '.github/workflows/benchmark-cli-serve-openai-providers.yml'
     branches:
       - main
