@@ -111,8 +111,8 @@ export function buildCompletionKwargs(params: {
   model: string
   messages: Array<{ role: 'user'; content: string }>
   generation: GenerationConfig
-}): Record<string, unknown> {
-  const kwargs: Record<string, unknown> = {
+}) {
+  const kwargs: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
     model: params.model,
     messages: params.messages,
     stream: true,
@@ -285,9 +285,7 @@ export async function runStreamingCompletion(params: {
   }
   let parsed: StreamParseResult
   try {
-    const stream = await params.client.chat.completions.create(
-      kwargs as unknown as Parameters<OpenAI['chat']['completions']['create']>[0]
-    )
+    const stream = await params.client.chat.completions.create(kwargs)
     parsed = await parseStream(stream as AsyncIterable<ChatChunk>, timings)
   } catch (err) {
     timings.streamEndS = nowSeconds()

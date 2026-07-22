@@ -55,17 +55,16 @@ export function validateRun(params: ValidateRunParams): ValidationResult {
   }
   if (parsed.promptTokens === null || parsed.completionTokens === null) {
     reasons.push('missing_usage')
-  } else {
-    if (!isTokenCount(parsed.promptTokens)) {
-      reasons.push('invalid_prompt_tokens')
-    } else if (parsed.promptTokens === 0) {
-      reasons.push('prompt_tokens_zero')
-    }
-    if (!isTokenCount(parsed.completionTokens)) {
-      reasons.push('invalid_completion_tokens')
-    } else if (parsed.completionTokens === 0) {
-      reasons.push('completion_tokens_zero')
-    }
+  }
+  if (parsed.promptTokens !== null && !isTokenCount(parsed.promptTokens)) {
+    reasons.push('invalid_prompt_tokens')
+  } else if (parsed.promptTokens === 0) {
+    reasons.push('prompt_tokens_zero')
+  }
+  if (parsed.completionTokens !== null && !isTokenCount(parsed.completionTokens)) {
+    reasons.push('invalid_completion_tokens')
+  } else if (parsed.completionTokens === 0) {
+    reasons.push('completion_tokens_zero')
   }
   if (metrics.ttftMs === null) {
     reasons.push('missing_ttft')

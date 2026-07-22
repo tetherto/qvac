@@ -24,8 +24,8 @@ function makeParsed(overrides: {
   return {
     content: 'answer',
     reasoningContent: '',
-    promptTokens: overrides.promptTokens ?? 10,
-    completionTokens: overrides.completionTokens ?? 5,
+    promptTokens: 'promptTokens' in overrides ? (overrides.promptTokens ?? null) : 10,
+    completionTokens: 'completionTokens' in overrides ? (overrides.completionTokens ?? null) : 5,
     responseModel: 'm',
     timings: {
       requestStartS: overrides.requestStartS ?? 0,
@@ -225,6 +225,14 @@ describe('serve-openai-providers harness', () => {
       assert.ok(validation.reasons.includes('invalid_completion_tokens'))
     })
   }
+
+  it('reports malformed completion usage when prompt usage is missing', () => {
+    const parsed = makeParsed({ promptTokens: null, completionTokens: Number.NaN })
+    const validation = validateRun({ parsed, metrics: computeMetrics(parsed) })
+    assert.equal(validation.ok, false)
+    assert.ok(validation.reasons.includes('missing_usage'))
+    assert.ok(validation.reasons.includes('invalid_completion_tokens'))
+  })
 
   it('fails validation when think markers appear in content', () => {
     const timings: StreamTimings = {
