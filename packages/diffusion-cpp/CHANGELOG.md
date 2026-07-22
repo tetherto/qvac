@@ -260,7 +260,7 @@ const model = new VideoStableDiffusion({
   files: {
     model: '/models/wan2.1_t2v_1.3B_fp16.safetensors',
     t5Xxl: '/models/umt5_xxl_fp16.safetensors',
-    vae: '/models/wan_2.1_vae.safetensors'
+    vae:   '/models/wan_2.1_vae.safetensors'
   },
   config: { threads: 4, device: 'gpu', diffusion_fa: true, vae_tiling: true }
 })
@@ -269,12 +269,7 @@ await model.load()
 const response = await model.run({
   mode: 'txt2vid',
   prompt: 'a coastal breeze pushes through tall grass at dawn',
-  video_frames: 33,
-  fps: 16,
-  steps: 30,
-  cfg_scale: 6.0,
-  flow_shift: 3.0,
-  seed: 42
+  video_frames: 33, fps: 16, steps: 30, cfg_scale: 6.0, flow_shift: 3.0, seed: 42
 })
 ```
 
@@ -321,7 +316,7 @@ New npm scripts:
 
 - `generate:video` → `examples/generate-video-wan.js`
 - `generate:img2vid` → `examples/img2vid-wan.js`
-  Each example streams progress ticks to stdout as a progress bar and writes a `.avi` to `output/`.
+Each example streams progress ticks to stdout as a progress bar and writes a `.avi` to `output/`.
 
 #### Refactored download scripts
 
@@ -431,23 +426,20 @@ This release migrates the diffusion addon off `BaseInference` inheritance and on
 
 ```js
 // BEFORE (≤ 0.2.x)
-const model = new ImgStableDiffusion(
-  {
-    diskPath: '/models',
-    modelName: 'flux-2-klein-4b-Q8_0.gguf',
-    llmModel: 'Qwen3-4B-Q4_K_M.gguf',
-    vaeModel: 'flux2-vae.safetensors',
-    logger: console
-  },
-  { threads: 8 }
-)
+const model = new ImgStableDiffusion({
+  diskPath: '/models',
+  modelName: 'flux-2-klein-4b-Q8_0.gguf',
+  llmModel: 'Qwen3-4B-Q4_K_M.gguf',
+  vaeModel: 'flux2-vae.safetensors',
+  logger: console
+}, { threads: 8 })
 
 // AFTER (0.3.0)
 const model = new ImgStableDiffusion({
   files: {
     model: '/models/flux-2-klein-4b-Q8_0.gguf',
-    llm: '/models/Qwen3-4B-Q4_K_M.gguf',
-    vae: '/models/flux2-vae.safetensors'
+    llm:   '/models/Qwen3-4B-Q4_K_M.gguf',
+    vae:   '/models/flux2-vae.safetensors'
   },
   config: { threads: 8 },
   logger: console,
@@ -551,8 +543,8 @@ If `addon.activate()` throws during `_load()` (for example a native init failure
 
 - Updated inference-addon-cpp dependancy from 1.1.2 to 1.1.5
 - Reason for the version update:
-  - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset.
-  - In the diffusion addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
+    - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset.
+    - In the diffusion addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.
 
 ## [0.1.1] - 2026-04-02
 

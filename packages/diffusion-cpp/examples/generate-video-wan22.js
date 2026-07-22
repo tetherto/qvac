@@ -18,8 +18,10 @@ const files = {
 
 const PROMPT =
   process.env.PROMPT ||
-  'Two anthropomorphic cats in comfy boxing gear and bright gloves fight intensely on a spotlighted stage. The camera tracks their rapid footwork as they exchange punches.'
-const NEGATIVE_PROMPT = process.env.NEG_PROMPT || 'blurry, low resolution, watermark, text, distorted'
+  'A single white porcelain espresso cup sits on a dark walnut table beside a sunlit window. Delicate steam curls upward from fresh coffee, a slow circular camera move, warm morning light, sharp ceramic texture, subtle reflections, calm premium coffee commercial, realistic continuous motion.'
+const NEGATIVE_PROMPT =
+  process.env.NEG_PROMPT ||
+  'flickering, temporal jitter, morphing, duplicated subject, warped geometry, distorted anatomy, blurry details, low resolution, text, watermark, logo'
 // Turbo was trained for this 720p, 24 fps, five-second shape.
 const WIDTH = parseInt(process.env.WIDTH || '1280', 10)
 const HEIGHT = parseInt(process.env.HEIGHT || '704', 10)
