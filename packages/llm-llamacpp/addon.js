@@ -166,10 +166,13 @@ class LlamaInterface {
   }
 
   /**
-   * Run one inference job with an array of message objects. The native binding
-   * mints the job id and returns it so concurrent jobs can be routed.
-   * @param {Array<{type: string, input?: string, content?: Uint8Array}>} data - messages (text and/or media)
-   * @returns {Promise<{accepted: boolean, id: number}>} admission result with the assigned job id
+   * Run one inference job with an array of message objects, or a batch of
+   * jobs with an array of `{id?, messages}` items. The native binding mints
+   * the job id (single) / group id (batch) and returns it so concurrent jobs
+   * can be routed; a batch result also carries the per-item `ids` assigned
+   * to each sequence.
+   * @param {Array<{type: string, input?: string, content?: Uint8Array}> | Array<{id?: string, messages: Array<{type: string, input?: string, content?: Uint8Array}>}>} data - messages (text and/or media), or batch items
+   * @returns {Promise<{accepted: boolean, id: number, ids?: string[]}>} admission result with the assigned job id (single), or group id plus per-item `ids` (batch)
    */
   async runJob(data) {
     return this._binding.runJob(this._handle, data)
