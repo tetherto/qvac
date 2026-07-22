@@ -16,39 +16,35 @@ const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
 
 const noopLogger = {
-  info () {},
-  debug () {},
-  error () {},
-  warn () {}
+  info() {},
+  debug() {},
+  error() {},
+  warn() {}
 }
 
 // Tiny model from HuggingFace (~1MB) for integration testing
-const TEST_MODEL_URL = 'https://huggingface.co/klosax/tinyllamas-stories-gguf/resolve/main/tinyllamas-stories-260k-f32.gguf'
+const TEST_MODEL_URL =
+  'https://huggingface.co/klosax/tinyllamas-stories-gguf/resolve/main/tinyllamas-stories-260k-f32.gguf'
 
-async function createService (t, { storage, bootstrap, swarmBootstrap } = {}) {
-  const basePath = storage || await createTempStorage(t)
+async function createService(t, { storage, bootstrap, swarmBootstrap } = {}) {
+  const basePath = storage || (await createTempStorage(t))
   const store = new Corestore(basePath)
   await store.ready()
 
   const swarm = new Hyperswarm({ bootstrap: swarmBootstrap || [] })
   const config = new RegistryConfig({ logger: noopLogger })
 
-  const service = new RegistryService(
-    store.namespace(AUTOBASE_NAMESPACE),
-    swarm,
-    config,
-    {
-      logger: noopLogger,
-      ackInterval: 5,
-      autobaseBootstrap: bootstrap || null,
-      skipStorageCheck: true
-    }
-  )
+  const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+    logger: noopLogger,
+    ackInterval: 5,
+    autobaseBootstrap: bootstrap || null,
+    skipStorageCheck: true
+  })
 
   return { service, store, swarm, config, storage: basePath }
 }
 
-async function cleanupService ({ service, store, swarm }) {
+async function cleanupService({ service, store, swarm }) {
   if (service && service.opened) {
     await service.close()
   }
@@ -99,16 +95,26 @@ test('Multiple writers replicate through Autobase', async (t) => {
     await waitForConnection(writer1.swarm, writer2.swarm)
     await waitForConnection(writer1.swarm, writer3.swarm)
 
-    await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, { key: writer2.service.base.local.key })
+    await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, {
+      key: writer2.service.base.local.key
+    })
     await flushAutobases(writer1.service.base, writer2.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer2.service.base.isIndexer === true, 15000)
 
-    await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, { key: writer3.service.base.local.key })
+    await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, {
+      key: writer3.service.base.local.key
+    })
     await flushAutobases(writer1.service.base, writer3.service.base)
+    // lunte-disable-next-line require-await
     await waitFor(async () => writer3.service.base.isIndexer === true, 15000)
 
     // Writer1 adds a model - using real HuggingFace URL
-    await writer1.service.addModel({ source: TEST_MODEL_URL, engine: '@test/tinyllamas', licenseId: 'MIT' })
+    await writer1.service.addModel({
+      source: TEST_MODEL_URL,
+      engine: '@test/tinyllamas',
+      licenseId: 'MIT'
+    })
 
     await flushAutobases(writer1.service.base, writer2.service.base, writer3.service.base)
 
@@ -175,7 +181,10 @@ test('License collection CRUD operations', async (t) => {
 
     const allLicenses = await ctx.service.view.findLicenses({}).toArray()
     t.ok(allLicenses.length >= 1, 'at least one license found')
-    t.ok(allLicenses.some(l => l.spdxId === 'MIT'), 'MIT license in list')
+    t.ok(
+      allLicenses.some((l) => l.spdxId === 'MIT'),
+      'MIT license in list'
+    )
   } finally {
     await cleanupService(ctx)
   }
@@ -246,7 +255,10 @@ test('License RPC methods work', async (t) => {
     const listResult = await ctx.service.listLicenses()
     t.ok(Array.isArray(listResult), 'listLicenses returns array')
     t.ok(listResult.length >= 1, 'at least one license in list')
-    t.ok(listResult.some(l => l.spdxId === 'GPL-3.0'), 'GPL-3.0 license in list')
+    t.ok(
+      listResult.some((l) => l.spdxId === 'GPL-3.0'),
+      'GPL-3.0 license in list'
+    )
   } finally {
     await cleanupService(ctx)
   }
@@ -369,11 +381,14 @@ test('addModel with skipExisting skips existing models', async (t) => {
     t.ok(model1.path, 'model added')
 
     // Second add with skipExisting
-    const model2 = await ctx.service.addModel({
-      source: 's3://test-bucket/skip-test.bin',
-      engine: '@test/engine',
-      licenseId: 'MIT'
-    }, { skipExisting: true })
+    const model2 = await ctx.service.addModel(
+      {
+        source: 's3://test-bucket/skip-test.bin',
+        engine: '@test/engine',
+        licenseId: 'MIT'
+      },
+      { skipExisting: true }
+    )
     await flushAutobases(ctx.service.base)
 
     t.is(downloadCount, 1, 'no additional download with skipExisting')
@@ -435,6 +450,7 @@ test('deleteModel throws for non-existent model', async (t) => {
     await ensureIndexer(ctx.service)
 
     await t.exception(
+      // lunte-disable-next-line require-await
       async () => ctx.service.deleteModel({ path: 'non/existent/model', source: 's3' }),
       /Model not found/,
       'throws for non-existent model'
@@ -530,14 +546,20 @@ test('undeprecating model clears deprecation fields', async (t) => {
     await ctx.service._appendOperation(DISPATCH_PUT_MODEL, deprecated)
     await flushAutobases(ctx.service.base)
 
-    const afterDeprecate = await ctx.service.getModelByKey({ path: model.path, source: model.source })
+    const afterDeprecate = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
     t.is(afterDeprecate.deprecated, true, 'model is deprecated')
     t.ok(afterDeprecate.deprecatedAt, 'deprecatedAt is set')
     t.ok(afterDeprecate.replacedBy, 'replacedBy is set')
     t.ok(afterDeprecate.deprecationReason, 'deprecationReason is set')
 
     // Now undeprecate via the RPC handler logic (simulated)
-    const deprecatedModel = await ctx.service.getModelByKey({ path: model.path, source: model.source })
+    const deprecatedModel = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
     const undeprecated = {
       ...deprecatedModel,
       deprecated: false,
@@ -548,7 +570,10 @@ test('undeprecating model clears deprecation fields', async (t) => {
     await ctx.service._appendOperation(DISPATCH_PUT_MODEL, undeprecated)
     await flushAutobases(ctx.service.base)
 
-    const afterUndeprecate = await ctx.service.getModelByKey({ path: model.path, source: model.source })
+    const afterUndeprecate = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
     t.is(afterUndeprecate.deprecated, false, 'model is no longer deprecated')
     t.absent(afterUndeprecate.deprecatedAt, 'deprecatedAt cleared')
     t.absent(afterUndeprecate.replacedBy, 'replacedBy cleared')
@@ -609,15 +634,16 @@ test('addModel extracts GGUF metadata for .gguf files', async (t) => {
   }
 })
 
-async function waitForConnection (swarm1, swarm2) {
+async function waitForConnection(swarm1, swarm2) {
   await swarm1.flush()
   await swarm2.flush()
+  // lunte-disable-next-line require-await
   await waitFor(async () => {
     return swarm1.connections.size > 0 && swarm2.connections.size > 0
   }, 10000)
 }
 
-async function flushAutobases (...bases) {
+async function flushAutobases(...bases) {
   for (let i = 0; i < 3; i++) {
     for (const base of bases) {
       await base.update()
@@ -627,12 +653,13 @@ async function flushAutobases (...bases) {
         await base.ack()
       }
     }
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
 }
 
-async function ensureIndexer (service) {
+async function ensureIndexer(service) {
   if (service.base.isIndexer) return
   await service._appendOperation(DISPATCH_ADD_INDEXER, { key: service.base.local.key })
+  // lunte-disable-next-line require-await
   await waitFor(async () => service.base.isIndexer === true, 15000)
 }

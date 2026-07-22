@@ -12,9 +12,9 @@ const QVACRegistryClient = require('../client/lib/client')
 const ADD_MODEL_RPC_TIMEOUT_MS = 60 * 60 * 1000
 const ADD_MODEL_POLL_INTERVAL_MS = 10 * 1000
 
-async function syncModels () {
+async function syncModels() {
   const args = process.argv.slice(2)
-  const fileArg = args.find(arg => arg.startsWith('--file='))
+  const fileArg = args.find((arg) => arg.startsWith('--file='))
   const filePath = fileArg ? fileArg.split('=')[1] : './data/models.prod.json'
   const dryRun = args.includes('--dry-run')
 
@@ -26,7 +26,9 @@ async function syncModels () {
   const registryCoreKey = config.getRegistryCoreKey()
 
   if (!registryCoreKey) {
-    throw new Error('QVAC_REGISTRY_CORE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.')
+    throw new Error(
+      'QVAC_REGISTRY_CORE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.'
+    )
   }
 
   // Use client library for reads
@@ -99,16 +101,21 @@ async function syncModels () {
             }
 
             try {
-              await connection.rpc.request('add-model', modelRequest, { timeout: ADD_MODEL_RPC_TIMEOUT_MS })
+              await connection.rpc.request('add-model', modelRequest, {
+                timeout: ADD_MODEL_RPC_TIMEOUT_MS
+              })
             } catch (err) {
               if (!isAmbiguousRpcError(err)) throw err
 
-              logger.warn({
-                path: sourceInfo.path,
-                source: sourceInfo.protocol,
-                error: err.message,
-                code: err.code
-              }, 'add-model RPC ended ambiguously; polling registry for completed ingest')
+              logger.warn(
+                {
+                  path: sourceInfo.path,
+                  source: sourceInfo.protocol,
+                  error: err.message,
+                  code: err.code
+                },
+                'add-model RPC ended ambiguously; polling registry for completed ingest'
+              )
 
               const recovery = await recoverAfterAmbiguousAdd({
                 client,
@@ -211,7 +218,7 @@ async function syncModels () {
   }
 }
 
-async function recoverAfterAmbiguousAdd ({
+async function recoverAfterAmbiguousAdd({
   client,
   sourceInfo,
   logger,
@@ -232,7 +239,7 @@ async function recoverAfterAmbiguousAdd ({
     error = err
   }
 
-  await connection.cleanup().catch(cleanupErr => {
+  await connection.cleanup().catch((cleanupErr) => {
     logger.warn({ error: cleanupErr.message }, 'Failed to clean up stale RPC connection')
   })
 
@@ -243,7 +250,7 @@ async function recoverAfterAmbiguousAdd ({
   }
 }
 
-function isAmbiguousRpcError (err) {
+function isAmbiguousRpcError(err) {
   if (!err) return false
 
   const code = err.code || err.cause?.code
@@ -259,7 +266,7 @@ function isAmbiguousRpcError (err) {
   )
 }
 
-async function waitForModelAfterAmbiguousAdd ({
+async function waitForModelAfterAmbiguousAdd({
   client,
   sourceInfo,
   timeoutMs = ADD_MODEL_RPC_TIMEOUT_MS,
@@ -276,10 +283,13 @@ async function waitForModelAfterAmbiguousAdd ({
 
     const model = await client.getModel(sourceInfo.path, sourceInfo.protocol)
     if (model) {
-      logger.info({
-        path: sourceInfo.path,
-        source: sourceInfo.protocol
-      }, 'Model appeared after ambiguous add-model RPC')
+      logger.info(
+        {
+          path: sourceInfo.path,
+          source: sourceInfo.protocol
+        },
+        'Model appeared after ambiguous add-model RPC'
+      )
       return model
     }
 
@@ -289,11 +299,11 @@ async function waitForModelAfterAmbiguousAdd ({
   throw new Error(`Timed out waiting for model after ambiguous add-model RPC: ${sourceInfo.path}`)
 }
 
-function defaultSleep (ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function needsMetadataUpdate (config, existing, sourceInfo) {
+function needsMetadataUpdate(config, existing, sourceInfo) {
   return (
     config.engine !== existing.engine ||
     config.licenseId !== existing.licenseId ||
@@ -306,13 +316,16 @@ function needsMetadataUpdate (config, existing, sourceInfo) {
     (existing.deprecated && config.deprecated === undefined) ||
     (config.deprecated !== undefined && config.deprecated !== existing.deprecated) ||
     (config.replacedBy !== undefined && config.replacedBy !== (existing.replacedBy || '')) ||
-    (config.deprecationReason !== undefined && config.deprecationReason !== (existing.deprecationReason || ''))
+    (config.deprecationReason !== undefined &&
+      config.deprecationReason !== (existing.deprecationReason || ''))
   )
 }
 
-function getChanges (config, existing) {
+function getChanges(config, existing) {
   const changes = {}
-  if (config.engine !== existing.engine) changes.engine = { from: existing.engine, to: config.engine }
+  if (config.engine !== existing.engine) {
+    changes.engine = { from: existing.engine, to: config.engine }
+  }
   if (config.licenseId !== existing.licenseId) {
     changes.licenseId = { from: existing.licenseId, to: config.licenseId }
   }
@@ -337,13 +350,19 @@ function getChanges (config, existing) {
   if (config.replacedBy !== undefined && config.replacedBy !== (existing.replacedBy || '')) {
     changes.replacedBy = { from: existing.replacedBy || '', to: config.replacedBy || '' }
   }
-  if (config.deprecationReason !== undefined && config.deprecationReason !== (existing.deprecationReason || '')) {
-    changes.deprecationReason = { from: existing.deprecationReason || '', to: config.deprecationReason || '' }
+  if (
+    config.deprecationReason !== undefined &&
+    config.deprecationReason !== (existing.deprecationReason || '')
+  ) {
+    changes.deprecationReason = {
+      from: existing.deprecationReason || '',
+      to: config.deprecationReason || ''
+    }
   }
   return changes
 }
 
-function printReport (report, dryRun) {
+function printReport(report, dryRun) {
   logger.info('\n=== Sync Report ===')
   logger.info(`Added: ${report.added.length}`)
   logger.info(`Updated: ${report.updated.length}`)
@@ -365,18 +384,21 @@ function printReport (report, dryRun) {
     }
   }
 
-  if (dryRun && (report.added.length > 0 || report.updated.length > 0 || report.autoDeprecated.length > 0)) {
+  if (
+    dryRun &&
+    (report.added.length > 0 || report.updated.length > 0 || report.autoDeprecated.length > 0)
+  ) {
     logger.info('\nRun without --dry-run to apply changes')
   }
 }
 
 if (require.main === module) {
   syncModels()
-    .then(report => {
+    .then((report) => {
       const hasErrors = report && report.errors && report.errors.length > 0
       process.exit(hasErrors ? 1 : 0)
     })
-    .catch(err => {
+    .catch((err) => {
       logger.error('Fatal error during sync-models:', err)
       process.exit(1)
     })

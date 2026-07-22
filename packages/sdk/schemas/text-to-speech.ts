@@ -112,6 +112,7 @@ export const ttsChatterboxRuntimeConfigSchema = z.object({
   streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
   cfmSteps: ttsNonNegativeIntegerSchema.optional(),
+  cfgRate: z.number().nonnegative().optional(),
   threads: ttsPositiveIntegerSchema.optional(),
   nGpuLayers: ttsIntegerSchema.optional(),
   seed: ttsIntegerSchema.optional()
@@ -124,7 +125,8 @@ export const ttsSupertonicRuntimeConfigSchema = z.object({
   ttsSpeed: z.number().optional(),
   ttsNumInferenceSteps: z.number().optional(),
   useGPU: z.boolean().optional(),
-  outputSampleRate: ttsOutputSampleRateSchema.optional()
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  vulkanCacheDir: z.string().min(1).optional()
 })
 
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
@@ -246,7 +248,9 @@ export const ttsRequestSchema = ttsClientParamsSchema.extend({
 
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
-  totalSamples: z.number().optional()
+  totalSamples: z.number().optional(),
+  enhancerBackendDevice: z.number().optional(),
+  enhancerBackendId: z.number().optional()
 })
 
 export const ttsResponseSchema = z.object({

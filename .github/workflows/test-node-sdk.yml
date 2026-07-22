@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       consumer:
-        description: "Node-compatible consumer to run (desktop or electron)"
+        description: "Node-compatible consumer to run (desktop, electron, or snap)"
         required: false
         type: string
         default: desktop
@@ -140,6 +140,7 @@ jobs:
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -263,12 +264,21 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      - name: Remove consumer package credentials
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          fs.rmSync('.npmrc', { force: true });
+
       - name: Bundle SDK worker (custom plugins)
         if: inputs.consumer == 'desktop'
         working-directory: ${{ inputs.working-directory }}
         run: npm run bundle:sdk
 
       - name: Configure SDK cache directory
+        if: inputs.consumer != 'snap'
         shell: node {0}
         run: |
           const fs = require('fs');
@@ -284,23 +294,23 @@ jobs:
 
       - name: Restore models cache
         id: models-cache
-        if: inputs.cache-models != false
-        uses: actions/cache/restore@v4
+        if: inputs.consumer != 'snap' && inputs.cache-models != false
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Bootstrap (download models)
-        if: steps.models-cache.outputs.cache-hit != 'true'
+        if: inputs.consumer != 'snap' && steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
         run: npx qvac-test run:bootstrap:${{ inputs.consumer }} --config=.
 
       # Save right after bootstrap. On parallel runners, first to finish reserves the key;
       # others get a non-fatal "unable to reserve" warning which is expected.
       - name: Save models cache
-        if: steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@v4
+        if: inputs.consumer != 'snap' && steps.models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
@@ -311,7 +321,107 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: npx qvac-test build:consumer:electron --config=. --skip-install
 
+      - name: Verify Snap tooling
+        if: inputs.consumer == 'snap'
+        run: |
+          if ! command -v snapcraft; then
+            sudo snap install snapcraft --classic
+          fi
+          if [ "$QVAC_TEST_SNAP_BUILD_MODE" = "lxd" ]; then
+            if ! command -v lxc; then
+              echo "::error::LXD is required for non-destructive Snap builds on this runner"
+              exit 1
+            fi
+            lxc info
+          fi
+          snap version
+          snapcraft --version
+
+      - name: Build first Snap revision
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          QVAC_TEST_SNAP_BUILD_ID: first
+        run: npx qvac-test build:consumer:snap --config=. --skip-install
+
+      - name: Preserve first Snap revision
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          fs.copyFileSync('snap/dist/qvac-sdk-e2e.snap', 'snap/dist/qvac-sdk-e2e-first.snap');
+
+      - name: Build second Snap revision
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          QVAC_TEST_SNAP_BUILD_ID: second
+        run: npx qvac-test build:consumer:snap --config=. --skip-install
+
+      - name: Verify Snap refresh persistence
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        run: >-
+          npm run test:snap:refresh --
+          --first snap/dist/qvac-sdk-e2e-first.snap
+          --second snap/dist/qvac-sdk-e2e.snap
+
+      - name: Show Snap confinement denials
+        if: failure() && inputs.consumer == 'snap'
+        continue-on-error: true
+        run: >-
+          sudo journalctl --dmesg --no-pager
+          --since "10 minutes ago"
+          --grep 'apparmor="DENIED"|audit'
+
+      - name: Install Snap revision for e2e
+        if: inputs.consumer == 'snap'
+        working-directory: ${{ inputs.working-directory }}
+        run: sudo snap install --dangerous snap/dist/qvac-sdk-e2e.snap
+
+      - name: Determine Snap model requirements
+        id: snap-model-requirements
+        if: inputs.consumer == 'snap'
+        shell: node {0}
+        env:
+          TEST_FILTER: ${{ inputs.filter }}
+        run: |
+          const fs = require('fs');
+          const filters = (process.env.TEST_FILTER || '')
+            .split(',')
+            .map((filter) => filter.trim())
+            .filter(Boolean);
+          const requiresModels =
+            filters.length === 0 || filters.some((filter) => !filter.startsWith('snap-storage'));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${requiresModels}\n`);
+
+      - name: Restore Snap models cache
+        id: snap-models-cache
+        if: inputs.consumer == 'snap' && steps.snap-model-requirements.outputs.required == 'true' && inputs.cache-models != false
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
+          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
+      - name: Bootstrap models inside Snap
+        if: inputs.consumer == 'snap' && steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ inputs.working-directory }}
+        run: >-
+          npx qvac-test run:bootstrap:snap
+          --config=.
+          --skip-build
+          --skip-snap-install
+
+      - name: Save Snap models cache
+        if: inputs.consumer == 'snap' && steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
+          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+
       - name: Generate runId
+        if: always()
         id: runid
         shell: node {0}
         env:
@@ -411,6 +521,8 @@ jobs:
             ];
             if (consumerType === 'electron') {
               consumerArgs.push('--skip-build');
+            } else if (consumerType === 'snap') {
+              consumerArgs.push('--skip-build', '--skip-snap-install');
             }
 
             const consumer = spawn('npx', consumerArgs, { detached: false, shell: true, stdio: 'inherit' });
@@ -534,6 +646,19 @@ jobs:
               console.log(`⚠️  Failed to kill consumer: ${e.message}`);
             }
           }
+
+      - name: Upload Snap artifacts
+        if: always() && inputs.consumer == 'snap'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: snap-artifacts-${{ steps.runid.outputs.platform }}
+          path: ${{ inputs.working-directory }}/snap/dist/*.snap
+          retention-days: 7
+
+      - name: Remove Snap consumer
+        if: always() && inputs.consumer == 'snap'
+        continue-on-error: true
+        run: sudo snap remove --purge qvac-sdk-e2e
 
       - name: Upload consumer logs
         if: always()

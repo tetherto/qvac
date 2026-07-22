@@ -2,7 +2,7 @@
 
 SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
-(packaged Electron main process), or mobile (Bare + React Native).
+(packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 
 ## Running locally
 
@@ -13,6 +13,7 @@ cp .env.example .env                 # only needed if you want to point at a rem
 
 npx qvac-test run:local:desktop
 npx qvac-test run:local:electron --filter completion-
+npx qvac-test run:local:snap --filter snap-
 npx qvac-test run:local:android
 npx qvac-test run:local:ios
 ```
@@ -34,6 +35,8 @@ full list.
 - Electron: Node 22+, Electron Forge dependencies, and a desktop runner capable of launching packaged Electron
   apps. The config declares `macos`, `windows`, and `linux`; local runs package the current host target unless
   `--platform` / `--arch` are supplied.
+- Snap: Linux with Snapcraft, snapd, a working LXD setup, Xvfb or a graphical session, and permission to
+  install local snaps with `sudo snap install --dangerous`.
 
 ### Rebuilding after changes
 
@@ -53,6 +56,7 @@ Which rebuild command you run depends on what changed.
   contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
 - **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
   changes. Omit `--skip-build` to rebuild.
+- **Snap requires a fresh strict Snap** after SDK, test, Electron package, or `snap/snapcraft.yaml` changes.
 - **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
@@ -81,12 +85,44 @@ packaged worker lock.
 `classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
 weights; no registry model pre-download is required.
 
+### Strict Snap e2e
+
+The Snap target wraps the Linux Electron package in `snap/snapcraft.yaml` with strict confinement. Test code,
+the SDK worker, addons, fixtures, and assets are included under the read-only `$SNAP` mount. Generated config,
+models, Corestore state, and worker locks use writable `$SNAP_USER_COMMON`.
+
+Electron is deliberately used as the packaging vehicle because the affected Workbench runtime is Electron and
+Electron Forge produces a self-contained application containing the SDK worker and native addons. The desktop
+Node consumer runs from the host checkout and depends on the host Node.js installation, so wrapping it would
+create an artificial package that does not exercise the production addon-packaging boundary. Snap remains a
+separate test-framework consumer for installation, confinement, environment, and refresh behavior, while reusing
+the same model/addon test surface and skip policy as the regular Electron consumer.
+
+```bash
+npm run install:build:full
+npx qvac-test run:local:snap --filter snap-
+```
+
+`snap-storage-common-root` verifies that strict Snap rewrites `HOME` to revision-specific
+`SNAP_USER_DATA` while the SDK worker creates `.qvac/.worker.lock` under `SNAP_USER_COMMON`. Desktop,
+mobile, and non-Snap Electron consumers skip this platform-only test.
+
+CI additionally builds two distinct local Snap artifacts and runs `scripts/run-snap-refresh-test.mjs`.
+The first revision records its home/common paths and creates SDK registry Corestore data; the second revision
+must have a different revision home while preserving and reopening those SDK-owned files from common storage.
+After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
+installed Snap.
+
+Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
+`QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.
+
 ### Custom plugin bundling
 
 [`fixtures/echo-plugin/`](./fixtures/echo-plugin) is a pure-JS custom plugin (no native addon) used to exercise
 the SDK plugin system end-to-end: `qvac.config.*` → `bundleSdk` → worker registration → `invokePlugin` /
 `invokePluginStream`. It's declared as a `custom-echo-plugin` dependency (`file:./fixtures/echo-plugin`) and
-listed in the `plugins` array of both `fixtures/qvac.config.e2e.json` and `fixtures/qvac.config.electron.json`,
+listed in the `plugins` array of `fixtures/qvac.config.e2e.json` and
+`fixtures/qvac.config.electron.json`,
 the same way a real app would add a third-party or in-repo custom plugin. `PluginExecutor`
 ([`tests/shared/executors/plugin-executor.ts`](./tests/shared/executors/plugin-executor.ts)) calls the plugin's
 own client wrapper (`custom-echo-plugin/client`) for the happy-path tests, mirroring how a real consumer would
@@ -96,7 +132,8 @@ Both `qvac.config.*` files list built-in plugins explicitly, not just `custom-ec
 or missing `plugins` array bundles all built-ins by default, but as soon as it's non-empty only the listed
 plugins are included (see `resolvePluginSpecifiers` in `@qvac/sdk/commands/bundle`). Omitting the built-ins here
 would silently drop LLM/whisper/OCR/etc. plugin registration from the workers. The Electron config intentionally
-omits `sdcpp-generation` and `ggml-vla` (these addons are skipped when running on Electron).
+omits `sdcpp-generation` and `ggml-vla` because those addons are skipped by both the regular Electron and Snap
+consumers.
 
 Each platform bundles the worker with the plugin included through its normal build path:
 
@@ -105,7 +142,7 @@ Each platform bundles the worker with the plugin included through its normal bui
   `qvac/worker.entry.mjs` at the project root, which is the SDK's standard priority-3 worker resolution path.
 - **Electron** — `forge.config.cjs` configures `@qvac/sdk/electron-forge` with
   `configPath: fixtures/qvac.config.electron.json`; the Forge plugin runs `bundleSdk` automatically during
-  `electron-forge package`.
+  `electron-forge package`. Snap reuses this packaged Linux application and plugin set.
 - **Mobile** — `qvac-test.config.js` sets `consumers.mobile.qvacConfig` to `fixtures/qvac.config.e2e.json`.
   `qvac-test build:consumer:mobile` copies that file into the generated Expo project root as `qvac.config.json`
   before `expo prebuild`, so the SDK's `withMobileBundle` Expo plugin discovers it and bundles the same plugin
@@ -122,15 +159,18 @@ other's bundle.
 
 See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-- `test-e2e-smoke` — runs the `smoke` suite on all platforms.
-- `test-e2e-full` — runs the full catalog on all platforms.
-- Release-branch PRs with SDK changes auto-run the full suite.
+- `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
+- `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
+- Release-branch PRs with SDK changes auto-run the same desktop and mobile suite.
 - Success applies the `e2e-tested` label.
 
 ### Manual runs
 
 Open [Actions → QVAC Tests (sdk) → Run workflow](https://github.com/tetherto/qvac/actions/workflows/test-sdk.yml)
 and submit the form.
+
+Snap runs are manual-only. Select `snap` to run only the strict Snap consumer, or `all` to include it with
+the other manually selected consumers.
 
 Non-obvious inputs:
 
