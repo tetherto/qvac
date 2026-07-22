@@ -561,7 +561,12 @@ const METRIC_COLUMNS = {
     { key: 'ttfb_ms', label: 'TTFB (ms)' },
     { key: 'total_steps', label: 'Steps' },
     { key: 'width', label: 'Width' },
-    { key: 'height', label: 'Height' }
+    { key: 'height', label: 'Height' },
+    { key: 'conditioner_ms', label: 'Cond (ms)' },
+    { key: 'denoise_ms', label: 'Denoise (ms)' },
+    { key: 'vae_ms', label: 'VAE (ms)' },
+    { key: 'post_process_ms', label: 'Post (ms)' },
+    { key: 'steps_per_second', label: 'Steps/s' }
   ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -651,6 +656,11 @@ function createPerformanceReporter (opts) {
           total_steps: null,
           width: null,
           height: null,
+          conditioner_ms: null,
+          denoise_ms: null,
+          vae_ms: null,
+          post_process_ms: null,
+          steps_per_second: null,
           ...metrics
         },
         input: (extra && extra.input) || null,

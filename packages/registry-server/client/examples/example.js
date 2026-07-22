@@ -7,7 +7,7 @@ const { QVACRegistryClient } = require('../index')
 const IdEnc = require('hypercore-id-encoding')
 const os = require('os')
 
-async function example () {
+async function example() {
   const tmpStorage = path.join(os.tmpdir(), `qvac-registry-example-${Date.now()}`)
   const client = new QVACRegistryClient({
     registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY,
@@ -27,7 +27,13 @@ async function example () {
   console.log('Total models found:', allModels.length)
 
   const totalBytes = allModels.reduce((sum, m) => sum + (m.blobBinding?.byteLength || 0), 0)
-  console.log('Total size:', totalBytes, 'bytes', (totalBytes / 1024 / 1024 / 1024).toFixed(2), 'GB')
+  console.log(
+    'Total size:',
+    totalBytes,
+    'bytes',
+    (totalBytes / 1024 / 1024 / 1024).toFixed(2),
+    'GB'
+  )
 
   if (allModels.length > 0) {
     const { path: modelPath, source: modelSource } = allModels[0]
@@ -35,7 +41,12 @@ async function example () {
     console.log('Found model:', {
       ...model,
       blobBinding: model.blobBinding
-        ? { ...model.blobBinding, coreKey: model.blobBinding.coreKey ? IdEnc.normalize(model.blobBinding.coreKey) : undefined }
+        ? {
+            ...model.blobBinding,
+            coreKey: model.blobBinding.coreKey
+              ? IdEnc.normalize(model.blobBinding.coreKey)
+              : undefined
+          }
         : undefined
     })
   }
@@ -64,7 +75,9 @@ async function example () {
   console.log('\n--- Fetching model shards by path prefix ---')
 
   if (allModels.length > 0) {
-    const exampleModel = allModels.find(m => m.path.includes('-00001-of-') || m.path.includes('-00002-of-'))
+    const exampleModel = allModels.find(
+      (m) => m.path.includes('-00001-of-') || m.path.includes('-00002-of-')
+    )
     if (exampleModel) {
       const basePath = exampleModel.path.replace(/-\d{5}-of-\d{5}\./, '.')
       const pathPrefix = basePath.substring(0, basePath.lastIndexOf('.'))
@@ -76,12 +89,14 @@ async function example () {
       })
 
       console.log(`Found ${shards.length} shard(s):`)
-      shards.forEach(shard => {
+      shards.forEach((shard) => {
         console.log(`  - ${shard.path} (${shard.blobBinding.byteLength} bytes)`)
       })
 
       const totalSize = shards.reduce((sum, shard) => sum + shard.blobBinding.byteLength, 0)
-      console.log(`Total size across all shards: ${totalSize} bytes (${(totalSize / 1024 / 1024).toFixed(2)} MB)`)
+      console.log(
+        `Total size across all shards: ${totalSize} bytes (${(totalSize / 1024 / 1024).toFixed(2)} MB)`
+      )
     } else {
       console.log('No sharded models found in registry')
     }
@@ -89,7 +104,7 @@ async function example () {
 
   console.log('\n--- Searching by non-indexed fields (client-side filtering) ---')
 
-  const modelsBySource = allModels.filter(m => m.source === 'hf')
+  const modelsBySource = allModels.filter((m) => m.source === 'hf')
   console.log('Found models by source "hf":', modelsBySource.length)
 
   await client.close()

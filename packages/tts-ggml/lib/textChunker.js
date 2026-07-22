@@ -1,239 +1,159 @@
-'use strict'
-
+"use strict";
 /**
- * Text chunking for sentence-stream TTS.
- *
- * `Intl.Segmenter` is used when present (typical Bun/Node). The Bare worker
- * used by the SDK may not define `Intl.Segmenter`; in that case splitting falls
- * back to punctuation rules and max-length chunking only.
+ * Text chunking for sentence-stream TTS. Intl.Segmenter is used when present;
+ * Bare runtimes without it fall back to punctuation and max-length splitting.
  */
-
-/**
- * Whether `Intl.Segmenter` exists (Bun/Node). Bare may omit it; callers
- * should always use {@link splitTtsText} which falls back to punctuation
- * and max-length chunking.
- */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_MAX_CHUNK_SCALARS = exports.KOREAN_MAX_CHUNK_SCALARS = void 0;
+exports.intlSentenceSegmentationAvailable = intlSentenceSegmentationAvailable;
+exports.splitByIntlSentences = splitByIntlSentences;
+exports.splitByAsciiAndCjkPunctuation = splitByAsciiAndCjkPunctuation;
+exports.countScalars = countScalars;
+exports.defaultMaxChunkScalars = defaultMaxChunkScalars;
+exports.splitTtsText = splitTtsText;
 function intlSentenceSegmentationAvailable() {
-  return typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+    return (typeof Intl !== "undefined" &&
+        "Segmenter" in Intl &&
+        typeof Intl.Segmenter === "function");
 }
-
-/**
- * @param {string} text
- * @param {string} [locale]
- * @returns {string[]|null}
- */
 function splitByIntlSentences(text, locale) {
-  if (!intlSentenceSegmentationAvailable()) return null
-  const trimmed = text.trim()
-  if (!trimmed) return null
-  try {
-    const seg = new Intl.Segmenter(locale || 'en', { granularity: 'sentence' })
-    const out = []
-    for (const s of seg.segment(trimmed)) {
-      const part = s.segment.trim()
-      if (part.length > 0) out.push(part)
+    if (!intlSentenceSegmentationAvailable())
+        return null;
+    const trimmed = text.trim();
+    if (!trimmed)
+        return null;
+    try {
+        const segmenter = new Intl.Segmenter(locale || "en", {
+            granularity: "sentence",
+        });
+        const output = [];
+        for (const segment of segmenter.segment(trimmed)) {
+            const part = segment.segment.trim();
+            if (part.length > 0)
+                output.push(part);
+        }
+        return output.length === 0 ? null : output;
     }
-    if (out.length === 0) return null
-    return out
-  } catch {
-    return null
-  }
+    catch {
+        return null;
+    }
 }
-
-const SENTENCE_TERMINATORS = /([.!?。！？؟])(\s*)/gu
-
-/**
- * @param {string} text
- * @returns {string[]}
- */
+const SENTENCE_TERMINATORS = /([.!?。！？؟])(\s*)/gu;
 function splitByAsciiAndCjkPunctuation(text) {
-  const parts = []
-  let lastIndex = 0
-  let m
-  while ((m = SENTENCE_TERMINATORS.exec(text)) !== null) {
-    const end = m.index + m[1].length
-    const slice = text.slice(lastIndex, end).trim()
-    if (slice.length > 0) parts.push(slice)
-    lastIndex = m.index + m[0].length
-  }
-  const tail = text.slice(lastIndex).trim()
-  if (tail.length > 0) parts.push(tail)
-  return parts
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = SENTENCE_TERMINATORS.exec(text)) !== null) {
+        const end = match.index + match[1].length;
+        const slice = text.slice(lastIndex, end).trim();
+        if (slice.length > 0)
+            parts.push(slice);
+        lastIndex = match.index + match[0].length;
+    }
+    const tail = text.slice(lastIndex).trim();
+    if (tail.length > 0)
+        parts.push(tail);
+    return parts;
 }
-
-/**
- * @param {string} text
- * @returns {string[]}
- */
 function splitByParagraphs(text) {
-  return text
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
+    return text
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.trim())
+        .filter((paragraph) => paragraph.length > 0);
 }
-
-const MIN_CHUNK_GRAPHEMES = 10
-
-/**
- * @param {string[]} chunks
- * @returns {string[]}
- */
+const MIN_CHUNK_GRAPHEMES = 10;
 function mergeShortChunks(chunks) {
-  const merged = []
-  let buffer = ''
-
-  for (const chunk of chunks) {
-    if (buffer.length === 0) {
-      buffer = chunk
-      continue
+    const merged = [];
+    let buffer = "";
+    for (const chunk of chunks) {
+        if (buffer.length === 0) {
+            buffer = chunk;
+            continue;
+        }
+        if ([...buffer].length < MIN_CHUNK_GRAPHEMES) {
+            buffer = buffer + " " + chunk;
+        }
+        else {
+            merged.push(buffer);
+            buffer = chunk;
+        }
     }
-
-    const graphemeCount = [...buffer].length
-    if (graphemeCount < MIN_CHUNK_GRAPHEMES) {
-      buffer = buffer + ' ' + chunk
-    } else {
-      merged.push(buffer)
-      buffer = chunk
-    }
-  }
-
-  if (buffer.length > 0) {
-    merged.push(buffer)
-  }
-
-  return merged
+    if (buffer.length > 0)
+        merged.push(buffer);
+    return merged;
 }
-
-/**
- * @param {string} s
- * @returns {number}
- */
-function countScalars(s) {
-  return [...s].length
+function countScalars(value) {
+    return [...value].length;
 }
-
-const MIN_HARD_SPLIT_SCALARS = 10
-
-/**
- * @param {string} text
- * @param {number} maxScalars
- * @returns {string[]}
- */
+const MIN_HARD_SPLIT_SCALARS = 10;
 function hardSplitByMaxScalars(text, maxScalars) {
-  if (maxScalars < MIN_HARD_SPLIT_SCALARS) maxScalars = MIN_HARD_SPLIT_SCALARS
-  const g = [...text]
-  if (g.length <= maxScalars) return [text]
-  const out = []
-  let i = 0
-  while (i < g.length) {
-    const slice = g.slice(i, i + maxScalars).join('')
-    out.push(slice)
-    i += maxScalars
-  }
-  return out
+    const maximum = Math.max(maxScalars, MIN_HARD_SPLIT_SCALARS);
+    const graphemes = [...text];
+    if (graphemes.length <= maximum)
+        return [text];
+    const output = [];
+    for (let index = 0; index < graphemes.length; index += maximum) {
+        output.push(graphemes.slice(index, index + maximum).join(""));
+    }
+    return output;
 }
-
-/**
- * Merge adjacent pieces until each is at most maxScalars (grapheme count).
- * @param {string[]} pieces
- * @param {number} maxScalars
- * @returns {string[]}
- */
 function mergeUpToMaxScalars(pieces, maxScalars) {
-  const out = []
-  let current = ''
-
-  for (const p of pieces) {
-    const piece = p.trim()
-    if (!piece) continue
-    const trial = current.length ? `${current} ${piece}` : piece
-    if (countScalars(trial) <= maxScalars) {
-      current = trial
-    } else {
-      if (current.length > 0) {
-        out.push(...hardSplitByMaxScalars(current, maxScalars))
-      }
-      current = piece
+    const output = [];
+    let current = "";
+    for (const rawPiece of pieces) {
+        const piece = rawPiece.trim();
+        if (!piece)
+            continue;
+        const trial = current.length ? `${current} ${piece}` : piece;
+        if (countScalars(trial) <= maxScalars) {
+            current = trial;
+        }
+        else {
+            if (current.length > 0) {
+                output.push(...hardSplitByMaxScalars(current, maxScalars));
+            }
+            current = piece;
+        }
     }
-  }
-  if (current.length > 0) {
-    out.push(...hardSplitByMaxScalars(current, maxScalars))
-  }
-  return out.filter((s) => s.trim().length > 0)
+    if (current.length > 0) {
+        output.push(...hardSplitByMaxScalars(current, maxScalars));
+    }
+    return output.filter((value) => value.trim().length > 0);
 }
-
-// Default per-chunk grapheme caps, shared with textStreamAccumulator's buffer
-// sizing. Korean packs more meaning per grapheme, so it flushes shorter chunks.
-const KOREAN_MAX_CHUNK_SCALARS = 120
-const DEFAULT_MAX_CHUNK_SCALARS = 300
-
-/**
- * @param {string} [language]
- * @returns {number}
- */
+exports.KOREAN_MAX_CHUNK_SCALARS = 120;
+exports.DEFAULT_MAX_CHUNK_SCALARS = 300;
 function defaultMaxChunkScalars(language) {
-  const lang = (language || 'en').toLowerCase()
-  return lang === 'ko' ? KOREAN_MAX_CHUNK_SCALARS : DEFAULT_MAX_CHUNK_SCALARS
+    return (language || "en").toLowerCase() === "ko"
+        ? exports.KOREAN_MAX_CHUNK_SCALARS
+        : exports.DEFAULT_MAX_CHUNK_SCALARS;
 }
-
-/**
- * Split long text into synthesis-sized chunks for sentence streaming.
- *
- * @param {string} text
- * @param {object} [options]
- * @param {string} [options.language] BCP-47 / model language (e.g. en, ko)
- * @param {string} [options.locale] Optional override for Intl.Segmenter
- * @param {number} [options.maxScalars] Max graphemes per chunk (default aligns with Supertonic)
- * @param {boolean} [options.mergeToMaxScalars] When false, return sentence-level pieces only (no
- *   mergeUpToMaxScalars pass). Default true. Useful for test harnesses that synthesize per sentence.
- * @returns {string[]}
- */
 function splitTtsText(text, options = {}) {
-  const mergeToMaxScalars = options.mergeToMaxScalars !== false
-  const language = (options.language || 'en').toLowerCase()
-  const maxScalars =
-    options.maxScalars != null ? options.maxScalars : defaultMaxChunkScalars(language)
-
-  const raw = text.trim()
-  if (!raw) return []
-
-  const locale = options.locale || language
-
-  let sentences = splitByIntlSentences(raw, locale)
-  if (!sentences || sentences.length === 0) {
-    const paras = splitByParagraphs(raw)
-    const blocks = paras.length > 0 ? paras : [raw]
-    sentences = []
-    for (const para of blocks) {
-      const sents = splitByAsciiAndCjkPunctuation(para)
-      const mergedShort = mergeShortChunks(sents.length > 0 ? sents : [para])
-      for (const m of mergedShort) {
-        if (m.trim()) sentences.push(m.trim())
-      }
+    const mergeToMaxScalars = options.mergeToMaxScalars !== false;
+    const language = (options.language || "en").toLowerCase();
+    const maxScalars = options.maxScalars ?? defaultMaxChunkScalars(language);
+    const raw = text.trim();
+    if (!raw)
+        return [];
+    let sentences = splitByIntlSentences(raw, options.locale || language);
+    if (!sentences || sentences.length === 0) {
+        const paragraphs = splitByParagraphs(raw);
+        const blocks = paragraphs.length > 0 ? paragraphs : [raw];
+        sentences = [];
+        for (const paragraph of blocks) {
+            const split = splitByAsciiAndCjkPunctuation(paragraph);
+            const merged = mergeShortChunks(split.length > 0 ? split : [paragraph]);
+            for (const chunk of merged) {
+                if (chunk.trim())
+                    sentences.push(chunk.trim());
+            }
+        }
     }
-  }
-
-  if (sentences.length === 0) {
-    if (!mergeToMaxScalars) {
-      return [raw]
+    if (sentences.length === 0) {
+        return mergeToMaxScalars
+            ? mergeUpToMaxScalars([raw], maxScalars)
+            : [raw];
     }
-    return mergeUpToMaxScalars([raw], maxScalars)
-  }
-
-  if (!mergeToMaxScalars) {
-    return sentences
-  }
-
-  return mergeUpToMaxScalars(sentences, maxScalars)
-}
-
-module.exports = {
-  splitTtsText,
-  intlSentenceSegmentationAvailable,
-  splitByIntlSentences,
-  splitByAsciiAndCjkPunctuation,
-  countScalars,
-  defaultMaxChunkScalars,
-  KOREAN_MAX_CHUNK_SCALARS,
-  DEFAULT_MAX_CHUNK_SCALARS
+    return mergeToMaxScalars
+        ? mergeUpToMaxScalars(sentences, maxScalars)
+        : sentences;
 }

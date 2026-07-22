@@ -29,23 +29,42 @@ const DEFAULT_WRITER_STORAGE = './writer-storage'
 
 const DEFAULT_COMPACTION_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
-function toInt (val) {
+function toInt(val) {
   const n = parseInt(val, 10)
   return Number.isNaN(n) ? undefined : n
 }
 
-const runCmd = command('run',
+const runCmd = command(
+  'run',
   flag('--storage|-s [path]', `storage path (default ${DEFAULT_STORAGE})`),
   flag('--bootstrap|-b [key]', 'Autobase bootstrap key (hex)'),
   flag('--ack-interval [ms]', 'Autobase ack interval in ms (default: 5000)'),
-  flag('--ack-threshold [n]', 'Autobase ack threshold, lower = less latency but more writes (default: 0)'),
+  flag(
+    '--ack-threshold [n]',
+    'Autobase ack threshold, lower = less latency but more writes (default: 0)'
+  ),
   flag('--blind-peers [keys]', 'Comma-separated blind peer public keys (z-base-32 or hex)'),
-  flag('--primary-key [key]', 'Primary key for deterministic key derivation (hex or z-base-32, testing/development only)'),
+  flag(
+    '--primary-key [key]',
+    'Primary key for deterministic key derivation (hex or z-base-32, testing/development only)'
+  ),
   flag('--clear-after-reseed', 'Clear blob blocks after successful replication to blind peers'),
-  flag('--compaction-interval [ms]', `Periodic RocksDB compaction interval in ms (default: ${DEFAULT_COMPACTION_INTERVAL_MS}, 0 to disable)`),
-  flag('--skip-storage-check', 'Skip storage/bootstrap key mismatch check (use when joining existing cluster with fresh storage)'),
-  flag('--metrics-port [port]', `Prometheus metrics HTTP port (default: ${DEFAULT_METRICS_PORT}, 0 to disable)`),
-  flag('--metrics-host [host]', `Prometheus metrics HTTP bind address (default: ${DEFAULT_METRICS_HOST}; use 0.0.0.0 to expose on all interfaces)`),
+  flag(
+    '--compaction-interval [ms]',
+    `Periodic RocksDB compaction interval in ms (default: ${DEFAULT_COMPACTION_INTERVAL_MS}, 0 to disable)`
+  ),
+  flag(
+    '--skip-storage-check',
+    'Skip storage/bootstrap key mismatch check (use when joining existing cluster with fresh storage)'
+  ),
+  flag(
+    '--metrics-port [port]',
+    `Prometheus metrics HTTP port (default: ${DEFAULT_METRICS_PORT}, 0 to disable)`
+  ),
+  flag(
+    '--metrics-host [host]',
+    `Prometheus metrics HTTP bind address (default: ${DEFAULT_METRICS_HOST}; use 0.0.0.0 to expose on all interfaces)`
+  ),
   async function ({ flags }) {
     const logger = createLogger()
 
@@ -53,12 +72,17 @@ const runCmd = command('run',
     const storagePath = config.getRegistryStorage(flags.storage || DEFAULT_STORAGE)
 
     const blindPeerKeys = flags.blindPeers
-      ? flags.blindPeers.split(',').map(key => key.trim()).filter(Boolean)
+      ? flags.blindPeers
+          .split(',')
+          .map((key) => key.trim())
+          .filter(Boolean)
       : config.getBlindPeerKeys()
 
     const primaryKey = config.getPrimaryKey(flags.primaryKey)
     if (primaryKey) {
-      logger.warn('Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.')
+      logger.warn(
+        'Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.'
+      )
     }
     const storeOpts = primaryKey ? { primaryKey, unsafe: true } : {}
     const store = new Corestore(storagePath, storeOpts)
@@ -71,34 +95,29 @@ const runCmd = command('run',
     const bootstrapHex = config.getAutobaseBootstrapKey(flags.bootstrap)
     const autobaseBootstrap = bootstrapHex ? IdEnc.decode(bootstrapHex) : null
 
-    const compactionIntervalMs = flags.compactionInterval !== undefined
-      ? parseInt(flags.compactionInterval, 10)
-      : DEFAULT_COMPACTION_INTERVAL_MS
+    const compactionIntervalMs =
+      flags.compactionInterval !== undefined
+        ? parseInt(flags.compactionInterval, 10)
+        : DEFAULT_COMPACTION_INTERVAL_MS
 
-    const service = new RegistryService(
-      store.namespace(AUTOBASE_NAMESPACE),
-      swarm,
-      config,
-      {
-        logger,
-        ackInterval: toInt(flags.ackInterval),
-        ackThreshold: toInt(flags.ackThreshold),
-        autobaseBootstrap,
-        blindPeerKeys,
-        clearAfterReseed: flags.clearAfterReseed,
-        compactionIntervalMs,
-        skipStorageCheck: flags.skipStorageCheck
-      }
-    )
+    const service = new RegistryService(store.namespace(AUTOBASE_NAMESPACE), swarm, config, {
+      logger,
+      ackInterval: toInt(flags.ackInterval),
+      ackThreshold: toInt(flags.ackThreshold),
+      autobaseBootstrap,
+      blindPeerKeys,
+      clearAfterReseed: flags.clearAfterReseed,
+      compactionIntervalMs,
+      skipStorageCheck: flags.skipStorageCheck
+    })
 
     await service.ready()
 
     config.setAutobaseKey(IdEnc.normalize(service.base.key))
     config.setRegistryCoreKey(IdEnc.normalize(service.registryCoreKey))
 
-    const metricsPort = flags.metricsPort !== undefined
-      ? parseInt(flags.metricsPort, 10)
-      : DEFAULT_METRICS_PORT
+    const metricsPort =
+      flags.metricsPort !== undefined ? parseInt(flags.metricsPort, 10) : DEFAULT_METRICS_PORT
 
     if (Number.isNaN(metricsPort) || metricsPort < 0) {
       throw new Error('--metrics-port must be a non-negative integer (0 to disable)')
@@ -114,7 +133,11 @@ const runCmd = command('run',
       HypercoreStats.fromCorestore(store).registerPrometheusMetrics(promClient)
       new HyperswarmStats(swarm).registerPrometheusMetrics(promClient) // eslint-disable-line no-new
 
-      metricsServer = new MetricsServer(promClient.register, { port: metricsPort, host: metricsHost, logger })
+      metricsServer = new MetricsServer(promClient.register, {
+        port: metricsPort,
+        host: metricsHost,
+        logger
+      })
       await metricsServer.ready()
     }
 
@@ -123,9 +146,13 @@ const runCmd = command('run',
   }
 )
 
-const initWriter = command('init-writer',
+const initWriter = command(
+  'init-writer',
   flag('--storage|-s [path]', `writer storage path (default ${DEFAULT_WRITER_STORAGE})`),
-  flag('--primary-key [key]', 'Primary key for deterministic writer keypair (hex or z-base-32, testing/development only)'),
+  flag(
+    '--primary-key [key]',
+    'Primary key for deterministic writer keypair (hex or z-base-32, testing/development only)'
+  ),
   async function ({ flags }) {
     const logger = createLogger()
     const storagePath = path.resolve(flags.storage || DEFAULT_WRITER_STORAGE)
@@ -134,7 +161,9 @@ const initWriter = command('init-writer',
       const config = new RegistryConfig({ logger })
       const primaryKey = config.getWriterPrimaryKey(flags.primaryKey)
       if (primaryKey) {
-        logger.warn('Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.')
+        logger.warn(
+          'Using deterministic primary key with unsafe mode — keys are predictable. Do NOT use in production.'
+        )
       }
       const storeOpts = primaryKey ? { primaryKey, unsafe: true } : {}
       const store = new Corestore(storagePath, storeOpts)
@@ -156,7 +185,10 @@ const initWriter = command('init-writer',
 
       const envResult = appendWriterKeyToEnv(publicKeyHex, logger)
       if (envResult.added) {
-        logger.info({ file: envResult.file }, 'Writer key added to QVAC_ALLOWED_WRITER_KEYS in .env')
+        logger.info(
+          { file: envResult.file },
+          'Writer key added to QVAC_ALLOWED_WRITER_KEYS in .env'
+        )
         logger.info('Restart the registry service for changes to take effect')
       } else if (envResult.alreadyExists) {
         logger.info('Writer key already exists in QVAC_ALLOWED_WRITER_KEYS')
@@ -170,7 +202,8 @@ const initWriter = command('init-writer',
   }
 )
 
-const syncModelsCmd = command('sync-models',
+const syncModelsCmd = command(
+  'sync-models',
   flag('--file [path]', 'Path to models JSON file (default: ./data/models.prod.json)'),
   flag('--dry-run', 'Preview changes without applying'),
   async function ({ flags }) {
@@ -187,7 +220,7 @@ const cmd = command('registry', runCmd, initWriter, syncModelsCmd)
 
 cmd.parse()
 
-function registerShutdown (logger, service, swarm, store, metricsServer) {
+function registerShutdown(logger, service, swarm, store, metricsServer) {
   let closing = false
   const shutdown = async () => {
     if (closing) return
@@ -210,17 +243,20 @@ function registerShutdown (logger, service, swarm, store, metricsServer) {
   process.once('SIGTERM', shutdown)
 }
 
-function logServiceInfo (logger, service) {
+function logServiceInfo(logger, service) {
   logger.info('Registry service ready')
   logger.info({ key: IdEnc.normalize(service.base.key) }, 'Autobase key')
   logger.info({ key: IdEnc.normalize(service.registryCoreKey) }, 'Registry view key')
-  logger.info({ key: IdEnc.normalize(service.registryDiscoveryKey) }, 'Registry discovery key (DHT topic)')
+  logger.info(
+    { key: IdEnc.normalize(service.registryDiscoveryKey) },
+    'Registry discovery key (DHT topic)'
+  )
   logger.info({ key: IdEnc.normalize(service.serverPublicKey) }, 'RPC server public key')
   logger.info({ key: IdEnc.normalize(service.base.local.key) }, 'Writer local key')
   logger.info({ length: service.view?.core?.length ?? 0 }, 'View core length')
 }
 
-function createLogger () {
+function createLogger() {
   return pino({
     transport: {
       target: 'pino-pretty',
@@ -232,7 +268,7 @@ function createLogger () {
   })
 }
 
-function appendWriterKeyToEnv (publicKeyHex, logger) {
+function appendWriterKeyToEnv(publicKeyHex, logger) {
   const envPath = path.resolve(process.cwd(), '.env')
   const envKey = 'QVAC_ALLOWED_WRITER_KEYS'
 
@@ -253,7 +289,10 @@ function appendWriterKeyToEnv (publicKeyHex, logger) {
     if (line.startsWith(`${envKey}=`)) {
       keyLineIndex = i
       const value = line.slice(`${envKey}=`.length)
-      existingKeys = value.split(',').map(k => k.trim()).filter(Boolean)
+      existingKeys = value
+        .split(',')
+        .map((k) => k.trim())
+        .filter(Boolean)
       break
     }
   }
