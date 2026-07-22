@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { main } from './benchmark'
 import { cmdFull, cmdPreflight, defaultDependencies, rotateIds } from './commands'
 import type { CommandDependencies } from './commands'
 import { loadBenchmarkConfig } from './config'
@@ -123,6 +124,18 @@ function makeSuccessfulClient(
 }
 
 describe('serve-openai-providers harness', () => {
+  it('returns a rejected promise for an invalid benchmark config', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-main-'))
+    try {
+      const configPath = join(dir, 'benchmark.yaml')
+      writeConfig(configPath, { providers: [] })
+
+      await assert.rejects(main(['digest', '--config', configPath]), /generation settings/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies the configured GGUF digest', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-digest-'))
     try {

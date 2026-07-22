@@ -44,6 +44,9 @@ through a symlink into it.
 
 ## Local
 
+The committed `benchmark.yaml` is a non-runnable template. Supply a populated
+external file with `--config`; do not run benchmarks against the committed copy.
+
 ```bash
 cd packages/cli
 npm install

@@ -32,14 +32,14 @@ function takeFlag(args: string[], name: string): string | undefined {
   return value
 }
 
-function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   const args = [...argv]
   const configPath = takeFlag(args, '--config') ?? 'benchmark.yaml'
   const promptsPath = takeFlag(args, '--prompts') ?? 'prompts.json'
   const command = args.shift()
   if (!command || command === '-h' || command === '--help') {
     printUsage()
-    return Promise.resolve(command ? 0 : 2)
+    return command ? 0 : 2
   }
 
   const root = process.cwd()
@@ -48,30 +48,30 @@ function main(argv: string[]): Promise<number> {
 
   switch (command) {
     case 'digest':
-      return cmdDigest(config)
+      return await cmdDigest(config)
     case 'preflight':
-      return cmdPreflight(config, promptsDoc)
+      return await cmdPreflight(config, promptsDoc)
     case 'smoke':
-      return cmdSmoke(config, promptsDoc)
+      return await cmdSmoke(config, promptsDoc)
     case 'calibrate': {
       const provider = takeFlag(args, '--provider') ?? 'qvac'
-      return cmdCalibrate(config, promptsDoc, provider)
+      return await cmdCalibrate(config, promptsDoc, provider)
     }
     case 'full':
-      return cmdFull(config, promptsDoc, root)
+      return await cmdFull(config, promptsDoc, root)
     case 'report': {
       const raw = takeFlag(args, '--raw')
       if (!raw) {
         console.error('report requires --raw <path>')
-        return Promise.resolve(2)
+        return 2
       }
       const out = takeFlag(args, '--out') ?? 'results/report.md'
-      return Promise.resolve(cmdReport(resolve(root, raw), resolve(root, out)))
+      return cmdReport(resolve(root, raw), resolve(root, out))
     }
     default:
       console.error(`unknown command: ${command}`)
       printUsage()
-      return Promise.resolve(2)
+      return 2
   }
 }
 
