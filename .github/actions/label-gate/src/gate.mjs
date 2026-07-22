@@ -27,6 +27,13 @@ const TRUSTED_EVENTS = new Set([
 
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
 
+// Commit-status context used to bind a `verified` approval to the exact commit
+// SHA it was approved on. Set by label-gate on a trusted `labeled` event; read
+// by every subsequent privileged run so that authorisation follows the approved
+// SHA, not workflow-event ordering (closes the draft->ready and close->reopen
+// flip bypasses where a stale approval for commit A authorised a later commit B).
+export const APPROVAL_STATUS_CONTEXT = 'qvac/fork-verified';
+
 /**
  * @typedef {object} Decision
  * @property {boolean} authorised
@@ -179,6 +186,7 @@ export async function gate({
   const org = repo.split('/')[0];
   const action = String(payload?.action ?? '');
   const sender = payload?.sender?.login ?? '';
+  const headSha = String(payload?.pull_request?.head?.sha ?? '').trim();
   const prNumber =
     payload?.pull_request?.number ?? payload?.number ?? null;
 
@@ -224,8 +232,10 @@ export async function gate({
   }
 
   // Resolve the label applier.
+  const isOurLabeledEvent =
+    action === 'labeled' && payload?.label?.name === label;
   let applier = '';
-  if (action === 'labeled' && payload?.label?.name === label) {
+  if (isOurLabeledEvent) {
     applier = sender;
   } else {
     applier = (await client.findLabelApplier(prNumber, label)) ?? '';
@@ -250,9 +260,58 @@ export async function gate({
       applierTrust.source === 'users'
         ? 'in users allowlist'
         : `member of '${org}/${applierTrust.team}'`;
+
+    // SHA-bound approval. Workflow-event ordering is NOT proof of
+    // authorisation: a stale approval for commit A must never authorise a
+    // later commit B that rode in on a draft->ready or close->reopen flip
+    // while A's run was still active. Bind the approval to the exact commit
+    // via a commit status, and require every subsequent privileged run to
+    // carry that trusted status on its CURRENT head SHA.
+    if (!headSha) {
+      return {
+        authorised: false,
+        reason:
+          'head SHA missing from event payload — cannot bind approval to a commit',
+        applier,
+      };
+    }
+
+    if (isOurLabeledEvent) {
+      // The approval moment: a trusted actor just applied the label to the
+      // current head. Record the approval against this exact SHA.
+      const bound = await client.setCommitStatus(headSha, {
+        state: 'success',
+        context: APPROVAL_STATUS_CONTEXT,
+        description: `verified by ${applier}`.slice(0, 140),
+      });
+      return {
+        authorised: true,
+        reason: `label applier '${applier}' is trusted (${detail}); approval bound to ${headSha}`,
+        applier,
+        approvedSha: headSha,
+        bound,
+      };
+    }
+
+    // Any other event (opened / reopened / ready_for_review / edited /
+    // labeled-with-a-different-label / manual re-run): the applier being
+    // trusted only proves SOME commit was once approved. Authorise ONLY if
+    // THIS head SHA is the commit that was approved.
+    const approvedForHead = await client.hasApprovalStatus(
+      headSha,
+      APPROVAL_STATUS_CONTEXT,
+    );
+    if (approvedForHead) {
+      return {
+        authorised: true,
+        reason: `head ${headSha} carries a trusted '${label}' approval`,
+        applier,
+        approvedSha: headSha,
+      };
+    }
     return {
-      authorised: true,
-      reason: `label applier '${applier}' is trusted (${detail})`,
+      authorised: false,
+      reason: `'${label}' is applied by a trusted actor, but head ${headSha} is not the approved commit — re-review required (approval is SHA-bound, not order-based)`,
       applier,
     };
   }
@@ -269,7 +328,7 @@ export async function gate({
   // status may have changed since the label was applied legitimately
   // (e.g. team member who later left), and the synchronize path will
   // strip on the next push if the actor is also untrusted.
-  if (action === 'labeled' && payload?.label?.name === label) {
+  if (isOurLabeledEvent) {
     const stripped = await client.stripLabel(prNumber, label);
     return {
       authorised: false,

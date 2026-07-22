@@ -25,13 +25,31 @@ const REPO = 'tetherto/qvac';
 const LABEL = 'verified';
 const TEAMS = ['qvac-internal-dev', 'qvac-internal-merge', 'qvac-internal-release'];
 
-function makeClient({ teamMembers = [], labelApplier = null, stripResult = true } = {}) {
+function makeClient({
+  teamMembers = [],
+  labelApplier = null,
+  stripResult = true,
+  approvedShas = [],
+} = {}) {
   const members = new Set(teamMembers.map((s) => s.toLowerCase()));
-  const calls = { isTeamMember: 0, findLabelApplier: 0, stripLabel: 0 };
+  const calls = {
+    isTeamMember: 0,
+    findLabelApplier: 0,
+    stripLabel: 0,
+    setCommitStatus: 0,
+    hasApprovalStatus: 0,
+  };
   const stripped = [];
+  // SHAs currently carrying a success approval status. Seeded by
+  // `approvedShas` (simulating a prior trusted `labeled` run) and grown by
+  // setCommitStatus so re-approval flows are exercised end to end.
+  const statuses = new Set(approvedShas);
+  const statusWrites = [];
   return {
     calls,
     stripped,
+    statuses,
+    statusWrites,
     async isTeamMember(_org, _team, login) {
       calls.isTeamMember += 1;
       return members.has(String(login).toLowerCase());
@@ -44,6 +62,16 @@ function makeClient({ teamMembers = [], labelApplier = null, stripResult = true 
       calls.stripLabel += 1;
       stripped.push({ pr, label });
       return stripResult;
+    },
+    async setCommitStatus(sha, { state, context, description } = {}) {
+      calls.setCommitStatus += 1;
+      statusWrites.push({ sha, state, context, description });
+      if (state === 'success') statuses.add(sha);
+      return true;
+    },
+    async hasApprovalStatus(sha, _context) {
+      calls.hasApprovalStatus += 1;
+      return statuses.has(sha);
     },
   };
 }
@@ -143,6 +171,11 @@ test("labeled by team member -> authorised; no timeline lookup", async () => {
   assert.equal(d.authorised, true);
   assert.equal(client.calls.findLabelApplier, 0, 'must skip timeline on labeled fast-path');
   assert.equal(d.applier, 'alice-team-member');
+  // Approval is bound to the exact head SHA via a commit status.
+  assert.equal(client.calls.setCommitStatus, 1, 'records approval on head SHA');
+  assert.equal(client.statusWrites[0].sha, 'deadbeef');
+  assert.equal(client.statusWrites[0].state, 'success');
+  assert.equal(d.approvedSha, 'deadbeef');
 });
 
 test('labeled by non-member -> not authorised AND label stripped', async () => {
@@ -387,15 +420,20 @@ test('external fork PR (head.repo != base) is NOT treated as internal', async ()
 
 // --- non-labeled, non-synchronize PR actions (e.g. opened, reopened) ---------
 
-test('opened PR with prior team-applied label -> authorised', async () => {
+test('opened PR with prior team-applied label AT THE APPROVED SHA -> authorised', async () => {
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: 'alice-team-member',
+    approvedShas: ['cafe1234'],
   });
   const payload = {
     action: 'opened',
     number: 9999,
-    pull_request: { number: 9999, labels: [{ name: 'verified' }] },
+    pull_request: {
+      number: 9999,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'cafe1234' },
+      labels: [{ name: 'verified' }],
+    },
     sender: { login: 'mallory-outsider' },
   };
   const d = await gate({
@@ -406,6 +444,36 @@ test('opened PR with prior team-applied label -> authorised', async () => {
   });
   assert.equal(d.authorised, true);
   assert.equal(d.applier, 'alice-team-member');
+  assert.equal(d.approvedSha, 'cafe1234');
+  assert.equal(client.calls.hasApprovalStatus, 1, 'verifies approval binds to head SHA');
+});
+
+test('opened PR with prior team-applied label but at an UNAPPROVED SHA -> denied', async () => {
+  // The label + a trusted historical applier are present, but this head SHA
+  // was never approved. Ordering/label-presence is not proof.
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+    approvedShas: ['cafe1234'],
+  });
+  const payload = {
+    action: 'opened',
+    number: 9999,
+    pull_request: {
+      number: 9999,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'deadbeef99' },
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /not the approved commit|SHA-bound/);
 });
 
 test('opened PR with no label at all -> not authorised', async () => {
@@ -519,12 +587,14 @@ test('REGRESSION: labeled with a DIFFERENT label by non-trusted user -> no strip
   const client = makeClient({
     teamMembers: ['alice'],
     labelApplier: 'alice',
+    approvedShas: ['beef5151'],
   });
   const payload = {
     action: 'labeled',
     number: 5151,
     pull_request: {
       number: 5151,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'beef5151' },
       labels: [{ name: 'verified' }, { name: 'wip' }],
     },
     label: { name: 'wip' },
@@ -536,7 +606,7 @@ test('REGRESSION: labeled with a DIFFERENT label by non-trusted user -> no strip
     payload,
     client,
   });
-  assert.equal(d.authorised, true, 'verified label is still legitimately applied');
+  assert.equal(d.authorised, true, 'verified is applied AND head SHA is the approved one');
   assert.equal(d.applier, 'alice');
   assert.equal(client.calls.stripLabel, 0, 'must not strip on unrelated label add');
 });
@@ -647,12 +717,14 @@ test('labeled with a different label still falls through to timeline lookup (ver
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: 'alice-team-member',
+    approvedShas: ['abc5555'],
   });
   const payload = {
     action: 'labeled',
     number: 5555,
     pull_request: {
       number: 5555,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'abc5555' },
       labels: [{ name: 'verified' }, { name: 'something-else' }],
     },
     label: { name: 'something-else' },
@@ -667,4 +739,141 @@ test('labeled with a different label still falls through to timeline lookup (ver
   assert.equal(d.authorised, true);
   assert.equal(client.calls.findLabelApplier, 1, 'must check timeline since this event is for a different label');
   assert.equal(d.applier, 'alice-team-member');
+  assert.equal(d.approvedSha, 'abc5555');
+});
+
+// --- SHA-BOUND APPROVAL: Marcus bypass regressions --------------------------
+// Both bypasses share a shape: commit A is verified (its approval is bound to
+// SHA A); commit B is then pushed; a state-flip event (ready_for_review or
+// reopened) fires a run at head=B while `verified` is still present and its
+// historical applier is still trusted. Workflow ordering must NOT authorise B —
+// only a commit status on B's SHA can, and none exists.
+
+test('REGRESSION (Marcus): draft->ready flip does not authorise a new unapproved SHA', async () => {
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+    approvedShas: ['aaaaaaaa'], // only commit A was ever approved
+  });
+  const payload = {
+    action: 'ready_for_review',
+    number: 8801,
+    pull_request: {
+      number: 8801,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'bbbbbbbb' }, // B
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false, 'B must not ride A\u2019s approval on a ready flip');
+  assert.match(d.reason, /not the approved commit|SHA-bound/);
+  assert.equal(client.calls.setCommitStatus, 0, 'must not mint a new approval');
+});
+
+test('REGRESSION (Marcus): close->reopen flip does not authorise a new unapproved SHA', async () => {
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+    approvedShas: ['aaaaaaaa'],
+  });
+  const payload = {
+    action: 'reopened',
+    number: 8802,
+    pull_request: {
+      number: 8802,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'bbbbbbbb' },
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false, 'B must not ride A\u2019s approval on a reopen flip');
+  assert.match(d.reason, /not the approved commit|SHA-bound/);
+});
+
+test('legit close/reopen WITHOUT a push (head still the approved SHA) stays authorised', async () => {
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+    approvedShas: ['aaaaaaaa'],
+  });
+  const payload = {
+    action: 'reopened',
+    number: 8803,
+    pull_request: {
+      number: 8803,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'aaaaaaaa' }, // unchanged
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'someone' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+  assert.equal(d.approvedSha, 'aaaaaaaa');
+});
+
+test('recovery: a trusted actor re-labeling at the new SHA mints a fresh approval and authorises', async () => {
+  const client = makeClient({ teamMembers: ['alice-team-member'] });
+  const payload = {
+    action: 'labeled',
+    number: 8804,
+    label: { name: 'verified' },
+    pull_request: {
+      number: 8804,
+      head: { repo: { full_name: 'external-fork/qvac' }, sha: 'bbbbbbbb' },
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'alice-team-member' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+  assert.equal(d.approvedSha, 'bbbbbbbb');
+  assert.equal(client.calls.setCommitStatus, 1);
+  assert.equal(client.statusWrites[0].sha, 'bbbbbbbb');
+  assert.equal(client.statusWrites[0].state, 'success');
+});
+
+test('trusted labeled event with a missing head SHA -> deny (cannot bind approval)', async () => {
+  const client = makeClient({ teamMembers: ['alice-team-member'] });
+  const payload = {
+    action: 'labeled',
+    number: 8805,
+    label: { name: 'verified' },
+    pull_request: {
+      number: 8805,
+      head: { repo: { full_name: 'external-fork/qvac' } },
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'alice-team-member' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /head SHA missing/);
+  assert.equal(client.calls.setCommitStatus, 0);
 });
