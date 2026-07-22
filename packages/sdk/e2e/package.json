@@ -12,6 +12,8 @@
     "install:build": "npm install --install-links && npm run build",
     "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build && npm run bundle:sdk",
     "package:electron": "electron-forge package",
+    "package:snap": "node scripts/package-snap.mjs",
+    "test:snap:refresh": "node scripts/run-snap-refresh-test.mjs",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "clean:sdk-snapshot": "rm -rf node_modules/@qvac/sdk build/consumers/ios/node_modules/@qvac/sdk build/consumers/android/node_modules/@qvac/sdk",
@@ -21,7 +23,7 @@
   "dependencies": {
     "@qvac/sdk": "file:..",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
-    "@tetherto/qvac-test-suite": "^0.8.1",
+    "@tetherto/qvac-test-suite": "^0.9.0",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",
     "react-native-bare-kit": "^0.14.0"

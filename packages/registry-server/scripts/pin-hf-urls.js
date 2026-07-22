@@ -6,9 +6,10 @@ const { listCommits } = require('@huggingface/hub')
 
 const logger = require('../lib/logger')
 
-const HF_URL_PATTERN = /https?:\/\/huggingface\.co\/([^/]+)\/([^/]+)\/(blob|resolve)\/(main|master)(\/.+)?/i
+const HF_URL_PATTERN =
+  /https?:\/\/huggingface\.co\/([^/]+)\/([^/]+)\/(blob|resolve)\/(main|master)(\/.+)?/i
 
-function extractRepoInfo (url) {
+function extractRepoInfo(url) {
   const match = url.trim().match(HF_URL_PATTERN)
   if (!match) return null
 
@@ -24,12 +25,12 @@ function extractRepoInfo (url) {
   }
 }
 
-function buildPinnedUrl (repoInfo, commitSha) {
+function buildPinnedUrl(repoInfo, commitSha) {
   const { org, repo, action, filePath } = repoInfo
   return `https://huggingface.co/${org}/${repo}/${action}/${commitSha}${filePath}`
 }
 
-async function fetchCommitHash (repoId) {
+async function fetchCommitHash(repoId) {
   try {
     const commits = listCommits({ repo: repoId, revision: 'main', batchSize: 1 })
     const firstCommit = await commits.next()
@@ -43,7 +44,7 @@ async function fetchCommitHash (repoId) {
   }
 }
 
-async function pinHfUrls (filePath, dryRun = false) {
+async function pinHfUrls(filePath, dryRun = false) {
   const resolvedPath = path.resolve(filePath)
   logger.info(`Reading models from: ${resolvedPath}`)
 
@@ -137,8 +138,8 @@ async function pinHfUrls (filePath, dryRun = false) {
 
   logger.info('\n=== Update Summary ===')
   logger.info(`Repositories processed: ${repoMap.size}`)
-  logger.info(`URLs to update: ${updates.filter(u => u.newUrl).length}`)
-  logger.info(`Errors: ${updates.filter(u => u.error).length}`)
+  logger.info(`URLs to update: ${updates.filter((u) => u.newUrl).length}`)
+  logger.info(`Errors: ${updates.filter((u) => u.error).length}`)
 
   if (updates.length > 0) {
     logger.info('\nUpdates:')
@@ -154,7 +155,7 @@ async function pinHfUrls (filePath, dryRun = false) {
     }
   }
 
-  if (!dryRun && updates.some(u => u.newUrl)) {
+  if (!dryRun && updates.some((u) => u.newUrl)) {
     logger.info(`\nWriting updated models to ${resolvedPath}...`)
     const updatedContent = JSON.stringify(models, null, 2) + '\n'
     await fs.writeFile(resolvedPath, updatedContent, 'utf8')
@@ -166,9 +167,9 @@ async function pinHfUrls (filePath, dryRun = false) {
   }
 }
 
-async function main () {
+async function main() {
   const args = process.argv.slice(2)
-  const fileArg = args.find(arg => arg.startsWith('--file='))
+  const fileArg = args.find((arg) => arg.startsWith('--file='))
   const filePath = fileArg ? fileArg.split('=')[1] : './data/models.prod.json'
   const dryRun = args.includes('--dry-run')
 
