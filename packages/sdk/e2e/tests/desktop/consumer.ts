@@ -27,6 +27,7 @@ import {
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
+  GROOT_Q8_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -180,6 +181,14 @@ resources.define('vla', {
 
 resources.define('vla-pi05', {
   constant: PI05_BASE_Q_AGGRESSIVE,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
+// Desktop-only: the q8 GR00T model (~3.76 GB) is too large for the mobile /
+// smoke path, so the groot e2e tests are not smoke-tagged.
+resources.define('vla-groot', {
+  constant: GROOT_Q8_VF16,
   type: 'ggml-vla',
   config: { backend: 'cpu' }
 })
