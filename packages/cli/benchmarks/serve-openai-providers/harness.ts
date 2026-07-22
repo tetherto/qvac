@@ -1,19 +1,16 @@
 import { randomBytes } from 'node:crypto'
-import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import OpenAI from 'openai'
-import { configPlaceholders, PLACEHOLDER_PREFIXES } from './config.ts'
 import { computeMetrics, validateRun } from './metrics.ts'
-import { atomicWriteJson, sha256File, verifyModelParity } from './persistence.ts'
-import { writeReport } from './report.ts'
+import { atomicWriteJson } from './persistence.ts'
 import type {
   BenchmarkConfig,
   ChatChunk,
+  ChatClient,
   GenerationConfig,
   PromptDoc,
   PromptsFile,
-  ProviderConfig,
-  RawDocument,
   RunMetrics,
   StreamParseResult,
   StreamTimings,
@@ -29,11 +26,13 @@ export type {
   AggregateStats,
   BenchmarkConfig,
   ChatChunk,
+  ChatClient,
   GenerationConfig,
   MetricObservation,
   PromptDoc,
   PromptsFile,
   ProviderConfig,
+  ProviderLifecycle,
   RawDocument,
   RunMetrics,
   StreamParseResult,
@@ -225,11 +224,12 @@ export function newRawDocument(
 export function appendRun(
   rawPath: string,
   raw: Record<string, unknown>,
-  run: Record<string, unknown>
+  run: Record<string, unknown>,
+  write: (path: string, payload: unknown) => void = atomicWriteJson
 ): void {
   const runs = raw.runs as unknown[]
   runs.push(run)
-  atomicWriteJson(rawPath, raw)
+  write(rawPath, raw)
 }
 
 export function makeClient(baseUrl: string, apiKey: string): OpenAI {
@@ -237,7 +237,7 @@ export function makeClient(baseUrl: string, apiKey: string): OpenAI {
 }
 
 export async function runStreamingCompletion(params: {
-  client: OpenAI
+  client: ChatClient
   model: string
   messages: Array<{ role: 'user'; content: string }>
   generation: GenerationConfig
@@ -252,7 +252,7 @@ export async function runStreamingCompletion(params: {
   let parsed: StreamParseResult
   try {
     const stream = await params.client.chat.completions.create(kwargs)
-    parsed = await parseStream(stream as AsyncIterable<ChatChunk>, timings)
+    parsed = await parseStream(stream, timings)
   } catch (err) {
     timings.streamEndS = nowSeconds()
     const name = err instanceof Error ? err.constructor.name : 'Error'
@@ -321,299 +321,4 @@ export function createFakeChunk(params: {
       }
     ]
   }
-}
-
-export async function cmdDigest(config: BenchmarkConfig): Promise<number> {
-  const path = config.model_parity.gguf_path
-  try {
-    const st = statSync(path)
-    if (!st.isFile()) {
-      console.error(`GGUF not found: ${path}`)
-      return 1
-    }
-    const digest = await sha256File(path)
-    console.log(JSON.stringify({ path, bytes: st.size, sha256: digest }, null, 2))
-    return 0
-  } catch {
-    console.error(`GGUF not found: ${path}`)
-    return 1
-  }
-}
-
-export async function cmdPreflight(
-  config: BenchmarkConfig,
-  promptsDoc: PromptsFile,
-  sessionDir?: string
-): Promise<number> {
-  const bad = configPlaceholders(config)
-  if (bad.length > 0) {
-    console.error('Replace placeholders before preflight:')
-    for (const item of bad) {
-      console.error(`  - ${item}`)
-    }
-    return 1
-  }
-
-  const modelParityEvidence = await verifyModelParity(config)
-  const parity = promptById(promptsDoc, config.parity_prompt_id ?? 'parity')
-  const generation = config.generation
-  const apiKey = config.api_key ?? 'local-benchmark-key'
-  const results: Record<string, unknown> = {}
-  const promptTokenCounts: Record<string, number> = {}
-
-  for (const provider of config.providers) {
-    const client = makeClient(provider.base_url, apiKey)
-    const messages = buildMessages(parity.content, null)
-    const [parsed, metrics, validation] = await runStreamingCompletion({
-      client,
-      model: provider.model,
-      messages,
-      generation
-    })
-    results[provider.id] = {
-      ok: validation.ok,
-      reasons: validation.reasons,
-      prompt_tokens: parsed.promptTokens,
-      completion_tokens: parsed.completionTokens,
-      response_model: parsed.responseModel,
-      content: parsed.content,
-      metrics: metricsToJson(metrics)
-    }
-    if (parsed.promptTokens !== null) {
-      promptTokenCounts[provider.id] = parsed.promptTokens
-    }
-    const status = validation.ok ? 'OK' : 'FAIL'
-    console.log(
-      `[${status}] ${provider.id}: reasons=${JSON.stringify(validation.reasons)} usage=(${parsed.promptTokens},${parsed.completionTokens})`
-    )
-  }
-
-  const unique = new Set(Object.values(promptTokenCounts))
-  const parityOk =
-    unique.size === 1 && Object.keys(promptTokenCounts).length === config.providers.length
-  if (!parityOk) {
-    console.error(
-      `FAIL prompt_tokens parity across providers: ${JSON.stringify(promptTokenCounts)}`
-    )
-  } else {
-    console.log(`OK prompt_tokens parity: ${[...unique][0]}`)
-  }
-
-  if (sessionDir) {
-    const rawPath = join(sessionDir, 'raw.json')
-    const raw = newRawDocument(config, sessionDir.split(/[\\/]/).pop() ?? sessionDir)
-    raw.model_parity_evidence = modelParityEvidence
-    raw.parity = { results, prompt_tokens_equal: parityOk }
-    atomicWriteJson(rawPath, raw)
-  }
-
-  const allOk = parityOk && Object.values(results).every((v) => (v as { ok: boolean }).ok)
-  return allOk ? 0 : 1
-}
-
-export async function runOne(params: {
-  client: OpenAI
-  provider: ProviderConfig
-  prompt: PromptDoc
-  generation: GenerationConfig
-  phase: string
-  runIndex: number
-}): Promise<Record<string, unknown>> {
-  const runId = randomBytes(5).toString('hex')
-  const messages = buildMessages(params.prompt.content, runId)
-  const startedAt = new Date().toISOString()
-  const [parsed, metrics, validation] = await runStreamingCompletion({
-    client: params.client,
-    model: params.provider.model,
-    messages,
-    generation: params.generation
-  })
-  const endedAt = new Date().toISOString()
-  return {
-    provider: params.provider.id,
-    prompt_id: params.prompt.id,
-    phase: params.phase,
-    run_index: params.runIndex,
-    run_id: runId,
-    started_at: startedAt,
-    ended_at: endedAt,
-    ok: validation.ok,
-    validation_reasons: validation.reasons,
-    response_model: parsed.responseModel,
-    content_preview: parsed.content.slice(0, 240),
-    reasoning_preview: parsed.reasoningContent.slice(0, 240),
-    error: parsed.error,
-    metrics: metricsToJson(metrics)
-  }
-}
-
-export async function cmdSmoke(config: BenchmarkConfig, promptsDoc: PromptsFile): Promise<number> {
-  const pre = await cmdPreflight(config, promptsDoc)
-  if (pre !== 0) {
-    return pre
-  }
-  const shortest = config.prompt_ids[0]!
-  const prompt = promptById(promptsDoc, shortest)
-  const apiKey = config.api_key ?? 'local-benchmark-key'
-  let failed = false
-  for (const provider of config.providers) {
-    const client = makeClient(provider.base_url, apiKey)
-    const result = await runOne({
-      client,
-      provider,
-      prompt,
-      generation: config.generation,
-      phase: 'smoke',
-      runIndex: 0
-    })
-    const metrics = result.metrics as Record<string, unknown>
-    const status = result.ok ? 'OK' : 'FAIL'
-    console.log(
-      `[${status}] smoke ${provider.id} ${shortest}: ttft_ms=${metrics.ttft_ms} client_output_tps=${metrics.client_output_tps} reasons=${JSON.stringify(result.validation_reasons)}`
-    )
-    if (!result.ok) {
-      failed = true
-    }
-  }
-  return failed ? 1 : 0
-}
-
-export async function cmdCalibrate(
-  config: BenchmarkConfig,
-  promptsDoc: PromptsFile,
-  providerId: string
-): Promise<number> {
-  const provider = config.providers.find((p) => p.id === providerId)
-  if (!provider) {
-    console.error(`unknown provider: ${providerId}`)
-    return 1
-  }
-  if (PLACEHOLDER_PREFIXES.some((prefix) => provider.model.startsWith(prefix))) {
-    console.error(`set providers.${providerId}.model first`)
-    return 1
-  }
-  const client = makeClient(provider.base_url, config.api_key ?? 'local-benchmark-key')
-  const generation: GenerationConfig = {
-    ...config.generation,
-    max_tokens: Math.min(config.generation.max_tokens ?? 128, 16)
-  }
-  const rows: Array<Record<string, unknown>> = []
-  for (const promptId of config.prompt_ids) {
-    const prompt = promptById(promptsDoc, promptId)
-    const [parsed, , validation] = await runStreamingCompletion({
-      client,
-      model: provider.model,
-      messages: buildMessages(prompt.content, 'calibrate'),
-      generation
-    })
-    const row = {
-      prompt_id: promptId,
-      target_prompt_tokens: prompt.target_prompt_tokens,
-      measured_prompt_tokens: parsed.promptTokens,
-      ok: validation.ok,
-      reasons: validation.reasons
-    }
-    rows.push(row)
-    console.log(JSON.stringify(row))
-  }
-  return rows.every((r) => r.ok && r.measured_prompt_tokens) ? 0 : 1
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
-}
-
-export async function cmdFull(
-  config: BenchmarkConfig,
-  promptsDoc: PromptsFile,
-  root: string
-): Promise<number> {
-  const sessionBase = join(root, config.session_dir ?? 'results')
-  mkdirSync(sessionBase, { recursive: true })
-  const sessionDir = createSessionDir(sessionBase)
-  const rawPath = join(sessionDir, 'raw.json')
-  let raw = newRawDocument(config, sessionDir.split(/[\\/]/).pop() ?? sessionDir)
-  atomicWriteJson(rawPath, raw)
-
-  console.log(`session: ${sessionDir}`)
-  if ((await cmdPreflight(config, promptsDoc, sessionDir)) !== 0) {
-    console.error('preflight failed; aborting full sweep')
-    return 1
-  }
-
-  raw = JSON.parse(readFileSync(rawPath, 'utf8')) as Record<string, unknown>
-  const apiKey = config.api_key ?? 'local-benchmark-key'
-  const warmupRuns = config.warmup_runs ?? 1
-  const measuredRuns = config.measured_runs ?? 5
-  const cooldownSeconds = config.cooldown_seconds ?? 90
-  const basePromptIds = [...config.prompt_ids]
-
-  for (let providerIndex = 0; providerIndex < config.providers.length; providerIndex += 1) {
-    const provider = config.providers[providerIndex]!
-    ;(raw.provider_order as string[]).push(provider.id)
-    atomicWriteJson(rawPath, raw)
-    console.log(`\n=== provider ${provider.id} ===`)
-    const client = makeClient(provider.base_url, apiKey)
-    const order = rotateIds(basePromptIds, providerIndex)
-    console.log(`prompt order: ${JSON.stringify(order)}`)
-
-    for (const promptId of order) {
-      const prompt = promptById(promptsDoc, promptId)
-      for (let i = 0; i < warmupRuns; i += 1) {
-        const run = await runOne({
-          client,
-          provider,
-          prompt,
-          generation: config.generation,
-          phase: 'warmup',
-          runIndex: i
-        })
-        appendRun(rawPath, raw, run)
-        console.log(`warmup ${provider.id} ${promptId}#${i} ok=${run.ok}`)
-      }
-      for (let i = 0; i < measuredRuns; i += 1) {
-        const run = await runOne({
-          client,
-          provider,
-          prompt,
-          generation: config.generation,
-          phase: 'measured',
-          runIndex: i
-        })
-        appendRun(rawPath, raw, run)
-        const m = run.metrics as Record<string, unknown>
-        console.log(
-          `measured ${provider.id} ${promptId}#${i} ok=${run.ok} ttft_ms=${m.ttft_ms} client_output_tps=${m.client_output_tps}`
-        )
-      }
-    }
-
-    if (providerIndex < config.providers.length - 1 && cooldownSeconds > 0) {
-      console.log(`cooldown ${cooldownSeconds}s before next provider`)
-      await sleep(cooldownSeconds * 1000)
-    }
-  }
-
-  const reportPath = join(sessionDir, 'report.md')
-  writeReport(raw as RawDocument, reportPath)
-  atomicWriteJson(join(sessionBase, 'raw.json'), raw)
-  copyFileSync(reportPath, join(sessionBase, 'report.md'))
-  console.log(`wrote ${reportPath}`)
-  console.log(`copied ${join(sessionBase, 'raw.json')} and ${join(sessionBase, 'report.md')}`)
-
-  const measuredFailures = ((raw.runs as Array<Record<string, unknown>>) ?? []).filter(
-    (r) => r.phase === 'measured' && !r.ok
-  )
-  if (measuredFailures.length > 0) {
-    console.error(`FAIL: ${measuredFailures.length} measured run(s) failed; see ${rawPath}`)
-    return 1
-  }
-  return 0
-}
-
-export async function cmdReport(rawPath: string, reportPath: string): Promise<number> {
-  const raw = JSON.parse(readFileSync(rawPath, 'utf8')) as RawDocument
-  writeReport(raw, reportPath)
-  console.log(`wrote ${reportPath}`)
-  return 0
 }

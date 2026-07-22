@@ -25,6 +25,11 @@ prompt_ids:
   - p4000
   - p7000
 
+# Each provider may declare an optional lifecycle block. When present, its
+# argv arrays run shell-free before and after that provider's benchmark block:
+#   lifecycle:
+#     start_command: [REPLACE_WITH_START_ARGV_ITEM, REPLACE_WITH_START_ARGV_ITEM]
+#     stop_command: [REPLACE_WITH_STOP_ARGV_ITEM]
 providers:
   - id: qvac
     base_url: http://127.0.0.1:11435/v1
@@ -42,4 +47,4 @@ model_parity:
   # Absolute path to the shared GGUF bytes used by all providers.
   gguf_path: REPLACE_WITH_ABSOLUTE_GGUF_PATH
   # Filled by `npx tsx benchmark.ts digest` or recorded manually.
-  sha256: ""
+  sha256: ''

@@ -1,3 +1,5 @@
+import type OpenAI from 'openai'
+
 export type StreamTimings = {
   requestStartS: number
   firstContentS: number | null
@@ -88,10 +90,16 @@ export type GenerationConfig = {
   stream_options?: { include_usage?: boolean }
 }
 
+export type ProviderLifecycle = {
+  start_command?: string[]
+  stop_command?: string[]
+}
+
 export type ProviderConfig = {
   id: string
   base_url: string
   model: string
+  lifecycle?: ProviderLifecycle
 }
 
 export type BenchmarkConfig = {
@@ -134,4 +142,14 @@ export type ChatChunk = {
       role?: string | null
     } | null
   }> | null
+}
+
+export type ChatClient = {
+  chat: {
+    completions: {
+      create: (
+        kwargs: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
+      ) => Promise<AsyncIterable<ChatChunk> | Iterable<ChatChunk>>
+    }
+  }
 }

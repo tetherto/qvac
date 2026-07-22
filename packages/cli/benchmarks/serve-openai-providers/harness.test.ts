@@ -4,20 +4,24 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { cmdFull, cmdPreflight, defaultDependencies } from './commands.ts'
+import type { CommandDependencies } from './commands.ts'
 import {
   atomicWriteJson,
   buildMessages,
-  cmdPreflight,
   createFakeChunk,
   loadBenchmarkConfig,
   parseStream,
   rotateIds,
   verifyModelParity
 } from './harness.ts'
+import { executeCommand, runProviderLifecycle } from './lifecycle.ts'
 import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
 import { writeReport } from './report.ts'
 import type {
   BenchmarkConfig,
+  ChatClient,
+  ProviderConfig,
   PromptsFile,
   RawDocument,
   StreamParseResult,
@@ -74,6 +78,30 @@ function makeParsed(overrides: {
 function validateRunFromUsage(promptTokens: number, completionTokens: number) {
   const parsed = makeParsed({ promptTokens, completionTokens })
   return validateRun({ parsed, metrics: computeMetrics(parsed) })
+}
+
+// Preflight requests omit the run-id prefix; measured/warmup requests carry it.
+// The fake answers preflight with a valid completion and fails measured runs.
+function makeMeasuredFailureClient(): ChatClient {
+  return {
+    chat: {
+      completions: {
+        create: (kwargs) => {
+          const content = String(kwargs.messages[0]?.content ?? '')
+          if (content.includes('[run:')) {
+            return Promise.resolve([createFakeChunk({ emptyChoices: true })])
+          }
+          return Promise.resolve([
+            createFakeChunk({ content: 'answer' }),
+            createFakeChunk({
+              emptyChoices: true,
+              usage: { promptTokens: 5, completionTokens: 3 }
+            })
+          ])
+        }
+      }
+    }
+  }
 }
 
 describe('serve-openai-providers harness', () => {
@@ -145,6 +173,58 @@ describe('serve-openai-providers harness', () => {
       })
     } finally {
       console.error = originalConsoleError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('full command persists a measured failure and stops the provider', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
+    const originalLog = console.log
+    const originalError = console.error
+    try {
+      console.log = ignoreError
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const sha256 = createHash('sha256').update(bytes).digest('hex')
+      const config = makeConfig({ ggufPath, sha256 })
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0
+      config.providers = [
+        {
+          id: 'qvac',
+          base_url: 'http://127.0.0.1:11435/v1',
+          model: 'model',
+          lifecycle: {
+            start_command: ['start-provider'],
+            stop_command: ['stop-provider']
+          }
+        }
+      ]
+
+      const events: string[] = []
+      const deps: CommandDependencies = {
+        ...defaultDependencies(),
+        createClient: () => makeMeasuredFailureClient(),
+        execute: async (command) => {
+          events.push(command[0]!)
+        }
+      }
+
+      const code = await cmdFull(config, promptsDoc, dir, deps)
+      assert.equal(code, 1)
+      assert.ok(events.includes('stop-provider'))
+
+      const raw = JSON.parse(readFileSync(join(dir, 'results', 'raw.json'), 'utf8')) as {
+        runs: Array<Record<string, unknown>>
+      }
+      const measuredFailure = raw.runs.find((run) => run.phase === 'measured' && run.ok === false)
+      assert.ok(measuredFailure)
+    } finally {
+      console.log = originalLog
+      console.error = originalError
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -259,6 +339,73 @@ describe('serve-openai-providers harness', () => {
             sha256: 'a'.repeat(64)
           }),
           ...update
+        }
+        writeConfig(path, config)
+
+        assert.throws(() => loadBenchmarkConfig(path))
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+
+  it('loads provider lifecycle commands', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+    try {
+      const path = join(dir, 'benchmark.yaml')
+      const config = makeConfig({
+        ggufPath: join(dir, 'model.gguf'),
+        sha256: 'a'.repeat(64)
+      })
+      config.providers = [
+        {
+          id: 'qvac',
+          base_url: 'http://127.0.0.1:11435/v1',
+          model: 'model',
+          lifecycle: {
+            start_command: ['serve', '--port', '11435'],
+            stop_command: ['pkill', 'serve']
+          }
+        }
+      ]
+      writeConfig(path, config)
+
+      assert.deepEqual(loadBenchmarkConfig(path), config)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  for (const [name, providers] of [
+    ['unknown provider key', [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', extra: true }]],
+    [
+      'string lifecycle start_command',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { start_command: 'serve' } }]
+    ],
+    [
+      'empty lifecycle stop_command',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { stop_command: [] } }]
+    ],
+    [
+      'blank lifecycle command entry',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { start_command: [' '] } }]
+    ],
+    [
+      'unknown lifecycle key',
+      [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: { restart: ['serve'] } }]
+    ],
+    ['non-object lifecycle', [{ id: 'qvac', base_url: 'http://x/v1', model: 'm', lifecycle: true }]]
+  ] as const) {
+    it(`rejects strict provider config with ${name}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+      try {
+        const path = join(dir, 'benchmark.yaml')
+        const config = {
+          ...makeConfig({
+            ggufPath: join(dir, 'model.gguf'),
+            sha256: 'a'.repeat(64)
+          }),
+          providers
         }
         writeConfig(path, config)
 
@@ -647,5 +794,115 @@ describe('serve-openai-providers harness', () => {
     const measuredFailures = runs.filter((r) => r.phase === 'measured' && !r.ok)
     assert.equal(measuredFailures.length, 1)
     assert.equal(measuredFailures.length > 0 ? 1 : 0, 1)
+  })
+
+  const providerWithCommands: ProviderConfig = {
+    id: 'qvac',
+    base_url: 'http://127.0.0.1:11435/v1',
+    model: 'model',
+    lifecycle: {
+      start_command: ['start-provider'],
+      stop_command: ['stop-provider']
+    }
+  }
+
+  it('starts and stops one provider around its operation', async () => {
+    const events: string[] = []
+    const result = await runProviderLifecycle(
+      providerWithCommands,
+      async () => {
+        events.push('request')
+        return 7
+      },
+      async (command) => {
+        events.push(command[0]!)
+      }
+    )
+    assert.equal(result, 7)
+    assert.deepEqual(events, ['start-provider', 'request', 'stop-provider'])
+  })
+
+  it('stops the provider when its request fails', async () => {
+    const events: string[] = []
+    const executeRecordingCommand = async (command: string[]): Promise<void> => {
+      events.push(command[0]!)
+    }
+    await assert.rejects(
+      runProviderLifecycle(
+        providerWithCommands,
+        async () => {
+          throw new Error('request failed')
+        },
+        executeRecordingCommand
+      ),
+      /request failed/
+    )
+    assert.deepEqual(events, ['start-provider', 'stop-provider'])
+  })
+
+  it('runs the operation without lifecycle commands', async () => {
+    const provider: ProviderConfig = { id: 'plain', base_url: 'http://127.0.0.1:1/v1', model: 'm' }
+    let executed = 0
+    const result = await runProviderLifecycle(
+      provider,
+      async () => 42,
+      async () => {
+        executed += 1
+      }
+    )
+    assert.equal(result, 42)
+    assert.equal(executed, 0)
+  })
+
+  it('surfaces a stop failure after a successful operation', async () => {
+    const failingStop = async (command: string[]): Promise<void> => {
+      if (command[0] === 'stop-provider') {
+        throw new Error('stop failed')
+      }
+    }
+    await assert.rejects(
+      runProviderLifecycle(providerWithCommands, async () => 1, failingStop),
+      /stop failed/
+    )
+  })
+
+  it('preserves the operation error when stop also fails', async () => {
+    const failingStop = async (command: string[]): Promise<void> => {
+      if (command[0] === 'stop-provider') {
+        throw new Error('stop failed')
+      }
+    }
+    await assert.rejects(
+      runProviderLifecycle(
+        providerWithCommands,
+        async () => {
+          throw new Error('request failed')
+        },
+        failingStop
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof AggregateError)
+        assert.equal(error.errors.length, 2)
+        assert.match(String(error.errors[0]), /request failed/)
+        assert.match(String(error.errors[1]), /stop failed/)
+        return true
+      }
+    )
+  })
+
+  it('runs shell-free commands and resolves on a zero exit', async () => {
+    await executeCommand(['node', '-e', 'process.exit(0)'])
+  })
+
+  it('rejects an empty lifecycle command', async () => {
+    await assert.rejects(executeCommand([]), /non-empty argv/)
+  })
+
+  it('rejects a non-zero lifecycle command exit', async () => {
+    await assert.rejects(executeCommand(['node', '-e', 'process.exit(3)']), /exited with code 3/)
+  })
+
+  it('rejects when the lifecycle command cannot start', async () => {
+    await assert.rejects(executeCommand(['definitely-not-a-real-binary-xyz']))
   })
 })

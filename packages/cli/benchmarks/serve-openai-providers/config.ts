@@ -18,6 +18,8 @@ const ROOT_KEYS = new Set([
 ])
 const GENERATION_KEYS = new Set(['max_tokens', 'temperature', 'seed', 'stream', 'stream_options'])
 const STREAM_OPTION_KEYS = new Set(['include_usage'])
+const PROVIDER_KEYS = new Set(['id', 'base_url', 'model', 'lifecycle'])
+const LIFECYCLE_KEYS = new Set(['start_command', 'stop_command'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -86,6 +88,27 @@ function assertGenerationConfig(value: unknown): void {
   }
 }
 
+function assertProviderLifecycle(value: unknown): void {
+  if (!isRecord(value)) {
+    throw new TypeError('config provider lifecycle must be a mapping')
+  }
+  for (const key of Object.keys(value)) {
+    if (!LIFECYCLE_KEYS.has(key)) {
+      throw new TypeError(`unknown config provider lifecycle setting: ${key}`)
+    }
+  }
+  for (const key of ['start_command', 'stop_command'] as const) {
+    if (key in value) {
+      const command = value[key]
+      if (!Array.isArray(command) || command.length === 0 || !command.every(isNonEmptyString)) {
+        throw new TypeError(
+          `config provider lifecycle.${key} must be a non-empty array of non-empty strings`
+        )
+      }
+    }
+  }
+}
+
 function assertBenchmarkConfig(data: unknown, path: string): asserts data is BenchmarkConfig {
   if (!isRecord(data)) {
     throw new TypeError(`config must be a mapping: ${path}`)
@@ -134,6 +157,14 @@ function assertBenchmarkConfig(data: unknown, path: string): asserts data is Ben
       !isNonEmptyString(provider.model)
     ) {
       throw new TypeError('each config provider must define non-empty id, base_url, and model')
+    }
+    for (const key of Object.keys(provider)) {
+      if (!PROVIDER_KEYS.has(key)) {
+        throw new TypeError(`unknown config provider setting: ${key}`)
+      }
+    }
+    if ('lifecycle' in provider) {
+      assertProviderLifecycle(provider.lifecycle)
     }
   }
   if (!isRecord(data.model_parity) || !isNonEmptyString(data.model_parity.gguf_path)) {
