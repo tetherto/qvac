@@ -299,6 +299,102 @@ export const vlaPi05InvalidImgSize = createVlaTest(
   'vla-pi05'
 )
 
+// ── GR00T N1.7-3B (LIBERO) ────────────────────────────────────────────────
+// Desktop-only against the `vla-groot` resource (q5 profile ~2.74 GB; NOT
+// smoke-tagged — too heavy for the quick smoke path). GR00T is the patch-input
+// arch: `imageInputMode === 'patches'` (each camera is a pre-patchified buffer
+// of `imagePatchElems` floats) with continuous state. Note it reports
+// `tokenizerMaxLength: 0` — the prompt length is model-fixed, not surfaced —
+// so it is deliberately absent from the positive-integer hparams check below.
+
+export const vlaGrootHparamsShape = createVlaTest(
+  'vla-groot-hparams-shape',
+  {},
+  {
+    validation: 'function',
+    fn: (result: unknown) => {
+      const r = result as { hparams?: Record<string, number | string>; backendName?: string | null }
+      if (!r.hparams) return { passed: false, output: 'missing hparams' }
+      const required = ['chunkSize', 'actionDim', 'maxActionDim', 'maxStateDim', 'visionImageSize']
+      for (const k of required) {
+        const v = r.hparams[k]
+        if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) {
+          return { passed: false, output: `hparams.${k} not a positive integer (got ${v})` }
+        }
+      }
+      if (r.hparams['imageInputMode'] !== 'patches') {
+        return {
+          passed: false,
+          output: `hparams.imageInputMode expected "patches" (got ${r.hparams['imageInputMode']})`
+        }
+      }
+      const patchElems = r.hparams['imagePatchElems']
+      if (typeof patchElems !== 'number' || !Number.isInteger(patchElems) || patchElems <= 0) {
+        return {
+          passed: false,
+          output: `hparams.imagePatchElems not a positive integer (got ${patchElems})`
+        }
+      }
+      if (r.hparams['numCameras'] !== 2) {
+        return {
+          passed: false,
+          output: `hparams.numCameras expected 2 (got ${r.hparams['numCameras']})`
+        }
+      }
+      if (r.hparams['stateInputMode'] !== 'continuous') {
+        return {
+          passed: false,
+          output: `hparams.stateInputMode expected "continuous" (got ${r.hparams['stateInputMode']})`
+        }
+      }
+      const knownBackends = new Set(['CPU', 'Metal', 'Vulkan', 'OpenCL'])
+      if (r.backendName !== null && !knownBackends.has(r.backendName ?? '')) {
+        return { passed: false, output: `unknown backendName: ${r.backendName}` }
+      }
+      return { passed: true }
+    }
+  },
+  300000,
+  undefined,
+  'vla-groot'
+)
+
+// Exercises the patch-input path end to end: the executor feeds two per-camera
+// patch buffers of `imagePatchElems` floats, a continuous (padded) state, the
+// required noise prior, and a prompt with one image-token run per camera.
+export const vlaGrootRunSyntheticShape = createVlaTest(
+  'vla-groot-run-synthetic-shape',
+  { inputs: 'synthetic' },
+  {
+    validation: 'function',
+    fn: (result: unknown) => {
+      const r = result as {
+        actionsLength?: number
+        expectedLength?: number
+        actionDim?: number
+        chunkSize?: number
+        numImages?: number
+      }
+      if (r.actionsLength !== r.expectedLength) {
+        return {
+          passed: false,
+          output: `actions.length=${r.actionsLength} != chunkSize*actionDim=${r.expectedLength}`
+        }
+      }
+      if (!r.actionDim || !r.chunkSize) {
+        return { passed: false, output: 'actionDim/chunkSize missing on result' }
+      }
+      if (r.numImages !== 2) {
+        return { passed: false, output: `expected 2 camera images for GR00T (got ${r.numImages})` }
+      }
+      return { passed: true }
+    }
+  },
+  300000,
+  undefined,
+  'vla-groot'
+)
+
 export const vlaTests: TestDefinition[] = [
   vlaHparamsShape,
   vlaRunSyntheticShape,
@@ -307,5 +403,7 @@ export const vlaTests: TestDefinition[] = [
   vlaPi05HparamsShape,
   vlaPi05RunSyntheticShape,
   vlaPi05RunStats,
-  vlaPi05InvalidImgSize
+  vlaPi05InvalidImgSize,
+  vlaGrootHparamsShape,
+  vlaGrootRunSyntheticShape
 ]
