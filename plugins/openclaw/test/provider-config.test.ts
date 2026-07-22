@@ -164,7 +164,7 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
     'openai/gpt-4.1': {},
     'qvac/qwen3.5-9b': {}
   })
-  assert.deepEqual(result.configPatch.agents.defaults.experimental, { localModelLean: true })
+  assert.equal(Object.hasOwn(result.configPatch.agents.defaults, 'experimental'), false)
   assert.equal(result.configPatch.models.mode, 'merge')
   assert.deepEqual(Object.keys(result.configPatch.models.providers).sort(), ['openai', 'qvac'])
   assert.deepEqual(
@@ -178,11 +178,26 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   )
 })
 
-test('applyQvacSetupConfig returns a complete OpenClaw config for non-interactive auth', () => {
-  const config = applyQvacSetupConfig({}, { model: 'qwen3.5-4b' })
+test('applyQvacSetupConfig preserves existing OpenClaw experimental settings', () => {
+  const config = applyQvacSetupConfig(
+    {
+      agents: {
+        defaults: {
+          experimental: {
+            localModelLean: true,
+            futureOpenClawFlag: 'preserve-me'
+          }
+        }
+      }
+    },
+    { model: 'qwen3.5-4b' }
+  )
 
   assert.deepEqual(config.agents?.defaults?.models, { 'qvac/qwen3.5-4b': {} })
-  assert.deepEqual(config.agents?.defaults?.experimental, { localModelLean: true })
+  assert.deepEqual(config.agents?.defaults?.experimental, {
+    localModelLean: true,
+    futureOpenClawFlag: 'preserve-me'
+  })
   assert.equal(config.models?.mode, 'merge')
   assert.deepEqual(
     config.models?.providers?.['qvac'],

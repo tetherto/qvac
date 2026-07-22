@@ -131,6 +131,19 @@ jobs:
           name: prebuilds
           path: packages/tts-ggml/prebuilds
 
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/tts-ggml
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/tts-ggml
+        run: npm run build:ts
+
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         working-directory: packages/tts-ggml
         run: |
@@ -204,6 +217,19 @@ jobs:
         with:
           name: prebuilds
           path: packages/tts-ggml/prebuilds
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/tts-ggml
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Build TypeScript wrapper
+        working-directory: packages/tts-ggml
+        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag

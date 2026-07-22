@@ -116,6 +116,20 @@ test('runStreaming accumulateSentences false runs one job per yield', async (t) 
   runJobSpy.restore()
 })
 
+test('runStreaming accumulateSentences null preserves disabled accumulation', async (t) => {
+  const runJobSpy = spyRunJob()
+  const model = createStubbedModel()
+  await model.load()
+  async function* tokens() {
+    yield 'a'
+    yield 'b'
+  }
+  const response = await model.runStreaming(tokens(), { accumulateSentences: null })
+  await response.await()
+  t.is(runJobSpy.callCount, 2)
+  runJobSpy.restore()
+})
+
 test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars', async (t) => {
   const runJobSpy = spyRunJob()
   const model = createStubbedModel()
@@ -147,6 +161,12 @@ test('buildSentenceEndTester resets global delimiter lastIndex before each test'
   const testEnd = buildSentenceEndTester({ sentenceDelimiter: delimiter })
   t.ok(testEnd('A.'))
   t.ok(testEnd('B.'), 'second buffer must match from lastIndex 0 (global /g otherwise sticks)')
+})
+
+test('buildSentenceEndTester falls back for an unknown delimiter preset', (t) => {
+  const testEnd = buildSentenceEndTester({ sentenceDelimiterPreset: 'unknown' })
+  t.ok(testEnd('Hello؟'), 'unknown preset should use multilingual punctuation')
+  t.absent(testEnd('Hello'), 'text without terminal punctuation should not match')
 })
 
 test('runStreaming custom sentenceDelimiter with /g still flushes each fragment', async (t) => {

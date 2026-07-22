@@ -1,178 +1,123 @@
-'use strict'
-
-const { countScalars, defaultMaxChunkScalars } = require('./textChunker')
-
-// Idle flush delay: emit the buffered fragment when no new fragment arrives
-// within this window (timer reset on each fragment). Shared with the
-// runStreaming default in index.js so the two never drift.
-const DEFAULT_FLUSH_AFTER_MS = 500
-
-/**
- * @param {string} s
- * @param {number} n
- * @returns {{ head: string, rest: string }}
- */
-function splitGraphemeHead(s, n) {
-  const g = [...s]
-  if (g.length <= n) {
-    return { head: s, rest: '' }
-  }
-  return {
-    head: g.slice(0, n).join(''),
-    rest: g.slice(n).join('')
-  }
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_FLUSH_AFTER_MS = void 0;
+exports.splitGraphemeHead = splitGraphemeHead;
+exports.buildSentenceEndTester = buildSentenceEndTester;
+exports.defaultMaxBufferScalars = defaultMaxBufferScalars;
+exports.accumulateTextStream = accumulateTextStream;
+const textChunker_1 = require("./textChunker");
+exports.DEFAULT_FLUSH_AFTER_MS = 500;
+function splitGraphemeHead(value, count) {
+    const graphemes = [...value];
+    if (graphemes.length <= count)
+        return { head: value, rest: "" };
+    return {
+        head: graphemes.slice(0, count).join(""),
+        rest: graphemes.slice(count).join(""),
+    };
 }
-
-/**
- * @param {{ sentenceDelimiter?: RegExp, sentenceDelimiterPreset?: string }} opts
- * @returns {(buffer: string) => boolean}
- */
-function buildSentenceEndTester(opts) {
-  if (opts.sentenceDelimiter instanceof RegExp) {
-    const re = opts.sentenceDelimiter
-    return function testCustom(buffer) {
-      re.lastIndex = 0
-      return re.test(buffer)
+function buildSentenceEndTester(options) {
+    if (options.sentenceDelimiter instanceof RegExp) {
+        const expression = options.sentenceDelimiter;
+        return function testCustom(buffer) {
+            expression.lastIndex = 0;
+            return expression.test(buffer);
+        };
     }
-  }
-  const preset = opts.sentenceDelimiterPreset || 'multilingual'
-  const patterns = {
-    latin: /[.!?…]\s*$/u,
-    cjk: /[。！？…]\s*$/u,
-    multilingual: /(?:[.!?…؟]|[。！？…])\s*$/u
-  }
-  const re = patterns[preset] || patterns.multilingual
-  return function testPreset(buffer) {
-    return re.test(buffer)
-  }
+    const patterns = {
+        latin: /[.!?…]\s*$/u,
+        cjk: /[。！？…]\s*$/u,
+        multilingual: /(?:[.!?…؟]|[。！？…])\s*$/u,
+    };
+    const preset = options.sentenceDelimiterPreset || "multilingual";
+    const expression = patterns[preset] || patterns.multilingual;
+    return function testPreset(buffer) {
+        return expression.test(buffer);
+    };
 }
-
-/**
- * Default `maxBufferScalars` aligned with `splitTtsText` when `maxScalars` is unset.
- * @param {string} [language]
- */
 function defaultMaxBufferScalars(language) {
-  return defaultMaxChunkScalars(language)
+    return (0, textChunker_1.defaultMaxChunkScalars)(language);
 }
-
-/**
- * Coalesces small text fragments from a streaming source into TTS-sized strings: flush when the
- * buffer ends with a sentence delimiter, when grapheme length exceeds `maxBufferScalars`, or after
- * `flushAfterMs` idle (timer reset on each fragment). Always flushes non-whitespace remainder when
- * the source ends.
- *
- * @param {AsyncIterable<string>} source
- * @param {object} opts
- * @param {RegExp} [opts.sentenceDelimiter] - If set, overrides `sentenceDelimiterPreset`.
- * @param {'latin'|'cjk'|'multilingual'} [opts.sentenceDelimiterPreset]
- * @param {number} [opts.maxBufferScalars]
- * @param {number} [opts.flushAfterMs]
- * @returns {AsyncGenerator<string, void, void>}
- */
-async function* accumulateTextStream(source, opts) {
-  const flushAfterMs = opts.flushAfterMs != null ? opts.flushAfterMs : DEFAULT_FLUSH_AFTER_MS
-  const defaultMax = defaultMaxBufferScalars(opts.language)
-  let maxScalars
-  if (opts.maxBufferScalars == null) {
-    maxScalars = defaultMax
-  } else {
-    const n = Number(opts.maxBufferScalars)
-    maxScalars = Number.isFinite(n) && n > 0 ? n : defaultMax
-  }
-  const testEnd = buildSentenceEndTester(opts)
-
-  const queue = []
-  let notify = null
-
-  function push(item) {
-    queue.push(item)
-    if (notify) {
-      const n = notify
-      notify = null
-      n()
-    }
-  }
-
-  ;(async function pump() {
-    let buffer = ''
-    let idleTimer = null
-
-    function clearIdle() {
-      if (idleTimer) {
-        clearTimeout(idleTimer)
-        idleTimer = null
-      }
-    }
-
-    function armIdle() {
-      clearIdle()
-      idleTimer = setTimeout(() => {
-        idleTimer = null
-        const t = buffer.trim()
-        if (t) {
-          buffer = ''
-          push({ kind: 'chunk', text: t })
+async function* accumulateTextStream(source, options = {}) {
+    const flushAfterMs = options.flushAfterMs ?? exports.DEFAULT_FLUSH_AFTER_MS;
+    const defaultMaximum = defaultMaxBufferScalars(options.language);
+    const configuredMaximum = Number(options.maxBufferScalars);
+    const maxScalars = options.maxBufferScalars == null ||
+        !Number.isFinite(configuredMaximum) ||
+        configuredMaximum <= 0
+        ? defaultMaximum
+        : configuredMaximum;
+    const testEnd = buildSentenceEndTester(options);
+    const queue = [];
+    let notify = null;
+    function push(item) {
+        queue.push(item);
+        if (notify) {
+            const resolve = notify;
+            notify = null;
+            resolve();
         }
-      }, flushAfterMs)
     }
-
-    try {
-      for await (const fragment of source) {
-        clearIdle()
-        buffer += String(fragment)
-
-        while (countScalars(buffer) >= maxScalars) {
-          const { head, rest } = splitGraphemeHead(buffer, maxScalars)
-          buffer = rest
-          if (head.length > 0) {
-            push({ kind: 'chunk', text: head })
-          }
+    void (async function pump() {
+        let buffer = "";
+        let idleTimer = null;
+        function clearIdle() {
+            if (idleTimer) {
+                clearTimeout(idleTimer);
+                idleTimer = null;
+            }
         }
-
-        if (testEnd(buffer)) {
-          const t = buffer.trim()
-          buffer = ''
-          if (t) {
-            push({ kind: 'chunk', text: t })
-          }
+        function armIdle() {
+            clearIdle();
+            idleTimer = setTimeout(() => {
+                idleTimer = null;
+                const text = buffer.trim();
+                if (text) {
+                    buffer = "";
+                    push({ kind: "chunk", text });
+                }
+            }, flushAfterMs);
         }
-
-        armIdle()
-      }
-
-      clearIdle()
-      const tail = buffer.trim()
-      if (tail) {
-        push({ kind: 'chunk', text: tail })
-      }
-      push({ kind: 'done' })
-    } catch (error) {
-      clearIdle()
-      push({ kind: 'err', error })
+        try {
+            for await (const fragment of source) {
+                clearIdle();
+                buffer += String(fragment);
+                while ((0, textChunker_1.countScalars)(buffer) >= maxScalars) {
+                    const { head, rest } = splitGraphemeHead(buffer, maxScalars);
+                    buffer = rest;
+                    if (head.length > 0)
+                        push({ kind: "chunk", text: head });
+                }
+                if (testEnd(buffer)) {
+                    const text = buffer.trim();
+                    buffer = "";
+                    if (text)
+                        push({ kind: "chunk", text });
+                }
+                armIdle();
+            }
+            clearIdle();
+            const tail = buffer.trim();
+            if (tail)
+                push({ kind: "chunk", text: tail });
+            push({ kind: "done" });
+        }
+        catch (error) {
+            clearIdle();
+            push({ kind: "err", error });
+        }
+    })();
+    while (true) {
+        while (queue.length === 0) {
+            await new Promise((resolve) => {
+                notify = resolve;
+            });
+        }
+        const item = queue.shift();
+        if (!item || item.kind === "done")
+            return;
+        if (item.kind === "err")
+            throw item.error;
+        yield item.text;
     }
-  })()
-
-  while (true) {
-    while (queue.length === 0) {
-      await new Promise((resolve) => {
-        notify = resolve
-      })
-    }
-    const item = queue.shift()
-    if (item.kind === 'done') {
-      return
-    }
-    if (item.kind === 'err') {
-      throw item.error
-    }
-    yield item.text
-  }
-}
-
-module.exports = {
-  accumulateTextStream,
-  defaultMaxBufferScalars,
-  buildSentenceEndTester,
-  splitGraphemeHead,
-  DEFAULT_FLUSH_AFTER_MS
 }

@@ -18,6 +18,31 @@ test('auto kv-cache history: next-turn lookup matches prior saved turn', (t) => 
   t.alike(getAutoCacheLookupHistory(nextTurnHistory), savedHistory)
 })
 
+test('auto kv-cache history: empty attachment arrays do not change the cache key', (t) => {
+  const firstTurnHistory = [
+    { role: 'user', content: 'What is the capital of France?', attachments: [] }
+  ]
+  const savedHistory = buildAutoCacheSaveHistory(firstTurnHistory, 'Paris.')
+  const nextTurnHistory = [
+    { role: 'user', content: 'What is the capital of France?', attachments: [] },
+    { role: 'assistant', content: 'Paris.', attachments: [] },
+    { role: 'user', content: 'What about Germany?', attachments: [] }
+  ]
+
+  t.is(JSON.stringify(getAutoCacheLookupHistory(nextTurnHistory)), JSON.stringify(savedHistory))
+  t.is(savedHistory[0]!.attachments, undefined)
+})
+
+test('auto kv-cache history: non-empty attachments remain part of the cache key', (t) => {
+  const attachment = { path: '/tmp/reference.png' }
+  const savedHistory = buildAutoCacheSaveHistory(
+    [{ role: 'user', content: 'Describe this image.', attachments: [attachment] }],
+    'A landscape.'
+  )
+
+  t.alike(savedHistory[0]!.attachments, [attachment])
+})
+
 test('auto kv-cache history: no lookup target for first turn', (t) => {
   t.alike(
     getAutoCacheLookupHistory([{ role: 'user', content: 'What is the capital of France?' }]),

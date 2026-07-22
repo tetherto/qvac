@@ -1,14 +1,18 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "check:generated": "node scripts/check-generated.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
@@ -20,15 +24,18 @@
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
-    "lint": "prettier --check \"test/**/*.js\" \"*.js\" \"lib/*.js\" && lunte \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
-    "format": "prettier --write \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
-    "test:unit": "brittle-bare test/unit/**/*.test.js && npm run test:node",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"test/**/*.js\" \"binding.js\" && lunte \"test/**/*.js\" \"binding.js\"",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"test/**/*.js\" \"binding.js\"",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:node",
     "test:node": "node --test scripts/__tests__/*.test.js",
-    "test": "npm run test:unit && npm run test:integration",
-    "test:integration": "brittle-bare test/integration/**/*.test.js",
-    "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test": "npm run test:types && npm run test:unit && npm run test:integration",
+    "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
+    "test:benchmark:rtf": "npm run build:ts && brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
-    "test:benchmark:streaming": "brittle-bare test/benchmark/streaming-benchmark.test.js",
+    "test:benchmark:streaming": "npm run build:ts && brittle-bare test/benchmark/streaming-benchmark.test.js",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target tts_ggml_tests && bare-make install",
@@ -38,7 +45,8 @@
     "coverage:cpp:summary": "cd build && llvm-cov report ./tts_ggml_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./tts_ggml_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./tts_ggml_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
-    "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
+    "test:dts": "tsc --noEmit -p tsconfig.dts.json",
+    "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh",
@@ -49,6 +57,7 @@
     "addonLogging.d.ts",
     "binding.js",
     "index.js",
+    "tts.d.ts",
     "lib",
     "prebuilds",
     "index.d.ts",
@@ -69,14 +78,26 @@
   ],
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
-    "./text-chunker": "./lib/textChunker.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./text-chunker": {
+      "types": "./lib/textChunker.d.ts",
+      "default": "./lib/textChunker.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js",
-    "./lib/textStreamAccumulator.js": "./lib/textStreamAccumulator.js"
+    "./addonLogging.js": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./lib/textStreamAccumulator.js": {
+      "types": "./lib/textStreamAccumulator.d.ts",
+      "default": "./lib/textStreamAccumulator.js"
+    }
   },
   "license": "Apache-2.0",
   "repository": {
@@ -95,12 +116,16 @@
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "fflate": "^0.8.2",
     "husky": "^9.1.7",
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",

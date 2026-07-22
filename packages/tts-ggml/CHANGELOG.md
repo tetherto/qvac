@@ -5,10 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.1] - 2026-07-21
 
 ### Changed
 
+- Migrated the published JavaScript wrapper to generated TypeScript sources and added declarations for the supported `./text-chunker` and `./lib/textStreamAccumulator.js` subpath exports, while preserving the existing CommonJS runtime API.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`tts-cpp` >= 2026-07-13#2, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels (chatterbox q4 CPU mean RTF 2.70 -> 2.28 on ubuntu-24.04-arm).
 - Bumped the `tts-cpp` `version>=` floor from `2026-07-13#2` to `2026-07-13#3` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), which raises the `ggml-speech` floor to `2026-07-15` (`tetherto/qvac-ext-ggml` speech `d7e27ac7`, [#42](https://github.com/tetherto/qvac-ext-ggml/pull/42) — QVAC-21623 ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM). `tts-cpp` source is unchanged (rebuild-only re-pin); the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical). Registry baseline unchanged.
 
