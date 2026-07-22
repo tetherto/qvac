@@ -300,8 +300,8 @@ export const vlaPi05InvalidImgSize = createVlaTest(
 )
 
 // ── GR00T N1.7-3B (LIBERO) ────────────────────────────────────────────────
-// Desktop-only against the `vla-groot` resource (q8 ~3.76 GB, too large for
-// the mobile / smoke path — so NOT smoke-tagged). GR00T is the patch-input
+// Desktop-only against the `vla-groot` resource (q5 profile ~2.74 GB; NOT
+// smoke-tagged — too heavy for the quick smoke path). GR00T is the patch-input
 // arch: `imageInputMode === 'patches'` (each camera is a pre-patchified buffer
 // of `imagePatchElems` floats) with continuous state. Note it reports
 // `tokenizerMaxLength: 0` — the prompt length is model-fixed, not surfaced —

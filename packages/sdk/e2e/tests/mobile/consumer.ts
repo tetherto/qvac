@@ -508,7 +508,7 @@ export const executor = createExecutor({
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
     new SkipExecutor(
       /^vla-groot-/,
-      'GR00T e2e is desktop-only (q8 model too large for the mobile suite); no vla-groot resource on mobile'
+      'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
     ),
     ...(Platform.OS === 'android'
       ? [
