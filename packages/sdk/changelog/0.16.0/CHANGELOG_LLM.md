@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.16.x (latest)
-description: Release notes for QVAC SDK v0.16.0.
----
-
-## v0.16.0
-
-### @qvac/sdk
+# QVAC SDK v0.16.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.16.0
 
 QVAC SDK 0.16.0 adds Ideogram 4 image generation, per-phase timing stats for the diffusion pipeline, and first-class GR00T support in the VLA SDK. It includes a full-fidelity Python SDK client (not yet published) that mirrors the TypeScript surface, reuses the KV cache across turns in the OpenAI-compatible serve endpoints for faster multi-turn chat, and refreshes the TTS and transcription model registry with new Parler-TTS voices and multimodal LLMs.
 
-#### New APIs
+## New APIs
 
-##### Ideogram 4 Diffusion
+### Ideogram 4 Diffusion
 
 Image generation now supports Ideogram 4 through the `sdcpp-generation` model type. Load the diffusion model together with its companion LLM, VAE, and unconditional models, then generate as with other diffusion backends.
 
@@ -29,7 +22,7 @@ const modelId = await loadModel({
 });
 ```
 
-##### Per-Phase Diffusion Timing Stats
+### Per-Phase Diffusion Timing Stats
 
 Diffusion results now include a per-phase timing breakdown, so you can see where generation time goes — conditioning, the denoising loop, VAE decode, post-processing, and overall throughput.
 
@@ -42,7 +35,7 @@ console.log(stats.postProcessMs); // encode/upscale/mux time (ms)
 console.log(stats.stepsPerSecond); // denoising throughput (steps/s)
 ```
 
-##### Python SDK Client
+### Python SDK Client
 
 > **Note:** The Python client has landed in the SDK source but is **not yet published** as an installable package. The example below previews the upcoming client; it is not installable yet.
 
@@ -65,7 +58,7 @@ async with Client() as client:
     final = await run.final
 ```
 
-##### GR00T Support in the VLA SDK
+### GR00T Support in the VLA SDK
 
 The VLA SDK now exposes GR00T as a first-class model, including its registry entry, hyperparameters, and helpers. GR00T uses a patch-based image input mode: when `hparams.imageInputMode` is `"patches"`, each camera image is supplied as a pre-patchified float buffer. A runnable usage example and desktop e2e ship alongside it.
 
@@ -97,21 +90,21 @@ if (hparams.imageInputMode === "patches") {
 }
 ```
 
-#### Features
+## Features
 
-##### KV Cache Reuse Across Turns in OpenAI-Compatible Endpoints
+### KV Cache Reuse Across Turns in OpenAI-Compatible Endpoints
 
 The OpenAI-compatible serve endpoints now reuse the KV cache across turns of a conversation instead of reprocessing the full prompt each time. Multi-turn chat that shares a growing prefix skips redundant prefill work, lowering latency and compute for each follow-up message.
 
-#### Bug Fixes
+## Bug Fixes
 
 Registry-hosted GGUF OCR models now load through the documented `ocr()` path, so OCR models resolved from the model registry work as described instead of failing to load.
 
-#### Model Changes
+## Model Changes
 
 This release refreshes the TTS and transcription model registry. New multimodal LLM constants (Gemma4, Qwen3.5) and Parler-TTS voices (English mini and large, plus Indic multilingual) are added, while a large set of legacy per-component Supertonic, Chatterbox, and Parakeet registry constants — along with the previous `QWEN3_4B_Q4_K_M` entry — are removed.
 
-##### Added Models
+### Added Models
 
 ```text
 GEMMA4_2B_MULTIMODAL_Q8_0
@@ -128,7 +121,7 @@ TTS_MINI_V1_EN_PARLER_TTS_FP32
 TTS_MINI_V1_EN_PARLER_TTS_Q8_0
 ```
 
-##### Removed Models
+### Removed Models
 
 ```text
 PARAKEET_CTC_FP32
