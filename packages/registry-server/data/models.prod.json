@@ -11501,5 +11501,105 @@
     ],
     "notes": "",
     "link": "https://huggingface.co/parler-tts/parler-tts-mini-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/Qwen3-Embedding-0.6B-Q8_0.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "Qwen3 0.6B embedding model for ACE-Step audio generation (GGUF)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "embedding",
+      "qwen3",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/acestep-5Hz-lm-0.6B-Q8_0.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step 5 Hz 0.6B language model for audio generation (GGUF)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "language-model",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-sft-Q8_0.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 supervised fine-tuned audio generation model (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "v1.5",
+      "sft",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/acestep-v15-sft"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "q4_k_m",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "v1.5",
+      "turbo",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q8_0.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "v1.5",
+      "turbo",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step variational autoencoder for audio generation (GGUF)",
+    "quantization": "bf16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "audio-generation",
+      "acestep",
+      "vae",
+      "gguf"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
   }
 ]
