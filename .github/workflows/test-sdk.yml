@@ -6,6 +6,14 @@
 #   - workflow_call: called by on-pr-test-sdk.yml for label/release-branch triggers
 
 name: QVAC Tests (sdk)
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+    && format('SDK e2e · {0} · {1} · {2} · @{3}',
+      inputs.test-version || github.ref_name,
+      inputs.suite || 'full',
+      inputs.filter || 'all tests',
+      github.actor)
+    || github.event.pull_request.title }}
 
 on:
   workflow_dispatch:
@@ -23,15 +31,15 @@ on:
         type: boolean
         default: false
       android:
-        description: "Android tests"
+        description: "Android tests (Device Farm)"
         type: boolean
         default: true
       ios:
-        description: "iOS tests"
+        description: "iOS tests (Device Farm)"
         type: boolean
         default: true
       suite:
-        description: "Test suite"
+        description: "Test suite (full = all tests; custom uses Custom suites)"
         type: choice
         options:
           - full
@@ -51,11 +59,11 @@ on:
         description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
         type: string
       cache-models:
-        description: "Reuse downloaded models across runs"
+        description: "Reuse downloaded models for Desktop, Electron, and Snap"
         type: boolean
         default: true
       desktop-consumer-timeout:
-        description: "Desktop/Electron connection timeout (seconds)"
+        description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
       mobile-consumer-timeout:
