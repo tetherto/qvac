@@ -213,7 +213,11 @@ export async function cmdPreflight(
 
   if (sessionDir) {
     const rawPath = join(sessionDir, 'raw.json')
-    const raw = newRawDocument(config, sessionDir.split(/[\\/]/).pop() ?? sessionDir)
+    const raw = newRawDocument(
+      config,
+      sessionDir.split(/[\\/]/).pop() ?? sessionDir,
+      deps.clock.date().toISOString()
+    )
     raw.model_parity_evidence = modelParityEvidence
     raw.parity = { results, prompt_tokens_equal: parityOk }
     deps.fs.writeJson(rawPath, raw)

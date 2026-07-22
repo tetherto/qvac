@@ -201,6 +201,38 @@ describe('serve-openai-providers harness', () => {
     }
   })
 
+  it('uses the injected date for preflight session artifacts', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-preflight-'))
+    const originalConsoleError = console.error
+    try {
+      console.error = ignoreError
+      const ggufPath = join(dir, 'model.gguf')
+      const bytes = Buffer.from('gguf')
+      writeFileSync(ggufPath, bytes)
+      const config = makeConfig({
+        ggufPath,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      })
+      config.providers = []
+      const deps: CommandDependencies = {
+        ...defaultDependencies(),
+        clock: {
+          ...defaultDependencies().clock,
+          date: () => new Date('2026-07-22T12:34:56.000Z')
+        }
+      }
+
+      assert.equal(await cmdPreflight(config, promptsDoc, dir, deps), 1)
+      const raw = JSON.parse(readFileSync(join(dir, 'raw.json'), 'utf8')) as {
+        created_at: string
+      }
+      assert.equal(raw.created_at, '2026-07-22T12:34:56.000Z')
+    } finally {
+      console.error = originalConsoleError
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('full command persists a measured failure and stops the provider', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-full-'))
     const originalLog = console.log
@@ -1106,6 +1138,57 @@ describe('serve-openai-providers harness', () => {
     )
   })
 
+  it('preserves an undefined operation rejection', async () => {
+    let rejected = false
+    let rejection: unknown = Symbol('not rejected')
+    try {
+      await runProviderLifecycle(
+        providerWithCommands,
+        () => Promise.reject(undefined),
+        async () => {}
+      )
+    } catch (error) {
+      rejected = true
+      rejection = error
+    }
+    assert.equal(rejected, true)
+    assert.equal(rejection, undefined)
+  })
+
+  it('preserves an undefined stop rejection', async () => {
+    let rejected = false
+    let rejection: unknown = Symbol('not rejected')
+    try {
+      await runProviderLifecycle(
+        providerWithCommands,
+        async () => 1,
+        (command) =>
+          command[0] === 'stop-provider' ? Promise.reject(undefined) : Promise.resolve()
+      )
+    } catch (error) {
+      rejected = true
+      rejection = error
+    }
+    assert.equal(rejected, true)
+    assert.equal(rejection, undefined)
+  })
+
+  it('aggregates undefined operation and stop rejections', async () => {
+    await assert.rejects(
+      runProviderLifecycle(
+        providerWithCommands,
+        () => Promise.reject(undefined),
+        (command) =>
+          command[0] === 'stop-provider' ? Promise.reject(undefined) : Promise.resolve()
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof AggregateError)
+        assert.deepEqual(error.errors, [undefined, undefined])
+        return true
+      }
+    )
+  })
+
   it('runs shell-free commands and resolves on a zero exit', async () => {
     await executeCommand(['node', '-e', 'process.exit(0)'])
   })
@@ -1127,6 +1210,32 @@ describe('serve-openai-providers harness', () => {
       executeCommand(['node', '-e', 'setInterval(() => {}, 1000)'], 25),
       /timed out after 25ms/
     )
+  })
+
+  it('waits for a timed-out child to close before rejecting', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-lifecycle-'))
+    const pidPath = join(dir, 'pid')
+    let pid: number | undefined
+    try {
+      const script = `require('node:fs').writeFileSync(${JSON.stringify(pidPath)}, String(process.pid)); setInterval(() => {}, 1000)`
+      await assert.rejects(executeCommand(['node', '-e', script], 100), /timed out after 100ms/)
+      pid = Number(readFileSync(pidPath, 'utf8'))
+      assert.throws(
+        () => process.kill(pid!, 0),
+        (error: unknown) => (error as NodeJS.ErrnoException).code === 'ESRCH'
+      )
+    } finally {
+      if (pid !== undefined) {
+        try {
+          process.kill(pid, 'SIGKILL')
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+            throw error
+          }
+        }
+      }
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('attempts stop cleanup when the start command times out', async () => {
