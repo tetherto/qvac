@@ -17,7 +17,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -143,7 +143,9 @@ jobs:
     # Runs per-package (matches how ./.github/actions/sanity-checks is
     # already invoked from every on-pr-<pkg>.yml - workdir is a package
     # path, there is no root package.json in this monorepo).
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.any == 'true'
+    # Gate on the concrete package list: a non-addon packages/** change leaves
+    # packages=[], which would make this matrix zero-run and result='' downstream.
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.packages != '[]' && needs.changes.outputs.packages != ''
     needs: [authorize, label-gate, changes]
     strategy:
       fail-fast: false
@@ -179,8 +181,18 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
+  # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
+  # pre-filter: the called workflow self-detects SDK pod changes and is a fast
+  # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
+  sdk-pod-checks:
+    needs: [authorize, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pr-checks-sdk-pod.yml
+
   merge-guard:
-    needs: [authorize, label-gate, changes, sanity-checks, prebuilds-caller]
+    needs: [authorize, label-gate, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
     if: |
       always() && !cancelled() &&
       (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -191,3 +203,4 @@ jobs:
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
       build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
+      general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}

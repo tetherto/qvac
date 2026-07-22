@@ -193,6 +193,11 @@ async function runBlocking(
       history,
       stream: false,
       captureThinking: true,
+      // Auto-cache keys on the conversation prefix so a follow-up turn only
+      // prefills the new tail instead of the whole history. The SDK normalizes
+      // out think blocks before hashing, so a client that round-trips plain
+      // assistant text still hits the cache.
+      kvCache: true,
       ...(p.tools !== undefined ? { tools: p.tools } : {}),
       ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
       ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
@@ -238,6 +243,8 @@ async function runStreaming(
       history,
       stream: true,
       captureThinking: true,
+      // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
+      kvCache: true,
       ...(p.tools !== undefined ? { tools: p.tools } : {}),
       ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
       ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})

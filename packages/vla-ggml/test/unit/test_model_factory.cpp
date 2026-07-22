@@ -68,6 +68,13 @@ TEST(VlaModelFactory, SniffsExplicitPi05Architecture) {
   cleanupTempFile(path);
 }
 
+TEST(VlaModelFactory, SniffsExplicitGrootArchitecture) {
+  const std::string path = writeTempGguf("groot");
+  ASSERT_FALSE(path.empty());
+  EXPECT_EQ(sniffGgufArchitecture(path), "groot");
+  cleanupTempFile(path);
+}
+
 TEST(VlaModelFactory, SniffsExplicitSmolvlaArchitecture) {
   const std::string path = writeTempGguf("smolvla");
   ASSERT_FALSE(path.empty());
@@ -122,6 +129,25 @@ TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
     EXPECT_NE(what.find("pi05LoadModel"), std::string::npos)
         << "exception did not come from Pi05Model: " << what;
     EXPECT_NE(what.find("tensor missing"), std::string::npos) << what;
+  }
+  cleanupTempFile(path);
+}
+
+TEST(VlaModelFactory, DispatchesGrootArchitectureToGrootLoader) {
+  // Same trick as the pi05/smolvla dispatch tests: the metadata-only GGUF
+  // carries none of GrootModel's ~1032 required tensors (and none of the
+  // groot.embodiment_tag/embodiment_cat_id keys grootLoadModel requires),
+  // so the loader throws before reaching tensor lookup — that failure
+  // message alone proves dispatch picked the GrootModel branch.
+  const std::string path = writeTempGguf("groot");
+  ASSERT_FALSE(path.empty());
+  try {
+    (void)createVlaModelFromGguf(path, /*forceCpu=*/true, /*backendsDir=*/"");
+    FAIL() << "groot factory dispatch should have thrown (no tensors)";
+  } catch (const std::runtime_error& e) {
+    const std::string what = e.what();
+    EXPECT_NE(what.find("grootLoadModel"), std::string::npos)
+        << "exception did not come from GrootModel: " << what;
   }
   cleanupTempFile(path);
 }

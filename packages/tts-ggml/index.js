@@ -1,1150 +1,960 @@
-'use strict'
-
-const { platform } = require('bare-os')
-const path = require('bare-path')
-const fs = require('bare-fs')
-const QvacLogger = require('@qvac/logging')
-const {
-  createJobHandler,
-  exclusiveRunQueue,
-  getApiDefinition: inferGetApiDefinition
-} = require('@qvac/infer-base')
-const { TTSInterface } = require('./tts')
-const { QvacErrorAddonTTSGgml, ERR_CODES } = require('./lib/error')
-const { splitTtsText } = require('./lib/textChunker')
-const { accumulateTextStream, DEFAULT_FLUSH_AFTER_MS } = require('./lib/textStreamAccumulator')
-
-const ENGINE_CHATTERBOX = 'chatterbox'
-const ENGINE_SUPERTONIC = 'supertonic'
-
-// Accepted output sample-rate window (Hz): below 8 kHz speech is unintelligible;
-// above 192 kHz is past any audio DAC and only wastes memory/CPU on resampling.
-const MIN_OUTPUT_SAMPLE_RATE = 8000
-const MAX_OUTPUT_SAMPLE_RATE = 192000
-
-const CHATTERBOX_T3_TURBO = 'chatterbox-t3-turbo.gguf'
-const CHATTERBOX_T3_MTL = 'chatterbox-t3-mtl.gguf'
-const CHATTERBOX_S3GEN_DEFAULT = 'chatterbox-s3gen.gguf'
-const CHATTERBOX_S3GEN_MTL = 'chatterbox-s3gen-mtl.gguf'
-const SUPERTONIC_DEFAULT = 'supertonic.gguf'
-const SUPERTONIC_MTL = 'supertonic2.gguf'
-// Supertonic 3 (31-language).  Same thin engine as v1/v2 — the architecture
-// and quantisation are read from the GGUF metadata by tts-cpp at load time, so
-// the addon only needs to recognise the filename for the modelDir auto-detect
-// path (explicit `files.supertonicModel` paths bypass this and already route
-// to the Supertonic engine).  Unlike v1/v2 (which keep a single historical
-// bare `supertonic.gguf` / `supertonic2.gguf` on disk), the v3 GGUFs are
-// published per quant tier with the quant in the filename
-// (`supertonic3-f16.gguf`, `supertonic3-q8_0.gguf`, ...), so the modelDir
-// lookup matches any `supertonic3[-<quant>].gguf` (see findSupertonicV3InDir).
-const SUPERTONIC_V3_RE = /^supertonic3(-[a-z0-9_]+)?\.gguf$/i
-// Preference when several v3 tiers share a modelDir: highest precision first.
-const SUPERTONIC_V3_QUANT_ORDER = ['f16', 'f32', 'q8_0', 'q4_0']
-
+"use strict";
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
+const bareOs = require("bare-os");
+const path = require("bare-path");
+const fs = require("bare-fs");
+const QvacLogger = require("@qvac/logging");
+/* eslint-enable @typescript-eslint/no-require-imports */
+const infer_base_1 = require("@qvac/infer-base");
+const tts_1 = require("./tts");
+const error_1 = require("./lib/error");
+const textChunker_1 = require("./lib/textChunker");
+const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
+const { platform } = bareOs;
+const ENGINE_CHATTERBOX = "chatterbox";
+const ENGINE_SUPERTONIC = "supertonic";
+const MIN_OUTPUT_SAMPLE_RATE = 8000;
+const MAX_OUTPUT_SAMPLE_RATE = 192000;
+const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
+const CHATTERBOX_T3_MTL = "chatterbox-t3-mtl.gguf";
+const CHATTERBOX_S3GEN_DEFAULT = "chatterbox-s3gen.gguf";
+const CHATTERBOX_S3GEN_MTL = "chatterbox-s3gen-mtl.gguf";
+const SUPERTONIC_DEFAULT = "supertonic.gguf";
+const SUPERTONIC_MTL = "supertonic2.gguf";
+const SUPERTONIC_V3_RE = /^supertonic3(-[a-z0-9_]+)?\.gguf$/i;
+const SUPERTONIC_V3_QUANT_ORDER = [
+    "f16",
+    "f32",
+    "q8_0",
+    "q4_0",
+];
+function normalizeError(error) {
+    return typeof error === "string"
+        ? error
+        : error instanceof Error
+            ? error
+            : new Error("Unknown TTS error");
+}
 function firstNonEmpty(...candidates) {
-  for (let i = 0; i < candidates.length; i++) {
-    const v = candidates[i]
-    if (v != null && v !== '') return v
-  }
-  return undefined
-}
-
-function fileExistsSafe(p) {
-  if (!p) return false
-  try {
-    return fs.existsSync(p)
-  } catch (_e) {
-    return false
-  }
-}
-
-/**
- * Find a Supertonic 3 GGUF inside `modelDir`.  The v3 models are published
- * per quant tier with the quant baked into the filename
- * (`supertonic3-f16.gguf`, `supertonic3-q8_0.gguf`, ...), so a plain
- * `supertonic3.gguf` lookup never matches.  Match any tier present, preferring
- * a bare `supertonic3.gguf` (forward-compat) and then highest precision.
- * Returns the absolute path of the chosen file, or undefined when none exist.
- *
- * @param {string|undefined} modelDir
- * @returns {string|undefined}
- */
-function findSupertonicV3InDir(modelDir) {
-  if (!modelDir) return undefined
-  let entries
-  try {
-    entries = fs.readdirSync(modelDir)
-  } catch (_e) {
-    return undefined
-  }
-  const matches = entries.filter((n) => SUPERTONIC_V3_RE.test(n))
-  if (matches.length === 0) return undefined
-  const rank = (n) => {
-    if (/^supertonic3\.gguf$/i.test(n)) return 0
-    const m = n.match(/^supertonic3-(.+)\.gguf$/i)
-    const idx = m ? SUPERTONIC_V3_QUANT_ORDER.indexOf(m[1].toLowerCase()) : -1
-    return idx === -1 ? SUPERTONIC_V3_QUANT_ORDER.length + 1 : idx + 1
-  }
-  matches.sort((a, b) => rank(a) - rank(b))
-  return path.join(modelDir, matches[0])
-}
-
-/**
- * Normalize the `files` map into the GGUF paths each engine variant needs.
- * Accepts:
- *   - Chatterbox: explicit `t3Model`/`s3genModel`, or a `modelDir` that
- *     contains either the turbo (`chatterbox-t3-turbo.gguf` +
- *     `chatterbox-s3gen.gguf`) or multilingual
- *     (`chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf`) GGUFs.
- *   - Supertonic: explicit `supertonicModel`, or a `modelDir` that
- *     contains `supertonic.gguf`.
- *
- * @param {Record<string, unknown>} files
- */
-function normalizeGgmlFiles(files) {
-  if (files == null || typeof files !== 'object') {
-    return {}
-  }
-  const f = files
-  return {
-    modelDir: firstNonEmpty(f.modelDir),
-    t3Model: firstNonEmpty(f.t3Model, f.t3ModelPath, f.t3),
-    s3genModel: firstNonEmpty(f.s3genModel, f.s3genModelPath, f.s3gen),
-    supertonicModel: firstNonEmpty(f.supertonicModel, f.supertonicModelPath, f.supertonic),
-    voicesDir: firstNonEmpty(f.voicesDir),
-    // LavaSR enhancer GGUF: single-file Vocos bandwidth extension, produced by
-    // tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. One canonical key
-    // (the alternative is enhancer.enhancerPath on the options object).
-    lavasrEnhancer: firstNonEmpty(f.lavasrEnhancer),
-    // LavaSR denoiser GGUF: UL-UNAS speech denoiser that runs BEFORE the
-    // enhancer (rate-preserving), produced by
-    // tts-cpp/scripts/convert-lavasr-denoiser-to-gguf.py. One canonical key
-    // (the alternative is denoiser.denoiserPath on the options object).
-    // The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
-    // PR #78; a provided path activates once the pinned tts-cpp includes it.
-    lavasrDenoiser: firstNonEmpty(f.lavasrDenoiser),
-    // Directory of the compiled MeCab/IPAdic dictionary (Japanese) and
-    // the Cangjie TSV (Chinese).  The host resolves/stages these (e.g.
-    // from the QVAC model registry) and passes the local paths; the
-    // addon only forwards them to tts-cpp's EngineOptions.
-    mecabDictDir: firstNonEmpty(f.mecabDictDir, f.mecabDictPath),
-    cangjieTsvPath: firstNonEmpty(f.cangjieTsvPath, f.cangjieTsv)
-  }
-}
-
-/**
- * Decide which engine the constructor should drive.  Order of precedence:
- *   1. Explicit `engine` option (caller-asserted: 'chatterbox' | 'supertonic').
- *   2. An explicit Supertonic file path.
- *   3. A `modelDir` that contains `supertonic.gguf` on disk.
- *   4. Default → Chatterbox (turbo or MTL is decided later inside the
- *      Chatterbox path resolver based on which T3 file is present).
- */
-function detectEngineType(engine, normalizedFiles) {
-  if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
-    return engine
-  }
-  if (engine != null && engine !== '') {
-    throw new Error(
-      "tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " + "(got '" + engine + "')"
-    )
-  }
-  if (normalizedFiles.t3Model || normalizedFiles.s3genModel) return ENGINE_CHATTERBOX
-  if (normalizedFiles.supertonicModel) return ENGINE_SUPERTONIC
-  if (normalizedFiles.modelDir) {
-    const turboT3 = path.join(normalizedFiles.modelDir, CHATTERBOX_T3_TURBO)
-    const mtlT3 = path.join(normalizedFiles.modelDir, CHATTERBOX_T3_MTL)
-    const supertonicEn = path.join(normalizedFiles.modelDir, SUPERTONIC_DEFAULT)
-    const supertonicMtl = path.join(normalizedFiles.modelDir, SUPERTONIC_MTL)
-    const supertonicV3 = findSupertonicV3InDir(normalizedFiles.modelDir)
-    const hasChatterbox = fileExistsSafe(turboT3) || fileExistsSafe(mtlT3)
-    const hasSupertonic =
-      fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl) || !!supertonicV3
-    if (hasChatterbox) return ENGINE_CHATTERBOX
-    if (hasSupertonic) return ENGINE_SUPERTONIC
-  }
-  return ENGINE_CHATTERBOX
-}
-
-/**
- * Pick the right Supertonic GGUF inside `modelDir`.
- * Mirrors the chatterbox resolver: prefer the English-only build when
- * present (smaller, single-language), only fall back to the multilingual
- * build when English isn't on disk.  Callers that explicitly want the
- * multilingual variant should pass `files.supertonicModel` directly.
- */
-function resolveSupertonicModelDirPath(modelDir) {
-  const supertonicEn = path.join(modelDir, SUPERTONIC_DEFAULT)
-  const supertonicMtl = path.join(modelDir, SUPERTONIC_MTL)
-  const supertonicV3 = findSupertonicV3InDir(modelDir)
-  if (fileExistsSafe(supertonicEn)) return supertonicEn
-  if (fileExistsSafe(supertonicMtl)) return supertonicMtl
-  if (supertonicV3) return supertonicV3
-  return supertonicEn
-}
-
-/**
- * Pick the right Chatterbox T3 + S3Gen file names inside `modelDir`.
- * Multilingual GGUFs win when both variants are present (only-mtl is
- * the only state where mtl beats turbo at the file-detection layer).
- * Otherwise fall back to the turbo English layout.
- */
-function resolveChatterboxModelDirPaths(modelDir) {
-  const turboT3 = path.join(modelDir, CHATTERBOX_T3_TURBO)
-  const mtlT3 = path.join(modelDir, CHATTERBOX_T3_MTL)
-  const defaultS3 = path.join(modelDir, CHATTERBOX_S3GEN_DEFAULT)
-  const mtlS3 = path.join(modelDir, CHATTERBOX_S3GEN_MTL)
-
-  const hasTurbo = fileExistsSafe(turboT3)
-  const hasMtl = fileExistsSafe(mtlT3)
-  if (hasMtl && !hasTurbo) {
-    return {
-      t3: mtlT3,
-      s3: fileExistsSafe(mtlS3) ? mtlS3 : defaultS3
+    for (const value of candidates) {
+        if (value != null && value !== "")
+            return value;
     }
-  }
-  return { t3: turboT3, s3: defaultS3 }
+    return undefined;
 }
-
-/**
- * Default `accumulateSentences` for `runStreaming`: true only for native `AsyncIterable`
- * (e.g. incremental text from an upstream async source), not for strings, arrays, or sync-only iterables.
- * @param {unknown} textStream
- * @returns {boolean}
- */
+function fileExistsSafe(filePath) {
+    if (!filePath)
+        return false;
+    try {
+        return fs.existsSync(filePath);
+    }
+    catch {
+        return false;
+    }
+}
+function findSupertonicV3InDir(modelDir) {
+    if (!modelDir)
+        return undefined;
+    let entries;
+    try {
+        entries = fs.readdirSync(modelDir);
+    }
+    catch {
+        return undefined;
+    }
+    const matches = entries.filter((name) => SUPERTONIC_V3_RE.test(name));
+    if (matches.length === 0)
+        return undefined;
+    function rank(name) {
+        if (/^supertonic3\.gguf$/i.test(name))
+            return 0;
+        const match = name.match(/^supertonic3-(.+)\.gguf$/i);
+        const index = match
+            ? SUPERTONIC_V3_QUANT_ORDER.indexOf(match[1].toLowerCase())
+            : -1;
+        return index === -1
+            ? SUPERTONIC_V3_QUANT_ORDER.length + 1
+            : index + 1;
+    }
+    matches.sort((left, right) => rank(left) - rank(right));
+    return path.join(modelDir, matches[0]);
+}
+function normalizeGgmlFiles(files) {
+    if (files == null || typeof files !== "object")
+        return {};
+    return {
+        modelDir: firstNonEmpty(files.modelDir),
+        t3Model: firstNonEmpty(files.t3Model, files.t3ModelPath, files.t3),
+        s3genModel: firstNonEmpty(files.s3genModel, files.s3genModelPath, files.s3gen),
+        supertonicModel: firstNonEmpty(files.supertonicModel, files.supertonicModelPath, files.supertonic),
+        voicesDir: firstNonEmpty(files.voicesDir),
+        lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
+        lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
+        mecabDictDir: firstNonEmpty(files.mecabDictDir, files.mecabDictPath),
+        cangjieTsvPath: firstNonEmpty(files.cangjieTsvPath, files.cangjieTsv),
+    };
+}
+function detectEngineType(engine, files) {
+    if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
+        return engine;
+    }
+    if (engine != null && engine !== "") {
+        throw new Error("tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " +
+            `(got '${String(engine)}')`);
+    }
+    if (files.t3Model || files.s3genModel)
+        return ENGINE_CHATTERBOX;
+    if (files.supertonicModel)
+        return ENGINE_SUPERTONIC;
+    if (files.modelDir) {
+        const hasChatterbox = fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_TURBO)) ||
+            fileExistsSafe(path.join(files.modelDir, CHATTERBOX_T3_MTL));
+        const hasSupertonic = fileExistsSafe(path.join(files.modelDir, SUPERTONIC_DEFAULT)) ||
+            fileExistsSafe(path.join(files.modelDir, SUPERTONIC_MTL)) ||
+            !!findSupertonicV3InDir(files.modelDir);
+        if (hasChatterbox)
+            return ENGINE_CHATTERBOX;
+        if (hasSupertonic)
+            return ENGINE_SUPERTONIC;
+    }
+    return ENGINE_CHATTERBOX;
+}
+function resolveSupertonicModelDirPath(modelDir) {
+    const english = path.join(modelDir, SUPERTONIC_DEFAULT);
+    const multilingual = path.join(modelDir, SUPERTONIC_MTL);
+    const versionThree = findSupertonicV3InDir(modelDir);
+    if (fileExistsSafe(english))
+        return english;
+    if (fileExistsSafe(multilingual))
+        return multilingual;
+    if (versionThree)
+        return versionThree;
+    return english;
+}
+function resolveChatterboxModelDirPaths(modelDir) {
+    const turboT3 = path.join(modelDir, CHATTERBOX_T3_TURBO);
+    const multilingualT3 = path.join(modelDir, CHATTERBOX_T3_MTL);
+    const defaultS3 = path.join(modelDir, CHATTERBOX_S3GEN_DEFAULT);
+    const multilingualS3 = path.join(modelDir, CHATTERBOX_S3GEN_MTL);
+    if (fileExistsSafe(multilingualT3) &&
+        !fileExistsSafe(turboT3)) {
+        return {
+            t3: multilingualT3,
+            s3: fileExistsSafe(multilingualS3)
+                ? multilingualS3
+                : defaultS3,
+        };
+    }
+    return { t3: turboT3, s3: defaultS3 };
+}
 function defaultAccumulateSentencesForStreamInput(textStream) {
-  if (textStream == null) return false
-  if (typeof textStream === 'string') return false
-  if (Array.isArray(textStream)) return false
-  if (typeof textStream[Symbol.asyncIterator] === 'function') return true
-  return false
+    if (textStream == null ||
+        typeof textStream === "string" ||
+        Array.isArray(textStream)) {
+        return false;
+    }
+    return (typeof textStream[Symbol.asyncIterator] === "function");
 }
-
 function ttsOutputDebugString(data) {
-  if (!data) return ''
-  if (typeof data !== 'object') return data.toString()
-  // Skip the heavy fields (outputArray = Int16Array of 24 kHz PCM
-  // samples; for native chunk streaming each event carries thousands of
-  // samples and JSON.stringify becomes the dominant cost on the
-  // outputCallback fast path). Surface only the summary fields so
-  // logger.debug stays useful.
-  const summary = {}
-  if (data.sampleRate != null) summary.sampleRate = data.sampleRate
-  if (data.chunkIndex != null) summary.chunkIndex = data.chunkIndex
-  if (data.isLast != null) summary.isLast = data.isLast
-  if (data.sentenceChunk != null) summary.sentenceChunk = data.sentenceChunk
-  if (data.outputArray && typeof data.outputArray.length === 'number') {
-    summary.outputArrayLen = data.outputArray.length
-  }
-  return JSON.stringify(summary)
+    if (!data)
+        return "";
+    if (typeof data === "string")
+        return data;
+    if (typeof data === "number" ||
+        typeof data === "boolean" ||
+        typeof data === "bigint") {
+        return data.toString();
+    }
+    if (typeof data === "symbol")
+        return data.description || "";
+    if (typeof data === "function")
+        return data.name;
+    const value = data;
+    const summary = {};
+    if (value.sampleRate != null)
+        summary.sampleRate = value.sampleRate;
+    if (value.chunkIndex != null)
+        summary.chunkIndex = value.chunkIndex;
+    if (value.isLast != null)
+        summary.isLast = value.isLast;
+    if (value.sentenceChunk != null) {
+        summary.sentenceChunk = value.sentenceChunk;
+    }
+    if (value.outputArray &&
+        typeof value.outputArray.length === "number") {
+        summary.outputArrayLen = value.outputArray.length;
+    }
+    return JSON.stringify(summary);
 }
-
 function resolveDefaultLazySessionLoading(lazySessionLoading) {
-  if (lazySessionLoading != null) return lazySessionLoading
-  return platform() === 'ios' || platform() === 'android'
+    if (lazySessionLoading != null)
+        return lazySessionLoading;
+    return platform() === "ios" || platform() === "android";
 }
-
 function validateOutputSampleRate(outputSampleRate) {
-  if (outputSampleRate == null) return null
-  if (outputSampleRate < MIN_OUTPUT_SAMPLE_RATE || outputSampleRate > MAX_OUTPUT_SAMPLE_RATE) {
-    throw new Error(
-      'outputSampleRate must be between ' +
-        MIN_OUTPUT_SAMPLE_RATE +
-        ' and ' +
-        MAX_OUTPUT_SAMPLE_RATE +
-        ', got ' +
-        outputSampleRate
-    )
-  }
-  return outputSampleRate
+    if (outputSampleRate == null)
+        return null;
+    if (outputSampleRate < MIN_OUTPUT_SAMPLE_RATE ||
+        outputSampleRate > MAX_OUTPUT_SAMPLE_RATE) {
+        throw new Error(`outputSampleRate must be between ${MIN_OUTPUT_SAMPLE_RATE} and ` +
+            `${MAX_OUTPUT_SAMPLE_RATE}, got ${outputSampleRate}`);
+    }
+    return outputSampleRate;
 }
-
-// LavaSR enhancer (opt-in): enhancement is ON iff a GGUF path is provided (via
-// files.lavasrEnhancer or enhancer.enhancerPath), so there is no separate
-// on/off flag to keep in sync. A provided `enhancer` block must use the
-// supported type so a typo can't silently disable it.
-function resolveEnhancerGgufPath(normalizedFiles, enhancer) {
-  if (enhancer != null && enhancer.type !== 'lavasr') {
-    throw new Error(`tts-ggml: unknown enhancer.type '${enhancer.type}', expected 'lavasr'.`)
-  }
-  return firstNonEmpty(normalizedFiles.lavasrEnhancer, enhancer ? enhancer.enhancerPath : undefined)
+function resolveEnhancerGgufPath(files, enhancer) {
+    if (enhancer != null && enhancer.type !== "lavasr") {
+        throw new Error(`tts-ggml: unknown enhancer.type '${String(enhancer.type)}', expected 'lavasr'.`);
+    }
+    return firstNonEmpty(files.lavasrEnhancer, enhancer?.enhancerPath);
 }
-
-// LavaSR denoiser (opt-in, mirrors the enhancer): runs BEFORE the enhancer and
-// is rate-preserving, enabled purely by supplying a GGUF path. A provided
-// `denoiser` block must use the supported type so a typo can't silently disable
-// it.
-function resolveDenoiserGgufPath(normalizedFiles, denoiser) {
-  if (denoiser != null && denoiser.type !== 'lavasr') {
-    throw new Error(`tts-ggml: unknown denoiser.type '${denoiser.type}', expected 'lavasr'.`)
-  }
-  return firstNonEmpty(normalizedFiles.lavasrDenoiser, denoiser ? denoiser.denoiserPath : undefined)
+function resolveDenoiserGgufPath(files, denoiser) {
+    if (denoiser != null && denoiser.type !== "lavasr") {
+        throw new Error(`tts-ggml: unknown denoiser.type '${String(denoiser.type)}', expected 'lavasr'.`);
+    }
+    return firstNonEmpty(files.lavasrDenoiser, denoiser?.denoiserPath);
 }
-
-// `layers != 0` (not > 0) so a future llama.cpp-style nGpuLayers:-1 ("offload
-// all layers") reads as "wants GPU" rather than falsely passing as "wants CPU".
 function assertGpuIntentConsistent(useGPU, nGpuLayers) {
-  if (typeof useGPU !== 'boolean' || nGpuLayers == null) return
-  const layersWantGpu = nGpuLayers !== 0
-  if (useGPU === layersWantGpu) return
-  throw new Error(
-    'tts-ggml: useGPU=' +
-      useGPU +
-      ' conflicts with nGpuLayers=' +
-      nGpuLayers +
-      '. ' +
-      'Either drop one of the two, or make them agree ' +
-      '(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).'
-  )
+    if (typeof useGPU !== "boolean" || nGpuLayers == null)
+        return;
+    if (useGPU === (nGpuLayers !== 0))
+        return;
+    throw new Error(`tts-ggml: useGPU=${String(useGPU)} conflicts with ` +
+        `nGpuLayers=${nGpuLayers}. Either drop one of the two, or make ` +
+        "them agree (useGPU:true + nGpuLayers!=0, or " +
+        "useGPU:false + nGpuLayers=0).");
 }
-
 function isAudioOutputEvent(data) {
-  return data != null && typeof data === 'object' && !!data.outputArray
+    return (data != null &&
+        typeof data === "object" &&
+        "outputArray" in data &&
+        data.outputArray != null);
 }
-
 function isStatsEvent(data) {
-  return (
-    data != null &&
-    typeof data === 'object' &&
-    ('totalTime' in data || 'audioDurationMs' in data || 'totalSamples' in data)
-  )
+    return (data != null &&
+        typeof data === "object" &&
+        ("totalTime" in data ||
+            "audioDurationMs" in data ||
+            "totalSamples" in data));
 }
-
-function computeSentenceStreamStats(chunks, acc) {
-  const totalChars = chunks.join('').length
-  return {
-    ...acc,
-    tokensPerSecond: acc.totalTime > 0 ? totalChars / acc.totalTime : 0,
-    realTimeFactor: acc.audioDurationMs > 0 ? (acc.totalTime * 1000.0) / acc.audioDurationMs : 0
-  }
+function computeSentenceStreamStats(chunks, accumulator) {
+    const totalCharacters = chunks.join("").length;
+    return {
+        ...accumulator,
+        tokensPerSecond: accumulator.totalTime > 0
+            ? totalCharacters / accumulator.totalTime
+            : 0,
+        realTimeFactor: accumulator.audioDurationMs > 0
+            ? (accumulator.totalTime * 1000) /
+                accumulator.audioDurationMs
+            : 0,
+    };
 }
-
 /**
- * GGML-backed Chatterbox TTS (via the `tts-cpp` / qvac-tts.cpp library).
+ * GGML-backed TTS via the `tts-cpp` library. Wraps both
+ * `tts_cpp::chatterbox::Engine` and `tts_cpp::supertonic::Engine` behind a
+ * single engine-agnostic JavaScript surface. Engine type is auto-detected
+ * from `files` or selected explicitly with `engine`.
  *
- * Owns a persistent native engine — T3, S3Gen, and any voice-conditioning
- * tensors are loaded once at `load()` and reused across every `run()` /
- * `runStream()` / `runStreaming()` call.  Exposes batch synthesis
- * (`run({ input })`), sentence-granularity streaming (`runStreaming()` over
- * an async iterator of sentences), and sub-sentence native chunk streaming
- * (set `streamChunkTokens` on the constructor; the C++ Engine then emits
- * PCM per chunk as it's produced).  See README.md for usage.
+ * Owns a persistent native engine: model weights and voice-conditioning
+ * tensors are loaded once by `load()` and reused by `run()`, `runStream()`,
+ * and `runStreaming()`.
  */
 class TTSGgml {
-  constructor(options = {}) {
-    this._initInferenceState(options)
-
-    const normalizedFiles = normalizeGgmlFiles(options.files || {})
-    this._config = { ...(options.config || {}) }
-    this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading)
-    this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate)
-
-    this._resolveEngineAndModelPaths(options.engine, normalizedFiles)
-    this._resolveDictionaryPaths(options, normalizedFiles)
-    this._assignSynthesisOptions(options)
-    this._enhancerGgufPath = resolveEnhancerGgufPath(normalizedFiles, options.enhancer)
-    this._denoiserGgufPath = resolveDenoiserGgufPath(normalizedFiles, options.denoiser)
-    this._resolveBackendPaths(options)
-
-    // Run the conflict check before any engine-specific GPU policy so a caller
-    // passing { useGPU:false, nGpuLayers:99 } gets the precise conflict message
-    // instead of, e.g., the Supertonic branch firing first and confusing them.
-    assertGpuIntentConsistent(this._config.useGPU, this._nGpuLayers)
-    this._assertEngineStreamingSupport()
-    this._applyDefaultGpuIntent()
-  }
-
-  _initInferenceState(options) {
-    this.opts = options.opts || {}
-    this.exclusiveRun = !!options.exclusiveRun
-    this.logger = new QvacLogger(options.logger)
-    this.state = {
-      configLoaded: false,
-      weightsLoaded: false,
-      destroyed: false
-    }
-    this.addon = null
-    this._sentenceStreamCtx = null
-    // Serializes run({ streamOutput: true }), runStream, and runStreaming until
-    // each response settles (Whisper-style).
-    this._ttsInferenceQueueWaiter = Promise.resolve()
-    this._job = createJobHandler({
-      cancel: () => {
-        const a = this.addon
-        return a ? a.cancel() : undefined
-      }
-    })
-    this._runExclusive = this.exclusiveRun
-      ? exclusiveRunQueue()
-      : async function runNow(fn) {
-          return fn()
+    static inferenceManagerConfig = {
+        noAdditionalDownload: true,
+    };
+    static ENGINE_CHATTERBOX = ENGINE_CHATTERBOX;
+    static ENGINE_SUPERTONIC = ENGINE_SUPERTONIC;
+    opts;
+    exclusiveRun;
+    logger;
+    state;
+    addon;
+    _job;
+    _runExclusive;
+    _ttsInferenceQueueWaiter;
+    _sentenceStreamCtx;
+    _config;
+    _lazySessionLoading;
+    _outputSampleRate;
+    _engineType;
+    _voicesDir;
+    _supertonicModelPath;
+    _t3ModelPath;
+    _s3genModelPath;
+    _mecabDictPath;
+    _cangjieTsvPath;
+    _referenceAudio;
+    _voiceDir;
+    _seed;
+    _nGpuLayers;
+    _nCtx;
+    _kvCacheType;
+    _threads;
+    _streamChunkTokens;
+    _streamFirstChunkTokens;
+    _cfmSteps;
+    _cfgRate;
+    _voice;
+    _steps;
+    _speed;
+    _noiseNpyPath;
+    _enhancerGgufPath;
+    _denoiserGgufPath;
+    _backendsDir;
+    _openclCacheDir;
+    _vulkanCacheDir;
+    constructor(options = {}) {
+        this.opts = options.opts || {};
+        this.exclusiveRun = !!options.exclusiveRun;
+        this.logger = new QvacLogger(options.logger);
+        this.state = {
+            configLoaded: false,
+            weightsLoaded: false,
+            destroyed: false,
+        };
+        this.addon = null;
+        this._sentenceStreamCtx = null;
+        this._ttsInferenceQueueWaiter = Promise.resolve();
+        this._job = (0, infer_base_1.createJobHandler)({
+            cancel: () => this._optionalAddon()?.cancel(),
+        });
+        this._runExclusive = this.exclusiveRun
+            ? (0, infer_base_1.exclusiveRunQueue)()
+            : async function runNow(callback) {
+                return callback();
+            };
+        const normalizedFiles = normalizeGgmlFiles(options.files || {});
+        this._config = { ...(options.config || {}) };
+        this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading);
+        this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate);
+        this._engineType = detectEngineType(options.engine, normalizedFiles);
+        this._resolveEngineAndModelPaths(normalizedFiles);
+        this._mecabDictPath = firstNonEmpty(options.mecabDictPath, options.mecabDictDir, normalizedFiles.mecabDictDir);
+        this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath);
+        this._assignSynthesisOptions(options);
+        this._enhancerGgufPath = resolveEnhancerGgufPath(normalizedFiles, options.enhancer);
+        this._denoiserGgufPath = resolveDenoiserGgufPath(normalizedFiles, options.denoiser);
+        this._backendsDir = firstNonEmpty(options.backendsDir, this._config.backendsDir, path.join(__dirname, "prebuilds"));
+        this._openclCacheDir = firstNonEmpty(options.openclCacheDir, this._config.openclCacheDir);
+        this._vulkanCacheDir = firstNonEmpty(options.vulkanCacheDir, this._config.vulkanCacheDir);
+        assertGpuIntentConsistent(this._config.useGPU, this._nGpuLayers);
+        this._assertEngineStreamingSupport();
+        if (this._config.useGPU === undefined &&
+            this._nGpuLayers == null) {
+            this._config.useGPU = false;
         }
-  }
-
-  _resolveEngineAndModelPaths(engine, normalizedFiles) {
-    this._engineType = detectEngineType(engine, normalizedFiles)
-    this._voicesDir = normalizedFiles.voicesDir
-    if (this._engineType === ENGINE_SUPERTONIC) {
-      const root = normalizedFiles.modelDir
-      this._supertonicModelPath = firstNonEmpty(
-        normalizedFiles.supertonicModel,
-        root ? resolveSupertonicModelDirPath(root) : undefined
-      )
-      this._t3ModelPath = undefined
-      this._s3genModelPath = undefined
-      return
     }
-    const root = normalizedFiles.modelDir
-    if (root) {
-      const resolved = resolveChatterboxModelDirPaths(root)
-      this._t3ModelPath = firstNonEmpty(normalizedFiles.t3Model, resolved.t3)
-      this._s3genModelPath = firstNonEmpty(normalizedFiles.s3genModel, resolved.s3)
-    } else {
-      this._t3ModelPath = normalizedFiles.t3Model
-      this._s3genModelPath = normalizedFiles.s3genModel
-    }
-    this._supertonicModelPath = undefined
-  }
-
-  // Multilingual preprocessing dictionaries (Chatterbox MTL only): accept a
-  // top-level option or a files.* entry; the host resolves/stages them and the
-  // addon forwards the local paths to tts-cpp.
-  _resolveDictionaryPaths(options, normalizedFiles) {
-    this._mecabDictPath = firstNonEmpty(
-      options.mecabDictPath,
-      options.mecabDictDir,
-      normalizedFiles.mecabDictDir
-    )
-    this._cangjieTsvPath = firstNonEmpty(options.cangjieTsvPath, normalizedFiles.cangjieTsvPath)
-  }
-
-  _assignSynthesisOptions(options) {
-    this._referenceAudio = options.referenceAudio
-    this._voiceDir = options.voiceDir
-    this._seed = options.seed
-    this._nGpuLayers = options.nGpuLayers
-    this._nCtx = options.nCtx
-    this._kvCacheType = options.kvCacheType
-    this._threads = options.threads
-    this._streamChunkTokens = options.streamChunkTokens
-    this._streamFirstChunkTokens = options.streamFirstChunkTokens
-    this._cfmSteps = options.cfmSteps
-    this._cfgRate = options.cfgRate
-    this._voice = firstNonEmpty(options.voice, options.voiceName)
-    this._steps = firstNonEmpty(options.steps, options.numInferenceSteps)
-    this._speed = options.speed
-    this._noiseNpyPath = options.noiseNpyPath
-  }
-
-  // Per-platform fallback for backendsDir when the host didn't pass one; mirrors
-  // the llm-llamacpp + transcription-parakeet resolution shape. The Vulkan cache
-  // dir is forwarded so the backend's first-dispatch pipeline-compile cost is
-  // paid once per install instead of once per process (empty -> no cache).
-  _resolveBackendPaths(options) {
-    this._backendsDir = firstNonEmpty(
-      options.backendsDir,
-      this._config?.backendsDir,
-      path.join(__dirname, 'prebuilds')
-    )
-    this._openclCacheDir = firstNonEmpty(options.openclCacheDir, this._config?.openclCacheDir)
-    this._vulkanCacheDir = firstNonEmpty(options.vulkanCacheDir, this._config?.vulkanCacheDir)
-  }
-
-  _assertEngineStreamingSupport() {
-    if (
-      this._engineType === ENGINE_SUPERTONIC &&
-      (this._streamChunkTokens != null || this._streamFirstChunkTokens != null)
-    ) {
-      throw new Error(
-        'tts-ggml: streamChunkTokens / streamFirstChunkTokens are Chatterbox-only ' +
-          'options (sub-sentence native streaming via the chatterbox::Engine ' +
-          'streaming chunked S3Gen+HiFT loop). Supertonic does not support sub-' +
-          'sentence native streaming; use sentence-level streaming via the engine-' +
-          'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
-      )
-    }
-    // LavaSR denoise + native chunk streaming is NOT supported yet: tts-cpp only
-    // exposes a one-shot denoise() today, so reject the combo up front rather
-    // than silently dropping denoising on the streaming path. Batch synthesis
-    // applies the denoiser normally.
-    if (
-      this._denoiserGgufPath &&
-      (this._streamChunkTokens != null || this._streamFirstChunkTokens != null)
-    ) {
-      throw new Error(
-        'tts-ggml: the LavaSR denoiser is not yet supported with Chatterbox ' +
-          'native chunk streaming (streamChunkTokens / streamFirstChunkTokens). ' +
-          'Use batch synthesis, or drop the denoiser for streaming. Streaming ' +
-          'denoise is a planned follow-up (needs a stateful streaming denoiser).'
-      )
-    }
-  }
-
-  // Default GPU off only when neither knob is set (every engine). A caller
-  // passing nGpuLayers alone keeps it; Supertonic GPU intent flows through to
-  // tts-cpp on GPU-capable hosts (Metal / Vulkan / CUDA, including Android).
-  _applyDefaultGpuIntent() {
-    if (this._config.useGPU === undefined && this._nGpuLayers == null) {
-      this._config.useGPU = false
-    }
-  }
-
-  getEngineType() {
-    return this._engineType
-  }
-
-  getApiDefinition() {
-    const api = inferGetApiDefinition()
-    this.logger.debug(`Using API definition: ${api} for platform: ${platform()}`)
-    return api
-  }
-
-  getState() {
-    return this.state
-  }
-
-  async load(..._args) {
-    if (this.state.destroyed) {
-      throw new QvacErrorAddonTTSGgml({
-        code: ERR_CODES.FAILED_TO_LOAD,
-        adds: 'instance was destroyed'
-      })
-    }
-    if (this.state.configLoaded || this.state.weightsLoaded) {
-      this.logger.info('Reload requested - unloading existing model first')
-      await this.unload()
-    }
-    await this._load()
-    this.state.configLoaded = true
-    this.state.weightsLoaded = true
-  }
-
-  /**
-   * Run text-to-speech.  Set `streamOutput: true` to split `input` into sentence
-   * chunks and emit PCM on `response.onUpdate` as each chunk completes (same
-   * behavior as `runStream`).
-   *
-   * @param {Object} input
-   * @param {string} input.input - Text to synthesize
-   * @param {boolean} [input.streamOutput=false] - Chunked streaming output
-   * @param {string} [input.locale] - BCP-47 locale for chunking when `streamOutput`
-   * @param {number} [input.maxChunkScalars] - Max graphemes per chunk when `streamOutput`
-   * @param {AbortSignal} [input.signal] - Cancels a **non-streaming** `run()`: when
-   *   the signal aborts, `response.await()` rejects with the abort reason.  An
-   *   already-aborted signal rejects deterministically without dispatching the
-   *   engine (no native interrupt), so cancellation is race-free on fast hardware.
-   *   **Ignored when `streamOutput: true`** (and on `runStream` / `runStreaming`):
-   *   the streaming path does not thread the signal, so passing it there is a
-   *   silent no-op — neither cancels nor errors.
-   */
-  async run(input) {
-    if (input && typeof input === 'object' && input.streamOutput === true) {
-      if (typeof input.input !== 'string' || input.input.trim().length === 0) {
-        throw new QvacErrorAddonTTSGgml({
-          code: ERR_CODES.FAILED_TO_APPEND,
-          adds: 'run with streamOutput: non-empty string `input` is required'
-        })
-      }
-      const streamOpts = {
-        locale: input.locale,
-        maxChunkScalars: input.maxChunkScalars
-      }
-      if (this.exclusiveRun) {
-        return await this._enqueueExclusiveTtsResponse(() =>
-          this._runStreamOrchestrator(input.input, streamOpts)
-        )
-      }
-      return this._runStreamOrchestrator(input.input, streamOpts)
-    }
-    return this._runExclusive(() => this._runInternal(input))
-  }
-
-  /**
-   * Serialize streaming runs until the returned {@link QvacResponse} settles.
-   */
-  async _enqueueExclusiveTtsResponse(runFn) {
-    const prev = this._ttsInferenceQueueWaiter || Promise.resolve()
-    let releaseSlot
-    this._ttsInferenceQueueWaiter = new Promise((resolve) => {
-      releaseSlot = resolve
-    })
-    await prev
-    let response
-    try {
-      response = await runFn()
-    } catch (err) {
-      releaseSlot()
-      throw err
-    }
-    response
-      .await()
-      .finally(() => {
-        releaseSlot()
-      })
-      .catch(() => {})
-    return response
-  }
-
-  /**
-   * Chunk long text by sentence (see {@link splitTtsText}), synthesize each chunk
-   * in order, and emit PCM on `response.onUpdate` as each chunk completes.
-   * Equivalent to `run({ input: text, streamOutput: true, ...options })`.
-   *
-   * @param {string} text
-   * @param {{ locale?: string, maxChunkScalars?: number }} [options]
-   */
-  async runStream(text, options = {}) {
-    const opts = options == null || typeof options !== 'object' ? {} : options
-    return this.run({
-      input: text,
-      streamOutput: true,
-      locale: opts.locale,
-      maxChunkScalars: opts.maxChunkScalars
-    })
-  }
-
-  /**
-   * Streaming input + streaming output: each flushed string is one synthesis job;
-   * PCM is emitted on `response.onUpdate` per job.  Same chunk metadata shape as
-   * `runStream`.
-   *
-   * For **AsyncIterable** inputs, **`accumulateSentences` defaults to true**:
-   * fragments are concatenated until a sentence end (see
-   * `sentenceDelimiterPreset`), max buffer size (`maxBufferScalars`), or
-   * `flushAfterMs` idle after the last fragment.  Strings and arrays default to
-   * one job per yield (`accumulateSentences` false).
-   *
-   * @param {AsyncIterable<string>|Iterable<string>|string} textStream
-   * @param {Object} [options]
-   * @param {boolean} [options.accumulateSentences] - Default: true for `AsyncIterable` inputs only.
-   * @param {'latin'|'cjk'|'multilingual'} [options.sentenceDelimiterPreset]
-   * @param {RegExp} [options.sentenceDelimiter] - Overrides preset when set (tested against full buffer).
-   * @param {number} [options.maxBufferScalars] - Max graphemes before hard flush (default by language).
-   * @param {number} [options.flushAfterMs] - Idle flush after last fragment (default 500).
-   */
-  async runStreaming(textStream, options = {}) {
-    const streamOpts = this._resolveRunStreamingOptions(textStream, options)
-    let normalized = this._normalizeTextStream(textStream)
-    if (streamOpts.accumulateSentences) {
-      normalized = accumulateTextStream(normalized, {
-        sentenceDelimiterPreset: streamOpts.sentenceDelimiterPreset,
-        maxBufferScalars: streamOpts.maxBufferScalars,
-        flushAfterMs: streamOpts.flushAfterMs,
-        sentenceDelimiter: streamOpts.sentenceDelimiter,
-        language: this._config?.language
-      })
-    }
-    if (this.exclusiveRun) {
-      return await this._enqueueExclusiveTtsResponse(() =>
-        this._runTextStreamOrchestrator(normalized)
-      )
-    }
-    return this._runTextStreamOrchestrator(normalized)
-  }
-
-  _resolveRunStreamingOptions(textStream, options) {
-    const o = options == null || typeof options !== 'object' ? {} : options
-    let accumulateSentences = o.accumulateSentences
-    if (accumulateSentences === undefined) {
-      accumulateSentences = defaultAccumulateSentencesForStreamInput(textStream)
-    }
-    const rawPreset = o.sentenceDelimiterPreset
-    const sentenceDelimiterPreset =
-      rawPreset === 'latin' || rawPreset === 'cjk' || rawPreset === 'multilingual'
-        ? rawPreset
-        : 'multilingual'
-    const maxBufferScalars = o.maxBufferScalars
-    const flushAfterMs = o.flushAfterMs != null ? o.flushAfterMs : DEFAULT_FLUSH_AFTER_MS
-    const sentenceDelimiter =
-      o.sentenceDelimiter instanceof RegExp ? o.sentenceDelimiter : undefined
-    return {
-      accumulateSentences: !!accumulateSentences,
-      sentenceDelimiterPreset,
-      maxBufferScalars,
-      flushAfterMs,
-      sentenceDelimiter
-    }
-  }
-
-  _normalizeTextStream(textStream) {
-    if (textStream == null) {
-      throw new QvacErrorAddonTTSGgml({
-        code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'runStreaming: text stream is required'
-      })
-    }
-    if (typeof textStream === 'string') {
-      async function* oneString() {
-        yield textStream
-      }
-      return oneString()
-    }
-    if (typeof textStream[Symbol.asyncIterator] === 'function') {
-      return textStream
-    }
-    if (Array.isArray(textStream)) {
-      async function* fromArray() {
-        for (let i = 0; i < textStream.length; i++) {
-          yield textStream[i]
+    _resolveEngineAndModelPaths(files) {
+        this._voicesDir = files.voicesDir;
+        if (this._engineType === ENGINE_SUPERTONIC) {
+            this._supertonicModelPath = firstNonEmpty(files.supertonicModel, files.modelDir
+                ? resolveSupertonicModelDirPath(files.modelDir)
+                : undefined);
+            return;
         }
-      }
-      return fromArray()
-    }
-    if (typeof textStream[Symbol.iterator] === 'function') {
-      async function* fromIterable() {
-        for (const x of textStream) {
-          yield x
+        if (files.modelDir) {
+            const resolved = resolveChatterboxModelDirPaths(files.modelDir);
+            this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
+            this._s3genModelPath = firstNonEmpty(files.s3genModel, resolved.s3);
         }
-      }
-      return fromIterable()
+        else {
+            this._t3ModelPath = files.t3Model;
+            this._s3genModelPath = files.s3genModel;
+        }
     }
-    throw new QvacErrorAddonTTSGgml({
-      code: ERR_CODES.FAILED_TO_APPEND,
-      adds: 'runStreaming: expected string, array of strings, Iterable, or AsyncIterable'
-    })
-  }
-
-  _runTextStreamOrchestrator(asyncTextSource) {
-    const response = this._job.start()
-    this._sentenceStreamCtx = {
-      textStreamMode: true,
-      asyncTextSource,
-      chunks: [],
-      chunkIdx: 0,
-      acc: {
-        totalTime: 0,
-        audioDurationMs: 0,
-        totalSamples: 0
-      },
-      chunkResolver: null
+    _assignSynthesisOptions(options) {
+        this._referenceAudio = options.referenceAudio;
+        this._voiceDir = options.voiceDir;
+        this._seed = options.seed;
+        this._nGpuLayers = options.nGpuLayers;
+        this._nCtx = options.nCtx;
+        this._kvCacheType = options.kvCacheType;
+        this._threads = options.threads;
+        this._streamChunkTokens = options.streamChunkTokens;
+        this._streamFirstChunkTokens = options.streamFirstChunkTokens;
+        this._cfmSteps = options.cfmSteps;
+        this._cfgRate = options.cfgRate;
+        this._voice = firstNonEmpty(options.voice, options.voiceName);
+        this._steps = firstNonEmpty(options.steps, options.numInferenceSteps);
+        this._speed = options.speed;
+        this._noiseNpyPath = options.noiseNpyPath;
     }
-
-    this._sentenceStreamTextIterableDrive().catch((err) => {
-      this._rejectActiveChunk(err)
-      this._sentenceStreamCtx = null
-      this._job.fail(err)
-    })
-
-    return response
-  }
-
-  async _sentenceStreamTextIterableDrive() {
-    const ctx = this._sentenceStreamCtx
-    if (!ctx || !ctx.textStreamMode) return
-    try {
-      for await (const piece of ctx.asyncTextSource) {
-        const s = String(piece).trim()
-        if (s.length === 0) continue
-        ctx.chunks.push(s)
-        ctx.chunkIdx = ctx.chunks.length - 1
-        const donePromise = new Promise((resolve, reject) => {
-          ctx.chunkResolver = { resolve, reject }
-        })
-        await this.addon.runJob({
-          type: 'text',
-          input: s
-        })
-        await donePromise
-      }
-    } catch (err) {
-      this._rejectActiveChunk(err)
-      this._sentenceStreamCtx = null
-      this._job.fail(err)
-      return
+    _assertEngineStreamingSupport() {
+        if (this._engineType === ENGINE_SUPERTONIC &&
+            (this._streamChunkTokens != null ||
+                this._streamFirstChunkTokens != null)) {
+            throw new Error("tts-ggml: streamChunkTokens / streamFirstChunkTokens are " +
+                "Chatterbox-only options (sub-sentence native streaming via " +
+                "the chatterbox::Engine streaming chunked S3Gen+HiFT loop). " +
+                "Supertonic does not support sub-sentence native streaming; " +
+                "use sentence-level streaming via the engine-agnostic " +
+                "runStream() / runStreaming() / run({ streamOutput: true }) APIs.");
+        }
+        if (this._denoiserGgufPath &&
+            (this._streamChunkTokens != null ||
+                this._streamFirstChunkTokens != null)) {
+            throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
+                "Chatterbox native chunk streaming (streamChunkTokens / " +
+                "streamFirstChunkTokens). Use batch synthesis, or drop the " +
+                "denoiser for streaming. Streaming denoise is a planned " +
+                "follow-up (needs a stateful streaming denoiser).");
+        }
     }
-
-    const chunks = this._sentenceStreamCtx ? this._sentenceStreamCtx.chunks : []
-    const acc = this._sentenceStreamCtx
-      ? this._sentenceStreamCtx.acc
-      : { totalTime: 0, audioDurationMs: 0, totalSamples: 0 }
-    this._sentenceStreamCtx = null
-
-    if (chunks.length === 0) {
-      this._endJobWithStats({
-        totalTime: 0,
-        tokensPerSecond: 0,
-        realTimeFactor: 0,
-        audioDurationMs: 0,
-        totalSamples: 0
-      })
-      return
+    getEngineType() {
+        return this._engineType;
     }
-
-    this._endJobWithStats(computeSentenceStreamStats(chunks, acc))
-  }
-
-  _runStreamOrchestrator(text, options) {
-    const chunks = splitTtsText(String(text), {
-      language: this._config?.language,
-      locale: options.locale,
-      maxScalars: options.maxChunkScalars
-    })
-    if (chunks.length === 0) {
-      throw new QvacErrorAddonTTSGgml({
-        code: ERR_CODES.FAILED_TO_APPEND,
-        adds: 'chunked synthesis: text produced no chunks after split'
-      })
+    getApiDefinition() {
+        const api = (0, infer_base_1.getApiDefinition)();
+        this._getLogger().debug(`Using API definition: ${api} for platform: ${platform()}`);
+        return api;
     }
-
-    const response = this._job.start()
-    this._sentenceStreamCtx = {
-      chunks,
-      chunkIdx: 0,
-      acc: {
-        totalTime: 0,
-        audioDurationMs: 0,
-        totalSamples: 0
-      },
-      chunkResolver: null
+    getState() {
+        return this.state;
     }
-
-    this._sentenceStreamDriveBody().catch((err) => {
-      this._rejectActiveChunk(err)
-      this._sentenceStreamCtx = null
-      this._job.fail(err)
-    })
-
-    return response
-  }
-
-  async _sentenceStreamDriveBody() {
-    const ctx = this._sentenceStreamCtx
-    if (!ctx || ctx.textStreamMode) return
-    for (let i = 0; i < ctx.chunks.length; i++) {
-      ctx.chunkIdx = i
-      const donePromise = new Promise((resolve, reject) => {
-        ctx.chunkResolver = { resolve, reject }
-      })
-      await this.addon.runJob({
-        type: 'text',
-        input: ctx.chunks[i]
-      })
-      await donePromise
+    async load(..._args) {
+        void _args;
+        if (this.state.destroyed) {
+            throw new error_1.QvacErrorAddonTTSGgml({
+                code: error_1.ERR_CODES.FAILED_TO_LOAD,
+                adds: "instance was destroyed",
+            });
+        }
+        if (this.state.configLoaded || this.state.weightsLoaded) {
+            this._getLogger().info("Reload requested - unloading existing model first");
+            await this.unload();
+        }
+        await this._load();
+        this.state.configLoaded = true;
+        this.state.weightsLoaded = true;
     }
-    this._sentenceStreamCtx = null
-  }
-
-  async _load() {
-    this.logger.info('[TTSGgml] Language:', this._config?.language || 'en')
-
-    const ttsParams = this._buildTtsParams()
-
-    const addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-    this.addon = addon
-    try {
-      await addon.activate()
-    } catch (err) {
-      try {
-        await addon.destroyInstance()
-      } catch (_e) {}
-      if (this.addon === addon) this.addon = null
-      throw err
+    async run(input) {
+        if (input?.streamOutput === true) {
+            if (typeof input.input !== "string" ||
+                input.input.trim().length === 0) {
+                throw new error_1.QvacErrorAddonTTSGgml({
+                    code: error_1.ERR_CODES.FAILED_TO_APPEND,
+                    adds: "run with streamOutput: non-empty string `input` is required",
+                });
+            }
+            const runStream = () => this._runStreamOrchestrator(input.input, {
+                locale: input.locale,
+                maxChunkScalars: input.maxChunkScalars,
+            });
+            return this.exclusiveRun
+                ? this._enqueueExclusiveTtsResponse(runStream)
+                : runStream();
+        }
+        return this._runExclusive(() => this._runInternal(input));
     }
-  }
-
-  _buildTtsParams() {
-    if (this._engineType === ENGINE_SUPERTONIC) {
-      return this._buildSupertonicParams()
+    /**
+     * Chunked streaming synthesis. Equivalent to
+     * `run({ input: text, streamOutput: true, ...options })`.
+     */
+    async runStream(text, options = {}) {
+        const normalized = options == null || typeof options !== "object" ? {} : options;
+        return this.run({
+            input: text,
+            streamOutput: true,
+            locale: normalized.locale,
+            maxChunkScalars: normalized.maxChunkScalars,
+        });
     }
-    return this._buildChatterboxParams()
-  }
-
-  _buildChatterboxParams() {
-    const params = {
-      engineType: ENGINE_CHATTERBOX,
-      t3ModelPath: this._t3ModelPath || '',
-      s3genModelPath: this._s3genModelPath || '',
-      language: this._config?.language || 'en'
+    /**
+     * Streaming text in and streaming audio out. Each flushed string is one
+     * native job and emits PCM through `response.onUpdate`.
+     *
+     * For `AsyncIterable` inputs, `accumulateSentences` defaults to `true` so
+     * small streamed fragments are coalesced.
+     */
+    async runStreaming(textStream, options = {}) {
+        const streamOptions = this._resolveRunStreamingOptions(textStream, options);
+        let normalized = this._normalizeTextStream(textStream);
+        if (streamOptions.accumulateSentences) {
+            normalized = (0, textStreamAccumulator_1.accumulateTextStream)(normalized, {
+                sentenceDelimiterPreset: streamOptions.sentenceDelimiterPreset,
+                maxBufferScalars: streamOptions.maxBufferScalars,
+                flushAfterMs: streamOptions.flushAfterMs,
+                sentenceDelimiter: streamOptions.sentenceDelimiter,
+                language: this._config.language,
+            });
+        }
+        const runStream = () => this._runTextStreamOrchestrator(normalized);
+        return this.exclusiveRun
+            ? this._enqueueExclusiveTtsResponse(runStream)
+            : runStream();
     }
-    if (this._referenceAudio != null) {
-      params.referenceAudio = this._referenceAudio
+    async _enqueueExclusiveTtsResponse(run) {
+        const previous = this._ttsInferenceQueueWaiter;
+        let releaseSlot = () => { };
+        this._ttsInferenceQueueWaiter = new Promise((resolve) => {
+            releaseSlot = resolve;
+        });
+        await previous;
+        let response;
+        try {
+            response = run();
+        }
+        catch (error) {
+            releaseSlot();
+            throw error;
+        }
+        void response
+            .await()
+            .finally(releaseSlot)
+            .catch(() => { });
+        return response;
     }
-    if (this._voiceDir != null) {
-      params.voiceDir = this._voiceDir
+    _resolveRunStreamingOptions(textStream, options) {
+        const normalized = options == null || typeof options !== "object" ? {} : options;
+        let accumulateSentences = normalized.accumulateSentences;
+        if (accumulateSentences === undefined) {
+            accumulateSentences =
+                defaultAccumulateSentencesForStreamInput(textStream);
+        }
+        return {
+            accumulateSentences: !!accumulateSentences,
+            sentenceDelimiterPreset: normalized.sentenceDelimiterPreset === "latin" ||
+                normalized.sentenceDelimiterPreset === "cjk" ||
+                normalized.sentenceDelimiterPreset === "multilingual"
+                ? normalized.sentenceDelimiterPreset
+                : "multilingual",
+            maxBufferScalars: normalized.maxBufferScalars,
+            flushAfterMs: normalized.flushAfterMs ?? textStreamAccumulator_1.DEFAULT_FLUSH_AFTER_MS,
+            sentenceDelimiter: normalized.sentenceDelimiter instanceof RegExp
+                ? normalized.sentenceDelimiter
+                : undefined,
+        };
     }
-    if (this._seed != null) params.seed = this._seed | 0
-    if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
-    if (this._nCtx != null) params.nCtx = this._nCtx | 0
-    if (this._kvCacheType != null) params.kvCacheType = String(this._kvCacheType)
-    if (this._threads != null) params.threads = this._threads | 0
-    if (this._streamChunkTokens != null) params.streamChunkTokens = this._streamChunkTokens | 0
-    if (this._streamFirstChunkTokens != null) {
-      params.streamFirstChunkTokens = this._streamFirstChunkTokens | 0
+    _normalizeTextStream(textStream) {
+        if (textStream == null) {
+            throw new error_1.QvacErrorAddonTTSGgml({
+                code: error_1.ERR_CODES.FAILED_TO_APPEND,
+                adds: "runStreaming: text stream is required",
+            });
+        }
+        if (typeof textStream === "string") {
+            // eslint-disable-next-line @typescript-eslint/require-await -- async iterable shape is required by the public API.
+            return (async function* oneString() {
+                yield textStream;
+            })();
+        }
+        if (typeof textStream[Symbol.asyncIterator] === "function") {
+            return textStream;
+        }
+        if (Array.isArray(textStream) ||
+            typeof textStream[Symbol.iterator] === "function") {
+            // eslint-disable-next-line @typescript-eslint/require-await -- adapts synchronous iterables to the async iterable contract.
+            return (async function* fromIterable() {
+                for (const value of textStream) {
+                    yield value;
+                }
+            })();
+        }
+        throw new error_1.QvacErrorAddonTTSGgml({
+            code: error_1.ERR_CODES.FAILED_TO_APPEND,
+            adds: "runStreaming: expected string, array of strings, Iterable, or AsyncIterable",
+        });
     }
-    if (this._cfmSteps != null) params.cfmSteps = this._cfmSteps | 0
-    // S3Gen classifier-free-guidance rate (float): 0 disables CFG (cond-only,
-    // ~2x faster S3Gen), > 0 overrides the model's baked rate; omit to keep it.
-    if (this._cfgRate != null) params.cfgRate = Number(this._cfgRate)
-    if (this._enhancerGgufPath) {
-      params.lavasrEnhancerPath = this._enhancerGgufPath
+    _runTextStreamOrchestrator(source) {
+        const response = this._job.start();
+        this._sentenceStreamCtx = {
+            textStreamMode: true,
+            asyncTextSource: source,
+            chunks: [],
+            chunkIdx: 0,
+            acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
+            chunkResolver: null,
+        };
+        void this._sentenceStreamTextIterableDrive().catch((error) => {
+            this._rejectActiveChunk(error);
+            this._sentenceStreamCtx = null;
+            this._job.fail(normalizeError(error));
+        });
+        return response;
     }
-    if (this._denoiserGgufPath) {
-      params.lavasrDenoiserPath = this._denoiserGgufPath
+    async _sentenceStreamTextIterableDrive() {
+        const context = this._sentenceStreamCtx;
+        if (!context ||
+            !context.textStreamMode ||
+            !context.asyncTextSource) {
+            return;
+        }
+        try {
+            for await (const piece of context.asyncTextSource) {
+                const text = String(piece).trim();
+                if (text.length === 0)
+                    continue;
+                context.chunks.push(text);
+                context.chunkIdx = context.chunks.length - 1;
+                const done = new Promise((resolve, reject) => {
+                    context.chunkResolver = { resolve, reject };
+                });
+                await this._requireAddon().runJob({
+                    type: "text",
+                    input: text,
+                });
+                await done;
+            }
+        }
+        catch (error) {
+            this._rejectActiveChunk(error);
+            this._sentenceStreamCtx = null;
+            this._job.fail(normalizeError(error));
+            return;
+        }
+        const current = this._sentenceStreamCtx;
+        const chunks = current?.chunks || [];
+        const accumulator = current?.acc || {
+            totalTime: 0,
+            audioDurationMs: 0,
+            totalSamples: 0,
+        };
+        this._sentenceStreamCtx = null;
+        this._endJobWithStats(chunks.length === 0
+            ? {
+                totalTime: 0,
+                tokensPerSecond: 0,
+                realTimeFactor: 0,
+                audioDurationMs: 0,
+                totalSamples: 0,
+            }
+            : computeSentenceStreamStats(chunks, accumulator));
     }
-    // Speaking-rate multiplier (1.0 = unchanged, < 1 slower, > 1 faster).
-    // Chatterbox has no native rate control, so the addon applies a
-    // pitch-preserving WSOLA time-stretch post-synthesis; see
-    // ChatterboxConfig::speed. Mirrors how _buildSupertonicParams plumbs it.
-    if (this._speed != null) params.speed = Number(this._speed)
-    if (this._outputSampleRate != null) {
-      params.outputSampleRate = this._outputSampleRate | 0
+    _runStreamOrchestrator(text, options) {
+        const chunks = (0, textChunker_1.splitTtsText)(String(text), {
+            language: this._config.language,
+            locale: options.locale,
+            maxScalars: options.maxChunkScalars,
+        });
+        if (chunks.length === 0) {
+            throw new error_1.QvacErrorAddonTTSGgml({
+                code: error_1.ERR_CODES.FAILED_TO_APPEND,
+                adds: "chunked synthesis: text produced no chunks after split",
+            });
+        }
+        const response = this._job.start();
+        this._sentenceStreamCtx = {
+            chunks,
+            chunkIdx: 0,
+            acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
+            chunkResolver: null,
+        };
+        void this._sentenceStreamDriveBody().catch((error) => {
+            this._rejectActiveChunk(error);
+            this._sentenceStreamCtx = null;
+            this._job.fail(normalizeError(error));
+        });
+        return response;
     }
-    if (this._config?.useGPU != null) {
-      params.useGPU = !!this._config.useGPU
+    async _sentenceStreamDriveBody() {
+        const context = this._sentenceStreamCtx;
+        if (!context || context.textStreamMode)
+            return;
+        for (let index = 0; index < context.chunks.length; index++) {
+            context.chunkIdx = index;
+            const done = new Promise((resolve, reject) => {
+                context.chunkResolver = { resolve, reject };
+            });
+            await this._requireAddon().runJob({
+                type: "text",
+                input: context.chunks[index],
+            });
+            await done;
+        }
+        this._sentenceStreamCtx = null;
     }
-    if (this._backendsDir) params.backendsDir = this._backendsDir
-    if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
-    if (this._mecabDictPath) params.mecabDictPath = this._mecabDictPath
-    if (this._cangjieTsvPath) params.cangjieTsvPath = this._cangjieTsvPath
-    return params
-  }
-
-  _buildSupertonicParams() {
-    const params = {
-      engineType: ENGINE_SUPERTONIC,
-      supertonicModelPath: this._supertonicModelPath || '',
-      language: this._config?.language || 'en'
+    async _load() {
+        this._getLogger().info("[TTSGgml] Language:", this._config.language || "en");
+        const addon = this._createAddon(this._buildTtsParams(), this._addonOutputCallback.bind(this));
+        this.addon = addon;
+        try {
+            await addon.activate();
+        }
+        catch (error) {
+            try {
+                await addon.destroyInstance();
+            }
+            catch { }
+            if (this.addon === addon)
+                this.addon = null;
+            throw error;
+        }
     }
-    if (this._voice) params.voice = this._voice
-    if (this._steps != null) params.steps = this._steps | 0
-    if (this._speed != null) params.speed = Number(this._speed)
-    if (this._seed != null) params.seed = this._seed | 0
-    if (this._threads != null) params.threads = this._threads | 0
-    if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
-    if (this._outputSampleRate != null) {
-      params.outputSampleRate = this._outputSampleRate | 0
+    _buildTtsParams() {
+        return this._engineType === ENGINE_SUPERTONIC
+            ? this._buildSupertonicParams()
+            : this._buildChatterboxParams();
     }
-    if (this._config?.useGPU != null) {
-      params.useGPU = !!this._config.useGPU
+    _buildChatterboxParams() {
+        const parameters = {
+            engineType: ENGINE_CHATTERBOX,
+            t3ModelPath: this._t3ModelPath || "",
+            s3genModelPath: this._s3genModelPath || "",
+            language: this._config.language || "en",
+        };
+        this._assignCommonNativeParams(parameters);
+        if (this._referenceAudio != null) {
+            parameters.referenceAudio = this._referenceAudio;
+        }
+        if (this._voiceDir != null)
+            parameters.voiceDir = this._voiceDir;
+        if (this._nCtx != null)
+            parameters.nCtx = this._nCtx | 0;
+        if (this._kvCacheType != null) {
+            parameters.kvCacheType = String(this._kvCacheType);
+        }
+        if (this._streamChunkTokens != null) {
+            parameters.streamChunkTokens = this._streamChunkTokens | 0;
+        }
+        if (this._streamFirstChunkTokens != null) {
+            parameters.streamFirstChunkTokens =
+                this._streamFirstChunkTokens | 0;
+        }
+        if (this._cfmSteps != null) {
+            parameters.cfmSteps = this._cfmSteps | 0;
+        }
+        if (this._cfgRate != null) {
+            parameters.cfgRate = Number(this._cfgRate);
+        }
+        if (this._speed != null)
+            parameters.speed = Number(this._speed);
+        if (this._mecabDictPath) {
+            parameters.mecabDictPath = this._mecabDictPath;
+        }
+        if (this._cangjieTsvPath) {
+            parameters.cangjieTsvPath = this._cangjieTsvPath;
+        }
+        return parameters;
     }
-    if (this._noiseNpyPath) params.noiseNpyPath = this._noiseNpyPath
-    if (this._enhancerGgufPath) {
-      params.lavasrEnhancerPath = this._enhancerGgufPath
+    _buildSupertonicParams() {
+        const parameters = {
+            engineType: ENGINE_SUPERTONIC,
+            supertonicModelPath: this._supertonicModelPath || "",
+            language: this._config.language || "en",
+        };
+        this._assignCommonNativeParams(parameters);
+        if (this._voice)
+            parameters.voice = this._voice;
+        if (this._steps != null)
+            parameters.steps = this._steps | 0;
+        if (this._speed != null)
+            parameters.speed = Number(this._speed);
+        if (this._noiseNpyPath) {
+            parameters.noiseNpyPath = this._noiseNpyPath;
+        }
+        if (this._vulkanCacheDir) {
+            parameters.vulkanCacheDir = this._vulkanCacheDir;
+        }
+        return parameters;
     }
-    if (this._denoiserGgufPath) {
-      params.lavasrDenoiserPath = this._denoiserGgufPath
+    _assignCommonNativeParams(parameters) {
+        if (this._seed != null)
+            parameters.seed = this._seed | 0;
+        if (this._threads != null)
+            parameters.threads = this._threads | 0;
+        if (this._nGpuLayers != null) {
+            parameters.nGpuLayers = this._nGpuLayers | 0;
+        }
+        if (this._outputSampleRate != null) {
+            parameters.outputSampleRate = this._outputSampleRate | 0;
+        }
+        if (this._config.useGPU != null) {
+            parameters.useGPU = !!this._config.useGPU;
+        }
+        if (this._enhancerGgufPath) {
+            parameters.lavasrEnhancerPath = this._enhancerGgufPath;
+        }
+        if (this._denoiserGgufPath) {
+            parameters.lavasrDenoiserPath = this._denoiserGgufPath;
+        }
+        if (this._backendsDir) {
+            parameters.backendsDir = this._backendsDir;
+        }
+        if (this._openclCacheDir) {
+            parameters.openclCacheDir = this._openclCacheDir;
+        }
     }
-    if (this._backendsDir) params.backendsDir = this._backendsDir
-    if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
-    if (this._vulkanCacheDir) params.vulkanCacheDir = this._vulkanCacheDir
-    return params
-  }
-
-  /**
-   * Instantiate the native addon with the given parameters.
-   * @param {Object} configurationParams
-   * @param {Function} outputCb
-   * @returns {TTSInterface}
-   */
-  _createAddon(configurationParams, outputCb) {
-    const binding = require('./binding')
-    return new TTSInterface(binding, configurationParams, outputCb)
-  }
-
-  async unload() {
-    await this.cancel()
-    this._failAndClearActiveResponse('Model was unloaded')
-    if (this.addon) {
-      await this.addon.destroyInstance()
+    _createAddon(configuration, outputCallback) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
+        const binding = require("./binding");
+        return new tts_1.TTSInterface(binding, configuration, outputCallback);
     }
-    this.state.configLoaded = false
-    this.state.weightsLoaded = false
-  }
-
-  async destroy() {
-    await this.unload()
-    this.state.destroyed = true
-  }
-
-  async _runInternal(input) {
-    const signal = input && input.signal
-    const response = this._job.start({ signal })
-
-    // An already-aborted signal settles `response` synchronously via
-    // QvacResponse._markAbortPending, so there is nothing to synthesize.  Skip
-    // dispatch entirely: we neither run the engine for a doomed request nor
-    // leave a mid-flight native job that a later cancel()/unload() would have to
-    // interrupt — that native interrupt is what wedges macOS teardown.
-    if (signal && signal.aborted) {
-      return response
+    async unload() {
+        await this.cancel();
+        this._failAndClearActiveResponse("Model was unloaded");
+        const addon = this._optionalAddon();
+        if (addon)
+            await addon.destroyInstance();
+        this.state.configLoaded = false;
+        this.state.weightsLoaded = false;
     }
-
-    try {
-      // Per-request overrides (e.g. input.outputSampleRate) are not
-      // honoured by the native engine today — all synthesis knobs are
-      // resolved at construction / reload.  Route those through
-      // `model.reload({...})` instead when the engine exposes them.
-      const jobData = {
-        type: input.type || 'text',
-        input: input.input
-      }
-
-      await this.addon.runJob(jobData)
-    } catch (error) {
-      this._job.fail(error)
-      throw error
+    async destroy() {
+        await this.unload();
+        this.state.destroyed = true;
     }
-
-    return response
-  }
-
-  _mergeSentenceStreamStats(acc, data) {
-    const t = typeof data.totalTime === 'number' ? data.totalTime : 0
-    const a = typeof data.audioDurationMs === 'number' ? data.audioDurationMs : 0
-    const s = typeof data.totalSamples === 'number' ? data.totalSamples : 0
-    acc.totalTime += t
-    acc.audioDurationMs += a
-    acc.totalSamples += s
-  }
-
-  _rejectActiveChunk(error) {
-    const ctx = this._sentenceStreamCtx
-    if (!ctx || !ctx.chunkResolver) return
-    const reject = ctx.chunkResolver.reject
-    ctx.chunkResolver = null
-    reject(error)
-  }
-
-  _endJobWithStats(stats) {
-    if (this.opts?.stats) {
-      this._job.end(stats)
-    } else {
-      this._job.end()
+    async _runInternal(input) {
+        const response = this._job.start({
+            signal: input?.signal,
+        });
+        if (input?.signal?.aborted)
+            return response;
+        try {
+            await this._requireAddon().runJob({
+                type: input.type || "text",
+                input: input.input,
+            });
+        }
+        catch (error) {
+            this._job.fail(normalizeError(error));
+            throw error;
+        }
+        return response;
     }
-  }
-
-  _addonOutputCallback(addon, event, data, error) {
-    if (typeof error === 'string' && error.length > 0) {
-      this._handleAddonError(error)
-      return
+    _mergeSentenceStreamStats(accumulator, data) {
+        accumulator.totalTime +=
+            typeof data.totalTime === "number" ? data.totalTime : 0;
+        accumulator.audioDurationMs +=
+            typeof data.audioDurationMs === "number"
+                ? data.audioDurationMs
+                : 0;
+        accumulator.totalSamples +=
+            typeof data.totalSamples === "number" ? data.totalSamples : 0;
     }
-    if (isAudioOutputEvent(data)) {
-      this._handleAddonOutput(data)
-      return
+    _rejectActiveChunk(error) {
+        const resolver = this._sentenceStreamCtx?.chunkResolver;
+        if (!resolver)
+            return;
+        this._sentenceStreamCtx.chunkResolver = null;
+        resolver.reject(error);
     }
-    if (isStatsEvent(data)) {
-      this._handleAddonStats(data)
-      return
+    _endJobWithStats(stats) {
+        if (this.opts.stats)
+            this._job.end(stats);
+        else
+            this._job.end();
     }
-    this.logger.debug(`Received TTS event: ${event}`)
-  }
-
-  _handleAddonError(error) {
-    this.logger.error(`TTS job failed with error: ${error}`)
-    this._rejectActiveChunk(new Error(error))
-    this._job.fail(error)
-  }
-
-  _handleAddonOutput(data) {
-    this._logOutputSafely(data)
-    if (this._sentenceStreamCtx) {
-      this._job.output(this._enrichStreamChunk(data))
-    } else {
-      this._job.output(data)
+    _addonOutputCallback(_addon, event, data, error) {
+        if (typeof error === "string" && error.length > 0) {
+            this._handleAddonError(error);
+        }
+        else if (isAudioOutputEvent(data)) {
+            this._handleAddonOutput(data);
+        }
+        else if (isStatsEvent(data)) {
+            this._handleAddonStats(data);
+        }
+        else {
+            this._getLogger().debug(`Received TTS event: ${String(event)}`);
+        }
     }
-  }
-
-  _logOutputSafely(data) {
-    try {
-      this.logger.debug(`TTS job produced output: ${ttsOutputDebugString(data)}`)
-    } catch (err) {
-      if (err instanceof RangeError) {
-        this.logger.debug('TTS job produced output: [data too large]')
-      } else {
-        throw err
-      }
+    _handleAddonError(error) {
+        this._getLogger().error(`TTS job failed with error: ${error}`);
+        this._rejectActiveChunk(new Error(error));
+        this._job.fail(error);
     }
-  }
-
-  _enrichStreamChunk(data) {
-    const ctx = this._sentenceStreamCtx
-    const idx = ctx.chunkIdx
-    const enriched = {
-      outputArray: data.outputArray,
-      chunkIndex: idx,
-      sentenceChunk: ctx.chunks[idx] || ''
+    _handleAddonOutput(data) {
+        try {
+            this._getLogger().debug(`TTS job produced output: ${ttsOutputDebugString(data)}`);
+        }
+        catch (error) {
+            if (error instanceof RangeError) {
+                this._getLogger().debug("TTS job produced output: [data too large]");
+            }
+            else {
+                throw error;
+            }
+        }
+        this._job.output(this._sentenceStreamCtx
+            ? this._enrichStreamChunk(data)
+            : data);
     }
-    if (data.sampleRate != null) enriched.sampleRate = data.sampleRate
-    if (!ctx.textStreamMode) {
-      enriched.isLast = idx >= ctx.chunks.length - 1
+    _enrichStreamChunk(data) {
+        const context = this._sentenceStreamCtx;
+        if (!context) {
+            // Preserve the historical ArrayBuffer declaration without changing the
+            // native Int16Array payload or allocating a compatibility copy.
+            return data;
+        }
+        const index = context.chunkIdx;
+        const enriched = {
+            // Public declarations historically expose ArrayBuffer; native output is
+            // the more precise Int16Array representation at runtime.
+            outputArray: data.outputArray,
+            chunkIndex: index,
+            sentenceChunk: context.chunks[index] || "",
+        };
+        if (data.sampleRate != null) {
+            enriched.sampleRate = data.sampleRate;
+        }
+        if (!context.textStreamMode) {
+            enriched.isLast = index >= context.chunks.length - 1;
+        }
+        return enriched;
     }
-    return enriched
-  }
-
-  _handleAddonStats(data) {
-    this.logger.info(`TTS job completed. Stats: ${JSON.stringify(data)}`)
-    if (this._sentenceStreamCtx) {
-      this._finalizeSentenceStreamChunkStats(data)
-    } else {
-      this._endJobWithStats(data)
+    _handleAddonStats(data) {
+        this._getLogger().info(`TTS job completed. Stats: ${JSON.stringify(data)}`);
+        const context = this._sentenceStreamCtx;
+        if (!context) {
+            this._endJobWithStats(data);
+            return;
+        }
+        this._mergeSentenceStreamStats(context.acc, data);
+        if (context.chunkResolver) {
+            context.chunkResolver.resolve();
+            context.chunkResolver = null;
+        }
+        if (!context.textStreamMode &&
+            context.chunkIdx >= context.chunks.length - 1) {
+            this._endJobWithStats(computeSentenceStreamStats(context.chunks, context.acc));
+        }
     }
-  }
-
-  _finalizeSentenceStreamChunkStats(data) {
-    const ctx = this._sentenceStreamCtx
-    this._mergeSentenceStreamStats(ctx.acc, data)
-    if (ctx.chunkResolver) {
-      ctx.chunkResolver.resolve()
-      ctx.chunkResolver = null
+    async cancel() {
+        const addon = this._optionalAddon();
+        if (addon?.cancel)
+            await addon.cancel();
     }
-    if (ctx.textStreamMode) return
-    const isLast = ctx.chunkIdx >= ctx.chunks.length - 1
-    if (isLast) {
-      this._endJobWithStats(computeSentenceStreamStats(ctx.chunks, ctx.acc))
+    _failAndClearActiveResponse(reason) {
+        this._rejectActiveChunk(reason instanceof Error ? reason : new Error(reason));
+        this._sentenceStreamCtx = null;
+        this._job.fail(reason);
     }
-  }
-
-  async cancel() {
-    if (this.addon?.cancel) {
-      await this.addon.cancel()
+    async reload(newConfig = {}) {
+        this._getLogger().debug("Reloading addon with new configuration", newConfig);
+        const runtimeConfig = newConfig;
+        if (runtimeConfig.language !== undefined) {
+            this._config.language = runtimeConfig.language;
+        }
+        if (runtimeConfig.useGPU !== undefined) {
+            this._config.useGPU = runtimeConfig.useGPU;
+        }
+        if (runtimeConfig.outputSampleRate !== undefined) {
+            this._outputSampleRate = runtimeConfig.outputSampleRate;
+        }
+        const parameters = this._buildTtsParams();
+        await this.cancel();
+        this._failAndClearActiveResponse("Model was reloaded");
+        const existingAddon = this._optionalAddon();
+        if (existingAddon)
+            await existingAddon.destroyInstance();
+        this.addon = this._createAddon(parameters, this._addonOutputCallback.bind(this));
+        await this._requireAddon().activate();
     }
-  }
-
-  _failAndClearActiveResponse(reason) {
-    this._rejectActiveChunk(reason instanceof Error ? reason : new Error(String(reason)))
-    this._sentenceStreamCtx = null
-    this._job.fail(reason)
-  }
-
-  /**
-   * Reload the addon with new configuration parameters.
-   * @param {Object} newConfig
-   * @param {string} [newConfig.language]
-   * @param {boolean} [newConfig.useGPU]
-   * @param {number} [newConfig.outputSampleRate]
-   */
-  async reload(newConfig = {}) {
-    this.logger.debug('Reloading addon with new configuration', newConfig)
-
-    if (newConfig.language !== undefined) this._config.language = newConfig.language
-    if (newConfig.useGPU !== undefined) this._config.useGPU = newConfig.useGPU
-    if (newConfig.outputSampleRate !== undefined)
-      this._outputSampleRate = newConfig.outputSampleRate
-
-    const ttsParams = this._buildTtsParams()
-
-    await this.cancel()
-    this._failAndClearActiveResponse('Model was reloaded')
-
-    if (this.addon) {
-      await this.addon.destroyInstance()
+    static getModelKey(_params) {
+        void _params;
+        return "tts-ggml";
     }
-    this.addon = this._createAddon(ttsParams, this._addonOutputCallback.bind(this))
-    await this.addon.activate()
-  }
-
-  static inferenceManagerConfig = {
-    noAdditionalDownload: true
-  }
-
-  static getModelKey(params) {
-    return 'tts-ggml'
-  }
-
-  static ENGINE_CHATTERBOX = ENGINE_CHATTERBOX
-  static ENGINE_SUPERTONIC = ENGINE_SUPERTONIC
+    _requireAddon() {
+        const addon = this._optionalAddon();
+        if (!addon)
+            throw new Error("TTS addon is not loaded");
+        return addon;
+    }
+    _optionalAddon() {
+        return this.addon || null;
+    }
+    _getLogger() {
+        return this.logger;
+    }
 }
-
-module.exports = TTSGgml
-module.exports.ENGINE_CHATTERBOX = ENGINE_CHATTERBOX
-module.exports.ENGINE_SUPERTONIC = ENGINE_SUPERTONIC
+module.exports = TTSGgml;
