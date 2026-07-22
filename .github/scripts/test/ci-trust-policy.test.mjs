@@ -440,6 +440,67 @@ test('sdk e2e: internal PR authorised without verified; external fork stays gate
   assert.equal(fork.allowed, 'false')
 })
 
+// Applying `verified` is a privileged trust decision: only the merge and
+// release teams may do it. The label-gate action resolves the label applier
+// and authorises only if they belong to a configured team, so restricting the
+// team default to merge+release is the enforcement point. Individual
+// contributor / partner teams (qvac-internal-dev, qvac-collabora) must NOT be
+// trusted appliers.
+test('label-gate default teams are scoped to merge + release only', () => {
+  const source = read('.github/actions/label-gate/action.yml')
+  // Isolate the teams input's block-scalar default (from `default: |` up to
+  // the next input, `users:`), so the descriptive prose that mentions the
+  // excluded teams by name does not leak into the assertion.
+  const teamsIdx = source.indexOf('  teams:')
+  const usersIdx = source.indexOf('  users:', teamsIdx)
+  assert.ok(teamsIdx !== -1 && usersIdx > teamsIdx, 'teams then users inputs')
+  const defaultMarker = 'default: |'
+  const defaultIdx = source.indexOf(defaultMarker, teamsIdx)
+  assert.ok(
+    defaultIdx !== -1 && defaultIdx < usersIdx,
+    'teams uses a block-scalar default',
+  )
+  const defaultTeams = source
+    .slice(defaultIdx + defaultMarker.length, usersIdx)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  assert.deepEqual(defaultTeams, ['qvac-internal-merge', 'qvac-internal-release'])
+})
+
+// Regression for the authorize-pr-only bypass: the registry-server PR jobs
+// that check out fork head and run `npm install` / tests must gate on
+// label-gate (verified by merge/release), not authorize-pr alone — otherwise
+// an external org member runs unreviewed fork code in a pull_request_target
+// context without verified.
+function jobBlock(source, job) {
+  const header = `\n  ${job}:\n`
+  const start = source.indexOf(header)
+  assert.notEqual(start, -1, `job '${job}' exists in workflow`)
+  const after = start + header.length
+  const nextJob = source.slice(after).search(/\n {2}[A-Za-z0-9_-]+:\n/)
+  return nextJob === -1 ? source.slice(start) : source.slice(start, after + nextJob)
+}
+
+test('registry-server PR jobs gate fork code on label-gate, not authorize alone', () => {
+  const source = read(
+    '.github/workflows/pr-models-validation-registry-server.yml',
+  )
+  for (const job of ['detect-changes', 'validate-json', 'test']) {
+    const block = jobBlock(source, job)
+    assert.match(
+      block,
+      /needs:.*\blabel-gate\b/,
+      `'${job}' declares label-gate as a dependency`,
+    )
+    assert.match(
+      block,
+      /needs\.label-gate\.outputs\.authorised == 'true'/,
+      `'${job}' if-gates on label-gate.authorised`,
+    )
+  }
+})
+
 function publicPrLabelPolicy(overrides = {}) {
   const script = extractRunBlock(
     '.github/workflows/public-pr.yml',
