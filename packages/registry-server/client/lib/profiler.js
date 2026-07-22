@@ -13,7 +13,7 @@ const { RegistryDatabase } = require('@qvac/registry-schema')
  * Normalize a blob core key into a Buffer regardless of input format.
  * Handles raw Buffer, { data: [...] } objects from HyperDB, and z32/hex strings.
  */
-function decodeCoreKey (key) {
+function decodeCoreKey(key) {
   if (Buffer.isBuffer(key)) return key
   if (typeof key === 'object' && key !== null && key.data) {
     return Buffer.from(key.data)
@@ -25,7 +25,7 @@ function decodeCoreKey (key) {
  * Collect a snapshot of network, connection, and hypercore stats.
  * All fields are plain values suitable for logging or formatting.
  */
-function collectStats (swarmStats, hypercoreStats, blobCore, elapsedSec) {
+function collectStats(swarmStats, hypercoreStats, blobCore, elapsedSec) {
   const bytesRx = swarmStats.dhtStats.udxBytesReceived
   const bytesTx = swarmStats.dhtStats.udxBytesTransmitted
 
@@ -71,7 +71,7 @@ function collectStats (swarmStats, hypercoreStats, blobCore, elapsedSec) {
 /**
  * Format a stats snapshot into a human-readable string.
  */
-function formatStats (stats) {
+function formatStats(stats) {
   const n = stats.network
   const c = stats.connection
   const h = stats.hypercore
@@ -88,7 +88,14 @@ function formatStats (stats) {
   lines += '  Attempted:  ' + c.attempted + '\n'
   lines += '  Opened:     ' + c.opened + '\n'
   lines += '  Closed:     ' + c.closed + '\n'
-  lines += '  Issues:     rto=' + c.rtos + ' fast-recoveries=' + c.fastRecoveries + ' retransmits=' + c.retransmits + '\n'
+  lines +=
+    '  Issues:     rto=' +
+    c.rtos +
+    ' fast-recoveries=' +
+    c.fastRecoveries +
+    ' retransmits=' +
+    c.retransmits +
+    '\n'
   lines += 'Hypercore\n'
   lines += '  Blob core: ' + h.contiguousLength + ' / ' + h.length + ' (contiguous / length)\n'
   lines += '  Hotswaps:  ' + h.hotswaps + '\n'
@@ -106,7 +113,7 @@ function formatStats (stats) {
 /**
  * Format a final download summary into a human-readable string.
  */
-function formatSummary (opts) {
+function formatSummary(opts) {
   let lines = '='.repeat(50) + '\n'
   lines += 'FINAL SUMMARY\n'
   lines += '='.repeat(50) + '\n'
@@ -133,7 +140,7 @@ function formatSummary (opts) {
  * @param {function} [opts.onLog] - Called with (message) for log output; defaults to console.log
  * @returns {Promise<object>} Summary with timing and stats
  */
-async function profileDownload (opts) {
+async function profileDownload(opts) {
   // Lazy-loaded: these Node builtins don't exist in Bare runtime,
   // so they must not be required at the top level or unit tests break.
   const os = require('#os')
@@ -177,7 +184,9 @@ async function profileDownload (opts) {
   const cleanupResources = async () => {
     await swarm.destroy()
     await store.close()
-    try { fs.rmSync(tmpdir, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(tmpdir, { recursive: true, force: true })
+    } catch {}
   }
 
   try {

@@ -12,17 +12,24 @@ const { ENV_KEYS } = require('../../shared/constants')
  * Derive a dedicated RPC discovery key from the autobase key.
  * Must match the derivation in registry-service.js.
  */
-function deriveRpcDiscoveryKey (autobaseKey) {
-  return crypto.createHash('sha256')
-    .update(autobaseKey)
-    .update('qvac-registry-rpc')
-    .digest()
+function deriveRpcDiscoveryKey(autobaseKey) {
+  return crypto.createHash('sha256').update(autobaseKey).update('qvac-registry-rpc').digest()
 }
 
-async function connectToRegistry ({ config, logger = console, storage = './temp-client-storage', timeout = 30000, primaryKey = null, targetPeer = null, indexerKeys = null }) {
+async function connectToRegistry({
+  config,
+  logger = console,
+  storage = './temp-client-storage',
+  timeout = 30000,
+  primaryKey = null,
+  targetPeer = null,
+  indexerKeys = null
+}) {
   const autobaseKeyEncoded = config.getAutobaseBootstrapKey()
   if (!autobaseKeyEncoded) {
-    throw new Error('QVAC_AUTOBASE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.')
+    throw new Error(
+      'QVAC_AUTOBASE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.'
+    )
   }
 
   const resolvedPrimaryKey = config.getWriterPrimaryKey(primaryKey)
@@ -35,10 +42,7 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
   let resolved = false
 
   const cleanup = async () => {
-    await Promise.allSettled([
-      swarm.destroy().catch(() => {}),
-      store.close().catch(() => {})
-    ])
+    await Promise.allSettled([swarm.destroy().catch(() => {}), store.close().catch(() => {})])
   }
 
   const autobaseKey = IdEnc.decode(autobaseKeyEncoded)
@@ -49,7 +53,7 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
   // Build a set of allowed peer keys for connection filtering
   const allowedPeerKeys = useDirectConnect
-    ? new Set(resolvedIndexerKeys.map(k => IdEnc.normalize(IdEnc.decode(k))))
+    ? new Set(resolvedIndexerKeys.map((k) => IdEnc.normalize(IdEnc.decode(k))))
     : null
 
   if (useDirectConnect) {
@@ -82,7 +86,10 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
       // If targeting a specific peer, skip others
       if (targetPeerNormalized && peerKey !== targetPeerNormalized) {
-        logger.info('RPC Client: Skipping peer (waiting for target)', { peer: peerKey, target: targetPeerNormalized })
+        logger.info('RPC Client: Skipping peer (waiting for target)', {
+          peer: peerKey,
+          target: targetPeerNormalized
+        })
         return
       }
 
@@ -97,12 +104,15 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
 
       logger.info('RPC Client: Connected to server', { peer: peerKey })
 
-      conn.on('error', err => {
-        logger.warn({
-          peer: peerKey,
-          error: err.message,
-          code: err.code
-        }, 'RPC Client: connection error')
+      conn.on('error', (err) => {
+        logger.warn(
+          {
+            peer: peerKey,
+            error: err.message,
+            code: err.code
+          },
+          'RPC Client: connection error'
+        )
       })
 
       const rpc = new ProtomuxRPC(conn, {
@@ -111,6 +121,7 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
       })
       store.replicate(conn)
 
+      // lunte-disable-next-line require-await
       const closeConnection = async () => {
         try {
           conn.destroy()
@@ -161,7 +172,7 @@ async function connectToRegistry ({ config, logger = console, storage = './temp-
   })
 }
 
-function getKeyPairFromEnv () {
+function getKeyPairFromEnv() {
   const publicKeyHex = process.env[ENV_KEYS.QVAC_WRITER_PUBLIC_KEY]
   const secretKeyHex = process.env[ENV_KEYS.QVAC_WRITER_SECRET_KEY]
 
@@ -173,30 +184,48 @@ function getKeyPairFromEnv () {
   }
 }
 
-async function getWriterKeyPair (store, logger) {
+async function getWriterKeyPair(store, logger) {
   const envPair = getKeyPairFromEnv()
   if (envPair) {
     if (logger?.debug) {
-      logger.debug({
-        writer: IdEnc.normalize(envPair.publicKey)
-      }, 'RPC Client: Using writer keypair from environment')
+      logger.debug(
+        {
+          writer: IdEnc.normalize(envPair.publicKey)
+        },
+        'RPC Client: Using writer keypair from environment'
+      )
     }
     return envPair
   }
 
   const keyPair = await store.createKeyPair('writer-key')
   if (logger?.debug) {
-    logger.debug({
-      writer: IdEnc.normalize(keyPair.publicKey)
-    }, 'RPC Client: Using writer keypair from corestore')
+    logger.debug(
+      {
+        writer: IdEnc.normalize(keyPair.publicKey)
+      },
+      'RPC Client: Using writer keypair from corestore'
+    )
   }
   return keyPair
 }
 
-async function updateModelMetadata ({ config, path, source, metadata, logger = console, storage = './temp-client-storage', timeout = 30000 }) {
+async function updateModelMetadata({
+  config,
+  path,
+  source,
+  metadata,
+  logger = console,
+  storage = './temp-client-storage',
+  timeout = 30000
+}) {
   const connection = await connectToRegistry({ config, logger, storage, timeout })
   try {
-    const result = await connection.rpc.request('update-model-metadata', { path, source, ...metadata })
+    const result = await connection.rpc.request('update-model-metadata', {
+      path,
+      source,
+      ...metadata
+    })
     return result
   } finally {
     await connection.cleanup()

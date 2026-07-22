@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { perCallProfilingSchema } from './profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from './heartbeat'
-import { completionStreamRequestSchema, completionStreamResponseSchema } from './completion-stream'
+import {
+  completionOrchestrateRequestSchema,
+  completionOrchestrateResponseSchema,
+  completionStreamRequestSchema,
+  completionStreamResponseSchema
+} from './completion-stream'
 import {
   batchCompletionStreamRequestSchema,
   batchCompletionStreamResponseSchema
@@ -83,6 +88,7 @@ export const requestSchema = z.union([
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
+  completionOrchestrateRequestSchema,
   batchCompletionStreamRequestSchema,
   unloadModelRequestSchema,
   transcribeRequestSchema,
@@ -122,6 +128,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
+  completionOrchestrateResponseSchema,
   batchCompletionStreamResponseSchema,
   unloadModelResponseSchema,
   modelProgressUpdateSchema,
