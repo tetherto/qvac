@@ -3,15 +3,16 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "inference-addon-cpp/JobRunner.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/job/SingleJobScheduler.hpp"
 #include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
 #include "inference-addon-cpp/queue/OutputQueue.hpp"
 
@@ -99,15 +100,15 @@ protected:
   std::unique_ptr<MockOutputCallback> callback_;
   std::unique_ptr<JobRunnerTestModel> model_;
   std::shared_ptr<OutputQueue> outputQueue_;
-  std::unique_ptr<JobRunner> jobRunner_;
+  std::unique_ptr<SingleJobScheduler> jobRunner_;
 
   void SetUp() override {
     callback_ = std::make_unique<MockOutputCallback>();
     model_ = std::make_unique<JobRunnerTestModel>();
     outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
     jobRunner_ =
-        std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-    jobRunner_->start();
+        std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+    jobRunner_->start(outputQueue_);
   }
 
   void TearDown() override {
@@ -122,9 +123,8 @@ protected:
 TEST_F(JobRunnerTest, BasicJobExecution) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{50});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   jobRunner_->runJob(std::string("test input"));
 
@@ -135,14 +135,33 @@ TEST_F(JobRunnerTest, BasicJobExecution) {
   EXPECT_GT(outputs.size(), 0);
 }
 
+// liveJobIds: the single slot reports the untagged sentinel while occupied and
+// nothing when idle — the snapshot the JS cancel-all path pairs with
+// cancelJobs.
+TEST_F(JobRunnerTest, LiveJobIdsReflectTheSingleSlot) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{5000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
+
+  EXPECT_TRUE(jobRunner_->liveJobIds().empty());
+
+  ASSERT_TRUE(jobRunner_->runJob(std::string("job")).has_value());
+  EXPECT_EQ(jobRunner_->liveJobIds(), std::vector<JobId>{kNoJobId});
+
+  jobRunner_->cancel(kNoJobId);
+  EXPECT_TRUE(jobRunner_->liveJobIds().empty())
+      << "cancel waits for the slot to clear, so no live id may remain";
+}
+
 // Test cancel without deadlock - this is the critical test
 TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
   // Create a model with longer processing time
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{500});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Start a job
   jobRunner_->runJob(std::string("test input"));
@@ -151,8 +170,8 @@ TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
   std::this_thread::sleep_for(std::chrono::milliseconds{50});
 
   // Try to cancel from another thread with a timeout
-  auto cancel_future =
-      std::async(std::launch::async, [this]() { jobRunner_->cancel(); });
+  auto cancel_future = std::async(
+      std::launch::async, [this]() { jobRunner_->cancel(kNoJobId); });
 
   // Wait for cancel to complete with timeout
   auto status = cancel_future.wait_for(std::chrono::seconds{2});
@@ -168,7 +187,7 @@ TEST_F(JobRunnerTest, CancelDuringProcessingNoDeadlock) {
 // Test cancel on a job that hasn't started yet
 TEST_F(JobRunnerTest, CancelBeforeProcessing) {
   // Don't start a job, just call cancel
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should complete without issue and quickly (not hang)
   SUCCEED();
@@ -178,12 +197,11 @@ TEST_F(JobRunnerTest, CancelBeforeProcessing) {
 TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{50});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Call cancel when no job is running
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should be able to run a job normally after cancel with no job
   jobRunner_->runJob(std::string("test input"));
@@ -196,7 +214,7 @@ TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
 
   // Verify we got a result (not an error)
   bool found_result = false;
-  for (const auto& output : outputs) {
+  for (const auto& [id, output] : outputs) {
     if (output.type() == typeid(std::string)) {
       found_result = true;
     }
@@ -208,12 +226,12 @@ TEST_F(JobRunnerTest, CancelBeforeJobThenRunNormally) {
 TEST_F(JobRunnerTest, MultipleJobsSequential) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{50});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   for (int i = 0; i < 3; ++i) {
-    jobRunner_->runJob(std::string("test input ") + std::to_string(i));
+    jobRunner_->runJob(
+        std::string("test input ") + std::to_string(i));
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
   }
 
@@ -225,9 +243,8 @@ TEST_F(JobRunnerTest, MultipleJobsSequential) {
 TEST_F(JobRunnerTest, CannotRunJobWhileProcessing) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{200});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Start first job
   EXPECT_TRUE(jobRunner_->runJob(std::string("test input 1")));
@@ -240,9 +257,8 @@ TEST_F(JobRunnerTest, CannotRunJobWhileProcessing) {
 TEST_F(JobRunnerTest, MultipleRapidCancels) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{100});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Start a job
   jobRunner_->runJob(std::string("test input"));
@@ -250,8 +266,9 @@ TEST_F(JobRunnerTest, MultipleRapidCancels) {
   // Call cancel multiple times from different threads
   std::vector<std::future<void>> futures;
   for (int i = 0; i < 5; ++i) {
-    futures.push_back(
-        std::async(std::launch::async, [this]() { jobRunner_->cancel(); }));
+    futures.push_back(std::async(std::launch::async, [this]() {
+      jobRunner_->cancel(kNoJobId);
+    }));
   }
 
   // Wait for all cancels with timeout
@@ -268,9 +285,8 @@ TEST_F(JobRunnerTest, CancelInCriticalWindowNoDeadlock) {
   // Create a model with very short processing time
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{50});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Run multiple iterations to increase chance of hitting the critical window
   for (int iteration = 0; iteration < 10; ++iteration) {
@@ -281,8 +297,8 @@ TEST_F(JobRunnerTest, CancelInCriticalWindowNoDeadlock) {
     // model_->process() returning and the lock being reacquired
     std::this_thread::sleep_for(std::chrono::milliseconds{40});
 
-    auto cancel_future =
-        std::async(std::launch::async, [this]() { jobRunner_->cancel(); });
+    auto cancel_future = std::async(
+        std::launch::async, [this]() { jobRunner_->cancel(kNoJobId); });
 
     auto status = cancel_future.wait_for(std::chrono::seconds{1});
     ASSERT_NE(status, std::future_status::timeout)
@@ -299,9 +315,8 @@ TEST_F(JobRunnerTest, CancelInCriticalWindowNoDeadlock) {
 TEST_F(JobRunnerTest, CancelWaitsForProcessingToComplete) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{200});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Start a job
   jobRunner_->runJob(std::string("test input"));
@@ -311,7 +326,7 @@ TEST_F(JobRunnerTest, CancelWaitsForProcessingToComplete) {
   ASSERT_TRUE(model_->isProcessing()) << "Model should be processing";
 
   // Call cancel while processing - it should block until processing completes
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // After cancel() returns, processing must be complete
   EXPECT_FALSE(model_->isProcessing())
@@ -328,9 +343,9 @@ TEST_F(JobRunnerTest, CancelWhileAccessingInputNoCrash) {
 
   auto local_output_queue =
       std::make_shared<OutputQueue>(*callback_, *model_with_access);
-  auto local_job_runner = std::make_unique<JobRunner>(
-      local_output_queue, model_with_access.get(), model_with_access.get());
-  local_job_runner->start();
+  auto local_job_runner = std::make_unique<SingleJobScheduler>(
+      model_with_access.get(), model_with_access.get());
+  local_job_runner->start(local_output_queue);
 
   // Run multiple iterations to increase chance of hitting the race condition
   for (int iteration = 0; iteration < 5; ++iteration) {
@@ -339,7 +354,7 @@ TEST_F(JobRunnerTest, CancelWhileAccessingInputNoCrash) {
 
     // Cancel quickly while model is accessing input
     std::this_thread::sleep_for(std::chrono::milliseconds{20});
-    local_job_runner->cancel();
+    local_job_runner->cancel(kNoJobId);
 
     // After cancel returns, processing must be complete
     EXPECT_FALSE(model_ptr->isProcessing())
@@ -364,9 +379,8 @@ TEST_F(
   // Use minimal processing time to maximize throughput
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{0});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   std::atomic_bool stop{false};
   std::atomic_int iterations{0};
@@ -376,7 +390,7 @@ TEST_F(
   for (int t = 0; t < 4; ++t) {
     cancel_threads.push_back(std::async(std::launch::async, [this, &stop]() {
       while (!stop.load()) {
-        jobRunner_->cancel();
+        jobRunner_->cancel(kNoJobId);
         std::this_thread::yield(); // Give other threads a chance
       }
     }));
@@ -408,8 +422,8 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
   // Check output queue for bad_optional_access errors
-  std::vector<std::any> outputs = outputQueue_->clear();
-  for (const std::any& output : outputs) {
+  auto outputs = outputQueue_->clear();
+  for (const auto& [id, output] : outputs) {
     if (output.type() == typeid(Output::Error)) {
       Output::Error error = std::any_cast<Output::Error>(output);
       if (error.find("bad_optional_access") != std::string::npos ||
@@ -431,22 +445,21 @@ TEST_F(
 TEST_F(JobRunnerTest, MultipleCancelsInSequence) {
   model_ = std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{100});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   // Start a job
   jobRunner_->runJob(std::string("test input"));
   std::this_thread::sleep_for(std::chrono::milliseconds{20});
 
   // Cancel it
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Call cancel again - should be safe even though no job is running
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // And again
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   // Should complete without hanging or crashing
   SUCCEED();
@@ -456,9 +469,8 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
   model_ =
       std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{10000});
   outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
-  jobRunner_ =
-      std::make_unique<JobRunner>(outputQueue_, model_.get(), model_.get());
-  jobRunner_->start();
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
 
   EXPECT_TRUE(jobRunner_->runJob(std::string("long job")));
 
@@ -473,7 +485,7 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
   std::chrono::steady_clock::time_point before_cancel =
       std::chrono::steady_clock::now();
 
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
 
   std::chrono::milliseconds cancel_elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -489,7 +501,98 @@ TEST_F(JobRunnerTest, CancelWhileActivelyProcessing_ModelReceivesStop) {
 
   EXPECT_TRUE(jobRunner_->runJob(std::string("follow-up")))
       << "Job slot should be free after cancel";
-  jobRunner_->cancel();
+  jobRunner_->cancel(kNoJobId);
+}
+
+/// Proves SingleJobScheduler satisfies IJobScheduler through a base pointer:
+/// runJob admits on an idle scheduler, rejects while the slot is occupied,
+/// and cancelAll() returns without deadlock.
+TEST(PolymorphicSchedulerTest, PolymorphicScheduler_RunRejectCancel) {
+  MockOutputCallback cb;
+  auto model = std::make_unique<JobRunnerTestModel>(
+      std::chrono::milliseconds{500} /* long enough to stay busy */);
+  auto queue = std::make_shared<OutputQueue>(cb, *model);
+
+  // Hold the scheduler through the interface pointer to verify polymorphism.
+  std::unique_ptr<IJobScheduler> sched =
+      std::make_unique<SingleJobScheduler>(model.get(), model.get());
+  sched->start(queue);
+
+  // First admit must succeed on an idle scheduler.
+  EXPECT_TRUE(sched->runJob(std::string("first")));
+
+  // Wait briefly so the processing thread picks up the job.
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+
+  // Second admit must be rejected while the slot is occupied.
+  EXPECT_FALSE(sched->runJob(std::string("second")));
+
+  // cancelAll() must return without deadlock while the job is in flight.
+  auto fut = std::async(std::launch::async, [&sched]() { sched->cancelAll(); });
+  ASSERT_NE(fut.wait_for(std::chrono::seconds{2}), std::future_status::timeout)
+      << "Deadlock detected: cancelAll() did not return within timeout";
+}
+
+/// The single-slot scheduler cannot correlate a tagged request to its outputs,
+/// so it identifies an accepted job with the untagged sentinel.
+TEST(PolymorphicSchedulerTest, PolymorphicScheduler_AdmitsAsUntaggedSentinel) {
+  MockOutputCallback cb;
+  auto model = std::make_unique<JobRunnerTestModel>();
+  auto queue = std::make_shared<OutputQueue>(cb, *model);
+
+  std::unique_ptr<IJobScheduler> sched =
+      std::make_unique<SingleJobScheduler>(model.get(), model.get());
+  sched->start(queue);
+
+  const std::optional<JobId> id = sched->runJob(std::string("job"));
+  ASSERT_TRUE(id.has_value());
+  EXPECT_EQ(*id, kNoJobId);
+}
+
+/// cancel() with a tagged id cannot map to the single slot; it must be ignored
+/// (warned, no throw) and must leave an in-flight untagged job running.
+TEST(PolymorphicSchedulerTest, PolymorphicScheduler_CancelIgnoresTaggedId) {
+  MockOutputCallback cb;
+  auto model = std::make_unique<JobRunnerTestModel>(
+      std::chrono::milliseconds{500} /* long enough to stay busy */);
+  auto queue = std::make_shared<OutputQueue>(cb, *model);
+
+  std::unique_ptr<IJobScheduler> sched =
+      std::make_unique<SingleJobScheduler>(model.get(), model.get());
+  sched->start(queue);
+
+  EXPECT_TRUE(sched->runJob(std::string("first")));
+  std::this_thread::sleep_for(std::chrono::milliseconds{50});
+
+  // A tagged cancel does not target the slot, so the job stays occupied.
+  EXPECT_NO_THROW(sched->cancel(42));
+  EXPECT_FALSE(sched->runJob(std::string("second")));
+}
+
+// Teardown must not wait for the model: the destructor signals model cancel
+// before joining, so a worker stuck in a long process() returns promptly.
+TEST_F(JobRunnerTest, DestructorCancelsInFlightJob) {
+  model_ =
+      std::make_unique<JobRunnerTestModel>(std::chrono::milliseconds{5000});
+  outputQueue_ = std::make_shared<OutputQueue>(*callback_, *model_);
+  jobRunner_ = std::make_unique<SingleJobScheduler>(model_.get(), model_.get());
+  jobRunner_->start(outputQueue_);
+
+  EXPECT_TRUE(jobRunner_->runJob(std::string("slow")));
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{2};
+  while (!model_->isProcessing() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+  }
+  ASSERT_TRUE(model_->isProcessing()) << "Job never reached the model";
+
+  const auto start = std::chrono::steady_clock::now();
+  jobRunner_.reset();
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  EXPECT_LT(elapsed, std::chrono::milliseconds{1500})
+      << "Destructor blocked on the in-flight job";
 }
 
 } // namespace qvac_lib_inference_addon_cpp

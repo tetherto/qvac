@@ -347,7 +347,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -479,6 +479,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(
@@ -502,6 +506,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^vla-groot-/,
+      'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
+    ),
     ...(Platform.OS === 'android'
       ? [
           skipTests(

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -319,7 +320,8 @@ TEST(SimpleAddonTest, JobCancellationWorks) {
 }
 
 // Reproduces the bug where cancel() runs before the worker thread takes the
-// job: without JobRunner signalling completion in that case, nothing ever
+// job: without SingleJobScheduler signalling completion in that case, nothing
+// ever
 // queues job-ended or error, so "wait for completion" would hang (JS
 // _finishPromise never resolves). We run many iterations of runJob()+cancel()
 // and wait for completion (job-ended or error); without the fix, some
@@ -340,7 +342,8 @@ TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
     addon->runJob(std::any(std::string("quick")));
     addon->cancelJob();
 
-    // Wait for completion (job-ended or error). JobRunner signals either
+    // Wait for completion (job-ended or error). SingleJobScheduler signals
+    // either
     // queueJobEnded() or queueException("Job cancelled") when cancel() runs
     // before the worker takes the job.
     bool received = completionState->waitForCompletion(waitTimeout);
@@ -349,8 +352,67 @@ TEST(SimpleAddonTest, CancelBeforeWorkerTakesJob_CompletionStillSignalled) {
         << "Iteration " << i << ": completion was not received within "
         << waitTimeout.count()
         << " ms. Simulates the stuck wait when cancel() runs before the "
-           "worker takes the job and JobRunner does not signal completion.";
+           "worker takes the job and SingleJobScheduler does not signal "
+           "completion.";
   }
+}
+
+/// Minimal custom IJobScheduler implementation (neither of the two built-in
+/// types) used to prove AddonCpp verifies model binding for ANY scheduler, not
+/// just the built-ins. It records the model instance it was constructed
+/// against so binding can be checked.
+class CustomScheduler : public IJobScheduler {
+  const model::IModel* boundModel_;
+
+public:
+  explicit CustomScheduler(const model::IModel* boundModel)
+      : boundModel_(boundModel) {}
+
+  void start(std::shared_ptr<OutputQueue> /*outputQueue*/) override {}
+  std::optional<JobId> runJob(std::any /*input*/) override { return kNoJobId; }
+  std::optional<JobId> runExclusiveJob(std::any /*input*/) override {
+    return kNoJobId;
+  }
+  void cancel(JobId /*id*/) override {}
+  void cancelAll() override {}
+  [[nodiscard]] std::vector<JobId> liveJobIds() const override { return {}; }
+  [[nodiscard]] std::size_t activeJobs() const override { return 0; }
+
+  [[nodiscard]] bool isBoundTo(const model::IModel& model) const override {
+    return boundModel_ == &model;
+  }
+};
+
+std::unique_ptr<OutputCallBackCpp> makeEmptyOutputCallback() {
+  auto handler = std::make_shared<
+      out_handl::CppContainerOutputHandler<std::set<std::string>>>();
+  out_handl::OutputHandlers<out_handl::OutputHandlerInterface<void>>
+      outputHandlers;
+  outputHandlers.add(handler);
+  return std::make_unique<OutputCallBackCpp>(std::move(outputHandlers));
+}
+
+TEST(SimpleAddonTest, CustomSchedulerBoundToModel_ConstructionSucceeds) {
+  auto model = std::make_unique<BlockingTestModel>();
+  auto scheduler = std::make_unique<CustomScheduler>(model.get());
+
+  EXPECT_NO_THROW(AddonCpp(
+      makeEmptyOutputCallback(), std::move(model), std::move(scheduler)));
+}
+
+TEST(
+    SimpleAddonTest,
+    CustomSchedulerBoundToDifferentModel_ThrowsInvalidArgument) {
+  auto boundModel = std::make_unique<BlockingTestModel>();
+  auto scheduler = std::make_unique<CustomScheduler>(boundModel.get());
+
+  auto ownedModel = std::make_unique<BlockingTestModel>();
+
+  EXPECT_THROW(
+      AddonCpp(
+          makeEmptyOutputCallback(), std::move(ownedModel),
+          std::move(scheduler)),
+      std::invalid_argument);
 }
 
 } // namespace qvac_lib_inference_addon_cpp

@@ -1,6 +1,7 @@
 #include "inference-addon-cpp/JsUtils.hpp"
 #include "helpers_header/js.h"
 #include <gtest/gtest.h>
+#include <cmath>
 #include <utility>
 #include <thread>
 #include <chrono>
@@ -68,6 +69,48 @@ TEST(JsUtilsTest, UniqueJsRefConstructorWithDeleter) {
     js_env_t env;
     js::UniqueJsRef<js::Object> ref(&env, &jsValue, &deleter);
     // Test passes if no exception is thrown
+}
+
+// asChecked<uint64_t> is the validating boundary parse (job ids); the plain
+// as<uint64_t> stays a truncating cast, pinned separately below.
+TEST(JsUtilsTest, NumberAsCheckedUint64RejectsNegative) {
+    js_env_t env;
+    auto number = js::Number::create(&env, -1.0);
+    EXPECT_THROW(number.asChecked<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsCheckedUint64RejectsNaN) {
+    js_env_t env;
+    auto number = js::Number::create(&env, std::nan(""));
+    EXPECT_THROW(number.asChecked<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsCheckedUint64RejectsNonIntegral) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 1.5);
+    EXPECT_THROW(number.asChecked<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsCheckedUint64RejectsAboveMaxSafeInteger) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 9007199254740992.0 * 4);
+    EXPECT_THROW(number.asChecked<uint64_t>(&env), qvac_errors::StatusError);
+}
+
+TEST(JsUtilsTest, NumberAsCheckedUint64AcceptsIntegral) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 42.0);
+    EXPECT_EQ(number.asChecked<uint64_t>(&env), 42U);
+}
+
+// The unchecked as<uint64_t> keeps its pre-1.3.0 contract: a plain
+// truncating cast, no validation, so downstream addons parsing trusted
+// in-range numbers see no behavior change. (Negative/non-finite input is
+// undefined per C++ cast rules and deliberately not pinned here.)
+TEST(JsUtilsTest, NumberAsUint64TruncatesWithoutValidation) {
+    js_env_t env;
+    auto number = js::Number::create(&env, 42.9);
+    EXPECT_EQ(number.as<uint64_t>(&env), 42U);
 }
 
 } // namespace qvac_lib_inference_addon_cpp::js_utils

@@ -1,6 +1,6 @@
 'use strict'
 
-function getRegistryFileType (filename) {
+function getRegistryFileType(filename) {
   let type
   if (filename.includes('tokenizer') && filename.endsWith('.json')) {
     type = 'tokenizer'
