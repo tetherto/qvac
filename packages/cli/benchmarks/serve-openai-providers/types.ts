@@ -46,8 +46,38 @@ export type AggregateStats = {
   p25: number | null
   p75: number | null
   iqr: number | null
+  nAttempted: number
   nValid: number
+  nUnavailable: number
   nFailed: number
+}
+
+export type RawRunRecord = {
+  provider: string
+  prompt_id: string
+  phase: string
+  run_index: number
+  ok: boolean
+  validation_reasons?: string[]
+  error?: string | null
+  metrics: Record<string, number | null>
+}
+
+export type RawDocument = {
+  session_id: string
+  created_at: string
+  config_snapshot: {
+    generation: GenerationConfig
+    cooldown_seconds?: number
+    warmup_runs?: number
+    measured_runs?: number
+    prompt_ids: string[]
+    providers: ProviderConfig[]
+    model_parity: BenchmarkConfig['model_parity']
+  }
+  provider_order: string[]
+  parity: Record<string, unknown>
+  runs: RawRunRecord[]
 }
 
 export type GenerationConfig = {

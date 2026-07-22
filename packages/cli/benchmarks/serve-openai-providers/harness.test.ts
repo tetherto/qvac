@@ -180,6 +180,23 @@ describe('serve-openai-providers harness', () => {
     assert.equal(stats.median, 20)
   })
 
+  it('reports attempted valid unavailable and failed samples', () => {
+    const stats = aggregateMetric([
+      { value: 10, ok: true },
+      { value: null, ok: true },
+      { value: null, ok: false }
+    ])
+    assert.deepEqual(
+      {
+        attempted: stats.nAttempted,
+        valid: stats.nValid,
+        unavailable: stats.nUnavailable,
+        failed: stats.nFailed
+      },
+      { attempted: 3, valid: 1, unavailable: 1, failed: 1 }
+    )
+  })
+
   it('persists results atomically', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-'))
     try {

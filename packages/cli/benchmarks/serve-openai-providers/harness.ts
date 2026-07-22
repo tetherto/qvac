@@ -13,15 +13,16 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import { load as loadYaml } from 'js-yaml'
 import OpenAI from 'openai'
-import { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+import { computeMetrics, validateRun } from './metrics.ts'
+import { writeReport } from './report.ts'
 import type {
   BenchmarkConfig,
   ChatChunk,
   GenerationConfig,
-  MetricObservation,
   PromptDoc,
   PromptsFile,
   ProviderConfig,
+  RawDocument,
   RunMetrics,
   StreamParseResult,
   StreamTimings,
@@ -31,6 +32,7 @@ import type {
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
 
 export { aggregateMetric, computeMetrics, validateRun } from './metrics.ts'
+export { writeReport } from './report.ts'
 export type {
   AggregateStats,
   BenchmarkConfig,
@@ -40,6 +42,7 @@ export type {
   PromptDoc,
   PromptsFile,
   ProviderConfig,
+  RawDocument,
   RunMetrics,
   StreamParseResult,
   StreamTimings,
@@ -572,162 +575,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 }
 
-function fmt(value: number | null, digits = 2): string {
-  if (value === null) {
-    return '—'
-  }
-  return value.toFixed(digits)
-}
-
-export function writeReport(raw: Record<string, unknown>, path: string): void {
-  const snapshot = (raw.config_snapshot ?? {}) as Record<string, unknown>
-  const providers = ((snapshot.providers as ProviderConfig[]) ?? []).map((p) => p.id)
-  const promptIds = (snapshot.prompt_ids as string[]) ?? []
-  const measured = ((raw.runs as Array<Record<string, unknown>>) ?? []).filter(
-    (r) => r.phase === 'measured'
-  )
-
-  const lines: string[] = []
-  lines.push('# OpenAI Server Performance Benchmark Report')
-  lines.push('')
-  lines.push(`Session: \`${raw.session_id}\``)
-  lines.push(`Created: \`${raw.created_at}\``)
-  lines.push('')
-  lines.push('## Executive summary')
-  lines.push('')
-  lines.push(
-    'Client-side comparison of OpenAI-compatible `/v1/chat/completions` across qvac serve, Ollama, and LM Studio using one shared GGUF and one shared SDK path.'
-  )
-  lines.push('')
-  lines.push('## Environment and exact revisions')
-  lines.push('')
-  lines.push('See `environment.md` in the harness directory for host, package, and launch details.')
-  lines.push('')
-  lines.push('## Model parity evidence')
-  lines.push('')
-  lines.push('```json')
-  lines.push(JSON.stringify(snapshot.model_parity ?? {}, null, 2))
-  lines.push('```')
-  lines.push('')
-  lines.push('Preflight parity:')
-  lines.push('')
-  lines.push('```json')
-  lines.push(JSON.stringify(raw.parity ?? {}, null, 2))
-  lines.push('```')
-  lines.push('')
-  lines.push('## Methodology and metric definitions')
-  lines.push('')
-  lines.push('- TTFT: request start → first non-empty `delta.content`')
-  lines.push('- Total: request start → stream completion')
-  lines.push('- Client output TPS: `completion_tokens / total_s`')
-  lines.push(
-    '- Effective prefill TPS (proxy): `prompt_tokens / ttft_s` (includes HTTP, queueing, template, prefill, first token; not native ppTPS)'
-  )
-  lines.push(`- Provider order: ${JSON.stringify(raw.provider_order)}`)
-  lines.push(`- Cool-down between providers: ${snapshot.cooldown_seconds}s`)
-  lines.push('')
-
-  const metricKeys: Array<[string, string]> = [
-    ['ttft_ms', 'TTFT (ms)'],
-    ['total_ms', 'Total latency (ms)'],
-    ['client_output_tps', 'Client output TPS']
-  ]
-  lines.push('## Median and IQR tables by prompt size')
-  lines.push('')
-  for (const [metricKey, title] of metricKeys) {
-    lines.push(`### ${title}`)
-    lines.push('')
-    lines.push(`| Prompt | ${providers.join(' | ')} |`)
-    lines.push(`|---| ${providers.map(() => '---').join(' | ')} |`)
-    for (const promptId of promptIds) {
-      const cells = [promptId]
-      for (const provider of providers) {
-        const observations: MetricObservation[] = measured
-          .filter((r) => r.provider === provider && r.prompt_id === promptId)
-          .map((r) => ({
-            value: (r.metrics as Record<string, number | null>)[metricKey] ?? null,
-            ok: Boolean(r.ok)
-          }))
-        const stats = aggregateMetric(observations)
-        cells.push(
-          `${fmt(stats.median)} (IQR ${fmt(stats.iqr)}; n=${stats.nValid}/${stats.nValid + stats.nFailed})`
-        )
-      }
-      lines.push(`| ${cells.join(' | ')} |`)
-    }
-    lines.push('')
-  }
-
-  lines.push('## Effective prefill TPS (proxy)')
-  lines.push('')
-  lines.push('End-to-end proxy only. Do not interpret as native llama.cpp prefill throughput.')
-  lines.push('')
-  lines.push(`| Prompt | ${providers.join(' | ')} |`)
-  lines.push(`|---| ${providers.map(() => '---').join(' | ')} |`)
-  for (const promptId of promptIds) {
-    const cells = [promptId]
-    for (const provider of providers) {
-      const observations: MetricObservation[] = measured
-        .filter((r) => r.provider === provider && r.prompt_id === promptId)
-        .map((r) => ({
-          value: (r.metrics as Record<string, number | null>).effective_prefill_tps ?? null,
-          ok: Boolean(r.ok)
-        }))
-      const stats = aggregateMetric(observations)
-      cells.push(`${fmt(stats.median)} (IQR ${fmt(stats.iqr)})`)
-    }
-    lines.push(`| ${cells.join(' | ')} |`)
-  }
-  lines.push('')
-
-  lines.push('## Run variability and failures')
-  lines.push('')
-  const failures = measured.filter((r) => !r.ok)
-  lines.push(`Measured failures: ${failures.length}`)
-  lines.push('')
-  if (failures.length === 0) {
-    lines.push('- None')
-  } else {
-    for (const fail of failures) {
-      lines.push(
-        `- \`${fail.provider}\` \`${fail.prompt_id}\` #${fail.run_index}: ${JSON.stringify(fail.validation_reasons)} error=${fail.error}`
-      )
-    }
-  }
-  lines.push('')
-  lines.push('## Interpretation')
-  lines.push('')
-  lines.push('_Fill in after reviewing medians, IQRs, and any failures._')
-  lines.push('')
-  lines.push('## Limitations')
-  lines.push('')
-  lines.push('- Single-host, single-model, sequential requests only.')
-  lines.push(
-    '- Provider blocks are ordered; cool-down reduces but does not erase thermal carryover.'
-  )
-  lines.push('- Effective prefill TPS is an end-to-end proxy, not native ppTPS.')
-  lines.push(
-    '- Prompt size labels are nominal; run-id prefixes slightly change prompt_tokens per run.'
-  )
-  lines.push(
-    '- llama.cpp / runtime build differences across servers are part of the measured stack.'
-  )
-  lines.push('')
-  lines.push('## Reproduction commands')
-  lines.push('')
-  lines.push('```bash')
-  lines.push('cd packages/cli')
-  lines.push('npm install')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts digest')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts preflight')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts smoke')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts full')
-  lines.push('```')
-  lines.push('')
-
-  writeFileSync(path, lines.join('\n'), 'utf8')
-}
-
 export async function cmdFull(
   config: BenchmarkConfig,
   promptsDoc: PromptsFile,
@@ -800,7 +647,7 @@ export async function cmdFull(
   }
 
   const reportPath = join(sessionDir, 'report.md')
-  writeReport(raw, reportPath)
+  writeReport(raw as RawDocument, reportPath)
   atomicWriteJson(join(sessionBase, 'raw.json'), raw)
   copyFileSync(reportPath, join(sessionBase, 'report.md'))
   console.log(`wrote ${reportPath}`)
@@ -817,7 +664,7 @@ export async function cmdFull(
 }
 
 export async function cmdReport(rawPath: string, reportPath: string): Promise<number> {
-  const raw = JSON.parse(readFileSync(rawPath, 'utf8')) as Record<string, unknown>
+  const raw = JSON.parse(readFileSync(rawPath, 'utf8')) as RawDocument
   writeReport(raw, reportPath)
   console.log(`wrote ${reportPath}`)
   return 0

@@ -111,24 +111,39 @@ export function quantilesInclusive(values: number[]): [number, number, number] {
   return [result[0]!, result[1]!, result[2]!]
 }
 
-export function aggregateMetric(values: MetricObservation[]): AggregateStats {
-  const clean = values
-    .filter(
-      (observation): observation is { value: number; ok: true } =>
-        observation.ok && observation.value !== null && Number.isFinite(observation.value)
-    )
-    .map((observation) => observation.value)
-  const nFailed = values.filter((observation) => !observation.ok).length
-  if (clean.length === 0) {
-    return { median: null, p25: null, p75: null, iqr: null, nValid: 0, nFailed }
+export function aggregateMetric(observations: MetricObservation[]): AggregateStats {
+  const values = observations.flatMap((observation) =>
+    observation.ok && observation.value !== null && Number.isFinite(observation.value)
+      ? [observation.value]
+      : []
+  )
+  const nAttempted = observations.length
+  const nFailed = observations.filter((observation) => !observation.ok).length
+  const nUnavailable = observations.filter(
+    (observation) => observation.ok && observation.value === null
+  ).length
+  const nValid = values.length
+  if (values.length === 0) {
+    return {
+      median: null,
+      p25: null,
+      p75: null,
+      iqr: null,
+      nAttempted,
+      nValid,
+      nUnavailable,
+      nFailed
+    }
   }
-  const [p25, median, p75] = quantilesInclusive(clean)
+  const [p25, median, p75] = quantilesInclusive(values)
   return {
     median,
     p25,
     p75,
     iqr: p75 - p25,
-    nValid: clean.length,
+    nAttempted,
+    nValid,
+    nUnavailable,
     nFailed
   }
 }
