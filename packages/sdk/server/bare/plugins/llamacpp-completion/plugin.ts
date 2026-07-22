@@ -44,6 +44,7 @@ import {
   isAddonContextOverflowError,
   parseContextOverflowMessage
 } from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
+import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
@@ -411,7 +412,7 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
@@ -422,17 +423,17 @@ export const llmPlugin = definePlugin({
           // -1 (unlimited) and -2 (context fill) must never trigger this.
           const effectivePredict =
             request.generationParams?.predict ?? (modelCfg as LlmConfig).predict
-          const stoppedByBudget =
-            !cancelled &&
-            effectivePredict !== undefined &&
-            effectivePredict > 0 &&
-            stats?.generatedTokens !== undefined &&
-            stats.generatedTokens >= effectivePredict
+          const lengthStop = stoppedByLength({
+            cancelled,
+            effectivePredict,
+            generatedTokens: stats?.generatedTokens,
+            stoppedAtContextBoundary
+          })
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
-            ...(stoppedByBudget && { stopReason: 'length' as const })
+            ...(lengthStop && { stopReason: 'length' as const })
           })
 
           if (!request.stream) {

@@ -59,6 +59,7 @@ interface CompletionResult {
   modelExecutionMs: number
   stats?: CompletionStats
   toolCalls: ToolCall[]
+  stoppedAtContextBoundary: boolean
 }
 
 interface ProcessModelResponseResult extends CompletionResult {
@@ -356,7 +357,8 @@ async function* processModelResponse(
     ...buildStreamResult(modelExecutionMs, stats),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
-    producedTokens
+    producedTokens,
+    stoppedAtContextBoundary: responseWithStats.stats?.stopReason === 'contextOverflow'
   }
 }
 

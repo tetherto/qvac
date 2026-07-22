@@ -833,7 +833,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
         onLogitsReady(-1, generatedAfterAccept, outputCallback, &batch);
     if (step.contextOverflow) {
       generationStopReason_ = GenerationStopReason::ContextOverflow;
-      return {.ok = false};
+      break;
     }
     if (step.decodedInline) {
       continue;

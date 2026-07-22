@@ -875,7 +875,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
               tools_.anchor(),
               tools_.enabled() ? "true" : "false"));
       generationStopReason_ = GenerationStopReason::ContextOverflow;
-      return {.ok = false};
+      break;
     }
     applyContextDiscard();
 
