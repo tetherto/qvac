@@ -9,7 +9,10 @@
 
 // Forward declarations for opaque types
 struct js_env_t {};
-struct js_value_t {};
+struct js_value_t {
+  double numberValue{};
+  bool isNumber{false};
+};
 struct js_ref_t {};
 struct js_callback_info_t {};
 struct js_handle_scope_t {};
@@ -181,6 +184,9 @@ inline int js_create_string_utf16le(
 }
 
 inline int js_create_double(js_env_t* env, double value, js_value_t** result) {
+  *result = new js_value_t{};
+  (*result)->numberValue = value;
+  (*result)->isNumber = true;
   return 0;
 }
 
@@ -242,6 +248,10 @@ inline int js_get_value_string_utf16le(
 
 inline int
 js_get_value_double(js_env_t* env, js_value_t* value, double* result) {
+  if (value->isNumber) {
+    *result = value->numberValue;
+    return 0;
+  }
   return -1;
 }
 

@@ -125,6 +125,9 @@ jobs:
         name: setup cmake macos
         run: |
           cd ..
+          # Persistent runners keep this parent dir between jobs (only $GITHUB_WORKSPACE
+          # is wiped), so a leftover download/extraction lingers. Force-refresh it.
+          rm -rf cmake-3.31.6-macos-universal cmake-3.31.6-macos-universal.tar.gz
           wget https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
           tar -xvzf cmake-3.31.6-macos-universal.tar.gz
           echo $(pwd)/cmake-3.31.6-macos-universal/bin > temp
@@ -135,6 +138,10 @@ jobs:
         name: Install vcpkg in macos
         run: |
           cd ..
+          # Persistent runners keep this parent dir between jobs (only $GITHUB_WORKSPACE
+          # is wiped), so a leftover clone makes `git clone` fail with "destination path
+          # 'vcpkg' already exists". Force-refresh it (mirrors the Windows cmake step).
+          rm -rf vcpkg
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT=$(pwd)
