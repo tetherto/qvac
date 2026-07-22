@@ -212,7 +212,9 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
   bool hasVadState = false;
   bool hasTranscriptOutput = false;
 
-  for (const auto& output : outputs) {
+  for (const auto& entry : outputs) {
+    // addon-cpp >= 1.3.0 drains (JobId, payload) pairs.
+    const std::any& output = entry.second;
     if (const auto* vadState = std::any_cast<VadStateUpdate>(&output);
         vadState != nullptr) {
       hasVadState = true;
