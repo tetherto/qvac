@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QVAC-22258: OpenAI-compatible server performance benchmark harness."""
+"""OpenAI-compatible server performance benchmark harness (qvac serve vs peers)."""
 
 from __future__ import annotations
 
@@ -264,7 +264,6 @@ def validate_run(
     *,
     parsed: StreamParseResult,
     metrics: RunMetrics,
-    expected_model: str | None = None,
     require_content: bool = True,
     check_reasoning_off: bool = True,
 ) -> ValidationResult:
@@ -284,10 +283,8 @@ def validate_run(
         reasons.append("missing_ttft")
     if metrics.total_ms is None:
         reasons.append("missing_total")
-    if expected_model and parsed.response_model and parsed.response_model != expected_model:
-        reasons.append(
-            f"model_mismatch:expected={expected_model}:got={parsed.response_model}"
-        )
+    # Do not require response `model` to equal the request model string.
+    # LM Studio / Ollama often echo a different visible id than the request alias.
     if check_reasoning_off:
         lowered = parsed.content.lower()
         for marker in THINK_MARKERS:
@@ -437,7 +434,7 @@ def run_streaming_completion(
             error=f"{type(exc).__name__}: {exc}",
         )
     metrics = compute_metrics(parsed)
-    validation = validate_run(parsed=parsed, metrics=metrics, expected_model=model)
+    validation = validate_run(parsed=parsed, metrics=metrics)
     return parsed, metrics, validation
 
 
@@ -714,6 +711,16 @@ def cmd_full(
     report_path_copy.write_text(report_path.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"wrote {report_path}")
     print(f"copied {session_base / 'raw.json'} and {report_path_copy}")
+
+    measured_failures = [
+        r for r in raw.get("runs", []) if r.get("phase") == "measured" and not r.get("ok")
+    ]
+    if measured_failures:
+        print(
+            f"FAIL: {len(measured_failures)} measured run(s) failed; see {raw_path}",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

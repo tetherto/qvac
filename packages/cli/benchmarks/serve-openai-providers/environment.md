@@ -1,4 +1,4 @@
-# Environment Manifest — QVAC-22258
+# Environment Manifest — OpenAI serve provider compare
 
 Fill this in on the benchmark host before the formal sweep. Do not put secrets here.
 

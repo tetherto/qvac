@@ -1,8 +1,12 @@
 # OpenAI serve provider compare (`qvac serve` vs LM Studio vs Ollama)
 
-One-off / dispatchable client-side benchmark for QVAC-22258. Hits each server's
-`POST /v1/chat/completions` with one OpenAI Python SDK client, the same Qwen3.5-9B
-Q4_K_M GGUF, and a fixed prompt set.
+Client-side benchmark that hits each server's `POST /v1/chat/completions` with one
+shared OpenAI Python SDK client, the same local GGUF, and a fixed prompt set.
+It measures TTFT, total latency, decode TPS, and an end-to-end prefill proxy.
+
+Python (not the CLI TypeScript stack) on purpose: this is a dispatchable compare
+harness, same pattern as other addon quality/perf evals that use the official
+OpenAI Python client as a provider-neutral HTTP client. It is not product code.
 
 Design details: [`design.md`](./design.md). Host/launch checklist: [`environment.md`](./environment.md).
 

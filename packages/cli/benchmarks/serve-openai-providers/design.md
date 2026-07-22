@@ -1,4 +1,4 @@
-# QVAC-22258 OpenAI Server Performance Benchmark Design
+# OpenAI Server Performance Benchmark Design
 
 ## Goal
 
@@ -177,12 +177,13 @@ Preflight must stop the formal sweep for a provider when any of these conditions
 - Final prompt or completion usage is absent
 - Prompt or completion usage is zero
 - Required generation parameters are rejected
-- The response model identity conflicts with the configured model
 - The shared parity fixture produces different prompt-token counts across providers
 - Reasoning artifacts appear despite the disable configuration (`<think>` in content or non-empty reasoning channel)
 - Streaming usage is missing when `stream_options.include_usage` is set
 
-A measured failure is persisted with provider, scenario, run index, elapsed time, error type, and error message. It is not retried automatically and is excluded from aggregates. After investigating the cause, the operator may restart the entire provider block; partial replacement runs are not mixed into the original block.
+A measured failure is persisted with provider, scenario, run index, elapsed time, error type, and error message. It is not retried automatically and is excluded from aggregates. After investigating the cause, the operator may restart the entire provider block; partial replacement runs are not mixed into the original block. `full` exits non-zero when any measured run fails so live CI fails closed like smoke/preflight.
+
+Response `model` strings are recorded but not required to equal the request model id: LM Studio and Ollama often echo a different visible identifier than the configured alias.
 
 The harness writes results atomically after each run so an interruption preserves completed observations. Resuming creates a new run session rather than appending measurements to an earlier session.
 

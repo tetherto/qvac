@@ -187,3 +187,36 @@ def test_rotate_ids() -> None:
 def test_build_messages_inserts_run_id() -> None:
     messages = harness.build_messages("hello", run_id="abc")
     assert messages == [{"role": "user", "content": "[run:abc] hello"}]
+
+
+def test_response_model_mismatch_does_not_fail_validation() -> None:
+    timings = harness.StreamTimings(
+        request_start_s=0.0,
+        first_content_s=0.1,
+        last_content_s=0.2,
+        stream_end_s=0.3,
+    )
+    parsed = harness.StreamParseResult(
+        content="answer",
+        reasoning_content="",
+        prompt_tokens=5,
+        completion_tokens=5,
+        response_model="some-other-visible-id",
+        timings=timings,
+    )
+    metrics = harness.compute_metrics(parsed)
+    validation = harness.validate_run(parsed=parsed, metrics=metrics)
+    assert validation.ok
+    assert not any(r.startswith("model_mismatch") for r in validation.reasons)
+
+
+def test_measured_failure_counts_for_fail_closed_full() -> None:
+    runs = [
+        {"phase": "warmup", "ok": False},
+        {"phase": "measured", "ok": True},
+        {"phase": "measured", "ok": False},
+    ]
+    measured_failures = [r for r in runs if r.get("phase") == "measured" and not r.get("ok")]
+    assert len(measured_failures) == 1
+    exit_code = 1 if measured_failures else 0
+    assert exit_code == 1

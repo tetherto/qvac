@@ -1,4 +1,4 @@
-# QVAC-22258 OpenAI-compatible server benchmark config.
+# OpenAI-compatible server benchmark config (qvac serve vs LM Studio vs Ollama).
 # Fill provider model IDs after each server loads the shared GGUF.
 
 session_dir: results

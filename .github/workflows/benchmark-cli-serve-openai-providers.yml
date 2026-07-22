@@ -22,9 +22,13 @@ on:
         type: string
       mode:
         description: 'harness-unit (pytest only) | smoke | full'
-        required: false
-        type: string
-        default: 'harness-unit'
+        required: true
+        type: choice
+        options:
+          - harness-unit
+          - smoke
+          - full
+        default: harness-unit
 
 permissions:
   contents: read
@@ -124,16 +128,27 @@ jobs:
 
       - name: Require runner config
         working-directory: ${{ env.BENCH_DIR }}
+        env:
+          MODE: ${{ inputs.mode }}
         run: |
           if grep -q 'REPLACE_WITH_' benchmark.yaml; then
             echo "::error::benchmark.yaml still contains REPLACE_WITH_ placeholders."
-            echo "Configure model IDs and gguf_path on the runner (or commit a CI overlay) before mode=${{ inputs.mode }}."
+            echo "Configure model IDs and gguf_path on the runner (or commit a CI overlay) before mode=${MODE}."
             exit 1
           fi
 
       - name: Run live mode
         working-directory: ${{ env.BENCH_DIR }}
-        run: .venv/bin/python benchmark.py ${{ inputs.mode }}
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in
+            smoke|full) .venv/bin/python benchmark.py "$MODE" ;;
+            *)
+              echo "::error::invalid mode: $MODE"
+              exit 1
+              ;;
+          esac
 
       - name: Upload results
         if: always() && inputs.mode == 'full'
