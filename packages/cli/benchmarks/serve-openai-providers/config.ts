@@ -4,6 +4,8 @@ import { load as loadYaml } from 'js-yaml'
 import type { BenchmarkConfig } from './types.ts'
 
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
+const GENERATION_KEYS = new Set(['max_tokens', 'temperature', 'seed', 'stream', 'stream_options'])
+const STREAM_OPTION_KEYS = new Set(['include_usage'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -13,12 +15,84 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0
+}
+
+function assertGenerationConfig(value: unknown): void {
+  if (!isRecord(value) || Object.keys(value).length === 0) {
+    throw new TypeError('config generation settings must be non-empty')
+  }
+  for (const key of Object.keys(value)) {
+    if (!GENERATION_KEYS.has(key)) {
+      throw new TypeError(`unknown config generation setting: ${key}`)
+    }
+  }
+  if (
+    'max_tokens' in value &&
+    (!isFiniteNumber(value.max_tokens) ||
+      !Number.isInteger(value.max_tokens) ||
+      value.max_tokens <= 0)
+  ) {
+    throw new TypeError('config generation.max_tokens must be a positive integer')
+  }
+  if (
+    'temperature' in value &&
+    (!isFiniteNumber(value.temperature) || value.temperature < 0 || value.temperature > 2)
+  ) {
+    throw new TypeError('config generation.temperature must be between 0 and 2')
+  }
+  if (
+    'seed' in value &&
+    value.seed !== null &&
+    (!isFiniteNumber(value.seed) || !Number.isInteger(value.seed))
+  ) {
+    throw new TypeError('config generation.seed must be an integer or null')
+  }
+  if ('stream' in value && typeof value.stream !== 'boolean') {
+    throw new TypeError('config generation.stream must be a boolean')
+  }
+  if ('stream_options' in value) {
+    if (!isRecord(value.stream_options)) {
+      throw new TypeError('config generation.stream_options must be a mapping')
+    }
+    for (const key of Object.keys(value.stream_options)) {
+      if (!STREAM_OPTION_KEYS.has(key)) {
+        throw new TypeError(`unknown config generation.stream_options setting: ${key}`)
+      }
+    }
+    if (
+      'include_usage' in value.stream_options &&
+      typeof value.stream_options.include_usage !== 'boolean'
+    ) {
+      throw new TypeError('config generation.stream_options.include_usage must be a boolean')
+    }
+  }
+}
+
 function assertBenchmarkConfig(data: unknown, path: string): asserts data is BenchmarkConfig {
   if (!isRecord(data)) {
     throw new TypeError(`config must be a mapping: ${path}`)
   }
-  if (!isRecord(data.generation) || Object.keys(data.generation).length === 0) {
-    throw new TypeError('config generation settings must be non-empty')
+  assertGenerationConfig(data.generation)
+  if ('warmup_runs' in data && !isNonNegativeInteger(data.warmup_runs)) {
+    throw new TypeError('config warmup_runs must be a non-negative integer')
+  }
+  if (
+    'measured_runs' in data &&
+    (!isNonNegativeInteger(data.measured_runs) || data.measured_runs === 0)
+  ) {
+    throw new TypeError('config measured_runs must be a positive integer')
+  }
+  if (
+    'cooldown_seconds' in data &&
+    (!isFiniteNumber(data.cooldown_seconds) || data.cooldown_seconds < 0)
+  ) {
+    throw new TypeError('config cooldown_seconds must be a non-negative number')
   }
   if (
     !Array.isArray(data.prompt_ids) ||

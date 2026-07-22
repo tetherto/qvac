@@ -157,6 +157,16 @@ describe('serve-openai-providers harness', () => {
         ggufPath: join(dir, 'model.gguf'),
         sha256: 'a'.repeat(64)
       })
+      config.generation = {
+        max_tokens: 128,
+        temperature: 0,
+        seed: 42,
+        stream: true,
+        stream_options: { include_usage: true }
+      }
+      config.warmup_runs = 0
+      config.measured_runs = 1
+      config.cooldown_seconds = 0.5
       writeConfig(path, config)
 
       assert.deepEqual(loadBenchmarkConfig(path), config)
@@ -176,6 +186,37 @@ describe('serve-openai-providers harness', () => {
     ]
   ] as const) {
     it(`rejects benchmark config with ${name}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+      try {
+        const path = join(dir, 'benchmark.yaml')
+        const config = {
+          ...makeConfig({
+            ggufPath: join(dir, 'model.gguf'),
+            sha256: 'a'.repeat(64)
+          }),
+          ...update
+        }
+        writeConfig(path, config)
+
+        assert.throws(() => loadBenchmarkConfig(path))
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+
+  for (const [name, update] of [
+    ['unknown generation key', { generation: { max_tokens: 128, unexpected: true } }],
+    ['string max_tokens', { generation: { max_tokens: '128' } }],
+    ['non-object stream_options', { generation: { stream_options: true } }],
+    ['string warmup_runs', { warmup_runs: '1' }],
+    ['negative warmup_runs', { warmup_runs: -1 }],
+    ['zero measured_runs', { measured_runs: 0 }],
+    ['fractional measured_runs', { measured_runs: 1.5 }],
+    ['string cooldown_seconds', { cooldown_seconds: '90' }],
+    ['negative cooldown_seconds', { cooldown_seconds: -1 }]
+  ] as const) {
+    it(`rejects malformed benchmark config with ${name}`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
       try {
         const path = join(dir, 'benchmark.yaml')

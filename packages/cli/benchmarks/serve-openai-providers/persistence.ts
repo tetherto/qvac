@@ -5,7 +5,6 @@ import {
   mkdtempSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -17,22 +16,24 @@ export type ModelParityEvidence = {
   sha256: string
 }
 
-export async function sha256File(path: string): Promise<string> {
+async function readFileDigest(path: string): Promise<{ bytes: number; sha256: string }> {
   const hash = createHash('sha256')
+  let bytes = 0
   for await (const chunk of createReadStream(path)) {
-    hash.update(chunk as Buffer)
+    const buffer = chunk as Buffer
+    hash.update(buffer)
+    bytes += buffer.byteLength
   }
-  return hash.digest('hex')
+  return { bytes, sha256: hash.digest('hex') }
+}
+
+export async function sha256File(path: string): Promise<string> {
+  return (await readFileDigest(path)).sha256
 }
 
 export async function verifyModelParity(config: BenchmarkConfig): Promise<ModelParityEvidence> {
   const path = config.model_parity.gguf_path
-  const stat = statSync(path)
-  if (!stat.isFile()) {
-    throw new TypeError(`GGUF is not a file: ${path}`)
-  }
-
-  const sha256 = await sha256File(path)
+  const { bytes, sha256 } = await readFileDigest(path)
   const configuredSha256 = config.model_parity.sha256
   if (
     configuredSha256 === undefined ||
@@ -44,7 +45,7 @@ export async function verifyModelParity(config: BenchmarkConfig): Promise<ModelP
     )
   }
 
-  return { path, bytes: stat.size, sha256 }
+  return { path, bytes, sha256 }
 }
 
 export function atomicWriteJson(path: string, payload: unknown): void {
