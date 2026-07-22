@@ -506,6 +506,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^vla-groot-/,
+      'GR00T e2e is desktop-only (q8 model too large for the mobile suite); no vla-groot resource on mobile'
+    ),
     ...(Platform.OS === 'android'
       ? [
           skipTests(
