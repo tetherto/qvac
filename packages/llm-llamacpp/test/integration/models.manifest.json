@@ -123,6 +123,13 @@
       "sha256": "56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453",
       "bytes": 204987232
     },
+    "mmproj-Qwen3.5-2B-F16.gguf": {
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"
+      ],
+      "sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+      "bytes": 668227264
+    },
     "Llama-3.2-1B-Instruct-Q4_0.gguf": {
       "urls": [
         "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
