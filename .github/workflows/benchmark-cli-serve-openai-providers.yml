@@ -68,6 +68,10 @@ jobs:
         working-directory: ${{ env.CLI_DIR }}
         run: npm install --no-fund --no-audit
 
+      - name: Typecheck benchmark harness
+        working-directory: ${{ env.CLI_DIR }}
+        run: npm run typecheck:bench-serve-openai-providers
+
       - name: Harness unit tests
         working-directory: ${{ env.CLI_DIR }}
         run: npm run test:bench-serve-openai-providers
