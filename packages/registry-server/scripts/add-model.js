@@ -7,7 +7,7 @@ const RegistryConfig = require('../lib/config')
 const logger = require('../lib/logger')
 const { connectToRegistry } = require('./utils/rpc-client')
 
-async function addModel () {
+async function addModel() {
   // Parse command line arguments
   const args = process.argv.slice(2)
   let canonicalSource = null
@@ -42,7 +42,9 @@ async function addModel () {
     logger.error('')
     logger.error('Examples:')
     logger.error('  npm run add-model -- https://huggingface.co/.../model.bin')
-    logger.error('  npm run add-model -- https://huggingface.co/.../model.bin -f ./data/models.prod.json')
+    logger.error(
+      '  npm run add-model -- https://huggingface.co/.../model.bin -f ./data/models.prod.json'
+    )
     process.exit(1)
   }
 
@@ -60,11 +62,11 @@ async function addModel () {
     process.exit(1)
   }
 
-  const modelEntry = storesData.find(entry => entry.source === canonicalSource)
+  const modelEntry = storesData.find((entry) => entry.source === canonicalSource)
   if (!modelEntry) {
     logger.error(`Model not found in ${modelsFile} for source ${canonicalSource}`)
     logger.error('First 10 available sources:')
-    storesData.slice(0, 10).forEach(entry => logger.error(`  - ${entry.source}`))
+    storesData.slice(0, 10).forEach((entry) => logger.error(`  - ${entry.source}`))
     process.exit(1)
   }
 
@@ -73,7 +75,9 @@ async function addModel () {
   const registryCoreKey = config.getRegistryCoreKey()
 
   if (!registryCoreKey) {
-    logger.error('QVAC_REGISTRY_CORE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.')
+    logger.error(
+      'QVAC_REGISTRY_CORE_KEY not set. Run "node scripts/bin.js run" once to initialize keys.'
+    )
     process.exit(1)
   }
 
@@ -113,6 +117,7 @@ async function addModel () {
 }
 
 if (require.main === module) {
+  // lunte-disable-next-line require-await
   addModel().catch(async (err) => {
     logger.error('Fatal error:', err)
     process.exit(1)

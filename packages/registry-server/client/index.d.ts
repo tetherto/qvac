@@ -48,7 +48,12 @@ export interface QVACDownloadOptions {
   peerTimeout?: number
   maxRetries?: number
   outputFile?: string
-  onProgress?: (progress: { downloaded: number, total: number, cachedBlocks: number, totalBlocks: number }) => void
+  onProgress?: (progress: {
+    downloaded: number
+    total: number
+    cachedBlocks: number
+    totalBlocks: number
+  }) => void
   signal?: AbortSignal
 }
 
@@ -56,7 +61,12 @@ export interface QVACBlobDownloadOptions {
   timeout?: number
   maxRetries?: number
   outputFile?: string
-  onProgress?: (progress: { downloaded: number, total: number, cachedBlocks: number, totalBlocks: number }) => void
+  onProgress?: (progress: {
+    downloaded: number
+    total: number
+    cachedBlocks: number
+    totalBlocks: number
+  }) => void
   signal?: AbortSignal
 }
 
@@ -91,35 +101,42 @@ export interface FindByParams {
 
 export interface LifecycleSwarmHandle {
   readonly suspended: boolean
-  suspend (opts?: LifecycleLogOptions): Promise<void>
-  resume (opts?: LifecycleLogOptions): Promise<void>
+  suspend(opts?: LifecycleLogOptions): Promise<void>
+  resume(opts?: LifecycleLogOptions): Promise<void>
 }
 
 export interface LifecycleStoreHandle {
-  suspend (opts?: LifecycleLogOptions): Promise<void>
-  resume (): Promise<void>
+  suspend(opts?: LifecycleLogOptions): Promise<void>
+  resume(): Promise<void>
 }
 
 export class QVACRegistryClient extends ReadyResource {
-  constructor (opts?: QVACRegistryClientOptions)
+  constructor(opts?: QVACRegistryClientOptions)
 
   /** Valid only while the client remains open. Cached handles become stale after close(). */
   readonly corestore: LifecycleStoreHandle | null
   /** Valid only while the client remains open. Cached handles become stale after close(). */
   readonly hyperswarm: LifecycleSwarmHandle | null
 
-  ready (): Promise<void>
-  close (): Promise<void>
-  suspend (opts?: LifecycleLogOptions): Promise<void>
-  resume (opts?: LifecycleLogOptions): Promise<void>
+  ready(): Promise<void>
+  close(): Promise<void>
+  suspend(opts?: LifecycleLogOptions): Promise<void>
+  resume(opts?: LifecycleLogOptions): Promise<void>
 
-  getModel (path: string, source: string): Promise<QVACModelEntry | null>
-  downloadModel (path: string, source: string, options?: QVACDownloadOptions): Promise<QVACDownloadResult>
-  downloadBlob (blobBinding: QVACBlobBinding, options?: QVACBlobDownloadOptions): Promise<QVACBlobDownloadResult>
+  getModel(path: string, source: string): Promise<QVACModelEntry | null>
+  downloadModel(
+    path: string,
+    source: string,
+    options?: QVACDownloadOptions
+  ): Promise<QVACDownloadResult>
+  downloadBlob(
+    blobBinding: QVACBlobBinding,
+    options?: QVACBlobDownloadOptions
+  ): Promise<QVACBlobDownloadResult>
 
-  findBy (params?: FindByParams): Promise<QVACModelEntry[]>
-  findModels (query?: QVACModelQuery): Promise<QVACModelEntry[]>
-  findModelsByEngine (query?: QVACModelQuery): Promise<QVACModelEntry[]>
-  findModelsByName (query?: QVACModelQuery): Promise<QVACModelEntry[]>
-  findModelsByQuantization (query?: QVACModelQuery): Promise<QVACModelEntry[]>
+  findBy(params?: FindByParams): Promise<QVACModelEntry[]>
+  findModels(query?: QVACModelQuery): Promise<QVACModelEntry[]>
+  findModelsByEngine(query?: QVACModelQuery): Promise<QVACModelEntry[]>
+  findModelsByName(query?: QVACModelQuery): Promise<QVACModelEntry[]>
+  findModelsByQuantization(query?: QVACModelQuery): Promise<QVACModelEntry[]>
 }

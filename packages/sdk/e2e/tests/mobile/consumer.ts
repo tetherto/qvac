@@ -479,6 +479,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 export const executor = createExecutor({
   handlers: [
     // Mobile platform skips (before real executors -- first match wins)
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(

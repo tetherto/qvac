@@ -6,7 +6,7 @@ const IdEnc = require('hypercore-id-encoding')
 const BlindPeer = require('blind-peer')
 const { createTempStorage } = require('./test-utils')
 
-async function createBlindPeerTestnet (t, opts = {}) {
+async function createBlindPeerTestnet(t, opts = {}) {
   const peers = opts.peers || 1
   const testnet = await setupTestnet()
   t.teardown(async () => {
@@ -38,7 +38,7 @@ async function createBlindPeerTestnet (t, opts = {}) {
   return {
     bootstrap: testnet.bootstrap,
     peers: instances,
-    blindPeerKeys: instances.map(instance => instance.publicKey)
+    blindPeerKeys: instances.map((instance) => instance.publicKey)
   }
 }
 

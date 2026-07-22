@@ -1,7 +1,7 @@
 'use strict'
 
 class ReseedTracker {
-  constructor (blindPeerKeys, logger = console) {
+  constructor(blindPeerKeys, logger = console) {
     if (!Array.isArray(blindPeerKeys) || blindPeerKeys.length === 0) {
       throw new Error('ReseedTracker requires at least one blind peer key')
     }
@@ -12,13 +12,13 @@ class ReseedTracker {
     this._pollInterval = null
   }
 
-  trackCore (core) {
+  trackCore(core) {
     if (!core || !core.discoveryKey) {
       throw new TypeError('trackCore expects an opened Hypercore instance')
     }
 
     const id = core.discoveryKey.toString('hex')
-    const exists = this._cores.some(c => c.id === id)
+    const exists = this._cores.some((c) => c.id === id)
     if (exists) return
 
     this._cores.push({
@@ -29,7 +29,8 @@ class ReseedTracker {
     })
   }
 
-  async waitForComplete ({ progressTimeout = 30000, pollInterval = 2500 } = {}) {
+  // lunte-disable-next-line require-await
+  async waitForComplete({ progressTimeout = 30000, pollInterval = 2500 } = {}) {
     if (this._cores.length === 0) return
 
     let checkCount = 0
@@ -65,7 +66,10 @@ class ReseedTracker {
               expectedPeers: this.expectedPeerCount,
               fullyDownloaded: fullyDownloadedCount,
               maxRemoteContiguous,
-              progress: localLength > 0 ? Math.round((maxRemoteContiguous / localLength) * 100) + '%' : 'N/A'
+              progress:
+                localLength > 0
+                  ? Math.round((maxRemoteContiguous / localLength) * 100) + '%'
+                  : 'N/A'
             })
           }
 
@@ -110,7 +114,11 @@ class ReseedTracker {
               hint = ' (peers connected but no download progress - check blind peer logs)'
             }
 
-            reject(new Error(`ReseedTracker: stalled for ${progressTimeout}ms on core ${entry.id.substring(0, 16)}...${hint}`))
+            reject(
+              new Error(
+                `ReseedTracker: stalled for ${progressTimeout}ms on core ${entry.id.substring(0, 16)}...${hint}`
+              )
+            )
             return
           }
         }
@@ -129,7 +137,7 @@ class ReseedTracker {
     })
   }
 
-  destroy () {
+  destroy() {
     if (this._pollInterval) {
       clearInterval(this._pollInterval)
       this._pollInterval = null
