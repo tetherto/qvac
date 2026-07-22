@@ -93,8 +93,8 @@ jobs:
               ``,
               `- Run: ${runUrl}`,
               `- Artifact: \`openclaw-upstream-compat\``,
-              `- Triage: inspect package versions, \`openclaw-onboard.stderr\`, \`openclaw-models-status.stdout\`, \`openclaw-agent.stdout\`, and \`openclaw-agent.stderr\` from the artifact.`,
-              `- Likely cause: latest \`openclaw\` changed plugin setup, localService lifecycle, config schema, model catalog, message content handling, or agent JSON output in a way that the latest published \`@qvac/openclaw-plugin\` no longer satisfies.`,
+              `- Triage: inspect package metadata and \`npm-install.log\` first, then \`openclaw-onboard.stderr\`, \`openclaw-models-status.stdout\`, \`openclaw-agent.stdout\`, and \`openclaw-agent.stderr\` when present.`,
+              `- Likely cause: latest \`openclaw\` changed package metadata, plugin setup, localService lifecycle, config schema, model catalog, message content handling, or agent JSON output in a way that the latest published \`@qvac/openclaw-plugin\` no longer satisfies.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
