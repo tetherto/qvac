@@ -54,9 +54,10 @@ function f32FromBase64(b64: string): Float32Array {
  *   model's tokenizer (SmolVLM2 for SmolVLA, PaliGemma/Gemma for π₀.₅,
  *   Qwen3-VL for GR00T).
  * @param params.mask - Token attention mask (`Uint8Array` matching `tokens`).
- * @param params.noise - Optional seeded noise prior
+ * @param params.noise - Seeded noise prior
  *   (`Float32Array` of length `hparams.chunkSize * hparams.maxActionDim`).
- *   When omitted the addon samples its own prior.
+ *   Optional for SmolVLA / π₀.₅ (addon samples its own prior when omitted).
+ *   Required for GR00T (`hparams.imageInputMode === 'patches'`).
  * @returns A `VlaClientRunResult` with the produced `actions` Float32Array
  *   (length `chunkSize * actionDim`), the corresponding `chunkSize` /
  *   `actionDim` returned by the addon, and optional per-stage `stats`.
