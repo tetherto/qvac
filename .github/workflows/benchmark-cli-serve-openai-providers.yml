@@ -183,6 +183,12 @@ jobs:
               exit 1
             fi
             case "$resolved_path" in
+              *$'\n'* | *$'\r'*)
+                echo "::error::$name resolves to a path containing line breaks."
+                exit 1
+                ;;
+            esac
+            case "$resolved_path" in
               "$workspace_path" | "$workspace_path"/*)
                 echo "::error::$name resolves inside GITHUB_WORKSPACE."
                 exit 1
