@@ -932,8 +932,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       // budgeted token, ending at the forced `</think>` is legitimate.
       // `generatedAfterAccept` counts this token (1-based).
       if (params_.n_predict <= 0 ||
-          generatedAfterAccept <
-              static_cast<unsigned>(params_.n_predict)) {
+          generatedAfterAccept < static_cast<unsigned>(params_.n_predict)) {
         float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
         if (logits != nullptr) {
           // `eogTokens_` is precomputed in initializeCommonState().
