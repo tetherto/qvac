@@ -167,6 +167,9 @@ describe('serve-openai-providers harness', () => {
       config.warmup_runs = 0
       config.measured_runs = 1
       config.cooldown_seconds = 0.5
+      config.session_dir = 'results'
+      config.api_key = 'local-key'
+      config.parity_prompt_id = 'parity'
       writeConfig(path, config)
 
       assert.deepEqual(loadBenchmarkConfig(path), config)
@@ -217,6 +220,36 @@ describe('serve-openai-providers harness', () => {
     ['negative cooldown_seconds', { cooldown_seconds: -1 }]
   ] as const) {
     it(`rejects malformed benchmark config with ${name}`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
+      try {
+        const path = join(dir, 'benchmark.yaml')
+        const config = {
+          ...makeConfig({
+            ggufPath: join(dir, 'model.gguf'),
+            sha256: 'a'.repeat(64)
+          }),
+          ...update
+        }
+        writeConfig(path, config)
+
+        assert.throws(() => loadBenchmarkConfig(path))
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  }
+
+  for (const [name, update] of [
+    ['unknown root key', { unexpected: true }],
+    ['non-string session_dir', { session_dir: 123 }],
+    ['empty session_dir', { session_dir: ' ' }],
+    ['non-string api_key', { api_key: 123 }],
+    ['empty api_key', { api_key: ' ' }],
+    ['non-string parity_prompt_id', { parity_prompt_id: 123 }],
+    ['empty parity_prompt_id', { parity_prompt_id: ' ' }],
+    ['disabled streaming', { generation: { max_tokens: 128, stream: false } }]
+  ] as const) {
+    it(`rejects strict root config with ${name}`, () => {
       const dir = mkdtempSync(join(tmpdir(), 'bench-config-'))
       try {
         const path = join(dir, 'benchmark.yaml')

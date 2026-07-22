@@ -4,6 +4,18 @@ import { load as loadYaml } from 'js-yaml'
 import type { BenchmarkConfig } from './types.ts'
 
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
+const ROOT_KEYS = new Set([
+  'session_dir',
+  'cooldown_seconds',
+  'warmup_runs',
+  'measured_runs',
+  'api_key',
+  'generation',
+  'parity_prompt_id',
+  'prompt_ids',
+  'providers',
+  'model_parity'
+])
 const GENERATION_KEYS = new Set(['max_tokens', 'temperature', 'seed', 'stream', 'stream_options'])
 const STREAM_OPTION_KEYS = new Set(['include_usage'])
 
@@ -53,8 +65,8 @@ function assertGenerationConfig(value: unknown): void {
   ) {
     throw new TypeError('config generation.seed must be an integer or null')
   }
-  if ('stream' in value && typeof value.stream !== 'boolean') {
-    throw new TypeError('config generation.stream must be a boolean')
+  if ('stream' in value && value.stream !== true) {
+    throw new TypeError('config generation.stream must be true')
   }
   if ('stream_options' in value) {
     if (!isRecord(value.stream_options)) {
@@ -77,6 +89,16 @@ function assertGenerationConfig(value: unknown): void {
 function assertBenchmarkConfig(data: unknown, path: string): asserts data is BenchmarkConfig {
   if (!isRecord(data)) {
     throw new TypeError(`config must be a mapping: ${path}`)
+  }
+  for (const key of Object.keys(data)) {
+    if (!ROOT_KEYS.has(key)) {
+      throw new TypeError(`unknown config setting: ${key}`)
+    }
+  }
+  for (const key of ['session_dir', 'api_key', 'parity_prompt_id'] as const) {
+    if (key in data && !isNonEmptyString(data[key])) {
+      throw new TypeError(`config ${key} must be a non-empty string`)
+    }
   }
   assertGenerationConfig(data.generation)
   if ('warmup_runs' in data && !isNonNegativeInteger(data.warmup_runs)) {
