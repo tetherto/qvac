@@ -54,12 +54,12 @@ logs when the filesystem isn't accessible.
 # Pull the GGUFs first (registry-client devDependency required)
 npm --prefix packages/tts-ggml run download-models:registry
 
-# Single combo — CPU, Chatterbox English, 1 warmup + 5 measured runs
+# Single combo — CPU, Chatterbox English, 1 warmup + 5 measured runs.
+# Whisper round-trip quality is enabled by default.
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 
-# Include Whisper round-trip quality. Transcription runs after timed synthesis
-# and after TTS unload, so CER/WER do not affect RTF or TTS memory measurements.
-QVAC_TTS_GGML_BENCHMARK_QUALITY=true \
+# Performance-only run without Whisper transcription.
+QVAC_TTS_GGML_BENCHMARK_QUALITY=false \
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 
 # Single combo — Vulkan GPU
@@ -137,7 +137,7 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 | `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st becomes `summary.coldRtf`). |
 | `QVAC_TTS_GGML_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
 | `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only. |
-| `QVAC_TTS_GGML_BENCHMARK_QUALITY` | `false` | Enable Whisper round-trip transcription and report mean/P50/P95 CER and WER. Quality evaluation runs after timed TTS synthesis and TTS memory collection. |
+| `QVAC_TTS_GGML_BENCHMARK_QUALITY` | `true` | Enable Whisper round-trip transcription and report mean/P50/P95 CER and WER. Set to `false` for a performance-only run. Quality evaluation runs after timed TTS synthesis and TTS memory collection. |
 | `QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL` | `ggml-small.bin` | Whisper GGML model filename under `models/whisper/`: `ggml-small.bin` or `ggml-medium.bin`. The selected model is downloaded on demand when missing. |
 | `QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND` | — | Optional mean WER assertion as a ratio (`0.4` = 40%). Only applied when quality evaluation is enabled. |
 | `QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND` | — | Optional mean CER assertion as a ratio (`0.2` = 20%). Only applied when quality evaluation is enabled. |

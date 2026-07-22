@@ -22,7 +22,7 @@
  *     "numRuns": 5,                                          (optional)
  *     "numThreads": 8,                                       (optional)
  *     "rtfUpperBound": 1.5,                                  (optional)
- *     "quality": true,                                       (optional, CER/WER)
+ *     "quality": true,                                       (optional, CER/WER; default true)
  *     "whisperModel": "ggml-small.bin",                       (optional)
  *     "werUpperBound": 0.4,                                  (optional)
  *     "cerUpperBound": 0.2                                   (optional)
@@ -199,7 +199,7 @@ function runEntry (pkgDir, entry, index, matrixLen) {
   console.log(`  denoiser:   ${env.QVAC_TTS_GGML_BENCHMARK_DENOISER}`)
   console.log(`  useGPU:     ${env.QVAC_TTS_GGML_BENCHMARK_USE_GPU}`)
   console.log(`  backend:    ${env.QVAC_TTS_GGML_BENCHMARK_BACKEND || 'default'}`)
-  console.log(`  CER/WER:    ${env.QVAC_TTS_GGML_BENCHMARK_QUALITY || 'false'}`)
+  console.log(`  CER/WER:    ${env.QVAC_TTS_GGML_BENCHMARK_QUALITY || 'true'}`)
   console.log(`  label:      ${env.QVAC_TTS_GGML_BENCHMARK_LABEL}`)
   console.log('='.repeat(70))
 

@@ -54,7 +54,7 @@
  *   QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS  number of warmup iterations (default: 1)
  *   QVAC_TTS_GGML_BENCHMARK_RUNS         number of measured iterations (default: 5 desktop, 3 mobile)
  *   QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND  assertion cap for mean RTF (optional)
- *   QVAC_TTS_GGML_BENCHMARK_QUALITY      enable Whisper round-trip CER/WER (default: false)
+ *   QVAC_TTS_GGML_BENCHMARK_QUALITY      enable Whisper round-trip CER/WER (default: true)
  *   QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL Whisper GGML filename (default: ggml-small.bin)
  *   QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND assertion cap for mean WER (optional)
  *   QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND assertion cap for mean CER (optional)
@@ -299,7 +299,7 @@ function getSettings() {
     numRuns: getEnvInteger('QVAC_TTS_GGML_BENCHMARK_RUNS', isMobile ? 3 : 5),
     numThreads,
     requestedUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND') || '',
-    qualityEnabled: getEnvBoolean('QVAC_TTS_GGML_BENCHMARK_QUALITY', false),
+    qualityEnabled: getEnvBoolean('QVAC_TTS_GGML_BENCHMARK_QUALITY', true),
     whisperModel,
     requestedWerUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND') || '',
     requestedCerUpperBound: getEnv('QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND') || '',
