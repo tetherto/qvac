@@ -367,6 +367,79 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
   )
 })
 
+// SDK e2e must inherit the fork-only trust model: internal same-repo PRs run
+// e2e via their own dedicated labels (test-e2e-smoke / test-e2e-full) with NO
+// 'verified' requirement, while external forks stay gated. Both workflows
+// derive their run gate from the shared label-gate + authorize-pr composites
+// rather than hardcoding a 'verified' check.
+const sdkE2eWorkflows = [
+  '.github/workflows/on-pr-test-sdk.yml',
+  '.github/workflows/on-pr-bare-sdk-e2e.yml',
+]
+
+test('sdk e2e: run gate derives from shared label-gate, never a hardcoded verified check', () => {
+  for (const path of sdkE2eWorkflows) {
+    const source = read(path)
+    assert.match(
+      source,
+      /uses:\s*\.\/\.github\/actions\/label-gate/,
+      `${path} uses the shared label-gate composite`,
+    )
+    assert.match(
+      source,
+      /uses:\s*\.\/\.github\/actions\/authorize-pr/,
+      `${path} uses the shared authorize-pr composite`,
+    )
+    assert.match(
+      source,
+      /needs\.label-gate\.outputs\.authorised == 'true'/,
+      `${path} gates its run job on label-gate.authorised`,
+    )
+    // The only 'verified' token allowed is inside a comment line; a functional
+    // 'verified' gate here would re-gate internal PRs and regress Dima's ask.
+    const functionalVerified = source
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .some((line) => line.includes('verified'))
+    assert.equal(
+      functionalVerified,
+      false,
+      `${path} must not hardcode a 'verified' gate outside comments`,
+    )
+  }
+})
+
+test('sdk e2e: internal PR authorised without verified; external fork stays gated', () => {
+  // Both e2e workflows invoke authorize-pr with the e2e-specific label input.
+  const internal = authorizePr({
+    HEAD_REPO: 'tetherto/qvac',
+    LABEL_NAME: 'safe-to-test',
+    LABELS_JSON: '[]',
+    AUTHOR_ASSOC: 'NONE',
+    HAS_WRITE: '0',
+  })
+  assert.equal(internal.allowed, 'true')
+
+  // Case-insensitive same-repo match is honoured for internal detection.
+  const internalMixedCase = authorizePr({
+    HEAD_REPO: 'TetherTo/QVAC',
+    LABEL_NAME: 'safe-to-test',
+    LABELS_JSON: '[]',
+    AUTHOR_ASSOC: 'NONE',
+    HAS_WRITE: '0',
+  })
+  assert.equal(internalMixedCase.allowed, 'true')
+
+  const fork = authorizePr({
+    HEAD_REPO: 'outsider/qvac',
+    LABEL_NAME: 'safe-to-test',
+    LABELS_JSON: '[]',
+    AUTHOR_ASSOC: 'NONE',
+    HAS_WRITE: '0',
+  })
+  assert.equal(fork.allowed, 'false')
+})
+
 function publicPrLabelPolicy(overrides = {}) {
   const script = extractRunBlock(
     '.github/workflows/public-pr.yml',
