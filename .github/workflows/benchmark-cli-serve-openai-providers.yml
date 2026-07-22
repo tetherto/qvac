@@ -9,7 +9,6 @@ on:
     paths:
       - 'packages/cli/benchmarks/serve-openai-providers/**'
       - 'packages/cli/package.json'
-      - 'packages/cli/package-lock.json'
       - '.github/workflows/benchmark-cli-serve-openai-providers.yml'
     branches:
       - main
@@ -63,8 +62,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: packages/cli/package-lock.json
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
@@ -122,8 +120,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: packages/cli/package-lock.json
+          # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
 
       - name: Install CLI deps
         working-directory: ${{ env.CLI_DIR }}
