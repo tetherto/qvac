@@ -1,15 +1,11 @@
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
 import {
   translateResponseSchema,
-  normalizeModelType,
-  ModelType,
   type TranslateRequest,
   type TranslateClientParams,
   type TranslationStats,
   type RPCOptions
 } from '@/schemas'
-import { detectOne } from '@qvac/langdetect-text'
-import { TranslationFailedError } from '@/utils/errors-client'
 
 /**
  * Translates text from one language to another using a specified translation model.
@@ -60,27 +56,13 @@ export function translate(
   stats: Promise<TranslationStats | undefined>
   text: Promise<string>
 } {
-  const canonicalModelType = normalizeModelType(params.modelType)
-  const isLlm = canonicalModelType === ModelType.llamacppCompletion
-
-  let sourceLanguage = isLlm ? (params as { from?: string }).from : undefined
-
-  if (!sourceLanguage && isLlm) {
-    const detected = detectOne(params.text as string)
-    if (detected.code === 'und' || detected.language === 'Undetermined') {
-      throw new TranslationFailedError(
-        "Could not detect the source language. Please specify the 'from' parameter explicitly."
-      )
-    }
-    sourceLanguage = detected.language
-  }
-
+  // Source-language auto-detection lives in the worker now
+  // (server/bare/ops/translate.ts): `from` is passed through when present and
+  // resolved server-side when absent, so every language binding shares one
+  // detector instead of each shipping its own.
   const request: TranslateRequest = {
     type: 'translate',
-    ...params,
-    ...(isLlm && {
-      from: sourceLanguage
-    })
+    ...params
   }
 
   let stats: TranslationStats | undefined

@@ -23,6 +23,9 @@
           "$ref": "#/$defs/classify.request"
         },
         {
+          "$ref": "#/$defs/completionOrchestrate.request"
+        },
+        {
           "$ref": "#/$defs/completionStream.request"
         },
         {
@@ -135,6 +138,9 @@
         },
         {
           "$ref": "#/$defs/classify.response"
+        },
+        {
+          "$ref": "#/$defs/completionOrchestrate.response"
         },
         {
           "$ref": "#/$defs/completionStream.response"
@@ -1331,6 +1337,611 @@
         }
       },
       "required": ["type", "results"],
+      "additionalProperties": false
+    },
+    "completionOrchestrate.request": {
+      "title": "CompletionOrchestrateRequest",
+      "type": "object",
+      "properties": {
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`)."
+              },
+              "content": {
+                "type": "string",
+                "description": "Message content."
+              },
+              "attachments": {
+                "description": "Optional file attachments for multimodal models.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+                    }
+                  },
+                  "required": ["path"],
+                  "title": "CompletionOrchestrateRequestHistoryItemAttachmentsItem"
+                }
+              }
+            },
+            "required": ["role", "content"],
+            "title": "CompletionOrchestrateRequestHistoryItem"
+          },
+          "description": "Array of conversation messages sent to the model."
+        },
+        "modelId": {
+          "type": "string",
+          "description": "The identifier of the model to use for completion."
+        },
+        "kvCache": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "tools": {
+          "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "function"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["string", "number", "integer", "boolean", "object", "array"],
+                          "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValueType"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "enum": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": ["type"],
+                      "title": "CompletionOrchestrateRequestToolsItemParametersPropertiesValue"
+                    },
+                    "title": "CompletionOrchestrateRequestToolsItemParametersProperties"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["type", "properties"],
+                "title": "CompletionOrchestrateRequestToolsItemParameters"
+              }
+            },
+            "required": ["type", "name", "description", "parameters"],
+            "title": "CompletionOrchestrateRequestToolsItem"
+          }
+        },
+        "stream": {
+          "type": "boolean",
+          "description": "Whether to stream tokens (`true`) or return the complete response once (`false`)."
+        },
+        "generationParams": {
+          "description": "Optional sampling / generation parameters.",
+          "type": "object",
+          "properties": {
+            "temp": {
+              "description": "Sampling temperature (typically 0–2).",
+              "type": "number"
+            },
+            "top_p": {
+              "description": "Top-p (nucleus) sampling cutoff (0–1).",
+              "type": "number"
+            },
+            "top_k": {
+              "description": "Top-k sampling — keep only the top K tokens.",
+              "type": "number"
+            },
+            "predict": {
+              "description": "Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
+              "type": "number"
+            },
+            "seed": {
+              "description": "Random seed for reproducibility.",
+              "type": "number"
+            },
+            "frequency_penalty": {
+              "description": "Penalty applied to tokens based on frequency so far.",
+              "type": "number"
+            },
+            "presence_penalty": {
+              "description": "Penalty applied to tokens that have already appeared.",
+              "type": "number"
+            },
+            "repeat_penalty": {
+              "description": "Penalty applied to repeated tokens.",
+              "type": "number"
+            },
+            "reasoning_budget": {
+              "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 2147483647
+            },
+            "remove_thinking_from_context": {
+              "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "title": "CompletionOrchestrateRequestGenerationParams"
+        },
+        "captureThinking": {
+          "description": "When `true`, capture and emit reasoning/thinking deltas separately from content deltas; requires a model that frames its thinking output.",
+          "type": "boolean"
+        },
+        "emitRawDeltas": {
+          "description": "When `true`, also emit raw per-token deltas in the event stream in addition to normalized `contentDelta` events.",
+          "type": "boolean"
+        },
+        "toolDialect": {
+          "description": "Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+          "type": "string",
+          "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4"],
+          "title": "CompletionOrchestrateRequestToolDialect"
+        },
+        "responseFormat": {
+          "description": "Optional structured-output constraint: `text` (default, free-form), `json_object` (any valid JSON), or `json_schema` (output conforms to the provided JSON Schema). Mutually exclusive with `tools`.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "text"
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": false,
+              "title": "CompletionOrchestrateRequestResponseFormatText"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "json_object"
+                }
+              },
+              "required": ["type"],
+              "additionalProperties": false,
+              "title": "CompletionOrchestrateRequestResponseFormatJsonObject"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "json_schema"
+                },
+                "json_schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Schema identifier; OpenAI-compatibility only — not used by the addon."
+                    },
+                    "description": {
+                      "description": "Free-form schema description. Accepted for OpenAI compatibility only — not forwarded to the addon and does not affect generation.",
+                      "type": "string"
+                    },
+                    "schema": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "JSON Schema the model output must validate against. Forwarded to the addon as-is and converted to GBNF natively by llama.cpp's `json_schema_to_grammar()`.",
+                      "title": "CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchemaSchema"
+                    },
+                    "strict": {
+                      "description": "Accepted for OpenAI compatibility but does NOT trigger OpenAI's auto-tightening semantics (implicit `additionalProperties: false`, all properties required). The schema is forwarded to the addon verbatim, so callers wanting strict validation must encode it explicitly in `schema`.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["name", "schema"],
+                  "additionalProperties": false,
+                  "title": "CompletionOrchestrateRequestResponseFormatJsonSchemaJsonSchema"
+                }
+              },
+              "required": ["type", "json_schema"],
+              "additionalProperties": false,
+              "title": "CompletionOrchestrateRequestResponseFormatJsonSchema"
+            }
+          ]
+        },
+        "requestId": {
+          "description": "Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "completionOrchestrate"
+        },
+        "maxToolTurns": {
+          "description": "Upper bound on generation turns the worker will run before ending the loop with `stopReason: \"maxToolTurns\"`. Each turn is one completion pass; a turn that requests tool calls consumes callbacks and starts the next turn. Defaults to 8.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        }
+      },
+      "required": ["history", "modelId", "stream", "type"]
+    },
+    "completionOrchestrate.response": {
+      "title": "CompletionOrchestrateResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "completionOrchestrate"
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "contentDelta"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "seq", "text"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemContentDelta"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "rawDelta"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "seq", "text"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemRawDelta"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "thinkingDelta"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "seq", "text"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemThinkingDelta"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "toolCall"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "call": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "arguments": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {},
+                        "title": "CompletionOrchestrateResponseEventsItemToolCallCallArguments"
+                      },
+                      "raw": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "name", "arguments"],
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemToolCallCall"
+                  }
+                },
+                "required": ["type", "seq", "call"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemToolCall"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "toolError"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": ["PARSE_ERROR", "VALIDATION_ERROR", "UNKNOWN_TOOL"],
+                        "title": "CompletionOrchestrateResponseEventsItemToolErrorErrorCode"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "raw": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["code", "message"],
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemToolErrorError"
+                  }
+                },
+                "required": ["type", "seq", "error"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemToolError"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "completionStats"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "stats": {
+                    "type": "object",
+                    "properties": {
+                      "timeToFirstToken": {
+                        "type": "number"
+                      },
+                      "tokensPerSecond": {
+                        "type": "number"
+                      },
+                      "cacheTokens": {
+                        "type": "number"
+                      },
+                      "promptTokens": {
+                        "type": "number"
+                      },
+                      "generatedTokens": {
+                        "type": "number"
+                      },
+                      "avgConcurrentSeq": {
+                        "type": "number"
+                      },
+                      "backendDevice": {
+                        "type": "string",
+                        "enum": ["cpu", "gpu"],
+                        "title": "CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemCompletionStatsStats"
+                  }
+                },
+                "required": ["type", "seq", "stats"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemCompletionStats"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "completionDone"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "stopReason": {
+                    "type": "string",
+                    "const": "error"
+                  },
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["message"],
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemCompletionDoneErrorError"
+                  },
+                  "raw": {
+                    "type": "object",
+                    "properties": {
+                      "fullText": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["fullText"],
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemCompletionDoneErrorRaw"
+                  }
+                },
+                "required": ["type", "seq", "stopReason", "error"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemCompletionDoneError"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "completionDone"
+                  },
+                  "seq": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "stopReason": {
+                    "type": "string",
+                    "enum": ["eos", "length", "stopSequence", "cancelled"],
+                    "title": "CompletionOrchestrateResponseEventsItemCompletionDoneStopReason"
+                  },
+                  "raw": {
+                    "type": "object",
+                    "properties": {
+                      "fullText": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["fullText"],
+                    "additionalProperties": false,
+                    "title": "CompletionOrchestrateResponseEventsItemCompletionDoneRaw"
+                  }
+                },
+                "required": ["type", "seq"],
+                "additionalProperties": false,
+                "title": "CompletionOrchestrateResponseEventsItemCompletionDone"
+              }
+            ]
+          }
+        },
+        "toolCallback": {
+          "type": "object",
+          "properties": {
+            "callId": {
+              "type": "string",
+              "description": "Correlates the upstream result line to this request."
+            },
+            "name": {
+              "type": "string"
+            },
+            "arguments": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {},
+              "title": "CompletionOrchestrateResponseToolCallbackArguments"
+            }
+          },
+          "required": ["callId", "name", "arguments"],
+          "additionalProperties": false,
+          "title": "CompletionOrchestrateResponseToolCallback"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "stopReason": {
+          "description": "Set on the terminal `done` frame only when the loop stopped because it hit `maxToolTurns` (the model still wanted a tool). Absent on a natural finish, so the caller can tell a truncated run from a completed one.",
+          "type": "string",
+          "const": "maxToolTurns"
+        }
+      },
+      "required": ["type"],
       "additionalProperties": false
     },
     "completionStream.request": {

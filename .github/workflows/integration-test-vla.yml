@@ -384,6 +384,36 @@ jobs:
           echo "π₀.₅ asset state after download:"
           ls -la model/vla/pi05/ test/pi05-oracle/
 
+      # GR00T N1.7-3B test artefacts (quantized gguf + parity-oracle activations).
+      # Same Apple-Paravirtual exclusion as smolvla/pi05 — the shipped
+      # groot-q8_vf16.gguf is ~3.76 GB (Q8_0 text/DiT/vlfusion/head, vision tower
+      # kept F16; see the quantization note in the converter README) and the
+      # model needs well over the macOS-13 intel runner's ~1 GB Paravirtual GPU
+      # budget to run.
+      #
+      # NOTE: the JS integration test is a PLUMBING gate (finite/shape/timing),
+      # not a PyTorch-parity test — the JS path dumps no reference actions, so it
+      # reads only the patchified images + state + noise + visual-pos-masks from
+      # activations_v4. (v4 is a superset of the old v3: it adds a backbone_input
+      # hook with input_ids/attention_mask that the C++ infer-parity gtest uses;
+      # one oracle file now serves both.)
+      #
+      # No `|| true`: a missing artefact fails the step loudly (a silently
+      # skipped groot e2e under a green CI would be a false-positive pass).
+      - name: Download GR00T test artefacts from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Downloading GR00T test artefacts from S3..."
+          mkdir -p model/vla/groot test/groot-oracle
+          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14"
+          aws s3 cp "$S3_BASE/groot-q8_vf16.gguf"          model/vla/groot/groot-q8_vf16.gguf
+          aws s3 cp "$S3_BASE/activations_v4.safetensors"  test/groot-oracle/activations_v4.safetensors
+          echo "GR00T asset state after download:"
+          ls -la model/vla/groot/ test/groot-oracle/
+
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
       # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
       # self-hosted runner has the Vulkan SDK preinstalled at C:\VulkanSDK
@@ -425,6 +455,8 @@ jobs:
           PI05_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/pi05/pi05-base-q-aggressive.gguf', github.workspace, env.WORKDIR) || '' }}
           PI05_TEST_FIXTURE: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/fixture.safetensors', github.workspace, env.WORKDIR) || '' }}
           PI05_TEST_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/pi05-oracle/activations.safetensors', github.workspace, env.WORKDIR) || '' }}
+          GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
+          GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary
@@ -454,13 +486,15 @@ jobs:
           PI05_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/pi05/pi05-base-q-aggressive.gguf
           PI05_TEST_FIXTURE: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/fixture.safetensors
           PI05_TEST_ACTIVATIONS: ${{ github.workspace }}/${{ env.WORKDIR }}/test/pi05-oracle/activations.safetensors
+          GROOT_TEST_GGUF: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/groot/groot-q8_vf16.gguf
+          GROOT_TEST_ACTIVATIONS_V4: ${{ github.workspace }}/${{ env.WORKDIR }}/test/groot-oracle/activations_v4.safetensors
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
 
       # Render the perf-report(s) into the job's Step Summary so reviewers
       # see the timing + quality tables inline on the Actions page. Mobile
-      # already does this; desktop was artifact-only before. Globs both
-      # smolvla's `performance-report.json` and pi05's
-      # `performance-report-pi05.json`; missing files are tolerated.
+      # already does this; desktop was artifact-only before. Globs smolvla's
+      # `performance-report.json`, pi05's `performance-report-pi05.json`, and
+      # groot's `performance-report-groot.json`; missing files are tolerated.
       - name: Render performance Step Summary (Linux/macOS)
         if: ${{ always() && !cancelled() && matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
@@ -498,8 +532,9 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
-          # Glob picks up both addon.test.js's `performance-report.json`
-          # (smolvla) and pi05.test.js's `performance-report-pi05.json`.
+          # Glob picks up addon.test.js's `performance-report.json` (smolvla),
+          # pi05.test.js's `performance-report-pi05.json`, and groot.test.js's
+          # `performance-report-groot.json`.
           path: ${{ env.WORKDIR }}/test/results/performance-report*.json
           if-no-files-found: ignore
           retention-days: 14

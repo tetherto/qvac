@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.14.0] - 2026-07-20
+
+### Added
+
+- GR00T N1.7-3B LIBERO support as the third VLA architecture behind the `IVlaModel` interface, alongside SmolVLA and pi05. Qwen3-VL backbone with a VL-fusion and AlternateVLDiT action head driven by a Euler flow-matching loop, dispatched by GGUF `general.architecture`. Ships the GGUF converter and quantizer scripts, PyTorch-parity C++ tests, and cpp, desktop and mobile CI coverage. GPU offload is wired across all inference phases.
+
 ## [0.13.0] - 2026-07-20
 
 ### Changed

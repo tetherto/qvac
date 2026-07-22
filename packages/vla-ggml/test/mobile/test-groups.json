@@ -1,10 +1,12 @@
 {
   "ios": {
     "smolvla": ["runAddonTest"],
-    "pi05":    ["runPi05Test"]
+    "pi05":    ["runPi05Test"],
+    "groot":   ["runGrootTest"]
   },
   "android": {
     "smolvla": ["runAddonTest"],
-    "pi05":    ["runPi05Test"]
+    "pi05":    ["runPi05Test"],
+    "groot":   ["runGrootTest"]
   }
 }
