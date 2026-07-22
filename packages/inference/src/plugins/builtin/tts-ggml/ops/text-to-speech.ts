@@ -1,0 +1,140 @@
+import { getModel } from '../../../../runtime/model-registry.ts'
+import { ttsRequestSchema, type TtsRequest, type TtsStats } from '../../../../schemas/index.ts'
+import { nowMs } from '../../../../profiling/index.ts'
+import { buildStreamResult, hasDefinedValues } from '../../../../profiling/model-execution.ts'
+import type { TtsResponse } from '../../../../utils/addon-responses.ts'
+import { TextToSpeechFailedError } from '../../../../errors/index.ts'
+import {
+  type TtsStreamChunk,
+  type TtsOpYield,
+  collectTtsStats
+} from '../../../../utils/tts-stats.ts'
+
+type RunStreamModel = {
+  runStream: (
+    text: string,
+    options?: { locale?: string; maxChunkScalars?: number }
+  ) => Promise<{
+    iterate: () => AsyncIterable<TtsStreamChunk>
+    stats?: { audioDurationMs?: number; totalSamples?: number }
+  }>
+}
+
+function hasRunStream(model: unknown): model is RunStreamModel {
+  return (
+    typeof model === 'object' &&
+    model !== null &&
+    'runStream' in model &&
+    typeof (model as RunStreamModel).runStream === 'function'
+  )
+}
+
+export async function* textToSpeech(
+  params: TtsRequest
+): AsyncGenerator<TtsOpYield, { modelExecutionMs: number; stats?: TtsStats }> {
+  const {
+    modelId,
+    inputType,
+    text,
+    stream,
+    sentenceStream,
+    sentenceStreamLocale,
+    sentenceStreamMaxChunkScalars
+  } = ttsRequestSchema.parse(params)
+
+  const model = getModel(modelId)
+  const modelStart = nowMs()
+
+  if (sentenceStream) {
+    if (!hasRunStream(model)) {
+      throw new TextToSpeechFailedError('sentenceStream requires a TTS model with runStream')
+    }
+
+    const streamOpts =
+      sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined
+        ? {
+            ...(sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
+            ...(sentenceStreamMaxChunkScalars !== undefined
+              ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
+              : {})
+          }
+        : undefined
+
+    const response = await model.runStream(text, streamOpts)
+
+    if (!stream) {
+      let completeBuffer: number[] = []
+      for await (const data of response.iterate()) {
+        // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
+        if (data.outputArray != null) {
+          completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+        }
+      }
+      const modelExecutionMs = nowMs() - modelStart
+      const stats = collectTtsStats(response)
+      yield { buffer: completeBuffer }
+      return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+    }
+
+    for await (const data of response.iterate()) {
+      // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
+      if (data.outputArray == null) continue
+      const buf = Array.from(data.outputArray)
+      if (buf.length === 0) continue
+      yield {
+        buffer: buf,
+        ...(data.chunkIndex !== undefined ? { chunkIndex: data.chunkIndex } : {}),
+        ...(typeof data.sentenceChunk === 'string' && data.sentenceChunk.length > 0
+          ? { sentenceChunk: data.sentenceChunk }
+          : {})
+      }
+    }
+
+    const modelExecutionMs = nowMs() - modelStart
+    const stats = collectTtsStats(response)
+    return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+  }
+
+  const response = (await model.run({
+    input: text,
+    inputType,
+    ...(stream ? { streamOutput: true } : {})
+  })) as unknown as TtsResponse
+
+  if (!stream) {
+    let completeBuffer: number[] = []
+
+    for await (const data of response.iterate()) {
+      completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+    }
+
+    const modelExecutionMs = nowMs() - modelStart
+    const stats: TtsStats = {
+      ...(response.stats?.audioDurationMs !== undefined && {
+        audioDuration: response.stats.audioDurationMs
+      }),
+      ...(response.stats?.totalSamples !== undefined && {
+        totalSamples: response.stats.totalSamples
+      })
+    }
+
+    yield { buffer: completeBuffer }
+    return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+  }
+
+  for await (const data of response.iterate()) {
+    yield { buffer: Array.from(data.outputArray) }
+  }
+
+  const modelExecutionMs = nowMs() - modelStart
+  const stats: TtsStats = {
+    ...(response.stats?.audioDurationMs !== undefined && {
+      audioDuration: response.stats.audioDurationMs
+    }),
+    ...(response.stats?.totalSamples !== undefined && {
+      totalSamples: response.stats.totalSamples
+    })
+  }
+
+  return buildStreamResult(modelExecutionMs, hasDefinedValues(stats) ? stats : undefined)
+}
