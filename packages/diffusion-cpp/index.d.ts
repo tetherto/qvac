@@ -161,9 +161,6 @@ export interface EsrganRuntimeStats {
     repeats: number;
     backendDevice?: 'cpu' | 'gpu';
 }
-type ModelState = {
-    configLoaded: boolean;
-};
 /**
  * Text-to-image and image-to-image generation using stable-diffusion.cpp.
  * Supports SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein], and Ideogram 4.
@@ -174,7 +171,9 @@ export declare class ImgStableDiffusion {
         stats?: boolean;
     };
     logger: QvacLogger;
-    state: ModelState;
+    state: {
+        configLoaded: boolean;
+    };
     private readonly _files;
     private readonly _config;
     private readonly _job;
@@ -189,7 +188,9 @@ export declare class ImgStableDiffusion {
     private _runInternal;
     cancel(): Promise<void>;
     unload(): Promise<void>;
-    getState(): ModelState;
+    getState(): {
+        configLoaded: boolean;
+    };
 }
 /**
  * Standalone ESRGAN image upscaling using stable-diffusion.cpp.
@@ -200,7 +201,9 @@ export declare class EsrganUpscaler {
         stats?: boolean;
     };
     logger: QvacLogger;
-    state: ModelState;
+    state: {
+        configLoaded: boolean;
+    };
     private readonly _files;
     private readonly _config;
     private readonly _job;
@@ -216,7 +219,9 @@ export declare class EsrganUpscaler {
     private _upscaleInternal;
     cancel(): Promise<void>;
     unload(): Promise<void>;
-    getState(): ModelState;
+    getState(): {
+        configLoaded: boolean;
+    };
 }
 export declare function applyFluxImg2ImgDimDefaults(params: GenerationParams, prediction: string, hasInitImages: boolean): GenerationParams;
 export type { VideoDiffusionFiles, VideoGenerationParams, VideoMode, VideoRuntimeStats, VideoStableDiffusionArgs } from './video';

@@ -77,9 +77,6 @@ export interface VideoRuntimeStats {
     postProcessMs: number;
     stepsPerSecond: number;
 }
-type ModelState = {
-    configLoaded: boolean;
-};
 /**
  * Text-to-video and image-to-video generation using stable-diffusion.cpp's
  * `generate_video()` path.
@@ -89,7 +86,9 @@ export default class VideoStableDiffusion {
         stats?: boolean;
     };
     logger: QvacLogger;
-    state: ModelState;
+    state: {
+        configLoaded: boolean;
+    };
     private readonly _files;
     private readonly _config;
     private readonly _job;
@@ -105,7 +104,8 @@ export default class VideoStableDiffusion {
     private _runInternal;
     cancel(): Promise<void>;
     unload(): Promise<void>;
-    getState(): ModelState;
+    getState(): {
+        configLoaded: boolean;
+    };
     private _isLtx;
 }
-export {};

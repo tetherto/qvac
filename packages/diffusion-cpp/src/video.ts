@@ -91,7 +91,6 @@ export interface VideoRuntimeStats {
 }
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>
-type ModelState = { configLoaded: boolean }
 type RuntimeVideoParams = VideoGenerationParams & {
   [key: string]: unknown
   init_images?: unknown
@@ -223,7 +222,7 @@ function loggableError(error: unknown): unknown {
 export default class VideoStableDiffusion {
   opts: { stats?: boolean }
   logger: QvacLogger
-  state: ModelState
+  state: { configLoaded: boolean }
 
   private readonly _files: VideoDiffusionFiles
   private readonly _config: SdConfig
@@ -598,7 +597,7 @@ export default class VideoStableDiffusion {
     })
   }
 
-  getState(): ModelState {
+  getState(): { configLoaded: boolean } {
     return this.state
   }
 

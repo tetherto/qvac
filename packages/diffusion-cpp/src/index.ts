@@ -231,7 +231,6 @@ export interface EsrganRuntimeStats {
 }
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>
-type ModelState = { configLoaded: boolean }
 type DiffusionAddon = Addon & SdInterface
 type UpscalerAddon = EsrganUpscalerInterface
 
@@ -307,7 +306,7 @@ export class ImgStableDiffusion {
   addon: Addon | null
   opts: { stats?: boolean }
   logger: QvacLogger
-  state: ModelState
+  state: { configLoaded: boolean }
 
   private readonly _files: DiffusionFiles
   private readonly _config: SdConfig
@@ -672,7 +671,7 @@ export class ImgStableDiffusion {
     })
   }
 
-  getState(): ModelState {
+  getState(): { configLoaded: boolean } {
     return this.state
   }
 }
@@ -684,7 +683,7 @@ export class ImgStableDiffusion {
 export class EsrganUpscaler {
   opts: { stats?: boolean }
   logger: QvacLogger
-  state: ModelState
+  state: { configLoaded: boolean }
 
   private readonly _files: EsrganFiles
   private readonly _config: EsrganUpscalerConfig
@@ -851,7 +850,7 @@ export class EsrganUpscaler {
     })
   }
 
-  getState(): ModelState {
+  getState(): { configLoaded: boolean } {
     return this.state
   }
 }
