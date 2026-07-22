@@ -4,7 +4,7 @@ import {
   diffusion,
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
-  QWEN3_4B_Q4_K_M
+  QWEN3_4B_4B_Q4_K_M
 } from '@qvac/sdk'
 import fs from 'fs'
 import path from 'path'
@@ -22,7 +22,7 @@ const modelId = await loadModel({
   modelConfig: {
     device: 'gpu',
     threads: 4,
-    llmModelSrc: QWEN3_4B_Q4_K_M,
+    llmModelSrc: QWEN3_4B_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE
   },
   onProgress: (p) => {
