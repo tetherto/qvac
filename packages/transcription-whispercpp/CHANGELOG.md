@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A malformed audio buffer whose byte length is not a multiple of 4 (`f32le`) no longer poisons the batch transcription queue. The buffered audio is now drained when a job is finalized, so the bad request fails on its own and later well-formed `transcribe` calls on the same model recover instead of repeatedly failing until the process restarts ([tetherto/qvac#3221](https://github.com/tetherto/qvac/issues/3221)).
+
 ## [0.12.1] - 2026-07-20
 
 ### Removed

@@ -379,7 +379,7 @@ export class WhisperInterface {
     try {
       if (data?.type === END_OF_INPUT) {
         const currentJobId = this._nextJobId;
-        const input = this._concatBufferedAudio();
+        const input = this._drainBufferedAudio();
         const previousJobId = this._activeJobId;
         const previousState = this._state;
 
@@ -405,8 +405,6 @@ export class WhisperInterface {
 
         this._activeJobId = currentJobId;
         this._nextJobId = nextSafeId(this._nextJobId);
-        this._bufferedAudio = [];
-        this._bufferedBytes = 0;
         this._setState(state.PROCESSING);
         return currentJobId;
       }
@@ -558,6 +556,13 @@ export class WhisperInterface {
   finishStreaming(): void {
     this._activeJobId = null;
     this._setState(state.LISTENING);
+  }
+
+  _drainBufferedAudio(): Uint8Array {
+    const input = this._concatBufferedAudio();
+    this._bufferedAudio = [];
+    this._bufferedBytes = 0;
+    return input;
   }
 
   _concatBufferedAudio(): Uint8Array {

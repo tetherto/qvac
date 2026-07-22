@@ -23,6 +23,8 @@ on:
       - feature-*
       - tmp-*
   workflow_dispatch:
+  # Lets pr-gate-merge.yml call this workflow directly.
+  workflow_call:
 
 permissions:
   contents: read
