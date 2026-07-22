@@ -44,6 +44,10 @@ function desktopReport (withMemory) {
     summary: {
       rtf: { mean: 0.21, p50: 0.2, p95: 0.23, stddev: 0.015 },
       wallMs: { mean: 540 },
+      quality: {
+        wer: { mean: 0.125 },
+        cer: { mean: 0.0625 }
+      },
       peakRssBytes: 1400 * MB
     }
   }
@@ -73,6 +77,8 @@ function mobileCanonicalReport () {
         rtf_p50: 0.29,
         rtf_p95: 0.35,
         wall_time_ms: 900,
+        word_error_rate: 0.2,
+        character_error_rate: 0.1,
         avg_rss_mb: 780,
         peak_rss_mb: 860,
         reclaimed_mb: 400
@@ -106,6 +112,8 @@ test('mobile canonical report carries avg/peak/reclaimed memory through metrics'
   assert.equal(row.avgRssMb, 780)
   assert.equal(row.peakRssMb, 860)
   assert.equal(row.reclaimedMb, 400)
+  assert.equal(row.meanWer, 0.2)
+  assert.equal(row.meanCer, 0.1)
 })
 
 test('manual record reads the LavaSR axes from a model block, mirroring the desktop reader', () => {
@@ -150,6 +158,26 @@ test('markdown table includes the memory columns and rounded values', () => {
   assert.ok(markdown.includes('| 906 |'), 'peak RSS should be rounded to 906 in the table')
   assert.ok(markdown.includes('| 812 |'), 'avg RSS should be rounded to 812 in the table')
   assert.ok(markdown.includes('| 512 |'), 'reclaimed should be rounded to 512 in the table')
+})
+
+test('desktop record and markdown surface optional CER and WER', () => {
+  const record = normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')
+  assert.equal(record.meanWer, 0.125)
+  assert.equal(record.meanCer, 0.0625)
+
+  const markdown = renderMarkdown([record], [])
+  assert.ok(markdown.includes('Mean WER'))
+  assert.ok(markdown.includes('Mean CER'))
+  assert.ok(markdown.includes('| 12.50% | 6.25% |'))
+})
+
+test('desktop record leaves CER and WER empty for legacy artifacts', () => {
+  const report = desktopReport(true)
+  delete report.summary.quality
+  const record = normalizeDesktopRecord(report, 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')
+  assert.equal(record.meanWer, null)
+  assert.equal(record.meanCer, null)
+  assert.ok(renderMarkdown([record], []).includes('| n/a | n/a |'))
 })
 
 test('desktop record defaults enhancer to none and surfaces model.enhancer when set', () => {

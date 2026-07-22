@@ -1,6 +1,7 @@
-# GGML TTS RTF + Streaming Benchmarks
+# GGML TTS RTF + Streaming + Quality Benchmarks
 
-This document covers the **cross-platform RTF and streaming latency** benchmark
+This document covers the **cross-platform RTF, streaming latency, and optional
+round-trip speech quality** benchmark
 system for the GGML (tts-cpp) TTS backend — the one wired into the
 `Benchmark Performance (TTS GGML)` GitHub Actions workflow, with ingestion paths for
 self-hosted `qvac-*` runners, the mobile AWS Device Farm leg, and off-CI manual
@@ -13,7 +14,7 @@ Two benchmark tracks:
 
 | Track | Entry point (npm) | What it measures | Artifact prefix |
 |-------|-------------------|------------------|-----------------|
-| Real-Time Factor (RTF) | `test:benchmark:rtf` | End-to-end RTF, P50/P95, cold RTF, load time, peak RSS, model size, tokens/s. | `rtf-benchmark-*.json` |
+| Real-Time Factor (RTF) + optional quality | `test:benchmark:rtf` | End-to-end RTF, P50/P95, cold RTF, load time, peak RSS, model size, tokens/s, and opt-in Whisper CER/WER. | `rtf-benchmark-*.json` |
 | Streaming latency | `test:benchmark:streaming` | Time-to-First-Audio (TTFA) + inter-chunk gap + chunk count, for `run({ streamOutput: true })`. | `streaming-benchmark-*.json` |
 | Matrix (per-CI-job) | `test:benchmark:rtf:matrix` | Iterates multiple `(engine, useGPU, backend, threads)` combos in a single CI job, emitting one artifact each. | same as RTF |
 
@@ -54,6 +55,11 @@ logs when the filesystem isn't accessible.
 npm --prefix packages/tts-ggml run download-models:registry
 
 # Single combo — CPU, Chatterbox English, 1 warmup + 5 measured runs
+npm --prefix packages/tts-ggml run test:benchmark:rtf
+
+# Include Whisper round-trip quality. Transcription runs after timed synthesis
+# and after TTS unload, so CER/WER do not affect RTF or TTS memory measurements.
+QVAC_TTS_GGML_BENCHMARK_QUALITY=true \
 npm --prefix packages/tts-ggml run test:benchmark:rtf
 
 # Single combo — Vulkan GPU
@@ -131,6 +137,10 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 | `QVAC_TTS_GGML_BENCHMARK_WARMUP_RUNS` | `1` | Warmup iterations before measurement (1st becomes `summary.coldRtf`). |
 | `QVAC_TTS_GGML_BENCHMARK_RUNS` | `5` desktop / `3` mobile | Measured iterations. |
 | `QVAC_TTS_GGML_BENCHMARK_RTF_UPPER_BOUND` | — | If set, test **fails** when mean RTF exceeds it. Use as a catastrophic-regression guard. No bound = numbers-only. |
+| `QVAC_TTS_GGML_BENCHMARK_QUALITY` | `false` | Enable Whisper round-trip transcription and report mean/P50/P95 CER and WER. Quality evaluation runs after timed TTS synthesis and TTS memory collection. |
+| `QVAC_TTS_GGML_BENCHMARK_WHISPER_MODEL` | `ggml-small.bin` | Whisper GGML model filename under `models/whisper/`: `ggml-small.bin` or `ggml-medium.bin`. The selected model is downloaded on demand when missing. |
+| `QVAC_TTS_GGML_BENCHMARK_WER_UPPER_BOUND` | — | Optional mean WER assertion as a ratio (`0.4` = 40%). Only applied when quality evaluation is enabled. |
+| `QVAC_TTS_GGML_BENCHMARK_CER_UPPER_BOUND` | — | Optional mean CER assertion as a ratio (`0.2` = 20%). Only applied when quality evaluation is enabled. |
 
 ### Streaming benchmark only
 
@@ -145,6 +155,9 @@ node scripts/perf-report/aggregate-tts-ggml-rtf.js \
 |---------|---------|---------|
 | `QVAC_TTS_GGML_BENCHMARK_MATRIX_JSON` | (4-engine CPU default) | JSON array of `(engine, useGPU, backendHint, ...)` entries. |
 | `QVAC_TTS_GGML_BENCHMARK_ENTRY_TIMEOUT_MS` | `600000` | Per-entry watchdog — a hung engine is SIGTERM'd so the matrix continues. |
+
+Matrix entries may set `quality`, `whisperModel`, `werUpperBound`, and
+`cerUpperBound` to override the corresponding quality settings per row.
 
 ### Mobile (Device Farm)
 
