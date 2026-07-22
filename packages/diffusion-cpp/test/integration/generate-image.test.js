@@ -7,7 +7,7 @@ const proc = require('bare-process')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
-const { recordPerformance, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
+const { recordPerformance, assertPhaseStats, PERF_RUNS, WARMUP_RUNS } = require('./_perf-helper')
 
 const platform = detectPlatform()
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -20,6 +20,8 @@ const skip = isMobile || noGpu
 const DEFAULT_MODEL = {
   name: 'stable-diffusion-v2-1-Q8_0.gguf'
 }
+
+const STEPS = 10
 
 safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip }, async (t) => {
   setupJsLogger(binding)
@@ -87,7 +89,7 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
       const response = await model.run({
         prompt: 'a red fox in a snowy forest, photorealistic',
         negative_prompt: 'blurry, low quality, watermark',
-        steps: 10,
+        steps: STEPS,
         width: 712,
         height: 712,
         cfg_scale: 7.5,
@@ -135,8 +137,8 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
     t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
     t.is(
       progressTicks[progressTicks.length - 1].total,
-      10,
-      'Final progress tick reports 10 total steps'
+      STEPS,
+      `Final progress tick reports ${STEPS} total steps`
     )
 
     t.is(images.length, 1, 'Received exactly 1 image')
@@ -147,38 +149,7 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
     // ── Runtime stats (new phase-breakdown fields) ────────────────────────────
-    t.ok(stats, 'stats object is populated')
-    t.ok(
-      typeof stats.conditionerMs === 'number' && stats.conditionerMs > 0,
-      `conditionerMs is a positive number (got ${stats.conditionerMs})`
-    )
-    t.ok(
-      typeof stats.denoiseMs === 'number' && stats.denoiseMs > 0,
-      `denoiseMs is a positive number (got ${stats.denoiseMs})`
-    )
-    t.ok(
-      typeof stats.vaeMs === 'number' && stats.vaeMs > 0,
-      `vaeMs is a positive number (got ${stats.vaeMs})`
-    )
-    t.ok(
-      typeof stats.postProcessMs === 'number' && stats.postProcessMs >= 0,
-      `postProcessMs is a non-negative number (got ${stats.postProcessMs})`
-    )
-    t.ok(
-      typeof stats.stepsPerSecond === 'number' && stats.stepsPerSecond > 0,
-      `stepsPerSecond is a positive number (got ${stats.stepsPerSecond})`
-    )
-
-    // The four phases are exhaustive: conditioner + denoise + vae + postProcess
-    // spans t0..t1, which is exactly generationMs. Only int-rounding of
-    // generationMs and sub-ms jitter clamps separate them, so hold a tight bound.
-    const totalPhaseMs = stats.conditionerMs + stats.denoiseMs + stats.vaeMs + stats.postProcessMs
-    const tolerance = Math.max(2, stats.generationMs * 0.01)
-    const diff = Math.abs(totalPhaseMs - stats.generationMs)
-    t.ok(
-      diff <= tolerance,
-      `Phase times sum to generation time: ${totalPhaseMs.toFixed(0)}ms ≈ ${stats.generationMs}ms (diff ${diff.toFixed(0)}ms, tol ${tolerance.toFixed(0)}ms)`
-    )
+    assertPhaseStats(t, stats, { expectedSteps: STEPS })
 
     // ── Batch runtime stats ───────────────────────────────────────────────────
     // stable-diffusion.cpp invokes its sampler once per batch item, then
@@ -204,25 +175,10 @@ safeTest('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, ski
 
     const batchStats = batchResponse.stats
     t.is(images.length, 2, 'batch_count=2 returns two images')
-    t.ok(
-      typeof batchStats.denoiseMs === 'number' && batchStats.denoiseMs > 0,
-      `batch denoiseMs is positive (got ${batchStats.denoiseMs})`
-    )
-    t.ok(
-      typeof batchStats.stepsPerSecond === 'number' && batchStats.stepsPerSecond > 0,
-      `batch stepsPerSecond is positive (got ${batchStats.stepsPerSecond})`
-    )
-    t.ok(
-      Math.abs((batchStats.stepsPerSecond * batchStats.denoiseMs) / 1000 - batchSteps * 2) < 0.001,
-      'batch throughput accounts for both sampler sequences'
-    )
-    const batchPhaseMs =
-      batchStats.conditionerMs + batchStats.denoiseMs + batchStats.vaeMs + batchStats.postProcessMs
-    const batchTolerance = Math.max(2, batchStats.generationMs * 0.01)
-    t.ok(
-      Math.abs(batchPhaseMs - batchStats.generationMs) <= batchTolerance,
-      `batch phase times sum to generation time: ${batchPhaseMs.toFixed(0)}ms ≈ ${batchStats.generationMs}ms`
-    )
+    // Effective sampler steps = batchSteps × batch_count: the tracker must fold
+    // both sampler sequences into denoiseMs (not the second into vaeMs), so the
+    // reconstructed step count is batchSteps * 2.
+    assertPhaseStats(t, batchStats, { expectedSteps: batchSteps * 2 })
 
     // Save output for CI artifact upload — filename encodes test origin
     // Saved to modelDir so mobile has write permission to the same path

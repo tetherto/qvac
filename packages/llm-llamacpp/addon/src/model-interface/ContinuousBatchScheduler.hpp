@@ -38,10 +38,11 @@ namespace qvac_lib_inference_addon_llama::batching {
 ///
 /// Returns `true` when the terminal hook left the driver in a state safe
 /// to persist via `saveCache`. Cancel/DecodeError paths forward
-/// `onCancel`'s rollback-ok signal; other terminal paths always return
-/// `true`. Callers that persist cache MUST skip `saveCache` when this
-/// returns `false` so a failed recurrent rollback cannot leak the
-/// cancelled request into the on-disk cache.
+/// `onCancel`'s rollback-ok signal; natural generation forwards
+/// `onGenerationFinished` so a prediction-limit rollback can also veto
+/// persistence. Prefill-only paths always return `true`. Callers that
+/// persist cache MUST skip `saveCache` when this returns `false` so a
+/// failed recurrent rollback cannot leak the request into the on-disk cache.
 [[nodiscard]] bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);

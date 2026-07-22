@@ -783,6 +783,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   forcedTokens_.clear();
   assistantOutput_.clear();
   generationStarted_ = false;
+  generationStopReason_ = GenerationStopReason::None;
 
   // The chat template force-opened the reasoning channel in the prompt (e.g.
   // Qwen3 / DeepSeek-R1 templates end with "<think>\n"). Emit the matching
@@ -814,12 +815,14 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     const SequenceStepResult step =
         onLogitsReady(-1, generatedAfterAccept, outputCallback, &batch);
     if (step.contextOverflow) {
+      generationStopReason_ = GenerationStopReason::ContextOverflow;
       return {.ok = false};
     }
     if (step.decodedInline) {
       continue;
     }
     if (step.finished) {
+      generationStopReason_ = step.stopReason;
       break;
     }
 
@@ -847,8 +850,14 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
     return {
         .ok = true, .cancelled = true, .rollbackOk = onCancel(outputCallback)};
   }
-  onGenerationFinished(outputCallback);
-  return {};
+  if (generationStopReason_ == GenerationStopReason::None &&
+      params_.n_predict > 0 &&
+      generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
+    generationStopReason_ = GenerationStopReason::PredictionLimit;
+  }
+  const bool rollbackOk =
+      onGenerationFinished(outputCallback, generationStopReason_);
+  return {.rollbackOk = rollbackOk};
 }
 
 SequenceStepResult TextLlmContext::onLogitsReady(
@@ -878,7 +887,10 @@ SequenceStepResult TextLlmContext::onLogitsReady(
             firstMsgTokens_,
             tools_.anchor(),
             tools_.enabled() ? "true" : "false"));
-    return {.finished = true, .contextOverflow = true};
+    return {
+        .finished = true,
+        .contextOverflow = true,
+        .stopReason = GenerationStopReason::ContextOverflow};
   }
   const llama_pos discarded = applyContextDiscard();
   // Batch path only: the scheduler cannot retry a full window, so a slot
@@ -886,7 +898,11 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   // Single-prompt keeps its legacy behavior (warn inside the slider and
   // continue).
   if (inlineDecodeBatch == nullptr && nPast_ + 1 > ctxCeiling()) {
-    return {.finished = true, .contextOverflow = true, .discarded = discarded};
+    return {
+        .finished = true,
+        .contextOverflow = true,
+        .stopReason = GenerationStopReason::ContextOverflow,
+        .discarded = discarded};
   }
 
   bool sampledToken = forcedTokens_.empty();
@@ -1018,14 +1034,32 @@ SequenceStepResult TextLlmContext::onLogitsReady(
         common_token_to_piece(modelCtx_.lctx, tokenId, true);
     emitOutputPiece(outputCallback, callMarker);
     flushPendingUtf8ToCallback(outputCallback);
-    return {.token = tokenId, .finished = true, .discarded = discarded};
+    generationStopReason_ = GenerationStopReason::Eos;
+    return {
+        .token = tokenId,
+        .finished = true,
+        .stopReason = GenerationStopReason::Eos,
+        .discarded = discarded};
   }
-  const bool finished = isEos || reachedBudget || checkAntiprompt();
+  GenerationStopReason stopReason = GenerationStopReason::None;
+  if (isEos) {
+    stopReason = GenerationStopReason::Eos;
+  } else if (reachedBudget) {
+    stopReason = GenerationStopReason::PredictionLimit;
+  } else if (checkAntiprompt()) {
+    stopReason = GenerationStopReason::Antiprompt;
+  }
+  const bool finished = stopReason != GenerationStopReason::None;
   if (finished) {
+    generationStopReason_ = stopReason;
     flushPendingUtf8ToCallback(outputCallback);
   }
 
-  return {.token = tokenId, .finished = finished, .discarded = discarded};
+  return {
+      .token = tokenId,
+      .finished = finished,
+      .stopReason = stopReason,
+      .discarded = discarded};
 }
 
 void TextLlmContext::onSequenceEnd(
@@ -1033,10 +1067,17 @@ void TextLlmContext::onSequenceEnd(
   flushPendingUtf8ToCallback(outputCallback);
 }
 
-void TextLlmContext::onGenerationFinished(
-    const std::function<void(const std::string&)>& outputCallback) {
+bool TextLlmContext::onGenerationFinished(
+    const std::function<void(const std::string&)>& outputCallback,
+    GenerationStopReason terminalReason) {
+  if (terminalReason != GenerationStopReason::None) {
+    generationStopReason_ = terminalReason;
+  }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
+  if (shouldRollbackKnownReasoningCutoff()) {
+    return rollbackCurrentRequest(outputCallback);
+  }
   if (generationStarted_) {
     onGenerationCompletePolicy(assistantOutput_);
     assistantOutput_.clear();
@@ -1050,12 +1091,29 @@ void TextLlmContext::onGenerationFinished(
   // prefill-entry rollback checkpoint is no longer reachable. Drop
   // its temp file now instead of waiting for the next inference.
   rollbackState_.clearPrefillEntry();
+  generationStopReason_ = GenerationStopReason::None;
+  return true;
 }
 
 bool TextLlmContext::onCancel(
     const std::function<void(const std::string&)>& outputCallback) {
-  // Cancel = "request never happened": roll back to the pre-request
-  // cursor for both prefill- and decode-stage cancels.
+  return rollbackCurrentRequest(outputCallback);
+}
+
+bool TextLlmContext::shouldRollbackKnownReasoningCutoff() const {
+  const bool knownTruncation =
+      generationStopReason_ == GenerationStopReason::PredictionLimit ||
+      generationStopReason_ == GenerationStopReason::SequenceLimit;
+  return knownTruncation && needsRecurrentSnapshot_ &&
+         removeThinkingFromContext_ && reasoningEnabled_ &&
+         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
+         !compactor_.hasCapturedCloseSpan();
+}
+
+bool TextLlmContext::rollbackCurrentRequest(
+    const std::function<void(const std::string&)>& outputCallback) {
+  // Rollback = "request never happened": roll back to the pre-request
+  // cursor for both cancellation and n_predict truncation inside reasoning.
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
@@ -1091,6 +1149,10 @@ bool TextLlmContext::onCancel(
   compactor_.clearSpan();
   assistantOutput_.clear();
   generationStarted_ = false;
+  generationStopReason_ = GenerationStopReason::None;
+  // The sampled tokens were accepted before rollback; clear sampler history so
+  // the next clean request cannot inherit a request that "never happened".
+  common_sampler_reset(smpl_.get());
   return rollbackOk;
 }
 

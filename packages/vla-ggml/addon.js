@@ -28,7 +28,7 @@ const DEFAULT_IMAGE_SIZE = 512
  *   range (`1` = pixels already in [0,1], `1/255` = pixels in [0,255]).
  * @returns {Float32Array}
  */
-function preprocessImage (pixels, width, height, opts = {}) {
+function preprocessImage(pixels, width, height, opts = {}) {
   const size = opts.size ?? DEFAULT_IMAGE_SIZE
   const layout = opts.layout ?? 'hwc'
 
@@ -40,7 +40,7 @@ function preprocessImage (pixels, width, height, opts = {}) {
     throw new RangeError(`preprocessImage: expected ${expected} pixel values, got ${pixels.length}`)
   }
 
-  const normalize = (opts.scale === 1 || opts.scale === 1 / 255) ? opts.scale : detectScale(pixels)
+  const normalize = opts.scale === 1 || opts.scale === 1 / 255 ? opts.scale : detectScale(pixels)
 
   // Letterbox target size (aspect-ratio preserving).
   const ratio = Math.max(width / size, height / size)
@@ -122,7 +122,7 @@ function preprocessImage (pixels, width, height, opts = {}) {
  * @param {number} targetDim
  * @returns {Float32Array}
  */
-function padState (state, targetDim = 32) {
+function padState(state, targetDim = 32) {
   if (!Number.isInteger(targetDim) || targetDim <= 0) {
     throw new TypeError('padState: targetDim must be a positive integer')
   }
@@ -134,7 +134,7 @@ function padState (state, targetDim = 32) {
   return out
 }
 
-function detectScale (pixels) {
+function detectScale(pixels) {
   if (pixels instanceof Uint8Array) return 1 / 255
   // Float/Number arrays: scan a small window to decide whether it's [0,255] or [0,1].
   const limit = Math.min(pixels.length, 256)
