@@ -549,3 +549,5 @@ Thrown errors are `QvacErrorAddonParakeet` instances (extending `QvacErrorBase`)
 This project is licensed under the Apache-2.0 License -- see [LICENSE](LICENSE) for details. Model files are distributed under the **NVIDIA Open Model License**; see the upstream HuggingFace cards for the per-checkpoint terms.
 
 For questions or issues, please open an issue on the GitHub repository.
+
+<!-- CI source-build baseline probe (no functional change) -->
