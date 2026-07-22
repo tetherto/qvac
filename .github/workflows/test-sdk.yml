@@ -45,7 +45,7 @@ on:
         description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
       filter:
-        description: "Test filters (comma-separated categories or prefixes)"
+        description: "Test filters (blank = all; comma-separated categories or prefixes)"
         type: string
       test-version:
         description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
