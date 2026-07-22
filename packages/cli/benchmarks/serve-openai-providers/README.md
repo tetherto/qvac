@@ -49,10 +49,15 @@ cd packages/cli
 npm install
 npm run test:bench-serve-openai-providers
 
-# Edit benchmarks/serve-openai-providers/benchmark.yaml, fill environment.md, start servers.
-cd benchmarks/serve-openai-providers
-npx tsx benchmark.ts digest
-npx tsx benchmark.ts preflight
-npx tsx benchmark.ts smoke
-npx tsx benchmark.ts full
+# Keep the filled config outside the repository and fill a local copy of
+# benchmarks/serve-openai-providers/environment.md.
+export BENCHMARK_CONFIG_PATH=/absolute/path/to/benchmark.yaml
+npx tsx benchmarks/serve-openai-providers/benchmark.ts digest --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmarks/serve-openai-providers/benchmark.ts preflight --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmarks/serve-openai-providers/benchmark.ts smoke --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmarks/serve-openai-providers/benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"
 ```
+
+For local runs, `benchmarks/serve-openai-providers/environment.md` is the source
+manifest. Protected full CI copies the runner-local filled manifest to
+`results/environment.md`, which is the version included in the results artifact.

@@ -837,7 +837,7 @@ describe('serve-openai-providers harness', () => {
     assert.equal(stats.nAttempted, stats.nValid + stats.nUnavailable + stats.nFailed)
   })
 
-  it('renders aggregate counts in every metric table', () => {
+  it('renders documented report wording, commands, counts, and final newline', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-report-'))
     try {
       const path = join(dir, 'report.md')
@@ -899,6 +899,23 @@ describe('serve-openai-providers harness', () => {
       const report = readFileSync(path, 'utf8')
       const expectedCounts = 'valid=1, unavailable=1, failed=1, attempted=3'
       assert.equal(report.split(expectedCounts).length - 1, 4)
+      assert.ok(
+        report.includes(
+          'Client output TPS: `completion_tokens / total_s` (end to end; includes HTTP, queueing, prompt processing, and first-token time; not native decode TPS)'
+        )
+      )
+      assert.ok(
+        report.includes(
+          'The local source manifest is `environment.md`; protected full CI copies it to `results/environment.md` in the uploaded artifact.'
+        )
+      )
+      assert.ok(report.includes('export BENCHMARK_CONFIG_PATH=/absolute/path/to/benchmark.yaml'))
+      assert.ok(
+        report.includes(
+          'npx tsx benchmarks/serve-openai-providers/benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"'
+        )
+      )
+      assert.equal(report.endsWith('\n'), true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

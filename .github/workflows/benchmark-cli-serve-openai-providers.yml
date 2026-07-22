@@ -96,12 +96,24 @@ jobs:
             echo "::error::target_sha must be a full 40-character commit SHA."
             exit 1
           fi
-          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          normalized_target_sha="${TARGET_SHA,,}"
+          printf 'target_sha=%s\n' "$normalized_target_sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout target SHA
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ steps.resolve.outputs.target_sha }}
+
+      - name: Verify checked out target SHA
+        env:
+          EXPECTED_TARGET_SHA: ${{ steps.resolve.outputs.target_sha }}
+        shell: bash
+        run: |
+          actual_target_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_target_sha" != "$EXPECTED_TARGET_SHA" ]]; then
+            echo "::error::checked out SHA $actual_target_sha does not match target $EXPECTED_TARGET_SHA."
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0

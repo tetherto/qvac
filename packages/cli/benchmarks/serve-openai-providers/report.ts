@@ -36,7 +36,9 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('')
   lines.push('## Environment and exact revisions')
   lines.push('')
-  lines.push('See `environment.md` in the harness directory for host, package, and launch details.')
+  lines.push(
+    'The local source manifest is `environment.md`; protected full CI copies it to `results/environment.md` in the uploaded artifact.'
+  )
   lines.push('')
   lines.push('## Model parity evidence')
   lines.push('')
@@ -169,10 +171,19 @@ export function writeReport(raw: RawDocument, path: string): void {
   lines.push('```bash')
   lines.push('cd packages/cli')
   lines.push('npm install')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts digest')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts preflight')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts smoke')
-  lines.push('npx tsx benchmarks/serve-openai-providers/benchmark.ts full')
+  lines.push('export BENCHMARK_CONFIG_PATH=/absolute/path/to/benchmark.yaml')
+  lines.push(
+    'npx tsx benchmarks/serve-openai-providers/benchmark.ts digest --config "$BENCHMARK_CONFIG_PATH"'
+  )
+  lines.push(
+    'npx tsx benchmarks/serve-openai-providers/benchmark.ts preflight --config "$BENCHMARK_CONFIG_PATH"'
+  )
+  lines.push(
+    'npx tsx benchmarks/serve-openai-providers/benchmark.ts smoke --config "$BENCHMARK_CONFIG_PATH"'
+  )
+  lines.push(
+    'npx tsx benchmarks/serve-openai-providers/benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"'
+  )
   lines.push('```')
   lines.push('')
 

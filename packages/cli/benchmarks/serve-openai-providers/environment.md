@@ -150,12 +150,13 @@ cd benchmarks/serve-openai-providers
 # 2) Fill a runner-local copy of environment.md outside the repository.
 # 3) Keep the Mac on AC power; lifecycle commands start one provider at a time.
 
-npx tsx benchmark.ts digest --config /absolute/path/to/benchmark.yaml
-npx tsx benchmark.ts preflight --config /absolute/path/to/benchmark.yaml
-npx tsx benchmark.ts calibrate --config /absolute/path/to/benchmark.yaml --provider qvac
+export BENCHMARK_CONFIG_PATH=/absolute/path/to/benchmark.yaml
+npx tsx benchmark.ts digest --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmark.ts preflight --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmark.ts calibrate --config "$BENCHMARK_CONFIG_PATH" --provider qvac
 # Adjust prompts.json if measured prompt_tokens drift far from targets, then re-preflight all three.
-npx tsx benchmark.ts smoke --config /absolute/path/to/benchmark.yaml
-npx tsx benchmark.ts full --config /absolute/path/to/benchmark.yaml
+npx tsx benchmark.ts smoke --config "$BENCHMARK_CONFIG_PATH"
+npx tsx benchmark.ts full --config "$BENCHMARK_CONFIG_PATH"
 ```
 
 CI: PR / CLI `test:unit` runs harness unit tests. Dispatch
@@ -219,8 +220,9 @@ the paths above:
 
 - The config is the same shape as the committed `benchmark.yaml`, but with real
   provider `model` IDs, the absolute `gguf_path`, and its `sha256` populated.
-- The environment manifest is a filled-in copy of this file, copied into
-  `results/environment.md` **after** the sweep completes and uploaded with the
+- This checked-in `environment.md` is the local source-manifest template. The
+  runner-local filled copy is copied into `results/environment.md` **after** the
+  sweep completes; that copied file is the environment manifest uploaded in the
   results artifact (`full` mode only).
 
 ### Lifecycle script contracts
