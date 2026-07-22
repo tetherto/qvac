@@ -74,6 +74,7 @@ test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
+    cfgRate: 0.7,
     threads: 8,
     nGpuLayers: 99,
     seed: 42
@@ -83,6 +84,7 @@ test('ttsConfigSchema: accepts Chatterbox native constructor options', (t) => {
     t.is(r.data.streamChunkTokens, 25)
     t.is(r.data.streamFirstChunkTokens, 10)
     t.is(r.data.cfmSteps, 1)
+    t.is(r.data.cfgRate, 0.7)
     t.is(r.data.threads, 8)
     t.is(r.data.nGpuLayers, 99)
     t.is(r.data.seed, 42)
@@ -94,6 +96,7 @@ test('ttsConfigSchema: rejects invalid Chatterbox constructor option ranges', (t
     { streamChunkTokens: -1 },
     { streamFirstChunkTokens: -1 },
     { cfmSteps: -1 },
+    { cfgRate: -0.1 },
     { threads: 0 },
     { nGpuLayers: 1.5 },
     { seed: 1.5 }
@@ -139,11 +142,13 @@ test('ttsConfigSchema: accepts LavaSR enhancer/denoiser + outputSampleRate (supe
     language: 'en',
     lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf',
     lavasrDenoiserModelSrc: 'registry://s3/lavasr/denoiser.gguf',
-    outputSampleRate: 24000
+    outputSampleRate: 24000,
+    vulkanCacheDir: '/data/qvac/vulkan-cache'
   })
   t.is(r.success, true)
   if (r.success) {
     t.is(r.data.outputSampleRate, 24000)
+    t.is(r.data.vulkanCacheDir, '/data/qvac/vulkan-cache')
   }
 })
 
@@ -375,6 +380,24 @@ test('ttsResponseSchema: accepts optional chunk metadata', (t) => {
   if (r.success) {
     t.is(r.data.chunkIndex, 0)
     t.is(r.data.sentenceChunk, 'Hello.')
+  }
+})
+
+test('ttsResponseSchema: accepts LavaSR enhancer backend stats', (t) => {
+  const r = ttsResponseSchema.safeParse({
+    type: 'textToSpeech',
+    buffer: [],
+    done: true,
+    stats: {
+      enhancerBackendDevice: 1,
+      enhancerBackendId: 3
+    }
+  })
+
+  t.is(r.success, true)
+  if (r.success) {
+    t.is(r.data.stats?.enhancerBackendDevice, 1)
+    t.is(r.data.stats?.enhancerBackendId, 3)
   }
 })
 

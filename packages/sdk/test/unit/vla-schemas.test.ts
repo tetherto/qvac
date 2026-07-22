@@ -109,6 +109,40 @@ test('vlaHparamsSchema: accepts canonical π₀.₅ shape (numCameras + discrete
   }
 })
 
+test('vlaHparamsSchema: accepts canonical GR00T shape (patches image mode + continuous state)', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    numCameras: 2,
+    stateInputMode: 'continuous',
+    imageInputMode: 'patches',
+    imagePatchElems: 262144
+  })
+  t.is(result.success, true)
+  if (result.success) {
+    t.is(result.data.numCameras, 2)
+    t.is(result.data.imageInputMode, 'patches')
+    t.is(result.data.imagePatchElems, 262144)
+  }
+})
+
+test('vlaHparamsSchema: rejects unknown imageInputMode', (t) => {
+  const result = vlaHparamsSchema.safeParse({
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    imageInputMode: 'tiles'
+  })
+  t.is(result.success, false)
+})
+
 test('vlaHparamsSchema: rejects unknown stateInputMode', (t) => {
   const result = vlaHparamsSchema.safeParse({
     chunkSize: 50,
@@ -702,6 +736,51 @@ test('vlaRun op: omits noise when not provided', async function (t) {
   )
 })
 
+test('vlaRun op: forwards GR00T patch-buffer images (imageInputMode patches)', async function (t) {
+  // GR00T supplies pre-patchified image buffers of hparams.imagePatchElems
+  // floats per camera, not 3*w*h pixel planes. The op must base64-decode and
+  // forward each patch buffer to model.run intact — the pixel-length contract
+  // does not apply on the patch path (patch/pixel dispatch is addon-side via
+  // hparams.imageInputMode).
+  let observedInput: Record<string, unknown> | undefined
+  const patchElems = 8 // stand-in for hparams.imagePatchElems (real: e.g. 262144)
+  const cam0 = new Float32Array(patchElems).fill(0.1)
+  const cam1 = new Float32Array(patchElems).fill(0.2)
+  await withRegisteredVlaModel(
+    {
+      runImpl: async function (input: unknown) {
+        observedInput = input as Record<string, unknown>
+        return {
+          await: async () => ({ actions: new Float32Array([0]), stats: { total_ms: 1 } })
+        }
+      },
+      hparams: { actionDim: 32, chunkSize: 40 }
+    },
+    async (modelId) => {
+      await vlaRun({
+        type: 'vlaRun',
+        modelId,
+        // Two cameras (LIBERO GR00T), each a patch buffer, not a pixel plane.
+        images: [
+          encodeBase64(new Uint8Array(cam0.buffer)),
+          encodeBase64(new Uint8Array(cam1.buffer))
+        ],
+        imgWidth: 224,
+        imgHeight: 224,
+        state: encodeBase64(new Uint8Array(new Float32Array(64).buffer)),
+        tokens: encodeBase64(new Uint8Array(new Int32Array(148).buffer)),
+        mask: encodeBase64(new Uint8Array(148))
+      })
+
+      const images = observedInput?.['images'] as Float32Array[]
+      t.is(images.length, 2, 'two camera patch buffers forwarded')
+      t.is(images[0]?.length, patchElems, 'patch buffer length preserved (not 3*w*h)')
+      t.ok(Math.abs((images[0]?.[0] ?? NaN) - 0.1) < 1e-6)
+      t.ok(Math.abs((images[1]?.[0] ?? NaN) - 0.2) < 1e-6)
+    }
+  )
+})
+
 // ============================================
 // vlaGetHparams op
 // ============================================
@@ -753,6 +832,38 @@ test('vlaGetHparams op: surfaces π₀.₅ numCameras + stateInputMode', async f
       t.alike(result.hparams, hp)
       t.is(result.hparams.numCameras, 3)
       t.is(result.hparams.stateInputMode, 'discrete')
+    }
+  )
+})
+
+test('vlaGetHparams op: surfaces GR00T imageInputMode + imagePatchElems', async function (t) {
+  // The patch-input hparams must survive the vlaHparamsSchema.parse() in the
+  // hparams path (they were being stripped before they were added to the
+  // schema), so a consumer can discover patch mode + size the patch buffer.
+  const hp = {
+    chunkSize: 40,
+    actionDim: 32,
+    maxActionDim: 132,
+    maxStateDim: 64,
+    tokenizerMaxLength: 148,
+    visionImageSize: 224,
+    numCameras: 2,
+    stateInputMode: 'continuous' as const,
+    imageInputMode: 'patches' as const,
+    imagePatchElems: 262144
+  }
+  await withRegisteredVlaModel(
+    {
+      runImpl: async function () {
+        throw new Error('run not exercised')
+      },
+      hparams: hp as unknown as { actionDim: number; chunkSize: number }
+    },
+    async (modelId) => {
+      const result = await vlaGetHparams({ type: 'vlaHparams', modelId })
+      t.alike(result.hparams, hp)
+      t.is(result.hparams.imageInputMode, 'patches')
+      t.is(result.hparams.imagePatchElems, 262144)
     }
   )
 })

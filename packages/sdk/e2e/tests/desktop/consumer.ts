@@ -1,4 +1,4 @@
-import { createExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -27,6 +27,7 @@ import {
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
+  GROOT_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -180,6 +181,15 @@ resources.define('vla', {
 
 resources.define('vla-pi05', {
   constant: PI05_BASE_Q_AGGRESSIVE,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
+// Desktop-only resource. Uses the smaller q5 profile (~2.74 GB) to keep load
+// time down. Not smoke-tagged (too heavy for the quick smoke path), and mobile
+// does not define this resource, so the mobile suite skips the groot tests.
+resources.define('vla-groot', {
+  constant: GROOT_Q5_VF16,
   type: 'ggml-vla',
   config: { backend: 'cpu' }
 })
@@ -364,7 +374,7 @@ resources.define('vision', {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
+    ctx_size: 4096,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
   }
 })
@@ -502,6 +512,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new SkipExecutor(
+      /^snap-storage-/,
+      'Snap storage tests require the strict-confined Snap consumer'
+    ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

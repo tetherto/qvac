@@ -38,7 +38,7 @@ export const ENGINE_TO_ADDON = {
 
 // Legacy engine names → canonical engine.
 // Used for backward compatibility with old registry data that uses @qvac/* package names.
-const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
+export const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   [ADDON_LLM]: ModelType.llamacppCompletion,
   [ADDON_WHISPER]: ModelType.whispercppTranscription,
   [ADDON_BCI]: ModelType.bciWhispercppTranscription,

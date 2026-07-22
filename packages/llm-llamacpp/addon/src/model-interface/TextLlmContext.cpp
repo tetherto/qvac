@@ -123,6 +123,22 @@ void TextLlmContext::initializeCommonState() {
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(arch.value());
   }
+
+  // Precompute the EOG token id set used by the EOS-inside-reasoning recovery
+  // (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family arms that
+  // ban, so the scan is gated on it. Computed once here so the recovery path
+  // never does an O(nVocab) scan mid-stream, matching this file's
+  // compute-once-at-load convention. Valid for the instance lifetime because
+  // `modelCtx_` (copy/move deleted) is never reassigned.
+  if (isQwen3ReasoningFamily_) {
+    const int32_t nVocab = llama_vocab_n_tokens(modelCtx_.vocab);
+    eogTokens_.reserve(8);
+    for (llama_token t = 0; t < nVocab; ++t) {
+      if (llama_vocab_is_eog(modelCtx_.vocab, t)) {
+        eogTokens_.push_back(t);
+      }
+    }
+  }
   isHarmonyModel_ =
       qvac_lib_inference_addon_llama::utils::isHarmonyModel(modelCtx_.model);
   if (isHarmonyModel_) {
@@ -783,6 +799,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   forcedTokens_.clear();
   assistantOutput_.clear();
   generationStarted_ = false;
+  banEogAfterReasoningRecovery_ = false;
   generationStopReason_ = GenerationStopReason::None;
 
   // The chat template force-opened the reasoning channel in the prompt (e.g.
@@ -908,6 +925,20 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   bool sampledToken = forcedTokens_.empty();
   llama_token tokenId = LLAMA_TOKEN_NULL;
   if (sampledToken) {
+    if (banEogAfterReasoningRecovery_) {
+      banEogAfterReasoningRecovery_ = false;
+      // Ban EOG for exactly this one token. Unconditional: the generation
+      // loop only reaches this sample while the n_predict budget allows it,
+      // so banning EOG on the final budgeted sample yields one content
+      // token and never extends generation past the budget.
+      float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
+      if (logits != nullptr) {
+        // `eogTokens_` is precomputed in initializeCommonState().
+        for (const llama_token t : eogTokens_) {
+          logits[t] = -INFINITY;
+        }
+      }
+    }
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
     common_sampler_accept(smpl_.get(), tokenId, true);
   } else {
@@ -1012,6 +1043,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
       }
+      banEogAfterReasoningRecovery_ = true;
       const std::string completeChars = utf8Buffer_.addToken(tokenStr);
       if (!completeChars.empty()) {
         emitOutputPiece(outputCallback, completeChars);
@@ -1091,7 +1123,9 @@ bool TextLlmContext::onGenerationFinished(
   // prefill-entry rollback checkpoint is no longer reachable. Drop
   // its temp file now instead of waiting for the next inference.
   rollbackState_.clearPrefillEntry();
-  generationStopReason_ = GenerationStopReason::None;
+  // `generationStopReason_` intentionally persists: runtime stats read
+  // it after generateResponse() returns; it is re-initialized at the
+  // next generation's entry.
   return true;
 }
 
@@ -1695,6 +1729,7 @@ void TextLlmContext::resetState(bool resetStats) {
   forcedTokens_.clear();
   assistantOutput_.clear();
   generationStarted_ = false;
+  banEogAfterReasoningRecovery_ = false;
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
   compactor_.reset();
@@ -1861,5 +1896,6 @@ bool TextLlmContext::handleReasoningEOS(
     }
   }
 
+  banEogAfterReasoningRecovery_ = true;
   return true;
 }

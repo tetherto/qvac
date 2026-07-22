@@ -39,6 +39,7 @@ import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
+import { snapStorageTests } from './snap-storage-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -317,6 +318,9 @@ export const tests = [
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
   ...pluginTests,
+
+  // Strict Snap storage-path conformance
+  ...snapStorageTests,
 
   // Additional model tests
   modelSwitchLlm,

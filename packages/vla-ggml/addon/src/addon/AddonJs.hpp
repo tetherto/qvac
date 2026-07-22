@@ -216,12 +216,15 @@ JSCATCH
 
 // getVlaHparams(instance) -> { chunkSize, actionDim, maxActionDim,
 //                              maxStateDim, tokenizerMaxLength,
-//                              visionImageSize, numCameras, stateInputMode }
+//                              visionImageSize, numCameras, imagePatchElems,
+//                              stateInputMode, imageInputMode }
 //
-// `numCameras` and `stateInputMode` let JS-side input validation
-// distinguish a SmolVLA model (2 cameras,
-// continuous state) from a π₀.₅ model (up to 3 cameras, discrete state
-// inlined into the prompt). The existing fields are unchanged.
+// `numCameras`, `stateInputMode`, and `imageInputMode` let JS-side input
+// validation tell the architectures apart: SmolVLA (2 cameras, continuous
+// state, pixel images), π₀.₅ (up to 3 cameras, discrete state inlined into
+// the prompt), and GR00T (continuous state, pre-patchified images ->
+// imageInputMode "patches"). `imagePatchElems` is the exact per-camera patch
+// buffer length the patches-path validator checks against (0 on pixel models).
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -251,11 +254,17 @@ inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   setInt("tokenizerMaxLength", hp.tokenizer_max_length);
   setInt("visionImageSize", hp.vision_image_size);
   setInt("numCameras", hp.num_cameras);
+  setInt("imagePatchElems", hp.image_patch_elems);
   setStr(
       "stateInputMode",
       hp.state_input_mode == VlaHparamsGeneric::StateInputMode::Discrete
           ? "discrete"
           : "continuous");
+  setStr(
+      "imageInputMode",
+      hp.image_input_mode == VlaHparamsGeneric::ImageInputMode::Patches
+          ? "patches"
+          : "pixels");
   return obj;
 }
 JSCATCH
