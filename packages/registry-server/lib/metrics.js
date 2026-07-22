@@ -14,7 +14,7 @@ const RPC_METHODS = Object.freeze([
 ])
 
 class QvacMetrics {
-  constructor (service, opts = {}) {
+  constructor(service, opts = {}) {
     this._service = service
     this._logger = opts.logger || console
 
@@ -38,21 +38,21 @@ class QvacMetrics {
     this._registerGauges()
   }
 
-  recordRpcRequest (method) {
+  recordRpcRequest(method) {
     this._rpcRequests.inc({ method })
   }
 
-  recordRpcError (method) {
+  recordRpcError(method) {
     this._rpcErrors.inc({ method })
   }
 
-  _registerGauges () {
+  _registerGauges() {
     const self = this
 
     registerGauge({
       name: 'qvac_registry_model_count',
       help: 'Number of models in the registry',
-      collect () {
+      collect() {
         this.set(self._service.modelCount)
       }
     })
@@ -60,7 +60,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_total_blob_bytes',
       help: 'Total bytes across all model blobs (sum of blobBinding.byteLength across view records)',
-      collect () {
+      collect() {
         this.set(self._service.totalModelBytes)
       }
     })
@@ -70,7 +70,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_totals_refreshed_age_seconds',
       help: 'Seconds since qvac_registry_total_blob_bytes and qvac_registry_model_count were last recomputed (-1 if never)',
-      collect () {
+      collect() {
         const ts = self._service.totalsRefreshedAt
         this.set(ts ? (Date.now() - ts) / 1000 : -1)
       }
@@ -79,7 +79,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_blob_core_count',
       help: 'Number of blob cores opened locally on this node',
-      collect () {
+      collect() {
         this.set(self._service.blobsCores.size)
       }
     })
@@ -90,24 +90,24 @@ class QvacMetrics {
     // distinguishes nodes at scrape time.
     registerGauge({
       name: 'qvac_registry_blob_core_peers',
-      help: 'Number of peers connected to this node\'s local blob core (may be partial replicas)',
-      collect () {
+      help: "Number of peers connected to this node's local blob core (may be partial replicas)",
+      collect() {
         this.set(firstBlobCore(self._service)?.peers.length ?? 0)
       }
     })
 
     registerGauge({
       name: 'qvac_registry_blob_core_length',
-      help: 'This node\'s local blob core length (total blocks)',
-      collect () {
+      help: "This node's local blob core length (total blocks)",
+      collect() {
         this.set(firstBlobCore(self._service)?.length ?? 0)
       }
     })
 
     registerGauge({
       name: 'qvac_registry_blob_core_contiguous_length',
-      help: 'This node\'s local blob core contiguous length (gap = length - contiguous indicates missing blocks on disk)',
-      collect () {
+      help: "This node's local blob core contiguous length (gap = length - contiguous indicates missing blocks on disk)",
+      collect() {
         this.set(firstBlobCore(self._service)?.contiguousLength ?? 0)
       }
     })
@@ -115,7 +115,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_view_core_length',
       help: 'View core length (total blocks)',
-      collect () {
+      collect() {
         const viewCore = self._service.view?.core
         this.set(viewCore ? viewCore.length : 0)
       }
@@ -124,7 +124,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_view_core_contiguous_length',
       help: 'View core contiguous length (gap = length - contiguous indicates replication lag)',
-      collect () {
+      collect() {
         const viewCore = self._service.view?.core
         this.set(viewCore ? viewCore.contiguousLength : 0)
       }
@@ -133,7 +133,7 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_view_core_seeders',
       help: 'Peers that hold the view core fully and are willing to upload (full replicas available in the swarm)',
-      collect () {
+      collect() {
         this.set(countSeeders(self._service.view?.core))
       }
     })
@@ -141,23 +141,23 @@ class QvacMetrics {
     registerGauge({
       name: 'qvac_registry_is_indexer',
       help: 'Whether this node is an indexer (1=yes, 0=no)',
-      collect () {
+      collect() {
         this.set(self._service.base?.isIndexer ? 1 : 0)
       }
     })
 
     registerGauge({
       name: 'qvac_registry_blob_core_byte_length',
-      help: 'Byte length of this node\'s local blob core (only populated on nodes that opened the blob core locally)',
-      collect () {
+      help: "Byte length of this node's local blob core (only populated on nodes that opened the blob core locally)",
+      collect() {
         this.set(firstBlobCore(self._service)?.byteLength ?? 0)
       }
     })
 
     registerGauge({
       name: 'qvac_registry_blob_core_seeders',
-      help: 'Peers holding this node\'s local blob core fully and willing to upload (full replicas)',
-      collect () {
+      help: "Peers holding this node's local blob core fully and willing to upload (full replicas)",
+      collect() {
         this.set(countSeeders(firstBlobCore(self._service)))
       }
     })
@@ -166,12 +166,12 @@ class QvacMetrics {
 
 // Each indexer owns at most one writable blob core; this helper returns it
 // or null when the node is a reader that hasn't opened the core locally.
-function firstBlobCore (service) {
+function firstBlobCore(service) {
   const iter = service.blobsCores.values().next()
   return iter.done ? null : iter.value.core
 }
 
-function registerGauge (opts) {
+function registerGauge(opts) {
   return new promClient.Gauge(opts)
 }
 
@@ -180,7 +180,7 @@ function registerGauge (opts) {
 // length covers the core's current length. `remoteContiguousLength` is zero
 // until the handshake completes, so the `remoteOpened` check avoids counting
 // partially-initialised peers as full replicas.
-function countSeeders (core) {
+function countSeeders(core) {
   if (!core || !Array.isArray(core.peers) || core.length === 0) return 0
   let n = 0
   for (const p of core.peers) {

@@ -9,9 +9,9 @@ const { parseCanonicalSource } = require('../lib/source-helpers')
 
 const TIMEOUT_MS = 60000
 
-async function smokeTest () {
+async function smokeTest() {
   const args = process.argv.slice(2)
-  const fileArg = args.find(arg => arg.startsWith('--file='))
+  const fileArg = args.find((arg) => arg.startsWith('--file='))
   const filePath = fileArg ? fileArg.split('=')[1] : './data/models.prod.json'
   const jsonOutput = args.includes('--json')
 
@@ -90,7 +90,8 @@ async function smokeTest () {
     if (models.length > 0) {
       const sample = models[0]
       const hasRequiredFields = sample.path && sample.engine && sample.blobBinding
-      const hasBlobBinding = sample.blobBinding &&
+      const hasBlobBinding =
+        sample.blobBinding &&
         typeof sample.blobBinding.blockOffset === 'number' &&
         typeof sample.blobBinding.blockLength === 'number' &&
         sample.blobBinding.coreKey
@@ -112,7 +113,7 @@ async function smokeTest () {
     let foundCount = 0
     const samplePaths = Array.from(expectedPaths).slice(0, 5)
     for (const expectedPath of samplePaths) {
-      const found = models.some(m => m.path === expectedPath)
+      const found = models.some((m) => m.path === expectedPath)
       if (found) foundCount++
     }
 
@@ -125,7 +126,7 @@ async function smokeTest () {
     }
 
     // Determine overall success
-    result.success = result.checks.every(c => c.passed)
+    result.success = result.checks.every((c) => c.passed)
   } catch (err) {
     result.error = err.message
     if (!jsonOutput) {
@@ -163,7 +164,7 @@ async function smokeTest () {
 }
 
 if (require.main === module) {
-  smokeTest().catch(err => {
+  smokeTest().catch((err) => {
     console.error('Fatal error:', err.message)
     process.exit(1)
   })

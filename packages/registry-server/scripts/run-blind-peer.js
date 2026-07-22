@@ -9,7 +9,7 @@ const logger = require('../lib/logger')
 const DEFAULT_STORAGE = path.resolve(process.cwd(), './blind-peer-data')
 const DEFAULT_MAX_STORAGE_MB = 50_000
 
-function formatBytes (bytes) {
+function formatBytes(bytes) {
   if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
@@ -26,9 +26,9 @@ const cli = command(
   async ({ flags }) => {
     const storage = flags.storage || DEFAULT_STORAGE
     const trusted = (flags.trusted || [])
-      .map(key => key.trim())
+      .map((key) => key.trim())
       .filter(Boolean)
-      .map(key => {
+      .map((key) => {
         try {
           return IdEnc.decode(key)
         } catch (err) {
@@ -39,7 +39,9 @@ const cli = command(
     const maxBytes = parseInt(flags.maxStorage || DEFAULT_MAX_STORAGE_MB, 10) * 1_000_000
     const port = flags.port ? parseInt(flags.port, 10) : undefined
 
-    logger.info(`Starting blind peer - storage: ${storage}, trusted peers: ${trusted.length}, max bytes: ${maxBytes}, port: ${port || 'auto'}`)
+    logger.info(
+      `Starting blind peer - storage: ${storage}, trusted peers: ${trusted.length}, max bytes: ${maxBytes}, port: ${port || 'auto'}`
+    )
 
     const blindPeer = new BlindPeer(storage, {
       maxBytes,
@@ -69,7 +71,9 @@ const cli = command(
     })
 
     blindPeer.on('announce-core', (core) => {
-      logger.info(`Core announced to DHT - key: ${IdEnc.normalize(core.key)}, length: ${core.length}`)
+      logger.info(
+        `Core announced to DHT - key: ${IdEnc.normalize(core.key)}, length: ${core.length}`
+      )
     })
 
     blindPeer.on('core-downloaded', (core) => {
@@ -82,7 +86,9 @@ const cli = command(
 
     blindPeer.on('downgrade-announce', ({ record, remotePublicKey }) => {
       const peer = remotePublicKey ? IdEnc.normalize(remotePublicKey) : 'unknown'
-      logger.warn(`Announce request rejected (untrusted peer) - key: ${IdEnc.normalize(record.key)}, peer: ${peer}`)
+      logger.warn(
+        `Announce request rejected (untrusted peer) - key: ${IdEnc.normalize(record.key)}, peer: ${peer}`
+      )
     })
 
     blindPeer.on('gc-start', ({ bytesToClear }) => {
