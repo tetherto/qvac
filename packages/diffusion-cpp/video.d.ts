@@ -128,6 +128,7 @@ export interface VideoGenerationParams {
   // ── Wan 2.2 T2V-A14B high-noise expert knobs ─────────────────────────
   // All require files.highNoiseDiffusionModel. They are rejected for dense
   // Wan 2.2 TI2V-5B and Wan 2.1 contexts to avoid silently dropping them.
+  /** High-noise sample count; `-1` uses native moe_boundary-based routing. */
   high_noise_steps?: number
   high_noise_sampler?: SamplerMethod
   high_noise_scheduler?: ScheduleType

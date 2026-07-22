@@ -19,7 +19,7 @@ const { verifyLocalModelPath } = require('./utils')
 
 const enabled = proc.env && proc.env.WAN22_RUN_SMOKE === 'true'
 const modelsDir = proc.env && proc.env.WAN22_MODELS_DIR
-const skip = !enabled || !modelsDir || os.platform() === 'darwin'
+const skip = !enabled || os.platform() === 'darwin'
 
 const FILES = [
   'Wan2_2-TI2V-5B-Turbo-Q5_K_S.gguf',
@@ -40,6 +40,10 @@ test(
   'Wan 2.2 TI2V-5B Turbo Q5_K_S — smoke (txt2vid) generates a valid AVI',
   { timeout: 900000, skip },
   async (t) => {
+    if (!modelsDir) {
+      throw new Error('WAN22_MODELS_DIR is required when WAN22_RUN_SMOKE=true')
+    }
+
     const resolved = {}
     for (const name of FILES) {
       const filePath = path.join(modelsDir, name)
@@ -72,7 +76,7 @@ test(
         mode: 'txt2vid',
         prompt: 'a red fox running through snow at dusk',
         width: 416,
-        height: 240,
+        height: 256,
         video_frames: 5,
         fps: 16,
         steps: 4,

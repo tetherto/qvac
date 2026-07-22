@@ -89,8 +89,10 @@ struct SdVidGenConfig {
   // -- High-noise expert (Wan 2.2 only) -------------------------------------
   // Mapped to sd_vid_gen_params_t::high_noise_sample_params. processVideo()
   // rejects an explicitly supplied high-noise setting unless
-  // SdCtxConfig::highNoiseDiffusionModelPath is also set.
-  int highNoiseSteps = 30;
+  // SdCtxConfig::highNoiseDiffusionModelPath is also set. -1 preserves the
+  // native sentinel: derive the A14B expert split from moeBoundary instead of
+  // running a separately configured high-noise schedule.
+  int highNoiseSteps = -1;
   sample_method_t highNoiseSampleMethod = EULER_SAMPLE_METHOD;
   scheduler_t highNoiseScheduler = SIMPLE_SCHEDULER;
   float highNoiseCfgScale = 6.0f;

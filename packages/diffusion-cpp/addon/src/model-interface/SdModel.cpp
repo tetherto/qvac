@@ -1207,9 +1207,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   stats_.totalGenerationMs += genMsI;
   stats_.totalWallMs += genMsI;
   // A Wan 2.2 A14B run consumes both expert schedules. Single-expert paths
-  // only count the primary schedule.
+  // only count the primary schedule. -1 is the native A14B sentinel that
+  // derives the split from moe_boundary, not a separately counted schedule.
   stats_.totalSteps += vid.sampleSteps;
-  if (hasHighNoiseExpert)
+  if (hasHighNoiseExpert && vid.highNoiseSteps > 0)
     stats_.totalSteps += vid.highNoiseSteps;
   stats_.totalGenerations++;
   stats_.totalVideos++;

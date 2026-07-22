@@ -699,6 +699,28 @@ test('run | accepts Wan 2.2 MoE controls with a high-noise expert', async (t) =>
   )
 })
 
+test('run | accepts the high_noise_steps native sentinel with a high-noise expert', async (t) => {
+  const m = new VideoStableDiffusion({
+    files: {
+      model: FAKE_MODEL,
+      highNoiseDiffusionModel: FAKE_HIGH_NOISE,
+      t5Xxl: FAKE_T5XXL,
+      vae: FAKE_VAE
+    },
+    config: { threads: 1 },
+    logger: makeQuiet()
+  })
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      high_noise_steps: -1,
+      moe_boundary: 0.5
+    }),
+    /Addon not initialized/
+  )
+})
+
 test('run | identifies every MoE control that lacks a high-noise expert', async (t) => {
   const m = makeWanModel()
   await t.exception.all(

@@ -45,7 +45,7 @@ The package exposes three JS entry points:
 | SD3                          | image                                  | Supports split CLIP-L / CLIP-G / T5-XXL inputs                                    |
 | FLUX.2 [klein]               | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE                                                 |
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
-| Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video, image-to-video          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
+| Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
@@ -407,7 +407,9 @@ VLC handles these files well.
 ### Wan 2.2
 
 The supported Wan 2.2 workflow is the community-distilled TI2V-5B Turbo
-Q5_K_S GGUF. Download its complete model layout before running the example:
+Q5_K_S GGUF for text-to-video. The downloader does not include the CLIP vision
+encoder required by the wrapper's image-to-video path. Download its complete
+text-to-video model layout before running the example:
 
 ```sh
 # TI2V-5B Turbo Q5_K_S (4 steps, CFG 1)
@@ -417,7 +419,9 @@ npm run generate:wan22
 
 The download is approximately 16.4 GB: 3.56 GB for the Q5_K_S diffusion model,
 11.4 GB for the fp16 UMT5-XXL encoder, and 1.41 GB for the Wan 2.2 VAE. The
-backend runs one process on one device with optional CPU offload.
+backend runs one process on one device with optional CPU offload. Use dimensions
+that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
+the requested dimensions.
 
 ## LTX-2 Text-to-Video With Audio
 
