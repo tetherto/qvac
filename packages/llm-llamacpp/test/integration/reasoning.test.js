@@ -106,8 +106,15 @@ function verifyReasoningTags(t, response, testName) {
   t.ok(response.length > 100, `${testName} should generate substantial output`)
 }
 
-// Shared helper: Verify generation continued after reasoning
-function verifyContinuedAfterReasoning(t, response, testName) {
+// Shared helper: Verify generation continued after reasoning.
+// The EOS-inside-reasoning recovery guarantees a content token after the
+// forced `</think>` — the only legitimate empty answer is when the forced
+// close-marker tokens themselves exhausted the n_predict budget. That case
+// is detected via `stats.stopReason === 'predictionLimit'` rather than by
+// comparing `generatedTokens` to n_predict: generatedTokens is raw n_eval,
+// which the recovery's inline decodes inflate, so it can reach n_predict
+// while the logical generation loop still had budget.
+function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   const thinkCloseIndex = response.indexOf('</think>')
   if (thinkCloseIndex === -1) {
     t.fail(`No </think> tag found in ${testName}`)
@@ -115,6 +122,13 @@ function verifyContinuedAfterReasoning(t, response, testName) {
   }
 
   const textAfterThink = response.substring(thinkCloseIndex + '</think>'.length).trim()
+  if (textAfterThink.length === 0 && opts.stopReason === 'predictionLimit') {
+    t.pass(
+      `Generation hit the n_predict cutoff (stopReason=${opts.stopReason}) after ` +
+        `the forced </think> tag — accepted (${testName})`
+    )
+    return true
+  }
   t.ok(textAfterThink.length > 0, `Generation should continue after </think> tag (${testName})`)
   return textAfterThink.length > 0
 }
@@ -170,13 +184,19 @@ safeTest(
 
     // Second completion - this is where the fix should activate
     const messages2 = createFollowUpMessages(messages1, response1)
-    const response2 = await runCompletion(inference, messages2)
+    const { response: response2, stats: stats2 } = await runCompletionWithStats(
+      inference,
+      messages2
+    )
     t.comment(`Second completion (tools=false, len=${response2.length}):\n${response2}`)
 
     verifyReasoningTags(t, response2, 'Second completion')
 
-    // Verify the fix worked: generation continued after reasoning
-    verifyContinuedAfterReasoning(t, response2, 'tools=false')
+    // Verify the fix worked: generation continued after reasoning (or the
+    // n_predict budget was exhausted, which legitimately ends the response).
+    verifyContinuedAfterReasoning(t, response2, 'tools=false', {
+      stopReason: stats2.stopReason
+    })
   }
 )
 
@@ -197,13 +217,19 @@ safeTest(
 
     // Second completion - this is where the fix should activate
     const messages2 = createFollowUpMessages(messages1, response1)
-    const response2 = await runCompletion(inference, messages2)
+    const { response: response2, stats: stats2 } = await runCompletionWithStats(
+      inference,
+      messages2
+    )
     t.comment(`Second completion (tools=true, len=${response2.length}):\n${response2}`)
 
     verifyReasoningTags(t, response2, 'Second completion (tools=true)')
 
-    // Verify the fix worked: generation continued after reasoning
-    verifyContinuedAfterReasoning(t, response2, 'tools=true')
+    // Verify the fix worked: generation continued after reasoning (or the
+    // n_predict budget was exhausted, which legitimately ends the response).
+    verifyContinuedAfterReasoning(t, response2, 'tools=true', {
+      stopReason: stats2.stopReason
+    })
   }
 )
 
