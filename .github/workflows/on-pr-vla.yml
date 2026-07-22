@@ -152,6 +152,7 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
+      id-token: write # OIDC to pull the GR00T parity model from S3 (cpp-tests-vla)
     if: always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks, ci-router, label-gate]
     uses: ./.github/workflows/cpp-tests-vla.yml

@@ -169,6 +169,17 @@ jobs:
           ./scripts/generate-smolvla-presigned-url.sh
           echo "✅ SmolVLA model URL generated and exported"
 
+      - name: Generate GR00T Model URL
+        working-directory: addon/packages/vla-ggml
+        env:
+          AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          echo "Generating GR00T model URL for mobile tests..."
+          chmod +x scripts/generate-groot-presigned-url.sh
+          ./scripts/generate-groot-presigned-url.sh
+          echo "GR00T model URL generated and exported"
+
       - name: Bundle Model URLs in config files for APK to access
         working-directory: addon/packages/vla-ggml
         env:
@@ -177,7 +188,14 @@ jobs:
           SMOLVLA_MODEL_SHA256: ${{ env.SMOLVLA_MODEL_SHA256 }}
         run: |
           echo "📝 Creating model URL config files for mobile app bundling..."
-          echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
+            echo "::add-mask::${SMOLVLA_MODEL_URL}"
+            echo "   SMOLVLA_MODEL_URL: SET"
+          else
+            echo "   SMOLVLA_MODEL_URL: NOTSET"
+          fi
           echo "   SMOLVLA_MODEL_SIZE: ${SMOLVLA_MODEL_SIZE:-unknown}"
           echo "   SMOLVLA_MODEL_SHA256: ${SMOLVLA_MODEL_SHA256:+SET}${SMOLVLA_MODEL_SHA256:-NOTSET}"
 
@@ -204,13 +222,13 @@ jobs:
           # S3 oracle directly. The pi05 test is gated by `_skipMobilePi05`
           # in pi05.test.js so no pi05 URL/fixture bundling is needed here.
 
-          # Copy the PyTorch reference fixtures into testAssets/ so the
-          # mobile test app can load them via global.assetPaths and run the
-          # same quality assertion the desktop integration test runs (max|Δ|
-          # and cosine similarity vs PyTorch). Without this the mobile run
-          # silently skips the quality check.
+          # Copy the PyTorch reference fixtures into testAssets/ so the mobile
+          # test app can load them via global.assetPaths and run the same
+          # quality assertion the desktop integration test runs (max|delta| and
+          # cosine similarity vs PyTorch). Kept here, gated on the always-present
+          # SMOLVLA_MODEL_URL, so a GR00T S3 hiccup can't break fixture bundling.
           echo ""
-          echo "📦 Bundling integration test fixtures..."
+          echo "Bundling integration test fixtures..."
           for f in pt_actions_libero_fixed.json \
                    pt_actions_libero_real.json \
                    libero_real_left.bin \
@@ -218,15 +236,48 @@ jobs:
             src="test/integration/assets/$f"
             if [ -f "$src" ]; then
               cp "$src" "test/mobile/testAssets/$f"
-              echo "   ✅ $f ($(wc -c < test/mobile/testAssets/$f) bytes)"
+              echo "   $f ($(wc -c < test/mobile/testAssets/$f) bytes)"
             else
-              echo "   ⚠️  $f missing — mobile will skip the corresponding fixture"
+              echo "   $f missing, mobile will skip the corresponding fixture"
             fi
           done
 
-          echo ""
-          echo "📂 testAssets directory contents:"
-          ls -la test/mobile/testAssets/
+      - name: Bundle GR00T Model URL in config file for APK to access
+        working-directory: addon/packages/vla-ggml
+        env:
+          GROOT_MODEL_URL: ${{ env.GROOT_MODEL_URL }}
+          GROOT_MODEL_SIZE: ${{ env.GROOT_MODEL_SIZE }}
+          GROOT_MODEL_SHA256: ${{ env.GROOT_MODEL_SHA256 }}
+        run: |
+          echo "Creating GR00T model URL config for mobile app bundling..."
+          # Presigned URL carries creds: mask it, then log only SET/NOTSET.
+          # `${VAR:-NOTSET}` would expand the full URL into the log when set.
+          if [ -n "${GROOT_MODEL_URL:-}" ]; then
+            echo "::add-mask::${GROOT_MODEL_URL}"
+            echo "   GROOT_MODEL_URL: SET"
+          else
+            echo "   GROOT_MODEL_URL: NOTSET"
+          fi
+          echo "   GROOT_MODEL_SIZE: ${GROOT_MODEL_SIZE:-unknown}"
+          echo "   GROOT_MODEL_SHA256: ${GROOT_MODEL_SHA256:+SET}${GROOT_MODEL_SHA256:-NOTSET}"
+
+          mkdir -p test/mobile/testAssets
+
+          if [ -n "${GROOT_MODEL_URL:-}" ]; then
+            jq -n \
+              --arg url "$GROOT_MODEL_URL" \
+              --arg size "${GROOT_MODEL_SIZE:-}" \
+              --arg sha256 "${GROOT_MODEL_SHA256:-}" \
+              '{modelUrl: $url}
+                + (if $size   != "" then {sizeBytes: ($size | tonumber)} else {} end)
+                + (if $sha256 != "" then {sha256: $sha256}              else {} end)' \
+              > test/mobile/testAssets/groot-urls.json
+            echo "   GR00T URL bundled ($(wc -c < test/mobile/testAssets/groot-urls.json) bytes)"
+            # Do not echo the URL itself (it's a presigned URL with creds).
+          else
+            echo "   GR00T URL not available"
+            exit 1
+          fi
 
       - name: Build mobile app
         id: build
@@ -248,8 +299,8 @@ jobs:
 
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
-      # test-groups.json under <addon-workdir>/test/mobile/ — VLA currently
-      # has no test-groups.json, so a single default test spec is emitted.
+      # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
+      # (smolvla/pi05/groot), so the test specs come from it.
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
