@@ -2209,6 +2209,40 @@
     "quantization": "q4_k_m",
     "params": "20B"
   },
+  "GROOT_Q5_VF16": {
+    "name": "GROOT_Q5_VF16",
+    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
+    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    "blobBlockOffset": 4651104,
+    "blobBlockLength": 41801,
+    "blobByteOffset": 304802373578,
+    "modelId": "groot-q5_vf16.gguf",
+    "expectedSize": 2739467616,
+    "sha256Checksum": "5695a64ff37ca2d3a123bba6b32f1b05f2c185e37ba85d20a2f0df570cbbf8b7",
+    "addon": "vla",
+    "engine": "ggml-vla",
+    "quantization": "q5_vf16",
+    "params": "groot-n1.7-3b-libero"
+  },
+  "GROOT_Q8_VF16": {
+    "name": "GROOT_Q8_VF16",
+    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    "blobBlockOffset": 4593738,
+    "blobBlockLength": 57366,
+    "blobByteOffset": 301042854506,
+    "modelId": "groot-q8_vf16.gguf",
+    "expectedSize": 3759519072,
+    "sha256Checksum": "27b57d1d54122649e6fee6ed0bba07559bb61e7872cfcae5e9b13ce016391f7d",
+    "addon": "vla",
+    "engine": "ggml-vla",
+    "quantization": "q8_vf16",
+    "params": "groot-n1.7-3b-libero"
+  },
   "GTE_LARGE_335M_FP16_SHARD": {
     "name": "GTE_LARGE_335M_FP16_SHARD",
     "src": "registry://s3/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
@@ -4096,23 +4130,6 @@
     "quantization": "q4",
     "params": "1.7B"
   },
-  "QWEN3_4B_4B_Q4_K_M": {
-    "name": "QWEN3_4B_4B_Q4_K_M",
-    "src": "registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
-    "registryPath": "unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
-    "registrySource": "hf",
-    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    "blobBlockOffset": 296679,
-    "blobBlockLength": 38106,
-    "blobByteOffset": 19441407821,
-    "modelId": "Qwen3-4B-Q4_K_M.gguf",
-    "expectedSize": 2497281312,
-    "sha256Checksum": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
-    "addon": "llm",
-    "engine": "llamacpp-completion",
-    "quantization": "q4_K_M",
-    "params": "4B"
-  },
   "QWEN3_4B_INST_Q4_K_M": {
     "name": "QWEN3_4B_INST_Q4_K_M",
     "src": "registry://s3/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
@@ -4162,6 +4179,23 @@
     "addon": "llm",
     "engine": "llamacpp-completion",
     "quantization": "q4",
+    "params": "4B"
+  },
+  "QWEN3_4B_Q4_K_M": {
+    "name": "QWEN3_4B_Q4_K_M",
+    "src": "registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
+    "registryPath": "unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
+    "registrySource": "hf",
+    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    "blobBlockOffset": 296679,
+    "blobBlockLength": 38106,
+    "blobByteOffset": 19441407821,
+    "modelId": "Qwen3-4B-Q4_K_M.gguf",
+    "expectedSize": 2497281312,
+    "sha256Checksum": "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+    "addon": "llm",
+    "engine": "llamacpp-completion",
+    "quantization": "q4_K_M",
     "params": "4B"
   },
   "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M": {

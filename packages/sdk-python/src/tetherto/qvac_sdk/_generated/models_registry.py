@@ -2369,6 +2369,42 @@ GPT_OSS_20B_INST_Q4_K_M = ModelConstant(
     params="20B",
 )
 
+GROOT_Q5_VF16 = ModelConstant(
+    name="GROOT_Q5_VF16",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=4651104,
+    blob_block_length=41801,
+    blob_byte_offset=304802373578,
+    model_id="groot-q5_vf16.gguf",
+    expected_size=2739467616,
+    sha256_checksum="5695a64ff37ca2d3a123bba6b32f1b05f2c185e37ba85d20a2f0df570cbbf8b7",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q5_vf16",
+    params="groot-n1.7-3b-libero",
+)
+
+GROOT_Q8_VF16 = ModelConstant(
+    name="GROOT_Q8_VF16",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=4593738,
+    blob_block_length=57366,
+    blob_byte_offset=301042854506,
+    model_id="groot-q8_vf16.gguf",
+    expected_size=3759519072,
+    sha256_checksum="27b57d1d54122649e6fee6ed0bba07559bb61e7872cfcae5e9b13ce016391f7d",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q8_vf16",
+    params="groot-n1.7-3b-libero",
+)
+
 GTE_LARGE_335M_FP16_SHARD = ModelConstant(
     name="GTE_LARGE_335M_FP16_SHARD",
     src="registry://s3/qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
@@ -4367,24 +4403,6 @@ QWEN3_1_7B_INST_Q4_TENSORS = ModelConstant(
     params="1.7B",
 )
 
-QWEN3_4B_4B_Q4_K_M = ModelConstant(
-    name="QWEN3_4B_4B_Q4_K_M",
-    src="registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
-    registry_path="unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
-    registry_source="hf",
-    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blob_block_offset=296679,
-    blob_block_length=38106,
-    blob_byte_offset=19441407821,
-    model_id="Qwen3-4B-Q4_K_M.gguf",
-    expected_size=2497281312,
-    sha256_checksum="f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
-    addon="llm",
-    engine="llamacpp-completion",
-    quantization="q4_K_M",
-    params="4B",
-)
-
 QWEN3_4B_INST_Q4_K_M = ModelConstant(
     name="QWEN3_4B_INST_Q4_K_M",
     src="registry://s3/qvac_models_compiled/ggml/Qwen3-4B/2025-06-27/Qwen3-4B-Q4_K_M.gguf",
@@ -4436,6 +4454,24 @@ QWEN3_4B_INST_Q4_TENSORS = ModelConstant(
     addon="llm",
     engine="llamacpp-completion",
     quantization="q4",
+    params="4B",
+)
+
+QWEN3_4B_Q4_K_M = ModelConstant(
+    name="QWEN3_4B_Q4_K_M",
+    src="registry://hf/unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
+    registry_path="unsloth/Qwen3-4B-GGUF/resolve/9b5c4f3506ac99d74e59ecd9aa9abb05537b7f59/Qwen3-4B-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=296679,
+    blob_block_length=38106,
+    blob_byte_offset=19441407821,
+    model_id="Qwen3-4B-Q4_K_M.gguf",
+    expected_size=2497281312,
+    sha256_checksum="f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_K_M",
     params="4B",
 )
 
@@ -6731,6 +6767,8 @@ __all__ = [
     "GPT_OSS_120B_INST_Q4_K_M_SHARD",
     "GPT_OSS_120B_INST_Q4_K_M_TENSORS",
     "GPT_OSS_20B_INST_Q4_K_M",
+    "GROOT_Q5_VF16",
+    "GROOT_Q8_VF16",
     "GTE_LARGE_335M_FP16_SHARD",
     "GTE_LARGE_335M_FP16_TENSORS",
     "GTE_LARGE_FP16",
@@ -6842,10 +6880,10 @@ __all__ = [
     "QWEN3_1_7B_INST_Q4",
     "QWEN3_1_7B_INST_Q4_SHARD",
     "QWEN3_1_7B_INST_Q4_TENSORS",
-    "QWEN3_4B_4B_Q4_K_M",
     "QWEN3_4B_INST_Q4_K_M",
     "QWEN3_4B_INST_Q4_SHARD",
     "QWEN3_4B_INST_Q4_TENSORS",
+    "QWEN3_4B_Q4_K_M",
     "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_0_8B_MULTIMODAL_Q6_K",
     "QWEN3_5_0_8B_MULTIMODAL_Q8_0",

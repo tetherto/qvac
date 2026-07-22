@@ -4,14 +4,14 @@ import {
   diffusion,
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
-  QWEN3_4B_4B_Q4_K_M
+  QWEN3_4B_Q4_K_M
 } from '@qvac/sdk'
 import fs from 'fs'
 import path from 'path'
 
 // FLUX.2 [klein] uses a split-layout: separate diffusion model + LLM text encoder + VAE
 const diffusionModelSrc = process.argv[2] || FLUX_2_KLEIN_4B_Q4_0
-const llmModelSrc = process.argv[3] || QWEN3_4B_4B_Q4_K_M
+const llmModelSrc = process.argv[3] || QWEN3_4B_Q4_K_M
 const vaeModelSrc = process.argv[4] || FLUX_2_KLEIN_4B_VAE
 const prompt = process.argv[5] || 'a futuristic city at sunset, photorealistic'
 const outputDir = process.argv[6] || '.'
