@@ -67,7 +67,7 @@ async function setupReasoningModel(t, toolsEnabled, opts = {}) {
     }
   })
 
-  return { inference }
+  return { inference, config }
 }
 
 // Shared helper: Run a completion and collect response
@@ -106,8 +106,13 @@ function verifyReasoningTags(t, response, testName) {
   t.ok(response.length > 100, `${testName} should generate substantial output`)
 }
 
-// Shared helper: Verify generation continued after reasoning
-function verifyContinuedAfterReasoning(t, response, testName) {
+// Shared helper: Verify generation continued after reasoning.
+// The EOS-inside-reasoning recovery guarantees a content token after the
+// forced `</think>` ONLY while n_predict budget remains — when the budget was
+// exhausted by thinking, ending at the close marker is legitimate. Pass the
+// second completion's stats + the configured n_predict so that case is
+// accepted instead of asserted against (it is model/GPU-numerics dependent).
+function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   const thinkCloseIndex = response.indexOf('</think>')
   if (thinkCloseIndex === -1) {
     t.fail(`No </think> tag found in ${testName}`)
@@ -115,6 +120,15 @@ function verifyContinuedAfterReasoning(t, response, testName) {
   }
 
   const textAfterThink = response.substring(thinkCloseIndex + '</think>'.length).trim()
+  const generatedTokens = toNumber(opts.generatedTokens)
+  const nPredict = toNumber(opts.nPredict)
+  if (textAfterThink.length === 0 && nPredict > 0 && generatedTokens >= nPredict) {
+    t.pass(
+      `Generation ended at the n_predict cutoff (${generatedTokens}/${nPredict}) after ` +
+        `the forced </think> tag — accepted (${testName})`
+    )
+    return true
+  }
   t.ok(textAfterThink.length > 0, `Generation should continue after </think> tag (${testName})`)
   return textAfterThink.length > 0
 }
@@ -160,7 +174,7 @@ safeTest(
     timeout: 600_000
   },
   async (t) => {
-    const { inference } = await setupReasoningModel(t, false)
+    const { inference, config } = await setupReasoningModel(t, false)
 
     // First completion - should work correctly
     const messages1 = createInitialMessages()
@@ -170,13 +184,20 @@ safeTest(
 
     // Second completion - this is where the fix should activate
     const messages2 = createFollowUpMessages(messages1, response1)
-    const response2 = await runCompletion(inference, messages2)
+    const { response: response2, stats: stats2 } = await runCompletionWithStats(
+      inference,
+      messages2
+    )
     t.comment(`Second completion (tools=false, len=${response2.length}):\n${response2}`)
 
     verifyReasoningTags(t, response2, 'Second completion')
 
-    // Verify the fix worked: generation continued after reasoning
-    verifyContinuedAfterReasoning(t, response2, 'tools=false')
+    // Verify the fix worked: generation continued after reasoning (or the
+    // n_predict budget was exhausted, which legitimately ends the response).
+    verifyContinuedAfterReasoning(t, response2, 'tools=false', {
+      generatedTokens: stats2.generatedTokens,
+      nPredict: config.n_predict
+    })
   }
 )
 
@@ -187,7 +208,7 @@ safeTest(
     timeout: 600_000
   },
   async (t) => {
-    const { inference } = await setupReasoningModel(t, true)
+    const { inference, config } = await setupReasoningModel(t, true)
 
     // First completion - should work correctly
     const messages1 = createInitialMessages()
@@ -197,13 +218,20 @@ safeTest(
 
     // Second completion - this is where the fix should activate
     const messages2 = createFollowUpMessages(messages1, response1)
-    const response2 = await runCompletion(inference, messages2)
+    const { response: response2, stats: stats2 } = await runCompletionWithStats(
+      inference,
+      messages2
+    )
     t.comment(`Second completion (tools=true, len=${response2.length}):\n${response2}`)
 
     verifyReasoningTags(t, response2, 'Second completion (tools=true)')
 
-    // Verify the fix worked: generation continued after reasoning
-    verifyContinuedAfterReasoning(t, response2, 'tools=true')
+    // Verify the fix worked: generation continued after reasoning (or the
+    // n_predict budget was exhausted, which legitimately ends the response).
+    verifyContinuedAfterReasoning(t, response2, 'tools=true', {
+      generatedTokens: stats2.generatedTokens,
+      nPredict: config.n_predict
+    })
   }
 )
 

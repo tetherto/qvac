@@ -364,6 +364,22 @@ private:
   // compaction stay family-agnostic via `reasoningEnabled_`.
   bool isQwen3ReasoningFamily_ = false;
 
+  // EOS-inside-reasoning recovery: the recovery substitutes `</think>\n\n` so
+  // the model produces an answer after thinking, but on marginal prompts the
+  // very next sampled token is EOG again, which would defeat the recovery
+  // with an empty answer. One-shot: consumed by the next sampled token.
+  // Narrowed vs the original (reverted in 39a2fef88) fix: all EOG ids are
+  // banned in a single pre-sampling pass (no sample-and-reroll loop), and
+  // only while the n_predict budget still allows at least one further token
+  // after this one — when the budget is exhausted, ending at the forced
+  // close marker is legitimate and must not be overridden.
+  bool banEogAfterReasoningRecovery_ = false;
+
+  // All EOG token ids of the loaded vocab, precomputed once in
+  // initializeCommonState() (Qwen3 family only) so the recovery ban is one
+  // pass over a short list with no mid-stream O(nVocab) scan.
+  std::vector<llama_token> eogTokens_;
+
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
