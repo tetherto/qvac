@@ -7,7 +7,6 @@
     "types": [],
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "baseUrl": ".",
     "paths": {
       "@qvac/inference": ["./src/index.ts"],
       "@qvac/inference/*": ["./src/plugins/builtin/*"]
