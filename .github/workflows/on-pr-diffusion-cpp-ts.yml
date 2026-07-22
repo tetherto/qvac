@@ -14,6 +14,9 @@ on:
     paths:
       - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
+      - ".github/actions/cache-models/**"
+      - "vcpkg-overlays/triplets/**"
+      - "vcpkg-overlays/toolchains/**"
 
 permissions:
   contents: read
@@ -24,7 +27,7 @@ concurrency:
 
 jobs:
   ts-checks:
-    name: ts-checks
+    name: diffusion-pr-head-ts-checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

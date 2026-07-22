@@ -147,9 +147,10 @@ jobs:
 
   await-ts-checks:
     name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target'
     needs: authorize
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 17
     permissions:
       checks: read
       contents: read
@@ -157,7 +158,7 @@ jobs:
       - name: Wait for ts-checks result
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
         env:
-          PR_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
             const timeoutAt = Date.now() + 15 * 60 * 1000
@@ -165,16 +166,20 @@ jobs:
             while (Date.now() < timeoutAt) {
               const response = await github.rest.checks.listForRef({
                 ...context.repo,
-                ref: process.env.PR_MERGE_SHA,
-                check_name: 'ts-checks',
+                ref: process.env.PR_HEAD_SHA,
+                check_name: 'diffusion-pr-head-ts-checks',
                 filter: 'latest',
                 per_page: 100
               })
-              const check = response.data.check_runs.find(({ name }) => name === 'ts-checks')
+              const check = response.data.check_runs.find(
+                ({ name }) => name === 'diffusion-pr-head-ts-checks'
+              )
 
               if (check?.status === 'completed') {
                 if (check.conclusion !== 'success') {
-                  core.setFailed(`ts-checks completed with conclusion: ${check.conclusion}`)
+                  core.setFailed(
+                    `diffusion-pr-head-ts-checks completed with conclusion: ${check.conclusion}`
+                  )
                 }
                 return
               }
@@ -182,7 +187,7 @@ jobs:
               await new Promise((resolve) => setTimeout(resolve, 15_000))
             }
 
-            core.setFailed('Timed out waiting for the PR-head ts-checks result')
+            core.setFailed('Timed out waiting for the PR-head diffusion TypeScript checks')
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -363,4 +368,4 @@ jobs:
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      general-checks-status: ${{ needs.await-ts-checks.result == 'success' }}
+      general-checks-status: ${{ github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' }}
